@@ -10,6 +10,8 @@ use {
     solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
         AccountsDbPluginError, ReplicaAccountInfo, SlotStatus,
     },
+    solana_metrics::datapoint_info,
+    solana_sdk::timing::AtomicInterval,
     std::{
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -188,10 +190,10 @@ impl PostgresClient for SimplePostgresClient {
         account: &T,
         slot: u64,
     ) -> Result<(), AccountsDbPluginError> {
-        debug!(
-            "Updating account {:?} {:?} at slot {:?}",
-            account.pubkey(),
-            account.owner(),
+        trace!(
+            "Updating account {} with owner {} at slot {}",
+            bs58::encode(account.pubkey()).into_string(),
+            bs58::encode(account.owner()).into_string(),
             slot,
         );
 
@@ -215,9 +217,12 @@ impl PostgresClient for SimplePostgresClient {
         );
 
         if let Err(err) = result {
-            return Err(AccountsDbPluginError::AccountsUpdateError {
-                msg: format!("Failed to persist the update of account to the PostgreSQL database. Error: {:?}", err)
-            });
+            let msg = format!(
+                "Failed to persist the update of account to the PostgreSQL database. Error: {:?}",
+                err
+            );
+            error!("{}", msg);
+            return Err(AccountsDbPluginError::AccountsUpdateError { msg });
         }
         Ok(())
     }
@@ -266,9 +271,12 @@ impl PostgresClient for SimplePostgresClient {
 
         match result {
             Err(err) => {
-                return Err(AccountsDbPluginError::SlotStatusUpdateError{
-                            msg: format!("Failed to persist the update of slot to the PostgreSQL database. Error: {:?}", err)
-                        });
+                let msg = format!(
+                    "Failed to persist the update of slot to the PostgreSQL database. Error: {:?}",
+                    err
+                );
+                error!("{:?}", msg);
+                return Err(AccountsDbPluginError::SlotStatusUpdateError { msg });
             }
             Ok(rows) => {
                 assert_eq!(1, rows, "Expected one rows to be updated a time");
@@ -340,6 +348,7 @@ pub struct ParallelPostgresClient {
     workers: Vec<JoinHandle<Result<(), AccountsDbPluginError>>>,
     exit_worker: Arc<AtomicBool>,
     sender: Sender<DbWorkItem>,
+    last_report: AtomicInterval,
 }
 
 impl ParallelPostgresClient {
@@ -365,6 +374,7 @@ impl ParallelPostgresClient {
         }
 
         Ok(Self {
+            last_report: AtomicInterval::default(),
             workers,
             exit_worker,
             sender,
@@ -395,6 +405,12 @@ impl PostgresClient for ParallelPostgresClient {
         account: &T,
         slot: u64,
     ) -> Result<(), AccountsDbPluginError> {
+        if self.last_report.should_update(30000) {
+            datapoint_info!(
+                "postgres-plugin-stats",
+                ("message-queue-length", self.sender.len() as i64, i64),
+            );
+        }
         if let Err(err) = self
             .sender
             .send(DbWorkItem::UpdateAccount(UpdateAccountRequest {
@@ -405,7 +421,7 @@ impl PostgresClient for ParallelPostgresClient {
             return Err(AccountsDbPluginError::AccountsUpdateError {
                 msg: format!(
                     "Failed to update the account {:?}, error: {:?}",
-                    account.pubkey(),
+                    bs58::encode(account.pubkey()).into_string(),
                     err
                 ),
             });
