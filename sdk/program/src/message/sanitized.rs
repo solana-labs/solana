@@ -626,7 +626,7 @@ mod tests {
             Some(&key0),
         ))
         .unwrap();
-        assert_eq!(message.calculate_fee(&FeeCalculator::new(1)), 2);
+        assert_eq!(message.calculate_fee(1), 2);
 
         instruction1.data = vec![0];
         instruction2.data = vec![10];
@@ -635,6 +635,6 @@ mod tests {
             Some(&key0),
         ))
         .unwrap();
-        assert_eq!(message.calculate_fee(&FeeCalculator::new(1)), 11);
+        assert_eq!(message.calculate_fee(1), 11);
     }
 }
