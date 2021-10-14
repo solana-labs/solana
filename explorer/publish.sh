@@ -12,7 +12,7 @@ PROJECT_NAME=explorer
 cat > "$CONFIG_FILE" <<EOF
 {
   "name": "$PROJECT_NAME",
-  "scope": "solana-lab"
+  "scope": "solana-labs"
 }
 EOF
 
