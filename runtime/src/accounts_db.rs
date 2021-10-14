@@ -2049,6 +2049,8 @@ impl AccountsDb {
         let missing_accum = AtomicU64::new(0);
         let after_max_accum = AtomicU64::new(0);
         let more_than_one_info_accum = AtomicU64::new(0);
+        let old_uncleaned_root = AtomicU64::new(0);
+        let old_action = AtomicU64::new(0);
 
         // parallel scan the index.
         let (mut purges_zero_lamports, purges_old_accounts) = {
@@ -2080,9 +2082,18 @@ impl AccountsDb {
                                     if slot_list.len() != 1 {
                                         more_than_one_info += 1;
                                     }
+                                    let mut am = false;
                                     max_clean_root.map(|x|
                                         if slot_list.iter().any(|item| item.0 > x.saturating_sub(100)) {
+                                            am = true;
                                             after_max += 1;
+                                        }
+                                    );
+                                    max_clean_root.map(|x|
+                                        if slot_list.iter().any(|item| item.0 < x.saturating_sub(300_000)) {
+                                            if !am {
+                                                old_action.fetch_add(1, Ordering::Relaxed);
+                                            }
                                         }
                                     );
 
@@ -2096,7 +2107,12 @@ impl AccountsDb {
                                         if let Some(max_clean_root) = max_clean_root {
                                             assert!(slot <= max_clean_root);
                                         }
-                                        purges_old_accounts.push(*pubkey);
+                                        max_clean_root.map(|x|
+                                            if slot < x.saturating_sub(300_000) {
+                                                old_uncleaned_root.fetch_add(1, Ordering::Relaxed);
+                                            }
+                                        );
+                                            purges_old_accounts.push(*pubkey);
                                     }
                                 }
                                 AccountIndexGetResult::NotFoundOnFork => {
@@ -2286,6 +2302,8 @@ impl AccountsDb {
             ("delta_slots_count_in_range3", key_timings.delta_slots_count_in_range3, i64),
             ("delta_slots_count_in_range4", key_timings.delta_slots_count_in_range4, i64),
             ("delta_slots_count_in_rangeold", key_timings.delta_slots_count_in_rangeold, i64),
+            ("old_uncleaned_root", old_uncleaned_root.load(Ordering::Relaxed), i64),
+            ("old_action", old_action.load(Ordering::Relaxed), i64),
             ("total_keys_count", total_keys_count, i64),
             (
                 "scan_found_not_zero",
