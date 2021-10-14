@@ -8,7 +8,6 @@ use {
         encryption::{
             elgamal::{ElGamalCiphertext, ElGamalPubkey, ElGamalSecretKey},
             pedersen::{PedersenBase, PedersenOpening},
-            aes::AESCiphertext,
         },
         errors::ProofError,
         instruction::Verifiable,
@@ -37,9 +36,6 @@ pub struct WithdrawData {
 
     /// Proof that the account is solvent
     pub proof: WithdrawProof, // 736 bytes
-
-    /// The new decryptable balance component
-    pub aes_ciphertext: pod::OptionAESCiphertext, // 17 bytes
 }
 
 impl WithdrawData {
@@ -50,7 +46,6 @@ impl WithdrawData {
         source_sk: &ElGamalSecretKey,
         current_balance: u64,
         current_balance_ct: ElGamalCiphertext,
-        aes_ciphertext: Option<AESCiphertext>,
     ) -> Self {
         // subtract withdraw amount from current balance
         //
@@ -67,7 +62,6 @@ impl WithdrawData {
         Self {
             final_balance_ct: final_balance_ct.into(),
             proof,
-            aes_ciphertext: aes_ciphertext.into(),
         }
     }
 }
@@ -198,7 +192,6 @@ mod test {
             &secret,
             current_balance,
             current_balance_ct,
-            None,
         );
         assert!(data.verify().is_ok());
 
@@ -210,7 +203,6 @@ mod test {
             &secret,
             wrong_balance,
             current_balance_ct,
-            None,
         );
         assert!(data.verify().is_err());
 
