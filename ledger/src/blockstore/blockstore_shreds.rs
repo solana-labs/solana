@@ -108,7 +108,6 @@ impl Blockstore {
             // which is dropped after this block ends, minimizing time held by the lock.
             // We still need a reference to the `ShredCache` behind the lock, hence, we
             // clone it out (`ShredCache` is an Arc so it is cheap to clone).
-            self.data_shred_cache_slots.lock().unwrap().insert(slot);
             self.data_shred_cache
                 .entry(slot)
                 .or_insert(Arc::new(RwLock::new(BTreeMap::new())))
@@ -121,12 +120,18 @@ impl Blockstore {
     }
 
     pub fn get_data_shred_slots_to_flush(&self, max_flush_slot: Slot) -> Vec<Slot> {
-        self.data_shred_cache_slots
-            .lock()
-            .unwrap()
+        // DashMap::iter() doesn't return entries in any specific order, so we must check
+        // the entire container. This is fine since cache size is limited in order to avoid
+        // excessive memory usage.
+        self.data_shred_cache
             .iter()
-            .cloned()
-            .take_while(|slot| *slot < max_flush_slot)
+            .filter_map(|kv_pair| {
+                if *kv_pair.key() < max_flush_slot {
+                    Some(*kv_pair.key())
+                } else {
+                    None
+                }
+            })
             .collect()
     }
 
@@ -137,8 +142,6 @@ impl Blockstore {
         let slot_cache = match self.data_slot_cache(slot) {
             Some(slot_cache) => slot_cache,
             None => {
-                // TODO: An error here indicates cache/keys out of sync, not
-                // sure what we should do here
                 error!(
                     "Slot {} was picked to be flushed, but not actually in cache",
                     slot
@@ -282,7 +285,6 @@ impl Blockstore {
         // the slot from the cache. fs::rename() will replace existing file if there is one.
         fs::rename(tmp_path, &path)?;
         self.data_shred_cache.remove(&slot);
-        self.data_shred_cache_slots.lock().unwrap().remove(&slot);
         flush_timer.stop();
         debug!("Flush took {}us", flush_timer.as_us());
         Ok(())
@@ -291,12 +293,9 @@ impl Blockstore {
     /// Purge the data shreds within [from_slot, to_slot) slots
     pub(crate) fn purge_data_shreds(&self, from_slot: Slot, to_slot: Slot) {
         // Remove from the cache; no issues if the slot had previously been flushed
-        let mut data_shred_cache_slots = self.data_shred_cache_slots.lock().unwrap();
         for slot in from_slot..to_slot {
-            data_shred_cache_slots.remove(&slot);
             self.data_shred_cache.remove(&slot);
         }
-        drop(data_shred_cache_slots);
         // TODO: Do this in parallel across several threads ?
         for slot in from_slot..to_slot {
             // Could get errors such as file doesn't exist; we don't care so just eat the error
@@ -487,6 +486,7 @@ pub mod tests {
 
     #[test]
     fn test_shred_file_header_constant() {
+        solana_logger::setup();
         // Header is fixed size, so values of parameters to new() are irrelevant
         let header = ShredFileHeader::new(0, 0, 0, 0);
         let serialized_header = bincode::serialize(&header).unwrap();

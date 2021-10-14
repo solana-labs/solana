@@ -49,7 +49,7 @@ use {
         borrow::Cow,
         cell::RefCell,
         cmp,
-        collections::{hash_map::Entry as HashMapEntry, BTreeMap, BTreeSet, HashMap, HashSet},
+        collections::{hash_map::Entry as HashMapEntry, BTreeMap, HashMap, HashSet},
         convert::TryInto,
         fs,
         io::{Error as IoError, ErrorKind},
@@ -166,7 +166,6 @@ pub struct Blockstore {
     slots_stats: Arc<Mutex<SlotsStats>>,
     data_shred_path: PathBuf,
     data_shred_cache: DashMap<Slot, Arc<RwLock<ShredCache>>>,
-    data_shred_cache_slots: Mutex<BTreeSet<Slot>>,
     shred_wal: Mutex<ShredWAL>,
 }
 
@@ -467,7 +466,6 @@ impl Blockstore {
             slots_stats: Arc::new(Mutex::new(SlotsStats::default())),
             data_shred_path,
             data_shred_cache: DashMap::new(),
-            data_shred_cache_slots: Mutex::new(BTreeSet::new()),
             shred_wal,
         };
         if initialize_transaction_status_index {

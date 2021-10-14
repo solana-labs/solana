@@ -140,14 +140,9 @@ impl LedgerCleanupService {
             blockstore.get_data_shred_slots_to_flush(root - flush_interval);
 
         if slots_to_flush.is_empty() {
-            info!("No shreds found to flush");
+            info!("no shreds found to flush");
             return Ok(());
         }
-        info!(
-            "Flushing shreds from slots {} to {}",
-            slots_to_flush.first().unwrap(),
-            slots_to_flush.last().unwrap()
-        );
 
         let mut flush_time = Measure::start("flush_time");
         // TODO: Do this in parallel across several threads ?
@@ -155,7 +150,7 @@ impl LedgerCleanupService {
             blockstore.flush_data_shreds_for_slot_to_fs(*slot)?;
         }
         flush_time.stop();
-        *last_flush_slot = *slots_to_flush.last().unwrap();
+        *last_flush_slot = root;
         info!(
             "flushed {} slots of shreds to disk, {}",
             slots_to_flush.len(),
