@@ -79,7 +79,7 @@ impl<'a> SlotIterator<'a> {
 
             SlotIteratorFsData {
                 index_iter,
-                data_buffer: &data_section,
+                data_buffer: data_section,
             }
         });
 
@@ -129,13 +129,13 @@ impl<'a> SlotIterator<'a> {
         file_data_ref
             .index_iter
             .next()
-            .and_then(|(idx, offset)| {
+            .map(|(idx, offset)| {
                 let mut buffer = vec![0; SHRED_PAYLOAD_SIZE];
                 let offset = *offset as usize;
                 buffer.copy_from_slice(
                     &file_data_ref.data_buffer[offset..offset + SHRED_PAYLOAD_SIZE],
                 );
-                Some((*idx as u64, buffer))
+                (*idx as u64, buffer)
             })
             .or_else(|| {
                 self.mode = state_if_exhausted;
@@ -196,7 +196,7 @@ pub mod tests {
         itertools::Itertools,
     };
 
-    fn verify_iterator(blockstore: &Blockstore, slot: Slot, shreds: &Vec<Shred>) {
+    fn verify_iterator(blockstore: &Blockstore, slot: Slot, shreds: &[Shred]) {
         // Ensure iterator with start_index = 0 yields all inserted elements
         {
             let cache = blockstore.data_slot_cache(slot);

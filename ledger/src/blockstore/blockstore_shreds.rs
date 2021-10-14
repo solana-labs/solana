@@ -108,10 +108,12 @@ impl Blockstore {
             // which is dropped after this block ends, minimizing time held by the lock.
             // We still need a reference to the `ShredCache` behind the lock, hence, we
             // clone it out (`ShredCache` is an Arc so it is cheap to clone).
-            self.data_shred_cache
-                .entry(slot)
-                .or_insert(Arc::new(RwLock::new(BTreeMap::new())))
-                .clone()
+            Arc::clone(
+                &self
+                    .data_shred_cache
+                    .entry(slot)
+                    .or_insert(Arc::new(RwLock::new(BTreeMap::new()))),
+            )
         });
         data_slot_cache
             .write()
@@ -383,7 +385,7 @@ impl Blockstore {
     pub(crate) fn data_slot_cache(&self, slot: Slot) -> Option<Arc<RwLock<ShredCache>>> {
         self.data_shred_cache
             .get(&slot)
-            .map(|res| res.value().clone())
+            .map(|res| Arc::clone(res.value()))
     }
 
     pub(crate) fn slot_data_shreds_path(&self, slot: Slot) -> PathBuf {
