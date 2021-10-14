@@ -1,8 +1,10 @@
 #[cfg(not(target_arch = "bpf"))]
 use rand::{rngs::OsRng, Rng};
 
-use aes::cipher::{BlockDecrypt, BlockEncrypt, NewBlockCipher};
-use aes::{Aes128, Block};
+use aes::{
+    cipher::{BlockDecrypt, BlockEncrypt, NewBlockCipher},
+    Aes128, Block,
+};
 
 use arrayref::array_ref;
 
