@@ -1420,24 +1420,23 @@ impl<T: IndexValue> AccountsIndex<T> {
                 lock = Some(self.account_maps[bin].read().unwrap());
                 last_bin = bin;
             }
-            let account = lock.as_ref().unwrap().get(pubkey);
-
-            match account {
-                Some(locked_entry) => {
-                    let slot_list = &locked_entry.slot_list.read().unwrap();
-                    let found_index = self.latest_slot(None, slot_list, max_root);
-                    let cache = callback(
-                        true,
-                        slot_list,
-                        found_index,
-                        pubkey,
-                        locked_entry.ref_count(),
-                    );
-                }
-                None => {
-                    callback(false, &empty_slot_list, None, pubkey, RefCount::MAX);
-                }
-            }
+            lock.as_ref().unwrap().get_internal(pubkey, |entry| {
+                let cache = match entry {
+                    Some(locked_entry) => {
+                        let slot_list = &locked_entry.slot_list.read().unwrap();
+                        let found_index = self.latest_slot(None, slot_list, max_root);
+                        callback(
+                            true,
+                            slot_list,
+                            found_index,
+                            pubkey,
+                            locked_entry.ref_count(),
+                        )
+                    }
+                    None => callback(false, &empty_slot_list, None, pubkey, RefCount::MAX),
+                };
+                (cache, ())
+            });
         });
     }
 
