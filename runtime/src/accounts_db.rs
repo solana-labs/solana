@@ -594,6 +594,8 @@ pub enum BankHashVerificationError {
 struct CleanKeyTimings {
     collect_delta_keys_us: u64,
     delta_insert_us: u64,
+    delta_slots_count: u64,
+    delta_slots_count_in_range: u64,
     hashset_to_vec_us: u64,
     dirty_store_processing_us: u64,
     delta_key_count: u64,
@@ -1910,10 +1912,15 @@ impl AccountsDb {
         let mut dirty_store_processing_time = Measure::start("dirty_store_processing");
         let max_slot = max_clean_root.unwrap_or_else(|| self.accounts_index.max_root());
         let mut dirty_stores = Vec::with_capacity(self.dirty_stores.len());
+        let lower_bound = max_slot.saturating_sub(100);
         self.dirty_stores.retain(|(slot, _store_id), store| {
             if *slot > max_slot {
                 true
             } else {
+                timings.delta_slots_count += 1;
+                if slot >= &lower_bound {
+                    timings.delta_slots_count_in_range += 1;
+                }
                 dirty_stores.push((*slot, store.clone()));
                 false
             }
@@ -2253,6 +2260,8 @@ impl AccountsDb {
             ("delta_key_count", key_timings.delta_key_count, i64),
             ("dirty_pubkeys_count", key_timings.dirty_pubkeys_count, i64),
             ("sort_us", sort.as_us(), i64),
+            ("delta_slots_count", key_timings.delta_slots_count, i64),
+            ("delta_slots_count_in_range", key_timings.delta_slots_count_in_range, i64),
             ("total_keys_count", total_keys_count, i64),
             (
                 "scan_found_not_zero",
