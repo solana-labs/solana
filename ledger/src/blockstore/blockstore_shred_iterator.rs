@@ -3,9 +3,9 @@
 
 use {
     super::*,
-    crate::blockstore::blockstore_shreds::{ShredCache, ShredFileIndex},
+    crate::blockstore::blockstore_shreds::{ShredCache, ShredFileData},
     crate::shred::SHRED_PAYLOAD_SIZE,
-    std::{collections::btree_map, io::Read, iter::Peekable, sync::RwLockReadGuard},
+    std::{collections::btree_map, iter::Peekable, sync::RwLockReadGuard},
 };
 
 // Iterator mode - set at iterator creation and updated as iterator progresses
@@ -34,18 +34,14 @@ impl<'a> SlotIterator<'a> {
         path: &Path,
     ) -> (
         Option<RwLockReadGuard<'a, ShredCache>>,
-        Option<(ShredFileIndex, Vec<u8>)>,
+        Option<ShredFileData>,
     ) {
         let cache_guard = cache.as_ref().map(|cache| cache.read().unwrap());
 
         let file_data = match fs::File::open(path) {
-            Ok(mut file) => {
-                // TODO: error handling on read_shred_file_metadata() and read_exact()
-                let (header, file_index) = Blockstore::read_shred_file_metadata(&mut file).unwrap();
-                let mut data_buffer = vec![0; header.data_size as usize];
-                file.read_exact(&mut data_buffer).ok();
-                Some((file_index, data_buffer))
-            }
+            Ok(mut file) => Some(Blockstore::read_shred_file(&mut file).unwrap_or_else(|_| {
+                panic!("failed to read {}, possibly corrupted", path.display())
+            })),
             Err(_err) => None,
         };
 
@@ -56,7 +52,7 @@ impl<'a> SlotIterator<'a> {
         slot: Slot,
         start_index: u64,
         cache_guard: &'a Option<RwLockReadGuard<ShredCache>>,
-        file_data: &'a Option<(ShredFileIndex, Vec<u8>)>,
+        file_data: &'a Option<ShredFileData>,
     ) -> Self {
         let cache_iter = if cache_guard.is_some() {
             let mut iter = cache_guard.as_ref().unwrap().iter().peekable();
@@ -67,10 +63,8 @@ impl<'a> SlotIterator<'a> {
             None
         };
 
-        let file_data = file_data.as_ref().map(|(file_index, data_section)| {
-            //let x = 5 + file_index;
-            //let y = 5 + data_section;
-            let mut index_iter = file_index.iter().peekable();
+        let file_data = file_data.as_ref().map(|file_data| {
+            let mut index_iter = file_data.index.iter().peekable();
             // Advance the iterator so first .next() will be >= start_index
             while index_iter
                 .next_if(|&(idx, _)| (*idx as u64) < start_index)
@@ -79,7 +73,7 @@ impl<'a> SlotIterator<'a> {
 
             SlotIteratorFsData {
                 index_iter,
-                data_buffer: data_section,
+                data_buffer: &file_data.data,
             }
         });
 

@@ -44,6 +44,12 @@ pub(crate) struct ShredFileHeader {
     pub data_size: u32,
 }
 
+pub(crate) struct ShredFileData {
+    pub _header: ShredFileHeader,
+    pub index: ShredFileIndex,
+    pub data: Vec<u8>,
+}
+
 /// The following constant is computed by hand and hardcoded.
 /// 'test_shred_file_header_constant' ensures the value is correct.
 /// Constant used over lazy_static for performance reasons.
@@ -140,18 +146,9 @@ impl Blockstore {
     pub fn flush_data_shreds_for_slot_to_fs(&self, slot: Slot) -> Result<()> {
         let mut flush_timer = Measure::start("flush_timer");
 
-        // First, check if we have a cache for this slot
-        let slot_cache = match self.data_slot_cache(slot) {
-            Some(slot_cache) => slot_cache,
-            None => {
-                error!(
-                    "Slot {} was picked to be flushed, but not actually in cache",
-                    slot
-                );
-                return Ok(());
-            }
-        };
-
+        let slot_cache = self
+            .data_slot_cache(slot)
+            .expect("slot was chosen for flush but is no longer in cache");
         let path = self.slot_data_shreds_path(slot);
         // We'll write contents to a temporary file first, and then rename
         // to desired file such that the write is "atomic".
@@ -162,34 +159,38 @@ impl Blockstore {
             // There is a file for this slot already, meaning it was previously flushed.
             // We'll have to merge the contents of cache with contents of that file
             let mut cur_file = fs::File::open(&path)?;
-            let (header, mut index) = Blockstore::read_shred_file_metadata(&mut cur_file)?;
-            let mut flushed_shreds = vec![0; header.data_size.try_into().unwrap()];
-            cur_file.read_exact(&mut flushed_shreds)?;
+            let mut old_file_data = Blockstore::read_shred_file(&mut cur_file)?;
             drop(cur_file);
 
             // We assume that the number of shreds in slot_cache is much smaller than number of
-            // shreds already on disk. This fits the case of the last few shreds trickling in late
-            // while the majority of them came in before the slot was initially flushed.
+            // shreds already on disk. This fits the profile of the last few shreds trickling in
+            // late while the majority of them came in before the slot was initially flushed.
             //
-            // First, insert elements from cache into existing index. Use dummy offset for the
-            // new entries for now, we'll need to update all offsets later since the new entries
-            // could invalidate previously calculated offsets.
+            // First, create a combined index of shreds on disk and in cache, using a dummy offset
+            // of 0 for starters. We'll later update all offsets on the complete combined index
+            // as any modifications to the index could invalidate previously calculated offsets.
             let slot_cache = slot_cache.read().unwrap();
+
+            // Alias for clarity
+            let combined_index = &mut old_file_data.index;
             let mut cache_data_size = 0;
             for (idx, shred) in slot_cache.iter() {
                 cache_data_size += shred.len();
-                index.insert(*idx as u32, 0);
+                combined_index.insert(*idx as u32, 0);
             }
+
             // Figre out how large the new file will be, and create a buffer to store all of it.
             // Use a regular buffer here instead of BufWriter because BufWriter must be filled
             // sequentially. Sequential writes would require updating the index first, writing it
             // and then writing the shreds as we iterate through the index a second time. With a
             // regular buffer, we can write shreds as we update the index, and then write the index
             // at the end. This will save us the second pass of the index.
-            let data_size = flushed_shreds.len() + cache_data_size;
-            let serialized_index_size: usize =
-                bincode::serialized_size(&index)?.try_into().unwrap();
-            let header = ShredFileHeader::new(slot, index.len(), serialized_index_size, data_size);
+            let data_size = old_file_data.data.len() + cache_data_size;
+            let serialized_index_size: usize = bincode::serialized_size(&combined_index)?
+                .try_into()
+                .unwrap();
+            let header =
+                ShredFileHeader::new(slot, combined_index.len(), serialized_index_size, data_size);
             let serialized_header = bincode::serialize(&header)?;
             let mut write_buffer =
                 vec![0; SIZE_OF_SHRED_FILE_HEADER + serialized_index_size + data_size];
@@ -205,7 +206,7 @@ impl Blockstore {
             let mut flushed_read_position = 0;
             let mut flushed_read_size = 0;
 
-            for (idx, offset) in index.iter_mut() {
+            for (idx, offset) in combined_index.iter_mut() {
                 if cache_item.is_some() && *idx == *cache_item.unwrap().0 as u32 {
                     if flushed_read_size != 0 {
                         // This could be the case if first index is from the cache or adjacent
@@ -213,7 +214,7 @@ impl Blockstore {
                         write_buffer
                             [buffer_write_position..buffer_write_position + flushed_read_size]
                             .copy_from_slice(
-                                &flushed_shreds[flushed_read_position
+                                &old_file_data.data[flushed_read_position
                                     ..flushed_read_position + flushed_read_size],
                             );
                         buffer_write_position += flushed_read_size;
@@ -239,13 +240,13 @@ impl Blockstore {
             if flushed_read_size != 0 {
                 write_buffer[buffer_write_position..buffer_write_position + flushed_read_size]
                     .copy_from_slice(
-                        &flushed_shreds
+                        &old_file_data.data
                             [flushed_read_position..flushed_read_position + flushed_read_size],
                     );
             }
 
             // The index is now updated so we can serialize and push into buffer
-            let serialized_index = bincode::serialize(&index)?;
+            let serialized_index = bincode::serialize(&combined_index)?;
             let header_write_offset: usize = header.index_offset as usize;
             write_buffer[header_write_offset..header_write_offset + serialized_index_size]
                 .copy_from_slice(&serialized_index[..]);
@@ -274,7 +275,10 @@ impl Blockstore {
                     write_buffer.write_all(shred).map_err(|err| {
                         BlockstoreError::Io(IoError::new(
                             ErrorKind::Other,
-                            format!("Unable to write slot {}: {}", slot, err),
+                            format!(
+                                "error writing cache contents to buffer for flush for slot {}: {}",
+                                slot, err
+                            ),
                         ))
                     })
                 })
@@ -414,6 +418,18 @@ impl Blockstore {
         Ok((header, file_index))
     }
 
+    pub(crate) fn read_shred_file(file: &mut fs::File) -> Result<ShredFileData> {
+        let (header, index) = Blockstore::read_shred_file_metadata(file)?;
+        let mut data = vec![0; header.data_size as usize];
+        file.read_exact(&mut data)?;
+
+        Ok(ShredFileData {
+            _header: header,
+            index,
+            data,
+        })
+    }
+
     // Retrieve shreds from fs
     // If end_index is Some(), range is inclusive on both ends
     // If end_index is None, range is inclusive on start, unbounded on end
@@ -527,7 +543,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_flush_data_shreds_for_full_slot_to_fs() {
+    fn test_flush_data_shreds_full_slot_to_fs() {
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
@@ -567,7 +583,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_flush_data_shreds_for_partial_slot_to_fs() {
+    fn test_flush_data_shreds_partial_slot_to_fs() {
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
