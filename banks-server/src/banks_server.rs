@@ -88,6 +88,7 @@ impl BanksServer {
     fn new_loopback(
         bank_forks: Arc<RwLock<BankForks>>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
+        poll_signature_status_sleep_duration: Duration,
     ) -> Self {
         let (transaction_sender, transaction_receiver) = channel();
         let bank = bank_forks.read().unwrap().working_bank();
@@ -106,7 +107,7 @@ impl BanksServer {
             bank_forks,
             block_commitment_cache,
             transaction_sender,
-            Duration::from_micros(100),
+            poll_signature_status_sleep_duration,
         )
     }
 
@@ -278,8 +279,13 @@ impl Banks for BanksServer {
 pub async fn start_local_server(
     bank_forks: Arc<RwLock<BankForks>>,
     block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
+    poll_signature_status_sleep_duration: Duration,
 ) -> UnboundedChannel<Response<BanksResponse>, ClientMessage<BanksRequest>> {
-    let banks_server = BanksServer::new_loopback(bank_forks, block_commitment_cache);
+    let banks_server = BanksServer::new_loopback(
+        bank_forks,
+        block_commitment_cache,
+        poll_signature_status_sleep_duration,
+    );
     let (client_transport, server_transport) = transport::channel::unbounded();
     let server = server::BaseChannel::with_defaults(server_transport).execute(banks_server.serve());
     tokio::spawn(server);
