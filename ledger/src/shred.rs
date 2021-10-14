@@ -223,17 +223,11 @@ fn sanitize_shred_type(value: u8) -> Result<ShredType> {
 }
 
 fn is_shred_type_data(shred_type: ShredType) -> bool {
-    match shred_type {
-        ShredType(DATA_SHRED_V1) | ShredType(DATA_SHRED_V2) => true,
-        _ => false,
-    }
+    matches!(shred_type, ShredType(DATA_SHRED_V1) | ShredType(DATA_SHRED_V2))
 }
 
 fn is_shred_type_coding(shred_type: ShredType) -> bool {
-    match shred_type {
-        ShredType(CODING_SHRED_V1) | ShredType(CODING_SHRED_V2) => true,
-        _ => false,
-    }
+    matches!(shred_type, ShredType(CODING_SHRED_V1) | ShredType(CODING_SHRED_V2))
 }
 
 #[derive(Error, Debug)]
@@ -448,7 +442,7 @@ impl Shred {
         }
     }
 
-    fn deserialize_shred_type(payload: &Vec<u8>) -> Result<ShredType> {
+    fn deserialize_shred_type(payload: &[u8]) -> Result<ShredType> {
         let start = OFFSET_OF_SHRED_TYPE;
         let end = start + SIZE_OF_SHRED_TYPE;
         let shred_type: u8 = limited_deserialize(&payload[start..end])?;
