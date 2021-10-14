@@ -455,12 +455,7 @@ impl Shred {
         let start = OFFSET_OF_SHRED_TYPE;
         let end = start + SIZE_OF_SHRED_TYPE;
         let shred_type: u8 = limited_deserialize(&payload[start..end])?;
-        match shred_type {
-            DATA_SHRED_V1 | DATA_SHRED_V2 | CODING_SHRED_V1 | CODING_SHRED_V2 => {
-                Ok(ShredType(shred_type))
-            }
-            _ => Err(ShredError::InvalidShredType),
-        }
+        sanitize_shred_type(shred_type)
     }
 
     pub fn new_from_serialized_shred(mut payload: Vec<u8>) -> Result<Self> {
