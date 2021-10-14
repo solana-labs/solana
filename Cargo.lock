@@ -5533,7 +5533,7 @@ dependencies = [
  "bincode",
  "bs58",
  "lazy_static",
- "log 0.4.14",
+ "log 0.4.11",
  "serde",
  "serde_derive",
  "serde_json",
