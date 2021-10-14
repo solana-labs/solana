@@ -2052,6 +2052,7 @@ impl AccountsDb {
         let old_uncleaned_root = AtomicU64::new(0);
         let old_action = AtomicU64::new(0);
         let useful = AtomicU64::new(0);
+        let single_old_zero = AtomicU64::new(0);
 
         // parallel scan the index.
         let (mut purges_zero_lamports, purges_old_accounts) = {
@@ -2095,9 +2096,15 @@ impl AccountsDb {
                                     if !am {
                                         max_clean_root.map(|x|
                                             if slot_list.iter().any(|item| item.0 < x.saturating_sub(300_000)) {
+                                                if slot_list.len() ==1 && account_info.lamports == 0 {
+
+                                            single_old_zero.fetch_add(1, Ordering::Relaxed); 
+                                                }
+                                                else {
                                                 old_action.fetch_add(1, Ordering::Relaxed);
                                                 error!("old_action: {:?}", slot_list.iter().map(|(slot, info)|
                                                     (x.wrapping_sub(*slot), info.is_zero_lamport())).collect::<Vec<_>>());
+                                                    }
                                             }
                                         );
                                     }
@@ -2314,6 +2321,8 @@ impl AccountsDb {
             ("delta_slots_count_in_rangeold", key_timings.delta_slots_count_in_rangeold, i64),
             ("old_uncleaned_root", old_uncleaned_root.load(Ordering::Relaxed), i64),
             ("old_action", old_action.load(Ordering::Relaxed), i64),
+            ("single_old_zero", single_old_zero.load(Ordering::Relaxed), i64),
+            
             ("total_keys_count", total_keys_count, i64),
             (
                 "scan_found_not_zero",
