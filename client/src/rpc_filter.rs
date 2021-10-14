@@ -251,7 +251,7 @@ mod tests {
                 encoding: None,
             })
             .verify(),
-            Err(RpcFilterError::Base58DataTooLarge)
+            Err(RpcFilterError::DataTooLarge)
         );
     }
 }
