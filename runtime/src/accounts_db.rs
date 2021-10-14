@@ -2051,6 +2051,7 @@ impl AccountsDb {
         let more_than_one_info_accum = AtomicU64::new(0);
         let old_uncleaned_root = AtomicU64::new(0);
         let old_action = AtomicU64::new(0);
+        let useful = AtomicU64::new(0);
 
         // parallel scan the index.
         let (mut purges_zero_lamports, purges_old_accounts) = {
@@ -2066,11 +2067,13 @@ impl AccountsDb {
                         let mut after_max = 0;
                         let mut more_than_one_info = 0;
                         for pubkey in pubkeys {
+                            let mut useless = true;
                             match self.accounts_index.get(pubkey, None, max_clean_root) {
                                 AccountIndexGetResult::Found(locked_entry, index) => {
                                     let slot_list = locked_entry.slot_list();
                                     let (slot, account_info) = &slot_list[index];
                                     if account_info.lamports == 0 {
+                                        useless = false;
                                         purges_zero_lamports.insert(
                                             *pubkey,
                                             self.accounts_index
@@ -2115,7 +2118,8 @@ impl AccountsDb {
                                             }
                                         );
                                             purges_old_accounts.push(*pubkey);
-                                    }
+                                            useless = false;
+                                        }
                                 }
                                 AccountIndexGetResult::NotFoundOnFork => {
                                     // This pubkey is in the index but not in a root slot, so clean
@@ -2125,12 +2129,16 @@ impl AccountsDb {
                                     // it was in the dirty list, so we assume that the slot it was
                                     // touched in must be unrooted.
                                     not_found_on_fork += 1;
+                                    useless = false;
                                     purges_old_accounts.push(*pubkey);
                                 }
                                 AccountIndexGetResult::Missing(_lock) => {
                                     missing += 1;
                                 }
                             };
+                            if !useless {
+                                useful.fetch_add(1, Ordering::Relaxed);
+                            }
                         }
                         found_not_zero_accum.fetch_add(found_not_zero, Ordering::Relaxed);
                         not_found_on_fork_accum.fetch_add(not_found_on_fork, Ordering::Relaxed);
@@ -2320,6 +2328,7 @@ impl AccountsDb {
             ("scan_missing", missing_accum.load(Ordering::Relaxed), i64),
             ("scan_after_max", after_max_accum.load(Ordering::Relaxed), i64),
             ("scan_more_than_one_info", more_than_one_info_accum.load(Ordering::Relaxed), i64),
+            ("useful_percent", useful.load(Ordering::Relaxed) * 100 / (total_keys_count as u64), i64),
             ("uncleaned_roots_len", uncleaned_roots_len, i64),
             (
                 "clean_old_root_us",
