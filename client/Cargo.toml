@@ -36,10 +36,13 @@ thiserror = "1.0"
 tokio = { version = "1", features = ["full"] }
 tungstenite = { version = "0.16.0", features = ["rustls-tls-webpki-roots"] }
 url = "2.2.2"
+async-trait = "0.1.51"
+futures-locks = "0.6.0"
 
 [dev-dependencies]
 assert_matches = "1.5.0"
 jsonrpc-http-server = "18.0.0"
+tokio-test = "0.4.2"
 solana-logger = { path = "../logger", version = "=1.9.0" }
 
 [package.metadata.docs.rs]

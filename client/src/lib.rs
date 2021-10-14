@@ -2,6 +2,7 @@
 #[macro_use]
 extern crate serde_derive;
 
+pub mod async_rpc_client;
 pub mod blockhash_query;
 pub mod client_error;
 pub mod http_sender;

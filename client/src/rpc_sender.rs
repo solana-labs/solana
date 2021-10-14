@@ -2,6 +2,7 @@
 
 use {
     crate::{client_error::Result, rpc_request::RpcRequest},
+    async_trait::async_trait,
     std::time::Duration,
 };
 
@@ -31,5 +32,26 @@ pub struct RpcTransportStats {
 /// [`MockSender`]: crate::mock_sender::MockSender
 pub trait RpcSender {
     fn send(&self, request: RpcRequest, params: serde_json::Value) -> Result<serde_json::Value>;
+    fn get_transport_stats(&self) -> RpcTransportStats;
+}
+
+/// An async transport for RPC calls.
+///
+/// `AsyncRpcSender` implements the underlying transport of requests to, and
+/// responses from, a Solana node, and is used primarily by [`AsyncRpcClient`].
+///
+/// It is typically implemented by [`AsyncHttpSender`] in production, and
+/// [`MockAsyncSender`] in unit tests.
+///
+/// [`AsyncRpcClient`]: crate::rpc_client::AsyncRpcClient
+/// [`AsyncHttpSender`]: crate::http_sender::AsyncHttpSender
+/// [`MockAsyncSender`]: crate::mock_sender::MockAsyncSender
+#[async_trait]
+pub trait AsyncRpcSender {
+    async fn send(
+        &self,
+        request: RpcRequest,
+        params: serde_json::Value,
+    ) -> Result<serde_json::Value>;
     fn get_transport_stats(&self) -> RpcTransportStats;
 }
