@@ -83,7 +83,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
 
     /// tell the accounts index the slot above which accounts index entries should be cached
     pub fn set_slot_for_caching(&self, slot: Slot) {
-        self.slot_for_caching.store(self.slot_for_caching_last.swap(slot, Ordering::Relaxed), Ordering::Relaxed);
+        self.slot_for_caching.store(self.slot_for_caching_last.swap(slot, Ordering::Relaxed).saturating_sub(300), Ordering::Relaxed);
     }
 
     pub fn set_startup(&self, storage: &AccountsIndexStorage<T>, value: bool) {
