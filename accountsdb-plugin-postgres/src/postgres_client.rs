@@ -206,6 +206,8 @@ impl SimplePostgresClient {
             }
         }
 
+        stmt = format!("{} ON CONFLICT (pubkey) DO NOTHING", stmt);
+
         info!("{}", stmt);
         let bulk_stmt = client.prepare(&stmt);
 

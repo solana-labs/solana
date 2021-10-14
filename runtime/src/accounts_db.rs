@@ -7071,7 +7071,8 @@ impl AccountsDb {
     pub fn notify_account_restore_from_snapshot(&self) {
         if let Some(accounts_update_notifier) = &self.accounts_update_notifier {
             let notifier = &accounts_update_notifier.read().unwrap();
-            let slots = self.storage.all_slots();
+            let mut slots = self.storage.all_slots();
+            slots.sort_by(|a, b| b.cmp(a));
             for slot in &slots {
                 let slot_stores = self.storage.get_slot_stores(*slot).unwrap();
 
