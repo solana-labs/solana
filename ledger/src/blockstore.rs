@@ -8368,6 +8368,7 @@ pub mod tests {
 
     #[test]
     fn test_transaction_status_protobuf_backward_compatability() {
+<<<<<<< HEAD
         let blockstore_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
@@ -8408,6 +8409,50 @@ pub mod tests {
             };
             let deprecated_status: StoredTransactionStatusMeta = status.clone().into();
             let protobuf_status: generated::TransactionStatusMeta = status.into();
+=======
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        let status = TransactionStatusMeta {
+            status: Ok(()),
+            fee: 42,
+            pre_balances: vec![1, 2, 3],
+            post_balances: vec![1, 2, 3],
+            inner_instructions: Some(vec![]),
+            log_messages: Some(vec![]),
+            pre_token_balances: Some(vec![TransactionTokenBalance {
+                account_index: 0,
+                mint: Pubkey::new_unique().to_string(),
+                ui_token_amount: UiTokenAmount {
+                    ui_amount: Some(1.1),
+                    decimals: 1,
+                    amount: "11".to_string(),
+                    ui_amount_string: "1.1".to_string(),
+                },
+                owner: Pubkey::new_unique().to_string(),
+            }]),
+            post_token_balances: Some(vec![TransactionTokenBalance {
+                account_index: 0,
+                mint: Pubkey::new_unique().to_string(),
+                ui_token_amount: UiTokenAmount {
+                    ui_amount: None,
+                    decimals: 1,
+                    amount: "11".to_string(),
+                    ui_amount_string: "1.1".to_string(),
+                },
+                owner: Pubkey::new_unique().to_string(),
+            }]),
+            rewards: Some(vec![Reward {
+                pubkey: "My11111111111111111111111111111111111111111".to_string(),
+                lamports: -42,
+                post_balance: 42,
+                reward_type: Some(RewardType::Rent),
+                commission: None,
+            }]),
+        };
+        let deprecated_status: StoredTransactionStatusMeta = status.clone().into();
+        let protobuf_status: generated::TransactionStatusMeta = status.into();
+>>>>>>> e806fa690 (Include token owners in TransactionTokenBalances (#20642))
 
             for slot in 0..2 {
                 let data = serialize(&deprecated_status).unwrap();
