@@ -507,6 +507,7 @@ impl AncestorHashesService {
     ) {
         let root_bank = repair_info.bank_forks.read().unwrap().root_bank();
         for slot in retryable_slots_receiver.try_iter() {
+            datapoint_info!("ancestor-repair-retry", ("slot", slot, i64));
             repairable_dead_slot_pool.insert(slot);
         }
 
