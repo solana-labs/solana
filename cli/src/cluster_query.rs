@@ -1720,7 +1720,7 @@ pub fn process_show_stakes(
                 // Filter by `StakeState::Stake(_, _)`
                 rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp {
                     offset: 0,
-                    bytes: rpc_filter::MemcmpEncodedBytes::Binary(
+                    bytes: rpc_filter::MemcmpEncodedBytes::Base58(
                         bs58::encode([2, 0, 0, 0]).into_string(),
                     ),
                     encoding: Some(rpc_filter::MemcmpEncoding::Binary),
@@ -1728,7 +1728,7 @@ pub fn process_show_stakes(
                 // Filter by `Delegation::voter_pubkey`, which begins at byte offset 124
                 rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp {
                     offset: 124,
-                    bytes: rpc_filter::MemcmpEncodedBytes::Binary(
+                    bytes: rpc_filter::MemcmpEncodedBytes::Base58(
                         vote_account_pubkeys[0].to_string(),
                     ),
                     encoding: Some(rpc_filter::MemcmpEncoding::Binary),
