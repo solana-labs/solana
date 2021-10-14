@@ -2471,7 +2471,7 @@ impl AccountsDb {
         unrefed_pubkeys: &mut Vec<&'a Pubkey>,
     ) -> usize
     where
-        I: Iterator<Item = (&'a Pubkey, &'a FoundStoredAccount<'a>)>,
+        I: Iterator<Item = &'a (Pubkey, FoundStoredAccount<'a>)>,
     {
         let mut alive_total = 0;
 
@@ -2543,6 +2543,10 @@ impl AccountsDb {
             }
             num_stores += 1;
         }
+
+        // sort by pubkey to keep account index lookups close
+        let mut stored_accounts = stored_accounts.into_iter().collect::<Vec<_>>();
+        stored_accounts.sort_unstable_by(|a, b| a.0.cmp(&b.0));
 
         let mut index_read_elapsed = Measure::start("index_read_elapsed");
         let alive_total_collect = AtomicUsize::new(0);
