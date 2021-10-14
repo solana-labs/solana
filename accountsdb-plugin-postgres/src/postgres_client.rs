@@ -184,7 +184,7 @@ impl SimplePostgresClient {
         let batch_size = config
             .batch_size
             .unwrap_or(DEFAULT_ACCOUNTS_INSERT_BATCH_SIZE);
-        let mut stmt = String::from("INSERT INTO account as acct (pubkey, slot, owner, lamports, executable, rent_epoch, data, updated_on) VALUES");
+        let mut stmt = String::from("INSERT INTO account AS acct (pubkey, slot, owner, lamports, executable, rent_epoch, data, updated_on) VALUES");
         for j in 0..batch_size {
             let row = j * ACCOUNT_COLUMN_COUNT;
             let val_str = format!(
@@ -229,10 +229,10 @@ impl SimplePostgresClient {
         client: &mut Client,
         config: &AccountsDbPluginPostgresConfig,
     ) -> Result<Statement, AccountsDbPluginError> {
-        let stmt = "INSERT INTO account (pubkey, slot, owner, lamports, executable, rent_epoch, data, updated_on) \
+        let stmt = "INSERT INTO account AS acct (pubkey, slot, owner, lamports, executable, rent_epoch, data, updated_on) \
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) \
         ON CONFLICT (pubkey) DO UPDATE SET slot=excluded.slot, owner=excluded.owner, lamports=excluded.lamports, executable=excluded.executable, rent_epoch=excluded.rent_epoch, \
-        data=excluded.data, updated_on=excluded.updated_on WHERE slot <= excluded.slot";
+        data=excluded.data, updated_on=excluded.updated_on WHERE acct.slot <= excluded.slot";
 
         let stmt = client.prepare(stmt);
 
