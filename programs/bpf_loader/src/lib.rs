@@ -71,8 +71,8 @@ fn map_ebpf_error(invoke_context: &dyn InvokeContext, e: EbpfError<BpfError>) ->
 }
 
 pub fn create_executor(
-    program_account_index: usize,
-    program_data_offset: usize,
+    programdata_account_index: usize,
+    programdata_offset: usize,
     invoke_context: &mut dyn InvokeContext,
     use_jit: bool,
 ) -> Result<Arc<BpfExecutor>, InstructionError> {
@@ -91,11 +91,9 @@ pub fn create_executor(
     };
     let mut executable = {
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
-        let program = keyed_account_at_index(keyed_accounts, program_account_index)?;
-        let account = program.try_account_ref()?;
-        let data = &account.data()[program_data_offset..];
+        let programdata = keyed_account_at_index(keyed_accounts, programdata_account_index)?;
         <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
-            data,
+            &programdata.try_account_ref()?.data()[programdata_offset..],
             None,
             config,
             syscall_registry,
@@ -263,7 +261,7 @@ fn process_instruction_common(
             Some(executor) => executor,
             None => {
                 let executor = create_executor(
-                    next_first_instruction_account,
+                    first_instruction_account,
                     program_data_offset,
                     invoke_context,
                     use_jit,
@@ -349,7 +347,7 @@ fn process_loader_upgradeable_instruction(
                 return Err(InstructionError::InvalidAccountData);
             }
             write_program_data(
-                1,
+                first_instruction_account,
                 UpgradeableLoaderState::buffer_data_offset()? + offset as usize,
                 &bytes,
                 invoke_context,
@@ -472,7 +470,12 @@ fn process_loader_upgradeable_instruction(
             )?;
 
             // Load and verify the program bits
-            let executor = create_executor(4, buffer_data_offset, invoke_context, use_jit)?;
+            let executor = create_executor(
+                first_instruction_account + 3,
+                buffer_data_offset,
+                invoke_context,
+                use_jit,
+            )?;
             invoke_context.add_executor(&new_program_id, executor);
 
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
@@ -611,7 +614,12 @@ fn process_loader_upgradeable_instruction(
             }
 
             // Load and verify the program bits
-            let executor = create_executor(3, buffer_data_offset, invoke_context, use_jit)?;
+            let executor = create_executor(
+                first_instruction_account + 2,
+                buffer_data_offset,
+                invoke_context,
+                use_jit,
+            )?;
             invoke_context.add_executor(&new_program_id, executor);
 
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
@@ -878,7 +886,12 @@ fn process_loader_instruction(
                 ic_msg!(invoke_context, "Program account did not sign");
                 return Err(InstructionError::MissingRequiredSignature);
             }
-            write_program_data(1, offset as usize, &bytes, invoke_context)?;
+            write_program_data(
+                first_instruction_account,
+                offset as usize,
+                &bytes,
+                invoke_context,
+            )?;
         }
         LoaderInstruction::Finalize => {
             if program.signer_key().is_none() {
@@ -886,7 +899,7 @@ fn process_loader_instruction(
                 return Err(InstructionError::MissingRequiredSignature);
             }
 
-            let executor = create_executor(1, 0, invoke_context, use_jit)?;
+            let executor = create_executor(first_instruction_account, 0, invoke_context, use_jit)?;
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let program = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             invoke_context.add_executor(program.unsigned_key(), executor);
