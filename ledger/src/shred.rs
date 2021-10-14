@@ -169,7 +169,10 @@ fn shred_type_to_common_header_version(shred_type: ShredType) -> ShredCommonHead
     match shred_type {
         ShredType(DATA_SHRED_V1) | ShredType(CODING_SHRED_V1) => ShredCommonHeaderVersion::V1,
         ShredType(DATA_SHRED_V2) | ShredType(CODING_SHRED_V2) => ShredCommonHeaderVersion::V2,
-        _ => panic!("unexpected shred type"),
+        _ => {
+            let ShredType(t) = shred_type;
+            panic!("unexpected shred type: {:#b}", t);
+        }
     }
 }
 
@@ -2146,11 +2149,13 @@ pub mod tests {
         assert_eq!(1, stats.index_out_of_bounds);
 
         let (mut header, coding_header) = Shredder::new_coding_shred_header(8, 2, 10, 30, 4, 200);
-        header.shred_type = ShredType(u8::MAX);
+        header.shred_type = ShredType(DATA_SHRED_V2);
         let shred = Shred::new_empty_from_header(header, DataShredHeader::default(), coding_header);
         shred.copy_to_packet(&mut packet);
 
-        assert_eq!(None, get_shred_slot_index_type(&packet, &mut stats));
-        assert_eq!(1, stats.bad_shred_type);
+        assert_eq!(
+            Some((8, 2, true)),
+            get_shred_slot_index_type(&packet, &mut stats)
+        );
     }
 }
