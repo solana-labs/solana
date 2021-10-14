@@ -39,10 +39,10 @@ pub struct AccountsDbPluginPostgresConfig {
 
 #[derive(Error, Debug)]
 pub enum AccountsDbPluginPostgresError {
-    #[error("Error connecting to the backend data store.")]
+    #[error("Error connecting to the backend data store, Error message: {msg}")]
     DataStoreConnectionError { msg: String },
 
-    #[error("Error preparing data store schema.")]
+    #[error("Error preparing data store schema. Error message: {msg}")]
     DataSchemaError { msg: String },
 }
 
