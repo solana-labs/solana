@@ -56,6 +56,12 @@ impl AESCiphertext {
     }
 }
 
+impl Default for AESCiphertext {
+    fn default() -> Self {
+        AESCiphertext([0_u8; 16])
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
