@@ -1,8 +1,10 @@
-use crate::parse_instruction::{
-    check_num_accounts, ParsableProgram, ParseInstructionError, ParsedInstructionEnum,
+use {
+    crate::parse_instruction::{
+        check_num_accounts, ParsableProgram, ParseInstructionError, ParsedInstructionEnum,
+    },
+    serde_json::json,
+    solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey},
 };
-use serde_json::json;
-use solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey};
 
 // A helper function to convert spl_associated_token_account_v1_0::id() as spl_sdk::pubkey::Pubkey
 // to solana_sdk::pubkey::Pubkey
@@ -47,12 +49,14 @@ fn check_num_associated_token_accounts(
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use spl_associated_token_account_v1_0::{
-        create_associated_token_account,
-        solana_program::{
-            instruction::CompiledInstruction as SplAssociatedTokenCompiledInstruction,
-            message::Message, pubkey::Pubkey as SplAssociatedTokenPubkey,
+    use {
+        super::*,
+        spl_associated_token_account_v1_0::{
+            create_associated_token_account,
+            solana_program::{
+                instruction::CompiledInstruction as SplAssociatedTokenCompiledInstruction,
+                message::Message, pubkey::Pubkey as SplAssociatedTokenPubkey,
+            },
         },
     };
 
