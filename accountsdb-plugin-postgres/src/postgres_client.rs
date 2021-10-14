@@ -206,8 +206,10 @@ impl SimplePostgresClient {
             }
         }
 
-        stmt = format!("{} ON CONFLICT (pubkey) DO UPDATE SET slot=excluded.slot, owner=excluded.owner, lamports=excluded.lamports, executable=excluded.executable, rent_epoch=excluded.rent_epoch, \
-        data=excluded.data, updated_on=excluded.updated_on WHERE acct.slot <= excluded.slot", stmt);
+        let handle_conflict = "ON CONFLICT (pubkey) DO UPDATE SET slot=excluded.slot, owner=excluded.owner, lamports=excluded.lamports, executable=excluded.executable, rent_epoch=excluded.rent_epoch, \
+            data=excluded.data, updated_on=excluded.updated_on WHERE acct.slot <= excluded.slot";
+
+        stmt = format!("{} {}", stmt, handle_conflict);
 
         info!("{}", stmt);
         let bulk_stmt = client.prepare(&stmt);

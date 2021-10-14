@@ -7073,17 +7073,20 @@ impl AccountsDb {
             let notifier = &accounts_update_notifier.read().unwrap();
             let mut slots = self.storage.all_slots();
             slots.sort_by(|a, b| b.cmp(a));
-            for slot in &slots {
-                let slot_stores = self.storage.get_slot_stores(*slot).unwrap();
 
-                let slot_stores = slot_stores.read().unwrap();
-                for (_, storage_entry) in slot_stores.iter() {
-                    let accounts = storage_entry.all_accounts();
-                    for account in &accounts {
-                        notifier.notify_account_restore_from_snapshot(*slot, account);
+            slots.par_chunks(4096).for_each(|slots| {
+                for slot in slots {
+                    let slot_stores = self.storage.get_slot_stores(*slot).unwrap();
+    
+                    let slot_stores = slot_stores.read().unwrap();
+                    for (_, storage_entry) in slot_stores.iter() {
+                        let accounts = storage_entry.all_accounts();
+                        for account in &accounts {
+                            notifier.notify_account_restore_from_snapshot(*slot, account);
+                        }
                     }
                 }
-            }
+            });
         }
     }
 }
