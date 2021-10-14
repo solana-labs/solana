@@ -8387,6 +8387,7 @@ pub mod tests {
                         amount: "11".to_string(),
                         ui_amount_string: "1.1".to_string(),
                     },
+                    owner: Pubkey::new_unique().to_string(),
                 }]),
                 post_token_balances: Some(vec![TransactionTokenBalance {
                     account_index: 0,
@@ -8397,6 +8398,7 @@ pub mod tests {
                         amount: "11".to_string(),
                         ui_amount_string: "1.1".to_string(),
                     },
+                    owner: Pubkey::new_unique().to_string(),
                 }]),
                 rewards: Some(vec![Reward {
                     pubkey: "My11111111111111111111111111111111111111111".to_string(),
