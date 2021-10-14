@@ -25,19 +25,19 @@ pub enum ReplicaAccountInfoVersions<'a> {
 
 #[derive(Error, Debug)]
 pub enum AccountsDbPluginError {
-    #[error("Error opening config file: error {0}.")]
+    #[error("Error opening config file: error ({0}).")]
     ConfigFileOpenError(#[from] io::Error),
 
-    #[error("Error reading config file. Error message: {msg}")]
+    #[error("Error reading config file. Error message: ({msg})")]
     ConfigFileReadError { msg: String },
 
-    #[error("Error updating account. Error message: {msg}")]
+    #[error("Error updating account. Error message: ({msg})")]
     AccountsUpdateError { msg: String },
 
-    #[error("Error updating slot status. Error message: {msg}")]
+    #[error("Error updating slot status. Error message: ({msg})")]
     SlotStatusUpdateError { msg: String },
 
-    #[error("Plugin-defined custom error. Error message: {0}")]
+    #[error("Plugin-defined custom error. Error message: ({0})")]
     Custom(Box<dyn error::Error + Send + Sync>),
 }
 

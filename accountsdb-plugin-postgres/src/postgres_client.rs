@@ -32,7 +32,6 @@ const ACCOUNT_COLUMN_COUNT: usize = 8;
 
 struct PostgresSqlClientWrapper {
     client: Client,
-    update_account_stmt: Statement,
     bulk_account_insert_stmt: Statement,
 }
 
@@ -225,61 +224,6 @@ impl SimplePostgresClient {
         }
     }
 
-    fn build_single_account_upsert_statement(
-        client: &mut Client,
-        config: &AccountsDbPluginPostgresConfig,
-    ) -> Result<Statement, AccountsDbPluginError> {
-        let stmt = "INSERT INTO account AS acct (pubkey, slot, owner, lamports, executable, rent_epoch, data, updated_on) \
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) \
-        ON CONFLICT (pubkey) DO UPDATE SET slot=excluded.slot, owner=excluded.owner, lamports=excluded.lamports, executable=excluded.executable, rent_epoch=excluded.rent_epoch, \
-        data=excluded.data, updated_on=excluded.updated_on WHERE acct.slot <= excluded.slot";
-
-        let stmt = client.prepare(stmt);
-
-        match stmt {
-            Err(err) => {
-                return Err(AccountsDbPluginError::Custom(Box::new(AccountsDbPluginPostgresError::DataSchemaError {
-                    msg: format!(
-                        "Error in preparing for the accounts update PostgreSQL database: {} host: {} user: {} config: {:?}",
-                        err, config.host, config.user, config
-                    ),
-                })));
-            }
-            Ok(update_account_stmt) => Ok(update_account_stmt),
-        }
-    }
-
-    fn upsert_account(&mut self, account: &DbAccountInfo) -> Result<(), AccountsDbPluginError> {
-        let lamports = account.lamports() as i64;
-        let rent_epoch = account.rent_epoch() as i64;
-        let updated_on = Utc::now().naive_utc();
-        let client = self.client.get_mut().unwrap();
-        let result = client.client.query(
-            &client.update_account_stmt,
-            &[
-                &account.pubkey(),
-                &account.slot,
-                &account.owner(),
-                &lamports,
-                &account.executable(),
-                &rent_epoch,
-                &account.data(),
-                &updated_on,
-            ],
-        );
-
-        if let Err(err) = result {
-            let msg = format!(
-                "Failed to persist the update of account to the PostgreSQL database. Error: {:?}",
-                err
-            );
-            error!("{}", msg);
-            return Err(AccountsDbPluginError::AccountsUpdateError { msg });
-        }
-
-        Ok(())
-    }
-
     fn insert_accounts_in_batch(
         &mut self,
         account: DbAccountInfo,
@@ -326,7 +270,6 @@ impl SimplePostgresClient {
         let mut client = Self::connect_to_db(config)?;
         let bulk_account_insert_stmt =
             Self::build_bulk_account_insert_statement(&mut client, config)?;
-        let update_account_stmt = Self::build_single_account_upsert_statement(&mut client, config)?;
 
         let batch_size = config
             .batch_size
@@ -337,7 +280,6 @@ impl SimplePostgresClient {
             accounts: Vec::with_capacity(batch_size),
             client: Mutex::new(PostgresSqlClientWrapper {
                 client,
-                update_account_stmt,
                 bulk_account_insert_stmt,
             }),
         })
@@ -356,9 +298,6 @@ impl PostgresClient for SimplePostgresClient {
             bs58::encode(account.owner()).into_string(),
             account.slot,
         );
-        if !at_startup {
-            return self.upsert_account(&account);
-        }
         self.insert_accounts_in_batch(account)
     }
 
