@@ -902,7 +902,7 @@ mod test {
         // shred.slot() < root, shred gets thrown out
         assert!(!should_retransmit_and_persist(
             &coding_shred,
-            Some(bank.clone()),
+            Some(bank),
             &cache,
             &me_id,
             6,
