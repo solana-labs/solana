@@ -2020,7 +2020,7 @@ impl AccountsDb {
         let found_not_zero_accum = AtomicU64::new(0);
         let not_found_on_fork_accum = AtomicU64::new(0);
         let missing_accum = AtomicU64::new(0);
-        let useful = AtomicU64::new(0);
+        let useful_accum = AtomicU64::new(0);
 
         // parallel scan the index.
         let (mut purges_zero_lamports, purges_old_accounts) = {
@@ -2033,6 +2033,7 @@ impl AccountsDb {
                         let mut found_not_zero = 0;
                         let mut not_found_on_fork = 0;
                         let mut missing = 0;
+                        let mut useful = 0;
                         self.accounts_index.get_many(
                             pubkeys,
                             max_clean_root,
@@ -2088,7 +2089,7 @@ impl AccountsDb {
                                     }
                                 }
                                 if !useless {
-                                    useful.fetch_add(1, Ordering::Relaxed);
+                                    useful += 1;
                                 }
                                 !useless
                             },
@@ -2096,6 +2097,7 @@ impl AccountsDb {
                         found_not_zero_accum.fetch_add(found_not_zero, Ordering::Relaxed);
                         not_found_on_fork_accum.fetch_add(not_found_on_fork, Ordering::Relaxed);
                         missing_accum.fetch_add(missing, Ordering::Relaxed);
+                        useful_accum.fetch_add(useful, Ordering::Relaxed);
                         (purges_zero_lamports, purges_old_accounts)
                     })
                     .reduce(
@@ -2253,6 +2255,7 @@ impl AccountsDb {
             ("delta_key_count", key_timings.delta_key_count, i64),
             ("dirty_pubkeys_count", key_timings.dirty_pubkeys_count, i64),
             ("sort_us", sort.as_us(), i64),
+            ("useful_keys", useful_accum.load(Ordering::Relaxed), i64),
             ("total_keys_count", total_keys_count, i64),
             (
                 "scan_found_not_zero",
