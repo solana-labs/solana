@@ -74,16 +74,11 @@ pub fn collect_token_balances(
                     continue;
                 }
 
-<<<<<<< HEAD
-                if let Some((mint, ui_token_amount)) =
-                    collect_token_balance_from_account(bank, account_id, &mut mint_decimals)
-=======
                 if let Some(TokenBalanceData {
                     mint,
                     ui_token_amount,
                     owner,
-                }) = collect_token_balance_from_account(bank, account_id, mint_decimals)
->>>>>>> e806fa690 (Include token owners in TransactionTokenBalances (#20642))
+                }) = collect_token_balance_from_account(bank, account_id, &mut mint_decimals)
                 {
                     transaction_balances.push(TransactionTokenBalance {
                         account_index: index as u8,
