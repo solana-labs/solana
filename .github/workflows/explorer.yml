@@ -33,6 +33,7 @@ jobs:
       - run: npm run test
       - name: deploy website
         uses: actions/checkout@v2
+      - run : npx vercel link
       - uses: amondnet/vercel-action@v20
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }} # Required
