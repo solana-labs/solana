@@ -223,11 +223,17 @@ fn sanitize_shred_type(value: u8) -> Result<ShredType> {
 }
 
 fn is_shred_type_data(shred_type: ShredType) -> bool {
-    matches!(shred_type, ShredType(DATA_SHRED_V1) | ShredType(DATA_SHRED_V2))
+    matches!(
+        shred_type,
+        ShredType(DATA_SHRED_V1) | ShredType(DATA_SHRED_V2)
+    )
 }
 
 fn is_shred_type_coding(shred_type: ShredType) -> bool {
-    matches!(shred_type, ShredType(CODING_SHRED_V1) | ShredType(CODING_SHRED_V2))
+    matches!(
+        shred_type,
+        ShredType(CODING_SHRED_V1) | ShredType(CODING_SHRED_V2)
+    )
 }
 
 #[derive(Error, Debug)]
