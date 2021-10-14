@@ -2093,6 +2093,8 @@ impl AccountsDb {
                                         max_clean_root.map(|x|
                                             if slot_list.iter().any(|item| item.0 < x.saturating_sub(300_000)) {
                                                 old_action.fetch_add(1, Ordering::Relaxed);
+                                                error!("old_action: {:?}", slot_list.iter().map(|(slot, info)|
+                                                    (x.wrapping_sub(*slot), info.is_zero_lamport())).collect::<Vec<_>>());
                                             }
                                         );
                                     }
