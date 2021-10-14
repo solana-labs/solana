@@ -599,6 +599,7 @@ struct CleanKeyTimings {
     delta_slots_count_in_range2: u64,
     delta_slots_count_in_range3: u64,
     delta_slots_count_in_range4: u64,
+    delta_slots_count_in_rangeold: u64,
     hashset_to_vec_us: u64,
     dirty_store_processing_us: u64,
     delta_key_count: u64,
@@ -1919,6 +1920,7 @@ impl AccountsDb {
         let lower_bound2 = max_slot.saturating_sub(200);
         let lower_bound3 = max_slot.saturating_sub(300);
         let lower_bound4 = max_slot.saturating_sub(400);
+        let old = max_slot.saturating_sub(300_000);
         self.dirty_stores.retain(|(slot, _store_id), store| {
             if *slot > max_slot {
                 true
@@ -1935,6 +1937,9 @@ impl AccountsDb {
                 }
                 if slot >= &lower_bound4 {
                     timings.delta_slots_count_in_range4 += 1;
+                }
+                if slot < &old {
+                    timings.delta_slots_count_in_rangeold += 1;
                 }
                 dirty_stores.push((*slot, store.clone()));
                 false
@@ -2280,6 +2285,7 @@ impl AccountsDb {
             ("delta_slots_count_in_range2", key_timings.delta_slots_count_in_range2, i64),
             ("delta_slots_count_in_range3", key_timings.delta_slots_count_in_range3, i64),
             ("delta_slots_count_in_range4", key_timings.delta_slots_count_in_range4, i64),
+            ("delta_slots_count_in_rangeold", key_timings.delta_slots_count_in_rangeold, i64),
             ("total_keys_count", total_keys_count, i64),
             (
                 "scan_found_not_zero",
@@ -2729,6 +2735,7 @@ impl AccountsDb {
             if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
                 slot_stores.write().unwrap().retain(|_key, store| {
                     if store.count() == 0 {
+                        error!("dirty_stores shrink store, dirty: {}", slot);
                         self.dirty_stores
                             .insert((slot, store.append_vec_id()), store.clone());
                         dead_storages.push(store.clone());
@@ -5363,6 +5370,7 @@ impl AccountsDb {
             for slot in storages.range().start..in_epoch_range_start {
                 if let Some(storages) = storages.get(slot) {
                     storages.iter().for_each(|store| {
+                        error!("dirty_stores mark old store as dirty: {}", store.id.load(Ordering::Relaxed));
                         self.dirty_stores
                             .insert((slot, store.id.load(Ordering::Relaxed)), store.clone());
                     });
@@ -5961,6 +5969,7 @@ impl AccountsDb {
                 );
                 let count = store.remove_account(account_info.stored_size, reset_accounts);
                 if count == 0 {
+                    error!("dirty_stores remove dead accounts, dirty: {}", slot);
                     self.dirty_stores
                         .insert((*slot, store.append_vec_id()), store.clone());
                     dead_slots.insert(*slot);
