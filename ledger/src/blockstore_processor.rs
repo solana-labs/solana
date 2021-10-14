@@ -1,7 +1,6 @@
 use crate::{
-    block_cost_limits::*, block_error::BlockError, blockstore::Blockstore,
-    blockstore_db::BlockstoreError, blockstore_meta::SlotMeta,
-    leader_schedule_cache::LeaderScheduleCache,
+    block_error::BlockError, blockstore::Blockstore, blockstore_db::BlockstoreError,
+    blockstore_meta::SlotMeta, leader_schedule_cache::LeaderScheduleCache,
 };
 use chrono_humanize::{Accuracy, HumanTime, Tense};
 use crossbeam_channel::Sender;
@@ -25,6 +24,7 @@ use solana_runtime::{
     },
     bank_forks::BankForks,
     bank_utils,
+    block_cost_limits::*,
     commitment::VOTE_THRESHOLD_SIZE,
     snapshot_config::SnapshotConfig,
     snapshot_package::{AccountsPackageSender, SnapshotType},
@@ -66,7 +66,7 @@ pub struct BlockCostCapacityMeter {
 
 impl Default for BlockCostCapacityMeter {
     fn default() -> Self {
-        BlockCostCapacityMeter::new(BLOCK_COST_MAX)
+        BlockCostCapacityMeter::new(MAX_BLOCK_UNITS)
     }
 }
 
@@ -143,7 +143,8 @@ fn aggregate_total_execution_units(execute_timings: &ExecuteTimings) -> u64 {
         if timing.count < 1 {
             continue;
         }
-        execute_cost_units += timing.accumulated_units / timing.count as u64;
+        execute_cost_units =
+            execute_cost_units.saturating_add(timing.accumulated_units / timing.count as u64);
         trace!("aggregated execution cost of {:?} {:?}", program_id, timing);
     }
     execute_cost_units

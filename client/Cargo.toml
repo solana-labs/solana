@@ -18,7 +18,7 @@ indicatif = "0.16.2"
 jsonrpc-core = "18.0.0"
 log = "0.4.14"
 rayon = "1.5.1"
-reqwest = { version = "0.11.4", default-features = false, features = ["blocking", "rustls-tls", "json"] }
+reqwest = { version = "0.11.5", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 semver = "1.0.4"
 serde = "1.0.130"
 serde_derive = "1.0.103"
@@ -27,6 +27,7 @@ solana-account-decoder = { path = "../account-decoder", version = "=1.9.0" }
 solana-clap-utils = { path = "../clap-utils", version = "=1.9.0" }
 solana-faucet = { path = "../faucet", version = "=1.9.0" }
 solana-net-utils = { path = "../net-utils", version = "=1.9.0" }
+solana-measure = { path = "../measure", version = "=1.9.0" }
 solana-sdk = { path = "../sdk", version = "=1.9.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.9.0" }
 solana-version = { path = "../version", version = "=1.9.0" }

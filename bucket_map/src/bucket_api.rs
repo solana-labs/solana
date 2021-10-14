@@ -7,6 +7,7 @@ use solana_sdk::pubkey::Pubkey;
 use std::ops::RangeBounds;
 use std::path::PathBuf;
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::sync::{RwLock, RwLockWriteGuard};
 
@@ -18,6 +19,7 @@ pub struct BucketApi<T: Clone + Copy> {
     pub stats: Arc<BucketMapStats>,
 
     bucket: LockedBucket<T>,
+    count: Arc<AtomicU64>,
 }
 
 impl<T: Clone + Copy> BucketApi<T> {
@@ -25,12 +27,14 @@ impl<T: Clone + Copy> BucketApi<T> {
         drives: Arc<Vec<PathBuf>>,
         max_search: MaxSearch,
         stats: Arc<BucketMapStats>,
+        count: Arc<AtomicU64>,
     ) -> Self {
         Self {
             drives,
             max_search,
             stats,
             bucket: RwLock::default(),
+            count,
         }
     }
 
@@ -90,7 +94,9 @@ impl<T: Clone + Copy> BucketApi<T> {
                 Arc::clone(&self.stats),
             ));
         } else {
-            bucket.as_mut().unwrap().handle_delayed_grows();
+            let write = bucket.as_mut().unwrap();
+            write.handle_delayed_grows();
+            self.count.store(write.bucket_len(), Ordering::Relaxed);
         }
         bucket
     }

@@ -1221,6 +1221,7 @@ pub fn main() {
                 .long("accountsdb-plugin-config")
                 .value_name("FILE")
                 .takes_value(true)
+                .multiple(true)
                 .hidden(true)
                 .help("Specify the configuration file for the AccountsDb plugin."),
         )
@@ -1379,8 +1380,14 @@ pub fn main() {
                 .help("Persistent accounts-index location. \
                        May be specified multiple times. \
                        [default: [ledger]/accounts_index]"),
- )
-        .arg(
+         )
+         .arg(Arg::with_name("accounts_filler_count")
+            .long("accounts-filler-count")
+            .value_name("COUNT")
+            .validator(is_parsable::<usize>)
+            .takes_value(true)
+            .help("How many accounts to add to stress the system. Accounts are ignored in operations related to correctness."))
+         .arg(
             Arg::with_name("accounts_db_test_hash_calculation")
                 .long("accounts-db-test-hash-calculation")
                 .help("Enables testing of hash calculation using stores in \
@@ -1948,9 +1955,11 @@ pub fn main() {
         accounts_index_config.drives = Some(accounts_index_paths);
     }
 
+    let filler_account_count = value_t!(matches, "accounts_filler_count", usize).ok();
     let accounts_db_config = Some(AccountsDbConfig {
         index: Some(accounts_index_config),
         accounts_hash_cache_path: Some(ledger_path.clone()),
+        filler_account_count,
     });
 
     let accountsdb_repl_service_config = if matches.is_present("enable_accountsdb_repl") {
@@ -1973,9 +1982,16 @@ pub fn main() {
         None
     };
 
-    let accountsdb_plugin_config_file = matches
-        .value_of("accountsdb_plugin_config")
-        .map(PathBuf::from);
+    let accountsdb_plugin_config_files = if matches.is_present("accountsdb_plugin_config") {
+        Some(
+            values_t_or_exit!(matches, "accountsdb_plugin_config", String)
+                .into_iter()
+                .map(PathBuf::from)
+                .collect(),
+        )
+    } else {
+        None
+    };
 
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
@@ -2018,7 +2034,7 @@ pub fn main() {
             rpc_scan_and_fix_roots: matches.is_present("rpc_scan_and_fix_roots"),
         },
         accountsdb_repl_service_config,
-        accountsdb_plugin_config_file,
+        accountsdb_plugin_config_files,
         rpc_addrs: value_t!(matches, "rpc_port", u16).ok().map(|rpc_port| {
             (
                 SocketAddr::new(rpc_bind_address, rpc_port),

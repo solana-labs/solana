@@ -14,7 +14,7 @@ chrono = { version = "0.4", features = ["serde"] }
 clap = "2.33.0"
 console = "0.14.1"
 csv = "1.1.6"
-ctrlc = { version = "3.1.9", features = ["termination"] }
+ctrlc = { version = "3.2.1", features = ["termination"] }
 indexmap = "1.7.0"
 indicatif = "0.16.2"
 pickledb = "0.4.1"

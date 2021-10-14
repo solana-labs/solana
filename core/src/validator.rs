@@ -1,5 +1,6 @@
 //! The `validator` module hosts all the validator microservices.
 
+pub use solana_perf::report_target_features;
 use {
     crate::{
         broadcast_stage::BroadcastStageType,
@@ -7,7 +8,6 @@ use {
         cluster_info_vote_listener::VoteTracker,
         completed_data_sets_service::CompletedDataSetsService,
         consensus::{reconcile_blockstore_roots_with_tower, Tower},
-        cost_model::CostModel,
         rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
         sample_performance_service::SamplePerformanceService,
         serve_repair::ServeRepair,
@@ -68,9 +68,11 @@ use {
         bank::Bank,
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
+        cost_model::CostModel,
         hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
+        snapshot_hash::StartingSnapshotHashes,
         snapshot_package::{AccountsPackageSender, PendingSnapshotPackage},
         snapshot_utils,
     },
@@ -115,7 +117,7 @@ pub struct ValidatorConfig {
     pub account_shrink_paths: Option<Vec<PathBuf>>,
     pub rpc_config: JsonRpcConfig,
     pub accountsdb_repl_service_config: Option<AccountsDbReplServiceConfig>,
-    pub accountsdb_plugin_config_file: Option<PathBuf>,
+    pub accountsdb_plugin_config_files: Option<Vec<PathBuf>>,
     pub rpc_addrs: Option<(SocketAddr, SocketAddr)>, // (JsonRpc, JsonRpcPubSub)
     pub pubsub_config: PubSubConfig,
     pub snapshot_config: Option<SnapshotConfig>,
@@ -177,7 +179,7 @@ impl Default for ValidatorConfig {
             account_shrink_paths: None,
             rpc_config: JsonRpcConfig::default(),
             accountsdb_repl_service_config: None,
-            accountsdb_plugin_config_file: None,
+            accountsdb_plugin_config_files: None,
             rpc_addrs: None,
             pubsub_config: PubSubConfig::default(),
             snapshot_config: None,
@@ -325,12 +327,12 @@ impl Validator {
         let mut bank_notification_senders = Vec::new();
 
         let accountsdb_plugin_service =
-            if let Some(accountsdb_plugin_config_file) = &config.accountsdb_plugin_config_file {
+            if let Some(accountsdb_plugin_config_files) = &config.accountsdb_plugin_config_files {
                 let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
                 bank_notification_senders.push(confirmed_bank_sender);
                 let result = AccountsDbPluginService::new(
                     confirmed_bank_receiver,
-                    accountsdb_plugin_config_file,
+                    accountsdb_plugin_config_files,
                 );
                 match result {
                     Ok(accountsdb_plugin_service) => Some(accountsdb_plugin_service),
@@ -417,7 +419,7 @@ impl Validator {
             completed_slots_receiver,
             leader_schedule_cache,
             last_full_snapshot_slot,
-            snapshot_hash,
+            starting_snapshot_hashes,
             TransactionHistoryServices {
                 transaction_status_sender,
                 transaction_status_service,
@@ -695,7 +697,7 @@ impl Validator {
 
                 let snapshot_packager_service = SnapshotPackagerService::new(
                     pending_snapshot_package.clone(),
-                    snapshot_hash,
+                    starting_snapshot_hashes,
                     &exit,
                     &cluster_info,
                     snapshot_config.clone(),
@@ -1149,7 +1151,7 @@ fn new_banks_from_ledger(
     CompletedSlotsReceiver,
     LeaderScheduleCache,
     Option<Slot>,
-    Option<(Slot, Hash)>,
+    Option<StartingSnapshotHashes>,
     TransactionHistoryServices,
     Tower,
 ) {
@@ -1244,27 +1246,31 @@ fn new_banks_from_ledger(
             TransactionHistoryServices::default()
         };
 
-    let (mut bank_forks, mut leader_schedule_cache, last_full_snapshot_slot, snapshot_hash) =
-        bank_forks_utils::load(
-            &genesis_config,
-            &blockstore,
-            config.account_paths.clone(),
-            config.account_shrink_paths.clone(),
-            config.snapshot_config.as_ref(),
-            process_options,
-            transaction_history_services
-                .transaction_status_sender
-                .as_ref(),
-            transaction_history_services
-                .cache_block_meta_sender
-                .as_ref(),
-            accounts_package_sender,
-            accounts_update_notifier,
-        )
-        .unwrap_or_else(|err| {
-            error!("Failed to load ledger: {:?}", err);
-            abort()
-        });
+    let (
+        mut bank_forks,
+        mut leader_schedule_cache,
+        last_full_snapshot_slot,
+        starting_snapshot_hashes,
+    ) = bank_forks_utils::load(
+        &genesis_config,
+        &blockstore,
+        config.account_paths.clone(),
+        config.account_shrink_paths.clone(),
+        config.snapshot_config.as_ref(),
+        process_options,
+        transaction_history_services
+            .transaction_status_sender
+            .as_ref(),
+        transaction_history_services
+            .cache_block_meta_sender
+            .as_ref(),
+        accounts_package_sender,
+        accounts_update_notifier,
+    )
+    .unwrap_or_else(|err| {
+        error!("Failed to load ledger: {:?}", err);
+        abort()
+    });
 
     if let Some(warp_slot) = config.warp_slot {
         let snapshot_config = config.snapshot_config.as_ref().unwrap_or_else(|| {
@@ -1344,7 +1350,7 @@ fn new_banks_from_ledger(
         completed_slots_receiver,
         leader_schedule_cache,
         last_full_snapshot_slot,
-        snapshot_hash,
+        starting_snapshot_hashes,
         transaction_history_services,
         tower,
     )
@@ -1542,76 +1548,6 @@ fn wait_for_supermajority(
     rpc_override_health_check.store(false, Ordering::Relaxed);
     Ok(true)
 }
-
-fn is_rosetta_emulated() -> bool {
-    #[cfg(target_os = "macos")]
-    {
-        use std::str::FromStr;
-        std::process::Command::new("sysctl")
-            .args(&["-in", "sysctl.proc_translated"])
-            .output()
-            .map_err(|_| ())
-            .and_then(|output| String::from_utf8(output.stdout).map_err(|_| ()))
-            .and_then(|stdout| u8::from_str(stdout.trim()).map_err(|_| ()))
-            .map(|enabled| enabled == 1)
-            .unwrap_or(false)
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        false
-    }
-}
-
-pub fn report_target_features() {
-    warn!(
-        "CUDA is {}abled",
-        if solana_perf::perf_libs::api().is_some() {
-            "en"
-        } else {
-            "dis"
-        }
-    );
-
-    if !is_rosetta_emulated() {
-        unsafe { check_avx() };
-        unsafe { check_avx2() };
-    }
-}
-
-// Validator binaries built on a machine with AVX support will generate invalid opcodes
-// when run on machines without AVX causing a non-obvious process abort.  Instead detect
-// the mismatch and error cleanly.
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-#[target_feature(enable = "avx")]
-unsafe fn check_avx() {
-    if is_x86_feature_detected!("avx") {
-        info!("AVX detected");
-    } else {
-        error!(
-            "Incompatible CPU detected: missing AVX support. Please build from source on the target"
-        );
-        abort();
-    }
-}
-
-#[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
-unsafe fn check_avx() {}
-
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-#[target_feature(enable = "avx2")]
-unsafe fn check_avx2() {
-    if is_x86_feature_detected!("avx2") {
-        info!("AVX2 detected");
-    } else {
-        error!(
-            "Incompatible CPU detected: missing AVX2 support. Please build from source on the target"
-        );
-        abort();
-    }
-}
-
-#[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
-unsafe fn check_avx2() {}
 
 // Get the activated stake percentage (based on the provided bank) that is visible in gossip
 fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: bool) -> u64 {

@@ -100,16 +100,18 @@ fn get_invoke_context<'a>() -> &'a mut dyn InvokeContext {
 
 pub fn builtin_process_instruction(
     process_instruction: solana_sdk::entrypoint::ProcessInstruction,
-    program_id: &Pubkey,
+    _first_instruction_account: usize,
     input: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     set_invoke_context(invoke_context);
 
     let logger = invoke_context.get_logger();
+    let program_id = invoke_context.get_caller()?;
     stable_log::program_invoke(&logger, program_id, invoke_context.invoke_depth());
 
-    let keyed_accounts = invoke_context.get_keyed_accounts()?;
+    // Skip the processor account
+    let keyed_accounts = &invoke_context.get_keyed_accounts()?[1..];
 
     // Copy all the accounts into a HashMap to ensure there are no duplicates
     let mut accounts: HashMap<Pubkey, Account> = keyed_accounts
@@ -182,12 +184,12 @@ pub fn builtin_process_instruction(
 macro_rules! processor {
     ($process_instruction:expr) => {
         Some(
-            |program_id: &Pubkey,
+            |first_instruction_account: usize,
              input: &[u8],
              invoke_context: &mut dyn solana_sdk::process_instruction::InvokeContext| {
                 $crate::builtin_process_instruction(
                     $process_instruction,
-                    program_id,
+                    first_instruction_account,
                     input,
                     invoke_context,
                 )

@@ -69,7 +69,6 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
             config.max_buckets.is_power_of_two(),
             "Max number of buckets must be a power of two"
         );
-        let stats = Arc::new(BucketMapStats::default());
         // this should be <= 1 << DEFAULT_CAPACITY or we end up searching the same items over and over - probably not a big deal since it is so small anyway
         const MAX_SEARCH: MaxSearch = 32;
         let max_search = config.max_search.unwrap_or(MAX_SEARCH);
@@ -84,14 +83,24 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
         });
         let drives = Arc::new(drives);
 
-        let mut buckets = Vec::with_capacity(config.max_buckets);
-        buckets.resize_with(config.max_buckets, || {
-            Arc::new(BucketApi::new(
-                Arc::clone(&drives),
-                max_search,
-                Arc::clone(&stats),
-            ))
+        let mut per_bucket_count = Vec::with_capacity(config.max_buckets);
+        per_bucket_count.resize_with(config.max_buckets, Arc::default);
+        let stats = Arc::new(BucketMapStats {
+            per_bucket_count,
+            ..BucketMapStats::default()
         });
+        let buckets = stats
+            .per_bucket_count
+            .iter()
+            .map(|per_bucket_count| {
+                Arc::new(BucketApi::new(
+                    Arc::clone(&drives),
+                    max_search,
+                    Arc::clone(&stats),
+                    Arc::clone(per_bucket_count),
+                ))
+            })
+            .collect();
 
         // A simple log2 function that is correct if x is a power of two
         let log2 = |x: usize| usize::BITS - x.leading_zeros() - 1;

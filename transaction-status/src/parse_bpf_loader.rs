@@ -1,11 +1,13 @@
-use crate::parse_instruction::{
-    check_num_accounts, ParsableProgram, ParseInstructionError, ParsedInstructionEnum,
-};
-use bincode::deserialize;
-use serde_json::json;
-use solana_sdk::{
-    instruction::CompiledInstruction, loader_instruction::LoaderInstruction,
-    loader_upgradeable_instruction::UpgradeableLoaderInstruction, pubkey::Pubkey,
+use {
+    crate::parse_instruction::{
+        check_num_accounts, ParsableProgram, ParseInstructionError, ParsedInstructionEnum,
+    },
+    bincode::deserialize,
+    serde_json::json,
+    solana_sdk::{
+        instruction::CompiledInstruction, loader_instruction::LoaderInstruction,
+        loader_upgradeable_instruction::UpgradeableLoaderInstruction, pubkey::Pubkey,
+    },
 };
 
 pub fn parse_bpf_loader(
@@ -154,9 +156,11 @@ fn check_num_bpf_upgradeable_loader_accounts(
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use serde_json::Value;
-    use solana_sdk::{message::Message, pubkey};
+    use {
+        super::*,
+        serde_json::Value,
+        solana_sdk::{message::Message, pubkey},
+    };
 
     #[test]
     fn test_parse_bpf_loader_instructions() {

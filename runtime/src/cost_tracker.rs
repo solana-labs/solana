@@ -14,7 +14,7 @@ use std::{
 
 const WRITABLE_ACCOUNTS_PER_BLOCK: usize = 512;
 
-#[derive(Debug)]
+#[derive(AbiExample, Debug)]
 pub struct CostTracker {
     cost_model: Arc<RwLock<CostModel>>,
     account_cost_limit: u64,
@@ -22,6 +22,12 @@ pub struct CostTracker {
     current_bank_slot: Slot,
     cost_by_writable_accounts: HashMap<Pubkey, u64>,
     block_cost: u64,
+}
+
+impl Default for CostTracker {
+    fn default() -> Self {
+        CostTracker::new(Arc::new(RwLock::new(CostModel::default())))
+    }
 }
 
 impl CostTracker {
@@ -52,11 +58,7 @@ impl CostTracker {
     ) -> Result<(), CostModelError> {
         let mut cost_model = self.cost_model.write().unwrap();
         let tx_cost = cost_model.calculate_cost(transaction, demote_program_write_locks);
-        self.would_fit(
-            &tx_cost.writable_accounts,
-            &(tx_cost.account_access_cost + tx_cost.execution_cost),
-            stats,
-        )
+        self.would_fit(&tx_cost.writable_accounts, &tx_cost.sum(), stats)
     }
 
     pub fn add_transaction_cost(
@@ -67,7 +69,7 @@ impl CostTracker {
     ) {
         let mut cost_model = self.cost_model.write().unwrap();
         let tx_cost = cost_model.calculate_cost(transaction, demote_program_write_locks);
-        let cost = tx_cost.account_access_cost + tx_cost.execution_cost;
+        let cost = tx_cost.sum();
         for account_key in tx_cost.writable_accounts.iter() {
             *self
                 .cost_by_writable_accounts
@@ -103,7 +105,7 @@ impl CostTracker {
         transaction_cost: &TransactionCost,
         stats: &mut CostTrackerStats,
     ) -> Result<u64, CostModelError> {
-        let cost = transaction_cost.account_access_cost + transaction_cost.execution_cost;
+        let cost = transaction_cost.sum();
         self.would_fit(&transaction_cost.writable_accounts, &cost, stats)?;
 
         self.add_transaction(&transaction_cost.writable_accounts, &cost);
@@ -195,7 +197,7 @@ impl CostTracker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_runtime::{
+    use crate::{
         bank::Bank,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
     };
@@ -428,8 +430,8 @@ mod tests {
         {
             let tx_cost = TransactionCost {
                 writable_accounts: vec![acct1, acct2, acct3],
-                account_access_cost: 0,
                 execution_cost: cost,
+                ..TransactionCost::default()
             };
             assert!(testee
                 .try_add(&tx_cost, &mut CostTrackerStats::default())
@@ -448,8 +450,8 @@ mod tests {
         {
             let tx_cost = TransactionCost {
                 writable_accounts: vec![acct2],
-                account_access_cost: 0,
                 execution_cost: cost,
+                ..TransactionCost::default()
             };
             assert!(testee
                 .try_add(&tx_cost, &mut CostTrackerStats::default())
@@ -470,8 +472,8 @@ mod tests {
         {
             let tx_cost = TransactionCost {
                 writable_accounts: vec![acct1, acct2],
-                account_access_cost: 0,
                 execution_cost: cost,
+                ..TransactionCost::default()
             };
             assert!(testee
                 .try_add(&tx_cost, &mut CostTrackerStats::default())

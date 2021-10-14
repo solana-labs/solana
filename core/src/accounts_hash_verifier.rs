@@ -134,6 +134,7 @@ impl AccountsHashVerifier {
                 HashStats::default(),
                 false,
                 None,
+                None, // this will fail with filler accounts
             )
             .unwrap();
 

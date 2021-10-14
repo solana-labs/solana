@@ -13,15 +13,19 @@ use solana_frozen_abi::abi_example::AbiExample;
 
 fn process_instruction_with_program_logging(
     process_instruction: ProcessInstructionWithContext,
-    program_id: &Pubkey,
+    first_instruction_account: usize,
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
+    debug_assert_eq!(first_instruction_account, 1);
+
     let logger = invoke_context.get_logger();
+    let program_id = invoke_context.get_caller()?;
     stable_log::program_invoke(&logger, program_id, invoke_context.invoke_depth());
 
-    let result = process_instruction(program_id, instruction_data, invoke_context);
+    let result = process_instruction(first_instruction_account, instruction_data, invoke_context);
 
+    let program_id = invoke_context.get_caller()?;
     match &result {
         Ok(()) => stable_log::program_success(&logger, program_id),
         Err(err) => stable_log::program_failure(&logger, program_id, err),
@@ -31,10 +35,12 @@ fn process_instruction_with_program_logging(
 
 macro_rules! with_program_logging {
     ($process_instruction:expr) => {
-        |program_id: &Pubkey, instruction_data: &[u8], invoke_context: &mut dyn InvokeContext| {
+        |first_instruction_account: usize,
+         instruction_data: &[u8],
+         invoke_context: &mut dyn InvokeContext| {
             process_instruction_with_program_logging(
                 $process_instruction,
-                program_id,
+                first_instruction_account,
                 instruction_data,
                 invoke_context,
             )
@@ -129,7 +135,7 @@ fn genesis_builtins() -> Vec<Builtin> {
 
 /// place holder for secp256k1, remove when the precompile program is deactivated via feature activation
 fn dummy_process_instruction(
-    _program_id: &Pubkey,
+    _first_instruction_account: usize,
     _data: &[u8],
     _invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {

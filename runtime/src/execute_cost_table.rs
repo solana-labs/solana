@@ -5,7 +5,7 @@
 /// to make room for new ones.
 use log::*;
 use solana_sdk::pubkey::Pubkey;
-use std::{collections::HashMap, time::SystemTime};
+use std::collections::HashMap;
 
 // prune is rather expensive op, free up bulk space in each operation
 // would be more efficient. PRUNE_RATIO defines the after prune table
@@ -16,11 +16,11 @@ const OCCURRENCES_WEIGHT: i64 = 100;
 
 const DEFAULT_CAPACITY: usize = 1024;
 
-#[derive(Debug)]
+#[derive(AbiExample, Debug)]
 pub struct ExecuteCostTable {
     capacity: usize,
     table: HashMap<Pubkey, u64>,
-    occurrences: HashMap<Pubkey, (usize, SystemTime)>,
+    occurrences: HashMap<Pubkey, (usize, u128)>,
 }
 
 impl Default for ExecuteCostTable {
@@ -78,7 +78,7 @@ impl ExecuteCostTable {
         self.table.get(key)
     }
 
-    pub fn upsert(&mut self, key: &Pubkey, value: u64) {
+    pub fn upsert(&mut self, key: &Pubkey, value: u64) -> Option<u64> {
         let need_to_add = self.table.get(key).is_none();
         let current_size = self.get_count();
         if current_size == self.capacity && need_to_add {
@@ -91,9 +91,11 @@ impl ExecuteCostTable {
         let (count, timestamp) = self
             .occurrences
             .entry(*key)
-            .or_insert((0, SystemTime::now()));
+            .or_insert((0, Self::micros_since_epoch()));
         *count += 1;
-        *timestamp = SystemTime::now();
+        *timestamp = Self::micros_since_epoch();
+
+        Some(*program_cost)
     }
 
     // prune the old programs so the table contains `new_size` of records,
@@ -118,12 +120,12 @@ impl ExecuteCostTable {
             return;
         }
 
-        let now = SystemTime::now();
+        let now = Self::micros_since_epoch();
         let mut sorted_by_weighted_age: Vec<_> = self
             .occurrences
             .iter()
             .map(|(key, (count, timestamp))| {
-                let age = now.duration_since(*timestamp).unwrap().as_micros();
+                let age = now - timestamp;
                 let weighted_age = *count as i64 * OCCURRENCES_WEIGHT + -(age as i64);
                 (weighted_age, *key)
             })
@@ -137,6 +139,13 @@ impl ExecuteCostTable {
                 break;
             }
         }
+    }
+
+    fn micros_since_epoch() -> u128 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_micros()
     }
 }
 
@@ -176,14 +185,19 @@ mod tests {
         let key2 = Pubkey::new_unique();
         let key3 = Pubkey::new_unique();
 
-        testee.upsert(&key1, 1);
-        testee.upsert(&key1, 1);
+        // simulate a lot of occurences to key1, so even there're longer than
+        // usual delay between upsert(key1..) and upsert(key2, ..), test
+        // would still satisfy as key1 has enough occurences to compensate
+        // its age.
+        for i in 0..1000 {
+            testee.upsert(&key1, i);
+        }
         testee.upsert(&key2, 2);
         testee.upsert(&key3, 3);
 
         testee.prune_to(&(capacity - 1));
 
-        // the oldest, key1, has 2 counts; 2nd oldest Key2 has 1 count;
+        // the oldest, key1, has many counts; 2nd oldest Key2 has 1 count;
         // expect key2 to be pruned.
         assert!(testee.get_cost(&key1).is_some());
         assert!(testee.get_cost(&key2).is_none());

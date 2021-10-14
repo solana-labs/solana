@@ -774,7 +774,6 @@ pub fn process_vote_authorize(
     check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
-        &latest_blockhash,
         &tx.message,
         config.commitment,
     )?;
@@ -811,7 +810,6 @@ pub fn process_vote_update_validator(
     check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
-        &latest_blockhash,
         &tx.message,
         config.commitment,
     )?;
@@ -842,7 +840,6 @@ pub fn process_vote_update_commission(
     check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
-        &latest_blockhash,
         &tx.message,
         config.commitment,
     )?;
@@ -980,7 +977,6 @@ pub fn process_withdraw_from_vote_account(
     check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
-        &latest_blockhash,
         &transaction.message,
         config.commitment,
     )?;
@@ -1036,7 +1032,6 @@ pub fn process_close_vote_account(
     check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
-        &latest_blockhash,
         &transaction.message,
         config.commitment,
     )?;

@@ -9,6 +9,8 @@ const STATS_INTERVAL_MS: u64 = 10_000;
 
 #[derive(Debug, Default)]
 pub struct BucketMapHolderStats {
+    pub held_in_mem_slot_list_len: AtomicU64,
+    pub held_in_mem_slot_list_cached: AtomicU64,
     pub get_mem_us: AtomicU64,
     pub gets_from_mem: AtomicU64,
     pub get_missing_us: AtomicU64,
@@ -26,18 +28,18 @@ pub struct BucketMapHolderStats {
     pub keys: AtomicU64,
     pub deletes: AtomicU64,
     pub inserts: AtomicU64,
-    pub count: AtomicU64,
+    count: AtomicU64,
     pub bg_waiting_us: AtomicU64,
     pub bg_throttling_wait_us: AtomicU64,
     pub count_in_mem: AtomicU64,
     pub per_bucket_count: Vec<AtomicU64>,
     pub flush_entries_updated_on_disk: AtomicU64,
+    pub flush_entries_removed_from_mem: AtomicU64,
     pub active_threads: AtomicU64,
     pub get_range_us: AtomicU64,
     last_age: AtomicU8,
     last_age_time: AtomicU64,
-    pub flush_scan_us: AtomicU64,
-    pub flush_update_us: AtomicU64,
+    pub flush_scan_update_us: AtomicU64,
     pub flush_remove_us: AtomicU64,
     pub flush_grow_us: AtomicU64,
     last_time: AtomicInterval,
@@ -65,13 +67,17 @@ impl BucketMapHolderStats {
     }
 
     pub fn insert_or_delete_mem(&self, insert: bool, bin: usize) {
+        self.insert_or_delete_mem_count(insert, bin, 1)
+    }
+
+    pub fn insert_or_delete_mem_count(&self, insert: bool, bin: usize, count: u64) {
         let per_bucket = self.per_bucket_count.get(bin);
         if insert {
-            self.count_in_mem.fetch_add(1, Ordering::Relaxed);
-            per_bucket.map(|count| count.fetch_add(1, Ordering::Relaxed));
+            self.count_in_mem.fetch_add(count, Ordering::Relaxed);
+            per_bucket.map(|stat| stat.fetch_add(count, Ordering::Relaxed));
         } else {
-            self.count_in_mem.fetch_sub(1, Ordering::Relaxed);
-            per_bucket.map(|count| count.fetch_sub(1, Ordering::Relaxed));
+            self.count_in_mem.fetch_sub(count, Ordering::Relaxed);
+            per_bucket.map(|stat| stat.fetch_sub(count, Ordering::Relaxed));
         }
     }
 
@@ -104,6 +110,21 @@ impl BucketMapHolderStats {
             .remaining_until_next_interval(STATS_INTERVAL_MS)
     }
 
+    /// return min, max, sum, median of data
+    fn get_stats(mut data: Vec<u64>) -> (u64, u64, u64, u64) {
+        if data.is_empty() {
+            (0, 0, 0, 0)
+        } else {
+            data.sort_unstable();
+            (
+                *data.first().unwrap(),
+                *data.last().unwrap(),
+                data.iter().sum(),
+                data[data.len() / 2],
+            )
+        }
+    }
+
     pub fn report_stats<T: IndexValue>(&self, storage: &BucketMapHolder<T>) {
         if !self.last_time.should_update(STATS_INTERVAL_MS) {
             return;
@@ -111,17 +132,23 @@ impl BucketMapHolderStats {
 
         let ms_per_age = self.ms_per_age(storage);
 
-        let mut ct = 0;
-        let mut min = usize::MAX;
-        let mut max = 0;
-        for d in &self.per_bucket_count {
-            let d = d.load(Ordering::Relaxed) as usize;
-            ct += d;
-            min = std::cmp::min(min, d);
-            max = std::cmp::max(max, d);
-        }
-
+        let in_mem_per_bucket_counts = self
+            .per_bucket_count
+            .iter()
+            .map(|count| count.load(Ordering::Relaxed))
+            .collect::<Vec<_>>();
         let disk = storage.disk.as_ref();
+        let disk_per_bucket_counts = disk
+            .map(|disk| {
+                disk.stats
+                    .per_bucket_count
+                    .iter()
+                    .map(|count| count.load(Ordering::Relaxed))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        let in_mem_stats = Self::get_stats(in_mem_per_bucket_counts);
+        let disk_stats = Self::get_stats(disk_per_bucket_counts);
 
         datapoint_info!(
             "accounts_index",
@@ -141,9 +168,24 @@ impl BucketMapHolderStats {
                 self.bg_throttling_wait_us.swap(0, Ordering::Relaxed),
                 i64
             ),
-            ("min_in_bin", min, i64),
-            ("max_in_bin", max, i64),
-            ("count_from_bins", ct, i64),
+            (
+                "held_in_mem_slot_list_len",
+                self.held_in_mem_slot_list_len.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "held_in_mem_slot_list_cached",
+                self.held_in_mem_slot_list_cached.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            ("min_in_bin_mem", in_mem_stats.0, i64),
+            ("max_in_bin_mem", in_mem_stats.1, i64),
+            ("count_from_bins_mem", in_mem_stats.2, i64),
+            ("median_from_bins_mem", in_mem_stats.3, i64),
+            ("min_in_bin_disk", disk_stats.0, i64),
+            ("max_in_bin_disk", disk_stats.1, i64),
+            ("count_from_bins_disk", disk_stats.2, i64),
+            ("median_from_bins_disk", disk_stats.3, i64),
             (
                 "gets_from_mem",
                 self.gets_from_mem.swap(0, Ordering::Relaxed),
@@ -225,13 +267,8 @@ impl BucketMapHolderStats {
             ("keys", self.keys.swap(0, Ordering::Relaxed), i64),
             ("ms_per_age", ms_per_age, i64),
             (
-                "flush_scan_us",
-                self.flush_scan_us.swap(0, Ordering::Relaxed),
-                i64
-            ),
-            (
-                "flush_update_us",
-                self.flush_update_us.swap(0, Ordering::Relaxed),
+                "flush_scan_update_us",
+                self.flush_scan_update_us.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
@@ -329,6 +366,12 @@ impl BucketMapHolderStats {
             (
                 "flush_entries_updated_on_disk",
                 self.flush_entries_updated_on_disk
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "flush_entries_removed_from_mem",
+                self.flush_entries_removed_from_mem
                     .swap(0, Ordering::Relaxed),
                 i64
             ),

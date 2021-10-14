@@ -15,9 +15,6 @@ use solana_clap_utils::{
         is_bin, is_parsable, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
     },
 };
-use solana_core::cost_model::CostModel;
-use solana_core::cost_tracker::CostTracker;
-use solana_core::cost_tracker_stats::CostTrackerStats;
 use solana_entry::entry::Entry;
 use solana_ledger::{
     ancestor_iterator::AncestorIterator,
@@ -32,6 +29,9 @@ use solana_runtime::{
     accounts_index::AccountsIndexConfig,
     bank::{Bank, RewardCalculationEvent},
     bank_forks::BankForks,
+    cost_model::CostModel,
+    cost_tracker::CostTracker,
+    cost_tracker_stats::CostTrackerStats,
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     snapshot_archive_info::SnapshotArchiveInfoGetter,
     snapshot_config::SnapshotConfig,
@@ -185,20 +185,21 @@ fn output_slot(
         }
     }
 
-    let (entries, num_shreds, _is_full) = blockstore
+    let (entries, num_shreds, is_full) = blockstore
         .get_slot_entries_with_shred_info(slot, 0, allow_dead_slots)
         .map_err(|err| format!("Failed to load entries for slot {}: {:?}", slot, err))?;
 
     if *method == LedgerOutputMethod::Print {
         if let Ok(Some(meta)) = blockstore.meta(slot) {
             if verbose_level >= 2 {
-                println!(" Slot Meta {:?}", meta);
+                println!(" Slot Meta {:?} is_full: {}", meta, is_full);
             } else {
                 println!(
-                    " num_shreds: {} parent_slot: {} num_entries: {}",
+                    " num_shreds: {} parent_slot: {} num_entries: {} is_full: {}",
                     num_shreds,
                     meta.parent_slot,
-                    entries.len()
+                    entries.len(),
+                    is_full,
                 );
             }
         }
@@ -893,6 +894,12 @@ fn main() {
         .validator(is_parsable::<usize>)
         .takes_value(true)
         .help("How much memory the accounts index can consume. If this is exceeded, some account index entries will be stored on disk. If missing, the entire index is stored in memory.");
+    let accounts_filler_count = Arg::with_name("accounts_filler_count")
+        .long("accounts-filler-count")
+        .value_name("COUNT")
+        .validator(is_parsable::<usize>)
+        .takes_value(true)
+        .help("How many accounts to add to stress the system. Accounts are ignored in operations related to correctness.");
     let account_paths_arg = Arg::with_name("account_paths")
         .long("accounts")
         .value_name("PATHS")
@@ -1217,6 +1224,7 @@ fn main() {
             .arg(&limit_load_slot_count_from_snapshot_arg)
             .arg(&accounts_index_bins)
             .arg(&accounts_index_limit)
+            .arg(&accounts_filler_count)
             .arg(&verify_index_arg)
             .arg(&hard_forks_arg)
             .arg(&no_accounts_db_caching_arg)
@@ -1936,11 +1944,12 @@ fn main() {
         }
         ("verify", Some(arg_matches)) => {
             let mut accounts_index_config = AccountsIndexConfig::default();
-            if let Some(bins) = value_t!(matches, "accounts_index_bins", usize).ok() {
+            if let Some(bins) = value_t!(arg_matches, "accounts_index_bins", usize).ok() {
                 accounts_index_config.bins = Some(bins);
             }
 
-            if let Some(limit) = value_t!(matches, "accounts_index_memory_limit_mb", usize).ok() {
+            if let Some(limit) = value_t!(arg_matches, "accounts_index_memory_limit_mb", usize).ok()
+            {
                 accounts_index_config.index_limit_mb = Some(limit);
             }
 
@@ -1960,9 +1969,12 @@ fn main() {
                 accounts_index_config.drives = Some(accounts_index_paths);
             }
 
+            let filler_account_count = value_t!(arg_matches, "accounts_filler_count", usize).ok();
+
             let accounts_db_config = Some(AccountsDbConfig {
                 index: Some(accounts_index_config),
                 accounts_hash_cache_path: Some(ledger_path.clone()),
+                filler_account_count,
             });
 
             let process_options = ProcessOptions {
