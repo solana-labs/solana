@@ -8,8 +8,8 @@ use raptorq::{Decoder, Encoder};
 use solana_entry::entry::{create_ticks, Entry};
 use solana_ledger::shred::{
     max_entries_per_n_shred, max_ticks_per_n_shreds, ProcessShredsStats, Shred, Shredder,
-    MAX_DATA_SHREDS_PER_FEC_BLOCK, SHRED_PAYLOAD_SIZE, SIZE_OF_CODING_SHRED_HEADERS,
-    SIZE_OF_DATA_SHRED_PAYLOAD,
+    MAX_DATA_SHREDS_PER_FEC_BLOCK, SHRED_PAYLOAD_SIZE, SIZE_OF_CODING_SHRED_HEADERS_V1,
+    SIZE_OF_DATA_SHRED_PAYLOAD_V1,
 };
 use solana_perf::test_tx;
 use solana_sdk::hash::Hash;
@@ -30,7 +30,7 @@ fn make_large_unchained_entries(txs_per_entry: u64, num_entries: u64) -> Vec<Ent
 }
 
 fn make_shreds(num_shreds: usize) -> Vec<Shred> {
-    let shred_size = SIZE_OF_DATA_SHRED_PAYLOAD;
+    let shred_size = SIZE_OF_DATA_SHRED_PAYLOAD_V1;
     let txs_per_entry = 128;
     let num_entries = max_entries_per_n_shred(
         &make_test_entry(txs_per_entry),
@@ -55,7 +55,7 @@ fn make_shreds(num_shreds: usize) -> Vec<Shred> {
 
 fn make_concatenated_shreds(num_shreds: usize) -> Vec<u8> {
     let data_shreds = make_shreds(num_shreds);
-    let valid_shred_data_len = (SHRED_PAYLOAD_SIZE - SIZE_OF_CODING_SHRED_HEADERS) as usize;
+    let valid_shred_data_len = (SHRED_PAYLOAD_SIZE - SIZE_OF_CODING_SHRED_HEADERS_V1) as usize;
     let mut data: Vec<u8> = vec![0; num_shreds * valid_shred_data_len];
     for (i, shred) in (data_shreds[0..num_shreds]).iter().enumerate() {
         data[i * valid_shred_data_len..(i + 1) * valid_shred_data_len]
@@ -68,10 +68,11 @@ fn make_concatenated_shreds(num_shreds: usize) -> Vec<u8> {
 #[bench]
 fn bench_shredder_ticks(bencher: &mut Bencher) {
     let kp = Keypair::new();
-    let shred_size = SIZE_OF_DATA_SHRED_PAYLOAD;
+    let shred_size = SIZE_OF_DATA_SHRED_PAYLOAD_V1;
     let num_shreds = ((1000 * 1000) + (shred_size - 1)) / shred_size;
     // ~1Mb
-    let num_ticks = max_ticks_per_n_shreds(1, Some(SIZE_OF_DATA_SHRED_PAYLOAD)) * num_shreds as u64;
+    let num_ticks =
+        max_ticks_per_n_shreds(1, Some(SIZE_OF_DATA_SHRED_PAYLOAD_V1)) * num_shreds as u64;
     let entries = create_ticks(num_ticks, 0, Hash::default());
     bencher.iter(|| {
         let shredder = Shredder::new(1, 0, 0, 0).unwrap();
@@ -82,7 +83,7 @@ fn bench_shredder_ticks(bencher: &mut Bencher) {
 #[bench]
 fn bench_shredder_large_entries(bencher: &mut Bencher) {
     let kp = Keypair::new();
-    let shred_size = SIZE_OF_DATA_SHRED_PAYLOAD;
+    let shred_size = SIZE_OF_DATA_SHRED_PAYLOAD_V1;
     let num_shreds = ((1000 * 1000) + (shred_size - 1)) / shred_size;
     let txs_per_entry = 128;
     let num_entries = max_entries_per_n_shred(
@@ -101,7 +102,7 @@ fn bench_shredder_large_entries(bencher: &mut Bencher) {
 #[bench]
 fn bench_deshredder(bencher: &mut Bencher) {
     let kp = Keypair::new();
-    let shred_size = SIZE_OF_DATA_SHRED_PAYLOAD;
+    let shred_size = SIZE_OF_DATA_SHRED_PAYLOAD_V1;
     // ~10Mb
     let num_shreds = ((10000 * 1000) + (shred_size - 1)) / shred_size;
     let num_ticks = max_ticks_per_n_shreds(1, Some(shred_size)) * num_shreds as u64;
@@ -116,7 +117,7 @@ fn bench_deshredder(bencher: &mut Bencher) {
 
 #[bench]
 fn bench_deserialize_hdr(bencher: &mut Bencher) {
-    let data = vec![0; SIZE_OF_DATA_SHRED_PAYLOAD];
+    let data = vec![0; SIZE_OF_DATA_SHRED_PAYLOAD_V1];
 
     let shred = Shred::new_from_data(2, 1, 1, Some(&data), true, true, 0, 0, 1);
 
@@ -163,7 +164,7 @@ fn bench_shredder_decoding(bencher: &mut Bencher) {
 fn bench_shredder_coding_raptorq(bencher: &mut Bencher) {
     let symbol_count = MAX_DATA_SHREDS_PER_FEC_BLOCK;
     let data = make_concatenated_shreds(symbol_count as usize);
-    let valid_shred_data_len = (SHRED_PAYLOAD_SIZE - SIZE_OF_CODING_SHRED_HEADERS) as usize;
+    let valid_shred_data_len = (SHRED_PAYLOAD_SIZE - SIZE_OF_CODING_SHRED_HEADERS_V1) as usize;
     bencher.iter(|| {
         let encoder = Encoder::with_defaults(&data, valid_shred_data_len as u16);
         encoder.get_encoded_packets(symbol_count);
@@ -174,7 +175,7 @@ fn bench_shredder_coding_raptorq(bencher: &mut Bencher) {
 fn bench_shredder_decoding_raptorq(bencher: &mut Bencher) {
     let symbol_count = MAX_DATA_SHREDS_PER_FEC_BLOCK;
     let data = make_concatenated_shreds(symbol_count as usize);
-    let valid_shred_data_len = (SHRED_PAYLOAD_SIZE - SIZE_OF_CODING_SHRED_HEADERS) as usize;
+    let valid_shred_data_len = (SHRED_PAYLOAD_SIZE - SIZE_OF_CODING_SHRED_HEADERS_V1) as usize;
     let encoder = Encoder::with_defaults(&data, valid_shred_data_len as u16);
     let mut packets = encoder.get_encoded_packets(symbol_count as u32);
     packets.shuffle(&mut rand::thread_rng());

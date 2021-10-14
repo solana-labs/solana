@@ -452,7 +452,10 @@ pub fn sign_shreds_gpu(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::shred::{Shred, Shredder, SIZE_OF_DATA_SHRED_PAYLOAD};
+    use crate::shred::{
+        shred_common_header_version_to_payload_size, slot_to_shred_common_header_version, Shred,
+        Shredder,
+    };
     use solana_sdk::signature::{Keypair, Signer};
 
     fn run_test_sigverify_shred_cpu(slot: Slot) {
@@ -622,6 +625,8 @@ pub mod tests {
         solana_logger::setup();
         let recycler_cache = RecyclerCache::default();
 
+        let header_version = slot_to_shred_common_header_version(slot);
+        let payload_size = shred_common_header_version_to_payload_size(header_version);
         let mut packets = Packets::default();
         let num_packets = 32;
         let num_batches = 100;
@@ -631,7 +636,7 @@ pub mod tests {
                 slot,
                 0xc0de,
                 i as u16,
-                Some(&[5; SIZE_OF_DATA_SHRED_PAYLOAD]),
+                Some(&vec![5; payload_size]),
                 true,
                 true,
                 1,

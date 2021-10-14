@@ -2883,8 +2883,8 @@ pub mod tests {
         genesis_utils::{create_genesis_config, create_genesis_config_with_leader},
         get_tmp_ledger_path,
         shred::{
-            CodingShredHeader, DataShredHeader, Shred, ShredCommonHeader, DATA_COMPLETE_SHRED,
-            SIZE_OF_COMMON_SHRED_HEADER, SIZE_OF_DATA_SHRED_HEADER, SIZE_OF_DATA_SHRED_PAYLOAD,
+            shred_common_header_version_to_payload_size, CodingShredHeader, DataShredHeader, Shred,
+            ShredCommonHeader, DATA_COMPLETE_SHRED, SIZE_OF_DATA_SHRED_HEADER,
         },
     };
     use solana_rpc::{
@@ -3477,23 +3477,26 @@ pub mod tests {
         // Insert entry that causes deserialization failure
         let res = check_dead_fork(|_, bank| {
             let gibberish = [0xa5u8; PACKET_DATA_SIZE];
-            let mut data_header = DataShredHeader::default();
-            data_header.flags |= DATA_COMPLETE_SHRED;
-            // Need to provide the right size for Shredder::deshred.
-            data_header.size = SIZE_OF_DATA_SHRED_PAYLOAD as u16;
-            data_header.parent_offset = (bank.slot() - bank.parent_slot()) as u16;
             let shred_common_header = ShredCommonHeader {
                 slot: bank.slot(),
                 ..ShredCommonHeader::default()
             };
+            let payload_size =
+                shred_common_header_version_to_payload_size(shred_common_header.header_version());
+            let mut data_header = DataShredHeader::default();
+            data_header.flags |= DATA_COMPLETE_SHRED;
+            // Need to provide the right size for Shredder::deshred.
+            data_header.size = payload_size as u16;
+            data_header.parent_offset = (bank.slot() - bank.parent_slot()) as u16;
             let mut shred = Shred::new_empty_from_header(
                 shred_common_header,
                 data_header,
                 CodingShredHeader::default(),
             );
+            let common_header_size = shred.common_header_size();
             bincode::serialize_into(
-                &mut shred.payload[SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER..],
-                &gibberish[..SIZE_OF_DATA_SHRED_PAYLOAD],
+                &mut shred.payload[common_header_size + SIZE_OF_DATA_SHRED_HEADER..],
+                &gibberish[..payload_size],
             )
             .unwrap();
             vec![shred]

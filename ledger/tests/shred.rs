@@ -2,7 +2,7 @@
 use solana_entry::entry::Entry;
 use solana_ledger::shred::{
     max_entries_per_n_shred, verify_test_data_shred, Shred, Shredder,
-    MAX_DATA_SHREDS_PER_FEC_BLOCK, SIZE_OF_DATA_SHRED_PAYLOAD,
+    MAX_DATA_SHREDS_PER_FEC_BLOCK, SIZE_OF_DATA_SHRED_PAYLOAD_V1,
 };
 use solana_sdk::{
     clock::Slot,
@@ -32,7 +32,7 @@ fn test_multi_fec_block_coding() {
     let num_entries = max_entries_per_n_shred(
         &entry,
         num_data_shreds as u64,
-        Some(SIZE_OF_DATA_SHRED_PAYLOAD),
+        Some(SIZE_OF_DATA_SHRED_PAYLOAD_V1),
     );
 
     let entries: Vec<_> = (0..num_entries)
@@ -205,7 +205,7 @@ fn setup_different_sized_fec_blocks(
     let num_entries = max_entries_per_n_shred(
         &entry,
         num_shreds_per_iter as u64,
-        Some(SIZE_OF_DATA_SHRED_PAYLOAD),
+        Some(SIZE_OF_DATA_SHRED_PAYLOAD_V1),
     );
     let entries: Vec<_> = (0..num_entries)
         .map(|_| {
