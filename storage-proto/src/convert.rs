@@ -408,6 +408,7 @@ impl From<TransactionTokenBalance> for generated::TokenBalance {
                 amount: value.ui_token_amount.amount,
                 ui_amount_string: value.ui_token_amount.ui_amount_string,
             }),
+            owner: value.owner,
         }
     }
 }
@@ -435,6 +436,7 @@ impl From<generated::TokenBalance> for TransactionTokenBalance {
                     )
                 },
             },
+            owner: value.owner,
         }
     }
 }
