@@ -1772,6 +1772,21 @@ mod tests {
             assert_eq!(elf[i], *byte);
         }
 
+        // Invoke deployed program
+        {
+            let programdata_account = RefCell::new(post_programdata_account);
+            let program_account = RefCell::new(post_program_account);
+            let program_address = program_keypair.pubkey();
+            let keyed_accounts: Vec<KeyedAccountTuple> = vec![
+                (false, false, &programdata_address, &programdata_account),
+                (false, false, &program_address, &program_account),
+            ];
+            assert_eq!(
+                Ok(()),
+                process_instruction(&program_address, &[], &keyed_accounts),
+            );
+        }
+
         // Test initialized program account
         bank.clear_signatures();
         bank.store_account(&buffer_address, &buffer_account);
@@ -3386,7 +3401,7 @@ mod tests {
         ];
         assert_eq!(
             Err(InstructionError::InvalidAccountData),
-            process_instruction(&program_address, &instruction, &keyed_accounts),
+            process_instruction(&program_address, &[], &keyed_accounts),
         );
     }
 
