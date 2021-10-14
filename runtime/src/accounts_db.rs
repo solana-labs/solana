@@ -2089,13 +2089,13 @@ impl AccountsDb {
                                             after_max += 1;
                                         }
                                     );
-                                    max_clean_root.map(|x|
-                                        if slot_list.iter().any(|item| item.0 < x.saturating_sub(300_000)) {
-                                            if !am {
+                                    if !am {
+                                        max_clean_root.map(|x|
+                                            if slot_list.iter().any(|item| item.0 < x.saturating_sub(300_000)) {
                                                 old_action.fetch_add(1, Ordering::Relaxed);
                                             }
-                                        }
-                                    );
+                                        );
+                                    }
 
                                     // Release the lock
                                     let slot = *slot;
