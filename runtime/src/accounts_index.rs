@@ -1637,9 +1637,8 @@ impl<T: IndexValue> AccountsIndex<T> {
     }
 
     pub fn unref_from_storage(&self, pubkey: &Pubkey) {
-        if let Some(locked_entry) = self.get_account_read_entry(pubkey) {
-            locked_entry.unref();
-        }
+        let map = &self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)];
+        map.read().unwrap().unref(pubkey)
     }
 
     pub fn ref_count_from_storage(&self, pubkey: &Pubkey) -> RefCount {

@@ -290,6 +290,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         })
     }
 
+    pub fn unref(&self, pubkey: &Pubkey) {
+        self.get_internal(pubkey, |entry| entry.map(|entry| entry.add_un_ref(false)));
+    }
+
     pub fn upsert(
         &self,
         pubkey: &Pubkey,
