@@ -25,6 +25,7 @@ use {
 /// The maximum asynchronous requests allowed in the channel to avoid excessive
 /// memory usage. The downside -- calls after this threshold is reached can get blocked.
 const MAX_ASYNC_REQUESTS: usize = 10240;
+const DEFAULT_POSTGRES_PORT: u16 = 5432;
 
 struct PostgresSqlClientWrapper {
     client: Client,
@@ -147,11 +148,9 @@ pub trait PostgresClient {
 
 impl SimplePostgresClient {
     pub fn new(config: &AccountsDbPluginPostgresConfig) -> Result<Self, AccountsDbPluginError> {
-        let connection_str = if let Some(port) = config.port {
-            format!("host={} user={} port={}", config.host, config.user, port)
-        } else {
-            format!("host={} user={}", config.host, config.user)
-        };
+        let port = config.port.unwrap_or(DEFAULT_POSTGRES_PORT);
+
+        let connection_str = format!("host={} user={} port={}", config.host, config.user, port);
 
         match Client::connect(&connection_str, NoTls) {
             Err(err) => {
