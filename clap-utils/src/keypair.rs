@@ -258,6 +258,15 @@ pub(crate) fn parse_signer_source<S: AsRef<str>>(
     let source = {
         #[cfg(target_family = "windows")]
         {
+            // trim matched single-quotes since cmd.exe won't
+            let mut source = source;
+            while let Some(trimmed) = source.strip_prefix('\'') {
+                source = if let Some(trimmed) = trimmed.strip_suffix('\'') {
+                    trimmed
+                } else {
+                    break;
+                }
+            }
             source.replace("\\", "/")
         }
         #[cfg(not(target_family = "windows"))]
