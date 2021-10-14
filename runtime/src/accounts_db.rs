@@ -2288,6 +2288,7 @@ impl AccountsDb {
         if let Some(slot) = max_clean_root {
             self.accounts_index.set_slot_for_caching(slot);
         }
+        measure_all.stop();
 
         self.clean_accounts_stats.report();
         datapoint_info!(
@@ -2322,7 +2323,7 @@ impl AccountsDb {
             ("old_uncleaned_root", old_uncleaned_root.load(Ordering::Relaxed), i64),
             ("old_action", old_action.load(Ordering::Relaxed), i64),
             ("single_old_zero", single_old_zero.load(Ordering::Relaxed), i64),
-            
+            ("total_us", measure_all.as_us(), i64),
             ("total_keys_count", total_keys_count, i64),
             (
                 "scan_found_not_zero",
