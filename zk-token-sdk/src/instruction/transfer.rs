@@ -6,6 +6,7 @@ use {
 use {
     crate::{
         encryption::{
+            aes::AESCiphertext,
             elgamal::{ElGamalCiphertext, ElGamalPubkey, ElGamalSecretKey},
             pedersen::{
                 Pedersen, PedersenBase, PedersenCommitment, PedersenDecryptHandle, PedersenOpening,
@@ -46,10 +47,14 @@ pub struct TransferData {
 
     /// Zero-knowledge proofs for Transfer
     pub proof: TransferProof,
+
+    /// The new decryptable balance
+    pub aes_ciphertext: pod::OptionAESCiphertext, // 17 bytes
 }
 
 #[cfg(not(target_arch = "bpf"))]
 impl TransferData {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         transfer_amount: u64,
         spendable_balance: u64,
@@ -58,6 +63,7 @@ impl TransferData {
         source_sk: &ElGamalSecretKey,
         dest_pk: ElGamalPubkey,
         auditor_pk: ElGamalPubkey,
+        aes_ciphertext: Option<AESCiphertext>,
     ) -> Self {
         // split and encrypt transfer amount
         //
@@ -136,6 +142,7 @@ impl TransferData {
             new_spendable_ct: new_spendable_ct.into(),
             transfer_public_keys,
             proof,
+            aes_ciphertext: aes_ciphertext.into(),
         }
     }
 
@@ -493,6 +500,7 @@ mod test {
             &source_sk,
             dest_pk,
             auditor_pk,
+            None,
         );
 
         assert!(transfer_data.verify().is_ok());
@@ -527,6 +535,7 @@ mod test {
             &source_sk,
             dest_pk,
             auditor_pk,
+            None,
         );
 
         let decryption_data = decode_u32_precomputation_for_G();
