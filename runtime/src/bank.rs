@@ -3108,11 +3108,8 @@ impl Bank {
         &self.fee_rate_governor
     }
 
-    pub fn get_fee_for_message(&self, hash: &Hash, message: &SanitizedMessage) -> Option<u64> {
-        let blockhash_queue = self.blockhash_queue.read().unwrap();
-        #[allow(deprecated)]
-        let fee_calculator = blockhash_queue.get_fee_calculator(hash)?;
-        Some(message.calculate_fee(fee_calculator))
+    pub fn get_fee_for_message(&self, message: &SanitizedMessage) -> Option<u64> {
+        Some(message.calculate_fee(self.fee_rate_governor.lamports_per_signature))
     }
 
     #[deprecated(
@@ -4042,7 +4039,9 @@ impl Bank {
                     });
 
                 let fee_calculator = fee_calculator.ok_or(TransactionError::BlockhashNotFound)?;
-                let fee = tx.message().calculate_fee(&fee_calculator);
+                let fee = tx
+                    .message()
+                    .calculate_fee(fee_calculator.lamports_per_signature);
 
                 match *res {
                     Err(TransactionError::InstructionError(_, _)) => {
@@ -4410,6 +4409,7 @@ impl Bank {
                 &pubkey,
                 &mut account,
                 rent_for_sysvars,
+                self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
             );
             total_rent += rent;
             // Store all of them unconditionally to purge old AppendVec,
@@ -4431,7 +4431,7 @@ impl Bank {
     // start_index..=end_index. But it has some exceptional cases, including
     // this important and valid one:
     //   0..=0: the first partition in the new epoch when crossing epochs
-    fn pubkey_range_from_partition(
+    pub fn pubkey_range_from_partition(
         (start_index, end_index, partition_count): Partition,
     ) -> RangeInclusive<Pubkey> {
         assert!(start_index <= end_index);
@@ -4496,13 +4496,15 @@ impl Bank {
         Pubkey::new_from_array(start_pubkey)..=Pubkey::new_from_array(end_pubkey)
     }
 
-    fn fixed_cycle_partitions(&self) -> Vec<Partition> {
-        let slot_count_in_two_day = self.slot_count_in_two_day();
-
-        let parent_cycle = self.parent_slot() / slot_count_in_two_day;
-        let current_cycle = self.slot() / slot_count_in_two_day;
-        let mut parent_cycle_index = self.parent_slot() % slot_count_in_two_day;
-        let current_cycle_index = self.slot() % slot_count_in_two_day;
+    pub fn get_partitions(
+        slot: Slot,
+        parent_slot: Slot,
+        slot_count_in_two_day: SlotCount,
+    ) -> Vec<Partition> {
+        let parent_cycle = parent_slot / slot_count_in_two_day;
+        let current_cycle = slot / slot_count_in_two_day;
+        let mut parent_cycle_index = parent_slot % slot_count_in_two_day;
+        let current_cycle_index = slot % slot_count_in_two_day;
         let mut partitions = vec![];
         if parent_cycle < current_cycle {
             if current_cycle_index > 0 {
@@ -4529,6 +4531,11 @@ impl Bank {
         ));
 
         partitions
+    }
+
+    fn fixed_cycle_partitions(&self) -> Vec<Partition> {
+        let slot_count_in_two_day = self.slot_count_in_two_day();
+        Self::get_partitions(self.slot(), self.parent_slot(), slot_count_in_two_day)
     }
 
     fn variable_cycle_partitions(&self) -> Vec<Partition> {
@@ -4722,11 +4729,15 @@ impl Bank {
             && self.slot_count_per_normal_epoch() < self.slot_count_in_two_day()
     }
 
+    fn slot_count_in_two_day(&self) -> SlotCount {
+        Self::slot_count_in_two_day_helper(self.ticks_per_slot)
+    }
+
     // This value is specially chosen to align with slots per epoch in mainnet-beta and testnet
     // Also, assume 500GB account data set as the extreme, then for 2 day (=48 hours) to collect
     // rent eagerly, we'll consume 5.7 MB/s IO bandwidth, bidirectionally.
-    fn slot_count_in_two_day(&self) -> SlotCount {
-        2 * DEFAULT_TICKS_PER_SECOND * SECONDS_PER_DAY / self.ticks_per_slot
+    pub fn slot_count_in_two_day_helper(ticks_per_slot: SlotCount) -> SlotCount {
+        2 * DEFAULT_TICKS_PER_SECOND * SECONDS_PER_DAY / ticks_per_slot
     }
 
     fn slot_count_per_normal_epoch(&self) -> SlotCount {
@@ -4914,7 +4925,6 @@ impl Bank {
             self.stakes.write().unwrap().store(
                 pubkey,
                 account,
-                self.check_init_vote_data_enabled(),
                 self.stakes_remove_delegation_if_inactive_enabled(),
             );
         }
@@ -5669,7 +5679,6 @@ impl Bank {
                 if let Some(old_vote_account) = self.stakes.write().unwrap().store(
                     pubkey,
                     account,
-                    self.check_init_vote_data_enabled(),
                     self.stakes_remove_delegation_if_inactive_enabled(),
                 ) {
                     // TODO: one of the indices is redundant.
@@ -5898,11 +5907,6 @@ impl Bank {
     pub fn no_overflow_rent_distribution_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::no_overflow_rent_distribution::id())
-    }
-
-    pub fn check_init_vote_data_enabled(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::check_init_vote_data::id())
     }
 
     pub fn verify_tx_signatures_len_enabled(&self) -> bool {
@@ -6692,7 +6696,6 @@ pub(crate) mod tests {
     }
 
     fn mock_process_instruction(
-        _program_id: &Pubkey,
         first_instruction_account: usize,
         data: &[u8],
         invoke_context: &mut dyn InvokeContext,
@@ -10340,11 +10343,11 @@ pub(crate) mod tests {
             Pubkey::new(&[42u8; 32])
         }
         fn mock_vote_processor(
-            program_id: &Pubkey,
             _first_instruction_account: usize,
             _instruction_data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
+            invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
+            let program_id = invoke_context.get_caller()?;
             if mock_vote_program_id() != *program_id {
                 return Err(InstructionError::IncorrectProgramId);
             }
@@ -10398,7 +10401,6 @@ pub(crate) mod tests {
         let mut bank = Bank::new_for_tests(&genesis_config);
 
         fn mock_vote_processor(
-            _pubkey: &Pubkey,
             _first_instruction_account: usize,
             _data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
@@ -10449,7 +10451,6 @@ pub(crate) mod tests {
         let mut bank = Bank::new_for_tests(&genesis_config);
 
         fn mock_ix_processor(
-            _pubkey: &Pubkey,
             _first_instruction_account: usize,
             _data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
@@ -10918,10 +10919,7 @@ pub(crate) mod tests {
         /* Check balances */
         let mut expected_balance = 4_650_000
             - bank
-                .get_fee_for_message(
-                    &bank.last_blockhash(),
-                    &durable_tx.message.try_into().unwrap(),
-                )
+                .get_fee_for_message(&durable_tx.message.try_into().unwrap())
                 .unwrap();
         assert_eq!(bank.get_balance(&custodian_pubkey), expected_balance);
         assert_eq!(bank.get_balance(&nonce_pubkey), 250_000);
@@ -10975,10 +10973,7 @@ pub(crate) mod tests {
         );
         /* Check fee charged and nonce has advanced */
         expected_balance -= bank
-            .get_fee_for_message(
-                &bank.last_blockhash(),
-                &SanitizedMessage::try_from(durable_tx.message.clone()).unwrap(),
-            )
+            .get_fee_for_message(&SanitizedMessage::try_from(durable_tx.message.clone()).unwrap())
             .unwrap();
         assert_eq!(bank.get_balance(&custodian_pubkey), expected_balance);
         assert_ne!(nonce_hash, get_nonce_account(&bank, &nonce_pubkey).unwrap());
@@ -11042,10 +11037,7 @@ pub(crate) mod tests {
             bank.get_balance(&custodian_pubkey),
             initial_custodian_balance
                 - bank
-                    .get_fee_for_message(
-                        &bank.last_blockhash(),
-                        &durable_tx.message.try_into().unwrap()
-                    )
+                    .get_fee_for_message(&durable_tx.message.try_into().unwrap())
                     .unwrap()
         );
         assert_eq!(nonce_hash, get_nonce_account(&bank, &nonce_pubkey).unwrap());
@@ -11097,10 +11089,7 @@ pub(crate) mod tests {
             bank.get_balance(&nonce_pubkey),
             nonce_starting_balance
                 - bank
-                    .get_fee_for_message(
-                        &bank.last_blockhash(),
-                        &durable_tx.message.try_into().unwrap()
-                    )
+                    .get_fee_for_message(&durable_tx.message.try_into().unwrap())
                     .unwrap()
         );
         assert_ne!(nonce_hash, get_nonce_account(&bank, &nonce_pubkey).unwrap());
@@ -11291,7 +11280,6 @@ pub(crate) mod tests {
         let mut bank = Bank::new_for_tests(&genesis_config);
 
         fn mock_process_instruction(
-            _program_id: &Pubkey,
             first_instruction_account: usize,
             data: &[u8],
             invoke_context: &mut dyn InvokeContext,
@@ -11352,7 +11340,6 @@ pub(crate) mod tests {
 
         #[allow(clippy::unnecessary_wraps)]
         fn mock_process_instruction(
-            _program_id: &Pubkey,
             _first_instruction_account: usize,
             _data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
@@ -11539,7 +11526,6 @@ pub(crate) mod tests {
 
     #[allow(clippy::unnecessary_wraps)]
     fn mock_ok_vote_processor(
-        _pubkey: &Pubkey,
         _first_instruction_account: usize,
         _data: &[u8],
         _invoke_context: &mut dyn InvokeContext,
@@ -11790,7 +11776,6 @@ pub(crate) mod tests {
     #[test]
     fn test_same_program_id_uses_unqiue_executable_accounts() {
         fn nested_processor(
-            _program_id: &Pubkey,
             first_instruction_account: usize,
             _data: &[u8],
             invoke_context: &mut dyn InvokeContext,
@@ -12162,7 +12147,6 @@ pub(crate) mod tests {
 
         #[allow(clippy::unnecessary_wraps)]
         fn mock_ix_processor(
-            _pubkey: &Pubkey,
             _first_instruction_account: usize,
             _data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
@@ -12212,7 +12196,6 @@ pub(crate) mod tests {
 
         #[allow(clippy::unnecessary_wraps)]
         fn mock_ix_processor(
-            _pubkey: &Pubkey,
             _first_instruction_account: usize,
             _data: &[u8],
             _context: &mut dyn InvokeContext,
@@ -12600,7 +12583,6 @@ pub(crate) mod tests {
     impl Executor for TestExecutor {
         fn execute(
             &self,
-            _program_id: &Pubkey,
             _first_instruction_account: usize,
             _instruction_data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
@@ -13104,7 +13086,6 @@ pub(crate) mod tests {
         // intentionally create bogus native programs
         #[allow(clippy::unnecessary_wraps)]
         fn mock_process_instruction(
-            _program_id: &Pubkey,
             _first_instruction_account: usize,
             _data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
@@ -14602,7 +14583,6 @@ pub(crate) mod tests {
         let mut bank = Bank::new_for_tests(&genesis_config);
 
         fn mock_ix_processor(
-            _pubkey: &Pubkey,
             first_instruction_account: usize,
             _data: &[u8],
             invoke_context: &mut dyn InvokeContext,
@@ -14812,7 +14792,6 @@ pub(crate) mod tests {
         let mut bank = Bank::new_for_tests(&genesis_config);
 
         fn mock_ix_processor(
-            _pubkey: &Pubkey,
             _first_instruction_account: usize,
             _data: &[u8],
             invoke_context: &mut dyn InvokeContext,

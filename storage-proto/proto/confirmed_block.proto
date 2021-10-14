@@ -66,6 +66,7 @@ message TokenBalance {
     uint32 account_index = 1;
     string mint = 2;
     UiTokenAmount ui_token_amount = 3;
+    string owner = 4;
 }
 
 message UiTokenAmount {

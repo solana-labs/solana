@@ -111,6 +111,8 @@ pub struct StoredTransactionTokenBalance {
     pub account_index: u8,
     pub mint: String,
     pub ui_token_amount: StoredTokenAmount,
+    #[serde(deserialize_with = "default_on_eof")]
+    pub owner: String,
 }
 
 impl From<StoredTransactionTokenBalance> for TransactionTokenBalance {
@@ -119,11 +121,13 @@ impl From<StoredTransactionTokenBalance> for TransactionTokenBalance {
             account_index,
             mint,
             ui_token_amount,
+            owner,
         } = value;
         Self {
             account_index,
             mint,
             ui_token_amount: ui_token_amount.into(),
+            owner,
         }
     }
 }
@@ -134,11 +138,13 @@ impl From<TransactionTokenBalance> for StoredTransactionTokenBalance {
             account_index,
             mint,
             ui_token_amount,
+            owner,
         } = value;
         Self {
             account_index,
             mint,
             ui_token_amount: ui_token_amount.into(),
+            owner,
         }
     }
 }

@@ -158,6 +158,9 @@ pub(crate) fn should_retransmit_and_persist(
         } else if shred.index() >= MAX_DATA_SHREDS_PER_SLOT as u32 {
             inc_new_counter_warn!("streamer-recv_window-shred_index_overrun", 1);
             false
+        } else if shred.data_header.size as usize > shred.payload.len() {
+            inc_new_counter_warn!("streamer-recv_window-shred_bad_meta_size", 1);
+            false
         } else {
             true
         }
@@ -732,7 +735,7 @@ mod test {
         ));
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
 
-        let mut shreds = local_entries_to_shred(&[Entry::default()], 0, 0, &leader_keypair);
+        let shreds = local_entries_to_shred(&[Entry::default()], 0, 0, &leader_keypair);
 
         // with a Bank for slot 0, shred continues
         assert!(should_retransmit_and_persist(
@@ -784,9 +787,22 @@ mod test {
         ));
 
         // with a Bank and no idea who leader is, shred gets thrown out
-        shreds[0].set_slot(MINIMUM_SLOTS_PER_EPOCH as u64 * 3);
+        let mut bad_slot_shred = shreds[0].clone();
+        bad_slot_shred.set_slot(MINIMUM_SLOTS_PER_EPOCH as u64 * 3);
         assert!(!should_retransmit_and_persist(
-            &shreds[0],
+            &bad_slot_shred,
+            Some(bank.clone()),
+            &cache,
+            &me_id,
+            0,
+            0
+        ));
+
+        // with a bad header size
+        let mut bad_header_shred = shreds[0].clone();
+        bad_header_shred.data_header.size = (bad_header_shred.payload.len() + 1) as u16;
+        assert!(!should_retransmit_and_persist(
+            &bad_header_shred,
             Some(bank.clone()),
             &cache,
             &me_id,

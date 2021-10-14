@@ -61,11 +61,13 @@ impl RentCollector {
         address: &Pubkey,
         account: &mut AccountSharedData,
         rent_for_sysvars: bool,
+        filler_account_suffix: Option<&Pubkey>,
     ) -> u64 {
         if account.executable() // executable accounts must be rent-exempt balance
             || account.rent_epoch() > self.epoch
             || (!rent_for_sysvars && sysvar::check_id(account.owner()))
             || *address == incinerator::id()
+            || crate::accounts_db::AccountsDb::is_filler_account_helper(address, filler_account_suffix)
         {
             0
         } else {
@@ -120,7 +122,7 @@ impl RentCollector {
     ) -> u64 {
         // initialize rent_epoch as created at this epoch
         account.set_rent_epoch(self.epoch);
-        self.collect_from_existing_account(address, account, rent_for_sysvars)
+        self.collect_from_existing_account(address, account, rent_for_sysvars, None)
     }
 }
 
@@ -162,6 +164,7 @@ mod tests {
             &solana_sdk::pubkey::new_rand(),
             &mut existing_account,
             true,
+            None,
         );
         assert!(existing_account.lamports() < old_lamports);
         assert_eq!(existing_account.lamports() + collected, old_lamports);
@@ -188,7 +191,7 @@ mod tests {
         let rent_collector = RentCollector::default().clone_with_epoch(epoch);
 
         // first mark account as being collected while being rent-exempt
-        collected = rent_collector.collect_from_existing_account(&pubkey, &mut account, true);
+        collected = rent_collector.collect_from_existing_account(&pubkey, &mut account, true, None);
         assert_eq!(account.lamports(), huge_lamports);
         assert_eq!(collected, 0);
 
@@ -196,7 +199,7 @@ mod tests {
         account.set_lamports(tiny_lamports);
 
         // ... and trigger another rent collection on the same epoch and check that rent is working
-        collected = rent_collector.collect_from_existing_account(&pubkey, &mut account, true);
+        collected = rent_collector.collect_from_existing_account(&pubkey, &mut account, true, None);
         assert_eq!(account.lamports(), tiny_lamports - collected);
         assert_ne!(collected, 0);
     }
@@ -216,12 +219,14 @@ mod tests {
         let rent_collector = RentCollector::default().clone_with_epoch(epoch);
 
         // old behavior: sysvars are special-cased
-        let collected = rent_collector.collect_from_existing_account(&pubkey, &mut account, false);
+        let collected =
+            rent_collector.collect_from_existing_account(&pubkey, &mut account, false, None);
         assert_eq!(account.lamports(), tiny_lamports);
         assert_eq!(collected, 0);
 
         // new behavior: sysvars are NOT special-cased
-        let collected = rent_collector.collect_from_existing_account(&pubkey, &mut account, true);
+        let collected =
+            rent_collector.collect_from_existing_account(&pubkey, &mut account, true, None);
         assert_eq!(account.lamports(), 0);
         assert_eq!(collected, 1);
     }

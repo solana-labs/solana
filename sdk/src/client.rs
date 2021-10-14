@@ -168,7 +168,7 @@ pub trait SyncClient {
     fn is_blockhash_valid(&self, blockhash: &Hash, commitment: CommitmentConfig) -> Result<bool>;
 
     /// Calculate the fee for a `Message`
-    fn get_fee_for_message(&self, blockhash: &Hash, message: &Message) -> Result<u64>;
+    fn get_fee_for_message(&self, message: &Message) -> Result<u64>;
 
     /// Get a new blockhash after the one specified
     fn get_new_latest_blockhash(&self, blockhash: &Hash) -> Result<Hash>;

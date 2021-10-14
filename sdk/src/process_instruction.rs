@@ -28,25 +28,31 @@ pub type LoaderEntrypoint = unsafe extern "C" fn(
 ) -> Result<(), InstructionError>;
 
 pub type ProcessInstructionWithContext =
-    fn(&Pubkey, usize, &[u8], &mut dyn InvokeContext) -> Result<(), InstructionError>;
+    fn(usize, &[u8], &mut dyn InvokeContext) -> Result<(), InstructionError>;
 
 pub struct InvokeContextStackFrame<'a> {
-    pub key: Pubkey,
+    pub number_of_program_accounts: usize,
     pub keyed_accounts: Vec<KeyedAccount<'a>>,
     pub keyed_accounts_range: std::ops::Range<usize>,
 }
 
 impl<'a> InvokeContextStackFrame<'a> {
-    pub fn new(key: Pubkey, keyed_accounts: Vec<KeyedAccount<'a>>) -> Self {
+    pub fn new(number_of_program_accounts: usize, keyed_accounts: Vec<KeyedAccount<'a>>) -> Self {
         let keyed_accounts_range = std::ops::Range {
             start: 0,
             end: keyed_accounts.len(),
         };
         Self {
-            key,
+            number_of_program_accounts,
             keyed_accounts,
             keyed_accounts_range,
         }
+    }
+
+    pub fn program_id(&self) -> Option<&Pubkey> {
+        self.keyed_accounts
+            .get(self.number_of_program_accounts.saturating_sub(1))
+            .map(|keyed_account| keyed_account.unsigned_key())
     }
 }
 
@@ -55,7 +61,6 @@ pub trait InvokeContext {
     /// Push a stack frame onto the invocation stack
     fn push(
         &mut self,
-        key: &Pubkey,
         message: &Message,
         instruction: &CompiledInstruction,
         program_indices: &[usize],
@@ -400,7 +405,6 @@ pub trait Executor: Debug + Send + Sync {
     /// Execute the program
     fn execute(
         &self,
-        program_id: &Pubkey,
         first_instruction_account: usize,
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
@@ -456,7 +460,7 @@ pub struct MockInvokeContext<'a> {
 }
 
 impl<'a> MockInvokeContext<'a> {
-    pub fn new(keyed_accounts: Vec<KeyedAccount<'a>>) -> Self {
+    pub fn new(program_id: &Pubkey, keyed_accounts: Vec<KeyedAccount<'a>>) -> Self {
         let compute_budget = ComputeBudget::default();
         let mut invoke_context = MockInvokeContext {
             invoke_stack: Vec::with_capacity(compute_budget.max_invoke_depth),
@@ -474,10 +478,15 @@ impl<'a> MockInvokeContext<'a> {
             fee_calculator: FeeCalculator::default(),
             return_data: (Pubkey::default(), Vec::new()),
         };
+        let number_of_program_accounts = keyed_accounts
+            .iter()
+            .position(|keyed_account| keyed_account.unsigned_key() == program_id)
+            .unwrap_or(0)
+            .saturating_add(1);
         invoke_context
             .invoke_stack
             .push(InvokeContextStackFrame::new(
-                Pubkey::default(),
+                number_of_program_accounts,
                 keyed_accounts,
             ));
         invoke_context
@@ -502,14 +511,13 @@ pub fn mock_set_sysvar<T: Sysvar>(
 impl<'a> InvokeContext for MockInvokeContext<'a> {
     fn push(
         &mut self,
-        _key: &Pubkey,
         _message: &Message,
         _instruction: &CompiledInstruction,
         _program_indices: &[usize],
         _account_indices: Option<&[usize]>,
     ) -> Result<(), InstructionError> {
         self.invoke_stack.push(InvokeContextStackFrame::new(
-            *_key,
+            0,
             create_keyed_accounts_unified(&[]),
         ));
         Ok(())
@@ -539,7 +547,7 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
         self.invoke_stack
             .last()
-            .map(|frame| &frame.key)
+            .and_then(|frame| frame.program_id())
             .ok_or(InstructionError::CallDepth)
     }
     fn remove_first_keyed_account(&mut self) -> Result<(), InstructionError> {

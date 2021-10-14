@@ -184,6 +184,14 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
         self.meta.dirty.store(value, Ordering::Release)
     }
 
+    /// set dirty to false, return true if was dirty
+    pub fn clear_dirty(&self) -> bool {
+        self.meta
+            .dirty
+            .compare_exchange(true, false, Ordering::AcqRel, Ordering::Relaxed)
+            .is_ok()
+    }
+
     pub fn age(&self) -> Age {
         self.meta.age.load(Ordering::Relaxed)
     }
@@ -1629,9 +1637,8 @@ impl<T: IndexValue> AccountsIndex<T> {
     }
 
     pub fn unref_from_storage(&self, pubkey: &Pubkey) {
-        if let Some(locked_entry) = self.get_account_read_entry(pubkey) {
-            locked_entry.unref();
-        }
+        let map = &self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)];
+        map.read().unwrap().unref(pubkey)
     }
 
     pub fn ref_count_from_storage(&self, pubkey: &Pubkey) -> RefCount {

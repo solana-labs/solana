@@ -3049,9 +3049,7 @@ mod tests {
             bank2.last_blockhash(),
         ))
         .unwrap();
-        let fee = bank2
-            .get_fee_for_message(&bank2.last_blockhash(), tx.message())
-            .unwrap();
+        let fee = bank2.get_fee_for_message(tx.message()).unwrap();
         let tx = system_transaction::transfer(
             &key1,
             &key2.pubkey(),

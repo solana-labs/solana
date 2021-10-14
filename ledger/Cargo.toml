@@ -80,5 +80,8 @@ name = "solana_ledger"
 [[bench]]
 name = "sigverify_shreds"
 
+[[bench]]
+name = "blockstore"
+
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

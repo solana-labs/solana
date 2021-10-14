@@ -1113,6 +1113,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "histogram"
+version = "0.6.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12cb882ccb290b8646e554b157ab0b71e64e8d5bef775cd66b6531e52d302669"
+
+[[package]]
 name = "hmac"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1368,9 +1374,9 @@ checksum = "dd8f7255a17a627354f321ef0055d63b898c6fb27eff628af4d1b66b7331edf6"
 
 [[package]]
 name = "libloading"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f84d96438c15fcd6c3f244c8fce01d1e2b9c6b5623e9c711dc9286d8fc92d6a"
+checksum = "c0cf036d15402bea3c5d4de17b3fce76b3e4a56ebc1f577be0e7a72f7c607cf0"
 dependencies = [
  "cfg-if 1.0.0",
  "winapi",
@@ -1692,9 +1698,9 @@ dependencies = [
 
 [[package]]
 name = "ouroboros"
-version = "0.12.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c711f35b4e881534535e7d943aa158ed673baf8e73b06bdd93b31703cf968cc3"
+checksum = "f357ef82d1b4db66fbed0b8d542cbd3c22d0bf5b393b3c257b9ba4568e70c9c3"
 dependencies = [
  "aliasable",
  "ouroboros_macro",
@@ -1703,9 +1709,9 @@ dependencies = [
 
 [[package]]
 name = "ouroboros_macro"
-version = "0.12.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "adbdedd935f91827ea19bb8b97c20dd5870221eac3e9d9a2e70367ecc813479d"
+checksum = "44a0b52c2cbaef7dffa5fec1a43274afe8bd2a644fa9fc50a9ef4ff0269b1257"
 dependencies = [
  "Inflector",
  "proc-macro-error",
@@ -2898,6 +2904,7 @@ dependencies = [
  "solana-account-decoder",
  "solana-clap-utils",
  "solana-faucet",
+ "solana-measure",
  "solana-net-utils",
  "solana-sdk",
  "solana-transaction-status",
@@ -3242,6 +3249,7 @@ dependencies = [
  "dir-diff",
  "flate2",
  "fnv",
+ "histogram",
  "itertools 0.10.1",
  "lazy_static",
  "log",
@@ -3386,10 +3394,13 @@ dependencies = [
  "bincode",
  "bs58 0.4.0",
  "lazy_static",
+ "log",
  "serde",
  "serde_derive",
  "serde_json",
  "solana-account-decoder",
+ "solana-measure",
+ "solana-metrics",
  "solana-runtime",
  "solana-sdk",
  "solana-vote-program",
@@ -3643,18 +3654,18 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "1.0.29"
+version = "1.0.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "602eca064b2d83369e2b2f34b09c70b605402801927c65c11071ac911d299b88"
+checksum = "854babe52e4df1653706b98fcfc05843010039b406875930a70e4d9644e5c417"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.29"
+version = "1.0.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bad553cc2c78e8de258400763a647e80e6d1b31ee237275d756f6836d204494c"
+checksum = "aa32fd3f627f367fe16f893e2597ae3c05020f8bba2666a4e6ea73d377e5714b"
 dependencies = [
  "proc-macro2 1.0.24",
  "quote 1.0.6",

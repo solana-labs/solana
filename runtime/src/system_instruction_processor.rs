@@ -263,7 +263,6 @@ fn transfer_with_seed(
 }
 
 pub fn process_instruction(
-    _owner: &Pubkey,
     first_instruction_account: usize,
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
@@ -522,13 +521,11 @@ mod tests {
             ..Account::default()
         }));
         let mut keyed_accounts = keyed_accounts.to_vec();
-        let processor_id = Pubkey::default();
-        keyed_accounts.insert(0, (false, false, &processor_id, &processor_account));
+        keyed_accounts.insert(0, (false, false, owner, &processor_account));
         super::process_instruction(
-            owner,
             1,
             instruction_data,
-            &mut MockInvokeContext::new(create_keyed_accounts_unified(&keyed_accounts)),
+            &mut MockInvokeContext::new(owner, create_keyed_accounts_unified(&keyed_accounts)),
         )
     }
 
@@ -661,7 +658,7 @@ mod tests {
             Address::create(
                 &to,
                 Some((&from, seed, &owner)),
-                &MockInvokeContext::new(vec![]),
+                &MockInvokeContext::new(&Pubkey::default(), vec![]),
             ),
             Err(SystemError::AddressWithSeedMismatch.into())
         );
@@ -679,7 +676,7 @@ mod tests {
         let to_address = Address::create(
             &to,
             Some((&from, seed, &new_owner)),
-            &MockInvokeContext::new(vec![]),
+            &MockInvokeContext::new(&Pubkey::default(), vec![]),
         )
         .unwrap();
 
@@ -692,7 +689,7 @@ mod tests {
                 2,
                 &new_owner,
                 &HashSet::new(),
-                &MockInvokeContext::new(vec![]),
+                &MockInvokeContext::new(&Pubkey::default(), vec![]),
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -719,7 +716,7 @@ mod tests {
                 2,
                 &new_owner,
                 &[from, to].iter().cloned().collect::<HashSet<_>>(),
-                &MockInvokeContext::new(vec![]),
+                &MockInvokeContext::new(&Pubkey::default(), vec![]),
             ),
             Ok(())
         );
@@ -751,7 +748,7 @@ mod tests {
             2,
             &new_owner,
             &[from, to].iter().cloned().collect::<HashSet<_>>(),
-            &MockInvokeContext::new(vec![]),
+            &MockInvokeContext::new(&Pubkey::default(), vec![]),
         );
         assert_eq!(result, Err(SystemError::ResultWithNegativeLamports.into()));
     }
@@ -775,7 +772,7 @@ mod tests {
             MAX_PERMITTED_DATA_LENGTH + 1,
             &system_program::id(),
             signers,
-            &MockInvokeContext::new(vec![]),
+            &MockInvokeContext::new(&Pubkey::default(), vec![]),
         );
         assert!(result.is_err());
         assert_eq!(
@@ -792,7 +789,7 @@ mod tests {
             MAX_PERMITTED_DATA_LENGTH,
             &system_program::id(),
             signers,
-            &MockInvokeContext::new(vec![]),
+            &MockInvokeContext::new(&Pubkey::default(), vec![]),
         );
         assert!(result.is_ok());
         assert_eq!(to_account.borrow().lamports(), 50);
@@ -825,7 +822,7 @@ mod tests {
             2,
             &new_owner,
             signers,
-            &MockInvokeContext::new(vec![]),
+            &MockInvokeContext::new(&Pubkey::default(), vec![]),
         );
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
 
@@ -844,7 +841,7 @@ mod tests {
             2,
             &new_owner,
             signers,
-            &MockInvokeContext::new(vec![]),
+            &MockInvokeContext::new(&Pubkey::default(), vec![]),
         );
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
         let from_lamports = from_account.borrow().lamports();
@@ -862,7 +859,7 @@ mod tests {
             2,
             &new_owner,
             signers,
-            &MockInvokeContext::new(vec![]),
+            &MockInvokeContext::new(&Pubkey::default(), vec![]),
         );
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
         assert_eq!(from_lamports, 100);
@@ -890,7 +887,7 @@ mod tests {
             2,
             &new_owner,
             &[owned_key].iter().cloned().collect::<HashSet<_>>(),
-            &MockInvokeContext::new(vec![]),
+            &MockInvokeContext::new(&Pubkey::default(), vec![]),
         );
         assert_eq!(result, Err(InstructionError::MissingRequiredSignature));
 
@@ -904,7 +901,7 @@ mod tests {
             2,
             &new_owner,
             &[from].iter().cloned().collect::<HashSet<_>>(),
-            &MockInvokeContext::new(vec![]),
+            &MockInvokeContext::new(&Pubkey::default(), vec![]),
         );
         assert_eq!(result, Err(InstructionError::MissingRequiredSignature));
 
@@ -918,7 +915,7 @@ mod tests {
             2,
             &new_owner,
             &[owned_key].iter().cloned().collect::<HashSet<_>>(),
-            &MockInvokeContext::new(vec![]),
+            &MockInvokeContext::new(&Pubkey::default(), vec![]),
         );
         assert_eq!(result, Err(InstructionError::MissingRequiredSignature));
     }
@@ -944,7 +941,7 @@ mod tests {
             2,
             &sysvar::id(),
             &signers,
-            &MockInvokeContext::new(vec![]),
+            &MockInvokeContext::new(&Pubkey::default(), vec![]),
         );
         assert_eq!(result, Ok(()));
     }
@@ -973,7 +970,7 @@ mod tests {
                 disabled_features: vec![feature_set::rent_for_sysvars::id()]
                     .into_iter()
                     .collect(),
-                ..MockInvokeContext::new(vec![])
+                ..MockInvokeContext::new(&Pubkey::default(), vec![])
             },
         );
         assert_eq!(result, Err(SystemError::InvalidProgramId.into()));
@@ -1007,7 +1004,7 @@ mod tests {
             2,
             &new_owner,
             &signers,
-            &MockInvokeContext::new(vec![]),
+            &MockInvokeContext::new(&Pubkey::default(), vec![]),
         );
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse.into()));
     }
@@ -1041,7 +1038,7 @@ mod tests {
                 0,
                 &solana_sdk::pubkey::new_rand(),
                 &signers,
-                &MockInvokeContext::new(vec![]),
+                &MockInvokeContext::new(&Pubkey::default(), vec![]),
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -1059,7 +1056,7 @@ mod tests {
                 &pubkey.into(),
                 &new_owner,
                 &HashSet::new(),
-                &MockInvokeContext::new(vec![]),
+                &MockInvokeContext::new(&Pubkey::default(), vec![]),
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -1071,7 +1068,7 @@ mod tests {
                 &pubkey.into(),
                 &system_program::id(),
                 &HashSet::new(),
-                &MockInvokeContext::new(vec![]),
+                &MockInvokeContext::new(&Pubkey::default(), vec![]),
             ),
             Ok(())
         );
@@ -1100,7 +1097,7 @@ mod tests {
                 &from.into(),
                 &new_owner,
                 &[from].iter().cloned().collect::<HashSet<_>>(),
-                &MockInvokeContext::new(vec![]),
+                &MockInvokeContext::new(&Pubkey::default(), vec![]),
             ),
             Ok(())
         );
@@ -1123,7 +1120,7 @@ mod tests {
                     disabled_features: vec![feature_set::rent_for_sysvars::id()]
                         .into_iter()
                         .collect(),
-                    ..MockInvokeContext::new(vec![])
+                    ..MockInvokeContext::new(&Pubkey::default(), vec![])
                 },
             ),
             Err(SystemError::InvalidProgramId.into())
@@ -1165,7 +1162,7 @@ mod tests {
             &from_keyed_account,
             &to_keyed_account,
             50,
-            &MockInvokeContext::new(vec![]),
+            &MockInvokeContext::new(&Pubkey::default(), vec![]),
         )
         .unwrap();
         let from_lamports = from_keyed_account.account.borrow().lamports();
@@ -1179,7 +1176,7 @@ mod tests {
             &from_keyed_account,
             &to_keyed_account,
             100,
-            &MockInvokeContext::new(vec![]),
+            &MockInvokeContext::new(&Pubkey::default(), vec![]),
         );
         assert_eq!(result, Err(SystemError::ResultWithNegativeLamports.into()));
         assert_eq!(from_keyed_account.account.borrow().lamports(), 50);
@@ -1190,7 +1187,7 @@ mod tests {
             &from_keyed_account,
             &to_keyed_account,
             0,
-            &MockInvokeContext::new(vec![]),
+            &MockInvokeContext::new(&Pubkey::default(), vec![]),
         )
         .is_ok());
         assert_eq!(from_keyed_account.account.borrow().lamports(), 50);
@@ -1204,7 +1201,7 @@ mod tests {
                 &from_keyed_account,
                 &to_keyed_account,
                 0,
-                &MockInvokeContext::new(vec![]),
+                &MockInvokeContext::new(&Pubkey::default(), vec![]),
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -1232,7 +1229,7 @@ mod tests {
             &from_owner,
             &to_keyed_account,
             50,
-            &MockInvokeContext::new(vec![]),
+            &MockInvokeContext::new(&Pubkey::default(), vec![]),
         )
         .unwrap();
         let from_lamports = from_keyed_account.account.borrow().lamports();
@@ -1249,7 +1246,7 @@ mod tests {
             &from_owner,
             &to_keyed_account,
             100,
-            &MockInvokeContext::new(vec![]),
+            &MockInvokeContext::new(&Pubkey::default(), vec![]),
         );
         assert_eq!(result, Err(SystemError::ResultWithNegativeLamports.into()));
         assert_eq!(from_keyed_account.account.borrow().lamports(), 50);
@@ -1264,7 +1261,7 @@ mod tests {
             &from_owner,
             &to_keyed_account,
             0,
-            &MockInvokeContext::new(vec![]),
+            &MockInvokeContext::new(&Pubkey::default(), vec![]),
         )
         .is_ok());
         assert_eq!(from_keyed_account.account.borrow().lamports(), 50);
@@ -1295,7 +1292,7 @@ mod tests {
                 &KeyedAccount::new(&from, true, &from_account),
                 &KeyedAccount::new(&to, false, &to_account),
                 50,
-                &MockInvokeContext::new(vec![]),
+                &MockInvokeContext::new(&Pubkey::default(), vec![]),
             ),
             Err(InstructionError::InvalidArgument),
         )
@@ -1610,12 +1607,13 @@ mod tests {
             (true, false, &owner, &nonce_acc),
             (false, false, &blockhash_id, &new_recent_blockhashes_account),
         ];
-        let mut invoke_context =
-            &mut MockInvokeContext::new(create_keyed_accounts_unified(&keyed_accounts));
+        let mut invoke_context = &mut MockInvokeContext::new(
+            &Pubkey::default(),
+            create_keyed_accounts_unified(&keyed_accounts),
+        );
         invoke_context.blockhash = *blockhash;
         assert_eq!(
             super::process_instruction(
-                &Pubkey::default(),
                 1,
                 &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap(),
                 invoke_context,
@@ -2034,12 +2032,13 @@ mod tests {
             (true, false, &owner, &nonce_acc),
             (false, false, &blockhash_id, &new_recent_blockhashes_account),
         ];
-        let mut invoke_context =
-            &mut MockInvokeContext::new(create_keyed_accounts_unified(&keyed_accounts));
+        let mut invoke_context = &mut MockInvokeContext::new(
+            &Pubkey::default(),
+            create_keyed_accounts_unified(&keyed_accounts),
+        );
         invoke_context.blockhash = *blockhash;
         assert_eq!(
             super::process_instruction(
-                &Pubkey::default(),
                 1,
                 &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap(),
                 invoke_context,

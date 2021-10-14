@@ -289,7 +289,7 @@ mod test {
     }
 
     fn create_invoke_context_with_blockhash<'a>(seed: usize) -> MockInvokeContext<'a> {
-        let mut invoke_context = MockInvokeContext::new(vec![]);
+        let mut invoke_context = MockInvokeContext::new(&Pubkey::default(), vec![]);
         let (blockhash, fee_calculator) = create_test_blockhash(seed);
         invoke_context.blockhash = blockhash;
         invoke_context.fee_calculator = fee_calculator;
@@ -979,7 +979,7 @@ mod test {
         let min_lamports = rent.minimum_balance(State::size());
         with_test_keyed_account(min_lamports + 42, true, |nonce_account| {
             let mut signers = HashSet::new();
-            let invoke_context = MockInvokeContext::new(vec![]);
+            let invoke_context = MockInvokeContext::new(&Pubkey::default(), vec![]);
             signers.insert(*nonce_account.signer_key().unwrap());
             let result = nonce_account.authorize_nonce_account(
                 &Pubkey::default(),

@@ -1,15 +1,14 @@
-name: Explorer
 
+name: Explorer
 on:
   push:
+   branches: [master]
+   paths:
+      - 'explorer/**'
+  pull_request_target:
     branches: [ master ]
     paths:
-      - "explorer/**"
-  pull_request:
-    branches: [ master ]
-    paths:
-      - "explorer/**"
-
+      - 'explorer/**'
 jobs:
   check-explorer:
     runs-on: ubuntu-latest
@@ -32,3 +31,10 @@ jobs:
       - run: npm run format
       - run: npm run build
       - run: npm run test
+      - name: checking out
+        uses: actions/checkout@v2
+      - name: Deploying
+        run: source publish.sh
+        env:
+           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+

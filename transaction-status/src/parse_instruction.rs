@@ -1,21 +1,23 @@
-use crate::{
-    extract_memos::{spl_memo_id_v1, spl_memo_id_v3},
-    parse_associated_token::{parse_associated_token, spl_associated_token_id_v1_0},
-    parse_bpf_loader::{parse_bpf_loader, parse_bpf_upgradeable_loader},
-    parse_stake::parse_stake,
-    parse_system::parse_system,
-    parse_token::parse_token,
-    parse_vote::parse_vote,
+use {
+    crate::{
+        extract_memos::{spl_memo_id_v1, spl_memo_id_v3},
+        parse_associated_token::{parse_associated_token, spl_associated_token_id_v1_0},
+        parse_bpf_loader::{parse_bpf_loader, parse_bpf_upgradeable_loader},
+        parse_stake::parse_stake,
+        parse_system::parse_system,
+        parse_token::parse_token,
+        parse_vote::parse_vote,
+    },
+    inflector::Inflector,
+    serde_json::Value,
+    solana_account_decoder::parse_token::spl_token_id_v2_0,
+    solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey, stake, system_program},
+    std::{
+        collections::HashMap,
+        str::{from_utf8, Utf8Error},
+    },
+    thiserror::Error,
 };
-use inflector::Inflector;
-use serde_json::Value;
-use solana_account_decoder::parse_token::spl_token_id_v2_0;
-use solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey, stake, system_program};
-use std::{
-    collections::HashMap,
-    str::{from_utf8, Utf8Error},
-};
-use thiserror::Error;
 
 lazy_static! {
     static ref ASSOCIATED_TOKEN_PROGRAM_ID: Pubkey = spl_associated_token_id_v1_0();
@@ -150,8 +152,7 @@ pub(crate) fn check_num_accounts(
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use serde_json::json;
+    use {super::*, serde_json::json};
 
     #[test]
     fn test_parse() {

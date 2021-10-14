@@ -1,4 +1,4 @@
-FROM debian:buster
+FROM debian:bullseye
 
 # RPC JSON
 EXPOSE 8899/tcp

@@ -1,10 +1,12 @@
-use crate::parse_instruction::{
-    check_num_accounts, ParsableProgram, ParseInstructionError, ParsedInstructionEnum,
-};
-use bincode::deserialize;
-use serde_json::{json, Map};
-use solana_sdk::{
-    instruction::CompiledInstruction, pubkey::Pubkey, stake::instruction::StakeInstruction,
+use {
+    crate::parse_instruction::{
+        check_num_accounts, ParsableProgram, ParseInstructionError, ParsedInstructionEnum,
+    },
+    bincode::deserialize,
+    serde_json::{json, Map},
+    solana_sdk::{
+        instruction::CompiledInstruction, pubkey::Pubkey, stake::instruction::StakeInstruction,
+    },
 };
 
 pub fn parse_stake(
@@ -275,13 +277,15 @@ fn check_num_stake_accounts(accounts: &[u8], num: usize) -> Result<(), ParseInst
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use solana_sdk::{
-        message::Message,
-        pubkey::Pubkey,
-        stake::{
-            instruction::{self, LockupArgs},
-            state::{Authorized, Lockup, StakeAuthorize},
+    use {
+        super::*,
+        solana_sdk::{
+            message::Message,
+            pubkey::Pubkey,
+            stake::{
+                instruction::{self, LockupArgs},
+                state::{Authorized, Lockup, StakeAuthorize},
+            },
         },
     };
 

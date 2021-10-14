@@ -308,7 +308,6 @@ fn verify_rent_exemption(
 }
 
 pub fn process_instruction(
-    _program_id: &Pubkey,
     first_instruction_account: usize,
     data: &[u8],
     invoke_context: &mut dyn InvokeContext,
@@ -338,7 +337,6 @@ pub fn process_instruction(
                     keyed_accounts,
                     first_instruction_account + 2,
                 )?)?,
-                invoke_context.is_feature_active(&feature_set::check_init_vote_data::id()),
             )
         }
         VoteInstruction::Authorize(voter_pubkey, vote_authorize) => vote_state::authorize(
@@ -429,10 +427,9 @@ mod tests {
         let mut keyed_accounts = keyed_accounts.to_vec();
         keyed_accounts.insert(0, (false, false, owner, &processor_account));
         super::process_instruction(
-            owner,
             1,
             instruction_data,
-            &mut MockInvokeContext::new(create_keyed_accounts_unified(&keyed_accounts)),
+            &mut MockInvokeContext::new(owner, create_keyed_accounts_unified(&keyed_accounts)),
         )
     }
 

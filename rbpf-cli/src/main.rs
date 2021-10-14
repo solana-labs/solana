@@ -175,7 +175,7 @@ native machine code before execting it in the virtual machine.",
             (Vec::from(bytes.as_slice_mut()), account_lengths)
         }
     };
-    let mut invoke_context = MockInvokeContext::new(accounts);
+    let mut invoke_context = MockInvokeContext::new(&bpf_loader::id(), accounts);
     let logger = invoke_context.logger.clone();
     let compute_meter = invoke_context.get_compute_meter();
     let mut instruction_meter = ThisInstructionMeter { compute_meter };

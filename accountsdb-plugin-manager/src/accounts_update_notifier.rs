@@ -5,6 +5,8 @@ use {
     solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
         ReplicaAccountInfo, ReplicaAccountInfoVersions, SlotStatus,
     },
+    solana_measure::measure::Measure,
+    solana_metrics::*,
     solana_runtime::{
         accounts_update_notifier_interface::AccountsUpdateNotifierInterface,
         append_vec::StoredAccountMeta,
@@ -88,21 +90,33 @@ impl AccountsUpdateNotifierImpl {
             return;
         }
         for plugin in plugin_manager.plugins.iter_mut() {
+            let mut measure = Measure::start("accountsdb-plugin-update-account");
             match plugin.update_account(ReplicaAccountInfoVersions::V0_0_1(&account), slot) {
                 Err(err) => {
                     error!(
-                        "Failed to update account {:?} at slot {:?}, error: {:?}",
-                        account.pubkey, slot, err
+                        "Failed to update account {} at slot {}, error: {} to plugin {}",
+                        bs58::encode(account.pubkey).into_string(),
+                        slot,
+                        err,
+                        plugin.name()
                     )
                 }
                 Ok(_) => {
                     trace!(
-                        "Successfully updated account {:?} at slot {:?}",
-                        account.pubkey,
-                        slot
+                        "Successfully updated account {} at slot {} to plugin {}",
+                        bs58::encode(account.pubkey).into_string(),
+                        slot,
+                        plugin.name()
                     );
                 }
             }
+            measure.stop();
+            inc_new_counter_info!(
+                "accountsdb-plugin-update-account-ms",
+                measure.as_ms() as usize,
+                100000,
+                100000
+            );
         }
     }
 
@@ -113,17 +127,31 @@ impl AccountsUpdateNotifierImpl {
         }
 
         for plugin in plugin_manager.plugins.iter_mut() {
+            let mut measure = Measure::start("accountsdb-plugin-update-slot");
             match plugin.update_slot_status(slot, parent, slot_status.clone()) {
                 Err(err) => {
                     error!(
-                        "Failed to update slot status at slot {:?}, error: {:?}",
-                        slot, err
+                        "Failed to update slot status at slot {}, error: {} to plugin {}",
+                        slot,
+                        err,
+                        plugin.name()
                     )
                 }
                 Ok(_) => {
-                    trace!("Successfully updated slot status at slot {:?}", slot);
+                    trace!(
+                        "Successfully updated slot status at slot {} to plugin {}",
+                        slot,
+                        plugin.name()
+                    );
                 }
             }
+            measure.stop();
+            inc_new_counter_info!(
+                "accountsdb-plugin-update-slot-ms",
+                measure.as_ms() as usize,
+                1000,
+                1000
+            );
         }
     }
 }

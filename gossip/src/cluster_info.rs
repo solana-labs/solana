@@ -2671,27 +2671,27 @@ fn get_epoch_duration(bank_forks: Option<&RwLock<BankForks>>) -> Duration {
 ///      1 - also check if there are nodes in the next layer and repeat the layer 1 to layer 2 logic
 
 /// Returns Neighbor Nodes and Children Nodes `(neighbors, children)` for a given node based on its stake
-pub fn compute_retransmit_peers(
+pub fn compute_retransmit_peers<T: Copy>(
     fanout: usize,
-    node: usize,
-    index: &[usize],
-) -> (Vec<usize> /*neighbors*/, Vec<usize> /*children*/) {
+    index: usize, // Local node's index withing the nodes slice.
+    nodes: &[T],
+) -> (Vec<T> /*neighbors*/, Vec<T> /*children*/) {
     // 1st layer: fanout    nodes starting at 0
     // 2nd layer: fanout**2 nodes starting at fanout
     // 3rd layer: fanout**3 nodes starting at fanout + fanout**2
     // ...
     // Each layer is divided into neighborhoods of fanout nodes each.
-    let offset = node % fanout; // Node's index within its neighborhood.
-    let anchor = node - offset; // First node in the neighborhood.
+    let offset = index % fanout; // Node's index within its neighborhood.
+    let anchor = index - offset; // First node in the neighborhood.
     let neighbors = (anchor..)
         .take(fanout)
-        .map(|i| index.get(i).copied())
+        .map(|i| nodes.get(i).copied())
         .while_some()
         .collect();
     let children = ((anchor + 1) * fanout + offset..)
         .step_by(fanout)
         .take(fanout)
-        .map(|i| index.get(i).copied())
+        .map(|i| nodes.get(i).copied())
         .while_some()
         .collect();
     (neighbors, children)

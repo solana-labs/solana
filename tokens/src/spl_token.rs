@@ -97,10 +97,9 @@ pub fn check_spl_token_balances(
         .expect("spl_token_args must be some");
     let allocation_amount: u64 = allocations.iter().map(|x| x.amount).sum();
 
-    let blockhash = client.get_latest_blockhash()?;
     let fees: u64 = messages
         .iter()
-        .map(|message| client.get_fee_for_message(&blockhash, message))
+        .map(|message| client.get_fee_for_message(message))
         .collect::<Result<Vec<_>, _>>()
         .unwrap()
         .iter()
