@@ -241,6 +241,10 @@ pub mod send_to_tpu_vote_port {
     solana_sdk::declare_id!("C5fh68nJ7uyKAuYZg2x9sEQ5YrVf3dkW6oojNBSc3Jvo");
 }
 
+pub mod turbine_peers_shuffle {
+    solana_sdk::declare_id!("4VvpgRD6UsHvkXwpuQhtR5NG1G4esMaExeWuSEpsYRUa");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -296,6 +300,7 @@ lazy_static! {
         (optimize_epoch_boundary_updates::id(), "Optimize epoch boundary updates"),
         (remove_native_loader::id(), "Remove support for the native loader"),
         (send_to_tpu_vote_port::id(), "Send votes to the tpu vote port"),
+        (turbine_peers_shuffle::id(), "turbine peers shuffle patch"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

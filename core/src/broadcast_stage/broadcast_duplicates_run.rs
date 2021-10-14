@@ -3,6 +3,7 @@ use {
     crate::cluster_nodes::ClusterNodesCache,
     itertools::Itertools,
     solana_entry::entry::Entry,
+    solana_gossip::cluster_info::DATA_PLANE_FANOUT,
     solana_ledger::shred::Shredder,
     solana_sdk::{
         hash::Hash,
@@ -246,6 +247,11 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             (bank_forks.root_bank(), bank_forks.working_bank())
         };
         let self_pubkey = cluster_info.id();
+        let nodes: Vec<_> = cluster_info
+            .all_peers()
+            .into_iter()
+            .map(|(node, _)| node)
+            .collect();
 
         // Creat cluster partition.
         let cluster_partition: HashSet<Pubkey> = {
@@ -273,8 +279,11 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         let packets: Vec<_> = shreds
             .iter()
             .filter_map(|shred| {
-                let seed = shred.seed(self_pubkey, &root_bank);
-                let node = cluster_nodes.get_broadcast_peer(seed)?;
+                let addr = cluster_nodes
+                    .get_broadcast_addrs(shred, &root_bank, DATA_PLANE_FANOUT, socket_addr_space)
+                    .first()
+                    .copied()?;
+                let node = nodes.iter().find(|node| node.tvu == addr)?;
                 if !socket_addr_space.check(&node.tvu) {
                     return None;
                 }

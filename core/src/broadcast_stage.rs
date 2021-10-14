@@ -17,7 +17,7 @@ use {
         Sender as CrossbeamSender,
     },
     itertools::Itertools,
-    solana_gossip::cluster_info::{ClusterInfo, ClusterInfoError},
+    solana_gossip::cluster_info::{ClusterInfo, ClusterInfoError, DATA_PLANE_FANOUT},
     solana_ledger::{blockstore::Blockstore, shred::Shred},
     solana_measure::measure::Measure,
     solana_metrics::{inc_new_counter_error, inc_new_counter_info},
@@ -33,6 +33,7 @@ use {
     },
     std::{
         collections::HashMap,
+        iter::repeat,
         net::UdpSocket,
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -412,8 +413,6 @@ pub fn broadcast_shreds(
 ) -> Result<()> {
     let mut result = Ok(());
     let mut shred_select = Measure::start("shred_select");
-    // Only the leader broadcasts shreds.
-    let leader = cluster_info.id();
     let (root_bank, working_bank) = {
         let bank_forks = bank_forks.read().unwrap();
         (bank_forks.root_bank(), bank_forks.working_bank())
@@ -427,12 +426,13 @@ pub fn broadcast_shreds(
                 cluster_nodes_cache.get(slot, &root_bank, &working_bank, cluster_info);
             update_peer_stats(&cluster_nodes, last_datapoint_submit);
             let root_bank = root_bank.clone();
-            shreds.filter_map(move |shred| {
-                let seed = shred.seed(leader, &root_bank);
-                let node = cluster_nodes.get_broadcast_peer(seed)?;
-                socket_addr_space
-                    .check(&node.tvu)
-                    .then(|| (&shred.payload, node.tvu))
+            shreds.flat_map(move |shred| {
+                repeat(&shred.payload).zip(cluster_nodes.get_broadcast_addrs(
+                    shred,
+                    &root_bank,
+                    DATA_PLANE_FANOUT,
+                    socket_addr_space,
+                ))
             })
         })
         .collect();
