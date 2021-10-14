@@ -2053,6 +2053,16 @@ impl AccountsDb {
         let old_action = AtomicU64::new(0);
         let useful = AtomicU64::new(0);
         let single_old_zero = AtomicU64::new(0);
+        let mut sort = Measure::start("sort");
+
+        if is_startup {
+            pubkeys.par_sort_unstable();
+        }
+        else {
+            self.thread_pool_clean.install(||
+                pubkeys.par_sort_unstable()
+            );}
+            sort.stop();
 
         // parallel scan the index.
         let (mut purges_zero_lamports, purges_old_accounts) = {
@@ -2321,6 +2331,7 @@ impl AccountsDb {
             ("delta_slots_count_in_range4", key_timings.delta_slots_count_in_range4, i64),
             ("delta_slots_count_in_rangeold", key_timings.delta_slots_count_in_rangeold, i64),
             ("old_uncleaned_root", old_uncleaned_root.load(Ordering::Relaxed), i64),
+            ("sort_us", sort.as_us(), i64),
             ("old_action", old_action.load(Ordering::Relaxed), i64),
             ("single_old_zero", single_old_zero.load(Ordering::Relaxed), i64),
             ("total_us", measure_all.as_us(), i64),
