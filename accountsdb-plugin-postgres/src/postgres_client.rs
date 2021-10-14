@@ -206,7 +206,8 @@ impl SimplePostgresClient {
             }
         }
 
-        stmt = format!("{} ON CONFLICT (pubkey) DO NOTHING", stmt);
+        stmt = format!("{} ON CONFLICT (pubkey) DO UPDATE SET slot=excluded.slot, owner=excluded.owner, lamports=excluded.lamports, executable=excluded.executable, rent_epoch=excluded.rent_epoch, \
+        data=excluded.data, updated_on=excluded.updated_on WHERE slot <= excluded.slot", stmt);
 
         info!("{}", stmt);
         let bulk_stmt = client.prepare(&stmt);
