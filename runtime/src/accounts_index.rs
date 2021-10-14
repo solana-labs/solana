@@ -1407,17 +1407,19 @@ impl<T: IndexValue> AccountsIndex<T> {
         F: FnMut(bool, &SlotList<T>, Option<usize>, &Pubkey, RefCount) -> bool,
     {
         let empty_slot_list = vec![];
+        let mut lock = None;
+        let mut last_bin = self.bins(); // too big, won't match
         pubkeys.into_iter().for_each(|pubkey| {
-            let read_lock = self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)]
-                .read()
-                .unwrap();
-            let account = read_lock
-                .get(pubkey)
-                .map(ReadAccountMapEntry::from_account_map_entry);
+            let bin = self.bin_calculator.bin_from_pubkey(pubkey);
+            if bin != last_bin {
+                lock = Some(self.account_maps[bin].read().unwrap());
+                last_bin = bin;
+            }
+            let account = lock.as_ref().unwrap().get(pubkey);
 
             match account {
                 Some(locked_entry) => {
-                    let slot_list = locked_entry.slot_list();
+                    let slot_list = &locked_entry.slot_list.read().unwrap();
                     let found_index = self.latest_slot(None, slot_list, max_root);
                     let cache = callback(
                         true,
