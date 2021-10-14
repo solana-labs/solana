@@ -2020,6 +2020,7 @@ impl AccountsDb {
         let found_not_zero_accum = AtomicU64::new(0);
         let not_found_on_fork_accum = AtomicU64::new(0);
         let missing_accum = AtomicU64::new(0);
+        let useful = AtomicU64::new(0);
 
         // parallel scan the index.
         let (mut purges_zero_lamports, purges_old_accounts) = {
@@ -2032,48 +2033,66 @@ impl AccountsDb {
                         let mut found_not_zero = 0;
                         let mut not_found_on_fork = 0;
                         let mut missing = 0;
-                        for pubkey in pubkeys {
-                            match self.accounts_index.get(pubkey, None, max_clean_root) {
-                                AccountIndexGetResult::Found(locked_entry, index) => {
-                                    let slot_list = locked_entry.slot_list();
-                                    let (slot, account_info) = &slot_list[index];
-                                    if account_info.lamports == 0 {
-                                        purges_zero_lamports.insert(
-                                            *pubkey,
-                                            self.accounts_index
-                                                .roots_and_ref_count(&locked_entry, max_clean_root),
-                                        );
-                                    } else {
-                                        found_not_zero += 1;
-                                    }
-                                    // Release the lock
-                                    let slot = *slot;
-                                    drop(locked_entry);
-
-                                    if uncleaned_roots.contains(&slot) {
-                                        // Assertion enforced by `accounts_index.get()`, the latest slot
-                                        // will not be greater than the given `max_clean_root`
-                                        if let Some(max_clean_root) = max_clean_root {
-                                            assert!(slot <= max_clean_root);
-                                        }
-                                        purges_old_accounts.push(*pubkey);
-                                    }
-                                }
-                                AccountIndexGetResult::NotFoundOnFork => {
-                                    // This pubkey is in the index but not in a root slot, so clean
-                                    // it up by adding it to the to-be-purged list.
-                                    //
-                                    // Also, this pubkey must have been touched by some slot since
-                                    // it was in the dirty list, so we assume that the slot it was
-                                    // touched in must be unrooted.
-                                    not_found_on_fork += 1;
-                                    purges_old_accounts.push(*pubkey);
-                                }
-                                AccountIndexGetResult::Missing(_lock) => {
+                        self.accounts_index.get_many(
+                            pubkeys,
+                            max_clean_root,
+                            // return true if we want this item to remain in the cache
+                            |exists, slot_list, index_in_slot_list, pubkey, ref_count| {
+                                let mut useless = true;
+                                if !exists {
                                     missing += 1;
+                                } else {
+                                    match index_in_slot_list {
+                                        Some(index_in_slot_list) => {
+                                            // found info relative to max_clean_root
+                                            let (slot, account_info) =
+                                                &slot_list[index_in_slot_list];
+                                            if account_info.lamports == 0 {
+                                                useless = false;
+                                                purges_zero_lamports.insert(
+                                                    *pubkey,
+                                                    (
+                                                        self.accounts_index.get_rooted_entries(
+                                                            slot_list,
+                                                            max_clean_root,
+                                                        ),
+                                                        ref_count,
+                                                    ),
+                                                );
+                                            } else {
+                                                found_not_zero += 1;
+                                            }
+                                            let slot = *slot;
+
+                                            if uncleaned_roots.contains(&slot) {
+                                                // Assertion enforced by `accounts_index.get()`, the latest slot
+                                                // will not be greater than the given `max_clean_root`
+                                                if let Some(max_clean_root) = max_clean_root {
+                                                    assert!(slot <= max_clean_root);
+                                                }
+                                                purges_old_accounts.push(*pubkey);
+                                                useless = false;
+                                            }
+                                        }
+                                        None => {
+                                            // This pubkey is in the index but not in a root slot, so clean
+                                            // it up by adding it to the to-be-purged list.
+                                            //
+                                            // Also, this pubkey must have been touched by some slot since
+                                            // it was in the dirty list, so we assume that the slot it was
+                                            // touched in must be unrooted.
+                                            not_found_on_fork += 1;
+                                            useless = false;
+                                            purges_old_accounts.push(*pubkey);
+                                        }
+                                    }
                                 }
-                            };
-                        }
+                                if !useless {
+                                    useful.fetch_add(1, Ordering::Relaxed);
+                                }
+                                !useless
+                            },
+                        );
                         found_not_zero_accum.fetch_add(found_not_zero, Ordering::Relaxed);
                         not_found_on_fork_accum.fetch_add(not_found_on_fork, Ordering::Relaxed);
                         missing_accum.fetch_add(missing, Ordering::Relaxed);
