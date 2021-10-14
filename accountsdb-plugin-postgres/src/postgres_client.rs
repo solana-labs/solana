@@ -230,8 +230,8 @@ impl SimplePostgresClient {
     ) -> Result<Statement, AccountsDbPluginError> {
         let stmt = "INSERT INTO account (pubkey, slot, owner, lamports, executable, rent_epoch, data, updated_on) \
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) \
-        ON CONFLICT (pubkey) DO UPDATE SET slot=$2, owner=$3, lamports=$4, executable=$5, rent_epoch=$6, \
-        data=$7, updated_on=$8";
+        ON CONFLICT (pubkey) DO UPDATE SET slot=excluded.slot, owner=excluded.owner, lamports=excluded.lamports, executable=excluded.executable, rent_epoch=excluded.rent_epoch, \
+        data=excluded.data, updated_on=excluded.updated_on WHERE slot <= excluded.slot";
 
         let stmt = client.prepare(stmt);
 
