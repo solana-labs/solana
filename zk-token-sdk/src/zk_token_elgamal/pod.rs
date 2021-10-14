@@ -80,4 +80,3 @@ impl fmt::Debug for AESCiphertext {
         write!(f, "{:?}", self.0)
     }
 }
-
