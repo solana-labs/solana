@@ -1397,7 +1397,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     }
 
     pub fn set_startup(&self, value: bool) {
-        self.storage.storage.set_startup(value);
+        self.storage.set_startup(value);
     }
 
     /// Get an account
