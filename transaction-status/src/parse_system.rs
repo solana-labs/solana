@@ -1,10 +1,12 @@
-use crate::parse_instruction::{
-    check_num_accounts, ParsableProgram, ParseInstructionError, ParsedInstructionEnum,
-};
-use bincode::deserialize;
-use serde_json::json;
-use solana_sdk::{
-    instruction::CompiledInstruction, pubkey::Pubkey, system_instruction::SystemInstruction,
+use {
+    crate::parse_instruction::{
+        check_num_accounts, ParsableProgram, ParseInstructionError, ParsedInstructionEnum,
+    },
+    bincode::deserialize,
+    serde_json::json,
+    solana_sdk::{
+        instruction::CompiledInstruction, pubkey::Pubkey, system_instruction::SystemInstruction,
+    },
 };
 
 pub fn parse_system(
@@ -197,8 +199,10 @@ fn check_num_system_accounts(accounts: &[u8], num: usize) -> Result<(), ParseIns
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use solana_sdk::{message::Message, pubkey::Pubkey, system_instruction};
+    use {
+        super::*,
+        solana_sdk::{message::Message, pubkey::Pubkey, system_instruction},
+    };
 
     #[test]
     #[allow(clippy::same_item_push)]
