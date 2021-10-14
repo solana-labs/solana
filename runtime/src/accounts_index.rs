@@ -1407,6 +1407,40 @@ impl<T: IndexValue> AccountsIndex<T> {
 
     /// Get an account
     /// The latest account that appears in `ancestors` or `roots` is returned.
+    pub(crate) fn get_many<F>(&self, pubkeys: &[Pubkey], max_root: Option<Slot>, mut callback: F)
+    where
+        F: FnMut(bool, &SlotList<T>, Option<usize>, &Pubkey, RefCount) -> bool,
+    {
+        let empty_slot_list = vec![];
+        pubkeys.into_iter().for_each(|pubkey| {
+            let read_lock = self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)]
+                .read()
+                .unwrap();
+            let account = read_lock
+                .get(pubkey)
+                .map(ReadAccountMapEntry::from_account_map_entry);
+
+            match account {
+                Some(locked_entry) => {
+                    let slot_list = locked_entry.slot_list();
+                    let found_index = self.latest_slot(None, slot_list, max_root);
+                    let cache = callback(
+                        true,
+                        slot_list,
+                        found_index,
+                        pubkey,
+                        locked_entry.ref_count(),
+                    );
+                }
+                None => {
+                    callback(false, &empty_slot_list, None, pubkey, RefCount::MAX);
+                }
+            }
+        });
+    }
+
+    /// Get an account
+    /// The latest account that appears in `ancestors` or `roots` is returned.
     pub(crate) fn get(
         &self,
         pubkey: &Pubkey,
