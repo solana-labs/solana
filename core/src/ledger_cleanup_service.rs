@@ -484,7 +484,7 @@ mod tests {
     }
 
     #[test]
-    fn test_cleanup_flush() {
+    fn test_cleanup_shred_cache_flush() {
         solana_logger::setup();
         let blockstore_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&blockstore_path).unwrap();
@@ -516,7 +516,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(last_flush_slot, 39);
+        assert_eq!(last_flush_slot, 50);
         assert_eq!(last_purge_slot, 0);
         assert_eq!(highest_compaction_slot.load(Ordering::Relaxed), 0);
 
