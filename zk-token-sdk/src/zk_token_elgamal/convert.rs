@@ -22,7 +22,7 @@ mod target_arch {
             range_proof::RangeProof,
         },
         curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar},
-        std::convert::{TryFrom, TryInto},
+        std::convert::TryFrom,
     };
 
     impl From<Scalar> for pod::Scalar {
@@ -133,30 +133,6 @@ mod target_arch {
     impl From<pod::AESCiphertext> for AESCiphertext {
         fn from(ct: pod::AESCiphertext) -> Self {
             Self(ct.0)
-        }
-    }
-
-    impl From<Option<AESCiphertext>> for pod::OptionAESCiphertext {
-        fn from(ct: Option<AESCiphertext>) -> Self {
-            let mut buf = [0_u8; 17];
-            match ct {
-                Some(ct) => {
-                    buf[0] = 1_u8;
-                    buf[1..].copy_from_slice(&ct.0);
-                    Self(buf)
-                },
-                None => Self(buf),
-            }
-        }
-    }
-
-    impl From<pod::OptionAESCiphertext> for Option<AESCiphertext> {
-        fn from(ct: pod::OptionAESCiphertext) -> Self {
-            if ct.0[0] == 0 {
-                None
-            } else {
-                Some(AESCiphertext(ct.0[1..17].try_into().unwrap()))
-            }
         }
     }
 
