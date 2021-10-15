@@ -1,8 +1,6 @@
 use std::{
     collections::HashMap,
-    fs::File,
-    io::{BufRead, BufReader},
-    path::Path,
+    io::BufRead,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -10,6 +8,9 @@ use std::{
     thread::{self, sleep, Builder, JoinHandle},
     time::{Duration, Instant},
 };
+
+#[cfg(target_os = "linux")]
+use std::{fs::File, io::BufReader, path::Path};
 
 const SAMPLE_INTERVAL: Duration = Duration::from_secs(60);
 const SLEEP_INTERVAL: Duration = Duration::from_millis(500);
@@ -21,7 +22,7 @@ pub struct SystemMonitorService {
     thread_hdl: JoinHandle<()>,
 }
 
-#[allow(dead_code)]
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 struct UdpStats {
     in_datagrams: usize,
     no_ports: usize,
@@ -33,14 +34,14 @@ struct UdpStats {
     ignored_multi: usize,
 }
 
-#[allow(dead_code)]
+#[cfg(target_os = "linux")]
 fn read_udp_stats(file_path: impl AsRef<Path>) -> Result<UdpStats, String> {
     let file = File::open(file_path).map_err(|e| e.to_string())?;
     let mut reader = BufReader::new(file);
     parse_udp_stats(&mut reader)
 }
 
-#[allow(dead_code)]
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 fn parse_udp_stats(reader: &mut impl BufRead) -> Result<UdpStats, String> {
     let mut udp_lines = Vec::default();
     for line in reader.lines() {
