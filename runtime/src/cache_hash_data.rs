@@ -1,7 +1,7 @@
 //! Cached data for hashing accounts
 use crate::accounts_hash::CalculateHashIntermediate;
 use crate::cache_hash_data_stats::CacheHashDataStats;
-use crate::pubkey_bins::PubkeyBinCalculator16;
+use crate::pubkey_bins::PubkeyBinCalculator24;
 use log::*;
 use memmap2::MmapMut;
 use solana_measure::measure::Measure;
@@ -151,7 +151,7 @@ impl CacheHashData {
         file_name: &P,
         accumulator: &mut SavedType,
         start_bin_index: usize,
-        bin_calculator: &PubkeyBinCalculator16,
+        bin_calculator: &PubkeyBinCalculator24,
     ) -> Result<(), std::io::Error> {
         let mut stats = CacheHashDataStats::default();
         let result = self.load_internal(
@@ -170,7 +170,7 @@ impl CacheHashData {
         file_name: &P,
         accumulator: &mut SavedType,
         start_bin_index: usize,
-        bin_calculator: &PubkeyBinCalculator16,
+        bin_calculator: &PubkeyBinCalculator24,
         stats: &mut CacheHashDataStats,
     ) -> Result<(), std::io::Error> {
         let mut m = Measure::start("overall");
@@ -316,7 +316,7 @@ pub mod tests {
         std::fs::create_dir_all(&tmpdir).unwrap();
 
         for bins in [1, 2, 4] {
-            let bin_calculator = PubkeyBinCalculator16::new(bins);
+            let bin_calculator = PubkeyBinCalculator24::new(bins);
             let num_points = 5;
             let (data, _total_points) = generate_test_data(num_points, bins, &bin_calculator);
             for passes in [1, 2] {
@@ -379,7 +379,7 @@ pub mod tests {
 
     fn bin_data(
         data: &mut SavedType,
-        bin_calculator: &PubkeyBinCalculator16,
+        bin_calculator: &PubkeyBinCalculator24,
         bins: usize,
         start_bin: usize,
     ) {
@@ -396,7 +396,7 @@ pub mod tests {
     fn generate_test_data(
         count: usize,
         bins: usize,
-        binner: &PubkeyBinCalculator16,
+        binner: &PubkeyBinCalculator24,
     ) -> (SavedType, usize) {
         let mut rng = rand::thread_rng();
         let mut ct = 0;

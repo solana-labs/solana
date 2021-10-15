@@ -5,7 +5,7 @@ use crate::{
     contains::Contains,
     in_mem_accounts_index::InMemAccountsIndex,
     inline_spl_token_v2_0::{self, SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
-    pubkey_bins::PubkeyBinCalculator16,
+    pubkey_bins::PubkeyBinCalculator24,
     secondary_index::*,
 };
 use bv::BitVec;
@@ -585,7 +585,7 @@ pub struct AccountsIndexRootsStats {
 
 pub struct AccountsIndexIterator<'a, T: IndexValue> {
     account_maps: &'a LockMapTypeSlice<T>,
-    bin_calculator: &'a PubkeyBinCalculator16,
+    bin_calculator: &'a PubkeyBinCalculator24,
     start_bound: Bound<Pubkey>,
     end_bound: Bound<Pubkey>,
     is_finished: bool,
@@ -755,7 +755,7 @@ impl ScanSlotTracker {
 #[derive(Debug)]
 pub struct AccountsIndex<T: IndexValue> {
     pub account_maps: LockMapType<T>,
-    pub bin_calculator: PubkeyBinCalculator16,
+    pub bin_calculator: PubkeyBinCalculator24,
     program_id_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
     spl_token_mint_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
     spl_token_owner_index: SecondaryIndex<RwLockSecondaryIndexEntry>,
@@ -806,7 +806,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         config: Option<AccountsIndexConfig>,
     ) -> (
         LockMapType<T>,
-        PubkeyBinCalculator16,
+        PubkeyBinCalculator24,
         AccountsIndexStorage<T>,
     ) {
         let bins = config
@@ -814,7 +814,7 @@ impl<T: IndexValue> AccountsIndex<T> {
             .and_then(|config| config.bins)
             .unwrap_or(BINS_DEFAULT);
         // create bin_calculator early to verify # bins is reasonable
-        let bin_calculator = PubkeyBinCalculator16::new(bins);
+        let bin_calculator = PubkeyBinCalculator24::new(bins);
         let storage = AccountsIndexStorage::new(bins, &config);
         let account_maps = (0..bins)
             .into_iter()
