@@ -15,13 +15,14 @@ pub const MAX_BLOCK_REPLAY_TIME_US: u64 = 400_000;
 pub const MAX_CONCURRENCY: u64 = 10;
 
 /// Cluster data, method of collecting at https://github.com/solana-labs/solana/issues/19627
+/// Dashboard: https://metrics.solana.com:8889/sources/0/dashboards/10?refresh=Paused&lower=now%28%29%20-%2012h
 ///
 /// cluster avergaed compute unit to microsec conversion rate
 pub const COMPUTE_UNIT_TO_US_RATIO: u64 = 40;
 /// Number of compute units for one signature verification.
-pub const SIGNATURE_COST: u64 = COMPUTE_UNIT_TO_US_RATIO * 175;
+pub const SIGNATURE_COST: u64 = COMPUTE_UNIT_TO_US_RATIO * 130;
 /// Number of compute units for one write lock
-pub const WRITE_LOCK_UNITS: u64 = COMPUTE_UNIT_TO_US_RATIO * 20;
+pub const WRITE_LOCK_UNITS: u64 = COMPUTE_UNIT_TO_US_RATIO * 10;
 /// Number of data bytes per compute units
 pub const DATA_BYTES_UNITS: u64 = 220 /*bytes per us*/ / COMPUTE_UNIT_TO_US_RATIO;
 // Number of compute units for each built-in programs
@@ -32,10 +33,11 @@ lazy_static! {
         (incinerator::id(), COMPUTE_UNIT_TO_US_RATIO * 2),
         (native_loader::id(), COMPUTE_UNIT_TO_US_RATIO * 2),
         (solana_sdk::stake::config::id(), COMPUTE_UNIT_TO_US_RATIO * 2),
-        (solana_sdk::stake::program::id(), COMPUTE_UNIT_TO_US_RATIO * 50),
-        (solana_vote_program::id(), COMPUTE_UNIT_TO_US_RATIO * 200),
+        (solana_sdk::stake::program::id(), COMPUTE_UNIT_TO_US_RATIO * 25),
+        (solana_config_program::id(), COMPUTE_UNIT_TO_US_RATIO * 15),
+        (solana_vote_program::id(), COMPUTE_UNIT_TO_US_RATIO * 85),
         (secp256k1_program::id(), COMPUTE_UNIT_TO_US_RATIO * 4),
-        (system_program::id(), COMPUTE_UNIT_TO_US_RATIO * 15),
+        (system_program::id(), COMPUTE_UNIT_TO_US_RATIO * 10),
     ]
     .iter()
     .cloned()
