@@ -5375,6 +5375,7 @@ impl Bank {
 
     /// Recalculate the hash_internal_state from the account stores. Would be used to verify a
     /// snapshot.
+    /// Only called from startup or test code.
     #[must_use]
     fn verify_bank_hash(&self, test_hash_calculation: bool) -> bool {
         self.rc.accounts.verify_bank_hash_and_lamports(
@@ -5492,6 +5493,7 @@ impl Bank {
         use_index: bool,
         mut debug_verify: bool,
         slots_per_epoch: Option<Slot>,
+        is_startup: bool,
     ) -> Hash {
         let (hash, total_lamports) = self
             .rc
@@ -5505,6 +5507,7 @@ impl Bank {
                 Some(self.capitalization()),
                 false,
                 slots_per_epoch,
+                is_startup,
             );
         if total_lamports != self.capitalization() {
             datapoint_info!(
@@ -5529,6 +5532,7 @@ impl Bank {
                         Some(self.capitalization()),
                         false,
                         slots_per_epoch,
+                        is_startup,
                     );
             }
 
@@ -5543,7 +5547,7 @@ impl Bank {
     }
 
     pub fn update_accounts_hash(&self) -> Hash {
-        self.update_accounts_hash_with_index_option(true, false, None)
+        self.update_accounts_hash_with_index_option(true, false, None, false)
     }
 
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
