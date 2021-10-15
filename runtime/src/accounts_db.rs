@@ -7095,10 +7095,18 @@ impl AccountsDb {
                             1000,
                             1000
                         );
+                        let mut measure = Measure::start("accountsdb-plugin-notify-accounts-at-snapshot-restore");
 
                         for account in &accounts {
                             notifier.notify_account_restore_from_snapshot(*slot, account);
                         }
+                        measure.stop();
+                        inc_new_counter_info!(
+                            "accountsdb-plugin-notify-accounts-at-snapshot-restore-ms",
+                            measure.as_ms() as usize,
+                            1000,
+                            1000
+                        );
                     }
                 }
             });
