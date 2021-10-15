@@ -43,10 +43,6 @@ pub fn process_instruction(
     match ProofInstruction::decode_type(program_id, input)
         .ok_or(InstructionError::InvalidInstructionData)?
     {
-        ProofInstruction::VerifyUpdateAccountPk => {
-            ic_msg!(invoke_context, "VerifyUpdateAccountPk");
-            verify::<UpdateAccountPkData>(input, invoke_context)
-        }
         ProofInstruction::VerifyCloseAccount => {
             ic_msg!(invoke_context, "VerifyCloseAccount");
             verify::<CloseAccountData>(input, invoke_context)
