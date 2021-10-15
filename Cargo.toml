@@ -65,7 +65,6 @@ members = [
     "tokens",
     "transaction-dos",
     "transaction-status",
-    "transaction-executor",
     "account-decoder",
     "upload-perf",
     "net-utils",

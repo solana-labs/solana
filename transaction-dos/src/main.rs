@@ -5,7 +5,7 @@ use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use solana_clap_utils::input_parsers::pubkey_of;
 use solana_cli::{cli::CliConfig, program::process_deploy};
-use solana_client::rpc_client::RpcClient;
+use solana_client::{rpc_client::RpcClient, transaction_executor::TransactionExecutor};
 use solana_faucet::faucet::{request_airdrop_transaction, FAUCET_PORT};
 use solana_gossip::gossip_service::discover;
 use solana_sdk::{
@@ -19,7 +19,6 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use solana_streamer::socket::SocketAddrSpace;
-use solana_transaction_executor::TransactionExecutor;
 use std::{
     net::SocketAddr,
     process::exit,
@@ -147,7 +146,6 @@ fn run_transactions_dos(
     maybe_account_groups: Option<usize>,
     just_calculate_fees: bool,
     batch_sleep_ms: u64,
-    use_tpu_client: bool,
 ) {
     assert!(num_instructions > 0);
     let client = Arc::new(RpcClient::new_socket_with_commitment(
@@ -255,7 +253,7 @@ fn run_transactions_dos(
 
     info!("Starting balance(s): {:?}", balances);
 
-    let executor = TransactionExecutor::new(entrypoint_addr, true, use_tpu_client, None);
+    let executor = TransactionExecutor::new(entrypoint_addr);
 
     let mut accounts_created = false;
     let tested_size = Arc::new(AtomicBool::new(false));
@@ -514,11 +512,6 @@ fn main() {
                 .help("Just print the necessary fees and exit"),
         )
         .arg(
-            Arg::with_name("use_tpu_client")
-                .long("use-tpu-client")
-                .help("Use tpu client instead of RPC client"),
-        )
-        .arg(
             Arg::with_name("program_id")
                 .long("program-id")
                 .takes_value(true)
@@ -529,7 +522,6 @@ fn main() {
 
     let skip_gossip = !matches.is_present("check_gossip");
     let just_calculate_fees = matches.is_present("just_calculate_fees");
-    let use_tpu_client = matches.is_present("use_tpu_client");
 
     let port = if skip_gossip { DEFAULT_RPC_PORT } else { 8001 };
     let mut entrypoint_addr = SocketAddr::from(([127, 0, 0, 1], port));
@@ -622,7 +614,6 @@ fn main() {
         account_groups,
         just_calculate_fees,
         batch_sleep_ms,
-        use_tpu_client,
     );
 }
 
@@ -722,7 +713,6 @@ pub mod test {
             maybe_account_groups,
             false,
             100,
-            true,
         );
         start.stop();
         info!("{}", start);

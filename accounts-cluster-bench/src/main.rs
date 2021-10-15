@@ -20,7 +20,6 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use solana_streamer::socket::SocketAddrSpace;
-use solana_transaction_executor::TransactionExecutor;
 use solana_transaction_status::parse_token::spl_token_v2_0_instruction;
 use std::{
     net::SocketAddr,
@@ -246,7 +245,7 @@ fn run_accounts_bench(
 
     info!("Starting balance(s): {:?}", balances);
 
-    let executor = TransactionExecutor::new(entrypoint_addr, false, false, None);
+    let executor = TransactionExecutor::new(entrypoint_addr);
 
     // Create and close messages both require 2 signatures, fake a 2 signature message to calculate fees
     let message = Message::new(
