@@ -169,9 +169,9 @@ impl SimplePostgresClient {
                         "Error in connecting to the PostgreSQL database: {:?} host: {:?} user: {:?} config: {:?}",
                         err, config.host, config.user, connection_str);
                 error!("{}", msg);
-                return Err(AccountsDbPluginError::Custom(Box::new(
+                Err(AccountsDbPluginError::Custom(Box::new(
                     AccountsDbPluginPostgresError::DataStoreConnectionError { msg },
-                )));
+                )))
             }
             Ok(client) => Ok(client),
         }
@@ -585,10 +585,7 @@ impl ParallelPostgresClient {
             100000
         );
 
-        if let Err(err) = self
-            .sender
-            .send(wrk_item)
-        {
+        if let Err(err) = self.sender.send(wrk_item) {
             return Err(AccountsDbPluginError::AccountsUpdateError {
                 msg: format!(
                     "Failed to update the account {:?}, error: {:?}",

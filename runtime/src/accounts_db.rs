@@ -7074,13 +7074,15 @@ impl AccountsDb {
             let mut slots = self.storage.all_slots();
             slots.sort_by(|a, b| b.cmp(a));
 
+            let mut processed_accounts: HashSet<Pubkey> = HashSet::default();
             for slot in slots {
                 let slot_stores = self.storage.get_slot_stores(slot).unwrap();
 
                 let slot_stores = slot_stores.read().unwrap();
+                let mut accounts_to_stream: HashMap<Pubkey, StoredAccountMeta> = HashMap::default();
                 for (_, storage_entry) in slot_stores.iter() {
                     let mut measure = Measure::start("accountsdb-plugin-load-accounts");
-                    let accounts = storage_entry.all_accounts();
+                    let mut accounts = storage_entry.all_accounts();
                     measure.stop();
                     inc_new_counter_info!(
                         "accountsdb-plugin-load-accounts-ms",
@@ -7094,11 +7096,31 @@ impl AccountsDb {
                         1000,
                         1000
                     );
-                    let mut measure = Measure::start("accountsdb-plugin-notify-accounts-at-snapshot-restore");
+                    let mut measure =
+                        Measure::start("accountsdb-plugin-notify-accounts-at-snapshot-restore");
 
-                    for account in &accounts {
+                    accounts.drain(..).into_iter().for_each(|account| {
+                        if processed_accounts.contains(&account.meta.pubkey) {
+                            return;
+                        }
+                        match accounts_to_stream.get(&account.meta.pubkey) {
+                            Some(existing_account) => {
+                                if account.meta.write_version > existing_account.meta.write_version
+                                {
+                                    accounts_to_stream.insert(account.meta.pubkey, account);
+                                }
+                            }
+                            None => {
+                                accounts_to_stream.insert(account.meta.pubkey, account);
+                            }
+                        }
+                    });
+
+                    for account in accounts_to_stream.values() {
                         notifier.notify_account_restore_from_snapshot(slot, account);
+                        processed_accounts.insert(account.meta.pubkey);
                     }
+
                     measure.stop();
                     inc_new_counter_info!(
                         "accountsdb-plugin-notify-accounts-at-snapshot-restore-ms",

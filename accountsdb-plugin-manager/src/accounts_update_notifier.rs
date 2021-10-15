@@ -31,7 +31,6 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
     }
 
     fn notify_account_restore_from_snapshot(&self, slot: Slot, account: &StoredAccountMeta) {
-
         let mut measure = Measure::start("accountsdb-plugin-copy-stored-account-info");
         let account = self.accountinfo_from_stored_account_meta(account);
         measure.stop();
