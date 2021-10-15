@@ -2585,6 +2585,35 @@ fn test_fake_shreds_broadcast_leader() {
 #[test]
 #[serial]
 #[allow(unused_attributes)]
+fn test_repair_sinkhole() {
+    // Create 3 validators:
+    // 1) One leader transmitting a slot with one missing shred. Has a stake of 1.
+    //
+    // 2) One highly staked validator node with stake of 10000000000.
+    // This validator will see that validator 3 has much more stake than validator 1.
+    //
+    // 3) One highly staked validator node with stake of 10000000000.
+    // This validator will see that validator 2 has much more stake than validator 1.
+
+    let validator1_stake = 1;
+    let validator2_stake = 10000000000;
+    let validator3_stake = 10000000000;
+
+    // 1) Set up the cluster
+    let (mut cluster, validator_keys) = test_faulty_node(
+        BroadcastStageType::BroadcastDuplicates(BroadcastDuplicatesConfig {
+            stake_partition: partition_node_stake,
+        }),
+        node_stakes,
+    );
+
+    // 2) Check for new roots
+    cluster.check_for_new_roots(16, "test_repair_sinkhole", SocketAddrSpace::Unspecified);
+}
+
+#[test]
+#[serial]
+#[allow(unused_attributes)]
 fn test_duplicate_shreds_broadcast_leader() {
     // Create 4 nodes:
     // 1) Bad leader sending different versions of shreds to both of the other nodes
