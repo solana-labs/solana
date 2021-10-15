@@ -28,6 +28,7 @@ pub struct TransactionExecutor {
     sig_clear_t: JoinHandle<()>,
     transfer_t: JoinHandle<()>,
 
+    #[allow(clippy::type_complexity)]
     pending_transactions: Arc<RwLock<VecDeque<Vec<(u64, Transaction)>>>>,
 
     sigs: Arc<RwLock<PendingQueue>>,
@@ -74,6 +75,7 @@ impl TransactionExecutor {
         self.sigs.read().unwrap().len()
     }
 
+    #[allow(clippy::type_complexity)]
     fn start_transfer_thread(
         exit: &Arc<AtomicBool>,
         sigs: &Arc<RwLock<PendingQueue>>,
