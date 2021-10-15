@@ -11,16 +11,6 @@ use {
 #[derive(Clone, Copy, Debug, FromPrimitive, ToPrimitive, PartialEq)]
 #[repr(u8)]
 pub enum ProofInstruction {
-    /// Verify a `UpdateAccountPkData` struct
-    ///
-    /// Accounts expected by this instruction:
-    ///   None
-    ///
-    /// Data expected by this instruction:
-    ///   `UpdateAccountPkData`
-    ///
-    VerifyUpdateAccountPk,
-
     /// Verify a `CloseAccountData` struct
     ///
     /// Accounts expected by this instruction:
@@ -82,10 +72,6 @@ impl ProofInstruction {
 
 pub fn verify_close_account(proof_data: &CloseAccountData) -> Instruction {
     ProofInstruction::VerifyCloseAccount.encode(proof_data)
-}
-
-pub fn verify_update_account_pk(proof_data: &UpdateAccountPkData) -> Instruction {
-    ProofInstruction::VerifyUpdateAccountPk.encode(proof_data)
 }
 
 pub fn verify_withdraw(proof_data: &WithdrawData) -> Instruction {
