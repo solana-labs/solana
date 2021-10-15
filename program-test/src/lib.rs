@@ -1038,7 +1038,7 @@ impl ProgramTestContext {
         bank_forks.set_root(
             pre_warp_slot,
             &solana_runtime::accounts_background_service::AbsRequestSender::default(),
-            Some(warp_slot),
+            Some(pre_warp_slot),
         );
 
         // warp bank is frozen, so go forward one slot from it
@@ -1051,7 +1051,11 @@ impl ProgramTestContext {
         // Update block commitment cache, otherwise banks server will poll at
         // the wrong slot
         let mut w_block_commitment_cache = self.block_commitment_cache.write().unwrap();
-        w_block_commitment_cache.set_all_slots(pre_warp_slot, warp_slot);
+        // HACK: The root set here should be `pre_warp_slot`, but since we're
+        // in a testing environment, the root bank never updates after a warp.
+        // The ticking thread only updates the working bank, and never the root
+        // bank.
+        w_block_commitment_cache.set_all_slots(warp_slot, warp_slot);
 
         let bank = bank_forks.working_bank();
         self.last_blockhash = bank.last_blockhash();

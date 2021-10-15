@@ -240,10 +240,7 @@ impl Banks for BanksServer {
 
         let blockhash = &transaction.message.recent_blockhash;
         let last_valid_block_height = self
-            .bank_forks
-            .read()
-            .unwrap()
-            .root_bank()
+            .bank(commitment)
             .get_blockhash_last_valid_block_height(blockhash)
             .unwrap();
         let signature = transaction.signatures.get(0).cloned().unwrap_or_default();
