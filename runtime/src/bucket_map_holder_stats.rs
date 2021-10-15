@@ -2,7 +2,7 @@ use crate::accounts_index::IndexValue;
 use crate::bucket_map_holder::BucketMapHolder;
 use solana_sdk::timing::{timestamp, AtomicInterval};
 use std::fmt::Debug;
-use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 
 // stats logged every 10 s
 const STATS_INTERVAL_MS: u64 = 10_000;
@@ -42,6 +42,7 @@ pub struct BucketMapHolderStats {
     pub flush_scan_update_us: AtomicU64,
     pub flush_remove_us: AtomicU64,
     pub flush_grow_us: AtomicU64,
+    last_was_startup: AtomicBool,
     last_time: AtomicInterval,
 }
 
@@ -150,8 +151,15 @@ impl BucketMapHolderStats {
         let in_mem_stats = Self::get_stats(in_mem_per_bucket_counts);
         let disk_stats = Self::get_stats(disk_per_bucket_counts);
 
+        // all metrics during startup are written to a different data point
+        let startup = storage.get_startup();
+        let was_startup = self.last_was_startup.swap(startup, Ordering::Relaxed);
         datapoint_info!(
-            "accounts_index",
+            if startup || was_startup {
+                "accounts_index_startup"
+            } else {
+                "accounts_index"
+            },
             (
                 "count_in_mem",
                 self.count_in_mem.load(Ordering::Relaxed),
