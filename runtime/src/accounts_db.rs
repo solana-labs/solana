@@ -2509,10 +2509,11 @@ impl AccountsDb {
         for store in stores {
             let mut start = 0;
             original_bytes += store.total_bytes();
+            let store_id = store.append_vec_id();
             while let Some((account, next)) = store.accounts.get_account(start) {
                 let new_entry = FoundStoredAccount {
                     account,
-                    store_id: store.append_vec_id(),
+                    store_id,
                     account_size: next - start,
                 };
                 match stored_accounts.entry(new_entry.account.meta.pubkey) {
