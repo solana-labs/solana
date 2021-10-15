@@ -85,6 +85,7 @@ fn parse_udp_stats(reader: &mut impl BufRead) -> Result<UdpStats, String> {
 #[cfg(target_os = "linux")]
 pub fn verify_udp_stats_access() -> Result<(), String> {
     read_udp_stats(PROC_NET_SNMP_PATH)?;
+    Ok(())
 }
 
 #[cfg(not(target_os = "linux"))]
