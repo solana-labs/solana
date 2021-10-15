@@ -7119,7 +7119,7 @@ impl AccountsDb {
         max_clean_root: Option<Slot>,
     ) {
         let previous_roots = self.accounts_index.reset_uncleaned_roots(max_clean_root);
-        candidates.extend(previous_roots);
+        candidates.extend(previous_roots.get_all());
     }
 
     #[cfg(test)]

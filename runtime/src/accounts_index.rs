@@ -321,6 +321,24 @@ impl PartialEq<RollingBitField> for RollingBitField {
     }
 }
 
+impl std::iter::Extend<Slot> for RollingBitField {
+    fn extend<T: IntoIterator<Item = Slot>>(&mut self, iter: T) {
+        let mut min = Slot::MAX;
+        let items = iter
+            .into_iter()
+            .map(|item| {
+                min = std::cmp::min(min, item);
+                item
+            })
+            .collect::<Vec<_>>();
+        // rolling bit fields work most efficiently when items are added smallest first
+        if !items.is_empty() {
+            self.insert(min);
+            items.into_iter().for_each(|item| self.insert(item));
+        }
+    }
+}
+
 // functionally similar to a hashset
 // Relies on there being a sliding window of key values. The key values continue to increase.
 // Old key values are removed from the lesser values and do not accumulate.
@@ -337,6 +355,10 @@ impl RollingBitField {
             max: 0,
             excess: HashSet::new(),
         }
+    }
+
+    pub fn max_width(&self) -> u64 {
+        self.max_width
     }
 
     // find the array index
@@ -527,15 +549,37 @@ impl RollingBitField {
         self.max
     }
 
-    pub fn get_all(&self) -> Vec<u64> {
-        let mut all = Vec::with_capacity(self.count);
-        self.excess.iter().for_each(|slot| all.push(*slot));
+    fn for_each<F>(&self, mut f: F)
+    where
+        F: FnMut(Slot),
+    {
+        self.excess.iter().for_each(|slot| f(*slot));
         for key in self.min..self.max {
             if self.contains_assume_in_range(&key) {
-                all.push(key);
+                f(key);
             }
         }
+    }
+
+    pub fn get_all(&self) -> Vec<u64> {
+        let mut all = Vec::with_capacity(self.count);
+        self.for_each(|key| all.push(key));
         all
+    }
+
+    pub fn retain2<F>(&mut self, mut f: F)
+    where
+        F: FnMut(&Slot) -> bool,
+    {
+        let mut remove = Vec::with_capacity(self.count);
+        self.for_each(|key| {
+            if !f(&key) {
+                remove.push(key);
+            }
+        });
+        remove.iter().for_each(|item| {
+            self.remove(item);
+        });
     }
 }
 
@@ -543,8 +587,8 @@ impl RollingBitField {
 pub struct RootsTracker {
     roots: RollingBitField,
     max_root: Slot,
-    uncleaned_roots: HashSet<Slot>,
-    previous_uncleaned_roots: HashSet<Slot>,
+    uncleaned_roots: RollingBitField,
+    previous_uncleaned_roots: RollingBitField,
 }
 
 impl Default for RootsTracker {
@@ -561,8 +605,8 @@ impl RootsTracker {
         Self {
             roots: RollingBitField::new(max_width),
             max_root: 0,
-            uncleaned_roots: HashSet::new(),
-            previous_uncleaned_roots: HashSet::new(),
+            uncleaned_roots: RollingBitField::new(max_width),
+            previous_uncleaned_roots: RollingBitField::new(max_width),
         }
     }
 
@@ -1810,9 +1854,9 @@ impl<T: IndexValue> AccountsIndex<T> {
         self.roots_tracker.read().unwrap().min_root()
     }
 
-    pub fn reset_uncleaned_roots(&self, max_clean_root: Option<Slot>) -> HashSet<Slot> {
-        let mut cleaned_roots = HashSet::new();
+    pub fn reset_uncleaned_roots(&self, max_clean_root: Option<Slot>) -> RollingBitField {
         let mut w_roots_tracker = self.roots_tracker.write().unwrap();
+        let mut cleaned_roots = RollingBitField::new(w_roots_tracker.uncleaned_roots.max_width());
         w_roots_tracker.uncleaned_roots.retain(|root| {
             let is_cleaned = max_clean_root
                 .map(|max_clean_root| *root <= max_clean_root)
