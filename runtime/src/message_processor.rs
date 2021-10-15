@@ -140,6 +140,12 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         }
 
         if self.invoke_stack.is_empty() {
+            if !self.feature_set.is_active(&tx_wide_compute_cap::id()) {
+                self.compute_meter = Rc::new(RefCell::new(ThisComputeMeter {
+                    remaining: self.compute_budget.max_units,
+                }));
+            }
+
             self.pre_accounts = Vec::with_capacity(instruction.accounts.len());
             let mut work = |_unique_index: usize, account_index: usize| {
                 if account_index < self.accounts.len() {
@@ -364,11 +370,6 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         self.executors.borrow().get(pubkey)
     }
     fn set_instruction_index(&mut self, instruction_index: usize) {
-        if !self.feature_set.is_active(&tx_wide_compute_cap::id()) {
-            self.compute_meter = Rc::new(RefCell::new(ThisComputeMeter {
-                remaining: self.compute_budget.max_units,
-            }));
-        }
         self.instruction_index = instruction_index;
     }
     fn record_instruction(&self, instruction: &Instruction) {
