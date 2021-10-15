@@ -451,6 +451,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "console"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a28b32d32ca44b70c3e4acd7db1babf555fa026e385fb95f18028f88848b3c31"
+dependencies = [
+ "encode_unicode",
+ "libc",
+ "once_cell",
+ "regex",
+ "terminal_size",
+ "unicode-width",
+ "winapi",
+]
+
+[[package]]
 name = "constant_time_eq"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -622,11 +637,11 @@ dependencies = [
 
 [[package]]
 name = "dialoguer"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9dd058f8b65922819fabb4a41e7d1964e56344042c26efbccd465202c23fa0c"
+checksum = "61579ada4ec0c6031cfac3f86fdba0d195a7ebeb5e36693bd53cb5999a25beeb"
 dependencies = [
- "console",
+ "console 0.15.0",
  "lazy_static",
  "tempfile",
  "zeroize",
@@ -1264,7 +1279,7 @@ version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d207dc617c7a380ab07ff572a6e52fa202a2a8f355860ac9c38e23f8196be1b"
 dependencies = [
- "console",
+ "console 0.14.1",
  "lazy_static",
  "number_prefix",
  "regex",
@@ -2870,7 +2885,7 @@ dependencies = [
  "base64 0.13.0",
  "chrono",
  "clap",
- "console",
+ "console 0.14.1",
  "humantime",
  "indicatif",
  "serde",
@@ -3220,7 +3235,7 @@ name = "solana-remote-wallet"
 version = "1.9.0"
 dependencies = [
  "base32",
- "console",
+ "console 0.14.1",
  "dialoguer",
  "hidapi",
  "log",
