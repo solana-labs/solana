@@ -2755,7 +2755,7 @@ impl AccountsDb {
             if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
                 slot_stores.write().unwrap().retain(|_key, store| {
                     if store.count() == 0 {
-                        error!("dirty_stores shrink store, dirty: {}", slot);
+                        //error!("dirty_stores shrink store, dirty: {}", slot);
                         self.dirty_stores
                             .insert((slot, store.append_vec_id()), store.clone());
                         dead_storages.push(store.clone());
