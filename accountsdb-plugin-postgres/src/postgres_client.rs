@@ -322,7 +322,7 @@ impl SimplePostgresClient {
             }
             measure.stop();
             inc_new_counter_info!(
-                "accountsdb-plugin-postgres-update-account",
+                "accountsdb-plugin-postgres-update-account-ms",
                 measure.as_ms() as usize,
                 10000,
                 10000
