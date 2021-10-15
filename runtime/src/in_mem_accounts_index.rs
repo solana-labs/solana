@@ -172,35 +172,41 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
     /// lookup 'pubkey' in index (in mem or on disk)
     pub fn get(&self, pubkey: &K) -> Option<AccountMapEntry<T>> {
-        self.get_internal(pubkey, |entry| entry.map(Arc::clone))
+        self.get_internal(pubkey, |entry| (true, entry.map(Arc::clone)))
     }
 
-    /// lookup 'pubkey' in index.
+    /// lookup 'pubkey' in index (in_mem or disk).
     /// call 'callback' whether found or not
-    fn get_internal<RT>(
+    pub(crate) fn get_internal<RT>(
         &self,
         pubkey: &K,
-        callback: impl for<'a> FnOnce(Option<&Arc<AccountMapEntryInner<T>>>) -> RT,
+        // return true if item should be added to in_mem cache
+        callback: impl for<'a> FnOnce(Option<&Arc<AccountMapEntryInner<T>>>) -> (bool, RT),
     ) -> RT {
         self.get_only_in_mem(pubkey, |entry| {
             if let Some(entry) = entry {
                 entry.set_age(self.storage.future_age_to_flush());
-                callback(Some(entry))
+                callback(Some(entry)).1
             } else {
                 // not in cache, look on disk
                 let stats = &self.stats();
                 let disk_entry = self.load_account_entry_from_disk(pubkey);
                 if disk_entry.is_none() {
-                    return callback(None);
+                    return callback(None).1;
                 }
                 let disk_entry = disk_entry.unwrap();
                 let mut map = self.map().write().unwrap();
                 let entry = map.entry(*pubkey);
                 match entry {
-                    Entry::Occupied(occupied) => callback(Some(occupied.get())),
+                    Entry::Occupied(occupied) => callback(Some(occupied.get())).1,
                     Entry::Vacant(vacant) => {
-                        stats.insert_or_delete_mem(true, self.bin);
-                        callback(Some(vacant.insert(disk_entry)))
+                        let (add_to_cache, rt) = callback(Some(&disk_entry));
+
+                        if add_to_cache {
+                            stats.insert_or_delete_mem(true, self.bin);
+                            vacant.insert(disk_entry);
+                        }
+                        rt
                     }
                 }
             }
@@ -282,16 +288,24 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         user: impl for<'a> FnOnce(&mut RwLockWriteGuard<'a, SlotList<T>>) -> RT,
     ) -> Option<RT> {
         self.get_internal(pubkey, |entry| {
-            entry.map(|entry| {
-                let result = user(&mut entry.slot_list.write().unwrap());
-                entry.set_dirty(true);
-                result
-            })
+            (
+                true,
+                entry.map(|entry| {
+                    let result = user(&mut entry.slot_list.write().unwrap());
+                    entry.set_dirty(true);
+                    result
+                }),
+            )
         })
     }
 
     pub fn unref(&self, pubkey: &Pubkey) {
-        self.get_internal(pubkey, |entry| entry.map(|entry| entry.add_un_ref(false)));
+        self.get_internal(pubkey, |entry| {
+            if let Some(entry) = entry {
+                entry.add_un_ref(false)
+            }
+            (true, ())
+        })
     }
 
     pub fn upsert(
