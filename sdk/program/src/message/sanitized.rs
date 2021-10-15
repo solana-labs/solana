@@ -6,6 +6,7 @@ use {
         pubkey::Pubkey,
         sanitize::{Sanitize, SanitizeError},
         secp256k1_program,
+        ed25519_program,
         serialize_utils::{append_slice, append_u16, append_u8},
     },
     bitflags::bitflags,
@@ -294,7 +295,7 @@ impl SanitizedMessage {
     pub fn calculate_fee(&self, lamports_per_signature: u64) -> u64 {
         let mut num_signatures =  u64::from(self.header().num_required_signatures);
         for (program_id, instruction) in self.program_instructions_iter() {
-            if secp256k1_program::check_id(program_id) {
+            if secp256k1_program::check_id(program_id) || ed25519_program::check_id(program_id) {
                 if let Some(num_verifies) = instruction.data.get(0) {
                     num_signatures =
                     num_signatures.saturating_add(u64::from(*num_verifies));
@@ -593,6 +594,44 @@ mod tests {
         secp_instruction2.data = vec![10];
         let message = SanitizedMessage::try_from(Message::new(
             &[ix0, secp_instruction1, secp_instruction2],
+            Some(&key0),
+        ))
+        .unwrap();
+        assert_eq!(message.calculate_fee(1), 11);
+    }
+
+    #[test]
+    fn test_calculate_fee_ed25519() {
+        let key0 = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+        let ix0 = system_instruction::transfer(&key0, &key1, 1);
+
+        let mut instruction1 = Instruction {
+            program_id: ed25519_program::id(),
+            accounts: vec![],
+            data: vec![],
+        };
+        let mut instruction2 = Instruction {
+            program_id: ed25519_program::id(),
+            accounts: vec![],
+            data: vec![1],
+        };
+
+        let message = SanitizedMessage::try_from(Message::new(
+            &[
+                ix0.clone(),
+                instruction1.clone(),
+                instruction2.clone(),
+            ],
+            Some(&key0),
+        ))
+        .unwrap();
+        assert_eq!(message.calculate_fee(1), 2);
+
+        instruction1.data = vec![0];
+        instruction2.data = vec![10];
+        let message = SanitizedMessage::try_from(Message::new(
+            &[ix0, instruction1, instruction2],
             Some(&key0),
         ))
         .unwrap();

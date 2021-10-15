@@ -1148,18 +1148,18 @@ fn get_buffers(
 ) -> Result<CliUpgradeableBuffers, Box<dyn std::error::Error>> {
     let mut filters = vec![RpcFilterType::Memcmp(Memcmp {
         offset: 0,
-        bytes: MemcmpEncodedBytes::Binary(bs58::encode(vec![1, 0, 0, 0]).into_string()),
+        bytes: MemcmpEncodedBytes::Base58(bs58::encode(vec![1, 0, 0, 0]).into_string()),
         encoding: None,
     })];
     if let Some(authority_pubkey) = authority_pubkey {
         filters.push(RpcFilterType::Memcmp(Memcmp {
             offset: ACCOUNT_TYPE_SIZE,
-            bytes: MemcmpEncodedBytes::Binary(bs58::encode(vec![1]).into_string()),
+            bytes: MemcmpEncodedBytes::Base58(bs58::encode(vec![1]).into_string()),
             encoding: None,
         }));
         filters.push(RpcFilterType::Memcmp(Memcmp {
             offset: ACCOUNT_TYPE_SIZE + OPTION_SIZE,
-            bytes: MemcmpEncodedBytes::Binary(
+            bytes: MemcmpEncodedBytes::Base58(
                 bs58::encode(authority_pubkey.as_ref()).into_string(),
             ),
             encoding: None,
@@ -1201,18 +1201,18 @@ fn get_programs(
 ) -> Result<CliUpgradeablePrograms, Box<dyn std::error::Error>> {
     let mut filters = vec![RpcFilterType::Memcmp(Memcmp {
         offset: 0,
-        bytes: MemcmpEncodedBytes::Binary(bs58::encode(vec![3, 0, 0, 0]).into_string()),
+        bytes: MemcmpEncodedBytes::Base58(bs58::encode(vec![3, 0, 0, 0]).into_string()),
         encoding: None,
     })];
     if let Some(authority_pubkey) = authority_pubkey {
         filters.push(RpcFilterType::Memcmp(Memcmp {
             offset: ACCOUNT_TYPE_SIZE + SLOT_SIZE,
-            bytes: MemcmpEncodedBytes::Binary(bs58::encode(vec![1]).into_string()),
+            bytes: MemcmpEncodedBytes::Base58(bs58::encode(vec![1]).into_string()),
             encoding: None,
         }));
         filters.push(RpcFilterType::Memcmp(Memcmp {
             offset: ACCOUNT_TYPE_SIZE + SLOT_SIZE + OPTION_SIZE,
-            bytes: MemcmpEncodedBytes::Binary(
+            bytes: MemcmpEncodedBytes::Base58(
                 bs58::encode(authority_pubkey.as_ref()).into_string(),
             ),
             encoding: None,
@@ -1236,7 +1236,7 @@ fn get_programs(
             bytes.extend_from_slice(programdata_address.as_ref());
             let filters = vec![RpcFilterType::Memcmp(Memcmp {
                 offset: 0,
-                bytes: MemcmpEncodedBytes::Binary(bs58::encode(bytes).into_string()),
+                bytes: MemcmpEncodedBytes::Base58(bs58::encode(bytes).into_string()),
                 encoding: None,
             })];
 
