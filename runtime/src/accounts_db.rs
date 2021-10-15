@@ -5989,7 +5989,7 @@ impl AccountsDb {
                 );
                 let count = store.remove_account(account_info.stored_size, reset_accounts);
                 if count == 0 {
-                    error!("dirty_stores remove dead accounts, dirty: {}", slot);
+                    //error!("dirty_stores remove dead accounts, dirty: {}", slot);
                     self.dirty_stores
                         .insert((*slot, store.append_vec_id()), store.clone());
                     dead_slots.insert(*slot);
