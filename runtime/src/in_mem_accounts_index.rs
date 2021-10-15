@@ -871,7 +871,6 @@ mod tests {
         let holder = Arc::new(BucketMapHolder::new(
             BINS_FOR_TESTING,
             &Some(AccountsIndexConfig::default()),
-            1,
         ));
         let bin = 0;
         InMemAccountsIndex::new(&holder, bin)
