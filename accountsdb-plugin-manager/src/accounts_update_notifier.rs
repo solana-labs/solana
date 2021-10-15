@@ -31,7 +31,19 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
     }
 
     fn notify_account_restore_from_snapshot(&self, slot: Slot, account: &StoredAccountMeta) {
-        if let Some(account_info) = self.accountinfo_from_stored_account_meta(account) {
+
+        let mut measure = Measure::start("accountsdb-plugin-copy-stored-account-info");
+        let account = self.accountinfo_from_stored_account_meta(account);
+        measure.stop();
+
+        inc_new_counter_info!(
+            "accountsdb-plugin-copy-stored-account-info-ms",
+            measure.as_ms() as usize,
+            100000,
+            100000
+        );
+
+        if let Some(account_info) = account {
             self.notify_plugins_of_account_update(account_info, slot, true);
         }
     }

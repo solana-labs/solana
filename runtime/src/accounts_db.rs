@@ -7080,7 +7080,22 @@ impl AccountsDb {
 
                     let slot_stores = slot_stores.read().unwrap();
                     for (_, storage_entry) in slot_stores.iter() {
+                        let mut measure = Measure::start("accountsdb-plugin-load-accounts");
                         let accounts = storage_entry.all_accounts();
+                        measure.stop();
+                        inc_new_counter_info!(
+                            "accountsdb-plugin-load-accounts-ms",
+                            measure.as_ms() as usize,
+                            1000,
+                            1000
+                        );
+                        inc_new_counter_info!(
+                            "accountsdb-plugin-load-accounts-count",
+                            accounts.len(),
+                            1000,
+                            1000
+                        );
+
                         for account in &accounts {
                             notifier.notify_account_restore_from_snapshot(*slot, account);
                         }

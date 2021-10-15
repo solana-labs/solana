@@ -570,12 +570,24 @@ impl ParallelPostgresClient {
                 ("message-queue-length", self.sender.len() as i64, i64),
             );
         }
+        let mut measure = Measure::start("accountsdb-plugin-posgres-create-work-item");
+        let wrk_item = DbWorkItem::UpdateAccount(UpdateAccountRequest {
+            account: DbAccountInfo::new(account, slot),
+            at_startup,
+        });
+
+        measure.stop();
+
+        inc_new_counter_info!(
+            "accountsdb-plugin-posgres-create-work-item-ms",
+            measure.as_ms() as usize,
+            100000,
+            100000
+        );
+
         if let Err(err) = self
             .sender
-            .send(DbWorkItem::UpdateAccount(UpdateAccountRequest {
-                account: DbAccountInfo::new(account, slot),
-                at_startup,
-            }))
+            .send(wrk_item)
         {
             return Err(AccountsDbPluginError::AccountsUpdateError {
                 msg: format!(
