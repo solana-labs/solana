@@ -7074,42 +7074,40 @@ impl AccountsDb {
             let mut slots = self.storage.all_slots();
             slots.sort_by(|a, b| b.cmp(a));
 
-            slots.par_chunks(4096).for_each(|slots| {
-                for slot in slots {
-                    let slot_stores = self.storage.get_slot_stores(*slot).unwrap();
+            for slot in slots {
+                let slot_stores = self.storage.get_slot_stores(slot).unwrap();
 
-                    let slot_stores = slot_stores.read().unwrap();
-                    for (_, storage_entry) in slot_stores.iter() {
-                        let mut measure = Measure::start("accountsdb-plugin-load-accounts");
-                        let accounts = storage_entry.all_accounts();
-                        measure.stop();
-                        inc_new_counter_info!(
-                            "accountsdb-plugin-load-accounts-ms",
-                            measure.as_ms() as usize,
-                            1000,
-                            1000
-                        );
-                        inc_new_counter_info!(
-                            "accountsdb-plugin-load-accounts-count",
-                            accounts.len(),
-                            1000,
-                            1000
-                        );
-                        let mut measure = Measure::start("accountsdb-plugin-notify-accounts-at-snapshot-restore");
+                let slot_stores = slot_stores.read().unwrap();
+                for (_, storage_entry) in slot_stores.iter() {
+                    let mut measure = Measure::start("accountsdb-plugin-load-accounts");
+                    let accounts = storage_entry.all_accounts();
+                    measure.stop();
+                    inc_new_counter_info!(
+                        "accountsdb-plugin-load-accounts-ms",
+                        measure.as_ms() as usize,
+                        1000,
+                        1000
+                    );
+                    inc_new_counter_info!(
+                        "accountsdb-plugin-load-accounts-count",
+                        accounts.len(),
+                        1000,
+                        1000
+                    );
+                    let mut measure = Measure::start("accountsdb-plugin-notify-accounts-at-snapshot-restore");
 
-                        for account in &accounts {
-                            notifier.notify_account_restore_from_snapshot(*slot, account);
-                        }
-                        measure.stop();
-                        inc_new_counter_info!(
-                            "accountsdb-plugin-notify-accounts-at-snapshot-restore-ms",
-                            measure.as_ms() as usize,
-                            1000,
-                            1000
-                        );
+                    for account in &accounts {
+                        notifier.notify_account_restore_from_snapshot(slot, account);
                     }
+                    measure.stop();
+                    inc_new_counter_info!(
+                        "accountsdb-plugin-notify-accounts-at-snapshot-restore-ms",
+                        measure.as_ms() as usize,
+                        1000,
+                        1000
+                    );
                 }
-            });
+            }
         }
     }
 }
