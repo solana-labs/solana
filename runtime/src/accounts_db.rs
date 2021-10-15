@@ -7077,7 +7077,7 @@ impl AccountsDb {
             slots.par_chunks(4096).for_each(|slots| {
                 for slot in slots {
                     let slot_stores = self.storage.get_slot_stores(*slot).unwrap();
-    
+
                     let slot_stores = slot_stores.read().unwrap();
                     for (_, storage_entry) in slot_stores.iter() {
                         let accounts = storage_entry.all_accounts();

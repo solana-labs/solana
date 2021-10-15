@@ -10,7 +10,8 @@ use {
     solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
         AccountsDbPluginError, ReplicaAccountInfo, SlotStatus,
     },
-    solana_metrics::datapoint_info,
+    solana_measure::measure::Measure,
+    solana_metrics::*,
     solana_sdk::timing::AtomicInterval,
     std::{
         sync::{
@@ -155,7 +156,6 @@ pub trait PostgresClient {
 }
 
 impl SimplePostgresClient {
-
     fn connect_to_db(
         config: &AccountsDbPluginPostgresConfig,
     ) -> Result<Client, AccountsDbPluginError> {
@@ -305,6 +305,7 @@ impl SimplePostgresClient {
                 values.push(&updated_on);
             }
 
+            let mut measure = Measure::start("accountsdb-plugin-postgres-update-account");
             let client = self.client.get_mut().unwrap();
             let result = client
                 .client
@@ -319,6 +320,13 @@ impl SimplePostgresClient {
                 error!("{}", msg);
                 return Err(AccountsDbPluginError::AccountsUpdateError { msg });
             }
+            measure.stop();
+            inc_new_counter_info!(
+                "accountsdb-plugin-postgres-update-account",
+                measure.as_ms() as usize,
+                10000,
+                10000
+            );
         }
         Ok(())
     }
