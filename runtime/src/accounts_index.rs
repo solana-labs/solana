@@ -1865,6 +1865,10 @@ impl<T: IndexValue> AccountsIndex<T> {
         self.roots_tracker.write().unwrap().roots.clear()
     }
 
+    pub fn clone_uncleaned_roots(&self) -> HashSet<Slot> {
+        self.roots_tracker.read().unwrap().uncleaned_roots.clone()
+    }
+
     pub fn uncleaned_roots_len(&self) -> usize {
         self.roots_tracker.read().unwrap().uncleaned_roots.len()
     }
