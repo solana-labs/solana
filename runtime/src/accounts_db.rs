@@ -1994,11 +1994,20 @@ impl AccountsDb {
         self.report_store_stats();
 
         let mut key_timings = CleanKeyTimings::default();
-        let pubkeys = self.construct_candidate_clean_keys(
+        let mut pubkeys = self.construct_candidate_clean_keys(
             max_clean_root,
             last_full_snapshot_slot,
             &mut key_timings,
         );
+
+        let mut sort = Measure::start("sort");
+        if is_startup {
+            pubkeys.par_sort_unstable();
+        } else {
+            self.thread_pool_clean
+                .install(|| pubkeys.par_sort_unstable());
+        }
+        sort.stop();
 
         let total_keys_count = pubkeys.len();
         let mut accounts_scan = Measure::start("accounts_scan");
@@ -2220,6 +2229,7 @@ impl AccountsDb {
             ("delta_insert_us", key_timings.delta_insert_us, i64),
             ("delta_key_count", key_timings.delta_key_count, i64),
             ("dirty_pubkeys_count", key_timings.dirty_pubkeys_count, i64),
+            ("sort_us", sort.as_us(), i64),
             ("total_keys_count", total_keys_count, i64),
             (
                 "scan_found_not_zero",
