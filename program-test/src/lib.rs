@@ -27,14 +27,10 @@ use {
         instruction::InstructionError,
         message::Message,
         native_token::sol_to_lamports,
-<<<<<<< HEAD
+        poh_config::PohConfig,
         process_instruction::{
             stable_log, BpfComputeBudget, InvokeContext, ProcessInstructionWithContext,
         },
-=======
-        poh_config::PohConfig,
-        process_instruction::{stable_log, InvokeContext, ProcessInstructionWithContext},
->>>>>>> bea181eba (Improve program-test process_transaction() speed by reducing sleep duration in banks-server (#20508))
         program_error::{ProgramError, ACCOUNT_BORROW_FAILED, UNSUPPORTED_SYSVAR},
         pubkey::Pubkey,
         rent::Rent,

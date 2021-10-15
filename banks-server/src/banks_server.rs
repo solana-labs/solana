@@ -314,19 +314,13 @@ pub async fn start_tcp_server(
 
             SendTransactionService::new(tpu_addr, &bank_forks, receiver);
 
-<<<<<<< HEAD
-            let server =
-                BanksServer::new(bank_forks.clone(), block_commitment_cache.clone(), sender);
-            chan.respond_with(server.serve()).execute()
-=======
             let server = BanksServer::new(
                 bank_forks.clone(),
                 block_commitment_cache.clone(),
                 sender,
                 Duration::from_millis(200),
             );
-            chan.execute(server.serve())
->>>>>>> bea181eba (Improve program-test process_transaction() speed by reducing sleep duration in banks-server (#20508))
+            chan.respond_with(server.serve()).execute()
         })
         // Max 10 channels.
         .buffer_unordered(10)
