@@ -43,20 +43,23 @@ impl<T: IndexValue> Drop for AccountsIndexStorage<T> {
 }
 
 impl<T: IndexValue> AccountsIndexStorage<T> {
-    pub fn new(bins: usize, config: &Option<AccountsIndexConfig>) -> AccountsIndexStorage<T> {
-        let num_threads = std::cmp::max(2, num_cpus::get() / 4);
-        let threads = config
-            .as_ref()
-            .and_then(|config| config.flush_threads)
-            .unwrap_or(num_threads);
+    pub fn add_worker_threads(existing: &Self, threads: usize) -> Self {
+        Self::allocate(
+            Arc::clone(&existing.storage),
+            existing.in_mem.clone(),
+            threads,
+        )
+    }
 
-        let storage = Arc::new(BucketMapHolder::new(bins, config, threads));
+    pub fn set_startup(&self, value: bool) {
+        self.storage.set_startup(self, value);
+    }
 
-        let in_mem = (0..bins)
-            .into_iter()
-            .map(|bin| Arc::new(InMemAccountsIndex::new(&storage, bin)))
-            .collect::<Vec<_>>();
-
+    fn allocate(
+        storage: Arc<BucketMapHolder<T>>,
+        in_mem: Vec<Arc<InMemAccountsIndex<T>>>,
+        threads: usize,
+    ) -> Self {
         let exit = Arc::new(AtomicBool::default());
         let handles = Some(
             (0..threads)
@@ -83,5 +86,22 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
             storage,
             in_mem,
         }
+    }
+
+    pub fn new(bins: usize, config: &Option<AccountsIndexConfig>) -> Self {
+        let num_threads = std::cmp::max(2, num_cpus::get() / 4);
+        let threads = config
+            .as_ref()
+            .and_then(|config| config.flush_threads)
+            .unwrap_or(num_threads);
+
+        let storage = Arc::new(BucketMapHolder::new(bins, config, threads));
+
+        let in_mem = (0..bins)
+            .into_iter()
+            .map(|bin| Arc::new(InMemAccountsIndex::new(&storage, bin)))
+            .collect::<Vec<_>>();
+
+        Self::allocate(storage, in_mem, threads)
     }
 }
