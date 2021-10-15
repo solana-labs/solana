@@ -2002,6 +2002,7 @@ impl AccountsDb {
 
         let total_keys_count = pubkeys.len();
         let mut accounts_scan = Measure::start("accounts_scan");
+        let uncleaned_roots = self.accounts_index.clone_uncleaned_roots();
         let uncleaned_roots_len = self.accounts_index.uncleaned_roots_len();
         let found_not_zero_accum = AtomicU64::new(0);
         let not_found_on_fork_accum = AtomicU64::new(0);
@@ -2036,7 +2037,7 @@ impl AccountsDb {
                                     let slot = *slot;
                                     drop(locked_entry);
 
-                                    if self.accounts_index.is_uncleaned_root(slot) {
+                                    if uncleaned_roots.contains(&slot) {
                                         // Assertion enforced by `accounts_index.get()`, the latest slot
                                         // will not be greater than the given `max_clean_root`
                                         if let Some(max_clean_root) = max_clean_root {
