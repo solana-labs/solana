@@ -327,6 +327,12 @@ impl SimplePostgresClient {
                 10000,
                 10000
             );
+            inc_new_counter_info!(
+                "accountsdb-plugin-postgres-update-account-count",
+                self.batch_size,
+                10000,
+                10000
+            );
         }
         Ok(())
     }
