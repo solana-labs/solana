@@ -66,8 +66,8 @@ pub struct ThisInvokeContext<'a> {
     ancestors: &'a Ancestors,
     #[allow(clippy::type_complexity)]
     sysvars: RefCell<Vec<(Pubkey, Option<Rc<Vec<u8>>>)>>,
-    blockhash: &'a Hash,
-    fee_calculator: &'a FeeCalculator,
+    blockhash: Hash,
+    fee_calculator: FeeCalculator,
     return_data: (Pubkey, Vec<u8>),
 }
 impl<'a> ThisInvokeContext<'a> {
@@ -84,8 +84,8 @@ impl<'a> ThisInvokeContext<'a> {
         feature_set: Arc<FeatureSet>,
         account_db: Arc<Accounts>,
         ancestors: &'a Ancestors,
-        blockhash: &'a Hash,
-        fee_calculator: &'a FeeCalculator,
+        blockhash: Hash,
+        fee_calculator: FeeCalculator,
     ) -> Self {
         Self {
             instruction_index: 0,
@@ -423,10 +423,10 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         &self.compute_budget
     }
     fn get_blockhash(&self) -> &Hash {
-        self.blockhash
+        &self.blockhash
     }
     fn get_fee_calculator(&self) -> &FeeCalculator {
-        self.fee_calculator
+        &self.fee_calculator
     }
     fn set_return_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError> {
         self.return_data = (*self.get_caller()?, data);
@@ -501,8 +501,8 @@ impl MessageProcessor {
             feature_set,
             account_db,
             ancestors,
-            &blockhash,
-            &fee_calculator,
+            blockhash,
+            fee_calculator,
         );
         let compute_meter = invoke_context.get_compute_meter();
 
@@ -679,8 +679,6 @@ mod tests {
             None,
         );
         let ancestors = Ancestors::default();
-        let blockhash = Hash::default();
-        let fee_calculator = FeeCalculator::default();
         let mut invoke_context = ThisInvokeContext::new(
             Rent::default(),
             &accounts,
@@ -693,8 +691,8 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             Arc::new(Accounts::default_for_tests()),
             &ancestors,
-            &blockhash,
-            &fee_calculator,
+            Hash::default(),
+            FeeCalculator::default(),
         );
 
         // Check call depth increases and has a limit
@@ -783,8 +781,6 @@ mod tests {
             None,
         );
         let ancestors = Ancestors::default();
-        let blockhash = Hash::default();
-        let fee_calculator = FeeCalculator::default();
         let mut invoke_context = ThisInvokeContext::new(
             Rent::default(),
             &accounts,
@@ -797,8 +793,8 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             Arc::new(Accounts::default_for_tests()),
             &ancestors,
-            &blockhash,
-            &fee_calculator,
+            Hash::default(),
+            FeeCalculator::default(),
         );
         invoke_context
             .push(&message, &message.instructions[0], &[0], None)
@@ -1234,8 +1230,6 @@ mod tests {
         let message = Message::new(&[callee_instruction], None);
 
         let ancestors = Ancestors::default();
-        let blockhash = Hash::default();
-        let fee_calculator = FeeCalculator::default();
         let mut invoke_context = ThisInvokeContext::new(
             Rent::default(),
             &accounts,
@@ -1248,8 +1242,8 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             Arc::new(Accounts::default_for_tests()),
             &ancestors,
-            &blockhash,
-            &fee_calculator,
+            Hash::default(),
+            FeeCalculator::default(),
         );
         invoke_context
             .push(&message, &caller_instruction, &program_indices[..1], None)
@@ -1379,8 +1373,6 @@ mod tests {
         let message = Message::new(&[callee_instruction.clone()], None);
 
         let ancestors = Ancestors::default();
-        let blockhash = Hash::default();
-        let fee_calculator = FeeCalculator::default();
         let mut invoke_context = ThisInvokeContext::new(
             Rent::default(),
             &accounts,
@@ -1393,8 +1385,8 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             Arc::new(Accounts::default_for_tests()),
             &ancestors,
-            &blockhash,
-            &fee_calculator,
+            Hash::default(),
+            FeeCalculator::default(),
         );
         invoke_context
             .push(&message, &caller_instruction, &program_indices, None)
