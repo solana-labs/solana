@@ -82,6 +82,16 @@ fn parse_udp_stats(reader: &mut impl BufRead) -> Result<UdpStats, String> {
     Ok(stats)
 }
 
+#[cfg(target_os = "linux")]
+pub fn verify_udp_stats_access() -> Result<(), String> {
+    read_udp_stats(PROC_NET_SNMP_PATH)?;
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn verify_udp_stats_access() -> Result<(), String> {
+    Ok(())
+}
+
 impl SystemMonitorService {
     pub fn new(exit: Arc<AtomicBool>) -> Self {
         info!("Starting SystemMonitorService");

@@ -14,7 +14,7 @@ use {
         serve_repair_service::ServeRepairService,
         sigverify,
         snapshot_packager_service::SnapshotPackagerService,
-        system_monitor_service::SystemMonitorService,
+        system_monitor_service::{verify_udp_stats_access, SystemMonitorService},
         tower_storage::TowerStorage,
         tpu::{Tpu, DEFAULT_TPU_COALESCE_MS},
         tvu::{Sockets, Tvu, TvuConfig},
@@ -450,6 +450,10 @@ impl Validator {
 
         *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;
 
+        verify_udp_stats_access().unwrap_or_else(|err| {
+            error!("Failed to access UDP stats: {}", err);
+            abort();
+        });
         let system_monitor_service = Some(SystemMonitorService::new(Arc::clone(&exit)));
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
