@@ -1,14 +1,14 @@
 #[cfg(not(target_arch = "bpf"))]
 use rand::{rngs::OsRng, Rng};
 
-use aes::{
-    cipher::{BlockDecrypt, BlockEncrypt, NewBlockCipher},
-    Aes128, Block,
+use {
+    aes::{
+        cipher::{BlockDecrypt, BlockEncrypt, NewBlockCipher},
+        Aes128, Block,
+    },
+    arrayref::array_ref,
+    zeroize::Zeroize,
 };
-
-use arrayref::array_ref;
-
-use zeroize::Zeroize;
 
 pub struct AES;
 impl AES {
