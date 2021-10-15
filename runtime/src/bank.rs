@@ -5086,15 +5086,6 @@ impl Bank {
         self.compute_budget = compute_budget;
     }
 
-    #[allow(deprecated)]
-    #[deprecated(since = "1.8.0", note = "please use `set_compute_budget` instead")]
-    pub fn set_bpf_compute_budget(
-        &mut self,
-        bpf_compute_budget: Option<solana_sdk::process_instruction::BpfComputeBudget>,
-    ) {
-        self.compute_budget = bpf_compute_budget.map(|budget| budget.into());
-    }
-
     pub fn hard_forks(&self) -> Arc<RwLock<HardForks>> {
         self.hard_forks.clone()
     }

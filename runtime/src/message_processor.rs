@@ -57,8 +57,6 @@ pub struct ThisInvokeContext<'a> {
     programs: &'a [(Pubkey, ProcessInstructionWithContext)],
     logger: Rc<RefCell<dyn Logger>>,
     compute_budget: ComputeBudget,
-    #[allow(deprecated)]
-    bpf_compute_budget: solana_sdk::process_instruction::BpfComputeBudget,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     executors: Rc<RefCell<Executors>>,
     instruction_recorders: Option<&'a [InstructionRecorder]>,
@@ -98,7 +96,6 @@ impl<'a> ThisInvokeContext<'a> {
             programs,
             logger: Rc::new(RefCell::new(ThisLogger { log_collector })),
             compute_budget,
-            bpf_compute_budget: compute_budget.into(),
             compute_meter,
             executors,
             instruction_recorders,
@@ -356,10 +353,6 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     }
     fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
         self.logger.clone()
-    }
-    #[allow(deprecated)]
-    fn get_bpf_compute_budget(&self) -> &solana_sdk::process_instruction::BpfComputeBudget {
-        &self.bpf_compute_budget
     }
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
         self.compute_meter.clone()
