@@ -48,6 +48,7 @@ impl ComputeMeter for ThisComputeMeter {
         self.remaining
     }
 }
+
 pub struct ThisInvokeContext<'a> {
     instruction_index: usize,
     invoke_stack: Vec<InvokeContextStackFrame<'a>>,
@@ -108,6 +109,30 @@ impl<'a> ThisInvokeContext<'a> {
             fee_calculator,
             return_data: (Pubkey::default(), Vec::new()),
         }
+    }
+
+    pub fn new_mock(
+        accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        programs: &'a [(Pubkey, ProcessInstructionWithContext)],
+        ancestors: &'a Ancestors,
+    ) -> Self {
+        Self::new(
+            Rent::default(),
+            accounts,
+            programs,
+            None,
+            ComputeBudget::default(),
+            Rc::new(RefCell::new(ThisComputeMeter {
+                remaining: std::i64::MAX as u64,
+            })),
+            Rc::new(RefCell::new(Executors::default())),
+            None,
+            Arc::new(FeatureSet::all_enabled()),
+            Arc::new(Accounts::default_for_tests()),
+            ancestors,
+            Hash::default(),
+            FeeCalculator::default(),
+        )
     }
 }
 impl<'a> InvokeContext for ThisInvokeContext<'a> {
@@ -680,21 +705,7 @@ mod tests {
             None,
         );
         let ancestors = Ancestors::default();
-        let mut invoke_context = ThisInvokeContext::new(
-            Rent::default(),
-            &accounts,
-            &[],
-            None,
-            ComputeBudget::default(),
-            Rc::new(RefCell::new(MockComputeMeter::default())),
-            Rc::new(RefCell::new(Executors::default())),
-            None,
-            Arc::new(FeatureSet::all_enabled()),
-            Arc::new(Accounts::default_for_tests()),
-            &ancestors,
-            Hash::default(),
-            FeeCalculator::default(),
-        );
+        let mut invoke_context = ThisInvokeContext::new_mock(&accounts, &[], &ancestors);
 
         // Check call depth increases and has a limit
         let mut depth_reached = 0;
@@ -782,21 +793,7 @@ mod tests {
             None,
         );
         let ancestors = Ancestors::default();
-        let mut invoke_context = ThisInvokeContext::new(
-            Rent::default(),
-            &accounts,
-            &[],
-            None,
-            ComputeBudget::default(),
-            Rc::new(RefCell::new(MockComputeMeter::default())),
-            Rc::new(RefCell::new(Executors::default())),
-            None,
-            Arc::new(FeatureSet::all_enabled()),
-            Arc::new(Accounts::default_for_tests()),
-            &ancestors,
-            Hash::default(),
-            FeeCalculator::default(),
-        );
+        let mut invoke_context = ThisInvokeContext::new_mock(&accounts, &[], &ancestors);
         invoke_context
             .push(&message, &message.instructions[0], &[0], None)
             .unwrap();
@@ -1231,21 +1228,8 @@ mod tests {
         let message = Message::new(&[callee_instruction], None);
 
         let ancestors = Ancestors::default();
-        let mut invoke_context = ThisInvokeContext::new(
-            Rent::default(),
-            &accounts,
-            programs.as_slice(),
-            None,
-            ComputeBudget::default(),
-            Rc::new(RefCell::new(MockComputeMeter::default())),
-            Rc::new(RefCell::new(Executors::default())),
-            None,
-            Arc::new(FeatureSet::all_enabled()),
-            Arc::new(Accounts::default_for_tests()),
-            &ancestors,
-            Hash::default(),
-            FeeCalculator::default(),
-        );
+        let mut invoke_context =
+            ThisInvokeContext::new_mock(&accounts, programs.as_slice(), &ancestors);
         invoke_context
             .push(&message, &caller_instruction, &program_indices[..1], None)
             .unwrap();
@@ -1374,21 +1358,8 @@ mod tests {
         let message = Message::new(&[callee_instruction.clone()], None);
 
         let ancestors = Ancestors::default();
-        let mut invoke_context = ThisInvokeContext::new(
-            Rent::default(),
-            &accounts,
-            programs.as_slice(),
-            None,
-            ComputeBudget::default(),
-            Rc::new(RefCell::new(MockComputeMeter::default())),
-            Rc::new(RefCell::new(Executors::default())),
-            None,
-            Arc::new(FeatureSet::all_enabled()),
-            Arc::new(Accounts::default_for_tests()),
-            &ancestors,
-            Hash::default(),
-            FeeCalculator::default(),
-        );
+        let mut invoke_context =
+            ThisInvokeContext::new_mock(&accounts, programs.as_slice(), &ancestors);
         invoke_context
             .push(&message, &caller_instruction, &program_indices, None)
             .unwrap();
