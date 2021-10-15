@@ -2584,7 +2584,6 @@ fn test_fake_shreds_broadcast_leader() {
 
 #[test]
 #[serial]
-#[ignore]
 #[allow(unused_attributes)]
 fn test_duplicate_shreds_broadcast_leader() {
     // Create 4 nodes:
@@ -2707,7 +2706,7 @@ fn test_duplicate_shreds_broadcast_leader() {
                     vote.slots.last().unwrap().cmp(vote2.slots.last().unwrap())
                 });
 
-                for (parsed_vote, leader_vote_tx) in parsed_vote_iter {
+                for (parsed_vote, leader_vote_tx) in &parsed_vote_iter {
                     if let Some(latest_vote_slot) = parsed_vote.slots.last() {
                         info!("received vote for {}", latest_vote_slot);
                         // Add to EpochSlots. Mark all slots frozen between slot..=max_vote_slot.
@@ -2759,6 +2758,10 @@ fn test_duplicate_shreds_broadcast_leader() {
                         }
                     }
                     // Give vote some time to propagate
+                    sleep(Duration::from_millis(100));
+                }
+
+                if parsed_vote_iter.is_empty() {
                     sleep(Duration::from_millis(100));
                 }
             }
