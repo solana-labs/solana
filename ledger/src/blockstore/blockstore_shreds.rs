@@ -97,7 +97,7 @@ impl Blockstore {
         index: u64,
     ) -> Result<Option<Vec<u8>>> {
         let payload = self
-            .data_slot_cache(slot)
+            .data_shred_slot_cache(slot)
             .and_then(|slot_cache| slot_cache.read().unwrap().get(&index).cloned());
         Ok(payload)
     }
@@ -108,7 +108,7 @@ impl Blockstore {
     }
 
     pub(crate) fn insert_data_shred_into_cache(&self, slot: Slot, index: u64, shred: &Shred) {
-        let data_slot_cache = self.data_slot_cache(slot).unwrap_or_else(|| {
+        let slot_cache = self.data_shred_slot_cache(slot).unwrap_or_else(|| {
             // Inner map for slot does not exist, let's create it
             // DashMap .entry().or_insert() returns a RefMut, essentially a write lock,
             // which is dropped after this block ends, minimizing time held by the lock.
@@ -121,7 +121,7 @@ impl Blockstore {
                     .or_insert(Arc::new(RwLock::new(BTreeMap::new()))),
             )
         });
-        data_slot_cache
+        slot_cache
             .write()
             .unwrap()
             .insert(index, shred.payload.clone());
@@ -147,7 +147,7 @@ impl Blockstore {
         let mut flush_timer = Measure::start("flush_timer");
 
         let slot_cache = self
-            .data_slot_cache(slot)
+            .data_shred_slot_cache(slot)
             .expect("slot was chosen for flush but is no longer in cache");
         let path = self.slot_data_shreds_path(slot);
         // We'll write contents to a temporary file first, and then rename
@@ -386,7 +386,7 @@ impl Blockstore {
         )?)
     }
 
-    pub(crate) fn data_slot_cache(&self, slot: Slot) -> Option<Arc<RwLock<ShredCache>>> {
+    pub(crate) fn data_shred_slot_cache(&self, slot: Slot) -> Option<Arc<RwLock<ShredCache>>> {
         self.data_shred_cache
             .get(&slot)
             .map(|res| Arc::clone(res.value()))

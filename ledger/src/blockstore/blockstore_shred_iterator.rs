@@ -193,7 +193,7 @@ pub mod tests {
     fn verify_iterator(blockstore: &Blockstore, slot: Slot, shreds: &[Shred]) {
         // Ensure iterator with start_index = 0 yields all inserted elements
         {
-            let cache = blockstore.data_slot_cache(slot);
+            let cache = blockstore.data_shred_slot_cache(slot);
             let (cache_guard, file_data) =
                 SlotIterator::setup(&cache, &blockstore.slot_data_shreds_path(slot));
             let shred_iter = SlotIterator::new(slot, 0, &cache_guard, &file_data);
@@ -205,7 +205,7 @@ pub mod tests {
         // Ensure iterator with non-zero start index yields expected elements
         {
             let start_index = 5;
-            let cache = blockstore.data_slot_cache(slot);
+            let cache = blockstore.data_shred_slot_cache(slot);
             let (cache_guard, file_data) =
                 SlotIterator::setup(&cache, &blockstore.slot_data_shreds_path(slot));
             let shred_iter = SlotIterator::new(
@@ -224,7 +224,7 @@ pub mod tests {
         // Ensure iterator with start_index > all elements yields no elements
         {
             let start_index = 10;
-            let cache = blockstore.data_slot_cache(slot);
+            let cache = blockstore.data_shred_slot_cache(slot);
             let (cache_guard, file_data) =
                 SlotIterator::setup(&cache, &blockstore.slot_data_shreds_path(slot));
             let shred_iter = SlotIterator::new(
@@ -292,7 +292,7 @@ pub mod tests {
         // Construct an iterator for a non-existent slot
         {
             let slot = num_slots + 1;
-            let cache = blockstore.data_slot_cache(slot);
+            let cache = blockstore.data_shred_slot_cache(slot);
             let (cache_guard, file_data) =
                 SlotIterator::setup(&cache, &blockstore.slot_data_shreds_path(slot));
             let shred_iter = SlotIterator::new(slot, 0, &cache_guard, &file_data);

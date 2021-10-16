@@ -1557,7 +1557,7 @@ impl Blockstore {
         slot: Slot,
         start_index: u64,
     ) -> ShredResult<Vec<Shred>> {
-        let cache = self.data_slot_cache(slot);
+        let cache = self.data_shred_slot_cache(slot);
         let (cache_guard, file_data) =
             SlotIterator::setup(&cache, &self.slot_data_shreds_path(slot));
         SlotIterator::new(slot, start_index, &cache_guard, &file_data)
@@ -1716,7 +1716,7 @@ impl Blockstore {
             return vec![];
         }
 
-        let cache = self.data_slot_cache(slot);
+        let cache = self.data_shred_slot_cache(slot);
         let (cache_guard, file_data) =
             SlotIterator::setup(&cache, &self.slot_data_shreds_path(slot));
         let shred_iter = SlotIterator::new(slot, start_index, &cache_guard, &file_data);
