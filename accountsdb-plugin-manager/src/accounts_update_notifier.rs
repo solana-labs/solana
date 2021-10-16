@@ -31,7 +31,9 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
     }
 
     fn notify_account_restore_from_snapshot(&self, slot: Slot, account: &StoredAccountMeta) {
+        let mut measure2 = Measure::start("accountsdb-plugin-notify-account-restore-all");
         let mut measure = Measure::start("accountsdb-plugin-copy-stored-account-info");
+
         let account = self.accountinfo_from_stored_account_meta(account);
         measure.stop();
 
@@ -45,6 +47,14 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
         if let Some(account_info) = account {
             self.notify_plugins_of_account_update(account_info, slot, true);
         }
+        measure2.stop();
+
+        inc_new_counter_info!(
+            "accountsdb-plugin-notify-account-restore-all-ms",
+            measure2.as_ms() as usize,
+            100000,
+            100000
+        );
     }
 
     fn notify_slot_confirmed(&self, slot: Slot, parent: Option<Slot>) {
@@ -100,6 +110,7 @@ impl AccountsUpdateNotifierImpl {
         slot: Slot,
         at_startup: bool,
     ) {
+        let mut measure2 = Measure::start("accountsdb-plugin-notify_plugins_of_account_update");
         let mut plugin_manager = self.plugin_manager.write().unwrap();
 
         if plugin_manager.plugins.is_empty() {
@@ -136,8 +147,15 @@ impl AccountsUpdateNotifierImpl {
                 measure.as_ms() as usize,
                 100000,
                 100000
-            );
+            );            
         }
+        measure2.stop();
+        inc_new_counter_info!(
+            "accountsdb-plugin-notify_plugins_of_account_update-ms",
+            measure2.as_ms() as usize,
+            100000,
+            100000
+        );            
     }
 
     pub fn notify_slot_status(&self, slot: Slot, parent: Option<Slot>, slot_status: SlotStatus) {
