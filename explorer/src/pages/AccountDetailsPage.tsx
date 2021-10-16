@@ -37,6 +37,7 @@ import { TokenInstructionsCard } from "components/account/history/TokenInstructi
 import { RewardsCard } from "components/account/RewardsCard";
 import { MetaplexMetadataCard } from "components/account/MetaplexMetadataCard";
 import { NFTHeader } from "components/account/MetaplexNFTHeader";
+import { AnchorAccountCard, hasAnchorIDL } from "components/account/AnchorAccountCard";
 
 const IDENTICON_WIDTH = 64;
 
@@ -215,10 +216,20 @@ function DetailsSections({
   tab?: string;
   info?: CacheEntry<Account>;
 }) {
+  const [ hasAnchorIdl, setHasAnchorIdl ] = React.useState<Boolean>(false);
+  const { url } = useCluster()
   const fetchAccount = useFetchAccountInfo();
   const address = pubkey.toBase58();
   const location = useLocation();
   const { flaggedAccounts } = useFlaggedAccounts();
+
+  React.useEffect(()=>{
+    if (info && info.data && info.data.details) {
+      hasAnchorIDL(info.data.details.owner, url)
+      .then(setHasAnchorIdl)
+    }
+  },[info, url])
+
 
   if (!info || info.status === FetchStatus.Fetching) {
     return <LoadingCard />;
@@ -232,6 +243,15 @@ function DetailsSections({
   const account = info.data;
   const data = account?.details?.data;
   const tabs = getTabs(data);
+
+  // This is a bad way to do this. This should happen inside getTabs?
+  if (hasAnchorIdl) {
+    tabs.push({
+      slug: "anchor",
+      title: "Anchor IDL",
+      path: "/anchor",
+    });
+  }
 
   let moreTab: MoreTabs = "history";
   if (tab && tabs.filter(({ slug }) => slug === tab).length === 0) {
@@ -256,6 +276,7 @@ function DetailsSections({
 
 function InfoSection({ account }: { account: Account }) {
   const data = account?.details?.data;
+  console.log("account", account);
 
   if (data && data.program === "bpf-upgradeable-loader") {
     return (
@@ -310,7 +331,8 @@ export type MoreTabs =
   | "transfers"
   | "instructions"
   | "rewards"
-  | "metadata";
+  | "metadata"
+  | "anchor";
 
 function MoreSection({
   account,
@@ -377,6 +399,11 @@ function MoreSection({
       {tab === "metadata" && (
         <MetaplexMetadataCard
           nftData={(account.details?.data as TokenProgramData).nftData!}
+        />
+      )}
+      {tab === "anchor" && (
+        <AnchorAccountCard
+          account={(account)}
         />
       )}
     </>
