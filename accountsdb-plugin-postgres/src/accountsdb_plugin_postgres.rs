@@ -1,3 +1,5 @@
+use solana_measure::measure::Measure;
+
 /// Main entry for the PostgreSQL plugin
 use {
     crate::{
@@ -11,6 +13,7 @@ use {
     solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
         AccountsDbPlugin, AccountsDbPluginError, ReplicaAccountInfoVersions, Result, SlotStatus,
     },
+    solana_metrics::*,
     std::{fs::File, io::Read},
     thiserror::Error,
 };
@@ -135,6 +138,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
         slot: u64,
         at_startup: bool,
     ) -> Result<()> {
+        let mut m1 = Measure::start("accountsdb-plugin-postgres-update-account-main");
         match account {
             ReplicaAccountInfoVersions::V0_0_1(account) => {
                 if let Some(accounts_selector) = &self.accounts_selector {
@@ -163,7 +167,16 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                         )));
                     }
                     Some(client) => {
+                        let mut measure = Measure::start("accountsdb-plugin-postgres-update-account-client");
                         let result = { client.update_account(account, slot, at_startup) };
+                        measure.stop();
+
+                        inc_new_counter_info!(
+                            "accountsdb-plugin-postgres-update-account-client-ms",
+                            m1.as_ms() as usize,
+                            100000,
+                            100000
+                        );
 
                         if let Err(err) = result {
                             return Err(AccountsDbPluginError::AccountsUpdateError {
@@ -174,6 +187,16 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                 }
             }
         }
+
+        m1.stop();
+
+        inc_new_counter_info!(
+            "accountsdb-plugin-postgres-update-account-main-ms",
+            m1.as_ms() as usize,
+            100000,
+            100000
+        );
+
         Ok(())
     }
 
