@@ -103,7 +103,7 @@ impl Blockstore {
     }
 
     pub(crate) fn get_data_shred_from_fs(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
-        let path = self.slot_data_shreds_path(slot);
+        let path = self.data_shred_slot_path(slot);
         Self::get_shred_from_fs(&path, index)
     }
 
@@ -149,7 +149,7 @@ impl Blockstore {
         let slot_cache = self
             .data_shred_slot_cache(slot)
             .expect("slot was chosen for flush but is no longer in cache");
-        let path = self.slot_data_shreds_path(slot);
+        let path = self.data_shred_slot_path(slot);
         // We'll write contents to a temporary file first, and then rename
         // to desired file such that the write is "atomic".
         let tmp_path = format!("{}.tmp", path.to_str().unwrap());
@@ -305,7 +305,7 @@ impl Blockstore {
         // TODO: Do this in parallel across several threads ?
         for slot in from_slot..to_slot {
             // Could get errors such as file doesn't exist; we don't care so just eat the error
-            let _ = fs::remove_file(self.slot_data_shreds_path(slot));
+            let _ = fs::remove_file(self.data_shred_slot_path(slot));
         }
     }
 
@@ -327,7 +327,7 @@ impl Blockstore {
             match shred_db_index_opt {
                 Some(shred_db_index) => {
                     // Shreds are stored by slot on file with an index of which shreds are present
-                    let path = self.slot_data_shreds_path(slot);
+                    let path = self.data_shred_slot_path(slot);
                     let shred_file_index = match fs::File::open(&path) {
                         Ok(mut file) => {
                             let (_header, file_index) =
@@ -392,7 +392,7 @@ impl Blockstore {
             .map(|res| Arc::clone(res.value()))
     }
 
-    pub(crate) fn slot_data_shreds_path(&self, slot: Slot) -> PathBuf {
+    pub(crate) fn data_shred_slot_path(&self, slot: Slot) -> PathBuf {
         self.data_shred_path.join(slot.to_string())
     }
 
@@ -476,7 +476,7 @@ impl Blockstore {
 
     /*
     pub(crate) fn is_data_shred_on_fs(&self, slot: Slot) -> bool {
-        let path = self.slot_data_shreds_path(slot);
+        let path = self.data_shred_slot_path(slot);
         let file = fs::File::open(path);
         return match file {
             Ok(mut file) => {

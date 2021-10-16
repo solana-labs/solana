@@ -195,7 +195,7 @@ pub mod tests {
         {
             let cache = blockstore.data_shred_slot_cache(slot);
             let (cache_guard, file_data) =
-                SlotIterator::setup(&cache, &blockstore.slot_data_shreds_path(slot));
+                SlotIterator::setup(&cache, &blockstore.data_shred_slot_path(slot));
             let shred_iter = SlotIterator::new(slot, 0, &cache_guard, &file_data);
             for (original_shred, (_, iter_shred)) in shreds.iter().zip_eq(shred_iter) {
                 assert_eq!(original_shred.payload, iter_shred);
@@ -207,7 +207,7 @@ pub mod tests {
             let start_index = 5;
             let cache = blockstore.data_shred_slot_cache(slot);
             let (cache_guard, file_data) =
-                SlotIterator::setup(&cache, &blockstore.slot_data_shreds_path(slot));
+                SlotIterator::setup(&cache, &blockstore.data_shred_slot_path(slot));
             let shred_iter = SlotIterator::new(
                 slot,
                 start_index.try_into().unwrap(),
@@ -226,7 +226,7 @@ pub mod tests {
             let start_index = 10;
             let cache = blockstore.data_shred_slot_cache(slot);
             let (cache_guard, file_data) =
-                SlotIterator::setup(&cache, &blockstore.slot_data_shreds_path(slot));
+                SlotIterator::setup(&cache, &blockstore.data_shred_slot_path(slot));
             let shred_iter = SlotIterator::new(
                 slot,
                 start_index.try_into().unwrap(),
@@ -294,7 +294,7 @@ pub mod tests {
             let slot = num_slots + 1;
             let cache = blockstore.data_shred_slot_cache(slot);
             let (cache_guard, file_data) =
-                SlotIterator::setup(&cache, &blockstore.slot_data_shreds_path(slot));
+                SlotIterator::setup(&cache, &blockstore.data_shred_slot_path(slot));
             let shred_iter = SlotIterator::new(slot, 0, &cache_guard, &file_data);
             assert_eq!(shred_iter.count(), 0);
         }
