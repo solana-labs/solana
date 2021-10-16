@@ -41,6 +41,10 @@ import { NFTHeader } from "components/account/MetaplexNFTHeader";
 import { DomainsCard } from "components/account/DomainsCard";
 import isMetaplexNFT from "providers/accounts/utils/isMetaplexNFT";
 import { SecurityCard } from "components/account/SecurityCard";
+import { AnchorAccountCard } from "components/account/AnchorAccountCard";
+import { AnchorProgramCard } from "components/account/AnchorProgramCard";
+import { Program } from '@project-serum/anchor';
+import { useAnchorProgram } from "providers/anchor";
 
 const IDENTICON_WIDTH = 64;
 
@@ -154,7 +158,9 @@ export function AccountDetailsPage({ address, tab }: Props) {
       {!pubkey ? (
         <ErrorCard text={`Address "${address}" is not valid`} />
       ) : (
-        <DetailsSections pubkey={pubkey} tab={tab} info={info} />
+        <React.Suspense fallback={<LoadingCard message="Loading account details" />}>
+          <DetailsSections pubkey={pubkey} tab={tab} info={info} />
+        </React.Suspense>
       )}
     </div>
   );
@@ -231,6 +237,12 @@ function DetailsSections({
   tab?: string;
   info?: CacheEntry<Account>;
 }) {
+  const { url } = useCluster();
+  const anchorProgram = useAnchorProgram(info?.data?.pubkey.toString() ?? "", url);
+  const isAnchorProgram = !!anchorProgram;
+  const accountAnchorProgram = useAnchorProgram(info?.data?.details?.owner.toString() ?? "", url);
+  const isAnchorAccount = !!accountAnchorProgram;
+
   const fetchAccount = useFetchAccountInfo();
   const address = pubkey.toBase58();
   const location = useLocation();
@@ -247,7 +259,7 @@ function DetailsSections({
 
   const account = info.data;
   const data = account?.details?.data;
-  const tabs = getTabs(data);
+  const tabs = getTabs(data, isAnchorAccount, isAnchorProgram);
 
   let moreTab: MoreTabs = "history";
   if (tab && tabs.filter(({ slug }) => slug === tab).length === 0) {
@@ -265,13 +277,14 @@ function DetailsSections({
         </div>
       )}
       {<InfoSection account={account} />}
-      {<MoreSection account={account} tab={moreTab} tabs={tabs} />}
+      {<MoreSection account={account} anchorProgram={anchorProgram} accountAnchorProgram={accountAnchorProgram} tab={moreTab} tabs={tabs} />}
     </>
   );
 }
 
 function InfoSection({ account }: { account: Account }) {
   const data = account?.details?.data;
+  console.log("account", account);
 
   if (data && data.program === "bpf-upgradeable-loader") {
     return (
@@ -328,14 +341,20 @@ export type MoreTabs =
   | "rewards"
   | "metadata"
   | "domains"
-  | "security";
+  | "security"
+  | "anchor-program"
+  | "anchor-account";
 
 function MoreSection({
   account,
+  anchorProgram,
+  accountAnchorProgram,
   tab,
   tabs,
 }: {
   account: Account;
+  anchorProgram: Program | null;
+  accountAnchorProgram: Program | null;
   tab: MoreTabs;
   tabs: Tab[];
 }) {
@@ -401,11 +420,17 @@ function MoreSection({
       {tab === "security" && data?.program === "bpf-upgradeable-loader" && (
         <SecurityCard data={data} />
       )}
+      {/* {tab === "anchor-program" && anchorProgram && <AnchorProgramCard program={anchorProgram} />}
+      {tab === "anchor-account" && accountAnchorProgram && <AnchorAccountCard account={account} program={accountAnchorProgram} />} */}
     </>
   );
 }
 
-function getTabs(data?: ProgramData): Tab[] {
+function getTabs(
+  data?: ProgramData,
+  isAnchorAccount?: Boolean,
+  isAnchorProgram?: Boolean
+): Tab[] {
   const tabs: Tab[] = [
     {
       slug: "history",
@@ -452,6 +477,22 @@ function getTabs(data?: ProgramData): Tab[] {
       slug: "domains",
       title: "Domains",
       path: "/domains",
+    });
+  }
+
+  // Add anchor tabs
+  if (isAnchorAccount) {
+    tabs.push({
+      slug: "anchor-account",
+      title: "Anchor IDL",
+      path: "/anchor-account",
+    });
+  }
+  if (isAnchorProgram) {
+    tabs.push({
+      slug: "anchor-program",
+      title: "Anchor IDL",
+      path: "/anchor-program",
     });
   }
 
