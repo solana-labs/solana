@@ -26,7 +26,7 @@ use {
 
 /// The maximum asynchronous requests allowed in the channel to avoid excessive
 /// memory usage. The downside -- calls after this threshold is reached can get blocked.
-const MAX_ASYNC_REQUESTS: usize = 10240;
+const MAX_ASYNC_REQUESTS: usize = 40960;
 const DEFAULT_POSTGRES_PORT: u16 = 5432;
 const DEFAULT_ACCOUNTS_INSERT_BATCH_SIZE: usize = 10;
 const ACCOUNT_COLUMN_COUNT: usize = 8;
