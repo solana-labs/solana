@@ -222,43 +222,63 @@ pub fn process_feature_subcommand(
     }
 }
 
-fn active_stake_by_feature_set(rpc_client: &RpcClient) -> Result<HashMap<u32, f64>, ClientError> {
+fn feature_set_stats(rpc_client: &RpcClient) -> Result<HashMap<u32, (f64, f32)>, ClientError> {
     // Validator identity -> feature set
-    let feature_set_map = rpc_client
+    let feature_sets = rpc_client
         .get_cluster_nodes()?
         .into_iter()
-        .map(|contact_info| (contact_info.pubkey, contact_info.feature_set))
-        .collect::<HashMap<_, _>>();
+        .map(|contact_info| {
+            (
+                contact_info.pubkey,
+                contact_info.feature_set,
+                contact_info.rpc.is_some(),
+            )
+        })
+        .collect::<Vec<_>>();
 
     let vote_accounts = rpc_client.get_vote_accounts()?;
 
-    let total_active_stake: u64 = vote_accounts
-        .current
+    let mut total_active_stake: u64 = vote_accounts
+        .delinquent
         .iter()
-        .chain(vote_accounts.delinquent.iter())
         .map(|vote_account| vote_account.activated_stake)
         .sum();
 
-    // Sum all active stake by feature set
-    let mut active_stake_by_feature_set: HashMap<u32, u64> = HashMap::new();
-    for vote_account in vote_accounts.current {
-        if let Some(Some(feature_set)) = feature_set_map.get(&vote_account.node_pubkey) {
-            *active_stake_by_feature_set.entry(*feature_set).or_default() +=
-                vote_account.activated_stake;
-        } else {
-            *active_stake_by_feature_set
-                .entry(0 /* "unknown" */)
-                .or_default() += vote_account.activated_stake;
+    let vote_stakes = vote_accounts
+        .current
+        .into_iter()
+        .map(|vote_account| {
+            total_active_stake += vote_account.activated_stake;
+            (vote_account.node_pubkey, vote_account.activated_stake)
+        })
+        .collect::<HashMap<_, _>>();
+
+    let mut feature_set_stats: HashMap<u32, (u64, u32)> = HashMap::new();
+    let mut total_rpc_nodes = 0;
+    for (node_id, feature_set, is_rpc) in feature_sets {
+        let feature_set = feature_set.unwrap_or(0);
+        let feature_set_entry = feature_set_stats.entry(feature_set).or_default();
+
+        if let Some(vote_stake) = vote_stakes.get(&node_id) {
+            feature_set_entry.0 += *vote_stake;
+        }
+
+        if is_rpc {
+            feature_set_entry.1 += 1;
+            total_rpc_nodes += 1;
         }
     }
 
-    Ok(active_stake_by_feature_set
+    Ok(feature_set_stats
         .into_iter()
-        .map(|(feature_set, active_stake)| {
-            (
-                feature_set,
-                active_stake as f64 * 100. / total_active_stake as f64,
-            )
+        .filter_map(|(feature_set, (active_stake, is_rpc))| {
+            let active_stake = active_stake as f64 * 100. / total_active_stake as f64;
+            let is_rpc = is_rpc as f32 * 100. / total_rpc_nodes as f32;
+            if active_stake >= 0.001 || is_rpc >= 0.001 {
+                Some((feature_set, (active_stake, is_rpc)))
+            } else {
+                None
+            }
         })
         .collect())
 }
@@ -267,50 +287,93 @@ fn active_stake_by_feature_set(rpc_client: &RpcClient) -> Result<HashMap<u32, f6
 fn feature_activation_allowed(rpc_client: &RpcClient, quiet: bool) -> Result<bool, ClientError> {
     let my_feature_set = solana_version::Version::default().feature_set;
 
-    let active_stake_by_feature_set = active_stake_by_feature_set(rpc_client)?;
+    let feature_set_stats = feature_set_stats(rpc_client)?;
 
-    let feature_activation_allowed = active_stake_by_feature_set
+    let (stake_allowed, rpc_allowed) = feature_set_stats
         .get(&my_feature_set)
-        .map(|percentage| *percentage >= 95.)
-        .unwrap_or(false);
+        .map(|(stake_percent, rpc_percent)| (*stake_percent >= 95., *rpc_percent >= 95.))
+        .unwrap_or((false, false));
 
-    if !feature_activation_allowed && !quiet {
-        if active_stake_by_feature_set.get(&my_feature_set).is_none() {
+    if !stake_allowed && !rpc_allowed && !quiet {
+        if feature_set_stats.get(&my_feature_set).is_none() {
             println!(
                 "{}",
                 style("To activate features the tool and cluster feature sets must match, select a tool version that matches the cluster")
                     .bold());
         } else {
-            println!(
-                "{}",
-                style("To activate features the stake must be >= 95%").bold()
-            );
+            if !stake_allowed {
+                print!(
+                    "\n{}",
+                    style("To activate features the stake must be >= 95%")
+                        .bold()
+                        .red()
+                );
+            }
+            if !rpc_allowed {
+                print!(
+                    "\n{}",
+                    style("To activate features the RPC nodes must be >= 95%")
+                        .bold()
+                        .red()
+                );
+            }
+        }
+        println!(
+            "\n\n{}",
+            style(format!("Tool Feature Set: {}", my_feature_set)).bold()
+        );
+        let feature_set_title = "Feature Set";
+        let stake_percent_title = "Stake";
+        let rpc_percent_title = "RPC";
+        let mut stats_output = Vec::new();
+        let mut max_feature_set_len = feature_set_title.len();
+        let mut max_stake_percent_len = stake_percent_title.len();
+        let mut max_rpc_percent_len = rpc_percent_title.len();
+        for (feature_set, (stake_percent, rpc_percent)) in feature_set_stats.iter() {
+            let me = *feature_set == my_feature_set;
+            let feature_set = if *feature_set == 0 {
+                "unknown".to_string()
+            } else {
+                feature_set.to_string()
+            };
+            let stake_percent = format!("{:.2}%", stake_percent);
+            let rpc_percent = format!("{:.2}%", rpc_percent);
+
+            max_feature_set_len = max_feature_set_len.max(feature_set.len());
+            max_stake_percent_len = max_stake_percent_len.max(stake_percent.len());
+            max_rpc_percent_len = max_rpc_percent_len.max(rpc_percent.len());
+
+            stats_output.push((feature_set, stake_percent, rpc_percent, me));
         }
         println!(
             "{}",
-            style(format!("Tool Feature Set: {}", my_feature_set)).bold()
+            style(format!(
+                "{1:<0$}  {3:<2$}  {5:<4$}",
+                max_feature_set_len,
+                feature_set_title,
+                max_stake_percent_len,
+                stake_percent_title,
+                max_rpc_percent_len,
+                rpc_percent_title,
+            ))
+            .bold(),
         );
-        println!("{}", style("Cluster Feature Sets and Stakes:").bold());
-        for (feature_set, percentage) in active_stake_by_feature_set.iter() {
-            if *feature_set == 0 {
-                println!("  unknown    - {:.2}%", percentage);
-            } else {
-                println!(
-                    "  {:<10} - {:.2}% {}",
-                    feature_set,
-                    percentage,
-                    if *feature_set == my_feature_set {
-                        " <-- me"
-                    } else {
-                        ""
-                    }
-                );
-            }
+        for (feature_set, stake_percent, rpc_percent, me) in stats_output {
+            println!(
+                "{1:>0$}  {3:>2$}  {5:>4$} {6}",
+                max_feature_set_len,
+                feature_set,
+                max_stake_percent_len,
+                stake_percent,
+                max_rpc_percent_len,
+                rpc_percent,
+                if me { "<-- me" } else { "" },
+            );
         }
         println!();
     }
 
-    Ok(feature_activation_allowed)
+    Ok(stake_allowed && rpc_allowed)
 }
 
 fn status_from_account(account: Account) -> Option<CliFeatureStatus> {
