@@ -245,7 +245,7 @@ export const ArtContent = ({
         animationURL={animationURL}
         active={active}
       />
-    ) : animationUrlExt === "html" ? (
+    ) : category === "html" || animationUrlExt === "html" ? (
       <HTMLContent animationUrl={animationURL} files={files} />
     ) : (
       <CachedImageContent uri={uri} />
