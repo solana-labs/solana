@@ -144,9 +144,9 @@ where
     F: Fn(u64) -> Message,
 {
     let fee = match blockhash {
-        Some(blockhash) => {
+        Some(_) => {
             let dummy_message = build_message(0);
-            get_fee_for_message(rpc_client, blockhash, &[&dummy_message])?
+            get_fee_for_message(rpc_client, &[&dummy_message])?
         }
         None => 0, // Offline, cannot calulate fee
     };

@@ -730,10 +730,9 @@ fn check_payer_balances(
 ) -> Result<(), Error> {
     let mut undistributed_tokens: u64 = allocations.iter().map(|x| x.amount).sum();
 
-    let blockhash = client.get_latest_blockhash()?;
     let fees = messages
         .iter()
-        .map(|message| client.get_fee_for_message(&blockhash, message))
+        .map(|message| client.get_fee_for_message(message))
         .collect::<Result<Vec<_>, _>>()
         .unwrap()
         .iter()

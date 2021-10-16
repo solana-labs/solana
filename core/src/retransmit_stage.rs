@@ -17,7 +17,10 @@ use {
     lru::LruCache,
     rayon::{prelude::*, ThreadPool, ThreadPoolBuilder},
     solana_client::rpc_response::SlotUpdate,
-    solana_gossip::cluster_info::{ClusterInfo, DATA_PLANE_FANOUT},
+    solana_gossip::{
+        cluster_info::{ClusterInfo, DATA_PLANE_FANOUT},
+        contact_info::ContactInfo,
+    },
     solana_ledger::{
         shred::Shred,
         {blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache},
@@ -28,6 +31,7 @@ use {
     solana_rpc::{max_slots::MaxSlots, rpc_subscriptions::RpcSubscriptions},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey, timing::timestamp},
+    solana_streamer::sendmmsg::{multi_target_send, SendPktsError},
     std::{
         collections::{BTreeSet, HashSet},
         net::UdpSocket,
@@ -215,7 +219,6 @@ fn retransmit(
     epoch_cache_update.stop();
     stats.epoch_cache_update += epoch_cache_update.as_us();
 
-    let my_id = cluster_info.id();
     let socket_addr_space = cluster_info.socket_addr_space();
     let retransmit_shred = |shred: Shred, socket: &UdpSocket| {
         if should_skip_retransmit(&shred, shreds_received) {
@@ -253,37 +256,29 @@ fn retransmit(
             };
         let cluster_nodes =
             cluster_nodes_cache.get(shred_slot, &root_bank, &working_bank, cluster_info);
-        let shred_seed = shred.seed(slot_leader, &root_bank);
-        let (neighbors, children) =
-            cluster_nodes.get_retransmit_peers(shred_seed, DATA_PLANE_FANOUT, slot_leader);
-        let anchor_node = neighbors[0].id == my_id;
+        let addrs: Vec<_> = cluster_nodes
+            .get_retransmit_addrs(slot_leader, &shred, &root_bank, DATA_PLANE_FANOUT)
+            .into_iter()
+            .filter(|addr| ContactInfo::is_valid_address(addr, socket_addr_space))
+            .collect();
         compute_turbine_peers.stop();
         stats
             .compute_turbine_peers_total
             .fetch_add(compute_turbine_peers.as_us(), Ordering::Relaxed);
 
         let mut retransmit_time = Measure::start("retransmit_to");
-        // If the node is on the critical path (i.e. the first node in each
-        // neighborhood), it should send the packet to tvu socket of its
-        // children and also tvu_forward socket of its neighbors. Otherwise it
-        // should only forward to tvu_forward socket of its children.
-        if anchor_node {
-            // First neighbor is this node itself, so skip it.
-            ClusterInfo::retransmit_to(
-                &neighbors[1..],
-                &shred.payload,
-                socket,
-                true, // forward socket
-                socket_addr_space,
+        if let Err(SendPktsError::IoError(ioerr, num_failed)) =
+            multi_target_send(socket, &shred.payload, &addrs)
+        {
+            inc_new_counter_info!("cluster_info-retransmit-packets", addrs.len(), 1);
+            inc_new_counter_error!("cluster_info-retransmit-error", num_failed, 1);
+            error!(
+                "retransmit_to multi_target_send error: {:?}, {}/{} packets failed",
+                ioerr,
+                num_failed,
+                addrs.len(),
             );
         }
-        ClusterInfo::retransmit_to(
-            &children,
-            &shred.payload,
-            socket,
-            !anchor_node, // send to forward socket!
-            socket_addr_space,
-        );
         retransmit_time.stop();
         stats
             .retransmit_total

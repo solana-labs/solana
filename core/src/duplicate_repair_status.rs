@@ -26,6 +26,22 @@ pub enum DuplicateAncestorDecision {
 }
 
 impl DuplicateAncestorDecision {
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            // If we get a bad sample from malicious validators, then retry
+            DuplicateAncestorDecision::InvalidSample
+            // It may be possible the validators have not yet detected duplicate confirmation
+            // so retry
+           |  DuplicateAncestorDecision::SampleNotDuplicateConfirmed => true,
+
+            DuplicateAncestorDecision::AncestorsAllMatch => false,
+
+             DuplicateAncestorDecision::ContinueSearch(_status)
+            | DuplicateAncestorDecision::EarliestAncestorNotFrozen(_status)
+            | DuplicateAncestorDecision::EarliestMismatchFound(_status) => false,
+        }
+    }
+
     pub fn repair_status(&self) -> Option<&DuplicateSlotRepairStatus> {
         match self {
             DuplicateAncestorDecision::InvalidSample

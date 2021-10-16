@@ -39,6 +39,7 @@ pub struct AccountsDbPluginPostgresConfig {
     pub host: String,
     pub user: String,
     pub threads: Option<usize>,
+    pub port: Option<u16>,
 }
 
 #[derive(Error, Debug)]

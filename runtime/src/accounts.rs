@@ -486,7 +486,8 @@ impl Accounts {
                                 .cloned()
                         });
                     let fee = if let Some(fee_calculator) = fee_calculator {
-                        tx.message().calculate_fee(&fee_calculator)
+                        tx.message()
+                            .calculate_fee(fee_calculator.lamports_per_signature)
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), None);
                     };
@@ -686,6 +687,7 @@ impl Accounts {
         debug_verify: bool,
     ) -> u64 {
         let use_index = false;
+        let is_startup = false; // there may be conditions where this is called at startup.
         self.accounts_db
             .update_accounts_hash_with_index_option(
                 use_index,
@@ -695,10 +697,12 @@ impl Accounts {
                 None,
                 can_cached_slot_be_unflushed,
                 None,
+                is_startup,
             )
             .1
     }
 
+    /// Only called from startup or test code.
     #[must_use]
     pub fn verify_bank_hash_and_lamports(
         &self,

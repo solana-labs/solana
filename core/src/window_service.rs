@@ -50,6 +50,12 @@ struct WindowServiceMetrics {
     num_shreds_received: u64,
     shred_receiver_elapsed_us: u64,
     prune_shreds_elapsed_us: u64,
+    num_shreds_pruned_invalid_repair: usize,
+    num_errors: u64,
+    num_errors_blockstore: u64,
+    num_errors_cross_beam_recv_timeout: u64,
+    num_errors_other: u64,
+    num_errors_try_crossbeam_send: u64,
 }
 
 impl WindowServiceMetrics {
@@ -68,7 +74,38 @@ impl WindowServiceMetrics {
                 self.prune_shreds_elapsed_us as i64,
                 i64
             ),
+            (
+                "num_shreds_pruned_invalid_repair",
+                self.num_shreds_pruned_invalid_repair,
+                i64
+            ),
+            ("num_errors", self.num_errors, i64),
+            ("num_errors_blockstore", self.num_errors_blockstore, i64),
+            ("num_errors_other", self.num_errors_other, i64),
+            (
+                "num_errors_try_crossbeam_send",
+                self.num_errors_try_crossbeam_send,
+                i64
+            ),
+            (
+                "num_errors_cross_beam_recv_timeout",
+                self.num_errors_cross_beam_recv_timeout,
+                i64
+            ),
         );
+    }
+
+    fn record_error(&mut self, err: &Error) {
+        self.num_errors += 1;
+        match err {
+            Error::TryCrossbeamSend => self.num_errors_try_crossbeam_send += 1,
+            Error::CrossbeamRecvTimeout(_) => self.num_errors_cross_beam_recv_timeout += 1,
+            Error::Blockstore(err) => {
+                self.num_errors_blockstore += 1;
+                error!("blockstore error: {}", err);
+            }
+            _ => self.num_errors_other += 1,
+        }
     }
 }
 
@@ -157,6 +194,9 @@ pub(crate) fn should_retransmit_and_persist(
             false
         } else if shred.index() >= MAX_DATA_SHREDS_PER_SLOT as u32 {
             inc_new_counter_warn!("streamer-recv_window-shred_index_overrun", 1);
+            false
+        } else if shred.data_header.size as usize > shred.payload.len() {
+            inc_new_counter_warn!("streamer-recv_window-shred_bad_meta_size", 1);
             false
         } else {
             true
@@ -266,6 +306,7 @@ fn run_insert<F>(
 where
     F: Fn(Shred),
 {
+    ws_metrics.run_insert_count += 1;
     let mut shred_receiver_elapsed = Measure::start("shred_receiver_elapsed");
     let timer = Duration::from_millis(200);
     let (mut shreds, mut repair_infos) = shred_receiver.recv_timeout(timer)?;
@@ -274,15 +315,19 @@ where
         repair_infos.extend(more_repair_infos);
     }
     shred_receiver_elapsed.stop();
+    ws_metrics.shred_receiver_elapsed_us += shred_receiver_elapsed.as_us();
     ws_metrics.num_shreds_received += shreds.len() as u64;
 
     let mut prune_shreds_elapsed = Measure::start("prune_shreds_elapsed");
+    let num_shreds = shreds.len();
     prune_shreds_invalid_repair(&mut shreds, &mut repair_infos, outstanding_requests);
+    ws_metrics.num_shreds_pruned_invalid_repair = num_shreds - shreds.len();
     let repairs: Vec<_> = repair_infos
         .iter()
         .map(|repair_info| repair_info.is_some())
         .collect();
     prune_shreds_elapsed.stop();
+    ws_metrics.prune_shreds_elapsed_us += prune_shreds_elapsed.as_us();
 
     let (completed_data_sets, inserted_indices) = blockstore.insert_shreds_handle_duplicate(
         shreds,
@@ -300,11 +345,6 @@ where
     }
 
     completed_data_sets_sender.try_send(completed_data_sets)?;
-
-    ws_metrics.run_insert_count += 1;
-    ws_metrics.shred_receiver_elapsed_us += shred_receiver_elapsed.as_us();
-    ws_metrics.prune_shreds_elapsed_us += prune_shreds_elapsed.as_us();
-
     Ok(())
 }
 
@@ -564,6 +604,7 @@ impl WindowService {
                         &retransmit_sender,
                         &outstanding_requests,
                     ) {
+                        ws_metrics.record_error(&e);
                         if Self::should_exit_on_error(e, &mut handle_timeout, &handle_error) {
                             break;
                         }
@@ -732,7 +773,7 @@ mod test {
         ));
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
 
-        let mut shreds = local_entries_to_shred(&[Entry::default()], 0, 0, &leader_keypair);
+        let shreds = local_entries_to_shred(&[Entry::default()], 0, 0, &leader_keypair);
 
         // with a Bank for slot 0, shred continues
         assert!(should_retransmit_and_persist(
@@ -784,9 +825,22 @@ mod test {
         ));
 
         // with a Bank and no idea who leader is, shred gets thrown out
-        shreds[0].set_slot(MINIMUM_SLOTS_PER_EPOCH as u64 * 3);
+        let mut bad_slot_shred = shreds[0].clone();
+        bad_slot_shred.set_slot(MINIMUM_SLOTS_PER_EPOCH as u64 * 3);
         assert!(!should_retransmit_and_persist(
-            &shreds[0],
+            &bad_slot_shred,
+            Some(bank.clone()),
+            &cache,
+            &me_id,
+            0,
+            0
+        ));
+
+        // with a bad header size
+        let mut bad_header_shred = shreds[0].clone();
+        bad_header_shred.data_header.size = (bad_header_shred.payload.len() + 1) as u16;
+        assert!(!should_retransmit_and_persist(
+            &bad_header_shred,
             Some(bank.clone()),
             &cache,
             &me_id,

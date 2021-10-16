@@ -1397,7 +1397,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     }
 
     pub fn set_startup(&self, value: bool) {
-        self.storage.storage.set_startup(value);
+        self.storage.set_startup(value);
     }
 
     /// Get an account
@@ -1637,9 +1637,8 @@ impl<T: IndexValue> AccountsIndex<T> {
     }
 
     pub fn unref_from_storage(&self, pubkey: &Pubkey) {
-        if let Some(locked_entry) = self.get_account_read_entry(pubkey) {
-            locked_entry.unref();
-        }
+        let map = &self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)];
+        map.read().unwrap().unref(pubkey)
     }
 
     pub fn ref_count_from_storage(&self, pubkey: &Pubkey) -> RefCount {
@@ -1864,6 +1863,10 @@ impl<T: IndexValue> AccountsIndex<T> {
     #[cfg(test)]
     pub fn clear_roots(&self) {
         self.roots_tracker.write().unwrap().roots.clear()
+    }
+
+    pub fn clone_uncleaned_roots(&self) -> HashSet<Slot> {
+        self.roots_tracker.read().unwrap().uncleaned_roots.clone()
     }
 
     pub fn uncleaned_roots_len(&self) -> usize {

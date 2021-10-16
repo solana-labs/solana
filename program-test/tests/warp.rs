@@ -2,7 +2,9 @@
 use {
     bincode::deserialize,
     solana_banks_client::BanksClient,
-    solana_program_test::{processor, ProgramTest, ProgramTestContext, ProgramTestError},
+    solana_program_test::{
+        processor, ProgramTest, ProgramTestBanksClientExt, ProgramTestContext, ProgramTestError,
+    },
     solana_sdk::{
         account_info::{next_account_info, AccountInfo},
         clock::Clock,
@@ -412,4 +414,33 @@ async fn stake_merge_immediately_after_activation() {
         .process_transaction(transaction)
         .await
         .unwrap();
+}
+
+#[tokio::test]
+async fn get_blockhash_post_warp() {
+    let program_test = ProgramTest::default();
+    let mut context = program_test.start_with_context().await;
+
+    let new_blockhash = context
+        .banks_client
+        .get_new_blockhash(&context.last_blockhash)
+        .await
+        .unwrap()
+        .0;
+    let mut tx = Transaction::new_with_payer(&[], Some(&context.payer.pubkey()));
+    tx.sign(&[&context.payer], new_blockhash);
+    context.banks_client.process_transaction(tx).await.unwrap();
+
+    context.warp_to_slot(10).unwrap();
+
+    let new_blockhash = context
+        .banks_client
+        .get_new_blockhash(&context.last_blockhash)
+        .await
+        .unwrap()
+        .0;
+
+    let mut tx = Transaction::new_with_payer(&[], Some(&context.payer.pubkey()));
+    tx.sign(&[&context.payer], new_blockhash);
+    context.banks_client.process_transaction(tx).await.unwrap();
 }
