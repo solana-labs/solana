@@ -7077,6 +7077,9 @@ impl AccountsDb {
             let mut elapse_filtering_ms: usize = 0;
             let mut elapse_notifying_ms: usize = 0;
             let mut total_accounts: usize = 0;
+            let mut total_pure_notify: usize = 0;
+            let mut total_pure_bookeeping: usize = 0;
+
             slots.sort_by(|a, b| b.cmp(a));
             for slot in slots {
                 let slot_stores = self.storage.get_slot_stores(slot).unwrap();
@@ -7125,7 +7128,8 @@ impl AccountsDb {
                     );
 
                     let mut measure = Measure::start("accountsdb-plugin-notifying-accounts");
-    
+                    let mut pure_notify: usize = 0;
+                    let mut pure_bookeeping: usize = 0;
                     for account in accounts_to_stream.values() {
                         let mut measure = Measure::start("accountsdb-plugin-notifying-accounts");
                         notifier.notify_account_restore_from_snapshot(slot, account);
@@ -7137,6 +7141,9 @@ impl AccountsDb {
                             100000
                         );
 
+                        pure_notify += measure.as_ms() as usize;
+                        total_pure_notify += measure.as_ms() as usize;
+
                         let mut measure = Measure::start("accountsdb-plugin-notifying-bookeeeping");
                         notified_accounts.insert(account.meta.pubkey);
                         measure.stop();
@@ -7146,11 +7153,25 @@ impl AccountsDb {
                             100000,
                             100000
                         );
+                        pure_bookeeping += measure.as_ms() as usize;
+                        total_pure_bookeeping += measure.as_ms() as usize;
                     }
                     measure.stop();
                     inc_new_counter_info!(
                         "accountsdb-plugin-notifying-accounts-ms",
                         measure.as_ms() as usize,
+                        1000,
+                        1000
+                    );
+                    inc_new_counter_info!(
+                        "accountsdb-plugin-notifying-pure-notify-ms",
+                        pure_notify,
+                        1000,
+                        1000
+                    );
+                    inc_new_counter_info!(
+                        "accountsdb-plugin-notifying-pure-bookeeping-ms",
+                        pure_bookeeping,
                         1000,
                         1000
                     );
@@ -7164,6 +7185,8 @@ impl AccountsDb {
                 ("notified_accounts", notified_accounts.len(), i64),
                 ("elapse_filtering_ms", elapse_filtering_ms, i64),
                 ("elapse_notifying_ms", elapse_notifying_ms, i64),
+                ("total_pure_notify", total_pure_notify, i64),
+                ("total_pure_bookeeping", total_pure_bookeeping, i64),
             );
         }
     }
