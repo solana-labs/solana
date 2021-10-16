@@ -289,6 +289,8 @@ impl SimplePostgresClient {
         self.accounts.push(account);
 
         if self.accounts.len() == self.batch_size {
+            let mut measure = Measure::start("accountsdb-plugin-postgres-prepare-values");
+
             let mut values: Vec<&(dyn ToSql + Sync)> =
                 Vec::with_capacity(self.batch_size * ACCOUNT_COLUMN_COUNT);
             let updated_on = Utc::now().naive_utc();
@@ -304,6 +306,13 @@ impl SimplePostgresClient {
                 values.push(&account.data);
                 values.push(&updated_on);
             }
+            measure.stop();
+            inc_new_counter_info!(
+                "accountsdb-plugin-postgres-prepare-values-ms",
+                measure.as_ms() as usize,
+                10000,
+                10000
+            );
 
             let mut measure = Measure::start("accountsdb-plugin-postgres-update-account");
             let client = self.client.get_mut().unwrap();
@@ -472,8 +481,15 @@ impl PostgresClientWorker {
         exit_worker: Arc<AtomicBool>,
     ) -> Result<(), AccountsDbPluginError> {
         while !exit_worker.load(Ordering::Relaxed) {
+            let mut measure = Measure::start("accountsdb-plugin-postgres-worker-recv");
             let work = receiver.recv_timeout(Duration::from_millis(500));
-
+            measure.stop();
+            inc_new_counter_info!(
+                "accountsdb-plugin-postgres-worker-recv-ms",
+                measure.as_ms() as usize,
+                100000,
+                100000
+            );
             match work {
                 Ok(work) => match work {
                     DbWorkItem::UpdateAccount(request) => {
@@ -585,6 +601,8 @@ impl ParallelPostgresClient {
             100000
         );
 
+        let mut measure = Measure::start("accountsdb-plugin-posgres-send-msg");
+
         if let Err(err) = self.sender.send(wrk_item) {
             return Err(AccountsDbPluginError::AccountsUpdateError {
                 msg: format!(
@@ -594,6 +612,15 @@ impl ParallelPostgresClient {
                 ),
             });
         }
+
+        measure.stop();
+        inc_new_counter_info!(
+            "accountsdb-plugin-posgres-send-msg-ms",
+            measure.as_ms() as usize,
+            100000,
+            100000
+        );
+
         Ok(())
     }
 
