@@ -7141,7 +7141,7 @@ impl AccountsDb {
                 }
             }
             datapoint_info!(
-                "notify_account_restore_from_snapshot_summary",
+                "accountsdb_plugin_notify_account_restore_from_snapshot_summary",
                 ("total_accounts", total_accounts, i64),
                 ("notified_accounts", notified_accounts.len(), i64),
                 ("elapse_filtering_ms", elapse_filtering_ms, i64),
