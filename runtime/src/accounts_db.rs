@@ -7125,10 +7125,27 @@ impl AccountsDb {
                     );
 
                     let mut measure = Measure::start("accountsdb-plugin-notifying-accounts");
-
+    
                     for account in accounts_to_stream.values() {
+                        let mut measure = Measure::start("accountsdb-plugin-notifying-accounts");
                         notifier.notify_account_restore_from_snapshot(slot, account);
+                        measure.stop();
+                        inc_new_counter_info!(
+                            "accountsdb-plugin-notify_account_restore_from_snapshot-ms",
+                            measure.as_ms() as usize,
+                            100000,
+                            100000
+                        );
+
+                        let mut measure = Measure::start("accountsdb-plugin-notifying-bookeeeping");
                         notified_accounts.insert(account.meta.pubkey);
+                        measure.stop();
+                        inc_new_counter_info!(
+                            "accountsdb-plugin-notifying-bookeeeping-ms",
+                            measure.as_ms() as usize,
+                            100000,
+                            100000
+                        );
                     }
                     measure.stop();
                     inc_new_counter_info!(
