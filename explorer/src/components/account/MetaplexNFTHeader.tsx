@@ -1,7 +1,7 @@
 import "bootstrap/dist/js/bootstrap.min.js";
 import { NFTData } from "providers/accounts";
 import { Creator } from "@metaplex/js";
-import { ArtContent } from "components/common/NFTArt";
+import { NFTArt } from "components/common/NFTArt";
 import { InfoTooltip } from "components/common/InfoTooltip";
 import { clusterPath } from "utils/url";
 import { Link } from "react-router-dom";
@@ -18,7 +18,7 @@ export function NFTHeader({
   return (
     <div className="row">
       <div className="col-auto ml-2 d-flex align-items-center">
-        <ArtContent metadata={metadata} pubkey={address} />
+        <NFTArt metadata={metadata} pubkey={address} />
       </div>
       <div className="col mb-3 ml-0.5 mt-3">
         {<h6 className="header-pretitle ml-1">Metaplex NFT</h6>}

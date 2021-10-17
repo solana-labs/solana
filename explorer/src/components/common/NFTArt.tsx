@@ -135,56 +135,56 @@ const VideoArtContent = ({
     return arr.length >= 2 ? index === 1 : index === 0;
   })?.[0] as string;
 
-  const content =
-    likelyVideo &&
-    likelyVideo.startsWith("https://watch.videodelivery.net/") ? (
-      <div className={"d-block"}>
-        <Stream
-          streamRef={(e: any) => playerRef(e)}
-          src={likelyVideo.replace("https://watch.videodelivery.net/", "")}
-          loop={true}
-          height={180}
-          width={320}
-          controls={false}
-          style={{ borderRadius: 12 }}
-          videoDimensions={{
-            videoWidth: 320,
-            videoHeight: 180,
-          }}
-          autoplay={true}
-          muted={true}
-        />
-        <ViewOriginalArtContentLink
-          src={likelyVideo.replace("https://watch.videodelivery.net/", "")}
-        />
-      </div>
-    ) : (
-      <div className={"d-block"}>
-        <video
-          playsInline={true}
-          autoPlay={true}
-          muted={true}
-          controls={true}
-          controlsList="nodownload"
-          style={{ borderRadius: 12, width: 320, height: 180 }}
-          loop={true}
-          poster={uri}
-        >
-          {likelyVideo && <source src={likelyVideo} type="video/mp4" />}
-          {animationURL && <source src={animationURL} type="video/mp4" />}
-          {files
-            ?.filter((f) => typeof f !== "string")
-            .map((f: any, index: number) => (
-              <source key={index} src={f.uri} type={f.type} />
-            ))}
-        </video>
-        {(likelyVideo || animationURL) && (
-          <ViewOriginalArtContentLink src={(likelyVideo || animationURL)!} />
-        )}
-      </div>
-    );
+  const isStream =
+    likelyVideo && likelyVideo.startsWith("https://watch.videodelivery.net/");
+  const streamSrc = isStream
+    ? likelyVideo.replace("https://watch.videodelivery.net/", "")
+    : "";
 
-  return content;
+  return isStream ? (
+    <div className={"d-block"}>
+      <Stream
+        streamRef={(e: any) => playerRef(e)}
+        src={streamSrc}
+        loop={true}
+        height={180}
+        width={320}
+        controls={false}
+        style={{ borderRadius: 12 }}
+        videoDimensions={{
+          videoWidth: 320,
+          videoHeight: 180,
+        }}
+        autoplay={true}
+        muted={true}
+      />
+      <ViewOriginalArtContentLink src={streamSrc} />
+    </div>
+  ) : (
+    <div className={"d-block"}>
+      <video
+        playsInline={true}
+        autoPlay={true}
+        muted={true}
+        controls={true}
+        controlsList="nodownload"
+        style={{ borderRadius: 12, width: 320, height: 180 }}
+        loop={true}
+        poster={uri}
+      >
+        {likelyVideo && <source src={likelyVideo} type="video/mp4" />}
+        {animationURL && <source src={animationURL} type="video/mp4" />}
+        {files
+          ?.filter((f) => typeof f !== "string")
+          .map((f: any, index: number) => (
+            <source key={index} src={f.uri} type={f.type} />
+          ))}
+      </video>
+      {(likelyVideo || animationURL) && (
+        <ViewOriginalArtContentLink src={(likelyVideo || animationURL)!} />
+      )}
+    </div>
+  );
 };
 
 const HTMLContent = ({
@@ -234,7 +234,7 @@ const HTMLContent = ({
   );
 };
 
-export const ArtContent = ({
+export const NFTArt = ({
   metadata,
   category,
   active,
@@ -306,7 +306,7 @@ enum ArtFetchStatus {
 }
 
 const cachedImages = new Map<string, string>();
-export const useCachedImage = (uri: string) => {
+const useCachedImage = (uri: string) => {
   const [cachedBlob, setCachedBlob] = useState<string | undefined>(undefined);
   const [fetchStatus, setFetchStatus] = useState<ArtFetchStatus>(
     ArtFetchStatus.ReadyToFetch
@@ -358,7 +358,7 @@ export const useCachedImage = (uri: string) => {
   return { cachedBlob };
 };
 
-export const useExtendedArt = (id: string, metadata: MetadataData) => {
+const useExtendedArt = (id: string, metadata: MetadataData) => {
   const [data, setData] = useState<MetadataJson>();
 
   useEffect(() => {
