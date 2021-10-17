@@ -7074,8 +7074,8 @@ impl AccountsDb {
             let mut slots = self.storage.all_slots();
             let mut notified_accounts: HashSet<Pubkey> = HashSet::default();
             let mut skipped_accounts: usize = 0;
-            let mut elapse_filtering_ms: usize = 0;
-            let mut elapse_notifying_ms: usize = 0;
+            let mut elapse_filtering_us: usize = 0;
+            let mut elapse_notifying_us: usize = 0;
             let mut total_accounts: usize = 0;
             let mut total_pure_notify: usize = 0;
             let mut total_pure_bookeeping: usize = 0;
@@ -7113,13 +7113,13 @@ impl AccountsDb {
 
                     measure.stop();
                     inc_new_counter_info!(
-                        "accountsdb-plugin-notify-accounts-at-snapshot-restore-filter-ms",
-                        measure.as_ms() as usize,
+                        "accountsdb-plugin-notify-accounts-at-snapshot-restore-filter-us",
+                        measure.as_us() as usize,
                         1000,
                         1000
                     );
 
-                    elapse_filtering_ms += measure.as_ms() as usize;
+                    elapse_filtering_us += measure.as_us() as usize;
                     inc_new_counter_info!(
                         "accountsdb-plugin-notify-accounts-at-snapshot-restore-filter-count",
                         account_len,
@@ -7132,50 +7132,50 @@ impl AccountsDb {
                     let mut pure_bookeeping: usize = 0;
                     for account in accounts_to_stream.values() {
                         let mut measure = Measure::start("accountsdb-plugin-notifying-accounts");
-                        //notifier.notify_account_restore_from_snapshot(slot, account);
+                        notifier.notify_account_restore_from_snapshot(slot, account);
                         measure.stop();
                         inc_new_counter_info!(
-                            "accountsdb-plugin-notify_account_restore_from_snapshot-ms",
-                            measure.as_ms() as usize,
+                            "accountsdb-plugin-notify_account_restore_from_snapshot-us",
+                            measure.as_us() as usize,
                             100000,
                             100000
                         );
 
-                        pure_notify += measure.as_ms() as usize;
-                        total_pure_notify += measure.as_ms() as usize;
+                        pure_notify += measure.as_us() as usize;
+                        total_pure_notify += measure.as_us() as usize;
 
                         let mut measure = Measure::start("accountsdb-plugin-notifying-bookeeeping");
                         notified_accounts.insert(account.meta.pubkey);
                         measure.stop();
                         inc_new_counter_info!(
-                            "accountsdb-plugin-notifying-bookeeeping-ms",
-                            measure.as_ms() as usize,
+                            "accountsdb-plugin-notifying-bookeeeping-us",
+                            measure.as_us() as usize,
                             100000,
                             100000
                         );
-                        pure_bookeeping += measure.as_ms() as usize;
-                        total_pure_bookeeping += measure.as_ms() as usize;
+                        pure_bookeeping += measure.as_us() as usize;
+                        total_pure_bookeeping += measure.as_us() as usize;
                     }
                     measure.stop();
                     inc_new_counter_info!(
-                        "accountsdb-plugin-notifying-accounts-ms",
-                        measure.as_ms() as usize,
+                        "accountsdb-plugin-notifying-accounts-us",
+                        measure.as_us() as usize,
                         1000,
                         1000
                     );
                     inc_new_counter_info!(
-                        "accountsdb-plugin-notifying-pure-notify-ms",
+                        "accountsdb-plugin-notifying-pure-notify-us",
                         pure_notify,
                         1000,
                         1000
                     );
                     inc_new_counter_info!(
-                        "accountsdb-plugin-notifying-pure-bookeeping-ms",
+                        "accountsdb-plugin-notifying-pure-bookeeping-us",
                         pure_bookeeping,
                         1000,
                         1000
                     );
-                    elapse_notifying_ms += measure.as_ms() as usize;
+                    elapse_notifying_us += measure.as_us() as usize;
                 }
             }
             datapoint_info!(
@@ -7183,8 +7183,8 @@ impl AccountsDb {
                 ("total_accounts", total_accounts, i64),
                 ("skipped_accounts", skipped_accounts, i64),
                 ("notified_accounts", notified_accounts.len(), i64),
-                ("elapse_filtering_ms", elapse_filtering_ms, i64),
-                ("elapse_notifying_ms", elapse_notifying_ms, i64),
+                ("elapse_filtering_us", elapse_filtering_us, i64),
+                ("elapse_notifying_us", elapse_notifying_us, i64),
                 ("total_pure_notify", total_pure_notify, i64),
                 ("total_pure_bookeeping", total_pure_bookeeping, i64),
             );
