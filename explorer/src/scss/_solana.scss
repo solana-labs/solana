@@ -428,3 +428,9 @@ p.updated-time {
   justify-content: center;
   width: 150px;
 }
+
+.no-overflow-with-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

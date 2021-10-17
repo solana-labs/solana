@@ -1204,6 +1204,7 @@ fn load_frozen_forks(
                             snapshot_config.accounts_hash_use_index,
                             snapshot_config.accounts_hash_debug_verify,
                             Some(new_root_bank.epoch_schedule().slots_per_epoch),
+                            false,
                         );
                         snapshot_utils::snapshot_bank(
                             new_root_bank,

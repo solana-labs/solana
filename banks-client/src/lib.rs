@@ -369,7 +369,9 @@ mod tests {
         let message = Message::new(&[instruction], Some(&mint_pubkey));
 
         Runtime::new()?.block_on(async {
-            let client_transport = start_local_server(bank_forks, block_commitment_cache).await;
+            let client_transport =
+                start_local_server(bank_forks, block_commitment_cache, Duration::from_millis(1))
+                    .await;
             let mut banks_client = start_client(client_transport).await?;
 
             let recent_blockhash = banks_client.get_recent_blockhash().await?;
@@ -400,7 +402,9 @@ mod tests {
         let message = Message::new(&[instruction], Some(mint_pubkey));
 
         Runtime::new()?.block_on(async {
-            let client_transport = start_local_server(bank_forks, block_commitment_cache).await;
+            let client_transport =
+                start_local_server(bank_forks, block_commitment_cache, Duration::from_millis(1))
+                    .await;
             let mut banks_client = start_client(client_transport).await?;
             let (_, recent_blockhash, last_valid_block_height) = banks_client.get_fees().await?;
             let transaction = Transaction::new(&[&genesis.mint_keypair], message, recent_blockhash);

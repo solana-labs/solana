@@ -19,7 +19,7 @@ import { Copyable } from "components/common/Copyable";
 import { CoingeckoStatus, useCoinGecko } from "utils/coingecko";
 import { displayTimestampWithoutDate } from "utils/date";
 import { LoadingCard } from "components/common/LoadingCard";
-import { toPublicKey } from "metaplex/ids";
+import { PublicKey } from "@solana/web3.js";
 
 const getEthAddress = (link?: string) => {
   let address = "";
@@ -314,23 +314,23 @@ function NonFungibleTokenMintAccountCard({
             <Address pubkey={account.pubkey} alignRight raw />
           </td>
         </tr>
-        {nftData?.editionData?.masterEdition?.maxSupply && (
+        {nftData.editionInfo.masterEdition?.maxSupply && (
           <tr>
             <td>Max Total Supply</td>
             <td className="text-lg-right">
-              {nftData.editionData.masterEdition.maxSupply.toNumber() === 0
+              {nftData.editionInfo.masterEdition.maxSupply.toNumber() === 0
                 ? 1
-                : nftData.editionData.masterEdition.maxSupply.toNumber()}
+                : nftData.editionInfo.masterEdition.maxSupply.toNumber()}
             </td>
           </tr>
         )}
-        {nftData?.editionData?.masterEdition?.supply && (
+        {nftData?.editionInfo.masterEdition?.supply && (
           <tr>
             <td>Current Supply</td>
             <td className="text-lg-right">
-              {nftData.editionData.masterEdition.supply.toNumber() === 0
+              {nftData.editionInfo.masterEdition.supply.toNumber() === 0
                 ? 1
-                : nftData.editionData.masterEdition.supply.toNumber()}
+                : nftData.editionInfo.masterEdition.supply.toNumber()}
             </td>
           </tr>
         )}
@@ -346,7 +346,7 @@ function NonFungibleTokenMintAccountCard({
           <td>Update Authority</td>
           <td className="text-lg-right">
             <Address
-              pubkey={toPublicKey(nftData.metadata.updateAuthority)}
+              pubkey={new PublicKey(nftData.metadata.updateAuthority)}
               alignRight
               link
             />
