@@ -306,7 +306,7 @@ enum ArtFetchStatus {
 }
 
 const cachedImages = new Map<string, string>();
-export const useCachedImage = (uri: string) => {
+const useCachedImage = (uri: string) => {
   const [cachedBlob, setCachedBlob] = useState<string | undefined>(undefined);
   const [fetchStatus, setFetchStatus] = useState<ArtFetchStatus>(
     ArtFetchStatus.ReadyToFetch
@@ -358,7 +358,7 @@ export const useCachedImage = (uri: string) => {
   return { cachedBlob };
 };
 
-export const useExtendedArt = (id: string, metadata: MetadataData) => {
+const useExtendedArt = (id: string, metadata: MetadataData) => {
   const [data, setData] = useState<MetadataJson>();
 
   useEffect(() => {
