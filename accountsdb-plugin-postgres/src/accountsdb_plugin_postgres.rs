@@ -141,6 +141,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
         let mut m1 = Measure::start("accountsdb-plugin-postgres-update-account-main");
         match account {
             ReplicaAccountInfoVersions::V0_0_1(account) => {
+                let mut m2 = Measure::start("accountsdb-plugin-postgres-update-account-select");
                 if let Some(accounts_selector) = &self.accounts_selector {
                     if !accounts_selector.is_account_selected(account.pubkey, account.owner) {
                         return Ok(());
@@ -148,6 +149,9 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                 } else {
                     return Ok(());
                 }
+                m2.stop();
+
+                let mut m3 = Measure::start("accountsdb-plugin-postgres-update-account-log");
 
                 debug!(
                     "Updating account {:?} with owner {:?} at slot {:?} using account selector {:?}",
@@ -155,6 +159,21 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                     bs58::encode(account.owner).into_string(),
                     slot,
                     self.accounts_selector.as_ref().unwrap()
+                );
+                m3.stop();
+
+                inc_new_counter_info!(
+                    "accountsdb-plugin-postgres-update-account-select-us",
+                    m2.as_us() as usize,
+                    100000,
+                    100000
+                );
+
+                inc_new_counter_info!(
+                    "accountsdb-plugin-postgres-update-account-log-us",
+                    m3.as_us() as usize,
+                    100000,
+                    100000
                 );
 
                 match &mut self.client {
@@ -167,13 +186,14 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                         )));
                     }
                     Some(client) => {
-                        let mut measure = Measure::start("accountsdb-plugin-postgres-update-account-client");
+                        let mut measure =
+                            Measure::start("accountsdb-plugin-postgres-update-account-client");
                         let result = { client.update_account(account, slot, at_startup) };
                         measure.stop();
 
                         inc_new_counter_info!(
                             "accountsdb-plugin-postgres-update-account-client-us",
-                            m1.as_us() as usize,
+                            measure.as_us() as usize,
                             100000,
                             100000
                         );

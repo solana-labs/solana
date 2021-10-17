@@ -147,7 +147,7 @@ impl AccountsUpdateNotifierImpl {
                 measure.as_us() as usize,
                 100000,
                 100000
-            );            
+            );
         }
         measure2.stop();
         inc_new_counter_info!(
@@ -155,7 +155,7 @@ impl AccountsUpdateNotifierImpl {
             measure2.as_us() as usize,
             100000,
             100000
-        );            
+        );
     }
 
     pub fn notify_slot_status(&self, slot: Slot, parent: Option<Slot>, slot_status: SlotStatus) {
