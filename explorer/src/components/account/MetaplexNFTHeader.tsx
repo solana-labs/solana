@@ -16,22 +16,21 @@ export function NFTHeader({
 }) {
   const metadata = nftData.metadata;
   return (
-    <div className="row align-items-begin">
+    <div className="row">
       <div className="col-auto ml-2 d-flex align-items-center">
         <ArtContent metadata={metadata} pubkey={address} />
       </div>
-
-      <div className="col mb-3 ml-n3 ml-md-n2 mt-3">
+      <div className="col mb-3 ml-0.5 mt-3">
         {<h6 className="header-pretitle ml-1">Metaplex NFT</h6>}
         <div className="d-flex align-items-center">
-          <h2 className="header-title ml-1 align-items-center">
+          <h2 className="header-title ml-1 align-items-center no-overflow-with-ellipsis">
             {metadata.data.name !== ""
               ? metadata.data.name
               : "No NFT name was found"}
           </h2>
           {getEditionPill(nftData.editionInfo)}
         </div>
-        <h4 className="header-pretitle ml-1 mt-1">
+        <h4 className="header-pretitle ml-1 mt-1 no-overflow-with-ellipsis">
           {metadata.data.symbol !== ""
             ? metadata.data.symbol
             : "No Symbol was found"}
