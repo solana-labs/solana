@@ -7112,7 +7112,7 @@ impl AccountsDb {
                     });
 
                     measure.stop();
-                    inc_new_counter_info!(
+                    inc_new_counter_debug!(
                         "accountsdb-plugin-notify-accounts-at-snapshot-restore-filter-us",
                         measure.as_us() as usize,
                         1000,
@@ -7120,7 +7120,7 @@ impl AccountsDb {
                     );
 
                     elapse_filtering_us += measure.as_us() as usize;
-                    inc_new_counter_info!(
+                    inc_new_counter_debug!(
                         "accountsdb-plugin-notify-accounts-at-snapshot-restore-filter-count",
                         account_len,
                         1000,
@@ -7134,7 +7134,7 @@ impl AccountsDb {
                         let mut measure = Measure::start("accountsdb-plugin-notifying-accounts");
                         notifier.notify_account_restore_from_snapshot(slot, account);
                         measure.stop();
-                        inc_new_counter_info!(
+                        inc_new_counter_debug!(
                             "accountsdb-plugin-notify_account_restore_from_snapshot-us",
                             measure.as_us() as usize,
                             100000,
@@ -7147,7 +7147,7 @@ impl AccountsDb {
                         let mut measure = Measure::start("accountsdb-plugin-notifying-bookeeeping");
                         notified_accounts.insert(account.meta.pubkey);
                         measure.stop();
-                        inc_new_counter_info!(
+                        inc_new_counter_debug!(
                             "accountsdb-plugin-notifying-bookeeeping-us",
                             measure.as_us() as usize,
                             100000,
@@ -7157,19 +7157,19 @@ impl AccountsDb {
                         total_pure_bookeeping += measure.as_us() as usize;
                     }
                     measure.stop();
-                    inc_new_counter_info!(
+                    inc_new_counter_debug!(
                         "accountsdb-plugin-notifying-accounts-us",
                         measure.as_us() as usize,
                         1000,
                         1000
                     );
-                    inc_new_counter_info!(
+                    inc_new_counter_debug!(
                         "accountsdb-plugin-notifying-pure-notify-us",
                         pure_notify,
                         1000,
                         1000
                     );
-                    inc_new_counter_info!(
+                    inc_new_counter_debug!(
                         "accountsdb-plugin-notifying-pure-bookeeping-us",
                         pure_bookeeping,
                         1000,

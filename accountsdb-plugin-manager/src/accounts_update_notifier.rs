@@ -37,7 +37,7 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
         let account = self.accountinfo_from_stored_account_meta(account);
         measure.stop();
 
-        inc_new_counter_info!(
+        inc_new_counter_debug!(
             "accountsdb-plugin-copy-stored-account-info-us",
             measure.as_us() as usize,
             100000,
@@ -49,7 +49,7 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
         }
         measure2.stop();
 
-        inc_new_counter_info!(
+        inc_new_counter_debug!(
             "accountsdb-plugin-notify-account-restore-all-us",
             measure2.as_us() as usize,
             100000,
@@ -142,7 +142,7 @@ impl AccountsUpdateNotifierImpl {
                 }
             }
             measure.stop();
-            inc_new_counter_info!(
+            inc_new_counter_debug!(
                 "accountsdb-plugin-update-account-us",
                 measure.as_us() as usize,
                 100000,
@@ -150,7 +150,7 @@ impl AccountsUpdateNotifierImpl {
             );
         }
         measure2.stop();
-        inc_new_counter_info!(
+        inc_new_counter_debug!(
             "accountsdb-plugin-notify_plugins_of_account_update-us",
             measure2.as_us() as usize,
             100000,
@@ -184,7 +184,7 @@ impl AccountsUpdateNotifierImpl {
                 }
             }
             measure.stop();
-            inc_new_counter_info!(
+            inc_new_counter_debug!(
                 "accountsdb-plugin-update-slot-us",
                 measure.as_us() as usize,
                 1000,

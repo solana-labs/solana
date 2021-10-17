@@ -307,7 +307,7 @@ impl SimplePostgresClient {
                 values.push(&updated_on);
             }
             measure.stop();
-            inc_new_counter_info!(
+            inc_new_counter_debug!(
                 "accountsdb-plugin-postgres-prepare-values-us",
                 measure.as_us() as usize,
                 10000,
@@ -330,13 +330,13 @@ impl SimplePostgresClient {
                 return Err(AccountsDbPluginError::AccountsUpdateError { msg });
             }
             measure.stop();
-            inc_new_counter_info!(
+            inc_new_counter_debug!(
                 "accountsdb-plugin-postgres-update-account-us",
                 measure.as_us() as usize,
                 10000,
                 10000
             );
-            inc_new_counter_info!(
+            inc_new_counter_debug!(
                 "accountsdb-plugin-postgres-update-account-count",
                 self.batch_size,
                 10000,
@@ -484,7 +484,7 @@ impl PostgresClientWorker {
             let mut measure = Measure::start("accountsdb-plugin-postgres-worker-recv");
             let work = receiver.recv_timeout(Duration::from_millis(500));
             measure.stop();
-            inc_new_counter_info!(
+            inc_new_counter_debug!(
                 "accountsdb-plugin-postgres-worker-recv-us",
                 measure.as_us() as usize,
                 100000,
@@ -594,7 +594,7 @@ impl ParallelPostgresClient {
 
         measure.stop();
 
-        inc_new_counter_info!(
+        inc_new_counter_debug!(
             "accountsdb-plugin-posgres-create-work-item-us",
             measure.as_us() as usize,
             100000,
@@ -614,7 +614,7 @@ impl ParallelPostgresClient {
         }
 
         measure.stop();
-        inc_new_counter_info!(
+        inc_new_counter_debug!(
             "accountsdb-plugin-posgres-send-msg-us",
             measure.as_us() as usize,
             100000,
