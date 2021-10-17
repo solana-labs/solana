@@ -137,30 +137,36 @@ const VideoArtContent = ({
 
   const isStream =
     likelyVideo && likelyVideo.startsWith("https://watch.videodelivery.net/");
-  const streamSrc = isStream
-    ? likelyVideo.replace("https://watch.videodelivery.net/", "")
-    : "";
 
-  return isStream ? (
-    <div className={"d-block"}>
-      <Stream
-        streamRef={(e: any) => playerRef(e)}
-        src={streamSrc}
-        loop={true}
-        height={180}
-        width={320}
-        controls={false}
-        style={{ borderRadius: 12 }}
-        videoDimensions={{
-          videoWidth: 320,
-          videoHeight: 180,
-        }}
-        autoplay={true}
-        muted={true}
-      />
-      <ViewOriginalArtContentLink src={streamSrc} />
-    </div>
-  ) : (
+  if (isStream) {
+    const streamSrc = likelyVideo.replace(
+      "https://watch.videodelivery.net/",
+      ""
+    );
+
+    return (
+      <div className={"d-block"}>
+        <Stream
+          streamRef={(e: any) => playerRef(e)}
+          src={streamSrc}
+          loop={true}
+          height={180}
+          width={320}
+          controls={false}
+          style={{ borderRadius: 12 }}
+          videoDimensions={{
+            videoWidth: 320,
+            videoHeight: 180,
+          }}
+          autoplay={true}
+          muted={true}
+        />
+        <ViewOriginalArtContentLink src={streamSrc} />
+      </div>
+    );
+  }
+
+  return (
     <div className={"d-block"}>
       <video
         playsInline={true}
