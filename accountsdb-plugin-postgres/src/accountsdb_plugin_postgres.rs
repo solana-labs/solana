@@ -163,15 +163,15 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                 m3.stop();
 
                 inc_new_counter_info!(
-                    "accountsdb-plugin-postgres-update-account-select-us",
-                    m2.as_us() as usize,
+                    "accountsdb-plugin-postgres-update-account-select-ns",
+                    m2.as_ns() as usize,
                     100000,
                     100000
                 );
 
                 inc_new_counter_info!(
-                    "accountsdb-plugin-postgres-update-account-log-us",
-                    m3.as_us() as usize,
+                    "accountsdb-plugin-postgres-update-account-log-ns",
+                    m3.as_ns() as usize,
                     100000,
                     100000
                 );
@@ -192,8 +192,8 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                         measure.stop();
 
                         inc_new_counter_info!(
-                            "accountsdb-plugin-postgres-update-account-client-us",
-                            measure.as_us() as usize,
+                            "accountsdb-plugin-postgres-update-account-client-ns",
+                            measure.as_ns() as usize,
                             100000,
                             100000
                         );
@@ -211,8 +211,8 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
         m1.stop();
 
         inc_new_counter_info!(
-            "accountsdb-plugin-postgres-update-account-main-us",
-            m1.as_us() as usize,
+            "accountsdb-plugin-postgres-update-account-main-ns",
+            m1.as_ns() as usize,
             100000,
             100000
         );
