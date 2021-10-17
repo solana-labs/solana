@@ -234,7 +234,7 @@ const HTMLContent = ({
   );
 };
 
-export const NFTArt = ({
+export const MetaplexNFTArt = ({
   metadata,
   category,
   active,
