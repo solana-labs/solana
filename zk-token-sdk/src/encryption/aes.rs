@@ -106,6 +106,15 @@ impl AesCiphertext {
     }
 }
 
+impl Default for AesCiphertext {
+    fn default() -> Self {
+        AesCiphertext {
+            nonce: [0_u8; 12],
+            ciphertext: [0_u8; 24],
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

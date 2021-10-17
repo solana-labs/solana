@@ -70,12 +70,17 @@ pub struct RangeProof128(pub [u8; 736]);
 unsafe impl Zeroable for RangeProof128 {}
 unsafe impl Pod for RangeProof128 {}
 
-/// Serialization for AESCiphertext
-#[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
+/// Serialization for AesCiphertext
+#[derive(Clone, Copy, PartialEq)]
 #[repr(transparent)]
-pub struct AESCiphertext(pub [u8; 16]);
+pub struct AesCiphertext(pub [u8; 36]);
 
-impl fmt::Debug for AESCiphertext {
+// `AesCiphertext` is a Pod and Zeroable.
+// Add the marker traits manually because `bytemuck` only adds them for some `u8` arrays
+unsafe impl Zeroable for AesCiphertext {}
+unsafe impl Pod for AesCiphertext {}
+
+impl fmt::Debug for AesCiphertext {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self.0)
     }
