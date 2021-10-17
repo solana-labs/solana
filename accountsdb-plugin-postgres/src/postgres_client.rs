@@ -581,7 +581,7 @@ impl ParallelPostgresClient {
         at_startup: bool,
     ) -> Result<(), AccountsDbPluginError> {
         if self.last_report.should_update(30000) {
-            datapoint_info!(
+            datapoint_debug!(
                 "postgres-plugin-stats",
                 ("message-queue-length", self.sender.len() as i64, i64),
             );
