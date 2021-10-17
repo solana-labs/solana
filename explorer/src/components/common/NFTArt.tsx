@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
-import { MetadataCategory, MetadataFile } from "../types";
-import { pubkeyToString } from "../utils";
-import { useCachedImage, useExtendedArt } from "./useArt";
 import { Stream, StreamPlayerApi } from "@cloudflare/stream-react";
 import { PublicKey } from "@solana/web3.js";
-import { getLast } from "../utils";
-import { Metadata } from "metaplex/classes";
+import {
+  MetadataData,
+  MetadataJson,
+  MetaDataJsonCategory,
+  MetadataJsonFile,
+} from "@metaplex/js";
 import ContentLoader from "react-content-loader";
 import ErrorLogo from "img/logos-solana/dark-solana-logo.svg";
+import { getLast, pubkeyToString } from "utils";
 
 const MAX_TIME_LOADING_IMAGE = 5000; /* 5 seconds */
 
@@ -90,7 +92,7 @@ const VideoArtContent = ({
   animationURL,
   active,
 }: {
-  files?: (MetadataFile | string)[];
+  files?: (MetadataJsonFile | string)[];
   uri?: string;
   animationURL?: string;
   active?: boolean;
@@ -168,7 +170,7 @@ const HTMLContent = ({
   files,
 }: {
   animationUrl?: string;
-  files?: (MetadataFile | string)[];
+  files?: (MetadataJsonFile | string)[];
 }) => {
   const [loaded, setLoaded] = useState<boolean>(false);
   const htmlURL =
@@ -207,13 +209,13 @@ export const ArtContent = ({
   animationURL,
   files,
 }: {
-  metadata: Metadata;
-  category?: MetadataCategory;
+  metadata: MetadataData;
+  category?: MetaDataJsonCategory;
   active?: boolean;
   pubkey?: PublicKey | string;
   uri?: string;
   animationURL?: string;
-  files?: (MetadataFile | string)[];
+  files?: (MetadataJsonFile | string)[];
 }) => {
   const id = pubkeyToString(pubkey);
 
@@ -260,4 +262,114 @@ export const ArtContent = ({
       {content}
     </div>
   );
+};
+
+enum ArtFetchStatus {
+  ReadyToFetch,
+  Fetching,
+  FetchFailed,
+  FetchSucceeded,
+}
+
+const cachedImages = new Map<string, string>();
+export const useCachedImage = (uri: string) => {
+  const [cachedBlob, setCachedBlob] = useState<string | undefined>(undefined);
+  const [fetchStatus, setFetchStatus] = useState<ArtFetchStatus>(
+    ArtFetchStatus.ReadyToFetch
+  );
+
+  useEffect(() => {
+    if (!uri) {
+      return;
+    }
+
+    if (fetchStatus === ArtFetchStatus.FetchFailed) {
+      setCachedBlob(uri);
+      return;
+    }
+
+    const result = cachedImages.get(uri);
+    if (result) {
+      setCachedBlob(result);
+      return;
+    }
+
+    if (fetchStatus === ArtFetchStatus.ReadyToFetch) {
+      (async () => {
+        setFetchStatus(ArtFetchStatus.Fetching);
+        let response: Response;
+        try {
+          response = await fetch(uri, { cache: "force-cache" });
+        } catch {
+          try {
+            response = await fetch(uri, { cache: "reload" });
+          } catch {
+            if (uri?.startsWith("http")) {
+              setCachedBlob(uri);
+            }
+            setFetchStatus(ArtFetchStatus.FetchFailed);
+            return;
+          }
+        }
+
+        const blob = await response.blob();
+        const blobURI = URL.createObjectURL(blob);
+        cachedImages.set(uri, blobURI);
+        setCachedBlob(blobURI);
+        setFetchStatus(ArtFetchStatus.FetchSucceeded);
+      })();
+    }
+  }, [uri, setCachedBlob, fetchStatus, setFetchStatus]);
+
+  return { cachedBlob };
+};
+
+export const useExtendedArt = (id: string, metadata: MetadataData) => {
+  const [data, setData] = useState<MetadataJson>();
+
+  useEffect(() => {
+    if (id && !data) {
+      if (metadata.data.uri) {
+        const uri = metadata.data.uri;
+
+        const processJson = (extended: any) => {
+          if (!extended || extended?.properties?.files?.length === 0) {
+            return;
+          }
+
+          if (extended?.image) {
+            extended.image = extended.image.startsWith("http")
+              ? extended.image
+              : `${metadata.data.uri}/${extended.image}`;
+          }
+
+          return extended;
+        };
+
+        try {
+          fetch(uri)
+            .then(async (_) => {
+              try {
+                const data = await _.json();
+                try {
+                  localStorage.setItem(uri, JSON.stringify(data));
+                } catch {
+                  // ignore
+                }
+                setData(processJson(data));
+              } catch {
+                return undefined;
+              }
+            })
+            .catch(() => {
+              return undefined;
+            });
+        } catch (ex) {
+          console.error(ex);
+        }
+      }
+    }
+  }, [id, data, setData, metadata.data.uri]);
+
+  return { data };
 };
