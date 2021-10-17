@@ -172,8 +172,8 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                         measure.stop();
 
                         inc_new_counter_info!(
-                            "accountsdb-plugin-postgres-update-account-client-ms",
-                            m1.as_ms() as usize,
+                            "accountsdb-plugin-postgres-update-account-client-us",
+                            m1.as_us() as usize,
                             100000,
                             100000
                         );
@@ -191,8 +191,8 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
         m1.stop();
 
         inc_new_counter_info!(
-            "accountsdb-plugin-postgres-update-account-main-ms",
-            m1.as_ms() as usize,
+            "accountsdb-plugin-postgres-update-account-main-us",
+            m1.as_us() as usize,
             100000,
             100000
         );

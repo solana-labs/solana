@@ -38,8 +38,8 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
         measure.stop();
 
         inc_new_counter_info!(
-            "accountsdb-plugin-copy-stored-account-info-ms",
-            measure.as_ms() as usize,
+            "accountsdb-plugin-copy-stored-account-info-us",
+            measure.as_us() as usize,
             100000,
             100000
         );
@@ -50,8 +50,8 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
         measure2.stop();
 
         inc_new_counter_info!(
-            "accountsdb-plugin-notify-account-restore-all-ms",
-            measure2.as_ms() as usize,
+            "accountsdb-plugin-notify-account-restore-all-us",
+            measure2.as_us() as usize,
             100000,
             100000
         );
@@ -143,16 +143,16 @@ impl AccountsUpdateNotifierImpl {
             }
             measure.stop();
             inc_new_counter_info!(
-                "accountsdb-plugin-update-account-ms",
-                measure.as_ms() as usize,
+                "accountsdb-plugin-update-account-us",
+                measure.as_us() as usize,
                 100000,
                 100000
             );            
         }
         measure2.stop();
         inc_new_counter_info!(
-            "accountsdb-plugin-notify_plugins_of_account_update-ms",
-            measure2.as_ms() as usize,
+            "accountsdb-plugin-notify_plugins_of_account_update-us",
+            measure2.as_us() as usize,
             100000,
             100000
         );            
@@ -185,8 +185,8 @@ impl AccountsUpdateNotifierImpl {
             }
             measure.stop();
             inc_new_counter_info!(
-                "accountsdb-plugin-update-slot-ms",
-                measure.as_ms() as usize,
+                "accountsdb-plugin-update-slot-us",
+                measure.as_us() as usize,
                 1000,
                 1000
             );
