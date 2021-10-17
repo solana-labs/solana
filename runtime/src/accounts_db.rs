@@ -7185,8 +7185,8 @@ impl AccountsDb {
                 ("notified_accounts", notified_accounts.len(), i64),
                 ("elapse_filtering_us", elapse_filtering_us, i64),
                 ("elapse_notifying_us", elapse_notifying_us, i64),
-                ("total_pure_notify", total_pure_notify, i64),
-                ("total_pure_bookeeping", total_pure_bookeeping, i64),
+                ("total_pure_notify_us", total_pure_notify, i64),
+                ("total_pure_bookeeping_us", total_pure_bookeeping, i64),
             );
         }
     }
