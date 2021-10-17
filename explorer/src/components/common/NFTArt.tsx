@@ -30,18 +30,6 @@ const ErrorPlaceHolder = () => (
   <img src={ErrorLogo} width="120" height="120" alt="Solana Logo" />
 );
 
-const ViewOriginalArtContentLink = ({ src }: { src: string }) => {
-  if (!src) {
-    return null;
-  }
-
-  return (
-    <h6 className={"header-pretitle d-flex justify-content-center mt-2"}>
-      <a href={src}>VIEW ORIGINAL</a>
-    </h6>
-  );
-}
-
 const CachedImageContent = ({ uri }: { uri?: string }) => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [showError, setShowError] = useState<boolean>(false);
@@ -77,26 +65,21 @@ const CachedImageContent = ({ uri }: { uri?: string }) => {
       ) : (
         <>
           {isLoading && <LoadingPlaceholder />}
-          <div className={`${isLoading ? "d-none" : "d-block"}`}>
-            <img
-              className={`rounded mx-auto ${isLoading ? "d-none" : "d-block"}`}
-              src={cachedBlob}
-              alt={"nft"}
-              style={{
-                width: 150,
-                maxHeight: 200,
-              }}
-              onLoad={() => {
-                setIsLoading(false);
-              }}
-              onError={() => {
-                setShowError(true);
-              }}
-            />
-            {uri && (
-              <ViewOriginalArtContentLink src={uri} />
-            )}
-          </div>
+          <img
+            className={`rounded mx-auto ${isLoading ? "d-none" : "d-block"}`}
+            src={cachedBlob}
+            alt={"nft"}
+            style={{
+              width: 150,
+              height: "auto",
+            }}
+            onLoad={() => {
+              setIsLoading(false);
+            }}
+            onError={() => {
+              setShowError(true);
+            }}
+          />
         </>
       )}
     </>
@@ -115,6 +98,7 @@ const VideoArtContent = ({
   active?: boolean;
 }) => {
   const [playerApi, setPlayerApi] = useState<StreamPlayerApi>();
+
   const playerRef = useCallback(
     (ref) => {
       setPlayerApi(ref);
@@ -139,8 +123,8 @@ const VideoArtContent = ({
 
   const content =
     likelyVideo &&
-      likelyVideo.startsWith("https://watch.videodelivery.net/") ? (
-      <div className={"d-block"}>
+    likelyVideo.startsWith("https://watch.videodelivery.net/") ? (
+      <div className={"square"}>
         <Stream
           streamRef={(e: any) => playerRef(e)}
           src={likelyVideo.replace("https://watch.videodelivery.net/", "")}
@@ -156,33 +140,27 @@ const VideoArtContent = ({
           autoplay={true}
           muted={true}
         />
-        <ViewOriginalArtContentLink src={likelyVideo.replace("https://watch.videodelivery.net/", "")} />
       </div>
     ) : (
-      <div className={"d-block"}>
-        <video
-          playsInline={true}
-          autoPlay={true}
-          muted={true}
-          controls={true}
-          controlsList="nodownload"
-          style={{ borderRadius: 12, width: 320, height: 180 }}
-          loop={true}
-          poster={uri}
-        >
-          {likelyVideo && <source src={likelyVideo} type="video/mp4" />}
-          {animationURL && <source src={animationURL} type="video/mp4" />}
-          {files
-            ?.filter((f) => typeof f !== "string")
-            .map((f: any, index: number) => (
-              <source key={index} src={f.uri} type={f.type} />
-            ))}
-        </video>
-        {(likelyVideo || animationURL) && (
-          <ViewOriginalArtContentLink src={(likelyVideo || animationURL)!} />
-        )}
-      </div>
-    )
+      <video
+        playsInline={true}
+        autoPlay={true}
+        muted={true}
+        controls={true}
+        controlsList="nodownload"
+        style={{ borderRadius: 12, width: 320, height: 180 }}
+        loop={true}
+        poster={uri}
+      >
+        {likelyVideo && <source src={likelyVideo} type="video/mp4" />}
+        {animationURL && <source src={animationURL} type="video/mp4" />}
+        {files
+          ?.filter((f) => typeof f !== "string")
+          .map((f: any) => (
+            <source src={f.uri} type={f.type} />
+          ))}
+      </video>
+    );
 
   return content;
 };
@@ -194,8 +172,7 @@ const HTMLContent = ({
   animationUrl?: string;
   files?: (MetadataJsonFile | string)[];
 }) => {
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [showError, setShowError] = useState<boolean>(false);
+  const [loaded, setLoaded] = useState<boolean>(false);
   const htmlURL =
     files && files.length > 0 && typeof files[0] === "string"
       ? files[0]
@@ -203,35 +180,22 @@ const HTMLContent = ({
 
   return (
     <>
-      {showError ? (
-        <div className={"art-error-image-placeholder"}>
-          <ErrorPlaceHolder />
-          <h6 className={"header-pretitle mt-2"}>Error Loading Image</h6>
-        </div>
-      ) : (
-        <>
-          {!isLoading && <LoadingPlaceholder />}
-          <div className={`${isLoading ? "d-block" : "d-none"}`}>
-            <iframe
-              allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
-              title={"html-content"}
-              sandbox="allow-scripts"
-              frameBorder="0"
-              src={htmlURL}
-              style={{ width: 320, height: 180, borderRadius: 12 }}
-              onLoad={() => {
-                setIsLoading(true);
-              }}
-              onError={() => {
-                setShowError(true);
-              }}
-            ></iframe>
-            {htmlURL && (
-              <ViewOriginalArtContentLink src={htmlURL} />
-            )}
-          </div>
-        </>
-      )}
+      {!loaded && <LoadingPlaceholder />}
+      <iframe
+        allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+        title={"html-content"}
+        sandbox="allow-scripts"
+        frameBorder="0"
+        src={htmlURL}
+        className={`${loaded ? "d-block" : "d-none"}`}
+        style={{ width: 320, height: 180, borderRadius: 12 }}
+        onLoad={() => {
+          setLoaded(true);
+        }}
+        onError={() => {
+          setLoaded(true);
+        }}
+      ></iframe>
     </>
   );
 };
