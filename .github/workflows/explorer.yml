@@ -28,6 +28,7 @@ jobs:
           cache-dependency-path: explorer/package-lock.json
       - run: npm i -g npm@7
       - run: npm ci
+      - run: npm run format:diff
       - run: npm run format
       - run: npm run build
       - run: npm run test
