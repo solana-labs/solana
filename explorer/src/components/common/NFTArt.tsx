@@ -137,7 +137,7 @@ const VideoArtContent = ({
 
   const content =
     likelyVideo &&
-    likelyVideo.startsWith("https://watch.videodelivery.net/") ? (
+      likelyVideo.startsWith("https://watch.videodelivery.net/") ? (
       <div className={"d-block"}>
         <Stream
           streamRef={(e: any) => playerRef(e)}
