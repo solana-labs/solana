@@ -1,22 +1,23 @@
+#[cfg(not(target_arch = "bpf"))]
 use {
+    aes_gcm::{aead::Aead, Aes128Gcm, NewAead},
+    rand::{rngs::OsRng, CryptoRng, Rng, RngCore},
+    sha3::{Digest, Sha3_256},
+};
+use {
+    arrayref::{array_ref, array_refs},
     ed25519_dalek::SecretKey as SigningKey,
     solana_sdk::pubkey::Pubkey,
     std::convert::TryInto,
     zeroize::Zeroize,
 };
-#[cfg(not(target_arch = "bpf"))]
-use {
-    aes_gcm::{aead::Aead, Aes128Gcm, NewAead},
-    rand::{CryptoRng, rngs::OsRng, Rng, RngCore},
-    sha3::{Digest, Sha3_256},
-};
 
-struct AES;
-impl AES {
+struct Aes;
+impl Aes {
     #[cfg(not(target_arch = "bpf"))]
     #[allow(clippy::new_ret_no_self)]
     fn keygen<T: RngCore + CryptoRng>(rng: &mut T) -> AesKey {
-        let random_bytes = OsRng.gen::<[u8; 16]>();
+        let random_bytes = rng.gen::<[u8; 16]>();
         AesKey(random_bytes)
     }
 
@@ -27,7 +28,8 @@ impl AES {
 
         // TODO: it seems like encryption cannot fail, but will need to double check
         let ciphertext = Aes128Gcm::new(&sk.0.into())
-            .encrypt(&nonce.into(), plaintext.as_ref()).unwrap();
+            .encrypt(&nonce.into(), plaintext.as_ref())
+            .unwrap();
 
         AesCiphertext {
             nonce,
@@ -37,8 +39,8 @@ impl AES {
 
     #[cfg(not(target_arch = "bpf"))]
     fn decrypt(sk: &AesKey, ct: &AesCiphertext) -> Option<u64> {
-        let plaintext = Aes128Gcm::new(&sk.0.into())
-            .decrypt(&ct.nonce.into(), ct.ciphertext.as_ref());
+        let plaintext =
+            Aes128Gcm::new(&sk.0.into()).decrypt(&ct.nonce.into(), ct.ciphertext.as_ref());
 
         if let Ok(plaintext) = plaintext {
             let amount_bytes: [u8; 8] = plaintext.try_into().unwrap();
@@ -65,11 +67,11 @@ impl AesKey {
     }
 
     pub fn random<T: RngCore + CryptoRng>(rng: &mut T) -> Self {
-        AES::keygen(&mut rng)
+        Aes::keygen(rng)
     }
 
     pub fn encrypt(&self, amount: u64) -> AesCiphertext {
-        AES::encrypt(self, amount)
+        Aes::encrypt(self, amount)
     }
 }
 
@@ -80,7 +82,27 @@ pub struct AesCiphertext {
 }
 impl AesCiphertext {
     pub fn decrypt(&self, key: &AesKey) -> Option<u64> {
-        AES::decrypt(key, self)
+        Aes::decrypt(key, self)
+    }
+
+    pub fn to_bytes(&self) -> [u8; 36] {
+        let mut buf = [0_u8; 36];
+        buf[..12].copy_from_slice(&self.nonce);
+        buf[12..].copy_from_slice(&self.ciphertext);
+        buf
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Option<AesCiphertext> {
+        if bytes.len() != 36 {
+            return None;
+        }
+
+        let bytes = array_ref![bytes, 0, 36];
+        let (nonce, ciphertext) = array_refs![bytes, 12, 24];
+        Some(AesCiphertext {
+            nonce: *nonce,
+            ciphertext: *ciphertext,
+        })
     }
 }
 

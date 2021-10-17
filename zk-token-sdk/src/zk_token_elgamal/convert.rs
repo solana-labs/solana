@@ -15,7 +15,7 @@ mod target_arch {
     use {
         super::pod,
         crate::{
-            encryption::aes::AESCiphertext,
+            encryption::aes::AesCiphertext,
             encryption::elgamal::{ElGamalCiphertext, ElGamalPubkey},
             encryption::pedersen::{PedersenCommitment, PedersenDecryptHandle},
             errors::ProofError,
@@ -124,15 +124,17 @@ mod target_arch {
         }
     }
 
-    impl From<AESCiphertext> for pod::AESCiphertext {
-        fn from(ct: AESCiphertext) -> Self {
-            Self(ct.0)
+    impl From<AesCiphertext> for pod::AesCiphertext {
+        fn from(ct: AesCiphertext) -> Self {
+            Self(ct.to_bytes())
         }
     }
 
-    impl From<pod::AESCiphertext> for AESCiphertext {
-        fn from(ct: pod::AESCiphertext) -> Self {
-            Self(ct.0)
+    impl TryFrom<pod::AesCiphertext> for AesCiphertext {
+        type Error = ProofError;
+
+        fn try_from(ct: pod::AesCiphertext) -> Result<Self, Self::Error> {
+            Self::from_bytes(&ct.0).ok_or(ProofError::InconsistentCTData)
         }
     }
 
