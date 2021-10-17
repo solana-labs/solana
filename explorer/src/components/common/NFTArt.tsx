@@ -234,7 +234,7 @@ const HTMLContent = ({
   );
 };
 
-export const ArtContent = ({
+export const NFTArt = ({
   metadata,
   category,
   active,
