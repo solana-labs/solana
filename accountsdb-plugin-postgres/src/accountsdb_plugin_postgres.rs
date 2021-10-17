@@ -188,7 +188,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                     Some(client) => {
                         let mut measure =
                             Measure::start("accountsdb-plugin-postgres-update-account-client");
-                        let result = { client.update_account(account, slot, at_startup) };
+                        //let result = { client.update_account(account, slot, at_startup) };
                         measure.stop();
 
                         inc_new_counter_info!(
@@ -198,11 +198,11 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                             100000
                         );
 
-                        if let Err(err) = result {
-                            return Err(AccountsDbPluginError::AccountsUpdateError {
-                                msg: format!("Failed to persist the update of account to the PostgreSQL database. Error: {:?}", err)
-                            });
-                        }
+                        // if let Err(err) = result {
+                        //     return Err(AccountsDbPluginError::AccountsUpdateError {
+                        //         msg: format!("Failed to persist the update of account to the PostgreSQL database. Error: {:?}", err)
+                        //     });
+                        // }
                     }
                 }
             }
