@@ -46,7 +46,7 @@ use {
         borrow::Cow,
         cell::RefCell,
         cmp,
-        collections::{BTreeMap, HashMap, HashSet},
+        collections::{hash_map::Entry as HashMapEntry, BTreeMap, HashMap, HashSet},
         convert::TryInto,
         fs,
         io::{Error as IoError, ErrorKind},
@@ -216,11 +216,19 @@ pub struct BlockstoreInsertionMetrics {
     pub num_inserted: u64,
     pub num_repair: u64,
     pub num_recovered: usize,
+    num_recovered_blockstore_error: usize,
     pub num_recovered_inserted: usize,
     pub num_recovered_failed_sig: usize,
     pub num_recovered_failed_invalid: usize,
     pub num_recovered_exists: usize,
     pub index_meta_time: u64,
+    num_data_shreds_exists: usize,
+    num_data_shreds_invalid: usize,
+    num_data_shreds_blockstore_error: usize,
+    num_coding_shreds_exists: usize,
+    num_coding_shreds_invalid: usize,
+    num_coding_shreds_invalid_erasure_config: usize,
+    num_coding_shreds_inserted: usize,
 }
 
 impl SlotMetaWorkingSetEntry {
@@ -278,6 +286,38 @@ impl BlockstoreInsertionMetrics {
             (
                 "num_recovered_exists",
                 self.num_recovered_exists as i64,
+                i64
+            ),
+            (
+                "num_recovered_blockstore_error",
+                self.num_recovered_blockstore_error,
+                i64
+            ),
+            ("num_data_shreds_exists", self.num_data_shreds_exists, i64),
+            ("num_data_shreds_invalid", self.num_data_shreds_invalid, i64),
+            (
+                "num_data_shreds_blockstore_error",
+                self.num_data_shreds_blockstore_error,
+                i64
+            ),
+            (
+                "num_coding_shreds_exists",
+                self.num_coding_shreds_exists,
+                i64
+            ),
+            (
+                "num_coding_shreds_invalid",
+                self.num_coding_shreds_invalid,
+                i64
+            ),
+            (
+                "num_coding_shreds_invalid_erasure_config",
+                self.num_coding_shreds_invalid_erasure_config,
+                i64
+            ),
+            (
+                "num_coding_shreds_inserted",
+                self.num_coding_shreds_inserted,
                 i64
             ),
         );
@@ -841,7 +881,7 @@ impl Blockstore {
                 } else {
                     ShredSource::Turbine
                 };
-                if let Ok(completed_data_sets) = self.check_insert_data_shred(
+                match self.check_insert_data_shred(
                     shred,
                     &mut erasure_metas,
                     &mut index_working_set,
@@ -854,10 +894,18 @@ impl Blockstore {
                     leader_schedule,
                     shred_source,
                 ) {
-                    newly_completed_data_sets.extend(completed_data_sets);
-                    inserted_indices.push(i);
-                    metrics.num_inserted += 1;
-                }
+                    Err(InsertDataShredError::Exists) => metrics.num_data_shreds_exists += 1,
+                    Err(InsertDataShredError::InvalidShred) => metrics.num_data_shreds_invalid += 1,
+                    Err(InsertDataShredError::BlockstoreError(err)) => {
+                        metrics.num_data_shreds_blockstore_error += 1;
+                        error!("blockstore error: {}", err);
+                    }
+                    Ok(completed_data_sets) => {
+                        newly_completed_data_sets.extend(completed_data_sets);
+                        inserted_indices.push(i);
+                        metrics.num_inserted += 1;
+                    }
+                };
             } else if shred.is_code() {
                 self.check_cache_coding_shred(
                     shred,
@@ -868,6 +916,7 @@ impl Blockstore {
                     handle_duplicate,
                     is_trusted,
                     is_repaired,
+                    metrics,
                 );
             } else {
                 panic!("There should be no other case");
@@ -917,7 +966,11 @@ impl Blockstore {
                             metrics.num_recovered_failed_invalid += 1;
                             None
                         }
-                        Err(InsertDataShredError::BlockstoreError(_)) => None,
+                        Err(InsertDataShredError::BlockstoreError(err)) => {
+                            metrics.num_recovered_blockstore_error += 1;
+                            error!("blockstore error: {}", err);
+                            None
+                        }
                         Ok(completed_data_sets) => {
                             newly_completed_data_sets.extend(completed_data_sets);
                             metrics.num_recovered_inserted += 1;
@@ -1062,6 +1115,7 @@ impl Blockstore {
             || shred1.coding_header.num_data_shreds != shred2.coding_header.num_data_shreds
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn check_cache_coding_shred<F>(
         &self,
         shred: Shred,
@@ -1072,6 +1126,7 @@ impl Blockstore {
         handle_duplicate: &F,
         is_trusted: bool,
         is_repaired: bool,
+        metrics: &mut BlockstoreInsertionMetrics,
     ) -> bool
     where
         F: Fn(Shred),
@@ -1089,11 +1144,13 @@ impl Blockstore {
 
         if !is_trusted {
             if index_meta.coding().is_present(shred_index) {
+                metrics.num_coding_shreds_exists += 1;
                 handle_duplicate(shred);
                 return false;
             }
 
             if !Blockstore::should_insert_coding_shred(&shred, &self.last_root) {
+                metrics.num_coding_shreds_invalid += 1;
                 return false;
             }
         }
@@ -1112,6 +1169,7 @@ impl Blockstore {
         });
 
         if erasure_config != erasure_meta.config {
+            metrics.num_coding_shreds_invalid_erasure_config += 1;
             let conflicting_shred = self.find_conflicting_coding_shred(
                 &shred,
                 slot,
@@ -1152,10 +1210,11 @@ impl Blockstore {
         // committed
         index_meta.coding_mut().set_present(shred_index, true);
 
-        just_received_coding_shreds
-            .entry((slot, shred_index))
-            .or_insert_with(|| shred);
-
+        if let HashMapEntry::Vacant(entry) = just_received_coding_shreds.entry((slot, shred_index))
+        {
+            metrics.num_coding_shreds_inserted += 1;
+            entry.insert(shred);
+        }
         true
     }
 
@@ -5658,6 +5717,7 @@ pub mod tests {
             let coding_shred =
                 Shred::new_empty_from_header(shred, DataShredHeader::default(), coding);
 
+<<<<<<< HEAD
             let mut erasure_metas = HashMap::new();
             let mut index_working_set = HashMap::new();
             let mut just_received_coding_shreds = HashMap::new();
@@ -5692,6 +5752,43 @@ pub mod tests {
             ));
             assert_eq!(counter.load(Ordering::Relaxed), 1);
         }
+=======
+        let mut erasure_metas = HashMap::new();
+        let mut index_working_set = HashMap::new();
+        let mut just_received_coding_shreds = HashMap::new();
+        let mut index_meta_time = 0;
+        assert!(blockstore.check_cache_coding_shred(
+            coding_shred.clone(),
+            &mut erasure_metas,
+            &mut index_working_set,
+            &mut just_received_coding_shreds,
+            &mut index_meta_time,
+            &|_shred| {
+                panic!("no dupes");
+            },
+            false,
+            false,
+            &mut BlockstoreInsertionMetrics::default(),
+        ));
+
+        // insert again fails on dupe
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let counter = AtomicUsize::new(0);
+        assert!(!blockstore.check_cache_coding_shred(
+            coding_shred,
+            &mut erasure_metas,
+            &mut index_working_set,
+            &mut just_received_coding_shreds,
+            &mut index_meta_time,
+            &|_shred| {
+                counter.fetch_add(1, Ordering::Relaxed);
+            },
+            false,
+            false,
+            &mut BlockstoreInsertionMetrics::default(),
+        ));
+        assert_eq!(counter.load(Ordering::Relaxed), 1);
+>>>>>>> 231b58b5f (adds more metrics to blockstore insert shreds stats (#20701))
     }
 
     #[test]
