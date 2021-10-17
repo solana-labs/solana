@@ -5717,7 +5717,6 @@ pub mod tests {
             let coding_shred =
                 Shred::new_empty_from_header(shred, DataShredHeader::default(), coding);
 
-<<<<<<< HEAD
             let mut erasure_metas = HashMap::new();
             let mut index_working_set = HashMap::new();
             let mut just_received_coding_shreds = HashMap::new();
@@ -5733,6 +5732,7 @@ pub mod tests {
                 },
                 false,
                 false,
+                &mut BlockstoreInsertionMetrics::default(),
             ));
 
             // insert again fails on dupe
@@ -5749,46 +5749,10 @@ pub mod tests {
                 },
                 false,
                 false,
+                &mut BlockstoreInsertionMetrics::default(),
             ));
             assert_eq!(counter.load(Ordering::Relaxed), 1);
         }
-=======
-        let mut erasure_metas = HashMap::new();
-        let mut index_working_set = HashMap::new();
-        let mut just_received_coding_shreds = HashMap::new();
-        let mut index_meta_time = 0;
-        assert!(blockstore.check_cache_coding_shred(
-            coding_shred.clone(),
-            &mut erasure_metas,
-            &mut index_working_set,
-            &mut just_received_coding_shreds,
-            &mut index_meta_time,
-            &|_shred| {
-                panic!("no dupes");
-            },
-            false,
-            false,
-            &mut BlockstoreInsertionMetrics::default(),
-        ));
-
-        // insert again fails on dupe
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        let counter = AtomicUsize::new(0);
-        assert!(!blockstore.check_cache_coding_shred(
-            coding_shred,
-            &mut erasure_metas,
-            &mut index_working_set,
-            &mut just_received_coding_shreds,
-            &mut index_meta_time,
-            &|_shred| {
-                counter.fetch_add(1, Ordering::Relaxed);
-            },
-            false,
-            false,
-            &mut BlockstoreInsertionMetrics::default(),
-        ));
-        assert_eq!(counter.load(Ordering::Relaxed), 1);
->>>>>>> 231b58b5f (adds more metrics to blockstore insert shreds stats (#20701))
     }
 
     #[test]
