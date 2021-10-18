@@ -1,3 +1,5 @@
+#![allow(clippy::integer_arithmetic)]
+
 /// A concurrent implementation for writing accounts into the PostgreSQL in parallel.
 use {
     crate::accountsdb_plugin_postgres::{
