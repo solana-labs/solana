@@ -687,6 +687,7 @@ impl Accounts {
         debug_verify: bool,
     ) -> u64 {
         let use_index = false;
+        let is_startup = false; // there may be conditions where this is called at startup.
         self.accounts_db
             .update_accounts_hash_with_index_option(
                 use_index,
@@ -696,10 +697,12 @@ impl Accounts {
                 None,
                 can_cached_slot_be_unflushed,
                 None,
+                is_startup,
             )
             .1
     }
 
+    /// Only called from startup or test code.
     #[must_use]
     pub fn verify_bank_hash_and_lamports(
         &self,
@@ -1268,7 +1271,7 @@ mod tests {
         let bins = idx.account_maps.len();
         // use bins * 2 to get the first half of the range within bin 0
         let bins_2 = bins * 2;
-        let binner = crate::pubkey_bins::PubkeyBinCalculator16::new(bins_2);
+        let binner = crate::pubkey_bins::PubkeyBinCalculator24::new(bins_2);
         let range2 =
             binner.lowest_pubkey_from_bin(0, bins_2)..binner.lowest_pubkey_from_bin(1, bins_2);
         let range2_inclusive = range2.start..=range2.end;

@@ -3076,7 +3076,7 @@ impl Bank {
     }
 
     pub fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> u64 {
-        self.rent_collector.rent.minimum_balance(data_len)
+        self.rent_collector.rent.minimum_balance(data_len).max(1)
     }
 
     #[deprecated(
@@ -5086,15 +5086,6 @@ impl Bank {
         self.compute_budget = compute_budget;
     }
 
-    #[allow(deprecated)]
-    #[deprecated(since = "1.8.0", note = "please use `set_compute_budget` instead")]
-    pub fn set_bpf_compute_budget(
-        &mut self,
-        bpf_compute_budget: Option<solana_sdk::process_instruction::BpfComputeBudget>,
-    ) {
-        self.compute_budget = bpf_compute_budget.map(|budget| budget.into());
-    }
-
     pub fn hard_forks(&self) -> Arc<RwLock<HardForks>> {
         self.hard_forks.clone()
     }
@@ -5375,6 +5366,7 @@ impl Bank {
 
     /// Recalculate the hash_internal_state from the account stores. Would be used to verify a
     /// snapshot.
+    /// Only called from startup or test code.
     #[must_use]
     fn verify_bank_hash(&self, test_hash_calculation: bool) -> bool {
         self.rc.accounts.verify_bank_hash_and_lamports(
@@ -5492,6 +5484,7 @@ impl Bank {
         use_index: bool,
         mut debug_verify: bool,
         slots_per_epoch: Option<Slot>,
+        is_startup: bool,
     ) -> Hash {
         let (hash, total_lamports) = self
             .rc
@@ -5505,6 +5498,7 @@ impl Bank {
                 Some(self.capitalization()),
                 false,
                 slots_per_epoch,
+                is_startup,
             );
         if total_lamports != self.capitalization() {
             datapoint_info!(
@@ -5529,6 +5523,7 @@ impl Bank {
                         Some(self.capitalization()),
                         false,
                         slots_per_epoch,
+                        is_startup,
                     );
             }
 
@@ -5543,7 +5538,7 @@ impl Bank {
     }
 
     pub fn update_accounts_hash(&self) -> Hash {
-        self.update_accounts_hash_with_index_option(true, false, None)
+        self.update_accounts_hash_with_index_option(true, false, None, false)
     }
 
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash

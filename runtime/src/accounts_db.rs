@@ -33,7 +33,7 @@ use crate::{
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
     cache_hash_data::CacheHashData,
     contains::Contains,
-    pubkey_bins::PubkeyBinCalculator16,
+    pubkey_bins::PubkeyBinCalculator24,
     read_only_accounts_cache::ReadOnlyAccountsCache,
     sorted_storages::SortedStorages,
 };
@@ -1432,9 +1432,13 @@ impl ShrinkStats {
     }
 }
 
+fn quarter_thread_count() -> usize {
+    std::cmp::max(2, num_cpus::get() / 4)
+}
+
 pub fn make_min_priority_thread_pool() -> ThreadPool {
     // Use lower thread count to reduce priority.
-    let num_threads = std::cmp::max(2, num_cpus::get() / 4);
+    let num_threads = quarter_thread_count();
     rayon::ThreadPoolBuilder::new()
         .thread_name(|i| format!("solana-cleanup-accounts-{}", i))
         .num_threads(num_threads)
@@ -2471,7 +2475,7 @@ impl AccountsDb {
         unrefed_pubkeys: &mut Vec<&'a Pubkey>,
     ) -> usize
     where
-        I: Iterator<Item = (&'a Pubkey, &'a FoundStoredAccount<'a>)>,
+        I: Iterator<Item = &'a (Pubkey, FoundStoredAccount<'a>)>,
     {
         let mut alive_total = 0;
 
@@ -2543,6 +2547,10 @@ impl AccountsDb {
             }
             num_stores += 1;
         }
+
+        // sort by pubkey to keep account index lookups close
+        let mut stored_accounts = stored_accounts.into_iter().collect::<Vec<_>>();
+        stored_accounts.sort_unstable_by(|a, b| a.0.cmp(&b.0));
 
         let mut index_read_elapsed = Measure::start("index_read_elapsed");
         let alive_total_collect = AtomicUsize::new(0);
@@ -5072,11 +5080,15 @@ impl AccountsDb {
     }
 
     pub fn update_accounts_hash(&self, slot: Slot, ancestors: &Ancestors) -> (Hash, u64) {
-        self.update_accounts_hash_with_index_option(true, false, slot, ancestors, None, false, None)
+        self.update_accounts_hash_with_index_option(
+            true, false, slot, ancestors, None, false, None, false,
+        )
     }
 
     pub fn update_accounts_hash_test(&self, slot: Slot, ancestors: &Ancestors) -> (Hash, u64) {
-        self.update_accounts_hash_with_index_option(true, true, slot, ancestors, None, false, None)
+        self.update_accounts_hash_with_index_option(
+            true, true, slot, ancestors, None, false, None, false,
+        )
     }
 
     fn scan_multiple_account_storages_one_slot<F, B>(
@@ -5143,7 +5155,7 @@ impl AccountsDb {
         scan_func: F,
         after_func: F2,
         bin_range: &Range<usize>,
-        bin_calculator: &PubkeyBinCalculator16,
+        bin_calculator: &PubkeyBinCalculator24,
     ) -> Vec<BinnedHashData>
     where
         F: Fn(LoadedAccount, &mut BinnedHashData, Slot) + Send + Sync,
@@ -5323,6 +5335,7 @@ impl AccountsDb {
         check_hash: bool,
         can_cached_slot_be_unflushed: bool,
         slots_per_epoch: Option<Slot>,
+        is_startup: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         if !use_index {
             let accounts_cache_and_ancestors = if can_cached_slot_be_unflushed {
@@ -5352,10 +5365,15 @@ impl AccountsDb {
                 ..HashStats::default()
             };
 
+            let thread_pool = if is_startup {
+                None
+            } else {
+                Some(&self.thread_pool_clean)
+            };
             Self::calculate_accounts_hash_without_index(
                 &self.accounts_hash_cache_path,
                 &storages,
-                Some(&self.thread_pool_clean),
+                thread_pool,
                 timings,
                 check_hash,
                 accounts_cache_and_ancestors,
@@ -5370,6 +5388,7 @@ impl AccountsDb {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn calculate_accounts_hash_helper_with_verify(
         &self,
         use_index: bool,
@@ -5380,6 +5399,7 @@ impl AccountsDb {
         can_cached_slot_be_unflushed: bool,
         check_hash: bool,
         slots_per_epoch: Option<Slot>,
+        is_startup: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         let (hash, total_lamports) = self.calculate_accounts_hash_helper(
             use_index,
@@ -5388,6 +5408,7 @@ impl AccountsDb {
             check_hash,
             can_cached_slot_be_unflushed,
             slots_per_epoch,
+            is_startup,
         )?;
         if debug_verify {
             // calculate the other way (store or non-store) and verify results match.
@@ -5398,6 +5419,7 @@ impl AccountsDb {
                 check_hash,
                 can_cached_slot_be_unflushed,
                 None,
+                is_startup,
             )?;
 
             let success = hash == hash_other
@@ -5417,6 +5439,7 @@ impl AccountsDb {
         expected_capitalization: Option<u64>,
         can_cached_slot_be_unflushed: bool,
         slots_per_epoch: Option<Slot>,
+        is_startup: bool,
     ) -> (Hash, u64) {
         let check_hash = false;
         let (hash, total_lamports) = self
@@ -5429,6 +5452,7 @@ impl AccountsDb {
                 can_cached_slot_be_unflushed,
                 check_hash,
                 slots_per_epoch,
+                is_startup,
             )
             .unwrap(); // unwrap here will never fail since check_hash = false
         let mut bank_hashes = self.bank_hashes.write().unwrap();
@@ -5451,7 +5475,7 @@ impl AccountsDb {
         )>,
         filler_account_suffix: Option<&Pubkey>,
     ) -> Result<Vec<BinnedHashData>, BankHashVerificationError> {
-        let bin_calculator = PubkeyBinCalculator16::new(bins);
+        let bin_calculator = PubkeyBinCalculator24::new(bins);
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
         let mut time = Measure::start("scan all accounts");
         stats.num_snapshot_storage = storage.slot_count();
@@ -5609,6 +5633,7 @@ impl AccountsDb {
         }
     }
 
+    /// Only called from startup or test code.
     pub fn verify_bank_hash_and_lamports(
         &self,
         slot: Slot,
@@ -5620,6 +5645,7 @@ impl AccountsDb {
 
         let use_index = false;
         let check_hash = true;
+        let is_startup = true;
         let can_cached_slot_be_unflushed = false;
         let (calculated_hash, calculated_lamports) = self
             .calculate_accounts_hash_helper_with_verify(
@@ -5631,6 +5657,7 @@ impl AccountsDb {
                 can_cached_slot_be_unflushed,
                 check_hash,
                 None,
+                is_startup,
             )?;
 
         if calculated_lamports != total_lamports {
@@ -5776,28 +5803,38 @@ impl AccountsDb {
 
     // previous_slot_entry_was_cached = true means we just need to assert that after this update is complete
     //  that there are no items we would have put in reclaims that are not cached
-    fn update_index(
+    fn update_index<T: ReadableAccount + Sync>(
         &self,
         slot: Slot,
         infos: Vec<AccountInfo>,
-        accounts: &[(&Pubkey, &impl ReadableAccount)],
+        accounts: &[(&Pubkey, &T)],
         previous_slot_entry_was_cached: bool,
     ) -> SlotList<AccountInfo> {
-        let mut reclaims = SlotList::<AccountInfo>::with_capacity(infos.len() * 2);
-        for (info, pubkey_account) in infos.into_iter().zip(accounts.iter()) {
-            let pubkey = pubkey_account.0;
-            self.accounts_index.upsert(
-                slot,
-                pubkey,
-                pubkey_account.1.owner(),
-                pubkey_account.1.data(),
-                &self.account_indexes,
-                info,
-                &mut reclaims,
-                previous_slot_entry_was_cached,
-            );
-        }
-        reclaims
+        // using a thread pool here results in deadlock panics from bank_hashes.write()
+        // so, instead we limit how many threads will be created to the same size as the bg thread pool
+        let chunk_size = std::cmp::max(1, accounts.len() / quarter_thread_count()); // # pubkeys/thread
+        infos
+            .par_chunks(chunk_size)
+            .zip(accounts.par_chunks(chunk_size))
+            .map(|(infos_chunk, accounts_chunk)| {
+                let mut reclaims = Vec::with_capacity(infos_chunk.len() / 2);
+                for (info, pubkey_account) in infos_chunk.iter().zip(accounts_chunk.iter()) {
+                    let pubkey = pubkey_account.0;
+                    self.accounts_index.upsert(
+                        slot,
+                        pubkey,
+                        pubkey_account.1.owner(),
+                        pubkey_account.1.data(),
+                        &self.account_indexes,
+                        *info,
+                        &mut reclaims,
+                        previous_slot_entry_was_cached,
+                    );
+                }
+                reclaims
+            })
+            .flatten()
+            .collect::<Vec<_>>()
     }
 
     fn should_not_shrink(aligned_bytes: u64, total_bytes: u64, num_stores: usize) -> bool {
@@ -6144,6 +6181,7 @@ impl AccountsDb {
     }
 
     /// Store the account update.
+    /// only called by tests
     pub fn store_uncached(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
         self.store(slot, accounts, false);
     }
@@ -6167,11 +6205,14 @@ impl AccountsDb {
             .store_total_data
             .fetch_add(total_data as u64, Ordering::Relaxed);
 
-        let mut bank_hashes = self.bank_hashes.write().unwrap();
-        let slot_info = bank_hashes
-            .entry(slot)
-            .or_insert_with(BankHashInfo::default);
-        slot_info.stats.merge(&stats);
+        {
+            // we need to drop bank_hashes to prevent deadlocks
+            let mut bank_hashes = self.bank_hashes.write().unwrap();
+            let slot_info = bank_hashes
+                .entry(slot)
+                .or_insert_with(BankHashInfo::default);
+            slot_info.stats.merge(&stats);
+        }
 
         // we use default hashes for now since the same account may be stored to the cache multiple times
         self.store_accounts_unfrozen(slot, accounts, None, is_cached_store);
@@ -6315,10 +6356,10 @@ impl AccountsDb {
         );
     }
 
-    fn store_accounts_frozen<'a>(
+    fn store_accounts_frozen<'a, T: ReadableAccount + Sync>(
         &'a self,
         slot: Slot,
-        accounts: &[(&Pubkey, &impl ReadableAccount)],
+        accounts: &[(&Pubkey, &T)],
         hashes: Option<&[impl Borrow<Hash>]>,
         storage_finder: Option<StorageFinder<'a>>,
         write_version_producer: Option<Box<dyn Iterator<Item = StoredMetaWriteVersion>>>,
@@ -6339,10 +6380,10 @@ impl AccountsDb {
         )
     }
 
-    fn store_accounts_custom<'a>(
+    fn store_accounts_custom<'a, T: ReadableAccount + Sync>(
         &'a self,
         slot: Slot,
-        accounts: &[(&Pubkey, &impl ReadableAccount)],
+        accounts: &[(&Pubkey, &T)],
         hashes: Option<&[impl Borrow<Hash>]>,
         storage_finder: Option<StorageFinder<'a>>,
         write_version_producer: Option<Box<dyn Iterator<Item = u64>>>,
@@ -7716,7 +7757,7 @@ pub mod tests {
             },
             |a| a,
             &Range { start: 0, end: 1 },
-            &PubkeyBinCalculator16::new(1),
+            &PubkeyBinCalculator24::new(1),
         );
         assert_eq!(calls.load(Ordering::Relaxed), 1);
         assert_eq!(
@@ -9779,7 +9820,7 @@ pub mod tests {
         for use_index in [true, false] {
             assert!(db
                 .calculate_accounts_hash_helper(
-                    use_index, some_slot, &ancestors, check_hash, false, None
+                    use_index, some_slot, &ancestors, check_hash, false, None, false,
                 )
                 .is_err());
         }
@@ -9802,11 +9843,13 @@ pub mod tests {
         let check_hash = true;
         assert_eq!(
             db.calculate_accounts_hash_helper(
-                false, some_slot, &ancestors, check_hash, false, None
+                false, some_slot, &ancestors, check_hash, false, None, false,
             )
             .unwrap(),
-            db.calculate_accounts_hash_helper(true, some_slot, &ancestors, check_hash, false, None)
-                .unwrap(),
+            db.calculate_accounts_hash_helper(
+                true, some_slot, &ancestors, check_hash, false, None, false,
+            )
+            .unwrap(),
         );
     }
 

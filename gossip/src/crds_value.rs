@@ -209,10 +209,10 @@ impl SnapshotHashes {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
 pub struct IncrementalSnapshotHashes {
-    pub(crate) from: Pubkey,
-    pub(crate) base: (Slot, Hash),
-    pub(crate) hashes: Vec<(Slot, Hash)>,
-    pub(crate) wallclock: u64,
+    pub from: Pubkey,
+    pub base: (Slot, Hash),
+    pub hashes: Vec<(Slot, Hash)>,
+    pub wallclock: u64,
 }
 
 impl Sanitize for IncrementalSnapshotHashes {
