@@ -291,6 +291,7 @@ solana-validator \
   --vote-account ~/vote-account-keypair.json \
   --rpc-port 8899 \
   --entrypoint entrypoint.devnet.solana.com:8001 \
+  --ledger ~/ledger \
   --limit-ledger-size \
   --log ~/solana-validator.log
 ```
