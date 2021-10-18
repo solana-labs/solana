@@ -15,7 +15,7 @@
     "@solana/web3.js": "^1.29.2",
     "@testing-library/jest-dom": "^5.14.1",
     "@testing-library/react": "^12.1.2",
-    "@testing-library/user-event": "^13.3.0",
+    "@testing-library/user-event": "^13.4.1",
     "@types/bn.js": "^5.1.0",
     "@types/bs58": "^4.0.1",
     "@types/chai": "^4.2.22",
