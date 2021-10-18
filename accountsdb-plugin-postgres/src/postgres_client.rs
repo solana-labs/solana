@@ -147,7 +147,7 @@ pub trait PostgresClient {
     fn update_account(
         &mut self,
         account: DbAccountInfo,
-        at_startup: bool,
+        is_startup: bool,
     ) -> Result<(), AccountsDbPluginError>;
 
     fn update_slot_status(
@@ -406,7 +406,7 @@ impl PostgresClient for SimplePostgresClient {
     fn update_account(
         &mut self,
         account: DbAccountInfo,
-        at_startup: bool,
+        is_startup: bool,
     ) -> Result<(), AccountsDbPluginError> {
         trace!(
             "Updating account {} with owner {} at slot {}",
@@ -414,7 +414,7 @@ impl PostgresClient for SimplePostgresClient {
             bs58::encode(account.owner()).into_string(),
             account.slot,
         );
-        if !at_startup {
+        if !is_startup {
             return self.upsert_account(&account);
         }
         self.flush_buffered_writes()?;
@@ -483,7 +483,7 @@ impl PostgresClient for SimplePostgresClient {
 
 struct UpdateAccountRequest {
     account: DbAccountInfo,
-    at_startup: bool,
+    is_startup: bool,
 }
 
 struct UpdateSlotRequest {
@@ -528,7 +528,7 @@ impl PostgresClientWorker {
                 Ok(work) => match work {
                     DbWorkItem::UpdateAccount(request) => {
                         self.client
-                            .update_account(request.account, request.at_startup)?;
+                            .update_account(request.account, request.is_startup)?;
                     }
                     DbWorkItem::UpdateSlot(request) => {
                         self.client.update_slot_status(
@@ -612,7 +612,7 @@ impl ParallelPostgresClient {
         &mut self,
         account: &ReplicaAccountInfo,
         slot: u64,
-        at_startup: bool,
+        is_startup: bool,
     ) -> Result<(), AccountsDbPluginError> {
         if self.last_report.should_update(30000) {
             datapoint_debug!(
@@ -623,7 +623,7 @@ impl ParallelPostgresClient {
         let mut measure = Measure::start("accountsdb-plugin-posgres-create-work-item");
         let wrk_item = DbWorkItem::UpdateAccount(UpdateAccountRequest {
             account: DbAccountInfo::new(account, slot),
-            at_startup,
+            is_startup,
         });
 
         measure.stop();

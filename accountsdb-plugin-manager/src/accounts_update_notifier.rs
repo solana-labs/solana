@@ -108,7 +108,7 @@ impl AccountsUpdateNotifierImpl {
         &self,
         account: ReplicaAccountInfo,
         slot: Slot,
-        at_startup: bool,
+        is_startup: bool,
     ) {
         let mut measure2 = Measure::start("accountsdb-plugin-notify_plugins_of_account_update");
         let mut plugin_manager = self.plugin_manager.write().unwrap();
@@ -121,7 +121,7 @@ impl AccountsUpdateNotifierImpl {
             match plugin.update_account(
                 ReplicaAccountInfoVersions::V0_0_1(&account),
                 slot,
-                at_startup,
+                is_startup,
             ) {
                 Err(err) => {
                     error!(

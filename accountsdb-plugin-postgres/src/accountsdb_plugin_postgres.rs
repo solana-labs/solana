@@ -138,7 +138,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
         &mut self,
         account: ReplicaAccountInfoVersions,
         slot: u64,
-        at_startup: bool,
+        is_startup: bool,
     ) -> Result<()> {
         let mut measure_all = Measure::start("accountsdb-plugin-postgres-update-account-main");
         match account {
@@ -180,7 +180,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                     Some(client) => {
                         let mut measure_update =
                             Measure::start("accountsdb-plugin-postgres-update-account-client");
-                        let result = { client.update_account(account, slot, at_startup) };
+                        let result = { client.update_account(account, slot, is_startup) };
                         measure_update.stop();
 
                         inc_new_counter_debug!(

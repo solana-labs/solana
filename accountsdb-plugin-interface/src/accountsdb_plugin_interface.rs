@@ -82,7 +82,7 @@ pub trait AccountsDbPlugin: Any + Send + Sync + std::fmt::Debug {
         &mut self,
         account: ReplicaAccountInfoVersions,
         slot: u64,
-        at_startup: bool,
+        is_startup: bool,
     ) -> Result<()>;
 
     /// Called when a slot status is updated
