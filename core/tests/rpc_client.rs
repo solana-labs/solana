@@ -203,7 +203,7 @@ fn get_signature_statuses_with_history() -> ClientResult<()> {
     let statuses = rpc_client
         .get_signature_statuses_with_history(&[signature])?
         .value;
-    assert!(statuses.len() > 0);
+    assert!(!statuses.is_empty());
 
     Ok(())
 }
@@ -499,7 +499,7 @@ fn get_largest_accounts_with_config() -> ClientResult<()> {
         filter: Some(RpcLargestAccountsFilter::Circulating),
     };
     let accounts = rpc_client.get_largest_accounts_with_config(config)?;
-    assert!(accounts.value.len() > 0);
+    assert!(!accounts.value.is_empty());
 
     Ok(())
 }
@@ -550,7 +550,7 @@ fn get_cluster_nodes() -> ClientResult<()> {
     let rpc_client = RpcClient::new(validator.rpc_url());
 
     let cluster_nodes = rpc_client.get_cluster_nodes()?;
-    assert!(cluster_nodes.len() > 0);
+    assert!(!cluster_nodes.is_empty());
 
     Ok(())
 }
@@ -656,7 +656,7 @@ fn get_blocks() -> ClientResult<()> {
     let end_slot = 3;
 
     let blocks = rpc_client.get_blocks(start_slot, Some(end_slot))?;
-    assert!(blocks.len() > 0);
+    assert!(!blocks.is_empty());
 
     Ok(())
 }
@@ -685,7 +685,7 @@ fn get_blocks_with_commitment() -> ClientResult<()> {
 
     let blocks =
         rpc_client.get_blocks_with_commitment(start_slot, Some(end_slot), commitment_config)?;
-    assert!(blocks.len() > 0);
+    assert!(!blocks.is_empty());
 
     Ok(())
 }
@@ -711,7 +711,7 @@ fn get_blocks_with_limit() -> ClientResult<()> {
     let limit = 3;
 
     let blocks = rpc_client.get_blocks_with_limit(start_slot, limit)?;
-    assert!(blocks.len() > 0);
+    assert!(!blocks.is_empty());
 
     Ok(())
 }
@@ -739,7 +739,7 @@ fn get_blocks_with_limit_and_commitment() -> ClientResult<()> {
 
     let blocks =
         rpc_client.get_blocks_with_limit_and_commitment(start_slot, limit, commitment_config)?;
-    assert!(blocks.len() > 0);
+    assert!(!blocks.is_empty());
 
     Ok(())
 }
@@ -762,7 +762,7 @@ fn get_signatures_for_address() -> ClientResult<()> {
     let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, latest_blockhash);
     rpc_client.send_and_confirm_transaction(&tx)?;
     let signatures = rpc_client.get_signatures_for_address(&alice.pubkey())?;
-    assert!(signatures.len() > 0);
+    assert!(!signatures.is_empty());
 
     Ok(())
 }
@@ -792,7 +792,7 @@ fn get_signatures_for_address_with_config() -> ClientResult<()> {
         commitment: Some(CommitmentConfig::confirmed()),
     };
     let signatures = rpc_client.get_signatures_for_address_with_config(&alice.pubkey(), config)?;
-    assert!(signatures.len() > 0);
+    assert!(!signatures.is_empty());
 
     Ok(())
 }
@@ -1008,7 +1008,7 @@ fn get_recent_performance_samples() -> ClientResult<()> {
     for _ in 0..1000 {
         let limit = Some(10);
         let performance_samples = rpc_client.get_recent_performance_samples(limit)?;
-        if performance_samples.len() > 0 {
+        if !performance_samples.is_empty() {
             return Ok(());
         }
         std::thread::sleep(Duration::from_millis(100));
@@ -1068,7 +1068,7 @@ fn get_version() -> ClientResult<()> {
     let rpc_client = RpcClient::new(validator.rpc_url());
 
     let version = rpc_client.get_version()?;
-    assert!(version.solana_core.len() > 0);
+    assert!(!version.solana_core.is_empty());
 
     Ok(())
 }
@@ -1144,7 +1144,7 @@ fn get_account_data() -> ClientResult<()> {
     let rpc_client = RpcClient::new(validator.rpc_url());
 
     let account_data = rpc_client.get_account_data(&alice.pubkey())?;
-    assert!(account_data.len() == 0);
+    assert!(account_data.is_empty());
 
     Ok(())
 }
