@@ -103,7 +103,7 @@ impl CliSignerInfo {
     }
 }
 
-/// A command line argument that loads a default signer in absense of other signers.
+/// A command line argument that loads a default signer in absence of other signers.
 ///
 /// This type manages a default signing source which may be overridden by other
 /// signing sources via its [`generate_unique_signers`] method.
@@ -195,7 +195,7 @@ impl DefaultSigner {
     ///
     /// `bulk_signers` is a vector of signers, all of which are optional. If any
     /// of those signers is `None`, then the default signer will be loaded; if
-    /// any of those signers is not `None`, then the default signer will not be
+    /// all of those signers are `Some`, then the default signer will not be
     /// loaded.
     ///
     /// The returned value includes all of the `bulk_signers` that were not
@@ -598,11 +598,11 @@ pub struct SignerFromPathConfig {
 ///   If the "skip_seed_phrase_validation" argument, as defined in
 ///   [SKIP_SEED_PHRASE_VALIDATION_ARG] is found in `matches`, then the keypair
 ///   seed will be generated directly from the seed phrase, without parsing or
-///   validating it as a BIP39 seed phrase. This allows the use non-BIP39 seed
+///   validating it as a BIP39 seed phrase. This allows the use of non-BIP39 seed
 ///   phrases.
 ///
 /// - `usb:` &mdash; Use a USB hardware device as the signer. In this case, the
-///   URI host indicates the device type, and is required. The only valid host
+///   URI host indicates the device type, and is required. The only currently valid host
 ///   value is "ledger".
 ///
 ///   Optionally, the first segment of the URI path indicates the base-58
@@ -624,7 +624,7 @@ pub struct SignerFromPathConfig {
 ///
 /// - `ASK` &mdash; The user will be prompted at the command line for their seed
 ///   phrase and passphrase. _This uses a legacy key derivation method and should
-///   be avoided in favor of `prompt:`._
+///   usually be avoided in favor of `prompt:`._
 ///
 /// Next, if the `path` argument parses as a base-58 public key, then the signer
 /// is created without a private key, but with presigned signatures, each parsed
@@ -633,7 +633,7 @@ pub struct SignerFromPathConfig {
 ///
 /// In this case, the remaining command line arguments are searched for clap
 /// arguments named "signer", as defined by [SIGNER_ARG], and each is parsed as
-/// a key value pair of the form "pubkey=signature", where `pubkey` is the same
+/// a key-value pair of the form "pubkey=signature", where `pubkey` is the same
 /// base-58 public key, and `signature` is a serialized signature produced by
 /// the corresponding keypair. One of the "signer" signatures must be for the
 /// pubkey specified in `path` or this function will return an error; unless the
@@ -704,7 +704,7 @@ pub fn signer_from_path(
 ///
 /// If the `allow_null_signer` field of `config` is `true`, then pubkey signers
 /// are allowed to have zero associated signatures via additional "signer"
-/// command line arguments. It the same effact as if the "sign_only" clap
+/// command line arguments. It the same effect as if the "sign_only" clap
 /// argument is present.
 ///
 /// See [`signer_from_path`] for full documentation of how this function
