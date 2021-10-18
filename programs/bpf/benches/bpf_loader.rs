@@ -94,8 +94,28 @@ fn bench_program_alu(bencher: &mut Bencher) {
         .write_u64::<LittleEndian>(ARMSTRONG_LIMIT)
         .unwrap();
     inner_iter.write_u64::<LittleEndian>(0).unwrap();
+
     let loader_id = bpf_loader::id();
-    let mut invoke_context = MockInvokeContext::new(&Pubkey::default(), vec![]);
+    let program_id = solana_sdk::pubkey::new_rand();
+    let accounts = [
+        (
+            program_id,
+            RefCell::new(AccountSharedData::new(0, 0, &loader_id)),
+        ),
+        (
+            solana_sdk::pubkey::new_rand(),
+            RefCell::new(AccountSharedData::new(
+                1,
+                10000001,
+                &solana_sdk::pubkey::new_rand(),
+            )),
+        ),
+    ];
+    let keyed_accounts: Vec<_> = accounts
+        .iter()
+        .map(|(key, account)| solana_sdk::keyed_account::KeyedAccount::new(&key, false, &account))
+        .collect();
+    let mut invoke_context = MockInvokeContext::new(&program_id, keyed_accounts);
 
     let elf = load_elf("bench_alu").unwrap();
     let mut executable = <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
@@ -254,29 +274,35 @@ fn bench_create_vm(bencher: &mut Bencher) {
 fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     const BUDGET: u64 = 200_000;
     let loader_id = bpf_loader::id();
+    let program_id = solana_sdk::pubkey::new_rand();
 
-    let accounts = [RefCell::new(AccountSharedData::new(
-        1,
-        10000001,
-        &solana_sdk::pubkey::new_rand(),
-    ))];
-    let keys = [solana_sdk::pubkey::new_rand()];
-    let keyed_accounts: Vec<_> = keys
+    let accounts = [
+        (
+            program_id,
+            RefCell::new(AccountSharedData::new(0, 0, &loader_id)),
+        ),
+        (
+            solana_sdk::pubkey::new_rand(),
+            RefCell::new(AccountSharedData::new(
+                1,
+                10000001,
+                &solana_sdk::pubkey::new_rand(),
+            )),
+        ),
+    ];
+    let keyed_accounts: Vec<_> = accounts
         .iter()
-        .zip(&accounts)
         .map(|(key, account)| solana_sdk::keyed_account::KeyedAccount::new(&key, false, &account))
         .collect();
     let instruction_data = vec![0u8];
-
-    let mut invoke_context = MockInvokeContext::new(&loader_id, keyed_accounts);
+    let mut invoke_context = MockInvokeContext::new(&program_id, keyed_accounts);
     invoke_context.compute_meter.remaining = BUDGET;
 
     // Serialize account data
-    let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
     let (mut serialized, account_lengths) = serialize_parameters(
         &loader_id,
-        &solana_sdk::pubkey::new_rand(),
-        keyed_accounts,
+        &program_id,
+        &invoke_context.get_keyed_accounts().unwrap()[1..],
         &instruction_data,
     )
     .unwrap();
