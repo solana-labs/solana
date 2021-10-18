@@ -33,7 +33,7 @@ use crate::{
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
     cache_hash_data::CacheHashData,
     contains::Contains,
-    pubkey_bins::PubkeyBinCalculator16,
+    pubkey_bins::PubkeyBinCalculator24,
     read_only_accounts_cache::ReadOnlyAccountsCache,
     sorted_storages::SortedStorages,
 };
@@ -5155,7 +5155,7 @@ impl AccountsDb {
         scan_func: F,
         after_func: F2,
         bin_range: &Range<usize>,
-        bin_calculator: &PubkeyBinCalculator16,
+        bin_calculator: &PubkeyBinCalculator24,
     ) -> Vec<BinnedHashData>
     where
         F: Fn(LoadedAccount, &mut BinnedHashData, Slot) + Send + Sync,
@@ -5475,7 +5475,7 @@ impl AccountsDb {
         )>,
         filler_account_suffix: Option<&Pubkey>,
     ) -> Result<Vec<BinnedHashData>, BankHashVerificationError> {
-        let bin_calculator = PubkeyBinCalculator16::new(bins);
+        let bin_calculator = PubkeyBinCalculator24::new(bins);
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
         let mut time = Measure::start("scan all accounts");
         stats.num_snapshot_storage = storage.slot_count();
@@ -7757,7 +7757,7 @@ pub mod tests {
             },
             |a| a,
             &Range { start: 0, end: 1 },
-            &PubkeyBinCalculator16::new(1),
+            &PubkeyBinCalculator24::new(1),
         );
         assert_eq!(calls.load(Ordering::Relaxed), 1);
         assert_eq!(

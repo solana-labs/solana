@@ -1271,7 +1271,7 @@ mod tests {
         let bins = idx.account_maps.len();
         // use bins * 2 to get the first half of the range within bin 0
         let bins_2 = bins * 2;
-        let binner = crate::pubkey_bins::PubkeyBinCalculator16::new(bins_2);
+        let binner = crate::pubkey_bins::PubkeyBinCalculator24::new(bins_2);
         let range2 =
             binner.lowest_pubkey_from_bin(0, bins_2)..binner.lowest_pubkey_from_bin(1, bins_2);
         let range2_inclusive = range2.start..=range2.end;
