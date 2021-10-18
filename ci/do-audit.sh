@@ -45,8 +45,6 @@ cargo_audit_ignores=(
   # Blocked on jsonrpc removing dependency on unmaintained `websocket`
   # https://github.com/paritytech/jsonrpc/issues/605
   --ignore RUSTSEC-2021-0079
-<<<<<<< HEAD
-=======
 
   # chrono: Potential segfault in `localtime_r` invocations
   #
@@ -54,6 +52,5 @@ cargo_audit_ignores=(
   # https://github.com/chronotope/chrono/issues/499
   --ignore RUSTSEC-2020-0159
 
->>>>>>> 7baeb04f2 (Ignore RUSTSEC-2020-0159)
 )
 scripts/cargo-for-all-lock-files.sh stable audit "${cargo_audit_ignores[@]}"
