@@ -46,5 +46,11 @@ cargo_audit_ignores=(
   # https://github.com/paritytech/jsonrpc/issues/605
   --ignore RUSTSEC-2021-0079
 
+  # chrono: Potential segfault in `localtime_r` invocations
+  #
+  # Blocked due to no safe upgrade
+  # https://github.com/chronotope/chrono/issues/499
+  --ignore RUSTSEC-2020-0159
+
 )
 scripts/cargo-for-all-lock-files.sh stable audit "${cargo_audit_ignores[@]}"
