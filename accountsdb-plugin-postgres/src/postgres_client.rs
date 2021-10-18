@@ -251,13 +251,17 @@ impl SimplePostgresClient {
         }
     }
 
-    fn upsert_account(&mut self, account: &DbAccountInfo) -> Result<(), AccountsDbPluginError> {
+    /// Internal function for updating or inserting a single account
+    fn upsert_account_internal(
+        account: &DbAccountInfo,
+        statement: &Statement,
+        client: &mut Client,
+    ) -> Result<(), AccountsDbPluginError> {
         let lamports = account.lamports() as i64;
         let rent_epoch = account.rent_epoch() as i64;
         let updated_on = Utc::now().naive_utc();
-        let client = self.client.get_mut().unwrap();
-        let result = client.client.query(
-            &client.update_account_stmt,
+        let result = client.query(
+            statement,
             &[
                 &account.pubkey(),
                 &account.slot,
@@ -282,6 +286,15 @@ impl SimplePostgresClient {
         Ok(())
     }
 
+    /// Update or insert a single account
+    fn upsert_account(&mut self, account: &DbAccountInfo) -> Result<(), AccountsDbPluginError> {
+        let client = self.client.get_mut().unwrap();
+        let statement = &client.update_account_stmt;
+        let client = &mut client.client;
+        Self::upsert_account_internal(account, statement, client)
+    }
+
+    /// Insert accounts in batch to reduce network overhead
     fn insert_accounts_in_batch(
         &mut self,
         account: DbAccountInfo,
@@ -346,6 +359,23 @@ impl SimplePostgresClient {
         Ok(())
     }
 
+    /// Flush any left over accounts in batch which are not processed in the last batch
+    fn flush_buffered_writes(&mut self) -> Result<(), AccountsDbPluginError> {
+        if self.accounts.is_empty() {
+            return Ok(());
+        }
+
+        let client = self.client.get_mut().unwrap();
+        let statement = &client.update_account_stmt;
+        let client = &mut client.client;
+
+        for account in self.accounts.drain(..) {
+            Self::upsert_account_internal(&account, statement, client)?;
+        }
+
+        Ok(())
+    }
+
     pub fn new(config: &AccountsDbPluginPostgresConfig) -> Result<Self, AccountsDbPluginError> {
         info!("Creating SimplePostgresClient...");
         let mut client = Self::connect_to_db(config)?;
@@ -384,6 +414,7 @@ impl PostgresClient for SimplePostgresClient {
         if !at_startup {
             return self.upsert_account(&account);
         }
+        self.flush_buffered_writes()?;
         self.insert_accounts_in_batch(account)
     }
 
