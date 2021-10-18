@@ -2034,7 +2034,7 @@ impl AccountsDb {
                         let mut not_found_on_fork = 0;
                         let mut missing = 0;
                         let mut useful = 0;
-                        self.accounts_index.get_many(
+                        self.accounts_index.scan(
                             pubkeys,
                             max_clean_root,
                             // return true if we want this item to remain in the cache

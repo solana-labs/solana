@@ -1402,7 +1402,7 @@ impl<T: IndexValue> AccountsIndex<T> {
 
     /// For each pubkey, find the latest account that appears in `roots` and <= `max_root`
     ///   call `callback`
-    pub(crate) fn get_many<F>(&self, pubkeys: &[Pubkey], max_root: Option<Slot>, mut callback: F)
+    pub(crate) fn scan<F>(&self, pubkeys: &[Pubkey], max_root: Option<Slot>, mut callback: F)
     where
         // return true if accounts index entry should be put in in_mem cache
         // params:
