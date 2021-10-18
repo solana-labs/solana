@@ -323,6 +323,7 @@ impl Rocks {
             Index::NAME,
             get_cf_options::<Index>(&access_type, &oldest_slot),
         );
+        // Keep shred cf's around for ability to open existing ledger
         let shred_data_cf_descriptor = ColumnFamilyDescriptor::new(
             ShredData::NAME,
             get_cf_options::<ShredData>(&access_type, &oldest_slot),

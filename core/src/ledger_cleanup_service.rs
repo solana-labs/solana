@@ -136,25 +136,22 @@ impl LedgerCleanupService {
         last_flush_slot: &mut u64,
         flush_interval: u64,
     ) -> BlockstoreResult<()> {
-        let slots_to_flush: Vec<Slot> =
-            blockstore.get_data_shred_slots_to_flush(root - flush_interval);
-
-        if slots_to_flush.is_empty() {
-            info!("no shreds found to flush");
-            return Ok(());
-        }
-
         let mut flush_time = Measure::start("flush_time");
-        // TODO: Do this in parallel across several threads ?
-        for slot in slots_to_flush.iter() {
-            blockstore.flush_data_shreds_for_slot_to_fs(*slot)?;
-        }
+        let (num_data_slots_flushed, num_data_shreds_flushed) =
+            blockstore.flush_data_shreds_to_fs(root - flush_interval)?;
+        let (num_coding_slots_flushed, num_coding_shreds_flushed) =
+            blockstore.flush_coding_shreds_to_fs(root - flush_interval)?;
         flush_time.stop();
+
         *last_flush_slot = root;
-        info!(
-            "flushed {} slots of shreds to disk, {}",
-            slots_to_flush.len(),
-            flush_time
+
+        datapoint_info!(
+            "ledger_cleanup_flush_shreds",
+            ("num_data_slots", num_data_slots_flushed as i64, i64),
+            ("num_data_shreds", num_data_shreds_flushed as i64, i64),
+            ("num_coding_slots", num_coding_slots_flushed as i64, i64),
+            ("num_coding_shreds", num_coding_shreds_flushed as i64, i64),
+            ("flush_time_us", flush_time.as_us() as i64, i64)
         );
         Ok(())
     }

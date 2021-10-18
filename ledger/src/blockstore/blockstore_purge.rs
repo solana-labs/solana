@@ -5,6 +5,7 @@ use std::time::Instant;
 pub struct PurgeStats {
     delete_range: u64,
     write_batch: u64,
+    delete_shreds: u64,
 }
 
 impl Blockstore {
@@ -23,7 +24,8 @@ impl Blockstore {
             ("from_slot", from_slot as i64, i64),
             ("to_slot", to_slot as i64, i64),
             ("delete_range_us", purge_stats.delete_range as i64, i64),
-            ("write_batch_us", purge_stats.write_batch as i64, i64)
+            ("write_batch_us", purge_stats.write_batch as i64, i64),
+            ("delete_shreds_us", purge_stats.delete_shreds as i64, i64)
         );
         if let Err(e) = purge_result {
             error!(
@@ -161,10 +163,6 @@ impl Blockstore {
                 .is_ok()
             & self
                 .db
-                .delete_range_cf::<cf::ShredCode>(&mut write_batch, from_slot, to_slot)
-                .is_ok()
-            & self
-                .db
                 .delete_range_cf::<cf::DeadSlots>(&mut write_batch, from_slot, to_slot)
                 .is_ok()
             & self
@@ -221,9 +219,8 @@ impl Blockstore {
                 // in no spiky periodic huge delete_range for them.
             }
         }
-        self.purge_data_shreds(from_slot, to_slot);
-
         delete_range_timer.stop();
+
         let mut write_timer = Measure::start("write_batch");
         if let Err(e) = self.db.write(write_batch) {
             error!(
@@ -233,8 +230,15 @@ impl Blockstore {
             return Err(e);
         }
         write_timer.stop();
+
+        let mut delete_shred_timer = Measure::start("delete_shreds");
+        self.delete_code_shreds(from_slot, to_slot);
+        self.delete_data_shreds(from_slot, to_slot);
+        delete_shred_timer.stop();
+
         purge_stats.delete_range += delete_range_timer.as_us();
         purge_stats.write_batch += write_timer.as_us();
+        purge_stats.delete_shreds += delete_shred_timer.as_us();
 
         // only drop w_active_transaction_status_index after we do db.write(write_batch);
         // otherwise, readers might be confused with inconsistent state between
@@ -257,10 +261,6 @@ impl Blockstore {
             && self
                 .db
                 .column::<cf::Root>()
-                .compact_range(from_slot, to_slot)
-                .unwrap_or(false)
-            && self
-                .code_shred_cf
                 .compact_range(from_slot, to_slot)
                 .unwrap_or(false)
             && self

@@ -3,7 +3,7 @@
 
 use {
     super::*,
-    crate::blockstore::blockstore_shreds::{ShredCache, ShredFileData},
+    crate::blockstore::blockstore_shreds::{ShredFileData, ShredSlotCache},
     crate::shred::SHRED_PAYLOAD_SIZE,
     std::{collections::btree_map, iter::Peekable, sync::RwLockReadGuard},
 };
@@ -30,10 +30,10 @@ pub(crate) struct SlotIterator<'a> {
 
 impl<'a> SlotIterator<'a> {
     pub fn setup(
-        cache: &'a Option<Arc<RwLock<ShredCache>>>,
+        cache: &'a Option<Arc<RwLock<ShredSlotCache>>>,
         path: &Path,
     ) -> (
-        Option<RwLockReadGuard<'a, ShredCache>>,
+        Option<RwLockReadGuard<'a, ShredSlotCache>>,
         Option<ShredFileData>,
     ) {
         let cache_guard = cache.as_ref().map(|cache| cache.read().unwrap());
@@ -51,7 +51,7 @@ impl<'a> SlotIterator<'a> {
     pub fn new(
         slot: Slot,
         start_index: u64,
-        cache_guard: &'a Option<RwLockReadGuard<ShredCache>>,
+        cache_guard: &'a Option<RwLockReadGuard<ShredSlotCache>>,
         file_data: &'a Option<ShredFileData>,
     ) -> Self {
         let cache_iter = if cache_guard.is_some() {
