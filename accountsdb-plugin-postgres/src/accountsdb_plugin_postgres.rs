@@ -42,7 +42,7 @@ pub struct AccountsDbPluginPostgresConfig {
 
 #[derive(Error, Debug)]
 pub enum AccountsDbPluginPostgresError {
-    #[error("Error connecting to the backend data store, Error message: ({msg})")]
+    #[error("Error connecting to the backend data store. Error message: ({msg})")]
     DataStoreConnectionError { msg: String },
 
     #[error("Error preparing data store schema. Error message: ({msg})")]
@@ -76,7 +76,9 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
     /// "host" specifies the PostgreSQL server.
     /// "user" specifies the PostgreSQL user.
     /// "threads" optional, specifies the number of worker threads for the plugin. A thread
-    /// maintains a PostgreSQL connection to the server.
+    /// maintains a PostgreSQL connection to the server. The default is 10.
+    /// "batch_size" optional, specifies the batch size of bulk insert when the AccountsDb is created
+    /// from restoring a snapshot. The default is "10".
     /// # Examples
     /// {
     ///    "libpath": "/home/solana/target/release/libsolana_accountsdb_plugin_postgres.so",
@@ -138,10 +140,11 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
         slot: u64,
         at_startup: bool,
     ) -> Result<()> {
-        let mut m1 = Measure::start("accountsdb-plugin-postgres-update-account-main");
+        let mut measure_all = Measure::start("accountsdb-plugin-postgres-update-account-main");
         match account {
             ReplicaAccountInfoVersions::V0_0_1(account) => {
-                let mut m2 = Measure::start("accountsdb-plugin-postgres-update-account-select");
+                let mut measure_select =
+                    Measure::start("accountsdb-plugin-postgres-update-account-select");
                 if let Some(accounts_selector) = &self.accounts_selector {
                     if !accounts_selector.is_account_selected(account.pubkey, account.owner) {
                         return Ok(());
@@ -149,9 +152,13 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                 } else {
                     return Ok(());
                 }
-                m2.stop();
-
-                let mut m3 = Measure::start("accountsdb-plugin-postgres-update-account-log");
+                measure_select.stop();
+                inc_new_counter_debug!(
+                    "accountsdb-plugin-postgres-update-account-select-us",
+                    measure_select.as_us() as usize,
+                    100000,
+                    100000
+                );
 
                 debug!(
                     "Updating account {:?} with owner {:?} at slot {:?} using account selector {:?}",
@@ -159,21 +166,6 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                     bs58::encode(account.owner).into_string(),
                     slot,
                     self.accounts_selector.as_ref().unwrap()
-                );
-                m3.stop();
-
-                inc_new_counter_debug!(
-                    "accountsdb-plugin-postgres-update-account-select-us",
-                    m2.as_us() as usize,
-                    100000,
-                    100000
-                );
-
-                inc_new_counter_debug!(
-                    "accountsdb-plugin-postgres-update-account-log-us",
-                    m3.as_us() as usize,
-                    100000,
-                    100000
                 );
 
                 match &mut self.client {
@@ -186,14 +178,14 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                         )));
                     }
                     Some(client) => {
-                        let mut measure =
+                        let mut measure_update =
                             Measure::start("accountsdb-plugin-postgres-update-account-client");
                         let result = { client.update_account(account, slot, at_startup) };
-                        measure.stop();
+                        measure_update.stop();
 
                         inc_new_counter_debug!(
                             "accountsdb-plugin-postgres-update-account-client-us",
-                            measure.as_us() as usize,
+                            measure_update.as_us() as usize,
                             100000,
                             100000
                         );
@@ -208,11 +200,11 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
             }
         }
 
-        m1.stop();
+        measure_all.stop();
 
         inc_new_counter_debug!(
             "accountsdb-plugin-postgres-update-account-main-us",
-            m1.as_us() as usize,
+            measure_all.as_us() as usize,
             100000,
             100000
         );

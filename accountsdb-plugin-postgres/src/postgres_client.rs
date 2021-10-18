@@ -28,6 +28,7 @@ use {
 /// memory usage. The downside -- calls after this threshold is reached can get blocked.
 const MAX_ASYNC_REQUESTS: usize = 40960;
 const DEFAULT_POSTGRES_PORT: u16 = 5432;
+const DEFAULT_THREADS_COUNT: usize = 100;
 const DEFAULT_ACCOUNTS_INSERT_BATCH_SIZE: usize = 10;
 const ACCOUNT_COLUMN_COUNT: usize = 8;
 
@@ -563,7 +564,7 @@ impl ParallelPostgresClient {
         let exit_worker = Arc::new(AtomicBool::new(false));
         let mut workers = Vec::default();
 
-        for i in 0..config.threads.unwrap() {
+        for i in 0..config.threads.unwrap_or(DEFAULT_THREADS_COUNT) {
             let cloned_receiver = receiver.clone();
             let exit_clone = exit_worker.clone();
             let config = config.clone();

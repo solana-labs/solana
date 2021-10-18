@@ -25,7 +25,7 @@ pub enum ReplicaAccountInfoVersions<'a> {
 
 #[derive(Error, Debug)]
 pub enum AccountsDbPluginError {
-    #[error("Error opening config file: error ({0}).")]
+    #[error("Error opening config file. Error detail: ({0}).")]
     ConfigFileOpenError(#[from] io::Error),
 
     #[error("Error reading config file. Error message: ({msg})")]

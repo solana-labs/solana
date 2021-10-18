@@ -31,15 +31,15 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
     }
 
     fn notify_account_restore_from_snapshot(&self, slot: Slot, account: &StoredAccountMeta) {
-        let mut measure2 = Measure::start("accountsdb-plugin-notify-account-restore-all");
-        let mut measure = Measure::start("accountsdb-plugin-copy-stored-account-info");
+        let mut measure_all = Measure::start("accountsdb-plugin-notify-account-restore-all");
+        let mut measure_copy = Measure::start("accountsdb-plugin-copy-stored-account-info");
 
         let account = self.accountinfo_from_stored_account_meta(account);
-        measure.stop();
+        measure_copy.stop();
 
         inc_new_counter_debug!(
             "accountsdb-plugin-copy-stored-account-info-us",
-            measure.as_us() as usize,
+            measure_copy.as_us() as usize,
             100000,
             100000
         );
@@ -47,11 +47,11 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
         if let Some(account_info) = account {
             self.notify_plugins_of_account_update(account_info, slot, true);
         }
-        measure2.stop();
+        measure_all.stop();
 
         inc_new_counter_debug!(
             "accountsdb-plugin-notify-account-restore-all-us",
-            measure2.as_us() as usize,
+            measure_all.as_us() as usize,
             100000,
             100000
         );
