@@ -624,7 +624,7 @@ impl EntrySlice for [Entry] {
                             &mut packets.packets[i],
                             None,
                             //todo: do we want to include the hash as well?
-                            hashed_tx.message(),
+                            &hashed_tx.to_versioned_transaction(),
                         )
                         .unwrap();
                     }
@@ -682,7 +682,7 @@ impl EntrySlice for [Entry] {
 
                     Some(SanitizedTransaction::try_create(Cow::Borrowed(&tx), message_hash, |_| {
                         Err(TransactionError::UnsupportedVersion)
-                    })
+                    }))
                 },
                 None => None
             }
