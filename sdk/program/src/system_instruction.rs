@@ -1,5 +1,4 @@
 #[allow(deprecated)]
-use crate::sysvar::recent_blockhashes;
 use {
     crate::{
         decode_error::DecodeError,
@@ -7,7 +6,7 @@ use {
         nonce,
         pubkey::Pubkey,
         system_program,
-        sysvar::rent,
+        sysvar::{recent_blockhashes, rent},
     },
     num_derive::{FromPrimitive, ToPrimitive},
     thiserror::Error,
