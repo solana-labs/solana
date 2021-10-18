@@ -12,7 +12,7 @@ use {
         serialize_utils::{
             append_slice, append_u16, append_u8, read_pubkey, read_slice, read_u16, read_u8,
         },
-        short_vec, system_instruction, system_program, sysvar,
+        short_vec, system_instruction, system_program, sysvar, wasm_bindgen,
     },
     lazy_static::lazy_static,
     std::{collections::BTreeSet, convert::TryFrom, str::FromStr},
@@ -168,15 +168,18 @@ fn get_program_ids(instructions: &[Instruction]) -> Vec<Pubkey> {
 
 // NOTE: Serialization-related changes must be paired with the custom serialization
 // for versioned messages in the `RemainingLegacyMessage` struct.
+#[wasm_bindgen]
 #[frozen_abi(digest = "2KnLEqfLcTBQqitE22Pp8JYkaqVVbAkGbCfdeHoyxcAU")]
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct Message {
     /// The message header, identifying signed and read-only `account_keys`
     /// NOTE: Serialization-related changes must be paired with the direct read at sigverify.
+    #[wasm_bindgen(skip)]
     pub header: MessageHeader,
 
     /// All the account keys used by this transaction
+    #[wasm_bindgen(skip)]
     #[serde(with = "short_vec")]
     pub account_keys: Vec<Pubkey>,
 
@@ -185,6 +188,7 @@ pub struct Message {
 
     /// Programs that will be executed in sequence and committed in one atomic transaction if all
     /// succeed.
+    #[wasm_bindgen(skip)]
     #[serde(with = "short_vec")]
     pub instructions: Vec<CompiledInstruction>,
 }
