@@ -3076,7 +3076,7 @@ impl Bank {
     }
 
     pub fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> u64 {
-        self.rent_collector.rent.minimum_balance(data_len)
+        self.rent_collector.rent.minimum_balance(data_len).max(1)
     }
 
     #[deprecated(
