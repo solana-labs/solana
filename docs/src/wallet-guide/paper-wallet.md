@@ -46,20 +46,20 @@ access your account.
 
 ### Seed Phrase Generation
 
-Generating a new keypair can be done using the `solana-keygen new` command. The
+Generating a new keypair can be done using the `solana-keygen new` command. To generate a keypair for the paper wallet, use the "--no-outfile" flag along with the "solana-keygen new" command. The
 command will generate a random seed phrase, ask you to enter an optional
 passphrase, and then will display the derived public key and the generated seed
-phrase for your paper wallet.
+phrase for your paper wallet. Please copy or write your seeds somewhere safe.
 
-After copying down your seed phrase, you can use the
-[public key derivation](#public-key-derivation) instructions to verify that you
-have not made any errors.
 
 ```bash
 solana-keygen new --no-outfile
 ```
 
 > If the `--no-outfile` flag is **omitted**, the default behavior is to write the keypair to `~/.config/solana/id.json`, resulting in a [file system wallet](file-system-wallet.md).
+
+After copying down your seed phrase, you can use the
+[public key derivation](#public-key-derivation) instructions to verify that you have not made any errors.
 
 The output of this command will display a line like this:
 
