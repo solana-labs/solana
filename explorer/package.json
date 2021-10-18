@@ -7,7 +7,7 @@
     "@bonfida/bot": "^0.5.3",
     "@cloudflare/stream-react": "^1.2.0",
     "@metamask/jazzicon": "^2.0.0",
-    "@metaplex/js": "1.2.0",
+    "@metaplex/js": "2.0.1",
     "@project-serum/serum": "^0.13.60",
     "@react-hook/debounce": "^4.0.0",
     "@sentry/react": "^6.13.3",
