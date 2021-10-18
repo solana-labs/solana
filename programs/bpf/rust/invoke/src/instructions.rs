@@ -1,4 +1,4 @@
-//! @brief Example Rust-based BPF program that issues a cross-program-invocation
+//! Example Rust-based BPF program that issues a cross-program-invocation
 
 pub const TEST_SUCCESS: u8 = 1;
 pub const TEST_PRIVILEGE_ESCALATION_SIGNER: u8 = 2;

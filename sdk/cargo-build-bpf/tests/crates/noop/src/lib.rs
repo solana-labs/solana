@@ -1,4 +1,4 @@
-//! @brief Example Rust-based BPF noop program
+//! Example Rust-based BPF noop program
 
 extern crate solana_program;
 use solana_program::{
