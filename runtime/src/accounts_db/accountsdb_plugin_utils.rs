@@ -75,12 +75,6 @@ impl AccountsDb {
         notified_accounts: &mut HashSet<Pubkey>,
         notify_stats: &mut AccountsDbPluginNotifyAtSnapshotRestoreStats,
     ) {
-        let notifier = self
-            .accounts_update_notifier
-            .as_ref()
-            .unwrap()
-            .read()
-            .unwrap();
 
         let slot_stores = self.storage.get_slot_stores(slot).unwrap();
 
@@ -113,24 +107,39 @@ impl AccountsDb {
             measure_filter.stop();
 
             notify_stats.elapsed_filtering_us += measure_filter.as_us() as usize;
-
-            let mut measure_notify = Measure::start("accountsdb-plugin-notifying-accounts");
-            for account in accounts_to_stream.values() {
-                let mut measure_pure_notify =
-                    Measure::start("accountsdb-plugin-notifying-accounts");
-                notifier.notify_account_restore_from_snapshot(slot, account);
-                measure_pure_notify.stop();
-
-                notify_stats.total_pure_notify += measure_pure_notify.as_us() as usize;
-
-                let mut measure_bookkeep =
-                    Measure::start("accountsdb-plugin-notifying-bookeeeping");
-                notified_accounts.insert(account.meta.pubkey);
-                measure_bookkeep.stop();
-                notify_stats.total_pure_bookeeping += measure_bookkeep.as_us() as usize;
-            }
-            measure_notify.stop();
-            notify_stats.elapsed_notifying_us += measure_notify.as_us() as usize;
         }
+        self.notify_filtered_accounts(slot, notified_accounts, &accounts_to_stream, notify_stats);
+    }
+
+    fn notify_filtered_accounts(&self,
+        slot: Slot,
+        notified_accounts: &mut HashSet<Pubkey>,
+        accounts_to_stream: &HashMap<Pubkey, StoredAccountMeta>,
+        notify_stats: &mut AccountsDbPluginNotifyAtSnapshotRestoreStats,
+    ) {
+        let notifier = self
+            .accounts_update_notifier
+            .as_ref()
+            .unwrap()
+            .read()
+            .unwrap();
+
+        let mut measure_notify = Measure::start("accountsdb-plugin-notifying-accounts");
+        for account in accounts_to_stream.values() {
+            let mut measure_pure_notify =
+                Measure::start("accountsdb-plugin-notifying-accounts");
+            notifier.notify_account_restore_from_snapshot(slot, account);
+            measure_pure_notify.stop();
+
+            notify_stats.total_pure_notify += measure_pure_notify.as_us() as usize;
+
+            let mut measure_bookkeep =
+                Measure::start("accountsdb-plugin-notifying-bookeeeping");
+            notified_accounts.insert(account.meta.pubkey);
+            measure_bookkeep.stop();
+            notify_stats.total_pure_bookeeping += measure_bookkeep.as_us() as usize;
+        }
+        measure_notify.stop();
+        notify_stats.elapsed_notifying_us += measure_notify.as_us() as usize;        
     }
 }
