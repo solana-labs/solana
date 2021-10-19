@@ -75,7 +75,6 @@ impl AccountsDb {
         notified_accounts: &mut HashSet<Pubkey>,
         notify_stats: &mut AccountsDbPluginNotifyAtSnapshotRestoreStats,
     ) {
-
         let slot_stores = self.storage.get_slot_stores(slot).unwrap();
 
         let slot_stores = slot_stores.read().unwrap();
@@ -110,7 +109,8 @@ impl AccountsDb {
         self.notify_filtered_accounts(slot, notified_accounts, &accounts_to_stream, notify_stats);
     }
 
-    fn notify_filtered_accounts(&self,
+    fn notify_filtered_accounts(
+        &self,
         slot: Slot,
         notified_accounts: &mut HashSet<Pubkey>,
         accounts_to_stream: &HashMap<Pubkey, StoredAccountMeta>,
@@ -125,21 +125,19 @@ impl AccountsDb {
 
         let mut measure_notify = Measure::start("accountsdb-plugin-notifying-accounts");
         for account in accounts_to_stream.values() {
-            let mut measure_pure_notify =
-                Measure::start("accountsdb-plugin-notifying-accounts");
+            let mut measure_pure_notify = Measure::start("accountsdb-plugin-notifying-accounts");
             notifier.notify_account_restore_from_snapshot(slot, account);
             measure_pure_notify.stop();
 
             notify_stats.total_pure_notify += measure_pure_notify.as_us() as usize;
 
-            let mut measure_bookkeep =
-                Measure::start("accountsdb-plugin-notifying-bookeeeping");
+            let mut measure_bookkeep = Measure::start("accountsdb-plugin-notifying-bookeeeping");
             notified_accounts.insert(account.meta.pubkey);
             measure_bookkeep.stop();
             notify_stats.total_pure_bookeeping += measure_bookkeep.as_us() as usize;
         }
         notify_stats.notified_accounts += accounts_to_stream.len();
         measure_notify.stop();
-        notify_stats.elapsed_notifying_us += measure_notify.as_us() as usize;        
+        notify_stats.elapsed_notifying_us += measure_notify.as_us() as usize;
     }
 }
