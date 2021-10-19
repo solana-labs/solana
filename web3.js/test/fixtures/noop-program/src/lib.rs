@@ -1,4 +1,4 @@
-//! @brief Example Rust-based BPF program that prints out the parameters passed to it
+//! Example Rust-based BPF program that prints out the parameters passed to it
 
 
 use solana_program::{
