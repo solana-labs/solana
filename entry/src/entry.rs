@@ -32,7 +32,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Instant;
 use std::{cmp, thread};
-use std::borrow::Cow;
+use solana_sdk::feature_set::{libsecp256k1_0_5_upgrade_enabled, libsecp256k1_fail_on_bad_count, FeatureSet};
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
@@ -623,7 +623,6 @@ impl EntrySlice for [Entry] {
                         Packet::populate_packet(
                             &mut packets.packets[i],
                             None,
-                            //todo: do we want to include the hash as well?
                             &hashed_tx.to_versioned_transaction(),
                         )
                         .unwrap();
@@ -662,7 +661,8 @@ impl EntrySlice for [Entry] {
         verify_tx_signatures_len: bool,
     ) -> Option<Vec<EntryType>> {
         let verify_and_hash = |vtx: & VersionedTransaction| -> Option<SanitizedTransaction> {
-            let maybe_tx=vtx.into_legacy_transaction();
+            // todo: is there a more efficient way to do this?
+            let maybe_tx=vtx.clone().into_legacy_transaction();
             match maybe_tx {
                 Some(tx)=>
                 {
@@ -670,7 +670,17 @@ impl EntrySlice for [Entry] {
                         if secp256k1_program_enabled {
                             // Verify tx precompiles if secp256k1 program is enabled.
                             //todo: what should the featureset be?
-                            tx.verify_precompiles().ok()?;
+                            let mut feature_set = solana_sdk::feature_set::FeatureSet::all_enabled();
+                            if !secp256k1_program_enabled {
+                                feature_set
+                                .active
+                                .remove(&solana_sdk::feature_set::libsecp256k1_0_5_upgrade_enabled::id());
+                            feature_set
+                                .inactive
+                                .insert(solana_sdk::feature_set::libsecp256k1_0_5_upgrade_enabled::id());
+                            }
+                            let feature_set = Arc::new(feature_set);
+                            tx.verify_precompiles(&feature_set).ok()?;
                         }
                         if verify_tx_signatures_len && !tx.verify_signatures_len() {
                             return None;
@@ -679,10 +689,14 @@ impl EntrySlice for [Entry] {
                     } else {
                         tx.message.hash()
                     };
-
-                    Some(SanitizedTransaction::try_create(Cow::Borrowed(&tx), message_hash, |_| {
+                    // todo: is there a more efficient way to do this?
+                    let sanitized_transaction_result = SanitizedTransaction::try_create(vtx.clone(), message_hash, |_| {
                         Err(TransactionError::UnsupportedVersion)
-                    }))
+                    });
+                    match sanitized_transaction_result {
+                        Ok(val)=>Some(val),
+                        Err(_)=>None,
+                    }
                 },
                 None => None
             }
@@ -715,30 +729,46 @@ impl EntrySlice for [Entry] {
         libsecp256k1_0_5_upgrade_enabled: bool,
         verify_tx_signatures_len: bool,
     ) -> EntrySigVerificationState {
-        let verify_and_hash = |vtx: & VersionedTransaction| -> Result<SanitizedTransaction> {
-            let maybe_tx=vtx.into_legacy_transaction();
+        let verify_and_hash = |vtx: & VersionedTransaction| -> Option<SanitizedTransaction> {
+            // todo: is there a more efficient way to do this?
+            let maybe_tx=vtx.clone().into_legacy_transaction();
             match maybe_tx {
                 Some(tx)=>{
                     let message_hash = if !skip_verification {
                         let size =
-                            bincode::serialized_size(&tx).map_err(|_| TransactionError::SanitizeFailure)?;
+                            bincode::serialized_size(&tx).ok()?;
                         if size > PACKET_DATA_SIZE as u64 {
-                            return Err(TransactionError::SanitizeFailure);
+                            return None;
                         }
-                        tx.verify_precompiles(libsecp256k1_0_5_upgrade_enabled)?;
+                        let mut feature_set = solana_sdk::feature_set::FeatureSet::all_enabled();
+                        if !libsecp256k1_0_5_upgrade_enabled {
+                            feature_set
+                            .active
+                            .remove(&solana_sdk::feature_set::libsecp256k1_0_5_upgrade_enabled::id());
+                        feature_set
+                            .inactive
+                            .insert(solana_sdk::feature_set::libsecp256k1_0_5_upgrade_enabled::id());
+                        }
+                        let feature_set = Arc::new(feature_set);
+                        tx.verify_precompiles(&feature_set).ok()?;
                         if verify_tx_signatures_len && !tx.verify_signatures_len() {
-                            return Err(TransactionError::SanitizeFailure);
+                            return None;
                         }
-                        tx.verify_and_hash_message()?
+                        tx.verify_and_hash_message().ok()?
                     } else {
                         tx.message.hash()
                     };
-
-                    SanitizedTransaction::try_create(Cow::Borrowed(&tx), message_hash, |_| {
+                    // todo: is there a more efficient way to do this?
+                    let sanitized_transaction_result = SanitizedTransaction::try_create(vtx.clone(), message_hash, |_| {
                         Err(TransactionError::UnsupportedVersion)
-                    })
+                    });
+                    match sanitized_transaction_result {
+                        Ok(val)=>Some(val),
+                        Err(_)=>None,
+                    }
+
                 },
-                None => Err(TransactionError::UnsupportedVersion)
+                None => None
             }
         };
 
@@ -747,14 +777,14 @@ impl EntrySlice for [Entry] {
                 self.par_iter()
                     .map(|entry| {
                         if entry.transactions.is_empty() {
-                            Ok(EntryType::Tick(entry.hash))
+                            Some(EntryType::Tick(entry.hash))
                         } else {
-                            Ok(EntryType::Transactions(
+                            Some(EntryType::Transactions(
                                 entry
                                     .transactions
                                     .par_iter()
                                     .map(verify_and_hash)
-                                    .collect::<Result<Vec<_>>>()?,
+                                    .collect::<Option<Vec<SanitizedTransaction>>>()?,
                             ))
                         }
                     })
