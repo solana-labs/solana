@@ -452,8 +452,14 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn get_compute_budget(&self) -> &ComputeBudget {
         &self.compute_budget
     }
+    fn set_blockhash(&mut self, hash: Hash) {
+        self.blockhash = hash;
+    }
     fn get_blockhash(&self) -> &Hash {
         &self.blockhash
+    }
+    fn set_fee_calculator(&mut self, fee_calculator: FeeCalculator) {
+        self.fee_calculator = fee_calculator;
     }
     fn get_fee_calculator(&self) -> &FeeCalculator {
         &self.fee_calculator

@@ -128,8 +128,12 @@ pub trait InvokeContext {
     fn get_sysvar_data(&self, id: &Pubkey) -> Option<Rc<Vec<u8>>>;
     /// Get this invocation's compute budget
     fn get_compute_budget(&self) -> &ComputeBudget;
+    /// Set this invocation's blockhash
+    fn set_blockhash(&mut self, hash: Hash);
     /// Get this invocation's blockhash
     fn get_blockhash(&self) -> &Hash;
+    /// Set this invocation's `FeeCalculator`
+    fn set_fee_calculator(&mut self, fee_calculator: FeeCalculator);
     /// Get this invocation's `FeeCalculator`
     fn get_fee_calculator(&self) -> &FeeCalculator;
     /// Set the return data
@@ -500,8 +504,14 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     fn get_compute_budget(&self) -> &ComputeBudget {
         &self.compute_budget
     }
+    fn set_blockhash(&mut self, hash: Hash) {
+        self.blockhash = hash;
+    }
     fn get_blockhash(&self) -> &Hash {
         &self.blockhash
+    }
+    fn set_fee_calculator(&mut self, fee_calculator: FeeCalculator) {
+        self.fee_calculator = fee_calculator;
     }
     fn get_fee_calculator(&self) -> &FeeCalculator {
         &self.fee_calculator
