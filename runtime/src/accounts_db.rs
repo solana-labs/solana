@@ -6195,15 +6195,7 @@ impl AccountsDb {
     pub fn store_cached(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
         self.store(slot, accounts, self.caching_enabled);
 
-        if let Some(accounts_update_notifier) = &self.accounts_update_notifier {
-            let notifier = &accounts_update_notifier.read().unwrap();
-
-            for account in accounts {
-                let pubkey = account.0;
-                let account = account.1;
-                notifier.notify_account_update(slot, pubkey, account);
-            }
-        }
+        self.notify_account_at_accounts_update(slot, accounts);
     }
 
     /// Store the account update.

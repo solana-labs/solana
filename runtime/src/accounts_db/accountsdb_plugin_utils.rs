@@ -2,7 +2,7 @@ use {
     crate::{accounts_db::AccountsDb, append_vec::StoredAccountMeta},
     solana_measure::measure::Measure,
     solana_metrics::*,
-    solana_sdk::{clock::Slot, pubkey::Pubkey},
+    solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey},
     std::collections::{HashMap, HashSet},
 };
 
@@ -11,10 +11,10 @@ pub struct AccountsDbPluginNotifyAtSnapshotRestoreStats {
     pub total_accounts: usize,
     pub skipped_accounts: usize,
     pub notified_accounts: usize,
-    pub elapse_filtering_us: usize,
+    pub elapsed_filtering_us: usize,
     pub total_pure_notify: usize,
     pub total_pure_bookeeping: usize,
-    pub elapse_notifying_us: usize,
+    pub elapsed_notifying_us: usize,
 }
 
 impl AccountsDbPluginNotifyAtSnapshotRestoreStats {
@@ -24,8 +24,8 @@ impl AccountsDbPluginNotifyAtSnapshotRestoreStats {
             ("total_accounts", self.total_accounts, i64),
             ("skipped_accounts", self.skipped_accounts, i64),
             ("notified_accounts", self.notified_accounts, i64),
-            ("elapse_filtering_us", self.elapse_filtering_us, i64),
-            ("elapse_notifying_us", self.elapse_notifying_us, i64),
+            ("elapsed_filtering_us", self.elapsed_filtering_us, i64),
+            ("elapsed_notifying_us", self.elapsed_notifying_us, i64),
             ("total_pure_notify_us", self.total_pure_notify, i64),
             ("total_pure_bookeeping_us", self.total_pure_bookeeping, i64),
         );
@@ -51,6 +51,22 @@ impl AccountsDb {
         }
 
         notify_stats.report();
+    }
+
+    pub fn notify_account_at_accounts_update(
+        &self,
+        slot: Slot,
+        accounts: &[(&Pubkey, &AccountSharedData)],
+    ) {
+        if let Some(accounts_update_notifier) = &self.accounts_update_notifier {
+            let notifier = &accounts_update_notifier.read().unwrap();
+
+            for account in accounts {
+                let pubkey = account.0;
+                let account = account.1;
+                notifier.notify_account_update(slot, pubkey, account);
+            }
+        }
     }
 
     fn notify_accounts_in_store<'a>(
@@ -96,7 +112,7 @@ impl AccountsDb {
 
             measure_filter.stop();
 
-            notify_stats.elapse_filtering_us += measure_filter.as_us() as usize;
+            notify_stats.elapsed_filtering_us += measure_filter.as_us() as usize;
 
             let mut measure_notify = Measure::start("accountsdb-plugin-notifying-accounts");
             for account in accounts_to_stream.values() {
@@ -114,7 +130,7 @@ impl AccountsDb {
                 notify_stats.total_pure_bookeeping += measure_bookkeep.as_us() as usize;
             }
             measure_notify.stop();
-            notify_stats.elapse_notifying_us += measure_notify.as_us() as usize;
+            notify_stats.elapsed_notifying_us += measure_notify.as_us() as usize;
         }
     }
 }
