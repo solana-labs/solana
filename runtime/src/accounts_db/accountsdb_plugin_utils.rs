@@ -47,7 +47,7 @@ impl AccountsDb {
 
         slots.sort_by(|a, b| b.cmp(a));
         for slot in slots {
-            self.notify_accounts_in_store(slot, &mut notified_accounts, &mut notify_stats);
+            self.notify_accounts_in_slot(slot, &mut notified_accounts, &mut notify_stats);
         }
 
         notify_stats.report();
@@ -69,7 +69,7 @@ impl AccountsDb {
         }
     }
 
-    fn notify_accounts_in_store<'a>(
+    fn notify_accounts_in_slot<'a>(
         &self,
         slot: Slot,
         notified_accounts: &mut HashSet<Pubkey>,
