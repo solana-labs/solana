@@ -741,20 +741,16 @@ impl Shred {
         limited_deserialize::<Slot>(&p.data[slot_start..slot_end]).ok()
     }
 
-    fn shred_type_from_data(data: &[u8]) -> ShredType {
-        if let Ok(shred_type) = sanitize_shred_type(data[OFFSET_OF_SHRED_TYPE]) {
-            shred_type
-        } else {
-            panic!("unexpected shred type");
-        }
+    fn shred_type_from_data(data: &[u8]) -> Result<ShredType> {
+        sanitize_shred_type(data[OFFSET_OF_SHRED_TYPE])
     }
 
-    pub fn reference_tick_from_data(data: &[u8]) -> u8 {
-        let shred_type = Shred::shred_type_from_data(data);
+    pub fn reference_tick_from_data(data: &[u8]) -> Result<u8> {
+        let shred_type = Shred::shred_type_from_data(data)?;
         let header_size = shred_type_to_common_header_size(shred_type);
         let flags =
             data[header_size + SIZE_OF_DATA_SHRED_HEADER - size_of::<u8>() - size_of::<u16>()];
-        flags & SHRED_TICK_REFERENCE_MASK
+        Ok(flags & SHRED_TICK_REFERENCE_MASK)
     }
 
     pub fn verify(&self, pubkey: &Pubkey) -> bool {
@@ -1351,6 +1347,7 @@ pub mod tests {
         assert_eq!(
             SIZE_OF_COMMON_SHRED_HEADER_V2,
             serialized_size(&common_shred_header_with_extended1).unwrap() as usize
+                + size_of::<u8>()
         );
         assert_eq!(
             SIZE_OF_CODING_SHRED_HEADER,
@@ -1529,7 +1526,7 @@ pub mod tests {
         let data_shreds = shredder.entries_to_shreds(&keypair, &entries, true, 0).0;
         data_shreds.iter().for_each(|s| {
             assert_eq!(s.reference_tick(), 5);
-            assert_eq!(Shred::reference_tick_from_data(&s.payload), 5);
+            assert_eq!(Shred::reference_tick_from_data(&s.payload).unwrap(), 5);
         });
 
         let deserialized_shred =
@@ -1557,7 +1554,7 @@ pub mod tests {
         data_shreds.iter().for_each(|s| {
             assert_eq!(s.reference_tick(), SHRED_TICK_REFERENCE_MASK);
             assert_eq!(
-                Shred::reference_tick_from_data(&s.payload),
+                Shred::reference_tick_from_data(&s.payload).unwrap(),
                 SHRED_TICK_REFERENCE_MASK
             );
         });
