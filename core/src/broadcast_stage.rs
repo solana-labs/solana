@@ -5,6 +5,7 @@ use {
         broadcast_duplicates_run::{BroadcastDuplicatesConfig, BroadcastDuplicatesRun},
         broadcast_fake_shreds_run::BroadcastFakeShredsRun,
         broadcast_metrics::*,
+        broadcast_missing_shreds_run::BroadcastMissingShredsRun,
         fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastRun,
         standard_broadcast_run::StandardBroadcastRun,
     },
@@ -48,6 +49,7 @@ use {
 pub mod broadcast_duplicates_run;
 mod broadcast_fake_shreds_run;
 pub mod broadcast_metrics;
+pub mod broadcast_missing_shreds_run;
 pub(crate) mod broadcast_utils;
 mod fail_entry_verification_broadcast_run;
 mod standard_broadcast_run;
@@ -141,7 +143,7 @@ impl BroadcastStageType {
                 exit_sender,
                 blockstore,
                 bank_forks,
-                BroadcastFakeShredsRun::new(0, shred_version),
+                BroadcastMissingShredsRun::new(shred_version),
             ),
         }
     }

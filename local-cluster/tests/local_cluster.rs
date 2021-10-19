@@ -2852,11 +2852,9 @@ fn test_faulty_node(
     // First validator is the bootstrap leader with the malicious broadcast logic.
     validator_configs.push(error_validator_config);
 
-    validator_configs.resize_with(num_nodes, || {
-        ValidatorConfig {
-            fixed_leader_schedule: fixed_leader_schedule.clone(),
-            ..ValidatorConfig::default()
-        }
+    validator_configs.resize_with(num_nodes, || ValidatorConfig {
+        fixed_leader_schedule: fixed_leader_schedule.clone(),
+        ..ValidatorConfig::default()
     });
 
     assert_eq!(node_stakes.len(), num_nodes);
