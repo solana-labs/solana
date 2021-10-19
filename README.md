@@ -11,7 +11,7 @@
 
 # Building
 
-## **1. Install rustc, cargo and rustfmt.**
+## **1. Instalar rustc, cargo y rustfmt.**
 
 ```bash
 $ curl https://sh.rustup.rs -sSf | sh
