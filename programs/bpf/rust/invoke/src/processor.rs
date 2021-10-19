@@ -1,51 +1,21 @@
 //! Example Rust-based BPF program that issues a cross-program-invocation
 
+#![cfg(feature = "program")]
 #![allow(unreachable_code)]
 
-extern crate solana_program;
-
-use solana_bpf_rust_invoked::instruction::*;
+use crate::instructions::*;
+use solana_bpf_rust_invoked::instructions::*;
 use solana_program::{
     account_info::AccountInfo,
     entrypoint,
     entrypoint::{ProgramResult, MAX_PERMITTED_DATA_INCREASE},
+    instruction::Instruction,
     msg,
     program::{get_return_data, invoke, invoke_signed, set_return_data},
     program_error::ProgramError,
     pubkey::{Pubkey, PubkeyError},
     system_instruction,
 };
-
-const TEST_SUCCESS: u8 = 1;
-const TEST_PRIVILEGE_ESCALATION_SIGNER: u8 = 2;
-const TEST_PRIVILEGE_ESCALATION_WRITABLE: u8 = 3;
-const TEST_PPROGRAM_NOT_EXECUTABLE: u8 = 4;
-const TEST_EMPTY_ACCOUNTS_SLICE: u8 = 5;
-const TEST_CAP_SEEDS: u8 = 6;
-const TEST_CAP_SIGNERS: u8 = 7;
-const TEST_ALLOC_ACCESS_VIOLATION: u8 = 8;
-const TEST_INSTRUCTION_DATA_TOO_LARGE: u8 = 9;
-const TEST_INSTRUCTION_META_TOO_LARGE: u8 = 10;
-const TEST_RETURN_ERROR: u8 = 11;
-const TEST_PRIVILEGE_DEESCALATION_ESCALATION_SIGNER: u8 = 12;
-const TEST_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE: u8 = 13;
-const TEST_WRITABLE_DEESCALATION_WRITABLE: u8 = 14;
-const TEST_NESTED_INVOKE_TOO_DEEP: u8 = 15;
-const TEST_EXECUTABLE_LAMPORTS: u8 = 16;
-const ADD_LAMPORTS: u8 = 17;
-const TEST_RETURN_DATA_TOO_LARGE: u8 = 19;
-
-// const MINT_INDEX: usize = 0; // unused placeholder
-const ARGUMENT_INDEX: usize = 1;
-const INVOKED_PROGRAM_INDEX: usize = 2;
-const INVOKED_ARGUMENT_INDEX: usize = 3;
-const INVOKED_PROGRAM_DUP_INDEX: usize = 4;
-// const ARGUMENT_DUP_INDEX: usize = 5; unused placeholder
-const DERIVED_KEY1_INDEX: usize = 6;
-const DERIVED_KEY2_INDEX: usize = 7;
-const DERIVED_KEY3_INDEX: usize = 8;
-const SYSTEM_PROGRAM_INDEX: usize = 9;
-const FROM_INDEX: usize = 10;
 
 fn do_nested_invokes(num_nested_invokes: u64, accounts: &[AccountInfo]) -> ProgramResult {
     assert!(accounts[ARGUMENT_INDEX].is_signer);
@@ -507,51 +477,27 @@ fn process_instruction(
             let owner = *accounts[FROM_INDEX].owner;
             let ptr = accounts[FROM_INDEX].data.borrow().as_ptr() as u64 as *mut _;
             let len = accounts[FROM_INDEX].data_len();
-            let mut data = unsafe { std::slice::from_raw_parts_mut(ptr, len) };
+            let data = unsafe { std::slice::from_raw_parts_mut(ptr, len) };
             let mut lamports = accounts[FROM_INDEX].lamports();
-            let from_info = AccountInfo::new(
-                &pubkey,
-                false,
-                true,
-                &mut lamports,
-                &mut data,
-                &owner,
-                false,
-                0,
-            );
+            let from_info =
+                AccountInfo::new(&pubkey, false, true, &mut lamports, data, &owner, false, 0);
 
             let pubkey = *accounts[DERIVED_KEY1_INDEX].key;
             let owner = *accounts[DERIVED_KEY1_INDEX].owner;
             // Point to top edge of heap, attempt to allocate into unprivileged memory
-            let mut data = unsafe { std::slice::from_raw_parts_mut(0x300007ff8 as *mut _, 0) };
+            let data = unsafe { std::slice::from_raw_parts_mut(0x300007ff8 as *mut _, 0) };
             let mut lamports = accounts[DERIVED_KEY1_INDEX].lamports();
-            let derived_info = AccountInfo::new(
-                &pubkey,
-                false,
-                true,
-                &mut lamports,
-                &mut data,
-                &owner,
-                false,
-                0,
-            );
+            let derived_info =
+                AccountInfo::new(&pubkey, false, true, &mut lamports, data, &owner, false, 0);
 
             let pubkey = *accounts[SYSTEM_PROGRAM_INDEX].key;
             let owner = *accounts[SYSTEM_PROGRAM_INDEX].owner;
             let ptr = accounts[SYSTEM_PROGRAM_INDEX].data.borrow().as_ptr() as u64 as *mut _;
             let len = accounts[SYSTEM_PROGRAM_INDEX].data_len();
-            let mut data = unsafe { std::slice::from_raw_parts_mut(ptr, len) };
+            let data = unsafe { std::slice::from_raw_parts_mut(ptr, len) };
             let mut lamports = accounts[SYSTEM_PROGRAM_INDEX].lamports();
-            let system_info = AccountInfo::new(
-                &pubkey,
-                false,
-                false,
-                &mut lamports,
-                &mut data,
-                &owner,
-                true,
-                0,
-            );
+            let system_info =
+                AccountInfo::new(&pubkey, false, false, &mut lamports, data, &owner, true, 0);
 
             let instruction = system_instruction::create_account(
                 accounts[FROM_INDEX].key,
@@ -663,6 +609,12 @@ fn process_instruction(
 
             // reset executable account
             **(*accounts[ARGUMENT_INDEX].lamports).borrow_mut() += 1;
+        }
+        TEST_CALL_PRECOMPILE => {
+            msg!("Test calling precompiled program from cpi");
+            let instruction =
+                Instruction::new_with_bytes(*accounts[ED25519_PROGRAM_INDEX].key, &[], vec![]);
+            invoke(&instruction, accounts)?;
         }
         ADD_LAMPORTS => {
             // make sure the total balance is fine

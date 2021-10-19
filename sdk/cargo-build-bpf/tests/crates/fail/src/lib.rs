@@ -6,11 +6,10 @@ use solana_program::{
 };
 
 entrypoint!(process_instruction);
-#[allow(clippy::unnecessary_wraps)]
 fn process_instruction(
     _program_id: &Pubkey,
     _accounts: &[AccountInfo],
     _instruction_data: &[u8],
 ) -> ProgramResult {
-    Ok(())
+    // error to make build fail: no return value
 }

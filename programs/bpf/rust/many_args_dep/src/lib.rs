@@ -1,4 +1,4 @@
-//! @brief Solana Rust-based BPF program utility functions and types
+//! Solana Rust-based BPF program utility functions and types
 
 extern crate solana_program;
 use solana_program::msg;
