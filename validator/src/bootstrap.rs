@@ -40,6 +40,12 @@ use {
     },
 };
 
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub enum ConfigState {
+    Disabled,
+    Enabled,
+}
+
 #[derive(Debug)]
 pub struct RpcBootstrapConfig {
     pub no_genesis_fetch: bool,
@@ -47,6 +53,8 @@ pub struct RpcBootstrapConfig {
     pub no_untrusted_rpc: bool,
     pub max_genesis_archive_unpacked_size: u64,
     pub no_check_vote_account: bool,
+    pub incremental_snapshots: ConfigState,
+    pub incremental_snapshot_fetch: ConfigState,
 }
 
 #[allow(clippy::too_many_arguments)]
