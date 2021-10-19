@@ -35,6 +35,7 @@ use solana_sdk::{
     nonce::NONCED_TX_MARKER_IX_INDEX,
     pubkey::Pubkey,
     system_program, sysvar,
+    sysvar::instructions::construct_instructions_data,
     transaction::{Result, SanitizedTransaction, TransactionError},
 };
 use std::{
@@ -206,9 +207,7 @@ impl Accounts {
         is_owned_by_sysvar: bool,
         demote_program_write_locks: bool,
     ) -> AccountSharedData {
-        let mut data = message.serialize_instructions(demote_program_write_locks);
-        // add room for current instruction index.
-        data.resize(data.len() + 2, 0);
+        let data = construct_instructions_data(message, demote_program_write_locks);
         let owner = if is_owned_by_sysvar {
             sysvar::id()
         } else {
