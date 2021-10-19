@@ -59,6 +59,7 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signer},
     },
+    solana_send_transaction_service::send_transaction_service,
     solana_streamer::socket::SocketAddrSpace,
     solana_validator::{
         admin_rpc_service, bootstrap, dashboard::Dashboard, ledger_lockfile, lock_ledger,
@@ -422,11 +423,12 @@ pub fn main() {
         PubSubConfig::default().queue_capacity_items.to_string();
     let default_rpc_pubsub_queue_capacity_bytes =
         PubSubConfig::default().queue_capacity_bytes.to_string();
-    let default_rpc_send_transaction_retry_ms = ValidatorConfig::default()
-        .send_transaction_retry_ms
+    let default_send_transaction_service_config = send_transaction_service::Config::default();
+    let default_rpc_send_transaction_retry_ms = default_send_transaction_service_config
+        .retry_rate_ms
         .to_string();
-    let default_rpc_send_transaction_leader_forward_count = ValidatorConfig::default()
-        .send_transaction_leader_forward_count
+    let default_rpc_send_transaction_leader_forward_count = default_send_transaction_service_config
+        .leader_forward_count
         .to_string();
     let default_rpc_threads = num_cpus::get().to_string();
     let default_accountsdb_repl_threads = num_cpus::get().to_string();
@@ -2093,12 +2095,14 @@ pub fn main() {
         debug_keys,
         contact_debug_interval,
         bpf_jit: !matches.is_present("no_bpf_jit"),
-        send_transaction_retry_ms: value_t_or_exit!(matches, "rpc_send_transaction_retry_ms", u64),
-        send_transaction_leader_forward_count: value_t_or_exit!(
-            matches,
-            "rpc_send_transaction_leader_forward_count",
-            u64
-        ),
+        send_transaction_service_config: send_transaction_service::Config {
+            retry_rate_ms: value_t_or_exit!(matches, "rpc_send_transaction_retry_ms", u64),
+            leader_forward_count: value_t_or_exit!(
+                matches,
+                "rpc_send_transaction_leader_forward_count",
+                u64
+            ),
+        },
         no_poh_speed_test: matches.is_present("no_poh_speed_test"),
         poh_pinned_cpu_core: value_of(&matches, "poh_pinned_cpu_core")
             .unwrap_or(poh_service::DEFAULT_PINNED_CPU_CORE),
