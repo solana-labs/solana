@@ -745,10 +745,10 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
     let mut program_ids = HashMap::new();
     let mut cost_model = CostModel::default();
     cost_model.initialize_cost_table(&blockstore.read_program_costs().unwrap());
-    let cost_model = Arc::new(RwLock::new(cost_model));
-    let mut cost_tracker = CostTracker::new(cost_model.clone());
+    let mut cost_tracker = CostTracker::default();
     let mut cost_tracker_stats = CostTrackerStats::default();
 
+<<<<<<< HEAD
     for entry in &entries {
         transactions += entry.transactions.len();
         let mut cost_model = cost_model.write().unwrap();
@@ -772,6 +772,45 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
                 *program_ids.entry(program_id).or_insert(0) += 1;
             }
         }
+=======
+    for entry in entries {
+        num_transactions += entry.transactions.len();
+        entry
+            .transactions
+            .into_iter()
+            .filter_map(|transaction| {
+                SanitizedTransaction::try_create(transaction, Hash::default(), |_| {
+                    Err(TransactionError::UnsupportedVersion)
+                })
+                .map_err(|err| {
+                    warn!("Failed to compute cost of transaction: {:?}", err);
+                })
+                .ok()
+            })
+            .for_each(|transaction| {
+                num_programs += transaction.message().instructions().len();
+
+                let tx_cost = cost_model.calculate_cost(
+                    &transaction,
+                    true, // demote_program_write_locks
+                );
+                if cost_tracker
+                    .try_add(&transaction, &tx_cost, &mut cost_tracker_stats)
+                    .is_err()
+                {
+                    println!(
+                        "Slot: {}, CostModel rejected transaction {:?}, stats {:?}!",
+                        slot,
+                        transaction,
+                        cost_tracker.get_stats()
+                    );
+                }
+                for (program_id, _instruction) in transaction.message().program_instructions_iter()
+                {
+                    *program_ids.entry(*program_id).or_insert(0) += 1;
+                }
+            });
+>>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
     }
 
     println!(

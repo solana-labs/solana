@@ -24,6 +24,7 @@ use solana_runtime::{
         TransactionExecutionResult,
     },
     bank_utils,
+    cost_model::CostModel,
     cost_tracker::CostTracker,
     cost_tracker_stats::CostTrackerStats,
     hashed_transaction::HashedTransaction,
@@ -55,7 +56,7 @@ use std::{
     net::{SocketAddr, UdpSocket},
     ops::DerefMut,
     sync::atomic::{AtomicU64, AtomicUsize, Ordering},
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, Mutex, RwLock, RwLockReadGuard},
     thread::{self, Builder, JoinHandle},
     time::Duration,
     time::Instant,
@@ -96,7 +97,6 @@ pub struct BankingStageStats {
     current_buffered_packet_batches_count: AtomicUsize,
     rebuffered_packets_count: AtomicUsize,
     consumed_buffered_packets_count: AtomicUsize,
-    reset_cost_tracker_count: AtomicUsize,
     cost_tracker_check_count: AtomicUsize,
     cost_forced_retry_transactions_count: AtomicUsize,
 
@@ -173,11 +173,6 @@ impl BankingStageStats {
                     "consumed_buffered_packets_count",
                     self.consumed_buffered_packets_count
                         .swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "reset_cost_tracker_count",
-                    self.reset_cost_tracker_count.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
@@ -288,7 +283,7 @@ impl BankingStage {
         verified_vote_receiver: CrossbeamReceiver<Vec<Packets>>,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
-        cost_tracker: Arc<RwLock<CostTracker>>,
+        cost_model: Arc<RwLock<CostModel>>,
     ) -> Self {
         Self::new_num_threads(
             cluster_info,
@@ -299,7 +294,7 @@ impl BankingStage {
             Self::num_threads(),
             transaction_status_sender,
             gossip_vote_sender,
-            cost_tracker,
+            cost_model,
         )
     }
 
@@ -312,7 +307,7 @@ impl BankingStage {
         num_threads: u32,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
-        cost_tracker: Arc<RwLock<CostTracker>>,
+        cost_model: Arc<RwLock<CostModel>>,
     ) -> Self {
         let batch_limit = TOTAL_BUFFERED_PACKETS / ((num_threads - 1) as usize * PACKETS_PER_BATCH);
         // Single thread to generate entries from many banks.
@@ -348,7 +343,11 @@ impl BankingStage {
                 let gossip_vote_sender = gossip_vote_sender.clone();
                 let duplicates = duplicates.clone();
                 let data_budget = data_budget.clone();
+<<<<<<< HEAD
                 let cost_tracker = cost_tracker.clone();
+=======
+                let cost_model = cost_model.clone();
+>>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
                 Builder::new()
                     .name("solana-banking-stage-tx".to_string())
                     .spawn(move || {
@@ -365,7 +364,11 @@ impl BankingStage {
                             gossip_vote_sender,
                             &duplicates,
                             &data_budget,
+<<<<<<< HEAD
                             &cost_tracker,
+=======
+                            cost_model,
+>>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
                         );
                     })
                     .unwrap()
@@ -423,6 +426,7 @@ impl BankingStage {
         has_more_unprocessed_transactions
     }
 
+<<<<<<< HEAD
     fn reset_cost_tracker_if_new_bank(
         cost_tracker: &Arc<RwLock<CostTracker>>,
         bank: Arc<Bank>,
@@ -441,6 +445,8 @@ impl BankingStage {
         }
     }
 
+=======
+>>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
     #[allow(clippy::too_many_arguments)]
     pub fn consume_buffered_packets(
         my_pubkey: &Pubkey,
@@ -452,7 +458,7 @@ impl BankingStage {
         test_fn: Option<impl Fn()>,
         banking_stage_stats: &BankingStageStats,
         recorder: &TransactionRecorder,
-        cost_tracker: &Arc<RwLock<CostTracker>>,
+        cost_model: &Arc<RwLock<CostModel>>,
         cost_tracker_stats: &mut CostTrackerStats,
     ) {
         let mut rebuffered_packets_len = 0;
@@ -471,8 +477,8 @@ impl BankingStage {
                     original_unprocessed_indexes,
                     my_pubkey,
                     *next_leader,
-                    cost_tracker,
                     banking_stage_stats,
+                    cost_model,
                     cost_tracker_stats,
                 );
                 Self::update_buffered_packets_with_new_unprocessed(
@@ -481,6 +487,7 @@ impl BankingStage {
                 )
             } else {
                 let bank_start = poh_recorder.lock().unwrap().bank_start();
+<<<<<<< HEAD
                 if let Some((bank, bank_creation_time)) = bank_start {
                     Self::reset_cost_tracker_if_new_bank(
                         cost_tracker,
@@ -488,6 +495,13 @@ impl BankingStage {
                         banking_stage_stats,
                         cost_tracker_stats,
                     );
+=======
+                if let Some(BankStart {
+                    working_bank,
+                    bank_creation_time,
+                }) = bank_start
+                {
+>>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
                     let (processed, verified_txs_len, new_unprocessed_indexes) =
                         Self::process_packets_transactions(
                             &bank,
@@ -498,7 +512,7 @@ impl BankingStage {
                             transaction_status_sender.clone(),
                             gossip_vote_sender,
                             banking_stage_stats,
-                            cost_tracker,
+                            cost_model,
                             cost_tracker_stats,
                         );
                     if processed < verified_txs_len
@@ -603,7 +617,11 @@ impl BankingStage {
         banking_stage_stats: &BankingStageStats,
         recorder: &TransactionRecorder,
         data_budget: &DataBudget,
+<<<<<<< HEAD
         cost_tracker: &Arc<RwLock<CostTracker>>,
+=======
+        cost_model: &Arc<RwLock<CostModel>>,
+>>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
         cost_tracker_stats: &mut CostTrackerStats,
     ) -> BufferedPacketsDecision {
         let bank_start;
@@ -615,6 +633,7 @@ impl BankingStage {
         ) = {
             let poh = poh_recorder.lock().unwrap();
             bank_start = poh.bank_start();
+<<<<<<< HEAD
             if let Some((ref bank, _)) = bank_start {
                 Self::reset_cost_tracker_if_new_bank(
                     cost_tracker,
@@ -623,6 +642,8 @@ impl BankingStage {
                     cost_tracker_stats,
                 );
             };
+=======
+>>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
             (
                 poh.leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET),
                 PohRecorder::get_bank_still_processing_txs(&bank_start),
@@ -653,7 +674,7 @@ impl BankingStage {
                     None::<Box<dyn Fn()>>,
                     banking_stage_stats,
                     recorder,
-                    cost_tracker,
+                    cost_model,
                     cost_tracker_stats,
                 );
             }
@@ -734,7 +755,11 @@ impl BankingStage {
         gossip_vote_sender: ReplayVoteSender,
         duplicates: &Arc<Mutex<(LruCache<u64, ()>, PacketHasher)>>,
         data_budget: &DataBudget,
+<<<<<<< HEAD
         cost_tracker: &Arc<RwLock<CostTracker>>,
+=======
+        cost_model: Arc<RwLock<CostModel>>,
+>>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
     ) {
         let recorder = poh_recorder.lock().unwrap().recorder();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -755,7 +780,11 @@ impl BankingStage {
                     &banking_stage_stats,
                     &recorder,
                     data_budget,
+<<<<<<< HEAD
                     cost_tracker,
+=======
+                    &cost_model,
+>>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
                     &mut cost_tracker_stats,
                 );
                 if matches!(decision, BufferedPacketsDecision::Hold)
@@ -791,7 +820,7 @@ impl BankingStage {
                 &banking_stage_stats,
                 duplicates,
                 &recorder,
-                cost_tracker,
+                &cost_model,
                 &mut cost_tracker_stats,
             ) {
                 Ok(()) | Err(RecvTimeoutError::Timeout) => (),
@@ -896,7 +925,6 @@ impl BankingStage {
         };
 
         let mut execute_timings = ExecuteTimings::default();
-
         let (
             mut loaded_accounts,
             results,
@@ -1131,10 +1159,18 @@ impl BankingStage {
         msgs: &Packets,
         transaction_indexes: &[usize],
         feature_set: &Arc<feature_set::FeatureSet>,
+<<<<<<< HEAD
         votes_only: bool,
         cost_tracker: &Arc<RwLock<CostTracker>>,
         banking_stage_stats: &BankingStageStats,
         demote_program_write_locks: bool,
+=======
+        read_cost_tracker: &RwLockReadGuard<CostTracker>,
+        banking_stage_stats: &BankingStageStats,
+        demote_program_write_locks: bool,
+        votes_only: bool,
+        cost_model: &Arc<RwLock<CostModel>>,
+>>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
         cost_tracker_stats: &mut CostTrackerStats,
     ) -> (Vec<HashedTransaction<'static>>, Vec<usize>, Vec<usize>) {
         let mut retryable_transaction_packet_indexes: Vec<usize> = vec![];
@@ -1159,8 +1195,12 @@ impl BankingStage {
         );
 
         let mut cost_tracker_check_time = Measure::start("cost_tracker_check_time");
+<<<<<<< HEAD
         let filtered_transactions_with_packet_indexes: Vec<_> = {
             let cost_tracker_readonly = cost_tracker.read().unwrap();
+=======
+        let (filtered_transactions, filter_transaction_packet_indexes) = {
+>>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
             verified_transactions_with_packet_indexes
                 .into_iter()
                 .filter_map(|(tx, tx_index)| {
@@ -1170,10 +1210,13 @@ impl BankingStage {
 
                     // excluding vote TX from cost_model, for now
                     if !is_vote
-                        && cost_tracker_readonly
+                        && read_cost_tracker
                             .would_transaction_fit(
                                 &tx,
-                                demote_program_write_locks,
+                                &cost_model
+                                    .read()
+                                    .unwrap()
+                                    .calculate_cost(&tx, demote_program_write_locks),
                                 cost_tracker_stats,
                             )
                             .is_err()
@@ -1262,7 +1305,7 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         banking_stage_stats: &BankingStageStats,
-        cost_tracker: &Arc<RwLock<CostTracker>>,
+        cost_model: &Arc<RwLock<CostModel>>,
         cost_tracker_stats: &mut CostTrackerStats,
     ) -> (usize, usize, Vec<usize>) {
         let mut packet_conversion_time = Measure::start("packet_conversion");
@@ -1271,10 +1314,18 @@ impl BankingStage {
                 msgs,
                 &packet_indexes,
                 &bank.feature_set,
+<<<<<<< HEAD
                 bank.vote_only_bank(),
                 cost_tracker,
                 banking_stage_stats,
                 bank.demote_program_write_locks(),
+=======
+                &bank.read_cost_tracker().unwrap(),
+                banking_stage_stats,
+                bank.demote_program_write_locks(),
+                bank.vote_only_bank(),
+                cost_model,
+>>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
                 cost_tracker_stats,
             );
         packet_conversion_time.stop();
@@ -1312,9 +1363,18 @@ impl BankingStage {
         let mut cost_tracking_time = Measure::start("cost_tracking_time");
         transactions.iter().enumerate().for_each(|(index, tx)| {
             if unprocessed_tx_indexes.iter().all(|&i| i != index) {
+<<<<<<< HEAD
                 cost_tracker.write().unwrap().add_transaction_cost(
                     tx.transaction(),
                     bank.demote_program_write_locks(),
+=======
+                bank.write_cost_tracker().unwrap().add_transaction_cost(
+                    tx,
+                    &cost_model
+                        .read()
+                        .unwrap()
+                        .calculate_cost(tx, bank.demote_program_write_locks()),
+>>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
                     cost_tracker_stats,
                 );
             }
@@ -1361,8 +1421,8 @@ impl BankingStage {
         transaction_indexes: &[usize],
         my_pubkey: &Pubkey,
         next_leader: Option<Pubkey>,
-        cost_tracker: &Arc<RwLock<CostTracker>>,
         banking_stage_stats: &BankingStageStats,
+        cost_model: &Arc<RwLock<CostModel>>,
         cost_tracker_stats: &mut CostTrackerStats,
     ) -> Vec<usize> {
         // Check if we are the next leader. If so, let's not filter the packets
@@ -1381,10 +1441,18 @@ impl BankingStage {
                 msgs,
                 &transaction_indexes,
                 &bank.feature_set,
+<<<<<<< HEAD
                 bank.vote_only_bank(),
                 cost_tracker,
                 banking_stage_stats,
                 bank.demote_program_write_locks(),
+=======
+                &bank.read_cost_tracker().unwrap(),
+                banking_stage_stats,
+                bank.demote_program_write_locks(),
+                bank.vote_only_bank(),
+                cost_model,
+>>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
                 cost_tracker_stats,
             );
         unprocessed_packet_conversion_time.stop();
@@ -1446,7 +1514,7 @@ impl BankingStage {
         banking_stage_stats: &BankingStageStats,
         duplicates: &Arc<Mutex<(LruCache<u64, ()>, PacketHasher)>>,
         recorder: &TransactionRecorder,
-        cost_tracker: &Arc<RwLock<CostTracker>>,
+        cost_model: &Arc<RwLock<CostModel>>,
         cost_tracker_stats: &mut CostTrackerStats,
     ) -> Result<(), RecvTimeoutError> {
         let mut recv_time = Measure::start("process_packets_recv");
@@ -1487,6 +1555,7 @@ impl BankingStage {
                 );
                 continue;
             }
+<<<<<<< HEAD
             let (bank, bank_creation_time) = bank_start.unwrap();
             Self::reset_cost_tracker_if_new_bank(
                 cost_tracker,
@@ -1494,6 +1563,14 @@ impl BankingStage {
                 banking_stage_stats,
                 cost_tracker_stats,
             );
+=======
+
+            // Destructure the `BankStart` behind an Arc
+            let BankStart {
+                working_bank,
+                bank_creation_time,
+            } = &*working_bank_start.unwrap();
+>>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
 
             let (processed, verified_txs_len, unprocessed_indexes) =
                 Self::process_packets_transactions(
@@ -1505,7 +1582,7 @@ impl BankingStage {
                     transaction_status_sender.clone(),
                     gossip_vote_sender,
                     banking_stage_stats,
-                    cost_tracker,
+                    cost_model,
                     cost_tracker_stats,
                 );
 
@@ -1538,8 +1615,8 @@ impl BankingStage {
                         &packet_indexes,
                         my_pubkey,
                         next_leader,
-                        cost_tracker,
                         banking_stage_stats,
+                        cost_model,
                         cost_tracker_stats,
                     );
                     Self::push_unprocessed(
@@ -1767,10 +1844,15 @@ mod tests {
                 tpu_vote_receiver,
                 gossip_verified_vote_receiver,
                 None,
+<<<<<<< HEAD
                 vote_forward_sender,
                 Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
                     CostModel::default(),
                 ))))),
+=======
+                gossip_vote_sender,
+                Arc::new(RwLock::new(CostModel::default())),
+>>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
             );
             drop(verified_sender);
             drop(gossip_verified_vote_sender);
@@ -1818,10 +1900,15 @@ mod tests {
                 tpu_vote_receiver,
                 verified_gossip_vote_receiver,
                 None,
+<<<<<<< HEAD
                 vote_forward_sender,
                 Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
                     CostModel::default(),
                 ))))),
+=======
+                gossip_vote_sender,
+                Arc::new(RwLock::new(CostModel::default())),
+>>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
             );
             trace!("sending bank");
             drop(verified_sender);
@@ -1894,9 +1981,7 @@ mod tests {
                 gossip_verified_vote_receiver,
                 None,
                 gossip_vote_sender,
-                Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
-                    CostModel::default(),
-                ))))),
+                Arc::new(RwLock::new(CostModel::default())),
             );
 
             // fund another account so we can send 2 good transactions in a single batch.
@@ -2047,9 +2132,7 @@ mod tests {
                     3,
                     None,
                     gossip_vote_sender,
-                    Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
-                        CostModel::default(),
-                    ))))),
+                    Arc::new(RwLock::new(CostModel::default())),
                 );
 
                 // wait for banking_stage to eat the packets
@@ -2871,9 +2954,7 @@ mod tests {
                 None::<Box<dyn Fn()>>,
                 &BankingStageStats::default(),
                 &recorder,
-                &Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
-                    CostModel::default(),
-                ))))),
+                &Arc::new(RwLock::new(CostModel::default())),
                 &mut CostTrackerStats::default(),
             );
             assert_eq!(buffered_packets[0].1.len(), num_conflicting_transactions);
@@ -2891,9 +2972,7 @@ mod tests {
                     None::<Box<dyn Fn()>>,
                     &BankingStageStats::default(),
                     &recorder,
-                    &Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
-                        CostModel::default(),
-                    ))))),
+                    &Arc::new(RwLock::new(CostModel::default())),
                     &mut CostTrackerStats::default(),
                 );
                 if num_expected_unprocessed == 0 {
@@ -2960,9 +3039,7 @@ mod tests {
                         test_fn,
                         &BankingStageStats::default(),
                         &recorder,
-                        &Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
-                            CostModel::default(),
-                        ))))),
+                        &Arc::new(RwLock::new(CostModel::default())),
                         &mut CostTrackerStats::default(),
                     );
 
@@ -3213,6 +3290,7 @@ mod tests {
                 make_test_packets(vec![transfer_tx.clone(), transfer_tx.clone()], vote_indexes);
 
             let mut votes_only = false;
+<<<<<<< HEAD
 
             let (txs, tx_packet_index, _) = BankingStage::transactions_from_packets(
                 &packets,
@@ -3226,10 +3304,25 @@ mod tests {
                 false,
                 &mut CostTrackerStats::default(),
             );
+=======
+            let (txs, tx_packet_index, _retryable_packet_indexes) =
+                BankingStage::transactions_from_packets(
+                    &packets,
+                    &packet_indexes,
+                    &Arc::new(FeatureSet::default()),
+                    &RwLock::new(CostTracker::default()).read().unwrap(),
+                    &BankingStageStats::default(),
+                    false,
+                    votes_only,
+                    &Arc::new(RwLock::new(CostModel::default())),
+                    &mut CostTrackerStats::default(),
+                );
+>>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
             assert_eq!(2, txs.len());
             assert_eq!(vec![0, 1], tx_packet_index);
 
             votes_only = true;
+<<<<<<< HEAD
             let (txs, tx_packet_index, _) = BankingStage::transactions_from_packets(
                 &packets,
                 &packet_indexes,
@@ -3242,6 +3335,20 @@ mod tests {
                 false,
                 &mut CostTrackerStats::default(),
             );
+=======
+            let (txs, tx_packet_index, _retryable_packet_indexes) =
+                BankingStage::transactions_from_packets(
+                    &packets,
+                    &packet_indexes,
+                    &Arc::new(FeatureSet::default()),
+                    &RwLock::new(CostTracker::default()).read().unwrap(),
+                    &BankingStageStats::default(),
+                    false,
+                    votes_only,
+                    &Arc::new(RwLock::new(CostModel::default())),
+                    &mut CostTrackerStats::default(),
+                );
+>>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
             assert_eq!(0, txs.len());
             assert_eq!(0, tx_packet_index.len());
         }
@@ -3255,6 +3362,7 @@ mod tests {
             );
 
             let mut votes_only = false;
+<<<<<<< HEAD
             let (txs, tx_packet_index, _) = BankingStage::transactions_from_packets(
                 &packets,
                 &packet_indexes,
@@ -3267,10 +3375,25 @@ mod tests {
                 false,
                 &mut CostTrackerStats::default(),
             );
+=======
+            let (txs, tx_packet_index, _retryable_packet_indexes) =
+                BankingStage::transactions_from_packets(
+                    &packets,
+                    &packet_indexes,
+                    &Arc::new(FeatureSet::default()),
+                    &RwLock::new(CostTracker::default()).read().unwrap(),
+                    &BankingStageStats::default(),
+                    false,
+                    votes_only,
+                    &Arc::new(RwLock::new(CostModel::default())),
+                    &mut CostTrackerStats::default(),
+                );
+>>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
             assert_eq!(3, txs.len());
             assert_eq!(vec![0, 1, 2], tx_packet_index);
 
             votes_only = true;
+<<<<<<< HEAD
             let (txs, tx_packet_index, _) = BankingStage::transactions_from_packets(
                 &packets,
                 &packet_indexes,
@@ -3283,6 +3406,20 @@ mod tests {
                 false,
                 &mut CostTrackerStats::default(),
             );
+=======
+            let (txs, tx_packet_index, _retryable_packet_indexes) =
+                BankingStage::transactions_from_packets(
+                    &packets,
+                    &packet_indexes,
+                    &Arc::new(FeatureSet::default()),
+                    &RwLock::new(CostTracker::default()).read().unwrap(),
+                    &BankingStageStats::default(),
+                    false,
+                    votes_only,
+                    &Arc::new(RwLock::new(CostModel::default())),
+                    &mut CostTrackerStats::default(),
+                );
+>>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
             assert_eq!(2, txs.len());
             assert_eq!(vec![0, 2], tx_packet_index);
         }
@@ -3297,6 +3434,7 @@ mod tests {
             let features = Arc::new(feature_set::FeatureSet::default());
 
             let mut votes_only = false;
+<<<<<<< HEAD
             let (txs, tx_packet_index, _) = BankingStage::transactions_from_packets(
                 &packets,
                 &packet_indexes,
@@ -3309,10 +3447,25 @@ mod tests {
                 false,
                 &mut CostTrackerStats::default(),
             );
+=======
+            let (txs, tx_packet_index, _retryable_packet_indexes) =
+                BankingStage::transactions_from_packets(
+                    &packets,
+                    &packet_indexes,
+                    &Arc::new(FeatureSet::default()),
+                    &RwLock::new(CostTracker::default()).read().unwrap(),
+                    &BankingStageStats::default(),
+                    false,
+                    votes_only,
+                    &Arc::new(RwLock::new(CostModel::default())),
+                    &mut CostTrackerStats::default(),
+                );
+>>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
             assert_eq!(3, txs.len());
             assert_eq!(vec![0, 1, 2], tx_packet_index);
 
             votes_only = true;
+<<<<<<< HEAD
             let (txs, tx_packet_index, _) = BankingStage::transactions_from_packets(
                 &packets,
                 &packet_indexes,
@@ -3325,6 +3478,20 @@ mod tests {
                 false,
                 &mut CostTrackerStats::default(),
             );
+=======
+            let (txs, tx_packet_index, _retryable_packet_indexes) =
+                BankingStage::transactions_from_packets(
+                    &packets,
+                    &packet_indexes,
+                    &Arc::new(FeatureSet::default()),
+                    &RwLock::new(CostTracker::default()).read().unwrap(),
+                    &BankingStageStats::default(),
+                    false,
+                    votes_only,
+                    &Arc::new(RwLock::new(CostModel::default())),
+                    &mut CostTrackerStats::default(),
+                );
+>>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
             assert_eq!(3, txs.len());
             assert_eq!(vec![0, 1, 2], tx_packet_index);
         }
