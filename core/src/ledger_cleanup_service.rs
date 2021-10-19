@@ -137,20 +137,44 @@ impl LedgerCleanupService {
         flush_interval: u64,
     ) -> BlockstoreResult<()> {
         let mut flush_time = Measure::start("flush_time");
-        let (num_data_slots_flushed, num_data_shreds_flushed) =
-            blockstore.flush_data_shreds_to_fs(root - flush_interval)?;
-        let (num_coding_slots_flushed, num_coding_shreds_flushed) =
-            blockstore.flush_coding_shreds_to_fs(root - flush_interval)?;
+        let data_flush_stats = blockstore.flush_data_shreds_to_fs(root - flush_interval)?;
+        let coding_flush_stats = blockstore.flush_coding_shreds_to_fs(root - flush_interval)?;
         flush_time.stop();
 
         *last_flush_slot = root;
 
         datapoint_info!(
             "ledger_cleanup_flush_shreds",
-            ("num_data_slots", num_data_slots_flushed as i64, i64),
-            ("num_data_shreds", num_data_shreds_flushed as i64, i64),
-            ("num_coding_slots", num_coding_slots_flushed as i64, i64),
-            ("num_coding_shreds", num_coding_shreds_flushed as i64, i64),
+            (
+                "num_data_slots_flushed",
+                data_flush_stats.num_slots_flushed as i64,
+                i64
+            ),
+            (
+                "num_data_slots_merged",
+                data_flush_stats.num_slots_flushed as i64,
+                i64
+            ),
+            (
+                "num_data_shreds_flushed",
+                data_flush_stats.num_shreds_flushed as i64,
+                i64
+            ),
+            (
+                "num_coding_slots_flushed",
+                coding_flush_stats.num_slots_flushed as i64,
+                i64
+            ),
+            (
+                "num_coding_slots_merged",
+                coding_flush_stats.num_slots_merged as i64,
+                i64
+            ),
+            (
+                "num_coding_shreds_flushed",
+                coding_flush_stats.num_shreds_flushed as i64,
+                i64
+            ),
             ("flush_time_us", flush_time.as_us() as i64, i64)
         );
         Ok(())

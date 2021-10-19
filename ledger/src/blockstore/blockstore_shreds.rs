@@ -56,6 +56,13 @@ pub(crate) struct ShredFileData {
     pub data: Vec<u8>,
 }
 
+#[derive(Default)]
+pub struct FlushStats {
+    pub num_slots_flushed: usize,
+    pub num_slots_merged: usize,
+    pub num_shreds_flushed: usize,
+}
+
 /// The following constant is computed by hand and hardcoded.
 /// 'test_shred_file_header_constant' ensures the value is correct.
 /// Constant used over lazy_static for performance reasons.
@@ -300,43 +307,49 @@ impl Blockstore {
     }
 
     // Flush all slots in the data shred cache older than max_flush_slot
-    pub fn flush_data_shreds_to_fs(&self, max_flush_slot: Slot) -> Result<(usize, usize)> {
+    pub fn flush_data_shreds_to_fs(&self, max_flush_slot: Slot) -> Result<FlushStats> {
+        let mut flush_stats = FlushStats::default();
         let slots_to_flush = self.get_data_shred_slots_to_flush(max_flush_slot);
         if slots_to_flush.is_empty() {
             debug!(
                 "no data shreds older than slot {} found to flush",
                 max_flush_slot
             );
-            return Ok((0, 0));
+            return Ok(flush_stats);
         }
 
-        let mut num_shreds_flushed = 0;
+        flush_stats.num_slots_flushed = slots_to_flush.len();
         for slot in slots_to_flush.iter() {
-            num_shreds_flushed += self.flush_data_shreds_for_slot_to_fs(*slot)?;
+            let (is_merge, num_shreds_flushed) = self.flush_data_shreds_for_slot_to_fs(*slot)?;
+            flush_stats.num_slots_merged += is_merge as usize;
+            flush_stats.num_shreds_flushed += num_shreds_flushed;
         }
-        Ok((slots_to_flush.len(), num_shreds_flushed))
+        Ok(flush_stats)
     }
 
     // Flush all slots in the coding shred cache older than max_flush_slot
-    pub fn flush_coding_shreds_to_fs(&self, max_flush_slot: Slot) -> Result<(usize, usize)> {
+    pub fn flush_coding_shreds_to_fs(&self, max_flush_slot: Slot) -> Result<FlushStats> {
+        let mut flush_stats = FlushStats::default();
         let slots_to_flush = self.get_code_shred_slots_to_flush(max_flush_slot);
         if slots_to_flush.is_empty() {
             debug!(
                 "no coding shreds older than slot {} found to flush",
                 max_flush_slot
             );
-            return Ok((0, 0));
+            return Ok(flush_stats);
         }
 
-        let mut num_shreds_flushed = 0;
+        flush_stats.num_slots_flushed = slots_to_flush.len();
         for slot in slots_to_flush.iter() {
-            num_shreds_flushed += self.flush_coding_shreds_for_slot_to_fs(*slot)?;
+            let (is_merge, num_shreds_flushed) = self.flush_coding_shreds_for_slot_to_fs(*slot)?;
+            flush_stats.num_slots_merged += is_merge as usize;
+            flush_stats.num_shreds_flushed += num_shreds_flushed;
         }
-        Ok((slots_to_flush.len(), num_shreds_flushed))
+        Ok(flush_stats)
     }
 
     // Flush a single slot from the data shred cache
-    pub fn flush_data_shreds_for_slot_to_fs(&self, slot: Slot) -> Result<usize> {
+    pub(crate) fn flush_data_shreds_for_slot_to_fs(&self, slot: Slot) -> Result<(bool, usize)> {
         let slot_cache = self
             .data_shred_slot_cache(slot)
             .expect("slot was chosen for flush but is not in data shred cache");
@@ -349,11 +362,11 @@ impl Blockstore {
         )?;
         self.data_shred_cache.remove(&slot);
 
-        Ok(num_shreds_to_flush)
+        Ok(flush_info)
     }
 
     // Flush a single slot from the coding shred cache
-    pub fn flush_coding_shreds_for_slot_to_fs(&self, slot: Slot) -> Result<usize> {
+    pub(crate) fn flush_coding_shreds_for_slot_to_fs(&self, slot: Slot) -> Result<(bool, usize)> {
         let slot_cache = self
             .code_shred_slot_cache(slot)
             .expect("slot was chosen for flush but is not in code shred cache");
@@ -366,18 +379,21 @@ impl Blockstore {
         )?;
         self.code_shred_cache.remove(&slot);
 
-        Ok(num_shreds_to_flush)
+        Ok(flush_info)
     }
 
+    // Flush shreds to file from cache, merge with existing file if necessary
+    // Return value: (is_merge, num_shreds_flushed)
     fn flush_shreds_for_slot_to_fs(
         shred_type: ShredType,
         slot: Slot,
         slot_cache: ShredCacheInner,
         path: PathBuf,
-    ) -> Result<usize> {
+    ) -> Result<(bool, usize)> {
         let mut flush_timer = Measure::start("flush_timer");
         let slot_cache = slot_cache.read().unwrap();
         let num_shreds_to_flush = slot_cache.len();
+        let is_merge;
 
         // We'll write contents to a temporary file first, and then rename
         // to desired file such that the write is "atomic".
@@ -387,6 +403,8 @@ impl Blockstore {
         if path.exists() {
             // There is a file for this slot already, meaning it was previously flushed.
             // We'll have to merge the contents of cache with contents of that file
+            is_merge = true;
+
             let mut cur_file = fs::File::open(&path)?;
             let mut old_file_data = Blockstore::read_shred_file(&mut cur_file)?;
             drop(cur_file);
@@ -486,6 +504,8 @@ impl Blockstore {
             tmp_file.write_all(&write_buffer)?;
         } else {
             // No data for this slot on disk, just need to dump the contents of the cache
+            is_merge = false;
+
             let (index, data_size) = ShredFileHeader::new_shred_index(&slot_cache);
             let serialized_index = bincode::serialize(&index)?;
             let serialized_header = bincode::serialize(&ShredFileHeader::new(
@@ -524,7 +544,7 @@ impl Blockstore {
         fs::rename(tmp_path, &path)?;
         flush_timer.stop();
         debug!("Flush took {}us", flush_timer.as_us());
-        Ok(num_shreds_to_flush)
+        Ok((is_merge, num_shreds_to_flush))
     }
 
     /// Remove the data shreds within [from_slot, to_slot) slots
@@ -598,18 +618,16 @@ impl Blockstore {
                             {
                                 self.insert_data_shred_into_cache(slot, index, &shred)
                             }
-                        } else {
-                            if !shred_meta_index.coding().is_present(index) {
-                                full_insert_shreds.push(shred);
-                            } else if code_shred_file_index.is_none()
-                                || code_shred_file_index
-                                    .as_ref()
-                                    .unwrap()
-                                    .get(&(index as u32))
-                                    .is_none()
-                            {
-                                self.insert_code_shred_into_cache(slot, index, &shred)
-                            }
+                        } else if !shred_meta_index.coding().is_present(index) {
+                            full_insert_shreds.push(shred);
+                        } else if code_shred_file_index.is_none()
+                            || code_shred_file_index
+                                .as_ref()
+                                .unwrap()
+                                .get(&(index as u32))
+                                .is_none()
+                        {
+                            self.insert_code_shred_into_cache(slot, index, &shred)
                         }
                     }
                 }
