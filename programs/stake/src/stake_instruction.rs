@@ -37,7 +37,7 @@ pub fn process_instruction(
         return Err(InstructionError::InvalidAccountOwner);
     }
 
-    let signers = get_signers(&keyed_accounts[1..]);
+    let signers = get_signers(&keyed_accounts[first_instruction_account..]);
     match limited_deserialize(data)? {
         StakeInstruction::Initialize(authorized, lockup) => me.initialize(
             &authorized,

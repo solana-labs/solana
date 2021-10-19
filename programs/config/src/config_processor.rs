@@ -54,20 +54,19 @@ pub fn process_instruction(
     }
 
     let mut counter = 0;
-    let mut keyed_accounts_iter = keyed_accounts.iter().skip(2);
     for (signer, _) in key_list.keys.iter().filter(|(_, is_signer)| *is_signer) {
         counter += 1;
         if signer != config_keyed_account.unsigned_key() {
-            let signer_account = keyed_accounts_iter.next();
-            if signer_account.is_none() {
-                ic_msg!(
-                    invoke_context,
-                    "account {:?} is not in account list",
-                    signer
-                );
-                return Err(InstructionError::MissingRequiredSignature);
-            }
-            let signer_key = signer_account.unwrap().signer_key();
+            let signer_account =
+                keyed_account_at_index(keyed_accounts, counter + 1).map_err(|_| {
+                    ic_msg!(
+                        invoke_context,
+                        "account {:?} is not in account list",
+                        signer,
+                    );
+                    InstructionError::MissingRequiredSignature
+                })?;
+            let signer_key = signer_account.signer_key();
             if signer_key.is_none() {
                 ic_msg!(
                     invoke_context,

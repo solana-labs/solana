@@ -611,6 +611,7 @@ mod tests {
     use super::*;
     use solana_sdk::{
         instruction::{AccountMeta, Instruction, InstructionError},
+        keyed_account::keyed_account_at_index,
         message::Message,
         native_loader::{self, create_loadable_account_for_test},
         process_instruction::MockComputeMeter,
@@ -636,11 +637,11 @@ mod tests {
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
         assert_eq!(
             *program_id,
-            keyed_accounts[first_instruction_account].owner()?
+            keyed_account_at_index(keyed_accounts, first_instruction_account)?.owner()?
         );
         assert_ne!(
-            keyed_accounts[first_instruction_account + 1].owner()?,
-            *keyed_accounts[first_instruction_account].unsigned_key()
+            keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?.owner()?,
+            *keyed_account_at_index(keyed_accounts, first_instruction_account)?.unsigned_key()
         );
 
         if let Ok(instruction) = bincode::deserialize(data) {
@@ -648,17 +649,17 @@ mod tests {
                 MockInstruction::NoopSuccess => (),
                 MockInstruction::NoopFail => return Err(InstructionError::GenericError),
                 MockInstruction::ModifyOwned => {
-                    keyed_accounts[first_instruction_account]
+                    keyed_account_at_index(keyed_accounts, first_instruction_account)?
                         .try_account_ref_mut()?
                         .data_as_mut_slice()[0] = 1
                 }
                 MockInstruction::ModifyNotOwned => {
-                    keyed_accounts[first_instruction_account + 1]
+                    keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?
                         .try_account_ref_mut()?
                         .data_as_mut_slice()[0] = 1
                 }
                 MockInstruction::ModifyReadonly => {
-                    keyed_accounts[first_instruction_account + 2]
+                    keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?
                         .try_account_ref_mut()?
                         .data_as_mut_slice()[0] = 1
                 }
@@ -827,11 +828,11 @@ mod tests {
                 match instruction {
                     MockSystemInstruction::Correct => Ok(()),
                     MockSystemInstruction::AttemptCredit { lamports } => {
-                        keyed_accounts[first_instruction_account]
+                        keyed_account_at_index(keyed_accounts, first_instruction_account)?
                             .account
                             .borrow_mut()
                             .checked_sub_lamports(lamports)?;
-                        keyed_accounts[first_instruction_account + 1]
+                        keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?
                             .account
                             .borrow_mut()
                             .checked_add_lamports(lamports)?;
@@ -839,7 +840,7 @@ mod tests {
                     }
                     // Change data in a read-only account
                     MockSystemInstruction::AttemptDataChange { data } => {
-                        keyed_accounts[first_instruction_account + 1]
+                        keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?
                             .account
                             .borrow_mut()
                             .set_data(vec![data]);
@@ -1000,9 +1001,11 @@ mod tests {
                 match instruction {
                     MockSystemInstruction::BorrowFail => {
                         let from_account =
-                            keyed_accounts[first_instruction_account].try_account_ref_mut()?;
+                            keyed_account_at_index(keyed_accounts, first_instruction_account)?
+                                .try_account_ref_mut()?;
                         let dup_account =
-                            keyed_accounts[first_instruction_account + 2].try_account_ref_mut()?;
+                            keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?
+                                .try_account_ref_mut()?;
                         if from_account.lamports() != dup_account.lamports() {
                             return Err(InstructionError::InvalidArgument);
                         }
@@ -1011,12 +1014,16 @@ mod tests {
                     MockSystemInstruction::MultiBorrowMut => {
                         let from_lamports = {
                             let from_account =
-                                keyed_accounts[first_instruction_account].try_account_ref_mut()?;
+                                keyed_account_at_index(keyed_accounts, first_instruction_account)?
+                                    .try_account_ref_mut()?;
                             from_account.lamports()
                         };
                         let dup_lamports = {
-                            let dup_account = keyed_accounts[first_instruction_account + 2]
-                                .try_account_ref_mut()?;
+                            let dup_account = keyed_account_at_index(
+                                keyed_accounts,
+                                first_instruction_account + 2,
+                            )?
+                            .try_account_ref_mut()?;
                             dup_account.lamports()
                         };
                         if from_lamports != dup_lamports {
@@ -1026,18 +1033,24 @@ mod tests {
                     }
                     MockSystemInstruction::DoWork { lamports, data } => {
                         {
-                            let mut to_account = keyed_accounts[first_instruction_account + 1]
-                                .try_account_ref_mut()?;
-                            let mut dup_account = keyed_accounts[first_instruction_account + 2]
-                                .try_account_ref_mut()?;
+                            let mut to_account = keyed_account_at_index(
+                                keyed_accounts,
+                                first_instruction_account + 1,
+                            )?
+                            .try_account_ref_mut()?;
+                            let mut dup_account = keyed_account_at_index(
+                                keyed_accounts,
+                                first_instruction_account + 2,
+                            )?
+                            .try_account_ref_mut()?;
                             dup_account.checked_sub_lamports(lamports)?;
                             to_account.checked_add_lamports(lamports)?;
                             dup_account.set_data(vec![data]);
                         }
-                        keyed_accounts[first_instruction_account]
+                        keyed_account_at_index(keyed_accounts, first_instruction_account)?
                             .try_account_ref_mut()?
                             .checked_sub_lamports(lamports)?;
-                        keyed_accounts[first_instruction_account + 1]
+                        keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?
                             .try_account_ref_mut()?
                             .checked_add_lamports(lamports)?;
                         Ok(())
