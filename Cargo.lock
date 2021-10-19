@@ -6004,6 +6004,7 @@ dependencies = [
  "solana-frozen-abi-macro 1.9.0",
  "solana-logger 1.9.0",
  "solana-metrics",
+ "solana-runtime",
  "solana-sdk",
  "thiserror",
 ]
