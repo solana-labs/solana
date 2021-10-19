@@ -3,21 +3,11 @@
 //! - would_transaction_fit(&tx_cost), immutable function to test if tx with tx_cost would fit into current block
 //! - add_transaction_cost(&tx_cost), mutable function to accumulate tx_cost to tracker.
 //!
-<<<<<<< HEAD
-use crate::cost_model::{CostModel, TransactionCost};
-use crate::cost_tracker_stats::CostTrackerStats;
-use solana_sdk::{clock::Slot, pubkey::Pubkey, transaction::Transaction};
-use std::{
-    collections::HashMap,
-    sync::{Arc, RwLock},
-};
-=======
 use crate::block_cost_limits::*;
 use crate::cost_model::TransactionCost;
 use crate::cost_tracker_stats::CostTrackerStats;
-use solana_sdk::{clock::Slot, pubkey::Pubkey, transaction::SanitizedTransaction};
+use solana_sdk::{clock::Slot, pubkey::Pubkey, transaction::Transaction};
 use std::collections::HashMap;
->>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
 
 const WRITABLE_ACCOUNTS_PER_BLOCK: usize = 512;
 
@@ -65,31 +55,17 @@ impl CostTracker {
 
     pub fn would_transaction_fit(
         &self,
-<<<<<<< HEAD
-        transaction: &Transaction,
-        demote_program_write_locks: bool,
-        stats: &mut CostTrackerStats,
-    ) -> Result<(), &'static str> {
-        let mut cost_model = self.cost_model.write().unwrap();
-        let tx_cost = cost_model.calculate_cost(transaction, demote_program_write_locks);
-=======
-        _transaction: &SanitizedTransaction,
+        _transaction: &Transaction,
         tx_cost: &TransactionCost,
         stats: &mut CostTrackerStats,
     ) -> Result<(), CostTrackerError> {
->>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
         self.would_fit(&tx_cost.writable_accounts, &tx_cost.sum(), stats)
     }
 
     pub fn add_transaction_cost(
         &mut self,
-<<<<<<< HEAD
-        transaction: &Transaction,
-        demote_program_write_locks: bool,
-=======
-        _transaction: &SanitizedTransaction,
+        _transaction: &Transaction,
         tx_cost: &TransactionCost,
->>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
         stats: &mut CostTrackerStats,
     ) {
         let cost = tx_cost.sum();
@@ -101,21 +77,13 @@ impl CostTracker {
 
     pub fn try_add(
         &mut self,
-        _transaction: &SanitizedTransaction,
+        _transaction: &Transaction,
         tx_cost: &TransactionCost,
         stats: &mut CostTrackerStats,
-<<<<<<< HEAD
-    ) -> Result<u64, &'static str> {
-        let cost = transaction_cost.sum();
-        self.would_fit(&transaction_cost.writable_accounts, &cost, stats)?;
-
-        self.add_transaction(&transaction_cost.writable_accounts, &cost);
-=======
     ) -> Result<u64, CostTrackerError> {
         let cost = tx_cost.sum();
         self.would_fit(&tx_cost.writable_accounts, &cost, stats)?;
         self.add_transaction(&tx_cost.writable_accounts, &cost);
->>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
         Ok(self.block_cost)
     }
 
@@ -124,29 +92,17 @@ impl CostTracker {
         keys: &[Pubkey],
         cost: &u64,
         stats: &mut CostTrackerStats,
-<<<<<<< HEAD
-    ) -> Result<(), &'static str> {
-=======
     ) -> Result<(), CostTrackerError> {
->>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
         stats.transaction_cost_histogram.increment(*cost).unwrap();
 
         // check against the total package cost
         if self.block_cost + cost > self.block_cost_limit {
-<<<<<<< HEAD
-            return Err("would exceed block cost limit");
-=======
             return Err(CostTrackerError::WouldExceedBlockMaxLimit);
->>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
         }
 
         // check if the transaction itself is more costly than the account_cost_limit
         if *cost > self.account_cost_limit {
-<<<<<<< HEAD
-            return Err("Transaction is too expansive, exceeds account cost limit");
-=======
             return Err(CostTrackerError::WouldExceedAccountMaxLimit);
->>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
         }
 
         // check each account against account_cost_limit,
@@ -159,11 +115,7 @@ impl CostTracker {
                         .unwrap();
 
                     if chained_cost + cost > self.account_cost_limit {
-<<<<<<< HEAD
-                        return Err("would exceed account cost limit");
-=======
                         return Err(CostTrackerError::WouldExceedAccountMaxLimit);
->>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
                     } else {
                         continue;
                     }
@@ -230,7 +182,7 @@ mod tests {
         system_transaction,
         transaction::Transaction,
     };
-    use std::{cmp, convert::TryFrom, sync::Arc};
+    use std::{cmp, sync::Arc};
 
     fn test_setup() -> (Keypair, Hash) {
         solana_logger::setup();
@@ -382,7 +334,6 @@ mod tests {
     fn test_cost_tracker_try_add_is_atomic() {
         let (mint_keypair, start_hash) = test_setup();
         let (tx, _keys, _cost) = build_simple_transaction(&mint_keypair, &start_hash);
-        let tx = SanitizedTransaction::try_from(tx).unwrap();
 
         let acct1 = Pubkey::new_unique();
         let acct2 = Pubkey::new_unique();

@@ -103,13 +103,8 @@ impl CostModel {
     }
 
     pub fn calculate_cost(
-<<<<<<< HEAD
-        &mut self,
-        transaction: &Transaction,
-=======
         &self,
-        transaction: &SanitizedTransaction,
->>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
+        transaction: &Transaction,
         demote_program_write_locks: bool,
     ) -> TransactionCost {
         let mut tx_cost = TransactionCost::new_with_capacity(MAX_WRITABLE_ACCOUNTS);
@@ -144,16 +139,12 @@ impl CostModel {
         transaction.signatures.len() as u64 * SIGNATURE_COST
     }
 
-<<<<<<< HEAD
-    fn get_write_lock_cost(&mut self, transaction: &Transaction, demote_program_write_locks: bool) {
-=======
     fn get_write_lock_cost(
         &self,
         tx_cost: &mut TransactionCost,
-        transaction: &SanitizedTransaction,
+        transaction: &Transaction,
         demote_program_write_locks: bool,
     ) {
->>>>>>> 7496b5784 (- make cost_tracker a member of bank, remove shared instance from TPU; (#20627))
         let message = transaction.message();
         message.account_keys.iter().enumerate().for_each(|(i, k)| {
             let is_writable = message.is_writable(i, demote_program_write_locks);
