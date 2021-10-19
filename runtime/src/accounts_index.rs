@@ -1400,6 +1400,49 @@ impl<T: IndexValue> AccountsIndex<T> {
         self.storage.set_startup(value);
     }
 
+    /// For each pubkey, find the latest account that appears in `roots` and <= `max_root`
+    ///   call `callback`
+    pub(crate) fn scan<F>(&self, pubkeys: &[Pubkey], max_root: Option<Slot>, mut callback: F)
+    where
+        // return true if accounts index entry should be put in in_mem cache
+        // params:
+        //  exists: false if not in index at all
+        //  slot list found at slot at most max_root or empty slot list
+        //  index in slot list where best slot was found or None if nothing found by root criteria
+        //  pubkey looked up
+        //  refcount of entry in index
+        F: FnMut(bool, &SlotList<T>, Option<usize>, &Pubkey, RefCount) -> bool,
+    {
+        let empty_slot_list = vec![];
+        let mut lock = None;
+        let mut last_bin = self.bins(); // too big, won't match
+        pubkeys.iter().for_each(|pubkey| {
+            let bin = self.bin_calculator.bin_from_pubkey(pubkey);
+            if bin != last_bin {
+                // cannot re-use lock since next pubkey is in a different bin than previous one
+                lock = Some(self.account_maps[bin].read().unwrap());
+                last_bin = bin;
+            }
+            lock.as_ref().unwrap().get_internal(pubkey, |entry| {
+                let cache = match entry {
+                    Some(locked_entry) => {
+                        let slot_list = &locked_entry.slot_list.read().unwrap();
+                        let found_index = self.latest_slot(None, slot_list, max_root);
+                        callback(
+                            true,
+                            slot_list,
+                            found_index,
+                            pubkey,
+                            locked_entry.ref_count(),
+                        )
+                    }
+                    None => callback(false, &empty_slot_list, None, pubkey, RefCount::MAX),
+                };
+                (cache, ())
+            });
+        });
+    }
+
     /// Get an account
     /// The latest account that appears in `ancestors` or `roots` is returned.
     pub(crate) fn get(
