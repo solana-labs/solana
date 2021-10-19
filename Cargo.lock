@@ -4664,6 +4664,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-logger 1.9.0",
+ "solana-runtime",
  "solana-sdk",
 ]
 
