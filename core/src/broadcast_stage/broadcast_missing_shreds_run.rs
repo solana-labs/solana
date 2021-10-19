@@ -22,39 +22,53 @@ use {
 
 struct FindLastShredsInSlotIterator<'a> {
     shreds: &'a [Shred],
-    begin_send_index: usize,
+    begin_search_index: usize,
 }
 
 impl<'a> FindLastShredsInSlotIterator<'a> {
     fn new(shreds: &'a [Shred]) -> Self {
         Self {
             shreds,
-            begin_send_index: 0,
+            begin_search_index: 0,
         }
     }
 }
 
-/// Iterator returns slice of shreds over the range (begin_send_index, end_send_index),
-// /from `self.slice`.
+/// Iterator returns slice of shreds over the range (returned_range_start, returned_range_end),
+/// from `self.slice`.
 ///
-/// In this slice, `end_send_index` is the index of the immediate next
-/// shred `s` after `begin_send_index`  where `s` is the last shred in some slot.
+/// In this slice, `returned_range_end` is the index of the immediate next
+/// shred `s` after `returned_range_start`  where `s` is the last shred in some slot.
 ///
-/// If no such `s` exists, then `end_send_index == self.shreds.len()`.
+/// If no such `s` exists, then `returned_range_end == self.shreds.len()`.
 impl<'a> Iterator for FindLastShredsInSlotIterator<'a> {
     type Item = &'a [Shred];
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.begin_send_index >= self.shreds.len() {
+        if self.begin_search_index >= self.shreds.len() {
             return None;
         }
-        let end_send_index = self.shreds[self.begin_send_index..]
-            .iter()
-            .position(|shred| shred.last_in_slot())
-            .unwrap_or_else(|| self.shreds.len());
-        let old_begin_send_index = self.begin_send_index;
-        self.begin_send_index = end_send_index + 1;
-        Some(&self.shreds[old_begin_send_index..end_send_index])
+
+        let mut returned_range_start = self.begin_search_index;
+        let mut returned_range_end = self.begin_search_index;
+
+        for shred in self.shreds[self.begin_search_index..].iter() {
+            if shred.last_in_slot() {
+                if returned_range_start == returned_range_end {
+                    returned_range_start += 1;
+                } else {
+                    break;
+                }
+            }
+            returned_range_end += 1;
+        }
+
+        self.begin_search_index = returned_range_end + 1;
+        if returned_range_start == returned_range_end {
+            None
+        } else {
+            Some(&self.shreds[returned_range_start..returned_range_end])
+        }
     }
 }
 
