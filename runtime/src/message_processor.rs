@@ -104,7 +104,7 @@ impl<'a> ThisInvokeContext<'a> {
             timings: ExecuteDetailsTimings::default(),
             account_db,
             ancestors,
-            sysvars: RefCell::new(vec![]),
+            sysvars: RefCell::new(Vec::new()),
             blockhash,
             fee_calculator,
             return_data: (Pubkey::default(), Vec::new()),
@@ -424,6 +424,10 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         self.timings.create_vm_us += create_vm_us;
         self.timings.execute_us += execute_us;
         self.timings.deserialize_us += deserialize_us;
+    }
+    #[allow(clippy::type_complexity)]
+    fn get_sysvars(&self) -> &RefCell<Vec<(Pubkey, Option<Rc<Vec<u8>>>)>> {
+        &self.sysvars
     }
     fn get_sysvar_data(&self, id: &Pubkey) -> Option<Rc<Vec<u8>>> {
         if let Ok(mut sysvars) = self.sysvars.try_borrow_mut() {

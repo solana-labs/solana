@@ -121,6 +121,9 @@ pub trait InvokeContext {
         execute_us: u64,
         deserialize_us: u64,
     );
+    /// Get sysvars
+    #[allow(clippy::type_complexity)]
+    fn get_sysvars(&self) -> &RefCell<Vec<(Pubkey, Option<Rc<Vec<u8>>>)>>;
     /// Get sysvar data
     fn get_sysvar_data(&self, id: &Pubkey) -> Option<Rc<Vec<u8>>>;
     /// Get this invocation's compute budget
@@ -350,7 +353,8 @@ pub struct MockInvokeContext<'a> {
     pub compute_meter: MockComputeMeter,
     pub programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
     pub accounts: Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
-    pub sysvars: Vec<(Pubkey, Option<Rc<Vec<u8>>>)>,
+    #[allow(clippy::type_complexity)]
+    pub sysvars: RefCell<Vec<(Pubkey, Option<Rc<Vec<u8>>>)>>,
     pub disabled_features: HashSet<Pubkey>,
     pub blockhash: Hash,
     pub fee_calculator: FeeCalculator,
@@ -369,7 +373,7 @@ impl<'a> MockInvokeContext<'a> {
             },
             programs: vec![],
             accounts: vec![],
-            sysvars: vec![],
+            sysvars: RefCell::new(Vec::new()),
             disabled_features: HashSet::default(),
             blockhash: Hash::default(),
             fee_calculator: FeeCalculator::default(),
@@ -388,21 +392,6 @@ impl<'a> MockInvokeContext<'a> {
             ));
         invoke_context
     }
-}
-
-pub fn mock_set_sysvar<T: Sysvar>(
-    mock_invoke_context: &mut MockInvokeContext,
-    id: Pubkey,
-    sysvar: T,
-) -> Result<(), InstructionError> {
-    let mut data = Vec::with_capacity(T::size_of());
-
-    bincode::serialize_into(&mut data, &sysvar).map_err(|err| {
-        ic_msg!(mock_invoke_context, "Unable to serialize sysvar: {:?}", err);
-        InstructionError::GenericError
-    })?;
-    mock_invoke_context.sysvars.push((id, Some(Rc::new(data))));
-    Ok(())
 }
 
 impl<'a> InvokeContext for MockInvokeContext<'a> {
@@ -498,8 +487,13 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
         _deserialize_us: u64,
     ) {
     }
+    #[allow(clippy::type_complexity)]
+    fn get_sysvars(&self) -> &RefCell<Vec<(Pubkey, Option<Rc<Vec<u8>>>)>> {
+        &self.sysvars
+    }
     fn get_sysvar_data(&self, id: &Pubkey) -> Option<Rc<Vec<u8>>> {
         self.sysvars
+            .borrow()
             .iter()
             .find_map(|(key, sysvar)| if id == key { sysvar.clone() } else { None })
     }
