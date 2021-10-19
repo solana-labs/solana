@@ -72,6 +72,7 @@ pub enum BroadcastStageType {
     FailEntryVerification,
     BroadcastFakeShreds,
     BroadcastDuplicates(BroadcastDuplicatesConfig),
+    BroadcastMissingShreds,
 }
 
 impl BroadcastStageType {
@@ -130,6 +131,17 @@ impl BroadcastStageType {
                 blockstore,
                 bank_forks,
                 BroadcastDuplicatesRun::new(shred_version, config.clone()),
+            ),
+
+            BroadcastStageType::BroadcastMissingShreds => BroadcastStage::new(
+                sock,
+                cluster_info,
+                receiver,
+                retransmit_slots_receiver,
+                exit_sender,
+                blockstore,
+                bank_forks,
+                BroadcastFakeShredsRun::new(0, shred_version),
             ),
         }
     }
