@@ -123,7 +123,7 @@ jobs:
       if: type IN (push, pull_request) OR tag IS present
       language: node_js
       node_js:
-        - "node"
+        - "lts/*"
 
       services:
         - docker
