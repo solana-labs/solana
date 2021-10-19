@@ -80,8 +80,8 @@ impl AccountsDb {
 
         let slot_stores = slot_stores.read().unwrap();
         let mut accounts_to_stream: HashMap<Pubkey, StoredAccountMeta> = HashMap::default();
+        let mut measure_filter = Measure::start("accountsdb-plugin-filtering-accounts");
         for (_, storage_entry) in slot_stores.iter() {
-            let mut measure_filter = Measure::start("accountsdb-plugin-filtering-accounts");
             let mut accounts = storage_entry.all_accounts();
             let account_len = accounts.len();
             notify_stats.total_accounts += account_len;
@@ -103,11 +103,10 @@ impl AccountsDb {
                     }
                 }
             });
-
-            measure_filter.stop();
-
-            notify_stats.elapsed_filtering_us += measure_filter.as_us() as usize;
         }
+        measure_filter.stop();
+        notify_stats.elapsed_filtering_us += measure_filter.as_us() as usize;
+
         self.notify_filtered_accounts(slot, notified_accounts, &accounts_to_stream, notify_stats);
     }
 
@@ -139,6 +138,7 @@ impl AccountsDb {
             measure_bookkeep.stop();
             notify_stats.total_pure_bookeeping += measure_bookkeep.as_us() as usize;
         }
+        notify_stats.notified_accounts += accounts_to_stream.len();
         measure_notify.stop();
         notify_stats.elapsed_notifying_us += measure_notify.as_us() as usize;        
     }
