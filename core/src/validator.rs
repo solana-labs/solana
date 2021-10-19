@@ -13,13 +13,8 @@ use {
         serve_repair::ServeRepair,
         serve_repair_service::ServeRepairService,
         sigverify,
-<<<<<<< HEAD
         snapshot_packager_service::{PendingSnapshotPackage, SnapshotPackagerService},
-=======
-        snapshot_packager_service::SnapshotPackagerService,
         system_monitor_service::{verify_udp_stats_access, SystemMonitorService},
-        tower_storage::TowerStorage,
->>>>>>> 4cac66244 (report udp stats from validator (#20587))
         tpu::{Tpu, DEFAULT_TPU_COALESCE_MS},
         tvu::{Sockets, Tvu, TvuConfig},
     },
