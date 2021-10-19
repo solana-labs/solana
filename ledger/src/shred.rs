@@ -57,7 +57,7 @@ use {
         slice::ParallelSlice,
         ThreadPool,
     },
-    serde::{Deserialize, Serialize, Serializer},
+    serde::{Deserialize, Serialize},
     solana_entry::entry::{create_ticks, Entry},
     solana_measure::measure::Measure,
     solana_perf::packet::{limited_deserialize, Packet},
@@ -269,16 +269,6 @@ impl Default for ShredType {
     }
 }
 
-#[allow(clippy::trivially_copy_pass_by_ref)]
-fn option_as_u8_serialize<S>(x: &Option<u8>, s: S) -> std::result::Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    assert!(x.is_some());
-    let num = x.unwrap();
-    s.serialize_u8(num)
-}
-
 /// A common header that is present in data and code shred headers
 #[derive(Serialize, Clone, Deserialize, Default, PartialEq, Debug)]
 pub struct ShredCommonHeader {
@@ -289,9 +279,8 @@ pub struct ShredCommonHeader {
     pub version: u16,
     pub fec_set_index: u32,
     #[serde(skip_deserializing)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(serialize_with = "option_as_u8_serialize")]
-    pub extended1: Option<u8>, // TODO always serialize if shred_type version is V2?
+    #[serde(skip_serializing)]
+    pub extended1: Option<u8>,
 }
 
 pub const TRANSMISSION_ITERATION_MASK: u8 = 0b0000_1111;
@@ -375,6 +364,22 @@ impl Shred {
         Ok(())
     }
 
+    fn serialize_common_header_into(
+        index: &mut usize,
+        size: usize,
+        buf: &mut [u8],
+        common_header: &ShredCommonHeader,
+    ) -> bincode::Result<()> {
+        Self::serialize_obj_into(index, size, buf, &common_header)
+            .expect("Failed to write header into shred buffer");
+        if common_header.header_version() == ShredCommonHeaderVersion::V2 {
+            let extended1: u8 = common_header.extended1.unwrap_or_default();
+            Self::serialize_obj_into(index, size_of::<u8>(), buf, &extended1)
+                .expect("Failed to write header into shred buffer");
+        }
+        Ok(())
+    }
+
     pub fn copy_to_packet(&self, packet: &mut Packet) {
         let len = self.payload.len();
         packet.data[..len].copy_from_slice(&self.payload[..]);
@@ -423,7 +428,7 @@ impl Shred {
         }
 
         let mut start = 0;
-        Self::serialize_obj_into(
+        Self::serialize_common_header_into(
             &mut start,
             common_header.size(),
             &mut payload,
@@ -463,8 +468,12 @@ impl Shred {
         let shred_type = Shred::deserialize_shred_type(&payload)?;
         let header_version = shred_type_to_common_header_version(shred_type);
         let header_size = shred_common_header_version_to_header_size(header_version);
-        let common_header: ShredCommonHeader =
+        let mut common_header: ShredCommonHeader =
             Self::deserialize_obj(&mut start, header_size, &payload)?;
+        if shred_type_to_common_header_version(shred_type) == ShredCommonHeaderVersion::V2 {
+            let extended1: u8 = Self::deserialize_obj(&mut start, size_of::<u8>(), &payload)?;
+            common_header.extended1 = Some(extended1);
+        }
 
         let slot = common_header.slot;
         // Shreds should be padded out to SHRED_PAYLOAD_SIZE
@@ -529,7 +538,7 @@ impl Shred {
         let header_size = common_header.size();
         let mut payload = vec![0; SHRED_PAYLOAD_SIZE];
         let mut start = 0;
-        Self::serialize_obj_into(&mut start, header_size, &mut payload, &common_header)
+        Self::serialize_common_header_into(&mut start, header_size, &mut payload, &common_header)
             .expect("Failed to write header into shred buffer");
         if is_shred_type_data(common_header.shred_type) {
             Self::serialize_obj_into(
@@ -597,21 +606,39 @@ impl Shred {
     }
 
     pub fn set_transmission_iteration(&mut self, iteration: u8) {
+        let header_size = self.common_header_size();
         self.common_header.set_transmission_iteration(iteration);
+        Self::serialize_common_header_into(
+            &mut 0,
+            header_size,
+            &mut self.payload,
+            &self.common_header,
+        )
+        .unwrap();
     }
 
     pub fn set_index(&mut self, index: u32) {
         let header_size = self.common_header_size();
         self.common_header.index = index;
-        Self::serialize_obj_into(&mut 0, header_size, &mut self.payload, &self.common_header)
-            .unwrap();
+        Self::serialize_common_header_into(
+            &mut 0,
+            header_size,
+            &mut self.payload,
+            &self.common_header,
+        )
+        .unwrap();
     }
 
     pub fn set_slot(&mut self, slot: Slot) {
         let header_size = self.common_header_size();
         self.common_header.slot = slot;
-        Self::serialize_obj_into(&mut 0, header_size, &mut self.payload, &self.common_header)
-            .unwrap();
+        Self::serialize_common_header_into(
+            &mut 0,
+            header_size,
+            &mut self.payload,
+            &self.common_header,
+        )
+        .unwrap();
     }
 
     pub fn signature(&self) -> Signature {
