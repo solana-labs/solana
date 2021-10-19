@@ -34,7 +34,7 @@ impl ReplicaAccountInfo {
         });
         ReplicaAccountInfo {
             account_meta,
-            hash: stored_account_meta.hash.0.to_vec(),
+            hash: stored_account_meta.hash.as_ref().to_vec(),
             data,
         }
     }
@@ -53,7 +53,7 @@ impl ReplicaAccountInfo {
         });
         ReplicaAccountInfo {
             account_meta,
-            hash: cached_account.hash().0.to_vec(),
+            hash: cached_account.hash().as_ref().to_vec(),
             data,
         }
     }

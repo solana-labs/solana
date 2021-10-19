@@ -4300,7 +4300,9 @@ impl AccountsDb {
         hasher.update(owner.as_ref());
         hasher.update(pubkey.as_ref());
 
-        Hash(<[u8; solana_sdk::hash::HASH_BYTES]>::try_from(hasher.finalize().as_slice()).unwrap())
+        Hash::new_from_array(
+            <[u8; solana_sdk::hash::HASH_BYTES]>::try_from(hasher.finalize().as_slice()).unwrap(),
+        )
     }
 
     fn bulk_assign_write_version(&self, count: usize) -> StoredMetaWriteVersion {

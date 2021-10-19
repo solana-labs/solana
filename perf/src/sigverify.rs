@@ -740,7 +740,7 @@ mod tests {
         message.account_keys.push(pubkey1);
         message.account_keys.push(pubkey1);
         message.header.num_required_signatures = NUM_SIG as u8;
-        message.recent_blockhash = Hash(pubkey1.to_bytes());
+        message.recent_blockhash = Hash::new_from_array(pubkey1.to_bytes());
         let mut tx = Transaction::new_unsigned(message);
 
         info!("message: {:?}", tx.message_data());
