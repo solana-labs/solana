@@ -15,4 +15,5 @@ use crate::{client_error::Result, rpc_request::RpcRequest};
 /// [`MockSender`]: crate::mock_sender::MockSender
 pub trait RpcSender {
     fn send(&self, request: RpcRequest, params: serde_json::Value) -> Result<serde_json::Value>;
+    fn send_batch(&self, request: RpcRequest, batch_params: Vec<serde_json::Value>) -> Result<serde_json::Value>;
 }

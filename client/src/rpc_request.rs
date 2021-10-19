@@ -212,6 +212,16 @@ impl RpcRequest {
            "params": params,
         })
     }
+    pub(crate) fn build_batch_request_json(self, id: u64, batch_params: Vec<Value>) -> Value {
+        let jsonrpc = "2.0";
+        let mut index = id;
+        let mut batch_request = vec![];
+        batch_params.into_iter().map(|params|{
+            batch_request.push(self.build_request_json(index,params));
+            index+=1;
+        });
+        json!(batch_request)
+    }
 }
 
 #[derive(Debug)]
