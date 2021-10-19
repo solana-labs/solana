@@ -896,9 +896,8 @@ impl Blockstore {
                 ) {
                     Err(InsertDataShredError::Exists) => metrics.num_data_shreds_exists += 1,
                     Err(InsertDataShredError::InvalidShred) => metrics.num_data_shreds_invalid += 1,
-                    Err(InsertDataShredError::BlockstoreError(err)) => {
+                    Err(InsertDataShredError::BlockstoreError(_)) => {
                         metrics.num_data_shreds_blockstore_error += 1;
-                        error!("blockstore error: {}", err);
                     }
                     Ok(completed_data_sets) => {
                         newly_completed_data_sets.extend(completed_data_sets);
@@ -966,9 +965,8 @@ impl Blockstore {
                             metrics.num_recovered_failed_invalid += 1;
                             None
                         }
-                        Err(InsertDataShredError::BlockstoreError(err)) => {
+                        Err(InsertDataShredError::BlockstoreError(_)) => {
                             metrics.num_recovered_blockstore_error += 1;
-                            error!("blockstore error: {}", err);
                             None
                         }
                         Ok(completed_data_sets) => {
