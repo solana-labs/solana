@@ -521,21 +521,11 @@ pub fn presigner_from_pubkey_sigs(
     })
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct SignerFromPathConfig {
     pub allow_null_signer: bool,
 }
 
-<<<<<<< HEAD
-impl Default for SignerFromPathConfig {
-    fn default() -> Self {
-        Self {
-            allow_null_signer: false,
-        }
-    }
-}
-
-=======
 /// Loads a [Signer] from one of several possible sources.
 ///
 /// The `path` is not strictly a file system path, but is interpreted as various
@@ -692,7 +682,6 @@ impl Default for SignerFromPathConfig {
 /// )?;
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
->>>>>>> 96c6ba6eb (Add docs to solana_clap_utils::keypair (#20665))
 pub fn signer_from_path(
     matches: &ArgMatches,
     path: &str,
