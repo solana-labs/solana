@@ -1808,7 +1808,7 @@ pub fn main() {
     };
 
     let private_rpc = matches.is_present("private_rpc");
-    let no_port_check = matches.is_present("no_port_check");
+    let do_port_check = !matches.is_present("no_port_check");
     let no_rocksdb_compaction = true;
     let rocksdb_compaction_interval = value_t!(matches, "rocksdb_compaction_interval", u64).ok();
     let rocksdb_max_compaction_jitter =
@@ -2431,7 +2431,7 @@ pub fn main() {
             &cluster_entrypoints,
             &mut validator_config,
             rpc_bootstrap_config,
-            no_port_check,
+            do_port_check,
             use_progress_bar,
             maximum_local_snapshot_age,
             should_check_duplicate_instance,

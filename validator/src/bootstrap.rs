@@ -68,7 +68,7 @@ pub fn rpc_bootstrap(
     cluster_entrypoints: &[ContactInfo],
     validator_config: &mut ValidatorConfig,
     bootstrap_config: RpcBootstrapConfig,
-    no_port_check: bool,
+    do_port_check: bool,
     use_progress_bar: bool,
     maximum_local_snapshot_age: Slot,
     should_check_duplicate_instance: bool,
@@ -77,6 +77,25 @@ pub fn rpc_bootstrap(
     maximum_snapshot_download_abort: u64,
     socket_addr_space: SocketAddrSpace,
 ) {
+    if do_port_check {
+        let mut order: Vec<_> = (0..cluster_entrypoints.len()).collect();
+        order.shuffle(&mut thread_rng());
+        if order.into_iter().all(|i| {
+            !verify_reachable_ports(
+                node,
+                &cluster_entrypoints[i],
+                validator_config,
+                &socket_addr_space,
+            )
+        }) {
+            exit(1);
+        }
+    }
+
+    if bootstrap_config.no_genesis_fetch && bootstrap_config.no_snapshot_fetch {
+        return;
+    }
+
     without_incremental_snapshots::rpc_bootstrap(
         node,
         identity_keypair,
@@ -87,7 +106,6 @@ pub fn rpc_bootstrap(
         cluster_entrypoints,
         validator_config,
         bootstrap_config,
-        no_port_check,
         use_progress_bar,
         maximum_local_snapshot_age,
         should_check_duplicate_instance,
@@ -379,7 +397,6 @@ mod without_incremental_snapshots {
         cluster_entrypoints: &[ContactInfo],
         validator_config: &mut ValidatorConfig,
         bootstrap_config: RpcBootstrapConfig,
-        no_port_check: bool,
         use_progress_bar: bool,
         maximum_local_snapshot_age: Slot,
         should_check_duplicate_instance: bool,
@@ -388,25 +405,6 @@ mod without_incremental_snapshots {
         maximum_snapshot_download_abort: u64,
         socket_addr_space: SocketAddrSpace,
     ) {
-        if !no_port_check {
-            let mut order: Vec<_> = (0..cluster_entrypoints.len()).collect();
-            order.shuffle(&mut thread_rng());
-            if order.into_iter().all(|i| {
-                !verify_reachable_ports(
-                    node,
-                    &cluster_entrypoints[i],
-                    validator_config,
-                    &socket_addr_space,
-                )
-            }) {
-                exit(1);
-            }
-        }
-
-        if bootstrap_config.no_genesis_fetch && bootstrap_config.no_snapshot_fetch {
-            return;
-        }
-
         let mut blacklisted_rpc_nodes = HashSet::new();
         let mut gossip = None;
         let mut download_abort_count = 0;
@@ -432,8 +430,7 @@ mod without_incremental_snapshots {
                 cluster_entrypoints,
                 validator_config,
                 &mut blacklisted_rpc_nodes,
-                bootstrap_config.no_snapshot_fetch,
-                bootstrap_config.no_untrusted_rpc,
+                &bootstrap_config,
                 snapshot_archives_dir,
             );
             if rpc_node_details.is_none() {
@@ -642,8 +639,7 @@ mod without_incremental_snapshots {
         cluster_entrypoints: &[ContactInfo],
         validator_config: &ValidatorConfig,
         blacklisted_rpc_nodes: &mut HashSet<Pubkey>,
-        snapshot_not_required: bool,
-        no_untrusted_rpc: bool,
+        bootstrap_config: &RpcBootstrapConfig,
         snapshot_archives_dir: &Path,
     ) -> Option<(ContactInfo, Option<(Slot, Hash)>)> {
         let mut blacklist_timeout = Instant::now();
@@ -668,7 +664,7 @@ mod without_incremental_snapshots {
             blacklist_timeout = Instant::now();
 
             let mut highest_snapshot_hash = get_highest_local_snapshot_hash(snapshot_archives_dir);
-            let eligible_rpc_peers = if snapshot_not_required {
+            let eligible_rpc_peers = if bootstrap_config.no_snapshot_fetch {
                 rpc_peers
             } else {
                 let trusted_snapshot_hashes =
@@ -677,7 +673,7 @@ mod without_incremental_snapshots {
                 let mut eligible_rpc_peers = vec![];
 
                 for rpc_peer in rpc_peers.iter() {
-                    if no_untrusted_rpc
+                    if bootstrap_config.no_untrusted_rpc
                         && !is_trusted_validator(&rpc_peer.id, &validator_config.trusted_validators)
                     {
                         continue;
