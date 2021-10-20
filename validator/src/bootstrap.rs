@@ -1325,6 +1325,8 @@ mod with_incremental_snapshots {
             &incremental_snapshot_hashes
                 [thread_rng().gen_range(0, incremental_snapshot_hashes.len())];
 
+        // It is a programmer bug if the assert fires!  By the time this function is called, the
+        // only remaining `incremental_snapshot_hashes` should all be the same.
         assert!(
             incremental_snapshot_hashes.iter().all(
                 |(_, full_snapshot_hash, incremental_snapshot_hash)| {
