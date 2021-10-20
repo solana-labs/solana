@@ -316,7 +316,7 @@ fn get_slot() -> ClientResult<()> {
     let rpc_client = RpcClient::new(validator.rpc_url());
 
     let slot = rpc_client.get_slot()?;
-    assert!(slot < 10);
+    assert!(slot > 0);
 
     Ok(())
 }
@@ -331,7 +331,7 @@ fn get_slot_with_commitment() -> ClientResult<()> {
 
     let commitment_config = CommitmentConfig::processed();
     let slot = rpc_client.get_slot_with_commitment(commitment_config)?;
-    assert!(slot < 10);
+    assert!(slot > 0);
 
     Ok(())
 }
