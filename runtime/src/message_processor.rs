@@ -17,7 +17,7 @@ use solana_sdk::{
     fee_calculator::FeeCalculator,
     hash::Hash,
     ic_logger_msg,
-    instruction::{CompiledInstruction, Instruction, InstructionError},
+    instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     keyed_account::{create_keyed_accounts_unified, KeyedAccount},
     message::Message,
     precompiles::is_precompile,
@@ -46,6 +46,31 @@ impl ComputeMeter for ThisComputeMeter {
     }
     fn get_remaining(&self) -> u64 {
         self.remaining
+    }
+}
+impl ThisComputeMeter {
+    pub fn new_ref(remaining: u64) -> Rc<RefCell<Self>> {
+        Rc::new(RefCell::new(Self { remaining }))
+    }
+}
+
+pub struct ThisLogger {
+    log_collector: Option<Rc<LogCollector>>,
+}
+impl Logger for ThisLogger {
+    fn log_enabled(&self) -> bool {
+        log_enabled!(log::Level::Info) || self.log_collector.is_some()
+    }
+    fn log(&self, message: &str) {
+        debug!("{}", message);
+        if let Some(log_collector) = &self.log_collector {
+            log_collector.log(message);
+        }
+    }
+}
+impl ThisLogger {
+    pub fn new_ref(log_collector: Option<Rc<LogCollector>>) -> Rc<RefCell<Self>> {
+        Rc::new(RefCell::new(Self { log_collector }))
     }
 }
 
@@ -95,7 +120,7 @@ impl<'a> ThisInvokeContext<'a> {
             pre_accounts: Vec::new(),
             accounts,
             programs,
-            logger: Rc::new(RefCell::new(ThisLogger { log_collector })),
+            logger: ThisLogger::new_ref(log_collector),
             compute_budget,
             compute_meter,
             executors,
@@ -122,9 +147,7 @@ impl<'a> ThisInvokeContext<'a> {
             programs,
             None,
             ComputeBudget::default(),
-            Rc::new(RefCell::new(ThisComputeMeter {
-                remaining: std::i64::MAX as u64,
-            })),
+            ThisComputeMeter::new_ref(std::i64::MAX as u64),
             Rc::new(RefCell::new(Executors::default())),
             None,
             feature_set,
@@ -173,9 +196,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
 
         if self.invoke_stack.is_empty() {
             if !self.feature_set.is_active(&tx_wide_compute_cap::id()) {
-                self.compute_meter = Rc::new(RefCell::new(ThisComputeMeter {
-                    remaining: self.compute_budget.max_units,
-                }));
+                self.compute_meter = ThisComputeMeter::new_ref(self.compute_budget.max_units);
             }
 
             self.pre_accounts = Vec::with_capacity(instruction.accounts.len());
@@ -481,19 +502,88 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         (self.return_data.0, &self.return_data.1)
     }
 }
-pub struct ThisLogger {
-    log_collector: Option<Rc<LogCollector>>,
+
+pub struct MockInvokeContextPreparation {
+    pub accounts: Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
+    pub message: Message,
+    pub account_indices: Vec<usize>,
 }
-impl Logger for ThisLogger {
-    fn log_enabled(&self) -> bool {
-        log_enabled!(log::Level::Info) || self.log_collector.is_some()
+
+pub fn prepare_mock_invoke_context(
+    program_indices: &[usize],
+    instruction_data: &[u8],
+    keyed_accounts: &[(bool, bool, Pubkey, Rc<RefCell<AccountSharedData>>)],
+) -> MockInvokeContextPreparation {
+    #[allow(clippy::type_complexity)]
+    let (accounts, mut metas): (
+        Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
+        Vec<AccountMeta>,
+    ) = keyed_accounts
+        .iter()
+        .map(|(is_signer, is_writable, pubkey, account)| {
+            (
+                (*pubkey, account.clone()),
+                AccountMeta {
+                    pubkey: *pubkey,
+                    is_signer: *is_signer,
+                    is_writable: *is_writable,
+                },
+            )
+        })
+        .unzip();
+    let program_id = if let Some(program_index) = program_indices.last() {
+        accounts[*program_index].0
+    } else {
+        Pubkey::default()
+    };
+    for program_index in program_indices.iter().rev() {
+        metas.remove(*program_index);
     }
-    fn log(&self, message: &str) {
-        debug!("{}", message);
-        if let Some(log_collector) = &self.log_collector {
-            log_collector.log(message);
-        }
+    let message = Message::new(
+        &[Instruction::new_with_bytes(
+            program_id,
+            instruction_data,
+            metas,
+        )],
+        None,
+    );
+    let account_indices: Vec<usize> = message
+        .account_keys
+        .iter()
+        .map(|search_key| {
+            accounts
+                .iter()
+                .position(|(key, _account)| key == search_key)
+                .unwrap_or(accounts.len())
+        })
+        .collect();
+    MockInvokeContextPreparation {
+        accounts,
+        message,
+        account_indices,
     }
+}
+
+pub fn mock_process_instruction(
+    loader_id: &Pubkey,
+    mut program_indices: Vec<usize>,
+    instruction_data: &[u8],
+    keyed_accounts: &[(bool, bool, Pubkey, Rc<RefCell<AccountSharedData>>)],
+    process_instruction: ProcessInstructionWithContext,
+) -> Result<(), InstructionError> {
+    let mut preparation =
+        prepare_mock_invoke_context(&program_indices, instruction_data, keyed_accounts);
+    let processor_account = AccountSharedData::new_ref(0, 0, &solana_sdk::native_loader::id());
+    program_indices.insert(0, preparation.accounts.len());
+    preparation.accounts.push((*loader_id, processor_account));
+    let mut invoke_context = ThisInvokeContext::new_mock(&preparation.accounts, &[]);
+    invoke_context.push(
+        &preparation.message,
+        &preparation.message.instructions[0],
+        &program_indices,
+        Some(&preparation.account_indices),
+    )?;
+    process_instruction(1, instruction_data, &mut invoke_context)
 }
 
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
@@ -633,7 +723,6 @@ mod tests {
         keyed_account::keyed_account_at_index,
         message::Message,
         native_loader::{self, create_loadable_account_for_test},
-        process_instruction::MockComputeMeter,
         secp256k1_instruction::new_secp256k1_instruction,
         secp256k1_program,
     };
@@ -917,7 +1006,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            Rc::new(RefCell::new(MockComputeMeter::default())),
+            ThisComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             Arc::new(Accounts::default_for_tests()),
             &ancestors,
@@ -948,7 +1037,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            Rc::new(RefCell::new(MockComputeMeter::default())),
+            ThisComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             Arc::new(Accounts::default_for_tests()),
             &ancestors,
@@ -983,7 +1072,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            Rc::new(RefCell::new(MockComputeMeter::default())),
+            ThisComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             Arc::new(Accounts::default_for_tests()),
             &ancestors,
@@ -1128,7 +1217,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            Rc::new(RefCell::new(MockComputeMeter::default())),
+            ThisComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             Arc::new(Accounts::default_for_tests()),
             &ancestors,
@@ -1163,7 +1252,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            Rc::new(RefCell::new(MockComputeMeter::default())),
+            ThisComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             Arc::new(Accounts::default_for_tests()),
             &ancestors,
@@ -1196,7 +1285,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            Rc::new(RefCell::new(MockComputeMeter::default())),
+            ThisComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             Arc::new(Accounts::default_for_tests()),
             &ancestors,
@@ -1499,7 +1588,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            Rc::new(RefCell::new(MockComputeMeter::default())),
+            ThisComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             Arc::new(Accounts::default_for_tests()),
             &Ancestors::default(),
