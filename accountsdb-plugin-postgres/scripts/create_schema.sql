@@ -24,6 +24,17 @@ CREATE TABLE slot (
     updated_on TIMESTAMP NOT NULL
 );
 
+
+-- The table storing transaction logs
+create TABLE transaction_log (
+    signature BYTEA PRIMARY KEY,
+    is_vote BOOL NOT NULL,
+    result varchar(256),
+    slot BIGINT NOT NULL,
+    logs text[],
+    updated_on TIMESTAMP NOT NULL
+);
+
 /**
  * The following is for keeping historical data for accounts and is not required for plugin to work.
  */

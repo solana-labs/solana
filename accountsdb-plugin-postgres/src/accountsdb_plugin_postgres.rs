@@ -11,7 +11,8 @@ use {
     serde_derive::{Deserialize, Serialize},
     serde_json,
     solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
-        AccountsDbPlugin, AccountsDbPluginError, ReplicaAccountInfoVersions, Result, SlotStatus,
+        AccountsDbPlugin, AccountsDbPluginError, ReplicaAccountInfoVersions,
+        ReplicaTranscaionLogInfoVersions, Result, SlotStatus,
     },
     solana_metrics::*,
     std::{fs::File, io::Read},
@@ -22,6 +23,7 @@ use {
 pub struct AccountsDbPluginPostgres {
     client: Option<ParallelPostgresClient>,
     accounts_selector: Option<AccountsSelector>,
+    config: Option<AccountsDbPluginPostgresConfig>,
 }
 
 impl std::fmt::Debug for AccountsDbPluginPostgres {
@@ -39,6 +41,7 @@ pub struct AccountsDbPluginPostgresConfig {
     pub threads: Option<usize>,
     pub batch_size: Option<usize>,
     pub panic_on_db_errors: Option<bool>,
+    pub store_transaction_logs: Option<bool>,
 }
 
 #[derive(Error, Debug)]
@@ -52,6 +55,8 @@ pub enum AccountsDbPluginPostgresError {
     #[error("Error preparing data store schema. Error message: ({msg})")]
     ConfigurationError { msg: String },
 }
+
+const DEFAULT_STORE_TRANSACTION_LOGS: bool = false;
 
 impl AccountsDbPlugin for AccountsDbPluginPostgres {
     fn name(&self) -> &'static str {
@@ -89,6 +94,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
     /// from restoring a snapshot. The default is '10'.
     /// * "panic_on_db_errors", optional, contols if to panic when there are errors replicating data to the
     /// PostgreSQL database. The default is 'false'.
+    /// * "store_transaction_logs", optional, controls if to store transaction logs, false by default.
     /// # Examples
     ///
     /// {
@@ -127,6 +133,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                 })
             }
             Ok(config) => {
+                self.config = Some(config.clone());
                 let client = PostgresClientBuilder::build_pararallel_postgres_client(&config)?;
                 self.client = Some(client);
             }
@@ -276,6 +283,46 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
         }
         Ok(())
     }
+
+    fn notify_transaction(
+        &mut self,
+        transaction_log_info: ReplicaTranscaionLogInfoVersions,
+        slot: u64,
+    ) -> Result<()> {
+        if self.config.is_none()
+            || !self
+                .config
+                .as_ref()
+                .unwrap()
+                .store_transaction_logs
+                .unwrap_or(DEFAULT_STORE_TRANSACTION_LOGS)
+        {
+            return Ok(());
+        }
+
+        match &mut self.client {
+            None => {
+                return Err(AccountsDbPluginError::Custom(Box::new(
+                    AccountsDbPluginPostgresError::DataStoreConnectionError {
+                        msg: "There is no connection to the PostgreSQL database.".to_string(),
+                    },
+                )));
+            }
+            Some(client) => match transaction_log_info {
+                ReplicaTranscaionLogInfoVersions::V0_0_1(transaction_log_info) => {
+                    let result = client.log_transaction_info(transaction_log_info, slot);
+
+                    if let Err(err) = result {
+                        return Err(AccountsDbPluginError::SlotStatusUpdateError{
+                                msg: format!("Failed to persist the transaction log to the PostgreSQL database. Error: {:?}", err)
+                            });
+                    }
+                }
+            },
+        }
+
+        Ok(())
+    }
 }
 
 impl AccountsDbPluginPostgres {
@@ -312,10 +359,7 @@ impl AccountsDbPluginPostgres {
     }
 
     pub fn new() -> Self {
-        AccountsDbPluginPostgres {
-            client: None,
-            accounts_selector: None,
-        }
+        Self::default()
     }
 }
 

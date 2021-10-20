@@ -354,7 +354,7 @@ where
         shrink_ratio,
         verify_index,
         accounts_db_config,
-        accounts_update_notifier,
+        accounts_update_notifier.clone(),
     )?;
     accounts_db.freeze_accounts(
         &Ancestors::from(&bank_fields.ancestors),
@@ -372,6 +372,7 @@ where
         debug_keys,
         additional_builtins,
         debug_do_not_add_builtins,
+        accounts_update_notifier,
     );
 
     info!("rent_collector: {:?}", bank.rent_collector());

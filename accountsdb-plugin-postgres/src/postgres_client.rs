@@ -10,7 +10,7 @@ use {
     log::*,
     postgres::{Client, NoTls, Statement},
     solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
-        AccountsDbPluginError, ReplicaAccountInfo, SlotStatus,
+        AccountsDbPluginError, ReplicaAccountInfo, ReplicaTransactionLogInfo, SlotStatus,
     },
     solana_measure::measure::Measure,
     solana_metrics::*,
@@ -41,6 +41,7 @@ struct PostgresSqlClientWrapper {
     bulk_account_insert_stmt: Statement,
     update_slot_with_parent_stmt: Statement,
     update_slot_without_parent_stmt: Statement,
+    update_transaction_log_stmt: Statement,
 }
 
 pub struct SimplePostgresClient {
@@ -187,6 +188,11 @@ pub trait PostgresClient {
     ) -> Result<(), AccountsDbPluginError>;
 
     fn notify_end_of_startup(&mut self) -> Result<(), AccountsDbPluginError>;
+
+    fn log_transaction(
+        &mut self,
+        transaction_log_info: LogTransactionRequest,
+    ) -> Result<(), AccountsDbPluginError>;
 }
 
 impl SimplePostgresClient {
@@ -304,6 +310,31 @@ impl SimplePostgresClient {
                 })));
             }
             Ok(update_account_stmt) => Ok(update_account_stmt),
+        }
+    }
+
+
+    fn build_transaction_log_upsert_statement(
+        client: &mut Client,
+        config: &AccountsDbPluginPostgresConfig,
+    ) -> Result<Statement, AccountsDbPluginError> {
+        let stmt = "INSERT INTO transaction_log AS txn (signature, is_vote, result, logs, slot, updated_on) \
+        VALUES ($1, $2, $3, $4, $5, $6) \
+        ON CONFLICT (signature) DO UPDATE SET slot=excluded.slot, is_vote=excluded.is_vote, result=excluded.result, logs=excluded.logs, \
+        updated_on=excluded.updated_on WHERE txn.slot <= excluded.slot";
+
+        let stmt = client.prepare(stmt);
+
+        match stmt {
+            Err(err) => {
+                return Err(AccountsDbPluginError::Custom(Box::new(AccountsDbPluginPostgresError::DataSchemaError {
+                    msg: format!(
+                        "Error in preparing for the accounts update PostgreSQL database: ({}) host: {:?} user: {:?} config: {:?}",
+                        err, config.host, config.user, config
+                    ),
+                })));
+            }
+            Ok(stmt) => Ok(stmt),
         }
     }
 
@@ -491,6 +522,8 @@ impl SimplePostgresClient {
             Self::build_slot_upsert_statement_with_parent(&mut client, config)?;
         let update_slot_without_parent_stmt =
             Self::build_slot_upsert_statement_without_parent(&mut client, config)?;
+        let update_transaction_log_stmt =
+            Self::build_transaction_log_upsert_statement(&mut client, config)?;
 
         let batch_size = config
             .batch_size
@@ -505,6 +538,7 @@ impl SimplePostgresClient {
                 bulk_account_insert_stmt,
                 update_slot_with_parent_stmt,
                 update_slot_without_parent_stmt,
+                update_transaction_log_stmt,
             }),
         })
     }
@@ -573,6 +607,40 @@ impl PostgresClient for SimplePostgresClient {
     fn notify_end_of_startup(&mut self) -> Result<(), AccountsDbPluginError> {
         self.flush_buffered_writes()
     }
+
+    fn log_transaction(
+        &mut self,
+        transaction_log_info: LogTransactionRequest,
+    ) -> Result<(), AccountsDbPluginError> {
+        let client = self.client.get_mut().unwrap();
+        let statement = &client.update_transaction_log_stmt;
+        let client = &mut client.client;
+        let updated_on = Utc::now().naive_utc();
+        let slot = transaction_log_info.slot as i64;
+
+        let result = client.query(
+            statement,
+            &[
+                &transaction_log_info.signature,
+                &transaction_log_info.is_vote,
+                &transaction_log_info.result,
+                &transaction_log_info.log_messages,
+                &slot,
+                &updated_on,
+            ],
+        );
+
+        if let Err(err) = result {
+            let msg = format!(
+                "Failed to persist the update of transaction log to the PostgreSQL database. Error: {:?}",
+                err
+            );
+            error!("{}", msg);
+            return Err(AccountsDbPluginError::AccountsUpdateError { msg });
+        }
+
+        Ok(())
+    }
 }
 
 struct UpdateAccountRequest {
@@ -586,9 +654,18 @@ struct UpdateSlotRequest {
     slot_status: SlotStatus,
 }
 
+pub struct LogTransactionRequest {
+    signature: Vec<u8>,
+    result: Option<String>,
+    is_vote: bool,
+    log_messages: Vec<String>,
+    slot: u64,
+}
+
 enum DbWorkItem {
     UpdateAccount(UpdateAccountRequest),
     UpdateSlot(UpdateSlotRequest),
+    LogTransaction(LogTransactionRequest),
 }
 
 impl PostgresClientWorker {
@@ -648,6 +725,9 @@ impl PostgresClientWorker {
                                 abort();
                             }
                         }
+                    }
+                    DbWorkItem::LogTransaction(transaction_log_info) => {
+                        self.client.log_transaction(transaction_log_info)?;
                     }
                 },
                 Err(err) => match err {
@@ -858,6 +938,27 @@ impl ParallelPostgresClient {
         }
 
         info!("Done with notifying the end of startup");
+        Ok(())
+    }
+
+    pub fn log_transaction_info(
+        &mut self,
+        transaction_info: &ReplicaTransactionLogInfo,
+        slot: u64,
+    ) -> Result<(), AccountsDbPluginError> {
+        let wrk_item = DbWorkItem::LogTransaction(LogTransactionRequest {
+            signature: transaction_info.signature.to_vec(),
+            is_vote: transaction_info.is_vote,
+            result: transaction_info.result.clone(),
+            log_messages: transaction_info.log_messages.to_vec(),
+            slot,
+        });
+
+        if let Err(err) = self.sender.send(wrk_item) {
+            return Err(AccountsDbPluginError::SlotStatusUpdateError {
+                msg: format!("Failed to update the transaction, error: {:?}", err),
+            });
+        }
         Ok(())
     }
 }

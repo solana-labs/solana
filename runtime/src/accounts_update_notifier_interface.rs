@@ -1,5 +1,4 @@
 use {
-    crate::append_vec::{StoredAccountMeta, StoredMeta},
     solana_sdk::{account::AccountSharedData, clock::Slot},
     std::sync::{Arc, RwLock},
 };
@@ -23,6 +22,9 @@ pub trait AccountsUpdateNotifierInterface: std::fmt::Debug {
 
     /// Notified when a slot is rooted.
     fn notify_slot_rooted(&self, slot: Slot, parent: Option<Slot>);
+
+    /// Notify transaction log info
+    fn notify_transaction_log_info(&self, transaction_log_info: &TransactionLogInfo, slot: Slot);
 }
 
 pub type AccountsUpdateNotifier = Arc<RwLock<dyn AccountsUpdateNotifierInterface + Sync + Send>>;
