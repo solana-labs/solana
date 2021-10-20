@@ -1570,17 +1570,17 @@ mod with_incremental_snapshots {
                     >= cluster_snapshot_slot.saturating_sub(maximum_local_snapshot_age)
                 {
                     info!(
-                    "Reusing local snapshot at slot {} instead of downloading a snapshot for slot {}.",
-                    local_snapshot_slot,
-                    cluster_snapshot_slot,
-                );
+                        "Reusing local snapshot at slot {} instead of downloading a snapshot for slot {}.",
+                        local_snapshot_slot,
+                        cluster_snapshot_slot,
+                    );
                     true
                 } else {
                     info!(
-                    "Local snapshot from slot {} is too old. Downloading a newer snapshot for slot {}.",
-                    local_snapshot_slot,
-                    cluster_snapshot_slot,
-                );
+                        "Local snapshot from slot {} is too old. Downloading a newer snapshot for slot {}.",
+                        local_snapshot_slot,
+                        cluster_snapshot_slot,
+                    );
                     false
                 }
             }
