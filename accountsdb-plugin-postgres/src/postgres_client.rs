@@ -42,7 +42,7 @@ struct PostgresSqlClientWrapper {
 
 pub struct SimplePostgresClient {
     batch_size: usize,
-    accounts: Vec<DbAccountInfo>,
+    pending_account_updates: Vec<DbAccountInfo>,
     client: Mutex<PostgresSqlClientWrapper>,
 }
 
@@ -302,16 +302,16 @@ impl SimplePostgresClient {
         &mut self,
         account: DbAccountInfo,
     ) -> Result<(), AccountsDbPluginError> {
-        self.accounts.push(account);
+        self.pending_account_updates.push(account);
 
-        if self.accounts.len() == self.batch_size {
+        if self.pending_account_updates.len() == self.batch_size {
             let mut measure = Measure::start("accountsdb-plugin-postgres-prepare-values");
 
             let mut values: Vec<&(dyn ToSql + Sync)> =
                 Vec::with_capacity(self.batch_size * ACCOUNT_COLUMN_COUNT);
             let updated_on = Utc::now().naive_utc();
             for j in 0..self.batch_size {
-                let account = &self.accounts[j];
+                let account = &self.pending_account_updates[j];
 
                 values.push(&account.pubkey);
                 values.push(&account.slot);
@@ -336,7 +336,7 @@ impl SimplePostgresClient {
                 .client
                 .query(&client.bulk_account_insert_stmt, &values);
 
-            self.accounts.clear();
+            self.pending_account_updates.clear();
             if let Err(err) = result {
                 let msg = format!(
                     "Failed to persist the update of account to the PostgreSQL database. Error: {:?}",
@@ -364,7 +364,7 @@ impl SimplePostgresClient {
 
     /// Flush any left over accounts in batch which are not processed in the last batch
     fn flush_buffered_writes(&mut self) -> Result<(), AccountsDbPluginError> {
-        if self.accounts.is_empty() {
+        if self.pending_account_updates.is_empty() {
             return Ok(());
         }
 
@@ -372,7 +372,7 @@ impl SimplePostgresClient {
         let statement = &client.update_account_stmt;
         let client = &mut client.client;
 
-        for account in self.accounts.drain(..) {
+        for account in self.pending_account_updates.drain(..) {
             Self::upsert_account_internal(&account, statement, client)?;
         }
 
@@ -392,7 +392,7 @@ impl SimplePostgresClient {
         info!("Created SimplePostgresClient.");
         Ok(Self {
             batch_size,
-            accounts: Vec::with_capacity(batch_size),
+            pending_account_updates: Vec::with_capacity(batch_size),
             client: Mutex::new(PostgresSqlClientWrapper {
                 client,
                 update_account_stmt,
