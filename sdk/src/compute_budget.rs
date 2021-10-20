@@ -12,7 +12,7 @@ use solana_sdk::{
 
 crate::declare_id!("ComputeBudget111111111111111111111111111111");
 
-const MAX_UNITS: u64 = 1_000_000;
+const MAX_UNITS: u32 = 1_000_000;
 
 /// Compute Budget Instructions
 #[derive(
@@ -30,11 +30,11 @@ const MAX_UNITS: u64 = 1_000_000;
 pub enum ComputeBudgetInstruction {
     /// Request a specific maximum number of compute units the transaction is
     /// allowed to consume.
-    RequestUnits(u64),
+    RequestUnits(u32),
 }
 
 /// Create a `ComputeBudgetInstruction::RequestUnits` `Instruction`
-pub fn request_units(units: u64) -> Instruction {
+pub fn request_units(units: u32) -> Instruction {
     Instruction::new_with_borsh(id(), &ComputeBudgetInstruction::RequestUnits(units), vec![])
 }
 
@@ -52,7 +52,7 @@ pub fn process_request(
             if units > MAX_UNITS {
                 return Err(error);
             }
-            compute_budget.max_units = units;
+            compute_budget.max_units = units as u64;
         }
     }
     Ok(())
@@ -134,7 +134,7 @@ mod tests {
         assert_eq!(
             compute_budget,
             BpfComputeBudget {
-                max_units: MAX_UNITS,
+                max_units: MAX_UNITS as u64,
                 ..BpfComputeBudget::default()
             }
         );
