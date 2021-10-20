@@ -92,6 +92,7 @@ pub struct BankingStageStats {
     new_tx_count: AtomicUsize,
     dropped_packet_batches_count: AtomicUsize,
     dropped_packets_count: AtomicUsize,
+    dropped_duplicated_packets_count: AtomicUsize,
     newly_buffered_packets_count: AtomicUsize,
     current_buffered_packets_count: AtomicUsize,
     current_buffered_packet_batches_count: AtomicUsize,
@@ -145,6 +146,12 @@ impl BankingStageStats {
                 (
                     "dropped_packets_count",
                     self.dropped_packets_count.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "dropped_duplicated_packets_count",
+                    self.dropped_duplicated_packets_count
+                        .swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
@@ -1444,8 +1451,8 @@ impl BankingStage {
                     buffered_packets,
                     msgs,
                     packet_indexes,
-                    &mut dropped_packets_count,
                     &mut dropped_packet_batches_count,
+                    &mut dropped_packets_count,
                     &mut newly_buffered_packets_count,
                     batch_limit,
                     duplicates,
@@ -1550,6 +1557,9 @@ impl BankingStage {
             .dropped_packet_batches_count
             .fetch_add(dropped_packet_batches_count, Ordering::Relaxed);
         banking_stage_stats
+            .dropped_packets_count
+            .fetch_add(dropped_packets_count, Ordering::Relaxed);
+        banking_stage_stats
             .newly_buffered_packets_count
             .fetch_add(newly_buffered_packets_count, Ordering::Relaxed);
         banking_stage_stats
@@ -1575,6 +1585,7 @@ impl BankingStage {
         banking_stage_stats: &BankingStageStats,
     ) {
         {
+            let original_packets_count = packet_indexes.len();
             let mut packet_duplicate_check_time = Measure::start("packet_duplicate_check");
             let mut duplicates = duplicates.lock().unwrap();
             let (cache, hasher) = duplicates.deref_mut();
@@ -1592,6 +1603,12 @@ impl BankingStage {
             banking_stage_stats
                 .packet_duplicate_check_elapsed
                 .fetch_add(packet_duplicate_check_time.as_us(), Ordering::Relaxed);
+            banking_stage_stats
+                .dropped_duplicated_packets_count
+                .fetch_add(
+                    original_packets_count.saturating_sub(packet_indexes.len()),
+                    Ordering::Relaxed,
+                );
         }
         if Self::packet_has_more_unprocessed_transactions(&packet_indexes) {
             if unprocessed_packets.len() >= batch_limit {
