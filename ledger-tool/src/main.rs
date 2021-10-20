@@ -1133,6 +1133,20 @@ fn main() {
             )
         )
         .subcommand(
+            SubCommand::with_name("remove-dead-slot")
+            .about("Remove the dead flag for a slot")
+            .arg(
+                Arg::with_name("slots")
+                    .index(1)
+                    .value_name("SLOTS")
+                    .validator(is_slot)
+                    .takes_value(true)
+                    .multiple(true)
+                    .required(true)
+                    .help("Slots to mark as not dead"),
+            )
+        )
+        .subcommand(
             SubCommand::with_name("genesis")
             .about("Prints the ledger's genesis config")
             .arg(&max_genesis_archive_unpacked_size_arg)
@@ -1870,7 +1884,20 @@ fn main() {
             for slot in slots {
                 match blockstore.set_dead_slot(slot) {
                     Ok(_) => println!("Slot {} dead", slot),
-                    Err(err) => eprintln!("Failed to set slot {} dead slot: {}", slot, err),
+                    Err(err) => eprintln!("Failed to set slot {} dead slot: {:?}", slot, err),
+                }
+            }
+        }
+        ("remove-dead-slot", Some(arg_matches)) => {
+            let slots = values_t_or_exit!(arg_matches, "slots", Slot);
+            let blockstore =
+                open_blockstore(&ledger_path, AccessType::PrimaryOnly, wal_recovery_mode);
+            for slot in slots {
+                match blockstore.remove_dead_slot(slot) {
+                    Ok(_) => println!("Slot {} not longer marked dead", slot),
+                    Err(err) => {
+                        eprintln!("Failed to remove dead flag for slot {}, {:?}", slot, err)
+                    }
                 }
             }
         }
