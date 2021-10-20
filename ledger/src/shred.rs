@@ -364,15 +364,33 @@ impl Shred {
         Ok(())
     }
 
+    fn deserialize_common_header(
+        index: &mut usize,
+        size: usize,
+        buf: &[u8],
+    ) -> bincode::Result<ShredCommonHeader> {
+        assert!(size >= SIZE_OF_COMMON_SHRED_HEADER_V1);
+        let mut common_header: ShredCommonHeader =
+            Self::deserialize_obj(index, SIZE_OF_COMMON_SHRED_HEADER_V1, buf)?;
+        if common_header.header_version() == ShredCommonHeaderVersion::V2 {
+            assert!(size >= SIZE_OF_COMMON_SHRED_HEADER_V2);
+            let extended1: u8 = Self::deserialize_obj(index, size_of::<u8>(), buf)?;
+            common_header.extended1 = Some(extended1);
+        }
+        Ok(common_header)
+    }
+
     fn serialize_common_header_into(
         index: &mut usize,
         size: usize,
         buf: &mut [u8],
         common_header: &ShredCommonHeader,
     ) -> bincode::Result<()> {
-        Self::serialize_obj_into(index, size, buf, &common_header)
+        assert!(size >= SIZE_OF_COMMON_SHRED_HEADER_V1);
+        Self::serialize_obj_into(index, SIZE_OF_COMMON_SHRED_HEADER_V1, buf, &common_header)
             .expect("Failed to write header into shred buffer");
         if common_header.header_version() == ShredCommonHeaderVersion::V2 {
+            assert!(size >= SIZE_OF_COMMON_SHRED_HEADER_V2);
             let extended1: u8 = common_header.extended1.unwrap_or_default();
             Self::serialize_obj_into(index, size_of::<u8>(), buf, &extended1)
                 .expect("Failed to write header into shred buffer");
@@ -468,12 +486,7 @@ impl Shred {
         let shred_type = Shred::deserialize_shred_type(&payload)?;
         let header_version = shred_type_to_common_header_version(shred_type);
         let header_size = shred_common_header_version_to_header_size(header_version);
-        let mut common_header: ShredCommonHeader =
-            Self::deserialize_obj(&mut start, header_size, &payload)?;
-        if shred_type_to_common_header_version(shred_type) == ShredCommonHeaderVersion::V2 {
-            let extended1: u8 = Self::deserialize_obj(&mut start, size_of::<u8>(), &payload)?;
-            common_header.extended1 = Some(extended1);
-        }
+        let common_header = Self::deserialize_common_header(&mut start, header_size, &payload)?;
 
         let slot = common_header.slot;
         // Shreds should be padded out to SHRED_PAYLOAD_SIZE
