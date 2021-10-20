@@ -16,7 +16,7 @@ use solana_perf::packet::to_packets_chunked;
 use solana_poh::poh_recorder::{create_test_recorder, PohRecorder, WorkingBankEntry};
 use solana_runtime::{
     accounts_background_service::AbsRequestSender, bank::Bank, bank_forks::BankForks,
-    cost_model::CostModel, cost_tracker::CostTracker,
+    cost_model::CostModel,
 };
 use solana_sdk::{
     hash::Hash,
@@ -233,9 +233,7 @@ fn main() {
             vote_receiver,
             None,
             replay_vote_sender,
-            Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
-                CostModel::default(),
-            ))))),
+            Arc::new(RwLock::new(CostModel::default())),
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 

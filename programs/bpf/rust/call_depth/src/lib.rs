@@ -1,4 +1,4 @@
-//! @brief Example Rust-based BPF program that tests call depth and stack usage
+//! Example Rust-based BPF program that tests call depth and stack usage
 
 use solana_program::{custom_panic_default, entrypoint::SUCCESS, msg};
 

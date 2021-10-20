@@ -11,19 +11,7 @@ use std::collections::HashMap;
 
 const MAX_WRITABLE_ACCOUNTS: usize = 256;
 
-#[derive(Debug, Clone)]
-pub enum CostModelError {
-    /// transaction that would fail sanitize, cost model is not able to process
-    /// such transaction.
-    InvalidTransaction,
-
-    /// would exceed block max limit
-    WouldExceedBlockMaxLimit,
-
-    /// would exceed account max limit
-    WouldExceedAccountMaxLimit,
-}
-
+// costs are stored in number of 'compute unit's
 #[derive(AbiExample, Default, Debug)]
 pub struct TransactionCost {
     pub writable_accounts: Vec<Pubkey>,
@@ -59,9 +47,6 @@ pub struct CostModel {
     account_cost_limit: u64,
     block_cost_limit: u64,
     instruction_execution_cost_table: ExecuteCostTable,
-
-    // reusable variables
-    transaction_cost: TransactionCost,
 }
 
 impl Default for CostModel {
@@ -71,12 +56,11 @@ impl Default for CostModel {
 }
 
 impl CostModel {
-    pub fn new(chain_max: u64, block_max: u64) -> Self {
+    pub fn new(account_max: u64, block_max: u64) -> Self {
         Self {
-            account_cost_limit: chain_max,
+            account_cost_limit: account_max,
             block_cost_limit: block_max,
             instruction_execution_cost_table: ExecuteCostTable::default(),
-            transaction_cost: TransactionCost::new_with_capacity(MAX_WRITABLE_ACCOUNTS),
         }
     }
 
@@ -119,22 +103,19 @@ impl CostModel {
     }
 
     pub fn calculate_cost(
-        &mut self,
+        &self,
         transaction: &SanitizedTransaction,
         demote_program_write_locks: bool,
-    ) -> &TransactionCost {
-        self.transaction_cost.reset();
+    ) -> TransactionCost {
+        let mut tx_cost = TransactionCost::new_with_capacity(MAX_WRITABLE_ACCOUNTS);
 
-        self.transaction_cost.signature_cost = self.get_signature_cost(transaction);
-        self.get_write_lock_cost(transaction, demote_program_write_locks);
-        self.transaction_cost.data_bytes_cost = self.get_data_bytes_cost(transaction);
-        self.transaction_cost.execution_cost = self.get_transaction_cost(transaction);
+        tx_cost.signature_cost = self.get_signature_cost(transaction);
+        self.get_write_lock_cost(&mut tx_cost, transaction, demote_program_write_locks);
+        tx_cost.data_bytes_cost = self.get_data_bytes_cost(transaction);
+        tx_cost.execution_cost = self.get_transaction_cost(transaction);
 
-        debug!(
-            "transaction {:?} has cost {:?}",
-            transaction, self.transaction_cost
-        );
-        &self.transaction_cost
+        debug!("transaction {:?} has cost {:?}", transaction, tx_cost);
+        tx_cost
     }
 
     pub fn upsert_instruction_cost(
@@ -159,7 +140,8 @@ impl CostModel {
     }
 
     fn get_write_lock_cost(
-        &mut self,
+        &self,
+        tx_cost: &mut TransactionCost,
         transaction: &SanitizedTransaction,
         demote_program_write_locks: bool,
     ) {
@@ -168,8 +150,8 @@ impl CostModel {
             let is_writable = message.is_writable(i, demote_program_write_locks);
 
             if is_writable {
-                self.transaction_cost.writable_accounts.push(*k);
-                self.transaction_cost.write_lock_cost += WRITE_LOCK_UNITS;
+                tx_cost.writable_accounts.push(*k);
+                tx_cost.write_lock_cost += WRITE_LOCK_UNITS;
             }
         });
     }
@@ -381,7 +363,7 @@ mod tests {
         .try_into()
         .unwrap();
 
-        let mut cost_model = CostModel::default();
+        let cost_model = CostModel::default();
         let tx_cost = cost_model.calculate_cost(&tx, /*demote_program_write_locks=*/ true);
         assert_eq!(2 + 2, tx_cost.writable_accounts.len());
         assert_eq!(signer1.pubkey(), tx_cost.writable_accounts[0]);
@@ -492,7 +474,7 @@ mod tests {
                     })
                 } else {
                     thread::spawn(move || {
-                        let mut cost_model = cost_model.write().unwrap();
+                        let cost_model = cost_model.write().unwrap();
                         let tx_cost = cost_model
                             .calculate_cost(&tx, /*demote_program_write_locks=*/ true);
                         assert_eq!(3, tx_cost.writable_accounts.len());

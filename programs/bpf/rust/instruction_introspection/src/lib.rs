@@ -1,4 +1,4 @@
-//! @brief Example Rust-based BPF program that exercises instruction introspection
+//! Example Rust-based BPF program that exercises instruction introspection
 
 extern crate solana_program;
 use solana_program::{

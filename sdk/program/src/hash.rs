@@ -26,7 +26,7 @@ const MAX_BASE58_LEN: usize = 44;
     AbiExample,
 )]
 #[repr(transparent)]
-pub struct Hash(pub [u8; HASH_BYTES]);
+pub struct Hash(pub(crate) [u8; HASH_BYTES]);
 
 #[derive(Clone, Default)]
 pub struct Hasher {

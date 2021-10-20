@@ -522,6 +522,13 @@ pub fn main() {
                       start from a local snapshot if present"),
         )
         .arg(
+            Arg::with_name("no_incremental_snapshot_fetch")
+                .long("no-incremental-snapshot-fetch")
+                .takes_value(false)
+                .help("Do not attempt to fetch incremental snapshots from the cluster, only fetch \
+                      full snapshots"),
+        )
+        .arg(
             Arg::with_name("no_genesis_fetch")
                 .long("no-genesis-fetch")
                 .takes_value(false)
@@ -1788,10 +1795,20 @@ pub fn main() {
             "max_genesis_archive_unpacked_size",
             u64
         ),
+        incremental_snapshots: if matches.is_present("incremental_snapshots") {
+            bootstrap::ConfigState::Enabled
+        } else {
+            bootstrap::ConfigState::Disabled
+        },
+        incremental_snapshot_fetch: if matches.is_present("no_incremental_snapshot_fetch") {
+            bootstrap::ConfigState::Disabled
+        } else {
+            bootstrap::ConfigState::Enabled
+        },
     };
 
     let private_rpc = matches.is_present("private_rpc");
-    let no_port_check = matches.is_present("no_port_check");
+    let do_port_check = !matches.is_present("no_port_check");
     let no_rocksdb_compaction = true;
     let rocksdb_compaction_interval = value_t!(matches, "rocksdb_compaction_interval", u64).ok();
     let rocksdb_max_compaction_jitter =
@@ -2414,7 +2431,7 @@ pub fn main() {
             &cluster_entrypoints,
             &mut validator_config,
             rpc_bootstrap_config,
-            no_port_check,
+            do_port_check,
             use_progress_bar,
             maximum_local_snapshot_age,
             should_check_duplicate_instance,

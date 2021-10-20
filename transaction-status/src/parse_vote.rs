@@ -163,7 +163,7 @@ mod test {
         }
 
         let lamports = 55;
-        let hash = Hash([1; 32]);
+        let hash = Hash::new_from_array([1; 32]);
         let vote = Vote {
             slots: vec![1, 2, 4],
             hash,
@@ -289,7 +289,7 @@ mod test {
         );
         assert!(parse_vote(&message.instructions[0], &keys[0..1]).is_err());
 
-        let proof_hash = Hash([2; 32]);
+        let proof_hash = Hash::new_from_array([2; 32]);
         let instruction = vote_instruction::vote_switch(&keys[1], &keys[0], vote, proof_hash);
         let message = Message::new(&[instruction], None);
         assert_eq!(

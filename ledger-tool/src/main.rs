@@ -775,13 +775,11 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
     let mut program_ids = HashMap::new();
     let mut cost_model = CostModel::default();
     cost_model.initialize_cost_table(&blockstore.read_program_costs().unwrap());
-    let cost_model = Arc::new(RwLock::new(cost_model));
-    let mut cost_tracker = CostTracker::new(cost_model.clone());
+    let mut cost_tracker = CostTracker::default();
     let mut cost_tracker_stats = CostTrackerStats::default();
 
     for entry in entries {
         num_transactions += entry.transactions.len();
-        let mut cost_model = cost_model.write().unwrap();
         entry
             .transactions
             .into_iter()
@@ -802,7 +800,7 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
                     true, // demote_program_write_locks
                 );
                 if cost_tracker
-                    .try_add(tx_cost, &mut cost_tracker_stats)
+                    .try_add(&transaction, &tx_cost, &mut cost_tracker_stats)
                     .is_err()
                 {
                     println!(

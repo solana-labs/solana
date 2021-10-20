@@ -1,3 +1,14 @@
+//! Loading signers and keypairs from the command line.
+//!
+//! This module contains utilities for loading [Signer]s and [Keypair]s from
+//! standard signing sources, from the command line, as in the Solana CLI.
+//!
+//! The key function here is [`signer_from_path`], which loads a `Signer` from
+//! one of several possible sources by interpreting a "path" command line
+//! argument. Its documentation includes a description of all possible signing
+//! sources supported by the Solana CLI. Many other functions here are
+//! variations on, or delegate to, `signer_from_path`.
+
 use {
     crate::{
         input_parsers::{pubkeys_sigs_of, STDOUT_OUTFILE_TOKEN},
@@ -92,14 +103,56 @@ impl CliSignerInfo {
     }
 }
 
+/// A command line argument that loads a default signer in absence of other signers.
+///
+/// This type manages a default signing source which may be overridden by other
+/// signing sources via its [`generate_unique_signers`] method.
+///
+/// [`generate_unique_signers`]: DefaultSigner::generate_unique_signers
+///
+/// `path` is a signing source as documented by [`signer_from_path`], and
+/// `arg_name` is the name of its [clap] command line argument, which is passed
+/// to `signer_from_path` as its `keypair_name` argument.
 #[derive(Debug, Default)]
 pub struct DefaultSigner {
+    /// The name of the signers command line argument.
     pub arg_name: String,
+    /// The signing source.
     pub path: String,
     is_path_checked: RefCell<bool>,
 }
 
 impl DefaultSigner {
+    /// Create a new `DefaultSigner`.
+    ///
+    /// `path` is a signing source as documented by [`signer_from_path`], and
+    /// `arg_name` is the name of its [clap] command line argument, which is
+    /// passed to `signer_from_path` as its `keypair_name` argument.
+    ///
+    /// [clap]: https://docs.rs/clap
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use clap::{App, Arg, value_t_or_exit};
+    /// use solana_clap_utils::keypair::DefaultSigner;
+    /// use solana_clap_utils::offline::OfflineArgs;
+    ///
+    /// let clap_app = App::new("my-program")
+    ///     // The argument we'll parse as a signer "path"
+    ///     .arg(Arg::with_name("keypair")
+    ///         .required(true)
+    ///         .help("The default signer"))
+    ///     .offline_args();
+    ///
+    /// let clap_matches = clap_app.get_matches();
+    /// let keypair_str = value_t_or_exit!(clap_matches, "keypair", String);
+    ///
+    /// let default_signer = DefaultSigner::new("keypair", &keypair_str);
+    /// # assert!(default_signer.arg_name.len() > 0);
+    /// assert_eq!(default_signer.path, keypair_str);
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     pub fn new<AN: AsRef<str>, P: AsRef<str>>(arg_name: AN, path: P) -> Self {
         let arg_name = arg_name.as_ref().to_string();
         let path = path.as_ref().to_string();
@@ -134,6 +187,57 @@ impl DefaultSigner {
         Ok(&self.path)
     }
 
+    /// Generate a unique set of signers, possibly excluding this default signer.
+    ///
+    /// This function allows a command line application to have a default
+    /// signer, perhaps representing a default wallet, but to override that
+    /// signer and instead sign with one or more other signers.
+    ///
+    /// `bulk_signers` is a vector of signers, all of which are optional. If any
+    /// of those signers is `None`, then the default signer will be loaded; if
+    /// all of those signers are `Some`, then the default signer will not be
+    /// loaded.
+    ///
+    /// The returned value includes all of the `bulk_signers` that were not
+    /// `None`, and maybe the default signer, if it was loaded.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use clap::{App, Arg, value_t_or_exit};
+    /// use solana_clap_utils::keypair::{DefaultSigner, signer_from_path};
+    /// use solana_clap_utils::offline::OfflineArgs;
+    /// use solana_sdk::signer::Signer;
+    ///
+    /// let clap_app = App::new("my-program")
+    ///     // The argument we'll parse as a signer "path"
+    ///     .arg(Arg::with_name("keypair")
+    ///         .required(true)
+    ///         .help("The default signer"))
+    ///     .arg(Arg::with_name("payer")
+    ///         .long("payer")
+    ///         .help("The account paying for the transaction"))
+    ///     .offline_args();
+    ///
+    /// let mut wallet_manager = None;
+    ///
+    /// let clap_matches = clap_app.get_matches();
+    /// let keypair_str = value_t_or_exit!(clap_matches, "keypair", String);
+    /// let maybe_payer = clap_matches.value_of("payer");
+    ///
+    /// let default_signer = DefaultSigner::new("keypair", &keypair_str);
+    /// let maybe_payer_signer = maybe_payer.map(|payer| {
+    ///     signer_from_path(&clap_matches, payer, "payer", &mut wallet_manager)
+    /// }).transpose()?;
+    /// let bulk_signers = vec![maybe_payer_signer];
+    ///
+    /// let unique_signers = default_signer.generate_unique_signers(
+    ///     bulk_signers,
+    ///     &clap_matches,
+    ///     &mut wallet_manager,
+    /// )?;
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     pub fn generate_unique_signers(
         &self,
         bulk_signers: Vec<Option<Box<dyn Signer>>>,
@@ -158,6 +262,45 @@ impl DefaultSigner {
         })
     }
 
+    /// Loads the default [Signer] from one of several possible sources.
+    ///
+    /// The `path` is not strictly a file system path, but is interpreted as
+    /// various types of _signing source_, depending on its format, one of which
+    /// is a path to a keypair file. Some sources may require user interaction
+    /// in the course of calling this function.
+    ///
+    /// This simply delegates to the [`signer_from_path`] free function, passing
+    /// it the `DefaultSigner`s `path` and `arg_name` fields as the `path` and
+    /// `keypair_name` arguments.
+    ///
+    /// See the [`signer_from_path`] free function for full documentation of how
+    /// this function interprets its arguments.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use clap::{App, Arg, value_t_or_exit};
+    /// use solana_clap_utils::keypair::DefaultSigner;
+    /// use solana_clap_utils::offline::OfflineArgs;
+    ///
+    /// let clap_app = App::new("my-program")
+    ///     // The argument we'll parse as a signer "path"
+    ///     .arg(Arg::with_name("keypair")
+    ///         .required(true)
+    ///         .help("The default signer"))
+    ///     .offline_args();
+    ///
+    /// let clap_matches = clap_app.get_matches();
+    /// let keypair_str = value_t_or_exit!(clap_matches, "keypair", String);
+    /// let default_signer = DefaultSigner::new("keypair", &keypair_str);
+    /// let mut wallet_manager = None;
+    ///
+    /// let signer = default_signer.signer_from_path(
+    ///     &clap_matches,
+    ///     &mut wallet_manager,
+    /// )?;
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     pub fn signer_from_path(
         &self,
         matches: &ArgMatches,
@@ -166,6 +309,51 @@ impl DefaultSigner {
         signer_from_path(matches, self.path()?, &self.arg_name, wallet_manager)
     }
 
+    /// Loads the default [Signer] from one of several possible sources.
+    ///
+    /// The `path` is not strictly a file system path, but is interpreted as
+    /// various types of _signing source_, depending on its format, one of which
+    /// is a path to a keypair file. Some sources may require user interaction
+    /// in the course of calling this function.
+    ///
+    /// This simply delegates to the [`signer_from_path_with_config`] free
+    /// function, passing it the `DefaultSigner`s `path` and `arg_name` fields
+    /// as the `path` and `keypair_name` arguments.
+    ///
+    /// See the [`signer_from_path`] free function for full documentation of how
+    /// this function interprets its arguments.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use clap::{App, Arg, value_t_or_exit};
+    /// use solana_clap_utils::keypair::{SignerFromPathConfig, DefaultSigner};
+    /// use solana_clap_utils::offline::OfflineArgs;
+    ///
+    /// let clap_app = App::new("my-program")
+    ///     // The argument we'll parse as a signer "path"
+    ///     .arg(Arg::with_name("keypair")
+    ///         .required(true)
+    ///         .help("The default signer"))
+    ///     .offline_args();
+    ///
+    /// let clap_matches = clap_app.get_matches();
+    /// let keypair_str = value_t_or_exit!(clap_matches, "keypair", String);
+    /// let default_signer = DefaultSigner::new("keypair", &keypair_str);
+    /// let mut wallet_manager = None;
+    ///
+    /// // Allow pubkey signers without accompanying signatures
+    /// let config = SignerFromPathConfig {
+    ///     allow_null_signer: true,
+    /// };
+    ///
+    /// let signer = default_signer.signer_from_path_with_config(
+    ///     &clap_matches,
+    ///     &mut wallet_manager,
+    ///     &config,
+    /// )?;
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     pub fn signer_from_path_with_config(
         &self,
         matches: &ArgMatches,
@@ -338,6 +526,162 @@ pub struct SignerFromPathConfig {
     pub allow_null_signer: bool,
 }
 
+/// Loads a [Signer] from one of several possible sources.
+///
+/// The `path` is not strictly a file system path, but is interpreted as various
+/// types of _signing source_, depending on its format, one of which is a path
+/// to a keypair file. Some sources may require user interaction in the course
+/// of calling this function.
+///
+/// The result of this function is a boxed object of the [Signer] trait. To load
+/// a concrete [Keypair], use the [keypair_from_path] function, though note that
+/// it does not support all signer sources.
+///
+/// The `matches` argument is the same set of parsed [clap] matches from which
+/// `path` was parsed. It is used to parse various additional command line
+/// arguments, depending on which signing source is requested, as described
+/// below in "Signing sources".
+///
+/// [clap]: https//docs.rs/clap
+///
+/// The `keypair_name` argument is the "name" of the signer, and is typically
+/// the name of the clap argument from which the `path` argument was parsed,
+/// like "keypair", "from", or "fee-payer". It is used solely for interactively
+/// prompting the user, either when entering seed phrases or selecting from
+/// multiple hardware wallets.
+///
+/// The `wallet_manager` is used for establishing connections to a hardware
+/// device such as Ledger. If `wallet_manager` is a reference to `None`, and a
+/// hardware signer is requested, then this function will attempt to create a
+/// wallet manager, assigning it to the mutable `wallet_manager` reference. This
+/// argument is typically a reference to `None`.
+///
+/// # Signing sources
+///
+/// The `path` argument can simply be a path to a keypair file, but it may also
+/// be interpreted in several other ways, in the following order.
+///
+/// Firstly, the `path` argument may be interpreted as a [URI], with the URI
+/// scheme indicating where to load the signer from. If it parses as a URI, then
+/// the following schemes are supported:
+///
+/// - `file:` &mdash; Read the keypair from a JSON keypair file. The path portion
+///    of the URI is the file path.
+///
+/// - `stdin:` &mdash; Read the keypair from stdin, in the JSON format used by
+///   the keypair file.
+///
+///   Non-scheme parts of the URI are ignored.
+///
+/// - `prompt:` &mdash; The user will be prompted at the command line
+///   for their seed phrase and passphrase.
+///
+///   In this URI the [query string][qs] may contain zero or one of the
+///   following key/value pairs that determine the [BIP44 derivation path][dp]
+///   of the private key from the seed:
+///
+///   - `key` &mdash; In this case the value is either one or two numerical
+///     indexes separated by a slash, which represent the "account", and
+///     "change" components of the BIP44 derivation path. Example: `key=0/0`.
+///
+///   - `full-path` &mdash; In this case the value is a full derivation path,
+///     and the user is responsible for ensuring it is correct. Example:
+///     `full-path=m/44/501/0/0/0`.
+///
+///   If neither is provided, then the default derivation path is used.
+///
+///   Note that when specifying derivation paths, this routine will convert all
+///   indexes into ["hardened"] indexes, even if written as "normal" indexes.
+///
+///   Other components of the URI besides the scheme and query string are ignored.
+///
+///   If the "skip_seed_phrase_validation" argument, as defined in
+///   [SKIP_SEED_PHRASE_VALIDATION_ARG] is found in `matches`, then the keypair
+///   seed will be generated directly from the seed phrase, without parsing or
+///   validating it as a BIP39 seed phrase. This allows the use of non-BIP39 seed
+///   phrases.
+///
+/// - `usb:` &mdash; Use a USB hardware device as the signer. In this case, the
+///   URI host indicates the device type, and is required. The only currently valid host
+///   value is "ledger".
+///
+///   Optionally, the first segment of the URI path indicates the base-58
+///   encoded pubkey of the wallet, and the "account" and "change" indices of
+///   the derivation path can be specified with the `key=` query parameter, as
+///   with the `prompt:` URI.
+///
+///   Examples:
+///
+///   - `usb://ledger`
+///   - `usb://ledger?key=0/0`
+///   - `usb://ledger/9rPVSygg3brqghvdZ6wsL2i5YNQTGhXGdJzF65YxaCQd`
+///   - `usb://ledger/9rPVSygg3brqghvdZ6wsL2i5YNQTGhXGdJzF65YxaCQd?key=0/0`
+///
+/// Next the `path` argument may be one of the following strings:
+///
+/// - `-` &mdash; Read the keypair from stdin. This is the same as the `stdin:`
+///   URI scheme.
+///
+/// - `ASK` &mdash; The user will be prompted at the command line for their seed
+///   phrase and passphrase. _This uses a legacy key derivation method and should
+///   usually be avoided in favor of `prompt:`._
+///
+/// Next, if the `path` argument parses as a base-58 public key, then the signer
+/// is created without a private key, but with presigned signatures, each parsed
+/// from the additional command line arguments, provided by the `matches`
+/// argument.
+///
+/// In this case, the remaining command line arguments are searched for clap
+/// arguments named "signer", as defined by [SIGNER_ARG], and each is parsed as
+/// a key-value pair of the form "pubkey=signature", where `pubkey` is the same
+/// base-58 public key, and `signature` is a serialized signature produced by
+/// the corresponding keypair. One of the "signer" signatures must be for the
+/// pubkey specified in `path` or this function will return an error; unless the
+/// "sign_only" clap argument, as defined by [SIGN_ONLY_ARG], is present in
+/// `matches`, in which case the signer will be created with no associated
+/// signatures.
+///
+/// Finally, if `path`, interpreted as a file path, represents a file on disk,
+/// then the signer is created by reading that file as a JSON-serialized
+/// keypair. This is the same as the `file:` URI scheme.
+///
+/// [qs]: https://en.wikipedia.org/wiki/Query_string
+/// [dp]: https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki
+/// [URI]: https://en.wikipedia.org/wiki/Uniform_Resource_Identifier
+/// ["hardened"]: https://wiki.trezor.io/Hardened_and_non-hardened_derivation
+///
+/// # Examples
+///
+/// This shows a reasonable way to set up clap to parse all possible signer
+/// sources. Note the use of the [`OfflineArgs::offline_args`] method to add
+/// correct clap definitions of the `--signer` and `--sign-only` arguments, as
+/// required by the base-58 pubkey offline signing method.
+///
+/// [`OfflineArgs::offline_args`]: crate::offline::OfflineArgs::offline_args
+///
+/// ```no_run
+/// use clap::{App, Arg, value_t_or_exit};
+/// use solana_clap_utils::keypair::signer_from_path;
+/// use solana_clap_utils::offline::OfflineArgs;
+///
+/// let clap_app = App::new("my-program")
+///     // The argument we'll parse as a signer "path"
+///     .arg(Arg::with_name("keypair")
+///         .required(true)
+///         .help("The default signer"))
+///     .offline_args();
+///
+/// let clap_matches = clap_app.get_matches();
+/// let keypair_str = value_t_or_exit!(clap_matches, "keypair", String);
+/// let mut wallet_manager = None;
+/// let signer = signer_from_path(
+///     &clap_matches,
+///     &keypair_str,
+///     "keypair",
+///     &mut wallet_manager,
+/// )?;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 pub fn signer_from_path(
     matches: &ArgMatches,
     path: &str,
@@ -348,6 +692,63 @@ pub fn signer_from_path(
     signer_from_path_with_config(matches, path, keypair_name, wallet_manager, &config)
 }
 
+/// Loads a [Signer] from one of several possible sources.
+///
+/// The `path` is not strictly a file system path, but is interpreted as various
+/// types of _signing source_, depending on its format, one of which is a path
+/// to a keypair file. Some sources may require user interaction in the course
+/// of calling this function.
+///
+/// This is the same as [`signer_from_path`] except that it additionaolly
+/// accepts a [`SignerFromPathConfig`] argument.
+///
+/// If the `allow_null_signer` field of `config` is `true`, then pubkey signers
+/// are allowed to have zero associated signatures via additional "signer"
+/// command line arguments. It the same effect as if the "sign_only" clap
+/// argument is present.
+///
+/// See [`signer_from_path`] for full documentation of how this function
+/// interprets its arguments.
+///
+/// # Examples
+///
+/// This shows a reasonable way to set up clap to parse all possible signer
+/// sources. Note the use of the [`OfflineArgs::offline_args`] method to add
+/// correct clap definitions of the `--signer` and `--sign-only` arguments, as
+/// required by the base-58 pubkey offline signing method.
+///
+/// [`OfflineArgs::offline_args`]: crate::offline::OfflineArgs::offline_args
+///
+/// ```no_run
+/// use clap::{App, Arg, value_t_or_exit};
+/// use solana_clap_utils::keypair::{signer_from_path_with_config, SignerFromPathConfig};
+/// use solana_clap_utils::offline::OfflineArgs;
+///
+/// let clap_app = App::new("my-program")
+///     // The argument we'll parse as a signer "path"
+///     .arg(Arg::with_name("keypair")
+///         .required(true)
+///         .help("The default signer"))
+///     .offline_args();
+///
+/// let clap_matches = clap_app.get_matches();
+/// let keypair_str = value_t_or_exit!(clap_matches, "keypair", String);
+/// let mut wallet_manager = None;
+///
+/// // Allow pubkey signers without accompanying signatures
+/// let config = SignerFromPathConfig {
+///     allow_null_signer: true,
+/// };
+///
+/// let signer = signer_from_path_with_config(
+///     &clap_matches,
+///     &keypair_str,
+///     "keypair",
+///     &mut wallet_manager,
+///     &config,
+/// )?;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 pub fn signer_from_path_with_config(
     matches: &ArgMatches,
     path: &str,
@@ -418,6 +819,43 @@ pub fn signer_from_path_with_config(
     }
 }
 
+/// Loads the pubkey of a [Signer] from one of several possible sources.
+///
+/// The `path` is not strictly a file system path, but is interpreted as various
+/// types of _signing source_, depending on its format, one of which is a path
+/// to a keypair file. Some sources may require user interaction in the course
+/// of calling this function.
+///
+/// The only difference between this function and [`signer_from_path`] is in the
+/// case of a "pubkey" path: this function does not require that accompanying
+/// command line arguments contain an offline signature.
+///
+/// See [`signer_from_path`] for full documentation of how this function
+/// interprets its arguments.
+///
+/// # Examples
+///
+/// ```no_run
+/// use clap::{App, Arg, value_t_or_exit};
+/// use solana_clap_utils::keypair::pubkey_from_path;
+///
+/// let clap_app = App::new("my-program")
+///     // The argument we'll parse as a signer "path"
+///     .arg(Arg::with_name("keypair")
+///         .required(true)
+///         .help("The default signer"));
+///
+/// let clap_matches = clap_app.get_matches();
+/// let keypair_str = value_t_or_exit!(clap_matches, "keypair", String);
+/// let mut wallet_manager = None;
+/// let pubkey = pubkey_from_path(
+///     &clap_matches,
+///     &keypair_str,
+///     "keypair",
+///     &mut wallet_manager,
+/// )?;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 pub fn pubkey_from_path(
     matches: &ArgMatches,
     path: &str,
@@ -517,7 +955,46 @@ pub fn prompt_passphrase(prompt: &str) -> Result<String, Box<dyn error::Error>> 
     Ok(passphrase)
 }
 
-/// Parses a path into a SignerSource and returns a Keypair for supporting SignerSourceKinds
+/// Loads a [Keypair] from one of several possible sources.
+///
+/// The `path` is not strictly a file system path, but is interpreted as various
+/// types of _signing source_, depending on its format, one of which is a path
+/// to a keypair file. Some sources may require user interaction in the course
+/// of calling this function.
+///
+/// This is the same as [`signer_from_path`] except that it only supports
+/// signing sources that can result in a [Keypair]: prompt for seed phrase,
+/// keypair file, and stdin.
+///
+/// If `confirm_pubkey` is `true` then after deriving the pubkey, the user will
+/// be prompted to confirm that the pubkey is as expected.
+///
+/// See [`signer_from_path`] for full documentation of how this function
+/// interprets its arguments.
+///
+/// # Examples
+///
+/// ```no_run
+/// use clap::{App, Arg, value_t_or_exit};
+/// use solana_clap_utils::keypair::keypair_from_path;
+///
+/// let clap_app = App::new("my-program")
+///     // The argument we'll parse as a signer "path"
+///     .arg(Arg::with_name("keypair")
+///         .required(true)
+///         .help("The default signer"));
+///
+/// let clap_matches = clap_app.get_matches();
+/// let keypair_str = value_t_or_exit!(clap_matches, "keypair", String);
+///
+/// let signer = keypair_from_path(
+///     &clap_matches,
+///     &keypair_str,
+///     "keypair",
+///     false,
+/// )?;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 pub fn keypair_from_path(
     matches: &ArgMatches,
     path: &str,
@@ -567,9 +1044,10 @@ pub fn keypair_from_path(
     }
 }
 
-/// Reads user input from stdin to retrieve a seed phrase and passphrase for keypair derivation
-/// Optionally skips validation of seed phrase
-/// Optionally confirms recovered public key
+/// Reads user input from stdin to retrieve a seed phrase and passphrase for keypair derivation.
+///
+/// Optionally skips validation of seed phrase. Optionally confirms recovered
+/// public key.
 pub fn keypair_from_seed_phrase(
     keypair_name: &str,
     skip_validation: bool,
@@ -646,9 +1124,13 @@ fn sanitize_seed_phrase(seed_phrase: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::offline::OfflineArgs;
+    use clap::{value_t_or_exit, App, Arg};
     use solana_remote_wallet::locator::Manufacturer;
+    use solana_remote_wallet::remote_wallet::initialize_wallet_manager;
+    use solana_sdk::signer::keypair::write_keypair_file;
     use solana_sdk::system_instruction;
-    use tempfile::NamedTempFile;
+    use tempfile::{NamedTempFile, TempDir};
 
     #[test]
     fn test_sanitize_seed_phrase() {
@@ -806,5 +1288,42 @@ mod tests {
                 legacy: false,
             } if p == relative_path_str)
         );
+    }
+
+    #[test]
+    fn signer_from_path_with_file() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = TempDir::new()?;
+        let dir = dir.path();
+        let keypair_path = dir.join("id.json");
+        let keypair_path_str = keypair_path.to_str().expect("utf-8");
+
+        let keypair = Keypair::new();
+        write_keypair_file(&keypair, &keypair_path)?;
+
+        let args = vec!["program", keypair_path_str];
+
+        let clap_app = App::new("my-program")
+            .arg(
+                Arg::with_name("keypair")
+                    .required(true)
+                    .help("The signing keypair"),
+            )
+            .offline_args();
+
+        let clap_matches = clap_app.get_matches_from(args);
+        let keypair_str = value_t_or_exit!(clap_matches, "keypair", String);
+
+        let wallet_manager = initialize_wallet_manager()?;
+
+        let signer = signer_from_path(
+            &clap_matches,
+            &keypair_str,
+            "signer",
+            &mut Some(wallet_manager),
+        )?;
+
+        assert_eq!(keypair.pubkey(), signer.pubkey());
+
+        Ok(())
     }
 }

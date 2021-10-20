@@ -44,6 +44,7 @@ use crate::{
     ancestors::{Ancestors, AncestorsForSerialization},
     blockhash_queue::BlockhashQueue,
     builtins::{self, ActivationType, Builtin, Builtins},
+    cost_tracker::CostTracker,
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
     inline_spl_token_v2_0,
     instruction_recorder::InstructionRecorder,
@@ -994,6 +995,8 @@ pub struct Bank {
     pub freeze_started: AtomicBool,
 
     vote_only_bank: bool,
+
+    pub cost_tracker: RwLock<CostTracker>,
 }
 
 impl Default for BlockhashQueue {
@@ -1132,6 +1135,7 @@ impl Bank {
             drop_callback: RwLock::<OptionalDropCallback>::default(),
             freeze_started: AtomicBool::default(),
             vote_only_bank: false,
+            cost_tracker: RwLock::<CostTracker>::default(),
         }
     }
 
@@ -1382,6 +1386,7 @@ impl Bank {
                     .map(|drop_callback| drop_callback.clone_box()),
             )),
             freeze_started: AtomicBool::new(false),
+            cost_tracker: RwLock::new(CostTracker::default()),
         };
 
         datapoint_info!(
@@ -1568,6 +1573,7 @@ impl Bank {
             drop_callback: RwLock::new(OptionalDropCallback(None)),
             freeze_started: AtomicBool::new(fields.hash != Hash::default()),
             vote_only_bank: false,
+            cost_tracker: RwLock::new(CostTracker::default()),
         };
         bank.finish_init(
             genesis_config,
@@ -5937,6 +5943,14 @@ impl Bank {
     pub fn send_to_tpu_vote_port_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::send_to_tpu_vote_port::id())
+    }
+
+    pub fn read_cost_tracker(&self) -> LockResult<RwLockReadGuard<CostTracker>> {
+        self.cost_tracker.read()
+    }
+
+    pub fn write_cost_tracker(&self) -> LockResult<RwLockWriteGuard<CostTracker>> {
+        self.cost_tracker.write()
     }
 
     // Check if the wallclock time from bank creation to now has exceeded the allotted
