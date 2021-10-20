@@ -50,5 +50,5 @@ extern uint64_t entrypoint(const uint8_t *input) {
     //   sol_log_pubkey(&pubkey);
     // }
   }
-  return 0;
+  return *val;
 }
