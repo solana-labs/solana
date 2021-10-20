@@ -22,6 +22,8 @@ const MAX_TRANSACTION_QUEUE_SIZE: usize = 10_000; // This seems like a lot but m
 const DEFAULT_RETRY_RATE_MS: u64 = 2_000;
 /// Default number of leaders to forward transactions to
 const DEFAULT_LEADER_FORWARD_COUNT: u64 = 2;
+/// Default max number of time the service will retry broadcast
+const DEFAULT_SERVICE_MAX_RETRIES: usize = usize::MAX;
 
 pub struct SendTransactionService {
     thread: JoinHandle<()>,
@@ -69,6 +71,8 @@ struct ProcessTransactionsResult {
 pub struct Config {
     pub retry_rate_ms: u64,
     pub leader_forward_count: u64,
+    pub default_max_retries: Option<usize>,
+    pub service_max_retries: usize,
 }
 
 impl Default for Config {
@@ -76,6 +80,8 @@ impl Default for Config {
         Self {
             retry_rate_ms: DEFAULT_RETRY_RATE_MS,
             leader_forward_count: DEFAULT_LEADER_FORWARD_COUNT,
+            default_max_retries: None,
+            service_max_retries: DEFAULT_SERVICE_MAX_RETRIES,
         }
     }
 }
@@ -238,7 +244,13 @@ impl SendTransactionService {
                 inc_new_counter_info!("send_transaction_service-expired", 1);
                 return false;
             }
-            if let Some(max_retries) = transaction_info.max_retries {
+
+            let max_retries = transaction_info
+                .max_retries
+                .or(config.default_max_retries)
+                .map(|max_retries| max_retries.min(config.service_max_retries));
+
+            if let Some(max_retries) = max_retries {
                 if transaction_info.retries >= max_retries {
                     info!("Dropping transaction due to max retries: {}", signature);
                     result.max_retries_elapsed += 1;
