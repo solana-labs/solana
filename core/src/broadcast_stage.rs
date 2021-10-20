@@ -350,30 +350,47 @@ impl BroadcastStage {
 
         for (_, bank) in retransmit_slots.iter() {
             let slot = bank.slot();
-            let data_shreds = Arc::new(
+            let mut data_shreds =
                 blockstore
                     .get_data_shreds_for_slot(slot, 0)
-                    .expect("My own shreds must be reconstructable"),
-            );
+                    .expect("My own shreds must be reconstructable");
             debug_assert!(data_shreds.iter().all(|shred| shred.slot() == slot));
 
             // TODO send retry iteration
+            // update iteration in shreds
+            for shred in data_shreds.iter_mut() {
+                if let Some(iter) = shred.transmission_iteration() {
+                    if iter < 16 { // TODO pass expected iter
+                        shred.set_transmission_iteration(iter + 1);
+                        //Shredder::sign_shred(keypayr, &shred);
+                    }
+                }
+            }
 
             if !data_shreds.is_empty() {
+                let data_shreds = Arc::new(data_shreds);
                 socket_sender.send((data_shreds, None))?;
             }
 
-            let coding_shreds = Arc::new(
+            let coding_shreds =
                 blockstore
                     .get_coding_shreds_for_slot(slot, 0)
-                    .expect("My own shreds must be reconstructable"),
-            );
-
+                    .expect("My own shreds must be reconstructable");
             debug_assert!(coding_shreds.iter().all(|shred| shred.slot() == slot));
+
+            for shred in coding_shreds.iter_mut() {
+                if let Some(iter) = shred.transmission_iteration() {
+                    if iter < 16 {
+                        shred.set_transmission_iteration(iter + 1);
+                        // todo sign shred
+                    }
+                }
+            }
 
             // TODO send retry iteration
 
             if !coding_shreds.is_empty() {
+                let coding_shreds = Arc::new(coding_shreds);
                 socket_sender.send((coding_shreds, None))?;
             }
         }
