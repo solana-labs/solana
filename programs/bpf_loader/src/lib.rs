@@ -34,7 +34,7 @@ use solana_sdk::{
     entrypoint::{HEAP_LENGTH, SUCCESS},
     feature_set::{
         add_missing_program_error_mappings, close_upgradeable_program_accounts, fix_write_privs,
-        reduce_required_deploy_balance, upgradeable_close_instruction,
+        reduce_required_deploy_balance, requestable_heap_size, upgradeable_close_instruction,
     },
     ic_logger_msg, ic_msg,
     instruction::{AccountMeta, InstructionError},
@@ -150,6 +150,12 @@ pub fn create_vm<'a>(
     invoke_context: &'a mut dyn InvokeContext,
 ) -> Result<EbpfVm<'a, BpfError, ThisInstructionMeter>, EbpfError<BpfError>> {
     let bpf_compute_budget = invoke_context.get_bpf_compute_budget();
+    let heap_size = bpf_compute_budget.heap_size.unwrap_or(HEAP_LENGTH);
+    if invoke_context.is_feature_active(&requestable_heap_size::id()) {
+        let _ = invoke_context.get_compute_meter().borrow_mut().consume(
+            (heap_size as u64 / (32 * 1024)).saturating_sub(1) * bpf_compute_budget.heap_cost,
+        );
+    }
     let heap = AlignedMemory::new_with_size(
         bpf_compute_budget.heap_size.unwrap_or(HEAP_LENGTH),
         HOST_ALIGN,

@@ -243,6 +243,10 @@ pub mod ed25519_program_enabled {
     solana_sdk::declare_id!("E1TvTNipX8TKNHrhRC8SMuAwQmGY58TZ4drdztP3Gxwc");
 }
 
+pub mod requestable_heap_size {
+    solana_sdk::declare_id!("CCu4boMmfLuqcmfTLPHQiUo22ZdUsXjgzPAURYaWt1Bw");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -304,6 +308,7 @@ lazy_static! {
         (return_data_syscall_enabled::id(), "enable sol_{set,get}_return_data syscall"),
         (sol_log_data_syscall_enabled::id(), "enable sol_log_data syscall"),
         (ed25519_program_enabled::id(), "enable builtin ed25519 signature verify program"),
+        (requestable_heap_size::id(), "Requestable heap frame size"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

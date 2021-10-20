@@ -11,8 +11,8 @@ use solana_sdk::{
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     feature_set::{
         demote_program_write_locks, fix_write_privs, instructions_sysvar_enabled,
-        neon_evm_compute_budget, remove_native_loader, tx_wide_compute_cap, updated_verify_policy,
-        FeatureSet,
+        neon_evm_compute_budget, remove_native_loader, requestable_heap_size, tx_wide_compute_cap,
+        updated_verify_policy, FeatureSet,
     },
     ic_logger_msg, ic_msg,
     instruction::{CompiledInstruction, Instruction, InstructionError},
@@ -1227,11 +1227,17 @@ impl MessageProcessor {
         let program_id = instruction.program_id(&message.account_keys);
 
         let mut bpf_compute_budget = bpf_compute_budget;
-        if feature_set.is_active(&neon_evm_compute_budget::id())
+        if !feature_set.is_active(&tx_wide_compute_cap::id())
+            && feature_set.is_active(&neon_evm_compute_budget::id())
             && *program_id == crate::neon_evm_program::id()
         {
             // Bump the compute budget for neon_evm
             bpf_compute_budget.max_units = bpf_compute_budget.max_units.max(500_000);
+        }
+        if !feature_set.is_active(&requestable_heap_size::id())
+            && feature_set.is_active(&neon_evm_compute_budget::id())
+            && *program_id == crate::neon_evm_program::id()
+        {
             bpf_compute_budget.heap_size = Some(256 * 1024);
         }
 

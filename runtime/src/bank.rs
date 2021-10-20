@@ -3677,7 +3677,11 @@ impl Bank {
                         .unwrap_or_else(BpfComputeBudget::new);
 
                     let mut process_result = if feature_set.is_active(&tx_wide_compute_cap::id()) {
-                        compute_budget::process_request(&mut bpf_compute_budget, tx)
+                        compute_budget::process_request(
+                            &mut bpf_compute_budget,
+                            tx,
+                            feature_set.clone(),
+                        )
                     } else {
                         Ok(())
                     };
@@ -14253,6 +14257,7 @@ pub(crate) mod tests {
                 *compute_budget,
                 BpfComputeBudget {
                     max_units: 1,
+                    heap_size: Some(48 * 1024),
                     ..BpfComputeBudget::default()
                 }
             );
@@ -14264,6 +14269,7 @@ pub(crate) mod tests {
         let message = Message::new(
             &[
                 compute_budget::request_units(1),
+                compute_budget::request_heap_frame(48 * 1024),
                 Instruction::new_with_bincode(program_id, &0, vec![]),
             ],
             Some(&mint_keypair.pubkey()),
