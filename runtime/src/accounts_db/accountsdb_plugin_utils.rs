@@ -3,7 +3,7 @@ use {
     solana_measure::measure::Measure,
     solana_metrics::*,
     solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey},
-    std::collections::{HashMap, HashSet},
+    std::collections::{hash_map::Entry, HashMap, HashSet},
 };
 
 #[derive(Default)]
@@ -69,7 +69,7 @@ impl AccountsDb {
         }
     }
 
-    fn notify_accounts_in_slot<'a>(
+    fn notify_accounts_in_slot(
         &self,
         slot: Slot,
         notified_accounts: &mut HashSet<Pubkey>,
@@ -89,16 +89,17 @@ impl AccountsDb {
                     notify_stats.skipped_accounts += 1;
                     return;
                 }
-                match accounts_to_stream.get(&account.meta.pubkey) {
-                    Some(existing_account) => {
+                match accounts_to_stream.entry(account.meta.pubkey) {
+                    Entry::Occupied(mut entry) => {
+                        let existing_account = entry.get();
                         if account.meta.write_version > existing_account.meta.write_version {
-                            accounts_to_stream.insert(account.meta.pubkey, account);
+                            entry.insert(account);
                         } else {
                             notify_stats.skipped_accounts += 1;
                         }
                     }
-                    None => {
-                        accounts_to_stream.insert(account.meta.pubkey, account);
+                    Entry::Vacant(entry) => {
+                        entry.insert(account);
                     }
                 }
             });
@@ -139,5 +140,327 @@ impl AccountsDb {
         notify_stats.notified_accounts += accounts_to_stream.len();
         measure_notify.stop();
         notify_stats.elapsed_notifying_us += measure_notify.as_us() as usize;
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use {
+        crate::{
+            accounts_db::AccountsDb,
+            accounts_update_notifier_interface::{
+                AccountsUpdateNotifier, AccountsUpdateNotifierInterface,
+            },
+            append_vec::StoredAccountMeta,
+        },
+        dashmap::DashMap,
+        solana_sdk::{
+            account::{AccountSharedData, ReadableAccount},
+            clock::Slot,
+            pubkey::Pubkey,
+        },
+        std::sync::{Arc, RwLock},
+    };
+
+    impl AccountsDb {
+        pub fn set_accountsdb_plugin_notifer(&mut self, notifier: Option<AccountsUpdateNotifier>) {
+            self.accounts_update_notifier = notifier;
+        }
+    }
+
+    #[derive(Debug, Default)]
+    struct AccountsDbTestPlugin {
+        pub accounts_at_snapshot_restore: DashMap<Pubkey, Vec<(Slot, AccountSharedData)>>,
+    }
+
+    impl AccountsUpdateNotifierInterface for AccountsDbTestPlugin {
+        /// Notified when an account is updated at runtime, due to transaction activities
+        fn notify_account_update(&self, slot: Slot, pubkey: &Pubkey, account: &AccountSharedData) {
+            self.accounts_at_snapshot_restore
+                .entry(pubkey.clone())
+                .or_insert(Vec::default())
+                .push((slot, account.clone()));
+        }
+
+        /// Notified when the AccountsDb is initialized at start when restored
+        /// from a snapshot.
+        fn notify_account_restore_from_snapshot(&self, slot: Slot, account: &StoredAccountMeta) {
+            self.accounts_at_snapshot_restore
+                .entry(account.meta.pubkey)
+                .or_insert(Vec::default())
+                .push((slot, account.clone_account()));
+        }
+
+        /// Notified when a slot is optimistically confirmed
+        fn notify_slot_confirmed(&self, _slot: Slot, _parent: Option<Slot>) {}
+
+        /// Notified when a slot is marked frozen.
+        fn notify_slot_processed(&self, _slot: Slot, _parent: Option<Slot>) {}
+
+        /// Notified when a slot is rooted.
+        fn notify_slot_rooted(&self, _slot: Slot, _parent: Option<Slot>) {}
+    }
+
+    #[test]
+    fn test_notify_account_restore_from_snapshot_once_per_slot() {
+        let mut accounts = AccountsDb::new_single_for_tests();
+        // Account with key1 is updated twice in the store -- should only get notified once.
+        let key1 = solana_sdk::pubkey::new_rand();
+        let mut account1_lamports: u64 = 1;
+        let account1 =
+            AccountSharedData::new(account1_lamports, 1, AccountSharedData::default().owner());
+        let slot0 = 0;
+        accounts.store_uncached(slot0, &[(&key1, &account1)]);
+
+        account1_lamports = 2;
+        let account1 = AccountSharedData::new(account1_lamports, 1, account1.owner());
+        accounts.store_uncached(slot0, &[(&key1, &account1)]);
+        let notifier = AccountsDbTestPlugin::default();
+
+        let key2 = solana_sdk::pubkey::new_rand();
+        let account2_lamports: u64 = 100;
+        let account2 =
+            AccountSharedData::new(account2_lamports, 1, AccountSharedData::default().owner());
+
+        accounts.store_uncached(slot0, &[(&key2, &account2)]);
+
+        let notifier = Arc::new(RwLock::new(notifier));
+        accounts.set_accountsdb_plugin_notifer(Some(notifier.clone()));
+
+        accounts.notify_account_restore_from_snapshot();
+
+        let notifier = notifier.write().unwrap();
+        assert_eq!(
+            notifier
+                .accounts_at_snapshot_restore
+                .get(&key1)
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            notifier.accounts_at_snapshot_restore.get(&key1).unwrap()[0]
+                .1
+                .lamports(),
+            account1_lamports
+        );
+        assert_eq!(
+            notifier.accounts_at_snapshot_restore.get(&key1).unwrap()[0].0,
+            slot0
+        );
+        assert_eq!(
+            notifier
+                .accounts_at_snapshot_restore
+                .get(&key2)
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            notifier.accounts_at_snapshot_restore.get(&key2).unwrap()[0]
+                .1
+                .lamports(),
+            account2_lamports
+        );
+        assert_eq!(
+            notifier.accounts_at_snapshot_restore.get(&key2).unwrap()[0].0,
+            slot0
+        );
+    }
+
+    #[test]
+    fn test_notify_account_restore_from_snapshot_once_across_slots() {
+        let mut accounts = AccountsDb::new_single_for_tests();
+        // Account with key1 is updated twice in two different slots -- should only get notified once.
+        // Account with key2 is updated slot0, should get notified once
+        // Account with key3 is updated in slot1, should get notified once
+        let key1 = solana_sdk::pubkey::new_rand();
+        let mut account1_lamports: u64 = 1;
+        let account1 =
+            AccountSharedData::new(account1_lamports, 1, AccountSharedData::default().owner());
+        let slot0 = 0;
+        accounts.store_uncached(slot0, &[(&key1, &account1)]);
+
+        let key2 = solana_sdk::pubkey::new_rand();
+        let account2_lamports: u64 = 200;
+        let account2 =
+            AccountSharedData::new(account2_lamports, 1, AccountSharedData::default().owner());
+        accounts.store_uncached(slot0, &[(&key2, &account2)]);
+
+        account1_lamports = 2;
+        let slot1 = 1;
+        let account1 = AccountSharedData::new(account1_lamports, 1, account1.owner());
+        accounts.store_uncached(slot1, &[(&key1, &account1)]);
+        let notifier = AccountsDbTestPlugin::default();
+
+        let key3 = solana_sdk::pubkey::new_rand();
+        let account3_lamports: u64 = 300;
+        let account3 =
+            AccountSharedData::new(account3_lamports, 1, AccountSharedData::default().owner());
+        accounts.store_uncached(slot1, &[(&key3, &account3)]);
+
+        let notifier = Arc::new(RwLock::new(notifier));
+        accounts.set_accountsdb_plugin_notifer(Some(notifier.clone()));
+
+        accounts.notify_account_restore_from_snapshot();
+
+        let notifier = notifier.write().unwrap();
+        assert_eq!(
+            notifier
+                .accounts_at_snapshot_restore
+                .get(&key1)
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            notifier.accounts_at_snapshot_restore.get(&key1).unwrap()[0]
+                .1
+                .lamports(),
+            account1_lamports
+        );
+        assert_eq!(
+            notifier.accounts_at_snapshot_restore.get(&key1).unwrap()[0].0,
+            slot1
+        );
+        assert_eq!(
+            notifier
+                .accounts_at_snapshot_restore
+                .get(&key2)
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            notifier.accounts_at_snapshot_restore.get(&key2).unwrap()[0]
+                .1
+                .lamports(),
+            account2_lamports
+        );
+        assert_eq!(
+            notifier.accounts_at_snapshot_restore.get(&key2).unwrap()[0].0,
+            slot0
+        );
+        assert_eq!(
+            notifier
+                .accounts_at_snapshot_restore
+                .get(&key3)
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            notifier.accounts_at_snapshot_restore.get(&key3).unwrap()[0]
+                .1
+                .lamports(),
+            account3_lamports
+        );
+        assert_eq!(
+            notifier.accounts_at_snapshot_restore.get(&key3).unwrap()[0].0,
+            slot1
+        );
+    }
+
+    #[test]
+    fn test_notify_account_at_accounts_update() {
+        let mut accounts = AccountsDb::new_single_for_tests();
+        let notifier = AccountsDbTestPlugin::default();
+
+        let notifier = Arc::new(RwLock::new(notifier));
+        accounts.set_accountsdb_plugin_notifer(Some(notifier.clone()));
+
+        // Account with key1 is updated twice in two different slots -- should only get notified twice.
+        // Account with key2 is updated slot0, should get notified once
+        // Account with key3 is updated in slot1, should get notified once
+        let key1 = solana_sdk::pubkey::new_rand();
+        let account1_lamports1: u64 = 1;
+        let account1 =
+            AccountSharedData::new(account1_lamports1, 1, AccountSharedData::default().owner());
+        let slot0 = 0;
+        accounts.store_cached(slot0, &[(&key1, &account1)]);
+
+        let key2 = solana_sdk::pubkey::new_rand();
+        let account2_lamports: u64 = 200;
+        let account2 =
+            AccountSharedData::new(account2_lamports, 1, AccountSharedData::default().owner());
+        accounts.store_cached(slot0, &[(&key2, &account2)]);
+
+        let account1_lamports2 = 2;
+        let slot1 = 1;
+        let account1 = AccountSharedData::new(account1_lamports2, 1, account1.owner());
+        accounts.store_cached(slot1, &[(&key1, &account1)]);
+
+        let key3 = solana_sdk::pubkey::new_rand();
+        let account3_lamports: u64 = 300;
+        let account3 =
+            AccountSharedData::new(account3_lamports, 1, AccountSharedData::default().owner());
+        accounts.store_cached(slot1, &[(&key3, &account3)]);
+
+        let notifier = notifier.write().unwrap();
+        assert_eq!(
+            notifier
+                .accounts_at_snapshot_restore
+                .get(&key1)
+                .unwrap()
+                .len(),
+            2
+        );
+        assert_eq!(
+            notifier.accounts_at_snapshot_restore.get(&key1).unwrap()[0]
+                .1
+                .lamports(),
+            account1_lamports1
+        );
+        assert_eq!(
+            notifier.accounts_at_snapshot_restore.get(&key1).unwrap()[0].0,
+            slot0
+        );
+        assert_eq!(
+            notifier.accounts_at_snapshot_restore.get(&key1).unwrap()[1]
+                .1
+                .lamports(),
+            account1_lamports2
+        );
+        assert_eq!(
+            notifier.accounts_at_snapshot_restore.get(&key1).unwrap()[1].0,
+            slot1
+        );
+
+        assert_eq!(
+            notifier
+                .accounts_at_snapshot_restore
+                .get(&key2)
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            notifier.accounts_at_snapshot_restore.get(&key2).unwrap()[0]
+                .1
+                .lamports(),
+            account2_lamports
+        );
+        assert_eq!(
+            notifier.accounts_at_snapshot_restore.get(&key2).unwrap()[0].0,
+            slot0
+        );
+        assert_eq!(
+            notifier
+                .accounts_at_snapshot_restore
+                .get(&key3)
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            notifier.accounts_at_snapshot_restore.get(&key3).unwrap()[0]
+                .1
+                .lamports(),
+            account3_lamports
+        );
+        assert_eq!(
+            notifier.accounts_at_snapshot_restore.get(&key3).unwrap()[0].0,
+            slot1
+        );
     }
 }
