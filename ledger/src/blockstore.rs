@@ -3076,6 +3076,10 @@ impl Blockstore {
         self.dead_slots_cf.put(slot, &true)
     }
 
+    pub fn remove_dead_slot(&self, slot: Slot) -> Result<()> {
+        self.dead_slots_cf.delete(slot)
+    }
+
     pub fn store_duplicate_if_not_existing(
         &self,
         slot: Slot,
