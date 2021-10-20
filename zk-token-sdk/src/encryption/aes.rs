@@ -6,8 +6,8 @@ use {
 };
 use {
     arrayref::{array_ref, array_refs},
-    ed25519_dalek::SecretKey as SigningKey,
     solana_sdk::pubkey::Pubkey,
+    solana_sdk::signature::Keypair as SigningKeypair,
     std::convert::TryInto,
     zeroize::Zeroize,
 };
@@ -54,9 +54,9 @@ impl Aes {
 #[derive(Debug, Zeroize)]
 pub struct AesKey([u8; 16]);
 impl AesKey {
-    pub fn new(signing_key: &SigningKey, address: &Pubkey) -> Self {
+    pub fn new(signing_keypair: &SigningKeypair, address: &Pubkey) -> Self {
         let mut hashable = [0_u8; 64];
-        hashable[..32].copy_from_slice(&signing_key.to_bytes());
+        hashable[..32].copy_from_slice(&signing_keypair.secret().to_bytes());
         hashable[32..].copy_from_slice(&address.to_bytes());
 
         let mut hasher = Sha3_256::new();

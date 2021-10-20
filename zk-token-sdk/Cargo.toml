@@ -22,7 +22,6 @@ bincode = "1"
 byteorder = "1"
 cipher = "0.3"
 curve25519-dalek = { version = "3.2.0", features = ["serde"]}
-ed25519-dalek = "=1.0.1"
 getrandom = { version = "0.1", features = ["dummy"] }
 merlin = "2"
 rand = "0.7"
