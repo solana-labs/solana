@@ -1014,11 +1014,9 @@ mod with_incremental_snapshots {
                 }
             }
 
-            // get a map from TRUSTED peers that maps all fss hashes to a set of iss hashes
             let trusted_incremental_snapshot_hashes =
                 get_trusted_incremental_snapshot_hashes(cluster_info, validator_config);
 
-            // get the highest incremental snapshot hash (fss and iss) from all eligible peers
             let mut incremental_snapshot_hashes =
                 get_incremental_snapshot_hashes_from_eligible_peers(
                     cluster_info,
