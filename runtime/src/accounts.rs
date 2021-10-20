@@ -33,14 +33,8 @@ use solana_sdk::{
     native_loader, nonce,
     nonce::NONCED_TX_MARKER_IX_INDEX,
     pubkey::Pubkey,
-<<<<<<< HEAD
     transaction::Result,
     transaction::{Transaction, TransactionError},
-=======
-    system_program, sysvar,
-    sysvar::instructions::construct_instructions_data,
-    transaction::{Result, SanitizedTransaction, TransactionError},
->>>>>>> a8098f37d (add checked instructions sysvar api (#20790))
 };
 use std::{
     cmp::Reverse,
@@ -193,18 +187,9 @@ impl Accounts {
         message: &Message,
         demote_program_write_locks: bool,
     ) -> AccountSharedData {
-<<<<<<< HEAD
         let mut data = message.serialize_instructions(demote_program_write_locks);
         // add room for current instruction index.
         data.resize(data.len() + 2, 0);
-=======
-        let data = construct_instructions_data(message, demote_program_write_locks);
-        let owner = if is_owned_by_sysvar {
-            sysvar::id()
-        } else {
-            system_program::id()
-        };
->>>>>>> a8098f37d (add checked instructions sysvar api (#20790))
         AccountSharedData::from(Account {
             data,
             ..Account::default()

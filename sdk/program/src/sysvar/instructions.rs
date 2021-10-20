@@ -11,19 +11,6 @@ pub struct Instructions();
 
 crate::declare_sysvar_id!("Sysvar1nstructions1111111111111111111111111", Instructions);
 
-// Construct the account data for the Instruction sSysvar
-#[cfg(not(target_arch = "bpf"))]
-pub fn construct_instructions_data(
-    message: &crate::message::SanitizedMessage,
-    demote_program_write_locks: bool,
-) -> Vec<u8> {
-    let mut data = message.serialize_instructions(demote_program_write_locks);
-    // add room for current instruction index.
-    data.resize(data.len() + 2, 0);
-
-    data
-}
-
 /// Load the current instruction's index from the Instructions Sysvar data
 pub fn load_current_index(data: &[u8]) -> u16 {
     let mut instr_fixed_data = [0u8; 2];
@@ -69,7 +56,6 @@ pub fn load_instruction_at_checked(
 mod tests {
     use super::*;
     use crate::{instruction::AccountMeta, message::Message, pubkey::Pubkey};
-    use std::convert::TryFrom;
 
     #[test]
     fn test_load_store_instruction() {
@@ -91,15 +77,15 @@ mod tests {
             &0,
             vec![AccountMeta::new(Pubkey::new_unique(), false)],
         );
-        let sanitized_message = crate::message::SanitizedMessage::try_from(Message::new(
+        let message = Message::new(
             &[instruction1.clone(), instruction2.clone()],
             Some(&Pubkey::new_unique()),
-        ))
-        .unwrap();
+        );
 
         let key = id();
         let mut lamports = 0;
-        let mut data = construct_instructions_data(&sanitized_message, true);
+        let mut data = message.serialize_instructions(true);
+        data.resize(data.len() + 2, 0);
         let owner = crate::sysvar::id();
         let account_info = AccountInfo::new(
             &key,

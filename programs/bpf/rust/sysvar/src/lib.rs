@@ -5,11 +5,8 @@ use solana_program::{
     account_info::AccountInfo,
     entrypoint,
     entrypoint::ProgramResult,
-<<<<<<< HEAD
     fee_calculator::FeeCalculator,
-=======
     instruction::{AccountMeta, Instruction},
->>>>>>> a8098f37d (add checked instructions sysvar api (#20790))
     msg,
     program_error::ProgramError,
     pubkey::Pubkey,
@@ -61,13 +58,9 @@ pub fn process_instruction(
     // Instructions
     msg!("Instructions identifier:");
     sysvar::instructions::id().log();
-<<<<<<< HEAD
-    let index = instructions::load_current_index(&accounts[5].try_borrow_data()?);
-=======
     assert_eq!(*accounts[4].owner, sysvar::id());
-    let index = instructions::load_current_index(&accounts[4].try_borrow_data()?);
-    let instruction = instructions::load_instruction_at_checked(index as usize, &accounts[4])?;
->>>>>>> a8098f37d (add checked instructions sysvar api (#20790))
+    let index = instructions::load_current_index(&accounts[5].try_borrow_data()?);
+    let instruction = instructions::load_instruction_at_checked(index as usize, &accounts[5])?;
     assert_eq!(0, index);
     assert_eq!(
         instruction,
@@ -85,6 +78,7 @@ pub fn process_instruction(
                 AccountMeta::new_readonly(*accounts[7].key, false),
                 AccountMeta::new_readonly(*accounts[8].key, false),
                 AccountMeta::new_readonly(*accounts[9].key, false),
+                AccountMeta::new_readonly(*accounts[10].key, false),
             ],
         )
     );
