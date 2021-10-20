@@ -9,7 +9,7 @@ keywords = ["BPF", "eBPF", "interpreter", "JIT"]
 edition = "2018"
 
 [dependencies]
-clap = "3.0.0-beta.2"
+clap = "3.0.0-beta.5"
 serde = "1.0.130"
 serde_json = "1.0.68"
 solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.9.0" }

@@ -10,7 +10,7 @@ homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-validator"
 
 [dependencies]
-clap = "2.33.1"
+clap = "3.0.0-beta"
 crossbeam-channel = "0.5"
 log = "0.4.14"
 rand = "0.7.0"

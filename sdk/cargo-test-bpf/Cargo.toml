@@ -10,7 +10,7 @@ edition = "2018"
 publish = false
 
 [dependencies]
-clap = "2.33.3"
+clap = "3.0.0-beta"
 cargo_metadata = "0.14.0"
 
 [[bin]]
