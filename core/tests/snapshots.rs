@@ -501,6 +501,7 @@ mod tests {
             &exit,
             &cluster_info,
             snapshot_config.clone(),
+            true,
         );
 
         let _package_receiver = std::thread::Builder::new()
@@ -928,6 +929,7 @@ mod tests {
             &exit,
             &cluster_info,
             snapshot_test_config.snapshot_config.clone(),
+            true,
         );
 
         let tmpdir = TempDir::new().unwrap();

@@ -703,12 +703,22 @@ impl Validator {
                 // Start a snapshot packaging service
                 let pending_snapshot_package = PendingSnapshotPackage::default();
 
+                // filler accounts make snapshots invalid for use
+                // so, do not publish that we have snapshots
+                let enable_gossip_push = config
+                    .accounts_db_config
+                    .as_ref()
+                    .and_then(|config| config.filler_account_count)
+                    .map(|count| count == 0)
+                    .unwrap_or(true);
+
                 let snapshot_packager_service = SnapshotPackagerService::new(
                     pending_snapshot_package.clone(),
                     starting_snapshot_hashes,
                     &exit,
                     &cluster_info,
                     snapshot_config.clone(),
+                    enable_gossip_push,
                 );
                 (
                     Some(snapshot_packager_service),

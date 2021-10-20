@@ -32,6 +32,7 @@ impl SnapshotPackagerService {
         exit: &Arc<AtomicBool>,
         cluster_info: &Arc<ClusterInfo>,
         snapshot_config: SnapshotConfig,
+        enable_gossip_push: bool,
     ) -> Self {
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
@@ -47,14 +48,20 @@ impl SnapshotPackagerService {
         let t_snapshot_packager = Builder::new()
             .name("snapshot-packager".to_string())
             .spawn(move || {
-                let mut snapshot_gossip_manager = SnapshotGossipManager {
-                    cluster_info,
-                    max_full_snapshot_hashes,
-                    max_incremental_snapshot_hashes,
-                    full_snapshot_hashes: FullSnapshotHashes::default(),
-                    incremental_snapshot_hashes: IncrementalSnapshotHashes::default(),
+                let mut snapshot_gossip_manager = if enable_gossip_push {
+                    Some(SnapshotGossipManager {
+                        cluster_info,
+                        max_full_snapshot_hashes,
+                        max_incremental_snapshot_hashes,
+                        full_snapshot_hashes: FullSnapshotHashes::default(),
+                        incremental_snapshot_hashes: IncrementalSnapshotHashes::default(),
+                    })
+                } else {
+                    None
                 };
-                snapshot_gossip_manager.push_starting_snapshot_hashes(starting_snapshot_hashes);
+                if let Some(snapshot_gossip_manager) = snapshot_gossip_manager.as_mut() {
+                    snapshot_gossip_manager.push_starting_snapshot_hashes(starting_snapshot_hashes);
+                }
 
                 loop {
                     if exit.load(Ordering::Relaxed) {
@@ -78,10 +85,12 @@ impl SnapshotPackagerService {
                     )
                     .expect("failed to archive snapshot package");
 
-                    snapshot_gossip_manager.push_snapshot_hash(
-                        snapshot_package.snapshot_type,
-                        (snapshot_package.slot(), *snapshot_package.hash()),
-                    );
+                    if let Some(snapshot_gossip_manager) = snapshot_gossip_manager.as_mut() {
+                        snapshot_gossip_manager.push_snapshot_hash(
+                            snapshot_package.snapshot_type,
+                            (snapshot_package.slot(), *snapshot_package.hash()),
+                        );
+                    }
                 }
             })
             .unwrap();
