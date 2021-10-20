@@ -1271,9 +1271,9 @@ mod with_incremental_snapshots {
         );
 
         trace!(
-                "retain incremental snapshot hashes with a multiple of full snapshot archive interval: {:?}",
-                &incremental_snapshot_hashes
-            );
+            "retain incremental snapshot hashes with a multiple of full snapshot archive interval: {:?}",
+            &incremental_snapshot_hashes
+        );
     }
 
     /// Retain the incremental snapshot hashes with the highest full snapshot slot
