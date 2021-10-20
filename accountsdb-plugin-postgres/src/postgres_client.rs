@@ -415,9 +415,9 @@ impl PostgresClient for SimplePostgresClient {
             account.slot,
         );
         if !is_startup {
+            self.flush_buffered_writes()?;
             return self.upsert_account(&account);
         }
-        self.flush_buffered_writes()?;
         self.insert_accounts_in_batch(account)
     }
 
