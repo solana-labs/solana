@@ -64,7 +64,7 @@ pub struct ThisInvokeContext<'a> {
     feature_set: Arc<FeatureSet>,
     pub timings: ExecuteDetailsTimings,
     account_db: Arc<Accounts>,
-    ancestors: &'a Ancestors,
+    ancestors: Option<&'a Ancestors>,
     #[allow(clippy::type_complexity)]
     sysvars: RefCell<Vec<(Pubkey, Option<Rc<Vec<u8>>>)>>,
     blockhash: Hash,
@@ -84,7 +84,7 @@ impl<'a> ThisInvokeContext<'a> {
         instruction_recorders: Option<&'a [InstructionRecorder]>,
         feature_set: Arc<FeatureSet>,
         account_db: Arc<Accounts>,
-        ancestors: &'a Ancestors,
+        ancestors: Option<&'a Ancestors>,
         blockhash: Hash,
         fee_calculator: FeeCalculator,
     ) -> Self {
@@ -114,7 +114,6 @@ impl<'a> ThisInvokeContext<'a> {
     pub fn new_mock_with_features(
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         programs: &'a [(Pubkey, ProcessInstructionWithContext)],
-        ancestors: &'a Ancestors,
         feature_set: Arc<FeatureSet>,
     ) -> Self {
         Self::new(
@@ -130,7 +129,7 @@ impl<'a> ThisInvokeContext<'a> {
             None,
             feature_set,
             Arc::new(Accounts::default_for_tests()),
-            ancestors,
+            None,
             Hash::default(),
             FeeCalculator::default(),
         )
@@ -139,14 +138,8 @@ impl<'a> ThisInvokeContext<'a> {
     pub fn new_mock(
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         programs: &'a [(Pubkey, ProcessInstructionWithContext)],
-        ancestors: &'a Ancestors,
     ) -> Self {
-        Self::new_mock_with_features(
-            accounts,
-            programs,
-            ancestors,
-            Arc::new(FeatureSet::all_enabled()),
-        )
+        Self::new_mock_with_features(accounts, programs, Arc::new(FeatureSet::all_enabled()))
     }
 }
 impl<'a> InvokeContext for ThisInvokeContext<'a> {
@@ -450,13 +443,15 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                 .iter()
                 .find_map(|(key, sysvar)| if id == key { sysvar.clone() } else { None });
             if result.is_none() {
-                // Load it
-                result = self
-                    .account_db
-                    .load_with_fixed_root(self.ancestors, id)
-                    .map(|(account, _)| Rc::new(account.data().to_vec()));
-                // Cache it
-                sysvars.push((*id, result.clone()));
+                if let Some(ancestors) = self.ancestors {
+                    // Load it
+                    result = self
+                        .account_db
+                        .load_with_fixed_root(ancestors, id)
+                        .map(|(account, _)| Rc::new(account.data().to_vec()));
+                    // Cache it
+                    sysvars.push((*id, result.clone()));
+                }
             }
             result
         } else {
@@ -550,7 +545,7 @@ impl MessageProcessor {
             instruction_recorders,
             feature_set,
             account_db,
-            ancestors,
+            Some(ancestors),
             blockhash,
             fee_calculator,
         );
@@ -729,8 +724,7 @@ mod tests {
             &[Instruction::new_with_bytes(invoke_stack[0], &[0], metas)],
             None,
         );
-        let ancestors = Ancestors::default();
-        let mut invoke_context = ThisInvokeContext::new_mock(&accounts, &[], &ancestors);
+        let mut invoke_context = ThisInvokeContext::new_mock(&accounts, &[]);
 
         // Check call depth increases and has a limit
         let mut depth_reached = 0;
@@ -817,8 +811,7 @@ mod tests {
             )],
             None,
         );
-        let ancestors = Ancestors::default();
-        let mut invoke_context = ThisInvokeContext::new_mock(&accounts, &[], &ancestors);
+        let mut invoke_context = ThisInvokeContext::new_mock(&accounts, &[]);
         invoke_context
             .push(&message, &message.instructions[0], &[0], None)
             .unwrap();
@@ -1264,9 +1257,7 @@ mod tests {
         );
         let message = Message::new(&[callee_instruction], None);
 
-        let ancestors = Ancestors::default();
-        let mut invoke_context =
-            ThisInvokeContext::new_mock(&accounts, programs.as_slice(), &ancestors);
+        let mut invoke_context = ThisInvokeContext::new_mock(&accounts, programs.as_slice());
         invoke_context
             .push(&message, &caller_instruction, &program_indices[..1], None)
             .unwrap();
@@ -1394,9 +1385,7 @@ mod tests {
         );
         let message = Message::new(&[callee_instruction.clone()], None);
 
-        let ancestors = Ancestors::default();
-        let mut invoke_context =
-            ThisInvokeContext::new_mock(&accounts, programs.as_slice(), &ancestors);
+        let mut invoke_context = ThisInvokeContext::new_mock(&accounts, programs.as_slice());
         invoke_context
             .push(&message, &caller_instruction, &program_indices, None)
             .unwrap();
