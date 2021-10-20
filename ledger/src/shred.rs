@@ -162,7 +162,7 @@ pub enum ShredCommonHeaderVersion {
 }
 
 pub fn slot_to_shred_common_header_version(_slot: Slot) -> ShredCommonHeaderVersion {
-    ShredCommonHeaderVersion::V1 // TODO enabled with feature
+    ShredCommonHeaderVersion::V2 // TODO enabled with feature
 }
 
 fn shred_type_to_common_header_version(shred_type: ShredType) -> ShredCommonHeaderVersion {
@@ -265,7 +265,7 @@ pub type Result<T> = std::result::Result<T, ShredError>;
 pub struct ShredType(pub u8);
 impl Default for ShredType {
     fn default() -> Self {
-        ShredType(DATA_SHRED_V1)
+        ShredType(DATA_SHRED_V2)
     }
 }
 
