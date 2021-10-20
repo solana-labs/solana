@@ -11,7 +11,7 @@ use {
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
     },
-    ed25519_dalek::SecretKey as SigningKey,
+    ed25519_dalek::Keypair as SigningKeyPair,
     serde::{Deserialize, Serialize},
     solana_sdk::pubkey::Pubkey,
     std::collections::HashMap,
@@ -136,8 +136,8 @@ impl ElGamalKeypair {
     /// address.
     #[cfg(not(target_arch = "bpf"))]
     #[allow(non_snake_case)]
-    pub fn new(signing_key: &SigningKey, address: &Pubkey) -> Self {
-        let secret = ElGamalSecretKey::new(signing_key, address);
+    pub fn new(signing_key_pair: &SigningKeyPair, address: &Pubkey) -> Self {
+        let secret = ElGamalSecretKey::new(signing_key_pair, address);
         let public = ElGamalPubkey::new(&secret);
 
         Self { public, secret }
@@ -292,10 +292,11 @@ impl fmt::Display for ElGamalPubkey {
 #[zeroize(drop)]
 pub struct ElGamalSecretKey(Scalar);
 impl ElGamalSecretKey {
-    pub fn new(signing_key: &SigningKey, address: &Pubkey) -> Self {
-        let mut hashable = [0_u8; 64];
-        hashable[..32].copy_from_slice(&signing_key.to_bytes());
-        hashable[32..].copy_from_slice(&address.to_bytes());
+    pub fn new(signing_key_pair: &SigningKeyPair, address: &Pubkey) -> Self {
+        let mut hashable = [0_u8; 96];
+        hashable[..32].copy_from_slice(&signing_key_pair.secret.to_bytes());
+        hashable[32..64].copy_from_slice(&signing_key_pair.public.to_bytes());
+        hashable[64..].copy_from_slice(&address.to_bytes());
         ElGamalSecretKey(Scalar::hash_from_bytes::<Sha3_512>(&hashable))
     }
 
