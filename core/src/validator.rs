@@ -88,6 +88,7 @@ use {
         signature::{Keypair, Signer},
         timing::timestamp,
     },
+    solana_send_transaction_service::send_transaction_service,
     solana_streamer::socket::SocketAddrSpace,
     solana_vote_program::vote_state::VoteState,
     std::{
@@ -148,8 +149,7 @@ pub struct ValidatorConfig {
     pub contact_debug_interval: u64,
     pub contact_save_interval: u64,
     pub bpf_jit: bool,
-    pub send_transaction_retry_ms: u64,
-    pub send_transaction_leader_forward_count: u64,
+    pub send_transaction_service_config: send_transaction_service::Config,
     pub no_poh_speed_test: bool,
     pub poh_pinned_cpu_core: usize,
     pub poh_hashes_per_batch: u64,
@@ -209,8 +209,7 @@ impl Default for ValidatorConfig {
             contact_debug_interval: DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
             contact_save_interval: DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS,
             bpf_jit: false,
-            send_transaction_retry_ms: 2000,
-            send_transaction_leader_forward_count: 2,
+            send_transaction_service_config: send_transaction_service::Config::default(),
             no_poh_speed_test: true,
             poh_pinned_cpu_core: poh_service::DEFAULT_PINNED_CPU_CORE,
             poh_hashes_per_batch: poh_service::DEFAULT_HASHES_PER_BATCH,
@@ -616,8 +615,7 @@ impl Validator {
                     config.trusted_validators.clone(),
                     rpc_override_health_check.clone(),
                     optimistically_confirmed_bank.clone(),
-                    config.send_transaction_retry_ms,
-                    config.send_transaction_leader_forward_count,
+                    config.send_transaction_service_config.clone(),
                     max_slots.clone(),
                     leader_schedule_cache.clone(),
                     max_complete_transaction_status_slot,
@@ -703,12 +701,22 @@ impl Validator {
                 // Start a snapshot packaging service
                 let pending_snapshot_package = PendingSnapshotPackage::default();
 
+                // filler accounts make snapshots invalid for use
+                // so, do not publish that we have snapshots
+                let enable_gossip_push = config
+                    .accounts_db_config
+                    .as_ref()
+                    .and_then(|config| config.filler_account_count)
+                    .map(|count| count == 0)
+                    .unwrap_or(true);
+
                 let snapshot_packager_service = SnapshotPackagerService::new(
                     pending_snapshot_package.clone(),
                     starting_snapshot_hashes,
                     &exit,
                     &cluster_info,
                     snapshot_config.clone(),
+                    enable_gossip_push,
                 );
                 (
                     Some(snapshot_packager_service),

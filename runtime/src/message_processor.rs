@@ -11,8 +11,8 @@ use solana_sdk::{
     compute_budget::ComputeBudget,
     feature_set::{
         demote_program_write_locks, do_support_realloc, neon_evm_compute_budget,
-        prevent_calling_precompiles_as_programs, remove_native_loader, tx_wide_compute_cap,
-        FeatureSet,
+        prevent_calling_precompiles_as_programs, remove_native_loader, requestable_heap_size,
+        tx_wide_compute_cap, FeatureSet,
     },
     fee_calculator::FeeCalculator,
     hash::Hash,
@@ -538,11 +538,18 @@ impl MessageProcessor {
             }
 
             let mut compute_budget = compute_budget;
-            if invoke_context.is_feature_active(&neon_evm_compute_budget::id())
+            if !invoke_context.is_feature_active(&tx_wide_compute_cap::id())
+                && invoke_context.is_feature_active(&neon_evm_compute_budget::id())
                 && *program_id == crate::neon_evm_program::id()
             {
                 // Bump the compute budget for neon_evm
                 compute_budget.max_units = compute_budget.max_units.max(500_000);
+            }
+            if !invoke_context.is_feature_active(&requestable_heap_size::id())
+                && invoke_context.is_feature_active(&neon_evm_compute_budget::id())
+                && *program_id == crate::neon_evm_program::id()
+            {
+                // Bump the compute budget for neon_evm
                 compute_budget.heap_size = Some(256 * 1024);
             }
 
