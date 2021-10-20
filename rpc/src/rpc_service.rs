@@ -541,6 +541,7 @@ mod tests {
             send_transaction_service::Config {
                 retry_rate_ms: 1000,
                 leader_forward_count: 1,
+                ..send_transaction_service::Config::default()
             },
             Arc::new(MaxSlots::default()),
             Arc::new(LeaderScheduleCache::default()),

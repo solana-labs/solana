@@ -1069,6 +1069,9 @@ pub fn main() {
     let default_rpc_send_transaction_leader_forward_count = default_send_transaction_service_config
         .leader_forward_count
         .to_string();
+    let default_rpc_send_transaction_service_max_retries = default_send_transaction_service_config
+        .service_max_retries
+        .to_string();
     let default_rpc_threads = num_cpus::get().to_string();
     let default_max_snapshot_to_retain = &DEFAULT_MAX_SNAPSHOTS_TO_RETAIN.to_string();
     let default_min_snapshot_download_speed = &DEFAULT_MIN_SNAPSHOT_DOWNLOAD_SPEED.to_string();
@@ -1721,6 +1724,23 @@ pub fn main() {
                 .validator(is_parsable::<u64>)
                 .default_value(&default_rpc_send_transaction_leader_forward_count)
                 .help("The number of upcoming leaders to which to forward transactions sent via rpc service."),
+        )
+        .arg(
+            Arg::with_name("rpc_send_transaction_default_max_retries")
+                .long("rpc-send-default-max-retries")
+                .value_name("NUMBER")
+                .takes_value(true)
+                .validator(is_parsable::<usize>)
+                .help("The maximum number of transaction broadcast retries when unspecified by the request, otherwise retried until expiration."),
+        )
+        .arg(
+            Arg::with_name("rpc_send_transaction_service_max_retries")
+                .long("rpc-send-service-max-retries")
+                .value_name("NUMBER")
+                .takes_value(true)
+                .validator(is_parsable::<usize>)
+                .default_value(&default_rpc_send_transaction_service_max_retries)
+                .help("The maximum number of transaction broadcast retries, regardless of requested value."),
         )
         .arg(
             Arg::with_name("rpc_scan_and_fix_roots")
@@ -2409,6 +2429,17 @@ pub fn main() {
                 matches,
                 "rpc_send_transaction_leader_forward_count",
                 u64
+            ),
+            default_max_retries: value_t!(
+                matches,
+                "rpc_send_transaction_default_max_retries",
+                usize
+            )
+            .ok(),
+            service_max_retries: value_t_or_exit!(
+                matches,
+                "rpc_send_transaction_service_max_retries",
+                usize
             ),
         },
         no_poh_speed_test: matches.is_present("no_poh_speed_test"),
