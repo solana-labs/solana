@@ -190,6 +190,9 @@ pub struct BpfComputeBudget {
     pub syscall_base_cost: u64,
     /// Optional program heap region size, if `None` then loader default
     pub heap_size: Option<usize>,
+    /// Number of compute units per additional 32k heap above the default (~.5
+    /// us per 32k at 15 units/us rounded up)
+    pub heap_cost: u64,
 }
 
 impl Default for BpfComputeBudget {
@@ -217,6 +220,7 @@ impl BpfComputeBudget {
             syscall_base_cost: 100,
             secp256k1_recover_cost: 25_000,
             heap_size: None,
+            heap_cost: 8,
         }
     }
 }

@@ -194,6 +194,54 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
 }
 
 #[bench]
+fn bench_create_vm(bencher: &mut Bencher) {
+    const BUDGET: u64 = 200_000;
+    let loader_id = bpf_loader::id();
+
+    let accounts = [RefCell::new(AccountSharedData::new(
+        1,
+        10000001,
+        &solana_sdk::pubkey::new_rand(),
+    ))];
+    let keys = [solana_sdk::pubkey::new_rand()];
+    let keyed_accounts: Vec<_> = keys
+        .iter()
+        .zip(&accounts)
+        .map(|(key, account)| solana_sdk::keyed_account::KeyedAccount::new(&key, false, &account))
+        .collect();
+    let instruction_data = vec![0u8];
+
+    let mut invoke_context = MockInvokeContext::new(keyed_accounts);
+    invoke_context.compute_meter.remaining = BUDGET;
+
+    // Serialize account data
+    let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
+    let mut serialized = serialize_parameters(
+        &bpf_loader::id(),
+        &solana_sdk::pubkey::new_rand(),
+        keyed_accounts,
+        &instruction_data,
+    )
+    .unwrap();
+
+    let elf = load_elf("noop").unwrap();
+    let mut executable =
+        <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(&elf, None, Config::default())
+            .unwrap();
+    executable.set_syscall_registry(register_syscalls(&mut invoke_context).unwrap());
+
+    bencher.iter(|| {
+        let _ = create_vm(
+            &loader_id,
+            executable.as_ref(),
+            serialized.as_slice_mut(),
+            &mut invoke_context,
+        )
+        .unwrap();
+    });
+}
+
+#[bench]
 fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     const BUDGET: u64 = 200_000;
     let loader_id = bpf_loader::id();
