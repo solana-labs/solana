@@ -752,21 +752,6 @@ dependencies = [
 
 [[package]]
 name = "console"
-version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3993e6445baa160675931ec041a5e03ca84b9c6e32a056150d3aa2bdda0a1f45"
-dependencies = [
- "encode_unicode",
- "lazy_static",
- "libc",
- "regex",
- "terminal_size",
- "unicode-width",
- "winapi 0.3.9",
-]
-
-[[package]]
-name = "console"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a28b32d32ca44b70c3e4acd7db1babf555fa026e385fb95f18028f88848b3c31"
@@ -1087,7 +1072,7 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61579ada4ec0c6031cfac3f86fdba0d195a7ebeb5e36693bd53cb5999a25beeb"
 dependencies = [
- "console 0.15.0",
+ "console",
  "lazy_static",
  "tempfile",
  "zeroize",
@@ -2031,7 +2016,7 @@ version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d207dc617c7a380ab07ff572a6e52fa202a2a8f355860ac9c38e23f8196be1b"
 dependencies = [
- "console 0.15.0",
+ "console",
  "lazy_static",
  "number_prefix",
  "regex",
@@ -4486,7 +4471,7 @@ dependencies = [
  "bincode",
  "bs58 0.4.0",
  "clap 2.33.3",
- "console 0.14.1",
+ "console",
  "const_format",
  "criterion-stats",
  "ctrlc",
@@ -4541,7 +4526,7 @@ dependencies = [
  "base64 0.13.0",
  "chrono",
  "clap 2.33.3",
- "console 0.14.1",
+ "console",
  "humantime",
  "indicatif",
  "serde",
@@ -4723,7 +4708,7 @@ dependencies = [
 name = "solana-download-utils"
 version = "1.9.0"
 dependencies = [
- "console 0.14.1",
+ "console",
  "indicatif",
  "log 0.4.14",
  "reqwest",
@@ -4915,7 +4900,7 @@ dependencies = [
  "bzip2",
  "chrono",
  "clap 2.33.3",
- "console 0.14.1",
+ "console",
  "ctrlc",
  "dirs-next",
  "indicatif",
@@ -5372,7 +5357,7 @@ name = "solana-remote-wallet"
 version = "1.9.0"
 dependencies = [
  "base32",
- "console 0.14.1",
+ "console",
  "dialoguer",
  "hidapi",
  "log 0.4.14",
@@ -5742,7 +5727,7 @@ dependencies = [
  "bincode",
  "chrono",
  "clap 2.33.3",
- "console 0.14.1",
+ "console",
  "csv",
  "ctrlc",
  "indexmap",
@@ -5805,7 +5790,7 @@ version = "1.9.0"
 dependencies = [
  "chrono",
  "clap 2.33.3",
- "console 0.14.1",
+ "console",
  "core_affinity",
  "fd-lock",
  "indicatif",
