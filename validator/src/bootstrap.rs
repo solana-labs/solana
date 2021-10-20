@@ -41,12 +41,6 @@ use {
     },
 };
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub enum ConfigState {
-    Disabled,
-    Enabled,
-}
-
 #[derive(Debug)]
 pub struct RpcBootstrapConfig {
     pub no_genesis_fetch: bool,
@@ -54,8 +48,7 @@ pub struct RpcBootstrapConfig {
     pub no_untrusted_rpc: bool,
     pub max_genesis_archive_unpacked_size: u64,
     pub no_check_vote_account: bool,
-    pub incremental_snapshots: ConfigState,
-    pub incremental_snapshot_fetch: ConfigState,
+    pub incremental_snapshot_fetch: bool,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -97,9 +90,7 @@ pub fn rpc_bootstrap(
         return;
     }
 
-    if bootstrap_config.incremental_snapshots == ConfigState::Enabled
-        && bootstrap_config.incremental_snapshot_fetch == ConfigState::Enabled
-    {
+    if bootstrap_config.incremental_snapshot_fetch {
         with_incremental_snapshots::rpc_bootstrap(
             node,
             identity_keypair,
