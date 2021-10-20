@@ -111,10 +111,11 @@ impl<'a> ThisInvokeContext<'a> {
         }
     }
 
-    pub fn new_mock(
+    pub fn new_mock_with_features(
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         programs: &'a [(Pubkey, ProcessInstructionWithContext)],
         ancestors: &'a Ancestors,
+        feature_set: Arc<FeatureSet>,
     ) -> Self {
         Self::new(
             Rent::default(),
@@ -127,11 +128,24 @@ impl<'a> ThisInvokeContext<'a> {
             })),
             Rc::new(RefCell::new(Executors::default())),
             None,
-            Arc::new(FeatureSet::all_enabled()),
+            feature_set,
             Arc::new(Accounts::default_for_tests()),
             ancestors,
             Hash::default(),
             FeeCalculator::default(),
+        )
+    }
+
+    pub fn new_mock(
+        accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        programs: &'a [(Pubkey, ProcessInstructionWithContext)],
+        ancestors: &'a Ancestors,
+    ) -> Self {
+        Self::new_mock_with_features(
+            accounts,
+            programs,
+            ancestors,
+            Arc::new(FeatureSet::all_enabled()),
         )
     }
 }
