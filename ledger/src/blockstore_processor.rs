@@ -932,11 +932,13 @@ pub fn confirm_slot(
         bank.verify_tx_signatures_len_enabled(),
         recyclers.clone(),
     );
+    let _b_finished = check_result.finish_verify();
     let check_result = check_result.entries();
     if check_result.is_none() {
         warn!("Ledger proof of history failed at slot: {}", slot);
         return Err(BlockError::InvalidEntryHash.into());
     }
+    let mut entries = check_result.unwrap();
     let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
 
     let mut replay_elapsed = Measure::start("replay_elapsed");
