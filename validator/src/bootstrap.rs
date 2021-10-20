@@ -91,6 +91,7 @@ pub fn rpc_bootstrap(
     }
 
     if bootstrap_config.incremental_snapshot_fetch {
+        debug!("rpc_bootstrap with incremental snapshot fetch");
         with_incremental_snapshots::rpc_bootstrap(
             node,
             identity_keypair,
@@ -110,6 +111,7 @@ pub fn rpc_bootstrap(
             socket_addr_space,
         )
     } else {
+        debug!("rpc_bootstrap without incremental snapshot fetch");
         without_incremental_snapshots::rpc_bootstrap(
             node,
             identity_keypair,
@@ -1154,6 +1156,10 @@ mod with_incremental_snapshots {
             })
         });
 
+        trace!(
+            "incremental snapshot hashes from trusted peers: {:?}",
+            &trusted_incremental_snapshot_hashes
+        );
         trusted_incremental_snapshot_hashes
     }
 
@@ -1216,6 +1222,10 @@ mod with_incremental_snapshots {
                 });
         }
 
+        trace!(
+            "incremental snapshot hashes from eligible peers: {:?}",
+            &incremental_snapshot_hashes
+        );
         incremental_snapshot_hashes
     }
 
@@ -1239,7 +1249,12 @@ mod with_incremental_snapshots {
                     })
                     .unwrap_or(false)
             },
-        )
+        );
+
+        trace!(
+            "retain trusted incremental snapshot hashes: {:?}",
+            &incremental_snapshot_hashes
+        );
     }
 
     /// Retain the incremental snapshot hashes with a full snapshot slot that is a multiple of the full
@@ -1253,7 +1268,12 @@ mod with_incremental_snapshots {
             |(_rpc_peer, full_snapshot_hash, _incremental_snapshot_hash)| {
                 full_snapshot_hash.0 % full_snapshot_archive_interval == 0
             },
-        )
+        );
+
+        trace!(
+                "retain incremental snapshot hashes with a multiple of full snapshot archive interval: {:?}",
+                &incremental_snapshot_hashes
+            );
     }
 
     /// Retain the incremental snapshot hashes with the highest full snapshot slot
@@ -1278,7 +1298,12 @@ mod with_incremental_snapshots {
             |(_rpc_peer, full_snapshot_hash, _incremental_snapshot_hash)| {
                 full_snapshot_hash == &highest_full_snapshot_hash
             },
-        )
+        );
+
+        trace!(
+            "retain incremental snapshot hashes with highest full snapshot slot: {:?}",
+            &incremental_snapshot_hashes
+        );
     }
 
     /// Retain the incremental snapshot hashes with the highest incremental snapshot slot
@@ -1306,7 +1331,12 @@ mod with_incremental_snapshots {
             |(_rpc_peer, _full_snapshot_hash, incremental_snapshot_hash)| {
                 incremental_snapshot_hash == &highest_incremental_snapshot_hash
             },
-        )
+        );
+
+        trace!(
+            "retain incremental snapshot hashes with highest incremental snapshot slot: {:?}",
+            &incremental_snapshot_hashes
+        );
     }
 
     /// Get a final peer from the remaining incremental snapshot hashes.  At this point all the
@@ -1335,11 +1365,16 @@ mod with_incremental_snapshots {
             "To safely pick a peer at random, all the snapshot hashes must be the same"
         );
 
-        (
+        let final_peer_and_incremental_snapshot_hash = (
             final_rpc_peer.clone(),
             *final_full_snapshot_hash,
             *final_incremental_snapshot_hash,
-        )
+        );
+        trace!(
+            "final peer and incremental snapshot hash: {:?}",
+            &final_peer_and_incremental_snapshot_hash
+        );
+        final_peer_and_incremental_snapshot_hash
     }
 
     /// Check to see if we can use our local snapshots, otherwise download newer ones.
