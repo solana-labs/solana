@@ -177,7 +177,7 @@ pub mod tests {
         /// Notified when an account is updated at runtime, due to transaction activities
         fn notify_account_update(&self, slot: Slot, pubkey: &Pubkey, account: &AccountSharedData) {
             self.accounts_at_snapshot_restore
-                .entry(pubkey.clone())
+                .entry(*pubkey)
                 .or_insert(Vec::default())
                 .push((slot, account.clone()));
         }
