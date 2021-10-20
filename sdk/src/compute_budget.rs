@@ -3,15 +3,19 @@
 use {
     crate::{
         borsh::try_from_slice_unchecked,
+        entrypoint::HEAP_LENGTH as MIN_HEAP_FRAME_BYTES,
+        feature_set::{requestable_heap_size, FeatureSet},
         instruction::{Instruction, InstructionError},
         transaction::{SanitizedTransaction, TransactionError},
     },
     borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
+    std::sync::Arc,
 };
 
 crate::declare_id!("ComputeBudget111111111111111111111111111111");
 
 const MAX_UNITS: u32 = 1_000_000;
+const MAX_HEAP_FRAME_BYTES: u32 = 256 * 1024;
 
 /// Compute Budget Instructions
 #[derive(
@@ -30,11 +34,23 @@ pub enum ComputeBudgetInstruction {
     /// Request a specific maximum number of compute units the transaction is
     /// allowed to consume.
     RequestUnits(u32),
+    /// Request a specific transaction-wide program heap frame size in bytes.
+    /// The value requested must be a multiple of 1024. This new heap frame size
+    /// applies to each program executed, including all calls to CPIs.
+    RequestHeapFrame(u32),
 }
 impl ComputeBudgetInstruction {
     /// Create a `ComputeBudgetInstruction::RequestUnits` `Instruction`
     pub fn request_units(units: u32) -> Instruction {
         Instruction::new_with_borsh(id(), &ComputeBudgetInstruction::RequestUnits(units), vec![])
+    }
+    /// Create a `ComputeBudgetInstruction::RequestHeapFrame` `Instruction`
+    pub fn request_heap_frame(bytes: u32) -> Instruction {
+        Instruction::new_with_borsh(
+            id(),
+            &ComputeBudgetInstruction::RequestHeapFrame(bytes),
+            vec![],
+        )
     }
 }
 
@@ -74,6 +90,9 @@ pub struct ComputeBudget {
     pub syscall_base_cost: u64,
     /// Optional program heap region size, if `None` then loader default
     pub heap_size: Option<usize>,
+    /// Number of compute units per additional 32k heap above the default (~.5
+    /// us per 32k at 15 units/us rounded up)
+    pub heap_cost: u64,
 }
 impl Default for ComputeBudget {
     fn default() -> Self {
@@ -99,23 +118,38 @@ impl ComputeBudget {
             secp256k1_recover_cost: 25_000,
             syscall_base_cost: 100,
             heap_size: None,
+            heap_cost: 8,
         }
     }
     pub fn process_transaction(
         &mut self,
         tx: &SanitizedTransaction,
+        feature_set: Arc<FeatureSet>,
     ) -> Result<(), TransactionError> {
         let error = TransactionError::InstructionError(0, InstructionError::InvalidInstructionData);
-        // Compute budget instruction must be in 1st or 2nd instruction (avoid nonce marker)
-        for (program_id, instruction) in tx.message().program_instructions_iter().take(2) {
+        // Compute budget instruction must be in the 1st 3 instructions (avoid
+        // nonce marker), otherwise ignored
+        for (program_id, instruction) in tx.message().program_instructions_iter().take(3) {
             if check_id(program_id) {
-                let ComputeBudgetInstruction::RequestUnits(units) =
-                    try_from_slice_unchecked::<ComputeBudgetInstruction>(&instruction.data)
-                        .map_err(|_| error.clone())?;
-                if units > MAX_UNITS {
-                    return Err(error);
+                match try_from_slice_unchecked(&instruction.data) {
+                    Ok(ComputeBudgetInstruction::RequestUnits(units)) => {
+                        if units > MAX_UNITS {
+                            return Err(error);
+                        }
+                        self.max_units = units as u64;
+                    }
+                    Ok(ComputeBudgetInstruction::RequestHeapFrame(bytes)) => {
+                        if !feature_set.is_active(&requestable_heap_size::id())
+                            || bytes > MAX_HEAP_FRAME_BYTES
+                            || bytes < MIN_HEAP_FRAME_BYTES as u32
+                            || bytes % 1024 != 0
+                        {
+                            return Err(error);
+                        }
+                        self.heap_size = Some(bytes as usize);
+                    }
+                    _ => return Err(error),
                 }
-                self.max_units = units as u64;
             }
         }
         Ok(())
@@ -135,75 +169,149 @@ mod tests {
         tx.try_into().unwrap()
     }
 
+    macro_rules! test {
+        ( $instructions: expr, $expected_error: expr, $expected_budget: expr ) => {
+            let payer_keypair = Keypair::new();
+            let tx = sanitize_tx(Transaction::new(
+                &[&payer_keypair],
+                Message::new($instructions, Some(&payer_keypair.pubkey())),
+                Hash::default(),
+            ));
+            let feature_set = Arc::new(FeatureSet::all_enabled());
+            let mut compute_budget = ComputeBudget::default();
+            let result = compute_budget.process_transaction(&tx, feature_set);
+            assert_eq!($expected_error as Result<(), TransactionError>, result);
+            assert_eq!(compute_budget, $expected_budget);
+        };
+    }
+
     #[test]
     fn test_process_transaction() {
-        let payer_keypair = Keypair::new();
-        let mut compute_budget = ComputeBudget::default();
-
-        let tx = sanitize_tx(Transaction::new(
-            &[&payer_keypair],
-            Message::new(&[], Some(&payer_keypair.pubkey())),
-            Hash::default(),
-        ));
-        compute_budget.process_transaction(&tx).unwrap();
-        assert_eq!(compute_budget, ComputeBudget::default());
-
-        let tx = sanitize_tx(Transaction::new(
-            &[&payer_keypair],
-            Message::new(
-                &[
-                    ComputeBudgetInstruction::request_units(1),
-                    Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                ],
-                Some(&payer_keypair.pubkey()),
-            ),
-            Hash::default(),
-        ));
-        compute_budget.process_transaction(&tx).unwrap();
-        assert_eq!(
-            compute_budget,
+        // Units
+        test!(&[], Ok(()), ComputeBudget::default());
+        test!(
+            &[
+                ComputeBudgetInstruction::request_units(1),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+            ],
+            Ok(()),
             ComputeBudget {
                 max_units: 1,
                 ..ComputeBudget::default()
             }
         );
-
-        let tx = sanitize_tx(Transaction::new(
-            &[&payer_keypair],
-            Message::new(
-                &[
-                    ComputeBudgetInstruction::request_units(MAX_UNITS + 1),
-                    Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                ],
-                Some(&payer_keypair.pubkey()),
-            ),
-            Hash::default(),
-        ));
-        let result = compute_budget.process_transaction(&tx);
-        assert_eq!(
-            result,
+        test!(
+            &[
+                ComputeBudgetInstruction::request_units(MAX_UNITS + 1),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+            ],
             Err(TransactionError::InstructionError(
                 0,
-                InstructionError::InvalidInstructionData
-            ))
+                InstructionError::InvalidInstructionData,
+            )),
+            ComputeBudget::default()
         );
-
-        let tx = sanitize_tx(Transaction::new(
-            &[&payer_keypair],
-            Message::new(
-                &[
-                    Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                    ComputeBudgetInstruction::request_units(MAX_UNITS),
-                ],
-                Some(&payer_keypair.pubkey()),
-            ),
-            Hash::default(),
-        ));
-        compute_budget.process_transaction(&tx).unwrap();
-        assert_eq!(
-            compute_budget,
+        test!(
+            &[
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                ComputeBudgetInstruction::request_units(MAX_UNITS),
+            ],
+            Ok(()),
             ComputeBudget {
                 max_units: MAX_UNITS as u64,
+                ..ComputeBudget::default()
+            }
+        );
+        test!(
+            &[
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                ComputeBudgetInstruction::request_units(1),
+            ],
+            Ok(()),
+            ComputeBudget::default()
+        );
+
+        // HeapFrame
+        test!(&[], Ok(()), ComputeBudget::default());
+        test!(
+            &[
+                ComputeBudgetInstruction::request_heap_frame(40 * 1024),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+            ],
+            Ok(()),
+            ComputeBudget {
+                heap_size: Some(40 * 1024),
+                ..ComputeBudget::default()
+            }
+        );
+        test!(
+            &[
+                ComputeBudgetInstruction::request_heap_frame(40 * 1024 + 1),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+            ],
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::InvalidInstructionData,
+            )),
+            ComputeBudget::default()
+        );
+        test!(
+            &[
+                ComputeBudgetInstruction::request_heap_frame(31 * 1024),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+            ],
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::InvalidInstructionData,
+            )),
+            ComputeBudget::default()
+        );
+        test!(
+            &[
+                ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES + 1),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+            ],
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::InvalidInstructionData,
+            )),
+            ComputeBudget::default()
+        );
+        test!(
+            &[
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES),
+            ],
+            Ok(()),
+            ComputeBudget {
+                heap_size: Some(MAX_HEAP_FRAME_BYTES as usize),
+                ..ComputeBudget::default()
+            }
+        );
+        test!(
+            &[
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                ComputeBudgetInstruction::request_heap_frame(1), // ignored
+            ],
+            Ok(()),
+            ComputeBudget::default()
+        );
+
+        // Combined
+        test!(
+            &[
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES),
+                ComputeBudgetInstruction::request_units(MAX_UNITS),
+            ],
+            Ok(()),
+            ComputeBudget {
+                max_units: MAX_UNITS as u64,
+                heap_size: Some(MAX_HEAP_FRAME_BYTES as usize),
                 ..ComputeBudget::default()
             }
         );
