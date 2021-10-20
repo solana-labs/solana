@@ -356,6 +356,9 @@ impl BroadcastStage {
                     .expect("My own shreds must be reconstructable"),
             );
             debug_assert!(data_shreds.iter().all(|shred| shred.slot() == slot));
+
+            // TODO send retry iteration
+
             if !data_shreds.is_empty() {
                 socket_sender.send((data_shreds, None))?;
             }
@@ -367,6 +370,9 @@ impl BroadcastStage {
             );
 
             debug_assert!(coding_shreds.iter().all(|shred| shred.slot() == slot));
+
+            // TODO send retry iteration
+
             if !coding_shreds.is_empty() {
                 socket_sender.send((coding_shreds, None))?;
             }

@@ -1444,6 +1444,9 @@ impl ReplayStage {
 
                 // Signal retransmit
                 if Self::should_retransmit(poh_slot, &mut skipped_slots_info.last_retransmit_slot) {
+
+                    // TODO check for retransmit
+
                     datapoint_info!("replay_stage-retransmit", ("slot", bank.slot(), i64),);
                     let _ = retransmit_slots_sender
                         .send(vec![(bank.slot(), bank.clone())].into_iter().collect());
