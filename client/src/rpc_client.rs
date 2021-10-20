@@ -4801,7 +4801,7 @@ impl RpcClient {
 
     #[allow(deprecated)]
     pub fn get_fee_for_message(&self, message: &Message) -> ClientResult<u64> {
-        if self.get_node_version()? < semver::Version::new(1, 8, 0) {
+        if self.get_node_version()? < semver::Version::new(1, 9, 0) {
             let Fees { fee_calculator, .. } = self.get_fees()?;
             Ok(fee_calculator
                 .lamports_per_signature
