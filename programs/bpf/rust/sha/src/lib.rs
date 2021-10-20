@@ -1,4 +1,4 @@
-//! @brief SHA Syscall test
+//! SHA Syscall test
 
 extern crate solana_program;
 use solana_program::{custom_panic_default, msg};

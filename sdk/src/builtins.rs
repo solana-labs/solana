@@ -1,4 +1,4 @@
-//! @brief Solana builtin helper macros
+//! Solana builtin helper macros
 
 #[rustversion::since(1.46.0)]
 #[macro_export]

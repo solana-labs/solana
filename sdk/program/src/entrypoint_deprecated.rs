@@ -1,5 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
-//! @brief Solana Rust-based BPF program entry point supported by the original
+//! Solana Rust-based BPF program entry point supported by the original
 //!  and now deprecated BPFLoader.  For more information see
 //!  './bpf_loader_deprecated.rs'
 

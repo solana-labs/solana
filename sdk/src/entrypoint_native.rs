@@ -1,4 +1,4 @@
-//! @brief Solana Native program entry point
+//! Solana Native program entry point
 
 use crate::{instruction::InstructionError, keyed_account::KeyedAccount, pubkey::Pubkey};
 
