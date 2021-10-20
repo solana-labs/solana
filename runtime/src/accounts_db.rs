@@ -5538,7 +5538,8 @@ impl AccountsDb {
         let bin_calculator = PubkeyBinCalculator24::new(bins);
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
         let mut time = Measure::start("scan all accounts");
-        stats.num_snapshot_storage = storage.slot_count();
+        stats.num_snapshot_storage = storage.storage_count();
+        stats.num_slots = storage.slot_count();
         let mismatch_found = AtomicU64::new(0);
         let range = bin_range.end - bin_range.start;
         let sort_time = AtomicU64::new(0);

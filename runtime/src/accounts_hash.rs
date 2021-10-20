@@ -27,6 +27,7 @@ pub struct HashStats {
     pub hash_total: usize,
     pub unreduced_entries: usize,
     pub num_snapshot_storage: usize,
+    pub num_slots: usize,
     pub collect_snapshots_us: u64,
     pub storage_sort_us: u64,
     pub min_bin_size: usize,
@@ -59,6 +60,7 @@ impl HashStats {
                 self.num_snapshot_storage as i64,
                 i64
             ),
+            ("num_slots", self.num_slots as i64, i64),
             ("min_bin_size", self.min_bin_size as i64, i64),
             ("max_bin_size", self.max_bin_size as i64, i64),
             ("total", total_time_us as i64, i64),
