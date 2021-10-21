@@ -3176,10 +3176,37 @@ impl Bank {
             .clear_slot_entries(slot);
     }
 
-    pub fn can_commit(result: &Result<()>) -> bool {
+    pub fn can_commit(
+        message: &solana_sdk::message::SanitizedMessage,
+        result: &Result<()>,
+        from_block_producer: bool,
+        dropped_vote_count: &mut usize,
+    ) -> bool {
         match result {
             Ok(_) => true,
-            Err(TransactionError::InstructionError(_, _)) => true,
+            Err(TransactionError::InstructionError(error_index, error)) => {
+                if from_block_producer
+                    && solana_vote_program::check_id(
+                        message.get_account_key(*error_index as usize).unwrap(),
+                    )
+                {
+                    match error {
+                        InstructionError::Custom(error_code) => {
+                            let vote_too_old_err: u32 =
+                                solana_vote_program::vote_instruction::VoteError::VoteTooOld as u32;
+                            if vote_too_old_err != *error_code {
+                                *dropped_vote_count += 1;
+                                true
+                            } else {
+                                false
+                            }
+                        }
+                        _ => true,
+                    }
+                } else {
+                    true
+                }
+            }
             Err(_) => false,
         }
     }
@@ -3192,7 +3219,7 @@ impl Bank {
         let mut status_cache = self.src.status_cache.write().unwrap();
         assert_eq!(sanitized_txs.len(), res.len());
         for (tx, (res, _nonce_rollback)) in sanitized_txs.iter().zip(res) {
-            if Self::can_commit(res) {
+            if Self::can_commit(tx.message(), res, false, &mut 0usize) {
                 // Add the message hash to the status cache to ensure that this message
                 // won't be processed again with a different signature.
                 status_cache.insert(
@@ -3931,7 +3958,7 @@ impl Bank {
                 }
             }
 
-            if Self::can_commit(r) // Skip log collection for unprocessed transactions
+            if Self::can_commit(tx.message(), r, false, &mut 0usize) // Skip log collection for unprocessed transactions
                 && transaction_log_collector_config.filter != TransactionLogCollectorFilter::None
             {
                 let mut transaction_log_collector = self.transaction_log_collector.write().unwrap();
@@ -4105,7 +4132,10 @@ impl Bank {
 
         if executed
             .iter()
-            .any(|(res, _nonce_rollback)| Self::can_commit(res))
+            .zip(sanitized_txs.iter())
+            .any(|((res, _nonce_rollback), tx)| {
+                Self::can_commit(tx.message(), res, false, &mut 0usize)
+            })
         {
             self.is_delta.store(true, Relaxed);
         }

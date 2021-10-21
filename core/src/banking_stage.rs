@@ -788,13 +788,14 @@ impl BankingStage {
         results: &[TransactionExecutionResult],
         recorder: &TransactionRecorder,
     ) -> (Result<usize, PohRecorderError>, Vec<usize>) {
+        let mut dropped_vote_count = 0;
         let mut processed_generation = Measure::start("record::process_generation");
         let (processed_transactions, processed_transactions_indexes): (Vec<_>, Vec<_>) = results
             .iter()
             .zip(txs)
             .enumerate()
             .filter_map(|(i, ((r, _n), tx))| {
-                if Bank::can_commit(r) {
+                if Bank::can_commit(tx.message(), r, true, &mut dropped_vote_count) {
                     Some((tx.to_versioned_transaction(), i))
                 } else {
                     None
@@ -802,6 +803,9 @@ impl BankingStage {
             })
             .unzip();
 
+        if dropped_vote_count > 0 {
+            inc_new_counter_info!("leader-dropped_vote", dropped_vote_count);
+        }
         processed_generation.stop();
         let num_to_commit = processed_transactions.len();
         debug!("num_to_commit: {} ", num_to_commit);
