@@ -17,7 +17,7 @@ use {
     solana_sdk::timing::AtomicInterval,
     std::{
         sync::{
-            atomic::{AtomicBool, Ordering},
+            atomic::{AtomicBool, AtomicUsize, Ordering},
             Arc, Mutex,
         },
         thread::{self, sleep, Builder, JoinHandle},
@@ -158,6 +158,8 @@ pub trait PostgresClient {
         parent: Option<u64>,
         status: SlotStatus,
     ) -> Result<(), AccountsDbPluginError>;
+
+    fn notify_end_of_startup(&mut self) -> Result<(), AccountsDbPluginError>;
 }
 
 impl SimplePostgresClient {
@@ -480,6 +482,10 @@ impl PostgresClient for SimplePostgresClient {
 
         Ok(())
     }
+
+    fn notify_end_of_startup(&mut self) -> Result<(), AccountsDbPluginError> {
+        self.flush_buffered_writes()
+    }
 }
 
 struct UpdateAccountRequest {
@@ -518,6 +524,7 @@ impl PostgresClientWorker {
         receiver: Receiver<DbWorkItem>,
         exit_worker: Arc<AtomicBool>,
         is_startup_done: Arc<AtomicBool>,
+        startup_done_count: Arc<AtomicUsize>,
     ) -> Result<(), AccountsDbPluginError> {
         while !exit_worker.load(Ordering::Relaxed) {
             let mut measure = Measure::start("accountsdb-plugin-postgres-worker-recv");
@@ -546,8 +553,9 @@ impl PostgresClientWorker {
                 Err(err) => match err {
                     RecvTimeoutError::Timeout => {
                         if !self.is_startup_done && is_startup_done.load(Ordering::Relaxed) {
-                            self.client.flush_buffered_writes()?;
+                            self.client.notify_end_of_startup()?;
                             self.is_startup_done = true;
+                            startup_done_count.fetch_add(1, Ordering::Relaxed);
                         }
 
                         continue;
@@ -566,6 +574,7 @@ pub struct ParallelPostgresClient {
     workers: Vec<JoinHandle<Result<(), AccountsDbPluginError>>>,
     exit_worker: Arc<AtomicBool>,
     is_startup_done: Arc<AtomicBool>,
+    startup_done_count: Arc<AtomicUsize>,
     sender: Sender<DbWorkItem>,
     last_report: AtomicInterval,
 }
@@ -577,17 +586,24 @@ impl ParallelPostgresClient {
         let exit_worker = Arc::new(AtomicBool::new(false));
         let mut workers = Vec::default();
         let is_startup_done = Arc::new(AtomicBool::new(false));
-
-        for i in 0..config.threads.unwrap_or(DEFAULT_THREADS_COUNT) {
+        let startup_done_count = Arc::new(AtomicUsize::new(0));
+        let worker_count = config.threads.unwrap_or(DEFAULT_THREADS_COUNT);
+        for i in 0..worker_count {
             let cloned_receiver = receiver.clone();
             let exit_clone = exit_worker.clone();
             let is_startup_done_clone = is_startup_done.clone();
+            let startup_done_count_clone = startup_done_count.clone();
             let config = config.clone();
             let worker = Builder::new()
                 .name(format!("worker-{}", i))
                 .spawn(move || -> Result<(), AccountsDbPluginError> {
                     let mut worker = PostgresClientWorker::new(config)?;
-                    worker.do_work(cloned_receiver, exit_clone, is_startup_done_clone)?;
+                    worker.do_work(
+                        cloned_receiver,
+                        exit_clone,
+                        is_startup_done_clone,
+                        startup_done_count_clone,
+                    )?;
                     Ok(())
                 })
                 .unwrap();
@@ -601,6 +617,7 @@ impl ParallelPostgresClient {
             workers,
             exit_worker,
             is_startup_done,
+            startup_done_count,
             sender,
         })
     }
@@ -692,10 +709,17 @@ impl ParallelPostgresClient {
 
     pub fn notify_end_of_startup(&mut self) -> Result<(), AccountsDbPluginError> {
         info!("Notifying the end of startup");
+        // Ensure all items in the queue has been received by the workers
         while !self.sender.is_empty() {
             sleep(Duration::from_millis(100));
         }
         self.is_startup_done.store(true, Ordering::Relaxed);
+
+        // Wait for all worker threads to be done with flushing
+        while self.startup_done_count.load(Ordering::Relaxed) != self.workers.len() {
+            sleep(Duration::from_millis(100));
+        }
+
         info!("Done with notifying the end of startup");
         Ok(())
     }
