@@ -162,7 +162,10 @@ pub mod tests {
             clock::Slot,
             pubkey::Pubkey,
         },
-        std::sync::{Arc, RwLock},
+        std::sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
     };
 
     impl AccountsDb {
@@ -174,6 +177,7 @@ pub mod tests {
     #[derive(Debug, Default)]
     struct AccountsDbTestPlugin {
         pub accounts_at_snapshot_restore: DashMap<Pubkey, Vec<(Slot, AccountSharedData)>>,
+        pub is_startup_done: AtomicBool,
     }
 
     impl AccountsUpdateNotifierInterface for AccountsDbTestPlugin {
@@ -202,6 +206,10 @@ pub mod tests {
 
         /// Notified when a slot is rooted.
         fn notify_slot_rooted(&self, _slot: Slot, _parent: Option<Slot>) {}
+
+        fn notify_end_of_restore_from_snapshot(&self) {
+            self.is_startup_done.store(true, Ordering::Relaxed);
+        }
     }
 
     #[test]
@@ -269,6 +277,8 @@ pub mod tests {
             notifier.accounts_at_snapshot_restore.get(&key2).unwrap()[0].0,
             slot0
         );
+
+        assert_eq!(notifier.is_startup_done.load(Ordering::Relaxed), true);
     }
 
     #[test]
@@ -362,6 +372,7 @@ pub mod tests {
             notifier.accounts_at_snapshot_restore.get(&key3).unwrap()[0].0,
             slot1
         );
+        assert_eq!(notifier.is_startup_done.load(Ordering::Relaxed), true);
     }
 
     #[test]
