@@ -799,7 +799,7 @@ impl ReplayStage {
                                 );
                                 let iter = last_retransmit_retry_info.retry_iteration;
                                 if last_retransmit_retry_info.retry_iteration < SHRED_RETRY_TRANSMISSION_ITERATION_MAX {
-                                    last_retransmit_retry_info.retry_iteration = last_retransmit_retry_info.retry_iteration + 1;
+                                    last_retransmit_retry_info.retry_iteration += 1;
                                 }
                                 last_retransmit_retry_info.time = Instant::now();
 
@@ -1505,7 +1505,7 @@ impl ReplayStage {
                     // TODO check for retransmit
 
                     datapoint_info!("replay_stage-retransmit", ("slot", bank.slot(), i64),);
-                    let _ = retransmit_slots_sender.send((bank.clone(), None));
+                    let _ = retransmit_slots_sender.send((bank, None));
                 }
                 return;
             }

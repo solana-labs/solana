@@ -340,25 +340,22 @@ impl BroadcastStage {
         }
 
         let blockstore = blockstore.clone();
-        let retransmit_thread = {
-            let cluster_info = cluster_info.clone();
-            Builder::new()
-                .name("solana-broadcaster-retransmit".to_string())
-                .spawn(move || loop {
-                    if let Some(res) = Self::handle_error(
-                        Self::check_retransmit_signals(
-                            &cluster_info,
-                            &blockstore,
-                            &retransmit_slots_receiver,
-                            &socket_sender,
-                        ),
-                        "solana-broadcaster-retransmit-check_retransmit_signals",
-                    ) {
-                        return res;
-                    }
-                })
-                .unwrap()
-        };
+        let retransmit_thread = Builder::new()
+            .name("solana-broadcaster-retransmit".to_string())
+            .spawn(move || loop {
+                if let Some(res) = Self::handle_error(
+                    Self::check_retransmit_signals(
+                        &cluster_info,
+                        &blockstore,
+                        &retransmit_slots_receiver,
+                        &socket_sender,
+                    ),
+                    "solana-broadcaster-retransmit-check_retransmit_signals",
+                ) {
+                    return res;
+                }
+            })
+            .unwrap();
 
         thread_hdls.push(retransmit_thread);
         Self { thread_hdls }
@@ -591,6 +588,12 @@ pub mod test {
     #[test]
     fn test_duplicate_retransmit_signal() {
         // Setup
+        let node = Node::new_localhost();
+        let cluster_info = Arc::new(ClusterInfo::new(
+            node.info,
+            Arc::new(Keypair::new()),
+            SocketAddrSpace::Unspecified,
+        ));
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let (transmit_sender, transmit_receiver) = channel();
@@ -616,13 +619,11 @@ pub mod test {
 
         // Insert duplicate retransmit signal, blocks should
         // only be retransmitted once
-        retransmit_slots_sender
-            .send(vec![(updated_slot, bank0.clone())].into_iter().collect())
-            .unwrap();
-        retransmit_slots_sender
-            .send(vec![(updated_slot, bank0)].into_iter().collect())
-            .unwrap();
+        retransmit_slots_sender.send((bank0.clone(), None)).unwrap();
+        retransmit_slots_sender.send((bank0, None)).unwrap();
+
         BroadcastStage::check_retransmit_signals(
+            &cluster_info,
             &blockstore,
             &retransmit_slots_receiver,
             &transmit_sender,
