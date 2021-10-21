@@ -3335,7 +3335,8 @@ mod tests {
             let mut data = vec![];
             bincode::serialize_into(&mut data, &src_clock).unwrap();
             invoke_context
-                .sysvars
+                .get_sysvars()
+                .borrow_mut()
                 .push((sysvar::clock::id(), Some(Rc::new(data))));
 
             let mut syscall = SyscallGetClockSysvar {
@@ -3380,7 +3381,8 @@ mod tests {
             let mut data = vec![];
             bincode::serialize_into(&mut data, &src_epochschedule).unwrap();
             invoke_context
-                .sysvars
+                .get_sysvars()
+                .borrow_mut()
                 .push((sysvar::epoch_schedule::id(), Some(Rc::new(data))));
 
             let mut syscall = SyscallGetEpochScheduleSysvar {
@@ -3432,7 +3434,8 @@ mod tests {
             let mut data = vec![];
             bincode::serialize_into(&mut data, &src_fees).unwrap();
             invoke_context
-                .sysvars
+                .get_sysvars()
+                .borrow_mut()
                 .push((sysvar::fees::id(), Some(Rc::new(data))));
 
             let mut syscall = SyscallGetFeesSysvar {
@@ -3475,7 +3478,8 @@ mod tests {
             let mut data = vec![];
             bincode::serialize_into(&mut data, &src_rent).unwrap();
             invoke_context
-                .sysvars
+                .get_sysvars()
+                .borrow_mut()
                 .push((sysvar::rent::id(), Some(Rc::new(data))));
 
             let mut syscall = SyscallGetRentSysvar {

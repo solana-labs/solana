@@ -322,7 +322,7 @@ pub fn process_instruction(
         return Err(InstructionError::InvalidAccountOwner);
     }
 
-    let signers: HashSet<Pubkey> = get_signers(&keyed_accounts[1..]);
+    let signers: HashSet<Pubkey> = get_signers(&keyed_accounts[first_instruction_account..]);
     match limited_deserialize(data)? {
         VoteInstruction::InitializeAccount(vote_init) => {
             verify_rent_exemption(

@@ -192,24 +192,23 @@ fn upgrade_bpf_program(
 
 fn run_program(
     name: &str,
+    loader_id: &Pubkey,
     program_id: &Pubkey,
     parameter_accounts: Vec<KeyedAccount>,
     instruction_data: &[u8],
 ) -> Result<u64, InstructionError> {
-    let path = create_bpf_path(name);
-    let mut file = File::open(path).unwrap();
-
+    let mut file = File::open(create_bpf_path(name)).unwrap();
     let mut data = vec![];
     file.read_to_end(&mut data).unwrap();
-    let loader_id = bpf_loader::id();
+
+    let mut invoke_context = MockInvokeContext::new(&program_id, parameter_accounts);
     let (parameter_bytes, account_lengths) = serialize_parameters(
         &loader_id,
         program_id,
-        &parameter_accounts,
+        &invoke_context.get_keyed_accounts().unwrap()[1..],
         &instruction_data,
     )
     .unwrap();
-    let mut invoke_context = MockInvokeContext::new(&loader_id, parameter_accounts);
     let compute_meter = invoke_context.get_compute_meter();
     let mut instruction_meter = ThisInstructionMeter { compute_meter };
 
@@ -1405,11 +1404,17 @@ fn assert_instruction_count() {
     let mut passed = true;
     println!("\n  {:36} expected actual  diff", "BPF program");
     for program in programs.iter() {
+        let loader_id = bpf_loader::id();
         let program_id = Pubkey::new_unique();
         let key = Pubkey::new_unique();
+        let mut program_account = RefCell::new(AccountSharedData::new(0, 0, &loader_id));
         let mut account = RefCell::new(AccountSharedData::default());
-        let parameter_accounts = vec![KeyedAccount::new(&key, false, &mut account)];
-        let count = run_program(program.0, &program_id, parameter_accounts, &[]).unwrap();
+        let parameter_accounts = vec![
+            KeyedAccount::new(&program_id, false, &mut program_account),
+            KeyedAccount::new(&key, false, &mut account),
+        ];
+        let count =
+            run_program(program.0, &loader_id, &program_id, parameter_accounts, &[]).unwrap();
         let diff: i64 = count as i64 - program.1 as i64;
         println!(
             "  {:36} {:8} {:6} {:+5} ({:+3.0}%)",

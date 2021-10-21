@@ -49,21 +49,30 @@ impl Measure {
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```
     /// // Call a function with a single argument
-    /// let (result, measure) = Measure::this(my_function, fizz, "my_func");
-
-    /// // Call a function with multiple arguments
-    /// let (result, measure) = Measure::this(|(arg1, arg2)| my_function(arg1, arg2), ("abc", 123), "my_func");
+    /// # use solana_measure::measure::Measure;
+    /// # fn my_function(fizz: i32) -> i32 { fizz }
+    /// let (result, measure) = Measure::this(my_function, 42, "my_func");
+    /// # assert_eq!(result, 42);
     /// ```
     ///
-    /// ```ignore
-    /// /// Call a method
-    /// struct Foo { ...  }
-    /// impl Foo { fn bar(&self, some_arg: i32) { ... } }
+    /// ```
+    /// // Call a function with multiple arguments
+    /// # use solana_measure::measure::Measure;
+    /// let (result, measure) = Measure::this(|(arg1, arg2)| std::cmp::min(arg1, arg2), (42, 123), "minimum");
+    /// # assert_eq!(result, 42);
+    /// ```
     ///
-    /// let foo = Foo { };
-    /// let (result, measure) = Measure::this(|this, arg| Foo::bar(&this, arg), (&foo, arg), "bar");
+    /// ```
+    /// // Call a method
+    /// # use solana_measure::measure::Measure;
+    /// # struct Foo { x: i32 }
+    /// # impl Foo { fn bar(&self, arg: i32) -> i32 { self.x + arg } }
+    /// # let baz = 8;
+    /// let foo = Foo { x: 42 };
+    /// let (result, measure) = Measure::this(|(this, args)| Foo::bar(&this, args), (&foo, baz), "Foo::bar");
+    /// # assert_eq!(result, 50);
     /// ```
     pub fn this<T, R, F: FnOnce(T) -> R>(func: F, args: T, name: &'static str) -> (R, Self) {
         let mut measure = Self::start(name);
@@ -162,7 +171,7 @@ mod tests {
     }
 
     #[test]
-    fn test_measure_with() {
+    fn test_measure_this() {
         // Ensure that the measurement side actually works
         {
             let (_result, measure) = Measure::this(|s| sleep(Duration::from_secs(s)), 1, "test");

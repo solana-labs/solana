@@ -17,7 +17,7 @@ use solana_sdk::{
     fee_calculator::FeeCalculator,
     hash::Hash,
     ic_logger_msg,
-    instruction::{CompiledInstruction, Instruction, InstructionError},
+    instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     keyed_account::{create_keyed_accounts_unified, KeyedAccount},
     message::Message,
     precompiles::is_precompile,
@@ -48,6 +48,32 @@ impl ComputeMeter for ThisComputeMeter {
         self.remaining
     }
 }
+impl ThisComputeMeter {
+    pub fn new_ref(remaining: u64) -> Rc<RefCell<Self>> {
+        Rc::new(RefCell::new(Self { remaining }))
+    }
+}
+
+pub struct ThisLogger {
+    log_collector: Option<Rc<LogCollector>>,
+}
+impl Logger for ThisLogger {
+    fn log_enabled(&self) -> bool {
+        log_enabled!(log::Level::Info) || self.log_collector.is_some()
+    }
+    fn log(&self, message: &str) {
+        debug!("{}", message);
+        if let Some(log_collector) = &self.log_collector {
+            log_collector.log(message);
+        }
+    }
+}
+impl ThisLogger {
+    pub fn new_ref(log_collector: Option<Rc<LogCollector>>) -> Rc<RefCell<Self>> {
+        Rc::new(RefCell::new(Self { log_collector }))
+    }
+}
+
 pub struct ThisInvokeContext<'a> {
     instruction_index: usize,
     invoke_stack: Vec<InvokeContextStackFrame<'a>>,
@@ -63,11 +89,11 @@ pub struct ThisInvokeContext<'a> {
     feature_set: Arc<FeatureSet>,
     pub timings: ExecuteDetailsTimings,
     account_db: Arc<Accounts>,
-    ancestors: &'a Ancestors,
+    ancestors: Option<&'a Ancestors>,
     #[allow(clippy::type_complexity)]
     sysvars: RefCell<Vec<(Pubkey, Option<Rc<Vec<u8>>>)>>,
-    blockhash: &'a Hash,
-    fee_calculator: &'a FeeCalculator,
+    blockhash: Hash,
+    fee_calculator: FeeCalculator,
     return_data: (Pubkey, Vec<u8>),
 }
 impl<'a> ThisInvokeContext<'a> {
@@ -83,9 +109,9 @@ impl<'a> ThisInvokeContext<'a> {
         instruction_recorders: Option<&'a [InstructionRecorder]>,
         feature_set: Arc<FeatureSet>,
         account_db: Arc<Accounts>,
-        ancestors: &'a Ancestors,
-        blockhash: &'a Hash,
-        fee_calculator: &'a FeeCalculator,
+        ancestors: Option<&'a Ancestors>,
+        blockhash: Hash,
+        fee_calculator: FeeCalculator,
     ) -> Self {
         Self {
             instruction_index: 0,
@@ -94,7 +120,7 @@ impl<'a> ThisInvokeContext<'a> {
             pre_accounts: Vec::new(),
             accounts,
             programs,
-            logger: Rc::new(RefCell::new(ThisLogger { log_collector })),
+            logger: ThisLogger::new_ref(log_collector),
             compute_budget,
             compute_meter,
             executors,
@@ -103,11 +129,40 @@ impl<'a> ThisInvokeContext<'a> {
             timings: ExecuteDetailsTimings::default(),
             account_db,
             ancestors,
-            sysvars: RefCell::new(vec![]),
+            sysvars: RefCell::new(Vec::new()),
             blockhash,
             fee_calculator,
             return_data: (Pubkey::default(), Vec::new()),
         }
+    }
+
+    pub fn new_mock_with_features(
+        accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        programs: &'a [(Pubkey, ProcessInstructionWithContext)],
+        feature_set: Arc<FeatureSet>,
+    ) -> Self {
+        Self::new(
+            Rent::default(),
+            accounts,
+            programs,
+            None,
+            ComputeBudget::default(),
+            ThisComputeMeter::new_ref(std::i64::MAX as u64),
+            Rc::new(RefCell::new(Executors::default())),
+            None,
+            feature_set,
+            Arc::new(Accounts::default_for_tests()),
+            None,
+            Hash::default(),
+            FeeCalculator::default(),
+        )
+    }
+
+    pub fn new_mock(
+        accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        programs: &'a [(Pubkey, ProcessInstructionWithContext)],
+    ) -> Self {
+        Self::new_mock_with_features(accounts, programs, Arc::new(FeatureSet::all_enabled()))
     }
 }
 impl<'a> InvokeContext for ThisInvokeContext<'a> {
@@ -140,6 +195,10 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         }
 
         if self.invoke_stack.is_empty() {
+            if !self.feature_set.is_active(&tx_wide_compute_cap::id()) {
+                self.compute_meter = ThisComputeMeter::new_ref(self.compute_budget.max_units);
+            }
+
             self.pre_accounts = Vec::with_capacity(instruction.accounts.len());
             let mut work = |_unique_index: usize, account_index: usize| {
                 if account_index < self.accounts.len() {
@@ -364,11 +423,6 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         self.executors.borrow().get(pubkey)
     }
     fn set_instruction_index(&mut self, instruction_index: usize) {
-        if !self.feature_set.is_active(&tx_wide_compute_cap::id()) {
-            self.compute_meter = Rc::new(RefCell::new(ThisComputeMeter {
-                remaining: self.compute_budget.max_units,
-            }));
-        }
         self.instruction_index = instruction_index;
     }
     fn record_instruction(&self, instruction: &Instruction) {
@@ -399,6 +453,10 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         self.timings.execute_us += execute_us;
         self.timings.deserialize_us += deserialize_us;
     }
+    #[allow(clippy::type_complexity)]
+    fn get_sysvars(&self) -> &RefCell<Vec<(Pubkey, Option<Rc<Vec<u8>>>)>> {
+        &self.sysvars
+    }
     fn get_sysvar_data(&self, id: &Pubkey) -> Option<Rc<Vec<u8>>> {
         if let Ok(mut sysvars) = self.sysvars.try_borrow_mut() {
             // Try share from cache
@@ -406,13 +464,15 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                 .iter()
                 .find_map(|(key, sysvar)| if id == key { sysvar.clone() } else { None });
             if result.is_none() {
-                // Load it
-                result = self
-                    .account_db
-                    .load_with_fixed_root(self.ancestors, id)
-                    .map(|(account, _)| Rc::new(account.data().to_vec()));
-                // Cache it
-                sysvars.push((*id, result.clone()));
+                if let Some(ancestors) = self.ancestors {
+                    // Load it
+                    result = self
+                        .account_db
+                        .load_with_fixed_root(ancestors, id)
+                        .map(|(account, _)| Rc::new(account.data().to_vec()));
+                    // Cache it
+                    sysvars.push((*id, result.clone()));
+                }
             }
             result
         } else {
@@ -422,11 +482,17 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn get_compute_budget(&self) -> &ComputeBudget {
         &self.compute_budget
     }
+    fn set_blockhash(&mut self, hash: Hash) {
+        self.blockhash = hash;
+    }
     fn get_blockhash(&self) -> &Hash {
-        self.blockhash
+        &self.blockhash
+    }
+    fn set_fee_calculator(&mut self, fee_calculator: FeeCalculator) {
+        self.fee_calculator = fee_calculator;
     }
     fn get_fee_calculator(&self) -> &FeeCalculator {
-        self.fee_calculator
+        &self.fee_calculator
     }
     fn set_return_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError> {
         self.return_data = (*self.get_caller()?, data);
@@ -436,19 +502,88 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         (self.return_data.0, &self.return_data.1)
     }
 }
-pub struct ThisLogger {
-    log_collector: Option<Rc<LogCollector>>,
+
+pub struct MockInvokeContextPreparation {
+    pub accounts: Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
+    pub message: Message,
+    pub account_indices: Vec<usize>,
 }
-impl Logger for ThisLogger {
-    fn log_enabled(&self) -> bool {
-        log_enabled!(log::Level::Info) || self.log_collector.is_some()
+
+pub fn prepare_mock_invoke_context(
+    program_indices: &[usize],
+    instruction_data: &[u8],
+    keyed_accounts: &[(bool, bool, Pubkey, Rc<RefCell<AccountSharedData>>)],
+) -> MockInvokeContextPreparation {
+    #[allow(clippy::type_complexity)]
+    let (accounts, mut metas): (
+        Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
+        Vec<AccountMeta>,
+    ) = keyed_accounts
+        .iter()
+        .map(|(is_signer, is_writable, pubkey, account)| {
+            (
+                (*pubkey, account.clone()),
+                AccountMeta {
+                    pubkey: *pubkey,
+                    is_signer: *is_signer,
+                    is_writable: *is_writable,
+                },
+            )
+        })
+        .unzip();
+    let program_id = if let Some(program_index) = program_indices.last() {
+        accounts[*program_index].0
+    } else {
+        Pubkey::default()
+    };
+    for program_index in program_indices.iter().rev() {
+        metas.remove(*program_index);
     }
-    fn log(&self, message: &str) {
-        debug!("{}", message);
-        if let Some(log_collector) = &self.log_collector {
-            log_collector.log(message);
-        }
+    let message = Message::new(
+        &[Instruction::new_with_bytes(
+            program_id,
+            instruction_data,
+            metas,
+        )],
+        None,
+    );
+    let account_indices: Vec<usize> = message
+        .account_keys
+        .iter()
+        .map(|search_key| {
+            accounts
+                .iter()
+                .position(|(key, _account)| key == search_key)
+                .unwrap_or(accounts.len())
+        })
+        .collect();
+    MockInvokeContextPreparation {
+        accounts,
+        message,
+        account_indices,
     }
+}
+
+pub fn mock_process_instruction(
+    loader_id: &Pubkey,
+    mut program_indices: Vec<usize>,
+    instruction_data: &[u8],
+    keyed_accounts: &[(bool, bool, Pubkey, Rc<RefCell<AccountSharedData>>)],
+    process_instruction: ProcessInstructionWithContext,
+) -> Result<(), InstructionError> {
+    let mut preparation =
+        prepare_mock_invoke_context(&program_indices, instruction_data, keyed_accounts);
+    let processor_account = AccountSharedData::new_ref(0, 0, &solana_sdk::native_loader::id());
+    program_indices.insert(0, preparation.accounts.len());
+    preparation.accounts.push((*loader_id, processor_account));
+    let mut invoke_context = ThisInvokeContext::new_mock(&preparation.accounts, &[]);
+    invoke_context.push(
+        &preparation.message,
+        &preparation.message.instructions[0],
+        &program_indices,
+        Some(&preparation.account_indices),
+    )?;
+    process_instruction(1, instruction_data, &mut invoke_context)
 }
 
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
@@ -500,9 +635,9 @@ impl MessageProcessor {
             instruction_recorders,
             feature_set,
             account_db,
-            ancestors,
-            &blockhash,
-            &fee_calculator,
+            Some(ancestors),
+            blockhash,
+            fee_calculator,
         );
         let compute_meter = invoke_context.get_compute_meter();
 
@@ -585,9 +720,9 @@ mod tests {
     use super::*;
     use solana_sdk::{
         instruction::{AccountMeta, Instruction, InstructionError},
+        keyed_account::keyed_account_at_index,
         message::Message,
         native_loader::{self, create_loadable_account_for_test},
-        process_instruction::MockComputeMeter,
         secp256k1_instruction::new_secp256k1_instruction,
         secp256k1_program,
     };
@@ -610,11 +745,11 @@ mod tests {
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
         assert_eq!(
             *program_id,
-            keyed_accounts[first_instruction_account].owner()?
+            keyed_account_at_index(keyed_accounts, first_instruction_account)?.owner()?
         );
         assert_ne!(
-            keyed_accounts[first_instruction_account + 1].owner()?,
-            *keyed_accounts[first_instruction_account].unsigned_key()
+            keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?.owner()?,
+            *keyed_account_at_index(keyed_accounts, first_instruction_account)?.unsigned_key()
         );
 
         if let Ok(instruction) = bincode::deserialize(data) {
@@ -622,17 +757,17 @@ mod tests {
                 MockInstruction::NoopSuccess => (),
                 MockInstruction::NoopFail => return Err(InstructionError::GenericError),
                 MockInstruction::ModifyOwned => {
-                    keyed_accounts[first_instruction_account]
+                    keyed_account_at_index(keyed_accounts, first_instruction_account)?
                         .try_account_ref_mut()?
                         .data_as_mut_slice()[0] = 1
                 }
                 MockInstruction::ModifyNotOwned => {
-                    keyed_accounts[first_instruction_account + 1]
+                    keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?
                         .try_account_ref_mut()?
                         .data_as_mut_slice()[0] = 1
                 }
                 MockInstruction::ModifyReadonly => {
-                    keyed_accounts[first_instruction_account + 2]
+                    keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?
                         .try_account_ref_mut()?
                         .data_as_mut_slice()[0] = 1
                 }
@@ -678,24 +813,7 @@ mod tests {
             &[Instruction::new_with_bytes(invoke_stack[0], &[0], metas)],
             None,
         );
-        let ancestors = Ancestors::default();
-        let blockhash = Hash::default();
-        let fee_calculator = FeeCalculator::default();
-        let mut invoke_context = ThisInvokeContext::new(
-            Rent::default(),
-            &accounts,
-            &[],
-            None,
-            ComputeBudget::default(),
-            Rc::new(RefCell::new(MockComputeMeter::default())),
-            Rc::new(RefCell::new(Executors::default())),
-            None,
-            Arc::new(FeatureSet::all_enabled()),
-            Arc::new(Accounts::default_for_tests()),
-            &ancestors,
-            &blockhash,
-            &fee_calculator,
-        );
+        let mut invoke_context = ThisInvokeContext::new_mock(&accounts, &[]);
 
         // Check call depth increases and has a limit
         let mut depth_reached = 0;
@@ -782,24 +900,7 @@ mod tests {
             )],
             None,
         );
-        let ancestors = Ancestors::default();
-        let blockhash = Hash::default();
-        let fee_calculator = FeeCalculator::default();
-        let mut invoke_context = ThisInvokeContext::new(
-            Rent::default(),
-            &accounts,
-            &[],
-            None,
-            ComputeBudget::default(),
-            Rc::new(RefCell::new(MockComputeMeter::default())),
-            Rc::new(RefCell::new(Executors::default())),
-            None,
-            Arc::new(FeatureSet::all_enabled()),
-            Arc::new(Accounts::default_for_tests()),
-            &ancestors,
-            &blockhash,
-            &fee_calculator,
-        );
+        let mut invoke_context = ThisInvokeContext::new_mock(&accounts, &[]);
         invoke_context
             .push(&message, &message.instructions[0], &[0], None)
             .unwrap();
@@ -833,11 +934,11 @@ mod tests {
                 match instruction {
                     MockSystemInstruction::Correct => Ok(()),
                     MockSystemInstruction::AttemptCredit { lamports } => {
-                        keyed_accounts[first_instruction_account]
+                        keyed_account_at_index(keyed_accounts, first_instruction_account)?
                             .account
                             .borrow_mut()
                             .checked_sub_lamports(lamports)?;
-                        keyed_accounts[first_instruction_account + 1]
+                        keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?
                             .account
                             .borrow_mut()
                             .checked_add_lamports(lamports)?;
@@ -845,7 +946,7 @@ mod tests {
                     }
                     // Change data in a read-only account
                     MockSystemInstruction::AttemptDataChange { data } => {
-                        keyed_accounts[first_instruction_account + 1]
+                        keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?
                             .account
                             .borrow_mut()
                             .set_data(vec![data]);
@@ -905,7 +1006,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            Rc::new(RefCell::new(MockComputeMeter::default())),
+            ThisComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             Arc::new(Accounts::default_for_tests()),
             &ancestors,
@@ -936,7 +1037,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            Rc::new(RefCell::new(MockComputeMeter::default())),
+            ThisComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             Arc::new(Accounts::default_for_tests()),
             &ancestors,
@@ -971,7 +1072,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            Rc::new(RefCell::new(MockComputeMeter::default())),
+            ThisComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             Arc::new(Accounts::default_for_tests()),
             &ancestors,
@@ -1006,9 +1107,11 @@ mod tests {
                 match instruction {
                     MockSystemInstruction::BorrowFail => {
                         let from_account =
-                            keyed_accounts[first_instruction_account].try_account_ref_mut()?;
+                            keyed_account_at_index(keyed_accounts, first_instruction_account)?
+                                .try_account_ref_mut()?;
                         let dup_account =
-                            keyed_accounts[first_instruction_account + 2].try_account_ref_mut()?;
+                            keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?
+                                .try_account_ref_mut()?;
                         if from_account.lamports() != dup_account.lamports() {
                             return Err(InstructionError::InvalidArgument);
                         }
@@ -1017,12 +1120,16 @@ mod tests {
                     MockSystemInstruction::MultiBorrowMut => {
                         let from_lamports = {
                             let from_account =
-                                keyed_accounts[first_instruction_account].try_account_ref_mut()?;
+                                keyed_account_at_index(keyed_accounts, first_instruction_account)?
+                                    .try_account_ref_mut()?;
                             from_account.lamports()
                         };
                         let dup_lamports = {
-                            let dup_account = keyed_accounts[first_instruction_account + 2]
-                                .try_account_ref_mut()?;
+                            let dup_account = keyed_account_at_index(
+                                keyed_accounts,
+                                first_instruction_account + 2,
+                            )?
+                            .try_account_ref_mut()?;
                             dup_account.lamports()
                         };
                         if from_lamports != dup_lamports {
@@ -1032,18 +1139,24 @@ mod tests {
                     }
                     MockSystemInstruction::DoWork { lamports, data } => {
                         {
-                            let mut to_account = keyed_accounts[first_instruction_account + 1]
-                                .try_account_ref_mut()?;
-                            let mut dup_account = keyed_accounts[first_instruction_account + 2]
-                                .try_account_ref_mut()?;
+                            let mut to_account = keyed_account_at_index(
+                                keyed_accounts,
+                                first_instruction_account + 1,
+                            )?
+                            .try_account_ref_mut()?;
+                            let mut dup_account = keyed_account_at_index(
+                                keyed_accounts,
+                                first_instruction_account + 2,
+                            )?
+                            .try_account_ref_mut()?;
                             dup_account.checked_sub_lamports(lamports)?;
                             to_account.checked_add_lamports(lamports)?;
                             dup_account.set_data(vec![data]);
                         }
-                        keyed_accounts[first_instruction_account]
+                        keyed_account_at_index(keyed_accounts, first_instruction_account)?
                             .try_account_ref_mut()?
                             .checked_sub_lamports(lamports)?;
-                        keyed_accounts[first_instruction_account + 1]
+                        keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?
                             .try_account_ref_mut()?
                             .checked_add_lamports(lamports)?;
                         Ok(())
@@ -1104,7 +1217,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            Rc::new(RefCell::new(MockComputeMeter::default())),
+            ThisComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             Arc::new(Accounts::default_for_tests()),
             &ancestors,
@@ -1139,7 +1252,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            Rc::new(RefCell::new(MockComputeMeter::default())),
+            ThisComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             Arc::new(Accounts::default_for_tests()),
             &ancestors,
@@ -1172,7 +1285,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            Rc::new(RefCell::new(MockComputeMeter::default())),
+            ThisComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             Arc::new(Accounts::default_for_tests()),
             &ancestors,
@@ -1233,24 +1346,7 @@ mod tests {
         );
         let message = Message::new(&[callee_instruction], None);
 
-        let ancestors = Ancestors::default();
-        let blockhash = Hash::default();
-        let fee_calculator = FeeCalculator::default();
-        let mut invoke_context = ThisInvokeContext::new(
-            Rent::default(),
-            &accounts,
-            programs.as_slice(),
-            None,
-            ComputeBudget::default(),
-            Rc::new(RefCell::new(MockComputeMeter::default())),
-            Rc::new(RefCell::new(Executors::default())),
-            None,
-            Arc::new(FeatureSet::all_enabled()),
-            Arc::new(Accounts::default_for_tests()),
-            &ancestors,
-            &blockhash,
-            &fee_calculator,
-        );
+        let mut invoke_context = ThisInvokeContext::new_mock(&accounts, programs.as_slice());
         invoke_context
             .push(&message, &caller_instruction, &program_indices[..1], None)
             .unwrap();
@@ -1378,24 +1474,7 @@ mod tests {
         );
         let message = Message::new(&[callee_instruction.clone()], None);
 
-        let ancestors = Ancestors::default();
-        let blockhash = Hash::default();
-        let fee_calculator = FeeCalculator::default();
-        let mut invoke_context = ThisInvokeContext::new(
-            Rent::default(),
-            &accounts,
-            programs.as_slice(),
-            None,
-            ComputeBudget::default(),
-            Rc::new(RefCell::new(MockComputeMeter::default())),
-            Rc::new(RefCell::new(Executors::default())),
-            None,
-            Arc::new(FeatureSet::all_enabled()),
-            Arc::new(Accounts::default_for_tests()),
-            &ancestors,
-            &blockhash,
-            &fee_calculator,
-        );
+        let mut invoke_context = ThisInvokeContext::new_mock(&accounts, programs.as_slice());
         invoke_context
             .push(&message, &caller_instruction, &program_indices, None)
             .unwrap();
@@ -1509,7 +1588,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            Rc::new(RefCell::new(MockComputeMeter::default())),
+            ThisComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             Arc::new(Accounts::default_for_tests()),
             &Ancestors::default(),
