@@ -102,7 +102,7 @@ impl TransactionStatusService {
                     transaction_logs_iter,
                     rent_debits,
                 ) {
-                    if Bank::can_commit(&status) {
+                    if Bank::can_commit(transaction.message(), &status, false, &mut 0usize) {
                         let lamports_per_signature = nonce_rollback
                             .map(|nonce_rollback| nonce_rollback.lamports_per_signature())
                             .unwrap_or_else(|| {
