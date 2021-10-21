@@ -111,7 +111,7 @@ pub fn rpc_bootstrap(
             socket_addr_space,
         )
     } else {
-        debug!("rpc_bootstrap without incremental snapshot fetch");
+        info!("rpc_bootstrap without incremental snapshot fetch");
         without_incremental_snapshots::rpc_bootstrap(
             node,
             identity_keypair,
