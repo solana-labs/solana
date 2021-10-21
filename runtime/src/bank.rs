@@ -173,6 +173,7 @@ pub struct ExecuteTimings {
     pub load_us: u64,
     pub execute_us: u64,
     pub store_us: u64,
+    pub update_stakes_cache_us: u64,
     pub total_batches_len: usize,
     pub num_execute_batches: u64,
     pub details: ExecuteDetailsTimings,
@@ -183,6 +184,9 @@ impl ExecuteTimings {
         self.load_us = self.load_us.saturating_add(other.load_us);
         self.execute_us = self.execute_us.saturating_add(other.execute_us);
         self.store_us = self.store_us.saturating_add(other.store_us);
+        self.update_stakes_cache_us = self
+            .update_stakes_cache_us
+            .saturating_add(other.update_stakes_cache_us);
         self.total_batches_len = self
             .total_batches_len
             .saturating_add(other.total_batches_len);
@@ -4128,8 +4132,10 @@ impl Bank {
         );
         let rent_debits = self.collect_rent(executed, loaded_txs);
 
+        let mut update_stakes_cache_time = Measure::start("update_stakes_cache_time");
         let overwritten_vote_accounts =
-            self.update_cached_accounts(sanitized_txs, executed, loaded_txs);
+            self.update_stakes_cache(sanitized_txs, executed, loaded_txs);
+        update_stakes_cache_time.stop();
 
         // once committed there is no way to unroll
         write_time.stop();
@@ -4139,6 +4145,9 @@ impl Bank {
             sanitized_txs.len()
         );
         timings.store_us = timings.store_us.saturating_add(write_time.as_us());
+        timings.update_stakes_cache_us = timings
+            .update_stakes_cache_us
+            .saturating_add(update_stakes_cache_time.as_us());
         self.update_transaction_statuses(sanitized_txs, executed);
         let fee_collection_results =
             self.filter_program_errors_and_collect_fee(sanitized_txs, executed);
@@ -5656,8 +5665,8 @@ impl Bank {
         self.epoch_schedule.get_leader_schedule_epoch(slot)
     }
 
-    /// a bank-level cache of vote accounts
-    fn update_cached_accounts(
+    /// a bank-level cache of vote accounts and stake delegation info
+    fn update_stakes_cache(
         &self,
         txs: &[SanitizedTransaction],
         res: &[TransactionExecutionResult],
