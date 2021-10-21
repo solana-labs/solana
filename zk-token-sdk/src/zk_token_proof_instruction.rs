@@ -4,7 +4,7 @@ use {
     bytemuck::{bytes_of, Pod},
     num_derive::{FromPrimitive, ToPrimitive},
     num_traits::{FromPrimitive, ToPrimitive},
-    solana_program::{instruction::Instruction, pubkey::Pubkey},
+    solana_program::instruction::Instruction,
 };
 
 #[derive(Clone, Copy, Debug, FromPrimitive, ToPrimitive, PartialEq)]
@@ -52,12 +52,8 @@ impl ProofInstruction {
         }
     }
 
-    pub fn decode_type(program_id: &Pubkey, input: &[u8]) -> Option<Self> {
-        if *program_id != crate::zk_token_proof_program::id() || input.is_empty() {
-            None
-        } else {
-            FromPrimitive::from_u8(input[0])
-        }
+    pub fn decode_type(input: &[u8]) -> Option<Self> {
+        FromPrimitive::from_u8(input[0])
     }
 
     pub fn decode_data<T: Pod>(input: &[u8]) -> Option<&T> {
