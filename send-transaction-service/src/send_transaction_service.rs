@@ -143,6 +143,7 @@ impl SendTransactionService {
                     Err(RecvTimeoutError::Disconnected) => break,
                     Err(RecvTimeoutError::Timeout) => {}
                     Ok(transaction_info) => {
+                        inc_new_counter_info!("send_transaction_service-recv-tx", 1);
                         let addresses = leader_info.as_ref().map(|leader_info| {
                             leader_info.get_leader_tpus(config.leader_forward_count)
                         });
