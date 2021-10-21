@@ -389,7 +389,7 @@ impl ClusterInfoVoteListener {
             let would_be_leader = poh_recorder
                 .lock()
                 .unwrap()
-                .would_be_leader(20 * DEFAULT_TICKS_PER_SLOT);
+                .would_be_leader(3000 * DEFAULT_TICKS_PER_SLOT);
             if let Err(e) = verified_vote_packets.receive_and_process_vote_packets(
                 &verified_vote_label_packets_receiver,
                 &mut update_version,
