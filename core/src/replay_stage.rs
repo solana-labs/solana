@@ -2,7 +2,7 @@
 use {
     crate::{
         ancestor_hashes_service::AncestorHashesReplayUpdateSender,
-        broadcast_stage::RetransmitSlotsSender,
+        broadcast_stage::{RetransmitSlotsContext, RetransmitSlotsSender},
         cache_block_meta_service::CacheBlockMetaSender,
         cluster_info_vote_listener::{
             GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver, VoteTracker,
@@ -33,6 +33,7 @@ use {
         blockstore::Blockstore,
         blockstore_processor::{self, BlockstoreProcessorError, TransactionStatusSender},
         leader_schedule_cache::LeaderScheduleCache,
+        shred::SHRED_RETRY_TRANSMISSION_ITERATION_MAX,
     },
     solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_info,
@@ -108,6 +109,12 @@ impl Drop for Finalizer {
 struct LastVoteRefreshTime {
     last_refresh_time: Instant,
     last_print_time: Instant,
+}
+
+struct LastRetransmitInfo {
+    slot: Slot,
+    time: Instant,
+    retry_iteration: u8,
 }
 
 #[derive(Default)]
@@ -373,6 +380,7 @@ impl ReplayStage {
                 let mut last_reset = Hash::default();
                 let mut partition_exists = false;
                 let mut skipped_slots_info = SkippedSlotsInfo::default();
+                let mut last_retransmit_retry_info = LastRetransmitInfo { slot: 0, time: Instant::now(), retry_iteration: 0 };
                 let mut replay_timing = ReplayTiming::default();
                 let mut duplicate_slots_tracker = DuplicateSlotsTracker::default();
                 let mut gossip_duplicate_confirmed_slots: GossipDuplicateConfirmedSlots = GossipDuplicateConfirmedSlots::default();
@@ -760,6 +768,56 @@ impl ReplayStage {
                     // may add a bank that will not included in either of these maps.
                     drop(ancestors);
                     drop(descendants);
+
+
+                    {
+                        //TODO retransmitting here?
+
+                        let (_reached_leader_slot, _grace_ticks, _poh_slot, parent_slot) =
+                            poh_recorder.lock().unwrap().reached_leader_slot();
+
+                        let latest_unconfirmed_leader_slot = progress.get_latest_leader_slot(parent_slot)
+                            .expect("In order for propagated check to fail, latest leader must exist in progress map");
+
+                        let bank = bank_forks
+                            .read()
+                            .unwrap()
+                            .get(latest_unconfirmed_leader_slot)
+                            .expect(
+                                "In order for propagated check to fail, \
+                                    latest leader must exist in progress map, and thus also in BankForks",
+                            )
+                            .clone();
+
+                        if last_retransmit_retry_info.slot == bank.slot() {
+                            error!("retransmit slot mached bank: {}", bank.slot());
+                            let time_offset = 2_u64.pow(last_retransmit_retry_info.retry_iteration.into()) * 5;
+                            if last_retransmit_retry_info.time.elapsed().as_secs() > time_offset {
+                                error!("retransmit time limit reached for iter {}, slot {}",
+                                    last_retransmit_retry_info.retry_iteration,
+                                    bank.slot(),
+                                );
+                                let iter = last_retransmit_retry_info.retry_iteration;
+                                if last_retransmit_retry_info.retry_iteration < SHRED_RETRY_TRANSMISSION_ITERATION_MAX {
+                                    last_retransmit_retry_info.retry_iteration = last_retransmit_retry_info.retry_iteration + 1;
+                                }
+                                last_retransmit_retry_info.time = Instant::now();
+
+                                let ctx = RetransmitSlotsContext {
+                                    retry_iteration: iter,
+                                };
+                                datapoint_info!("replay_stage-retransmit", ("slot", bank.slot(), i64));
+                                let _ = retransmit_slots_sender.send((bank.clone(), Some(ctx)));
+                            }
+                        } else {
+                            last_retransmit_retry_info.slot = bank.slot();
+                            last_retransmit_retry_info.time = Instant::now();
+                            last_retransmit_retry_info.retry_iteration = 0;
+                            error!("setting start of retransmit retry for {}", bank.slot());
+                        }
+                    }
+
+// ------------------> TODO this may retransmit
                     if !tpu_has_bank {
                         Self::maybe_start_leader(
                             &my_pubkey,
@@ -1447,8 +1505,7 @@ impl ReplayStage {
                     // TODO check for retransmit
 
                     datapoint_info!("replay_stage-retransmit", ("slot", bank.slot(), i64),);
-                    let _ = retransmit_slots_sender
-                        .send(vec![(bank.slot(), bank.clone())].into_iter().collect());
+                    let _ = retransmit_slots_sender.send((bank.clone(), None));
                 }
                 return;
             }

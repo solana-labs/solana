@@ -283,7 +283,8 @@ pub struct ShredCommonHeader {
     pub extended1: Option<u8>,
 }
 
-pub const TRANSMISSION_ITERATION_MASK: u8 = 0b0000_1111;
+const TRANSMISSION_ITERATION_MASK: u8 = 0b0000_1111;
+pub const SHRED_RETRY_TRANSMISSION_ITERATION_MAX: u8 = 15;
 
 impl ShredCommonHeader {
     pub fn size(&self) -> usize {

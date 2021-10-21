@@ -18,7 +18,12 @@ use {
     },
     itertools::Itertools,
     solana_gossip::cluster_info::{ClusterInfo, ClusterInfoError, DATA_PLANE_FANOUT},
-    solana_ledger::{blockstore::Blockstore, shred::Shred},
+    solana_ledger::{
+        blockstore::Blockstore,
+        shred::{
+            Shred, ShredCommonHeaderVersion, Shredder, SHRED_RETRY_TRANSMISSION_ITERATION_MAX,
+        },
+    },
     solana_measure::measure::Measure,
     solana_metrics::{inc_new_counter_error, inc_new_counter_info},
     solana_poh::poh_recorder::WorkingBankEntry,
@@ -55,9 +60,15 @@ mod standard_broadcast_run;
 const CLUSTER_NODES_CACHE_NUM_EPOCH_CAP: usize = 8;
 const CLUSTER_NODES_CACHE_TTL: Duration = Duration::from_secs(5);
 
+pub struct RetransmitSlotsContext {
+    pub retry_iteration: u8,
+}
+
 pub(crate) const NUM_INSERT_THREADS: usize = 2;
-pub(crate) type RetransmitSlotsSender = CrossbeamSender<HashMap<Slot, Arc<Bank>>>;
-pub(crate) type RetransmitSlotsReceiver = CrossbeamReceiver<HashMap<Slot, Arc<Bank>>>;
+pub(crate) type RetransmitSlotsSender =
+    CrossbeamSender<(Arc<Bank>, Option<RetransmitSlotsContext>)>;
+pub(crate) type RetransmitSlotsReceiver =
+    CrossbeamReceiver<(Arc<Bank>, Option<RetransmitSlotsContext>)>;
 pub(crate) type RecordReceiver = Receiver<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>;
 pub(crate) type TransmitReceiver = Receiver<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>;
 
@@ -315,59 +326,75 @@ impl BroadcastStage {
         }
 
         let blockstore = blockstore.clone();
-        let retransmit_thread = Builder::new()
-            .name("solana-broadcaster-retransmit".to_string())
-            .spawn(move || loop {
-                if let Some(res) = Self::handle_error(
-                    Self::check_retransmit_signals(
-                        &blockstore,
-                        &retransmit_slots_receiver,
-                        &socket_sender,
-                    ),
-                    "solana-broadcaster-retransmit-check_retransmit_signals",
-                ) {
-                    return res;
-                }
-            })
-            .unwrap();
+        let retransmit_thread = {
+            let cluster_info = cluster_info.clone();
+            Builder::new()
+                .name("solana-broadcaster-retransmit".to_string())
+                .spawn(move || loop {
+                    if let Some(res) = Self::handle_error(
+                        Self::check_retransmit_signals(
+                            &cluster_info,
+                            &blockstore,
+                            &retransmit_slots_receiver,
+                            &socket_sender,
+                        ),
+                        "solana-broadcaster-retransmit-check_retransmit_signals",
+                    ) {
+                        return res;
+                    }
+                })
+                .unwrap()
+        };
 
         thread_hdls.push(retransmit_thread);
         Self { thread_hdls }
     }
 
+    fn update_shreds_for_retransmit(
+        shreds: &mut Vec<Shred>,
+        ctx: &RetransmitSlotsContext,
+        keypair: &Keypair,
+    ) {
+        assert!(ctx.retry_iteration <= SHRED_RETRY_TRANSMISSION_ITERATION_MAX);
+        error!(
+            "updating {} shreds with iter: {}",
+            shreds.len(),
+            ctx.retry_iteration
+        );
+        for shred in shreds.iter_mut() {
+            if shred.common_header.header_version() == ShredCommonHeaderVersion::V2 {
+                shred.set_transmission_iteration(ctx.retry_iteration);
+                Shredder::sign_shred(keypair, shred);
+            }
+        }
+    }
+
     fn check_retransmit_signals(
+        cluster_info: &ClusterInfo,
         blockstore: &Blockstore,
         retransmit_slots_receiver: &RetransmitSlotsReceiver,
         socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
     ) -> Result<()> {
         let timer = Duration::from_millis(100);
+        let keypair = cluster_info.keypair().clone();
 
         // Check for a retransmit signal
-        let mut retransmit_slots = retransmit_slots_receiver.recv_timeout(timer)?;
-        while let Ok(new_retransmit_slots) = retransmit_slots_receiver.try_recv() {
-            retransmit_slots.extend(new_retransmit_slots);
+        let mut retransmit_vec = vec![retransmit_slots_receiver.recv_timeout(timer)?];
+        while let Ok(new_retransmit) = retransmit_slots_receiver.try_recv() {
+            retransmit_vec.push(new_retransmit);
         }
 
-        for (_, bank) in retransmit_slots.iter() {
+        for (bank, ctx) in retransmit_vec.iter() {
             let slot = bank.slot();
             let mut data_shreds = blockstore
                 .get_data_shreds_for_slot(slot, 0)
                 .expect("My own shreds must be reconstructable");
             debug_assert!(data_shreds.iter().all(|shred| shred.slot() == slot));
 
-            // TODO send retry iteration
-            // update iteration in shreds
-            for shred in data_shreds.iter_mut() {
-                if let Some(iter) = shred.transmission_iteration() {
-                    if iter < 16 {
-                        // TODO pass expected iter
-                        shred.set_transmission_iteration(iter + 1);
-                        //Shredder::sign_shred(keypayr, &shred);
-                    }
-                }
-            }
-
             if !data_shreds.is_empty() {
+                if let Some(ctx) = ctx {
+                    Self::update_shreds_for_retransmit(&mut data_shreds, ctx, &keypair);
+                }
                 let data_shreds = Arc::new(data_shreds);
                 socket_sender.send((data_shreds, None))?;
             }
@@ -377,18 +404,10 @@ impl BroadcastStage {
                 .expect("My own shreds must be reconstructable");
             debug_assert!(coding_shreds.iter().all(|shred| shred.slot() == slot));
 
-            for shred in coding_shreds.iter_mut() {
-                if let Some(iter) = shred.transmission_iteration() {
-                    if iter < 16 {
-                        shred.set_transmission_iteration(iter + 1);
-                        // todo sign shred
-                    }
-                }
-            }
-
-            // TODO send retry iteration
-
             if !coding_shreds.is_empty() {
+                if let Some(ctx) = ctx {
+                    Self::update_shreds_for_retransmit(&mut coding_shreds, ctx, &keypair);
+                }
                 let coding_shreds = Arc::new(coding_shreds);
                 socket_sender.send((coding_shreds, None))?;
             }
