@@ -932,6 +932,8 @@ pub fn confirm_slot(
         bank.verify_tx_signatures_len_enabled(),
         recyclers.clone(),
     );
+    // todo: we should use _b_finished. Also, we're not taking advatnage of the async nature of start_verify_and_hash_transactions
+    // is there something else we can do in the meantime?
     let _b_finished = check_result.finish_verify();
     let check_result = check_result.entries();
     if check_result.is_none() {
