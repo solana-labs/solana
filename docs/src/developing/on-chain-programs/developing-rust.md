@@ -33,7 +33,7 @@ Solana Rust programs may depend directly on each other in order to gain access
 to instruction helpers when making [cross-program invocations](developing/programming-model/calling-between-programs.md#cross-program-invocations).
 When doing so it's important to not pull in the dependent program's entrypoint
 symbols because they may conflict with the program's own. To avoid this,
-programs should define an `exclude_entrypoint` feature in `Cargo.toml` and use
+programs should define an `no-entrypoint` feature in `Cargo.toml` and use
 to exclude the entrypoint.
 
 - [Define the
@@ -42,7 +42,7 @@ to exclude the entrypoint.
   entrypoint](https://github.com/solana-labs/solana-program-library/blob/fca9836a2c8e18fc7e3595287484e9acd60a8f64/token/program/src/lib.rs#L12)
 
 Then when other programs include this program as a dependency, they should do so
-using the `exclude_entrypoint` feature.
+using the `no-entrypoint` feature.
 
 - [Include without
   entrypoint](https://github.com/solana-labs/solana-program-library/blob/fca9836a2c8e18fc7e3595287484e9acd60a8f64/token-swap/program/Cargo.toml#L22)
