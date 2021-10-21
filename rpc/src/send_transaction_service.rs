@@ -23,6 +23,12 @@ use {
 
 /// Maximum size of the transaction queue
 const MAX_TRANSACTION_QUEUE_SIZE: usize = 10_000; // This seems like a lot but maybe it needs to be bigger one day
+/// Default retry interval
+const DEFAULT_RETRY_RATE_MS: u64 = 2_000;
+/// Default number of leaders to forward transactions to
+const DEFAULT_LEADER_FORWARD_COUNT: u64 = 2;
+/// Default max number of time the service will retry broadcast
+const DEFAULT_SERVICE_MAX_RETRIES: usize = usize::MAX;
 
 pub struct SendTransactionService {
     thread: JoinHandle<()>,
@@ -108,6 +114,25 @@ struct ProcessTransactionsResult {
     retained: u64,
 }
 
+#[derive(Clone, Debug)]
+pub struct Config {
+    pub retry_rate_ms: u64,
+    pub leader_forward_count: u64,
+    pub default_max_retries: Option<usize>,
+    pub service_max_retries: usize,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            retry_rate_ms: DEFAULT_RETRY_RATE_MS,
+            leader_forward_count: DEFAULT_LEADER_FORWARD_COUNT,
+            default_max_retries: None,
+            service_max_retries: DEFAULT_SERVICE_MAX_RETRIES,
+        }
+    }
+}
+
 impl SendTransactionService {
     pub fn new(
         tpu_address: SocketAddr,
@@ -117,13 +142,27 @@ impl SendTransactionService {
         retry_rate_ms: u64,
         leader_forward_count: u64,
     ) -> Self {
+        let config = Config {
+            retry_rate_ms,
+            leader_forward_count,
+            ..Config::default()
+        };
+        Self::new_with_config(tpu_address, bank_forks, leader_info, receiver, config)
+    }
+
+    pub fn new_with_config(
+        tpu_address: SocketAddr,
+        bank_forks: &Arc<RwLock<BankForks>>,
+        leader_info: Option<LeaderInfo>,
+        receiver: Receiver<TransactionInfo>,
+        config: Config,
+    ) -> Self {
         let thread = Self::retry_thread(
             tpu_address,
             receiver,
             bank_forks.clone(),
             leader_info,
-            retry_rate_ms,
-            leader_forward_count,
+            config,
         );
         Self { thread }
     }
@@ -133,8 +172,7 @@ impl SendTransactionService {
         receiver: Receiver<TransactionInfo>,
         bank_forks: Arc<RwLock<BankForks>>,
         mut leader_info: Option<LeaderInfo>,
-        retry_rate_ms: u64,
-        leader_forward_count: u64,
+        config: Config,
     ) -> JoinHandle<()> {
         let mut last_status_check = Instant::now();
         let mut last_leader_refresh = Instant::now();
@@ -148,13 +186,13 @@ impl SendTransactionService {
         Builder::new()
             .name("send-tx-sv2".to_string())
             .spawn(move || loop {
-                match receiver.recv_timeout(Duration::from_millis(1000.min(retry_rate_ms))) {
+                match receiver.recv_timeout(Duration::from_millis(1000.min(config.retry_rate_ms))) {
                     Err(RecvTimeoutError::Disconnected) => break,
                     Err(RecvTimeoutError::Timeout) => {}
                     Ok(transaction_info) => {
-                        let addresses = leader_info
-                            .as_ref()
-                            .map(|leader_info| leader_info.get_leader_tpus(leader_forward_count));
+                        let addresses = leader_info.as_ref().map(|leader_info| {
+                            leader_info.get_leader_tpus(config.leader_forward_count)
+                        });
                         let addresses = addresses
                             .map(|address_list| {
                                 if address_list.is_empty() {
@@ -179,7 +217,7 @@ impl SendTransactionService {
                     }
                 }
 
-                if last_status_check.elapsed().as_millis() as u64 >= retry_rate_ms {
+                if last_status_check.elapsed().as_millis() as u64 >= config.retry_rate_ms {
                     if !transactions.is_empty() {
                         datapoint_info!(
                             "send_transaction_service-queue-size",
@@ -200,7 +238,7 @@ impl SendTransactionService {
                             &tpu_address,
                             &mut transactions,
                             &leader_info,
-                            leader_forward_count,
+                            &config,
                         );
                     }
                     last_status_check = Instant::now();
@@ -222,7 +260,7 @@ impl SendTransactionService {
         tpu_address: &SocketAddr,
         transactions: &mut HashMap<Signature, TransactionInfo>,
         leader_info: &Option<LeaderInfo>,
-        leader_forward_count: u64,
+        config: &Config,
     ) -> ProcessTransactionsResult {
         let mut result = ProcessTransactionsResult::default();
 
@@ -253,7 +291,13 @@ impl SendTransactionService {
                 inc_new_counter_info!("send_transaction_service-expired", 1);
                 return false;
             }
-            if let Some(max_retries) = transaction_info.max_retries {
+
+            let max_retries = transaction_info
+                .max_retries
+                .or(config.default_max_retries)
+                .map(|max_retries| max_retries.min(config.service_max_retries));
+
+            if let Some(max_retries) = max_retries {
                 if transaction_info.retries >= max_retries {
                     info!("Dropping transaction due to max retries: {}", signature);
                     result.max_retries_elapsed += 1;
@@ -270,9 +314,9 @@ impl SendTransactionService {
                     result.retried += 1;
                     transaction_info.retries += 1;
                     inc_new_counter_info!("send_transaction_service-retry", 1);
-                    let addresses = leader_info
-                        .as_ref()
-                        .map(|leader_info| leader_info.get_leader_tpus(leader_forward_count));
+                    let addresses = leader_info.as_ref().map(|leader_info| {
+                        leader_info.get_leader_tpus(config.leader_forward_count)
+                    });
                     let addresses = addresses
                         .map(|address_list| {
                             if address_list.is_empty() {
@@ -372,7 +416,10 @@ mod test {
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let tpu_address = "127.0.0.1:0".parse().unwrap();
-        let leader_forward_count = 1;
+        let config = Config {
+            leader_forward_count: 1,
+            ..Config::default()
+        };
 
         let root_bank = Arc::new(Bank::new_from_parent(
             &bank_forks.read().unwrap().working_bank(),
@@ -418,7 +465,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &None,
-            leader_forward_count,
+            &config,
         );
         assert!(transactions.is_empty());
         assert_eq!(
@@ -447,7 +494,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &None,
-            leader_forward_count,
+            &config,
         );
         assert!(transactions.is_empty());
         assert_eq!(
@@ -476,7 +523,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &None,
-            leader_forward_count,
+            &config,
         );
         assert!(transactions.is_empty());
         assert_eq!(
@@ -505,7 +552,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &None,
-            leader_forward_count,
+            &config,
         );
         assert_eq!(transactions.len(), 1);
         assert_eq!(
@@ -535,7 +582,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &None,
-            leader_forward_count,
+            &config,
         );
         assert_eq!(transactions.len(), 1);
         assert_eq!(
@@ -575,7 +622,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &None,
-            leader_forward_count,
+            &config,
         );
         assert_eq!(transactions.len(), 1);
         assert_eq!(
@@ -593,7 +640,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &None,
-            leader_forward_count,
+            &config,
         );
         assert!(transactions.is_empty());
         assert_eq!(
@@ -614,7 +661,10 @@ mod test {
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let tpu_address = "127.0.0.1:0".parse().unwrap();
-        let leader_forward_count = 1;
+        let config = Config {
+            leader_forward_count: 1,
+            ..Config::default()
+        };
 
         let root_bank = Arc::new(Bank::new_from_parent(
             &bank_forks.read().unwrap().working_bank(),
@@ -673,7 +723,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &None,
-            leader_forward_count,
+            &config,
         );
         assert!(transactions.is_empty());
         assert_eq!(
@@ -701,7 +751,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &None,
-            leader_forward_count,
+            &config,
         );
         assert!(transactions.is_empty());
         assert_eq!(
@@ -731,7 +781,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &None,
-            leader_forward_count,
+            &config,
         );
         assert!(transactions.is_empty());
         assert_eq!(
@@ -759,7 +809,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &None,
-            leader_forward_count,
+            &config,
         );
         assert!(transactions.is_empty());
         assert_eq!(
@@ -788,7 +838,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &None,
-            leader_forward_count,
+            &config,
         );
         assert!(transactions.is_empty());
         assert_eq!(
@@ -817,7 +867,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &None,
-            leader_forward_count,
+            &config,
         );
         assert_eq!(transactions.len(), 1);
         assert_eq!(
@@ -847,7 +897,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &None,
-            leader_forward_count,
+            &config,
         );
         assert_eq!(transactions.len(), 1);
         assert_eq!(
@@ -875,7 +925,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &None,
-            leader_forward_count,
+            &config,
         );
         assert_eq!(transactions.len(), 0);
         assert_eq!(
