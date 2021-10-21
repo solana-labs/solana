@@ -70,7 +70,7 @@ impl Pedersen {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Zeroize)]
+#[derive(Serialize, Deserialize, Default, Clone, Debug, Zeroize)]
 #[zeroize(drop)]
 pub struct PedersenOpening(pub(crate) Scalar);
 impl PedersenOpening {
@@ -104,12 +104,6 @@ impl PartialEq for PedersenOpening {
 impl ConstantTimeEq for PedersenOpening {
     fn ct_eq(&self, other: &Self) -> Choice {
         self.0.ct_eq(&other.0)
-    }
-}
-
-impl Default for PedersenOpening {
-    fn default() -> Self {
-        PedersenOpening(Scalar::default())
     }
 }
 

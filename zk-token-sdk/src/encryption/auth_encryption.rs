@@ -97,7 +97,7 @@ pub type Nonce = [u8; 12];
 pub type Ciphertext = [u8; 24];
 
 /// Authenticated encryption nonce and ciphertext
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct AeCiphertext {
     pub nonce: Nonce,
     pub ciphertext: Ciphertext,
@@ -126,15 +126,6 @@ impl AeCiphertext {
             nonce: *nonce,
             ciphertext: *ciphertext,
         })
-    }
-}
-
-impl Default for AeCiphertext {
-    fn default() -> Self {
-        AeCiphertext {
-            nonce: [0_u8; 12],
-            ciphertext: [0_u8; 24],
-        }
     }
 }
 
