@@ -278,7 +278,7 @@ pub mod tests {
             slot0
         );
 
-        assert_eq!(notifier.is_startup_done.load(Ordering::Relaxed), true);
+        assert!(notifier.is_startup_done.load(Ordering::Relaxed));
     }
 
     #[test]
@@ -372,7 +372,7 @@ pub mod tests {
             notifier.accounts_at_snapshot_restore.get(&key3).unwrap()[0].0,
             slot1
         );
-        assert_eq!(notifier.is_startup_done.load(Ordering::Relaxed), true);
+        assert!(notifier.is_startup_done.load(Ordering::Relaxed));
     }
 
     #[test]
