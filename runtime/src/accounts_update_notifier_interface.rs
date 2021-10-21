@@ -12,6 +12,9 @@ pub trait AccountsUpdateNotifierInterface: std::fmt::Debug {
     /// from a snapshot.
     fn notify_account_restore_from_snapshot(&self, slot: Slot, account: &StoredAccountMeta);
 
+    /// Notified when all accounts have been notified when restoring from a snapshot.
+    fn notify_end_of_restore_from_snapshot(&self);
+
     /// Notified when a slot is optimistically confirmed
     fn notify_slot_confirmed(&self, slot: Slot, parent: Option<Slot>);
 

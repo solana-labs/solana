@@ -241,6 +241,29 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
 
         Ok(())
     }
+
+    fn notify_end_of_startup(&mut self) -> Result<()> {
+        info!("Notifying the end of startup for accounts notifications");
+        match &mut self.client {
+            None => {
+                return Err(AccountsDbPluginError::Custom(Box::new(
+                    AccountsDbPluginPostgresError::DataStoreConnectionError {
+                        msg: "There is no connection to the PostgreSQL database.".to_string(),
+                    },
+                )));
+            }
+            Some(client) => {
+                let result = { client.notify_end_of_startup() };
+
+                if let Err(err) = result {
+                    return Err(AccountsDbPluginError::SlotStatusUpdateError{
+                        msg: format!("Failed to notify the end of startup for accounts notifications. Error: {:?}", err)
+                    });
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 impl AccountsDbPluginPostgres {

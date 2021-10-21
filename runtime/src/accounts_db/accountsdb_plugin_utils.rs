@@ -50,6 +50,9 @@ impl AccountsDb {
             self.notify_accounts_in_slot(slot, &mut notified_accounts, &mut notify_stats);
         }
 
+        let accounts_update_notifier = self.accounts_update_notifier.as_ref().unwrap();
+        let notifier = &accounts_update_notifier.read().unwrap();
+        notifier.notify_end_of_restore_from_snapshot();
         notify_stats.report();
     }
 

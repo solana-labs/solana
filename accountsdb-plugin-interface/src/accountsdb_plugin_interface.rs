@@ -85,6 +85,9 @@ pub trait AccountsDbPlugin: Any + Send + Sync + std::fmt::Debug {
         is_startup: bool,
     ) -> Result<()>;
 
+    /// Called when all accounts are notified of during startup.
+    fn notify_end_of_startup(&mut self) -> Result<()>;
+
     /// Called when a slot status is updated
     fn update_slot_status(
         &mut self,
