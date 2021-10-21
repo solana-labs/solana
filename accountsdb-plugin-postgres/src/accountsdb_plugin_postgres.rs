@@ -229,7 +229,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                 )));
             }
             Some(client) => {
-                let result = { client.update_slot_status(slot, parent, status) };
+                let result = client.update_slot_status(slot, parent, status);
 
                 if let Err(err) = result {
                     return Err(AccountsDbPluginError::SlotStatusUpdateError{
@@ -253,7 +253,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                 )));
             }
             Some(client) => {
-                let result = { client.notify_end_of_startup() };
+                let result = client.notify_end_of_startup();
 
                 if let Err(err) = result {
                     return Err(AccountsDbPluginError::SlotStatusUpdateError{
