@@ -692,7 +692,7 @@ impl ParallelPostgresClient {
 
     pub fn notify_end_of_startup(&mut self) -> Result<(), AccountsDbPluginError> {
         info!("Notifying the end of startup");
-        while self.sender.len() != 0 {
+        while !self.sender.is_empty() {
             sleep(Duration::from_millis(100));
         }
         self.is_startup_done.store(true, Ordering::Relaxed);
