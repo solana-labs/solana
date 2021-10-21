@@ -37,7 +37,7 @@ pub fn process_instruction(
         return Err(InstructionError::InvalidAccountOwner);
     }
 
-    let signers = get_signers(&keyed_accounts[1..]);
+    let signers = get_signers(&keyed_accounts[first_instruction_account..]);
     match limited_deserialize(data)? {
         StakeInstruction::Initialize(authorized, lockup) => me.initialize(
             &authorized,
@@ -330,7 +330,7 @@ mod tests {
         account::{self, Account, AccountSharedData, WritableAccount},
         instruction::{AccountMeta, Instruction},
         keyed_account::create_keyed_accounts_unified,
-        process_instruction::{mock_set_sysvar, MockInvokeContext},
+        process_instruction::MockInvokeContext,
         pubkey::Pubkey,
         rent::Rent,
         stake::{
@@ -338,7 +338,7 @@ mod tests {
             instruction::{self, LockupArgs},
             state::{Authorized, Lockup, StakeAuthorize},
         },
-        sysvar::stake_history::StakeHistory,
+        sysvar::{stake_history::StakeHistory, Sysvar},
     };
     use std::{cell::RefCell, rc::Rc, str::FromStr};
 
@@ -442,12 +442,12 @@ mod tests {
                 &processor_id,
                 create_keyed_accounts_unified(&keyed_accounts),
             );
-            mock_set_sysvar(
-                &mut invoke_context,
-                sysvar::clock::id(),
-                sysvar::clock::Clock::default(),
-            )
-            .unwrap();
+            let mut data = Vec::with_capacity(sysvar::clock::Clock::size_of());
+            bincode::serialize_into(&mut data, &sysvar::clock::Clock::default()).unwrap();
+            invoke_context
+                .get_sysvars()
+                .borrow_mut()
+                .push((sysvar::clock::id(), Some(Rc::new(data))));
             super::process_instruction(1, &instruction.data, &mut invoke_context)
         }
     }
@@ -1100,11 +1100,11 @@ mod tests {
         ];
         let mut invoke_context =
             MockInvokeContext::new(&id(), create_keyed_accounts_unified(&keyed_accounts));
-        let clock = Clock::default();
-        let mut data = vec![];
-        bincode::serialize_into(&mut data, &clock).unwrap();
+        let mut data = Vec::with_capacity(sysvar::clock::Clock::size_of());
+        bincode::serialize_into(&mut data, &sysvar::clock::Clock::default()).unwrap();
         invoke_context
-            .sysvars
+            .get_sysvars()
+            .borrow_mut()
             .push((sysvar::clock::id(), Some(Rc::new(data))));
 
         assert_eq!(

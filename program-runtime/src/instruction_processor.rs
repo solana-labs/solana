@@ -9,6 +9,7 @@ use solana_sdk::{
     },
     ic_msg,
     instruction::{Instruction, InstructionError},
+    keyed_account::keyed_account_at_index,
     message::Message,
     process_instruction::{Executor, InvokeContext, ProcessInstructionWithContext},
     pubkey::Pubkey,
@@ -355,7 +356,8 @@ impl InstructionProcessor {
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
-        if let Some(root_account) = invoke_context.get_keyed_accounts()?.iter().next() {
+        let keyed_accounts = invoke_context.get_keyed_accounts()?;
+        if let Ok(root_account) = keyed_account_at_index(keyed_accounts, 0) {
             let root_id = root_account.unsigned_key();
             let owner_id = &root_account.owner()?;
             if solana_sdk::native_loader::check_id(owner_id) {
@@ -536,7 +538,8 @@ impl InstructionProcessor {
             caller_write_privileges = Vec::with_capacity(1 + keyed_account_indices_obsolete.len());
             caller_write_privileges.push(false);
             for index in keyed_account_indices_obsolete.iter() {
-                caller_write_privileges.push(caller_keyed_accounts[*index].is_writable());
+                caller_write_privileges
+                    .push(keyed_account_at_index(caller_keyed_accounts, *index)?.is_writable());
             }
         };
         let mut account_indices = Vec::with_capacity(message.account_keys.len());
