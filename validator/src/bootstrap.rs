@@ -793,6 +793,30 @@ mod without_incremental_snapshots {
 mod with_incremental_snapshots {
     use super::*;
 
+    /// Struct to wrap the return value from get_rpc_node().  The `rpc_contact_info` is the peer to
+    /// download from, and `snapshot_hash` is the (optional) full and (optional) incremental
+    /// snapshots to download.
+    #[derive(Debug)]
+    struct GetRpcNodeResult {
+        rpc_contact_info: ContactInfo,
+        snapshot_hash: Option<SnapshotHash>,
+    }
+
+    /// Struct to wrap the peers & snapshot hashes together.
+    #[derive(Debug, PartialEq, Eq, Clone)]
+    struct PeerSnapshotHash {
+        rpc_contact_info: ContactInfo,
+        snapshot_hash: SnapshotHash,
+    }
+
+    /// A snapshot hash.  In this context (bootstrap *with* incremental snapshots), a snapshot hash
+    /// is _both_ a full snapshot hash and an (optional) incremental snapshot hash.
+    #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+    struct SnapshotHash {
+        full: (Slot, Hash),
+        incr: Option<(Slot, Hash)>,
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn rpc_bootstrap(
         node: &Node,
@@ -842,7 +866,10 @@ mod with_incremental_snapshots {
             if rpc_node_details.is_none() {
                 return;
             }
-            let (rpc_contact_info, snapshot_hashes) = rpc_node_details.unwrap();
+            let GetRpcNodeResult {
+                rpc_contact_info,
+                snapshot_hash,
+            } = rpc_node_details.unwrap();
 
             info!(
                 "Using RPC service from node {}: {:?}",
@@ -910,7 +937,7 @@ mod with_incremental_snapshots {
                     minimal_snapshot_download_speed,
                     maximum_snapshot_download_abort,
                     &mut download_abort_count,
-                    snapshot_hashes,
+                    snapshot_hash,
                     &rpc_contact_info,
                 )
             })
@@ -977,14 +1004,13 @@ mod with_incremental_snapshots {
     /// (1) try again, (2) change its full snapshot interval back to a standard/default value, or
     /// (3) disable downloading an incremental snapshot and instead download the highest full
     /// snapshot hash, regardless of compatibility.
-    #[allow(clippy::type_complexity)]
     fn get_rpc_node(
         cluster_info: &ClusterInfo,
         cluster_entrypoints: &[ContactInfo],
         validator_config: &ValidatorConfig,
         blacklisted_rpc_nodes: &mut HashSet<Pubkey>,
         bootstrap_config: &RpcBootstrapConfig,
-    ) -> Option<(ContactInfo, Option<((Slot, Hash), Option<(Slot, Hash)>)>)> {
+    ) -> Option<GetRpcNodeResult> {
         let mut blacklist_timeout = Instant::now();
         let mut newer_cluster_snapshot_timeout = None;
         let mut retry_reason = None;
@@ -1012,44 +1038,21 @@ mod with_incremental_snapshots {
                     continue;
                 } else {
                     let random_peer = &rpc_peers[thread_rng().gen_range(0, rpc_peers.len())];
-                    return Some((random_peer.clone(), None));
+                    return Some(GetRpcNodeResult {
+                        rpc_contact_info: random_peer.clone(),
+                        snapshot_hash: None,
+                    });
                 }
             }
 
-            let trusted_incremental_snapshot_hashes =
-                get_trusted_incremental_snapshot_hashes(cluster_info, validator_config);
-
-            let mut incremental_snapshot_hashes =
-                get_incremental_snapshot_hashes_from_eligible_peers(
-                    cluster_info,
-                    validator_config,
-                    bootstrap_config,
-                    &rpc_peers,
-                );
-
-            retain_trusted_incremental_snapshot_hashes(
-                &trusted_incremental_snapshot_hashes,
-                &mut incremental_snapshot_hashes,
+            let peer_snapshot_hashes = get_peer_snapshot_hashes(
+                cluster_info,
+                validator_config,
+                bootstrap_config,
+                &rpc_peers,
             );
 
-            retain_incremental_snapshot_hashes_with_a_multiple_of_full_snapshot_archive_interval(
-                validator_config
-                    .snapshot_config
-                    .as_ref()
-                    .unwrap()
-                    .full_snapshot_archive_interval_slots,
-                &mut incremental_snapshot_hashes,
-            );
-
-            retain_incremental_snapshot_hashes_with_highest_full_snapshot_slot(
-                &mut incremental_snapshot_hashes,
-            );
-
-            retain_incremental_snapshot_hashes_with_highest_incremental_snapshot_slot(
-                &mut incremental_snapshot_hashes,
-            );
-
-            if incremental_snapshot_hashes.is_empty() {
+            if peer_snapshot_hashes.is_empty() {
                 match newer_cluster_snapshot_timeout {
                     None => newer_cluster_snapshot_timeout = Some(Instant::now()),
                     Some(newer_cluster_snapshot_timeout) => {
@@ -1069,44 +1072,85 @@ mod with_incremental_snapshots {
                 retry_reason = Some("No snapshots available".to_owned());
                 continue;
             } else {
-                let rpc_peers = incremental_snapshot_hashes
+                let rpc_peers = peer_snapshot_hashes
                     .iter()
-                    .map(|(rpc_peer, ..)| rpc_peer.id)
+                    .map(|peer_snapshot_hash| peer_snapshot_hash.rpc_contact_info.id)
                     .collect::<Vec<_>>();
-                let (final_rpc_peer, final_full_snapshot_hash, final_incremental_snapshot_hash) =
-                    get_final_peer_and_incremental_snapshot_hash(&incremental_snapshot_hashes);
+                let PeerSnapshotHash {
+                    rpc_contact_info: final_rpc_contact_info,
+                    snapshot_hash: final_snapshot_hash,
+                } = get_final_peer_snapshot_hash(&peer_snapshot_hashes);
                 info!(
                     "Highest available snapshot slot is {}, available from {} node{}: {:?}",
-                    final_incremental_snapshot_hash
+                    final_snapshot_hash
+                        .incr
                         .map(|(slot, _hash)| slot)
-                        .unwrap_or(final_full_snapshot_hash.0),
+                        .unwrap_or(final_snapshot_hash.full.0),
                     rpc_peers.len(),
                     if rpc_peers.len() > 1 { "s" } else { "" },
                     rpc_peers,
                 );
-                return Some((
-                    final_rpc_peer,
-                    Some((final_full_snapshot_hash, final_incremental_snapshot_hash)),
-                ));
+
+                return Some(GetRpcNodeResult {
+                    rpc_contact_info: final_rpc_contact_info,
+                    snapshot_hash: Some(final_snapshot_hash),
+                });
             }
         }
     }
 
-    /// Get the incremental snapshot hashes from trusted peers.
+    /// Get peer snapshot hashes
+    ///
+    /// The result is a vector of peers with snapshot hashes that:
+    /// 1. have a full snapshot slot that is a multiple of our full snapshot interval
+    /// 2. have the highest full snapshot slot
+    /// 3. have the highest incremental snapshot slot
+    fn get_peer_snapshot_hashes(
+        cluster_info: &ClusterInfo,
+        validator_config: &ValidatorConfig,
+        bootstrap_config: &RpcBootstrapConfig,
+        rpc_peers: &[ContactInfo],
+    ) -> Vec<PeerSnapshotHash> {
+        let trusted_snapshot_hashes = get_trusted_snapshot_hashes(cluster_info, validator_config);
+
+        let mut peer_snapshot_hashes = get_trusted_peer_snapshot_hashes(
+            cluster_info,
+            validator_config,
+            bootstrap_config,
+            rpc_peers,
+        );
+        retain_trusted_peer_snapshot_hashes(&trusted_snapshot_hashes, &mut peer_snapshot_hashes);
+        retain_peer_snapshot_hashes_with_a_multiple_of_full_snapshot_archive_interval(
+            validator_config
+                .snapshot_config
+                .as_ref()
+                .unwrap()
+                .full_snapshot_archive_interval_slots,
+            &mut peer_snapshot_hashes,
+        );
+        retain_peer_snapshot_hashes_with_highest_full_snapshot_slot(&mut peer_snapshot_hashes);
+        retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(
+            &mut peer_snapshot_hashes,
+        );
+
+        peer_snapshot_hashes
+    }
+
+    /// Get the snapshot hashes from trusted peers.
     ///
     /// The hashes are put into a map from full snapshot hash to a set of incremental snapshot
     /// hashes.  This map will be used as the golden hashes; when peers are queried for their
-    /// individual incremental snapshot hashes, their results will be checked against this map to
-    /// verify correctness.
+    /// individual snapshot hashes, their results will be checked against this map to verify
+    /// correctness.
     ///
     /// NOTE: Only a single full snashot hash is allowed per slot.  If somehow two trusted peers
     /// have a full snapshot hash with the same slot and _different_ hashes, the second will be
     /// skipped, and its incremental snapshot hashes will not be added to the map.
-    fn get_trusted_incremental_snapshot_hashes(
+    fn get_trusted_snapshot_hashes(
         cluster_info: &ClusterInfo,
         validator_config: &ValidatorConfig,
     ) -> HashMap<(Slot, Hash), HashSet<(Slot, Hash)>> {
-        let mut trusted_incremental_snapshot_hashes: HashMap<(Slot, Hash), HashSet<(Slot, Hash)>> =
+        let mut trusted_snapshot_hashes: HashMap<(Slot, Hash), HashSet<(Slot, Hash)>> =
             HashMap::new();
         validator_config
         .trusted_validators
@@ -1116,7 +1160,7 @@ mod with_incremental_snapshots {
             .iter()
             .for_each(|trusted_validator| {
                 if let Some(crds_value::IncrementalSnapshotHashes {base: full_snapshot_hash, hashes: incremental_snapshot_hashes, ..}) = cluster_info.get_incremental_snapshot_hashes_for_node(trusted_validator) {
-                    match trusted_incremental_snapshot_hashes.get_mut(&full_snapshot_hash) {
+                    match trusted_snapshot_hashes.get_mut(&full_snapshot_hash) {
                         Some(hashes) => {
                             // Do not add these hashes if there's already an incremental
                             // snapshot hash with this same slot, but with a _different_ hash.
@@ -1137,7 +1181,7 @@ mod with_incremental_snapshots {
                             // NOTE: There's no good reason for trusted validators to
                             // produce full snapshots at the same slot with different
                             // hashes, so this should not happen.
-                            if !trusted_incremental_snapshot_hashes.keys().any(
+                            if !trusted_snapshot_hashes.keys().any(
                                 |(slot, hash)| {
                                     slot == &full_snapshot_hash.0
                                         && hash != &full_snapshot_hash.1
@@ -1145,7 +1189,7 @@ mod with_incremental_snapshots {
                             ) {
                                 let mut hashes = HashSet::new();
                                 hashes.extend(incremental_snapshot_hashes);
-                                trusted_incremental_snapshot_hashes
+                                trusted_snapshot_hashes
                                     .insert(full_snapshot_hash, hashes);
                             } else {
                                 info!("Ignoring full snapshot hashes from trusted validator {} with a slot we've already seen (slot: {}), but a different hash.", trusted_validator, full_snapshot_hash.0);
@@ -1156,29 +1200,20 @@ mod with_incremental_snapshots {
             })
         });
 
-        trace!(
-            "incremental snapshot hashes from trusted peers: {:?}",
-            &trusted_incremental_snapshot_hashes
-        );
-        trusted_incremental_snapshot_hashes
+        trace!("trusted snapshot hashes: {:?}", &trusted_snapshot_hashes);
+        trusted_snapshot_hashes
     }
 
-    /// Get incremental snapshot hashes from all the eligible peers.  This fn will get only one
-    /// incremental snapshot hash per peer (the one with the highest slot).  This may be just a full
-    /// snapshot hash, or a combo full (i.e. base) snapshot hash and incremental snapshot hash.
-    ///
-    /// Returns a vector of tuples, which are:
-    /// - ContactInfo:          the rpc peer
-    /// - (Slot, Hash):         the base (i.e. full) snapshot hash
-    /// - Option<(Slot, Hash)>: the highest incremental snapshot hash, if one exists
-    #[allow(clippy::type_complexity)]
-    fn get_incremental_snapshot_hashes_from_eligible_peers(
+    /// Get trusted snapshot hashes from all the eligible peers.  This fn will get only one
+    /// snapshot hash per peer (the one with the highest slot).  This may be just a full snapshot
+    /// hash, or a combo full (i.e. base) snapshot hash and incremental snapshot hash.
+    fn get_trusted_peer_snapshot_hashes(
         cluster_info: &ClusterInfo,
         validator_config: &ValidatorConfig,
         bootstrap_config: &RpcBootstrapConfig,
         rpc_peers: &[ContactInfo],
-    ) -> Vec<(ContactInfo, (Slot, Hash), Option<(Slot, Hash)>)> {
-        let mut incremental_snapshot_hashes = Vec::new();
+    ) -> Vec<PeerSnapshotHash> {
+        let mut peer_snapshot_hashes = Vec::new();
         for rpc_peer in rpc_peers {
             if bootstrap_config.no_untrusted_rpc
                 && !is_trusted_validator(&rpc_peer.id, &validator_config.trusted_validators)
@@ -1199,11 +1234,13 @@ mod with_incremental_snapshots {
                         // either (1) the peer does not have incremental snapshots enabled, or (2) the
                         // peer has not generated any incremental snapshots yet.
                         hashes.last().map(|incremental_snapshot_hash| {
-                            incremental_snapshot_hashes.push((
-                                rpc_peer.clone(),
-                                base,
-                                Some(*incremental_snapshot_hash),
-                            ))
+                            peer_snapshot_hashes.push(PeerSnapshotHash {
+                                rpc_contact_info: rpc_peer.clone(),
+                                snapshot_hash: SnapshotHash {
+                                    full: base,
+                                    incr: Some(*incremental_snapshot_hash),
+                                },
+                            })
                         })
                     },
                 )
@@ -1212,173 +1249,139 @@ mod with_incremental_snapshots {
                 .or_else(|| {
                     cluster_info.get_snapshot_hash_for_node(&rpc_peer.id, |hashes| {
                         if let Some(full_snapshot_hash) = hashes.last() {
-                            incremental_snapshot_hashes.push((
-                                rpc_peer.clone(),
-                                *full_snapshot_hash,
-                                None,
-                            ))
+                            peer_snapshot_hashes.push(PeerSnapshotHash {
+                                rpc_contact_info: rpc_peer.clone(),
+                                snapshot_hash: SnapshotHash {
+                                    full: *full_snapshot_hash,
+                                    incr: None,
+                                },
+                            })
                         }
                     })
                 });
         }
 
-        trace!(
-            "incremental snapshot hashes from eligible peers: {:?}",
-            &incremental_snapshot_hashes
-        );
-        incremental_snapshot_hashes
+        trace!("peer snapshot hashes: {:?}", &peer_snapshot_hashes);
+        peer_snapshot_hashes
     }
 
-    /// Retain the incremental snapshot hashes that match a hash from a trusted peer
-    #[allow(clippy::type_complexity)]
-    fn retain_trusted_incremental_snapshot_hashes(
-        trusted_incremental_snapshot_hashes: &HashMap<(Slot, Hash), HashSet<(Slot, Hash)>>,
-        incremental_snapshot_hashes: &mut Vec<(ContactInfo, (Slot, Hash), Option<(Slot, Hash)>)>,
+    /// Retain the peer snapshot hashes that match a hash from the trusted snapshot hashes
+    fn retain_trusted_peer_snapshot_hashes(
+        trusted_snapshot_hashes: &HashMap<(Slot, Hash), HashSet<(Slot, Hash)>>,
+        peer_snapshot_hashes: &mut Vec<PeerSnapshotHash>,
     ) {
-        incremental_snapshot_hashes.retain(
-            |(_rpc_peer, full_snapshot_hash, incremental_snapshot_hash)| {
-                trusted_incremental_snapshot_hashes
-                    .get(full_snapshot_hash)
-                    .map(|trusted_incremental_hashes| {
-                        if incremental_snapshot_hash.is_none() {
-                            false
-                        } else {
-                            trusted_incremental_hashes
-                                .contains(incremental_snapshot_hash.as_ref().unwrap())
-                        }
-                    })
-                    .unwrap_or(false)
-            },
-        );
+        peer_snapshot_hashes.retain(|peer_snapshot_hash| {
+            trusted_snapshot_hashes
+                .get(&peer_snapshot_hash.snapshot_hash.full)
+                .map(|trusted_incremental_hashes| {
+                    if peer_snapshot_hash.snapshot_hash.incr.is_none() {
+                        false
+                    } else {
+                        trusted_incremental_hashes
+                            .contains(peer_snapshot_hash.snapshot_hash.incr.as_ref().unwrap())
+                    }
+                })
+                .unwrap_or(false)
+        });
 
         trace!(
-            "retain trusted incremental snapshot hashes: {:?}",
-            &incremental_snapshot_hashes
+            "retain trusted peer snapshot hashes: {:?}",
+            &peer_snapshot_hashes
         );
     }
 
-    /// Retain the incremental snapshot hashes with a full snapshot slot that is a multiple of the full
+    /// Retain the peer snapshot hashes with a full snapshot slot that is a multiple of the full
     /// snapshot archive interval
-    #[allow(clippy::type_complexity)]
-    fn retain_incremental_snapshot_hashes_with_a_multiple_of_full_snapshot_archive_interval(
+    fn retain_peer_snapshot_hashes_with_a_multiple_of_full_snapshot_archive_interval(
         full_snapshot_archive_interval: Slot,
-        incremental_snapshot_hashes: &mut Vec<(ContactInfo, (Slot, Hash), Option<(Slot, Hash)>)>,
+        peer_snapshot_hashes: &mut Vec<PeerSnapshotHash>,
     ) {
-        incremental_snapshot_hashes.retain(
-            |(_rpc_peer, full_snapshot_hash, _incremental_snapshot_hash)| {
-                full_snapshot_hash.0 % full_snapshot_archive_interval == 0
-            },
-        );
+        peer_snapshot_hashes.retain(|peer_snapshot_hash| {
+            peer_snapshot_hash.snapshot_hash.full.0 % full_snapshot_archive_interval == 0
+        });
 
         trace!(
-            "retain incremental snapshot hashes with a multiple of full snapshot archive interval: {:?}",
-            &incremental_snapshot_hashes
+            "retain peer snapshot hashes with a multiple of full snapshot archive interval: {:?}",
+            &peer_snapshot_hashes
         );
     }
 
-    /// Retain the incremental snapshot hashes with the highest full snapshot slot
-    #[allow(clippy::type_complexity)]
-    fn retain_incremental_snapshot_hashes_with_highest_full_snapshot_slot(
-        incremental_snapshot_hashes: &mut Vec<(ContactInfo, (Slot, Hash), Option<(Slot, Hash)>)>,
+    /// Retain the peer snapshot hashes with the highest full snapshot slot
+    fn retain_peer_snapshot_hashes_with_highest_full_snapshot_slot(
+        peer_snapshot_hashes: &mut Vec<PeerSnapshotHash>,
     ) {
         // retain the hashes with the highest full snapshot slot
         // do a two-pass algorithm
         // 1. find the full snapshot hash with the highest full snapshot slot
         // 2. retain elems with that full snapshot hash
         let mut highest_full_snapshot_hash = (Slot::MIN, Hash::default());
-        for (_rpc_peer, full_snapshot_hash, _incremental_snapshot_hash) in
-            incremental_snapshot_hashes.iter()
-        {
-            if full_snapshot_hash.0 > highest_full_snapshot_hash.0 {
-                highest_full_snapshot_hash = *full_snapshot_hash;
+        peer_snapshot_hashes.iter().for_each(|peer_snapshot_hash| {
+            if peer_snapshot_hash.snapshot_hash.full.0 > highest_full_snapshot_hash.0 {
+                highest_full_snapshot_hash = peer_snapshot_hash.snapshot_hash.full;
             }
-        }
+        });
 
-        incremental_snapshot_hashes.retain(
-            |(_rpc_peer, full_snapshot_hash, _incremental_snapshot_hash)| {
-                full_snapshot_hash == &highest_full_snapshot_hash
-            },
-        );
+        peer_snapshot_hashes.retain(|peer_snapshot_hash| {
+            peer_snapshot_hash.snapshot_hash.full == highest_full_snapshot_hash
+        });
 
         trace!(
-            "retain incremental snapshot hashes with highest full snapshot slot: {:?}",
-            &incremental_snapshot_hashes
+            "retain peer snapshot hashes with highest full snapshot slot: {:?}",
+            &peer_snapshot_hashes
         );
     }
 
-    /// Retain the incremental snapshot hashes with the highest incremental snapshot slot
-    #[allow(clippy::type_complexity)]
-    fn retain_incremental_snapshot_hashes_with_highest_incremental_snapshot_slot(
-        incremental_snapshot_hashes: &mut Vec<(ContactInfo, (Slot, Hash), Option<(Slot, Hash)>)>,
+    /// Retain the peer snapshot hashes with the highest incremental snapshot slot
+    fn retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(
+        peer_snapshot_hashes: &mut Vec<PeerSnapshotHash>,
     ) {
         let mut highest_incremental_snapshot_hash: Option<(Slot, Hash)> = None;
-        for (_rpc_peer, _full_snapshot_hash, incremental_snapshot_hash) in
-            incremental_snapshot_hashes.iter()
-        {
-            if incremental_snapshot_hash.is_none() {
-                continue;
-            }
-            let incremental_snapshot_hash = incremental_snapshot_hash.as_ref().unwrap();
-
-            if highest_incremental_snapshot_hash.is_none()
-                || incremental_snapshot_hash.0 > highest_incremental_snapshot_hash.unwrap().0
+        peer_snapshot_hashes.iter().for_each(|peer_snapshot_hash| {
+            if let Some(incremental_snapshot_hash) = peer_snapshot_hash.snapshot_hash.incr.as_ref()
             {
-                highest_incremental_snapshot_hash = Some(*incremental_snapshot_hash);
-            }
-        }
+                if highest_incremental_snapshot_hash.is_none()
+                    || incremental_snapshot_hash.0 > highest_incremental_snapshot_hash.unwrap().0
+                {
+                    highest_incremental_snapshot_hash = Some(*incremental_snapshot_hash);
+                }
+            };
+        });
 
-        incremental_snapshot_hashes.retain(
-            |(_rpc_peer, _full_snapshot_hash, incremental_snapshot_hash)| {
-                incremental_snapshot_hash == &highest_incremental_snapshot_hash
-            },
-        );
+        peer_snapshot_hashes.retain(|peer_snapshot_hash| {
+            peer_snapshot_hash.snapshot_hash.incr == highest_incremental_snapshot_hash
+        });
 
         trace!(
-            "retain incremental snapshot hashes with highest incremental snapshot slot: {:?}",
-            &incremental_snapshot_hashes
+            "retain peer snapshot hashes with highest incremental snapshot slot: {:?}",
+            &peer_snapshot_hashes
         );
     }
 
-    /// Get a final peer from the remaining incremental snapshot hashes.  At this point all the
-    /// snapshot hashes should (must) be the same, and only the peers are different.  Pick an element
-    /// from the vector at random and return it.
-    #[allow(clippy::type_complexity)]
-    fn get_final_peer_and_incremental_snapshot_hash(
-        incremental_snapshot_hashes: &[(ContactInfo, (Slot, Hash), Option<(Slot, Hash)>)],
-    ) -> (ContactInfo, (Slot, Hash), Option<(Slot, Hash)>) {
-        assert!(!incremental_snapshot_hashes.is_empty());
+    /// Get a final peer from the remaining peer snapshot hashes.  At this point all the snapshot
+    /// hashes should (must) be the same, and only the peers are different.  Pick an element from
+    /// the slice at random and return it.
+    fn get_final_peer_snapshot_hash(peer_snapshot_hashes: &[PeerSnapshotHash]) -> PeerSnapshotHash {
+        assert!(!peer_snapshot_hashes.is_empty());
 
         // pick a final rpc peer at random
-        let (final_rpc_peer, final_full_snapshot_hash, final_incremental_snapshot_hash) =
-            &incremental_snapshot_hashes
-                [thread_rng().gen_range(0, incremental_snapshot_hashes.len())];
+        let final_peer_snapshot_hash =
+            &peer_snapshot_hashes[thread_rng().gen_range(0, peer_snapshot_hashes.len())];
 
         // It is a programmer bug if the assert fires!  By the time this function is called, the
         // only remaining `incremental_snapshot_hashes` should all be the same.
         assert!(
-            incremental_snapshot_hashes.iter().all(
-                |(_, full_snapshot_hash, incremental_snapshot_hash)| {
-                    full_snapshot_hash == final_full_snapshot_hash
-                        && incremental_snapshot_hash == final_incremental_snapshot_hash
-                }
-            ),
+            peer_snapshot_hashes.iter().all(|peer_snapshot_hash| {
+                peer_snapshot_hash.snapshot_hash == final_peer_snapshot_hash.snapshot_hash
+            }),
             "To safely pick a peer at random, all the snapshot hashes must be the same"
         );
 
-        let final_peer_and_incremental_snapshot_hash = (
-            final_rpc_peer.clone(),
-            *final_full_snapshot_hash,
-            *final_incremental_snapshot_hash,
-        );
-        trace!(
-            "final peer and incremental snapshot hash: {:?}",
-            &final_peer_and_incremental_snapshot_hash
-        );
-        final_peer_and_incremental_snapshot_hash
+        trace!("final peer snapshot hash: {:?}", final_peer_snapshot_hash);
+        final_peer_snapshot_hash.clone()
     }
 
     /// Check to see if we can use our local snapshots, otherwise download newer ones.
-    #[allow(clippy::type_complexity, clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)]
     fn download_snapshots(
         snapshot_archives_dir: &Path,
         validator_config: &ValidatorConfig,
@@ -1389,13 +1392,16 @@ mod with_incremental_snapshots {
         minimal_snapshot_download_speed: f32,
         maximum_snapshot_download_abort: u64,
         download_abort_count: &mut u64,
-        snapshot_hashes: Option<((Slot, Hash), Option<(Slot, Hash)>)>,
+        snapshot_hash: Option<SnapshotHash>,
         rpc_contact_info: &ContactInfo,
     ) -> Result<(), String> {
-        if snapshot_hashes.is_none() {
+        if snapshot_hash.is_none() {
             return Ok(());
         }
-        let (full_snapshot_hash, incremental_snapshot_hash) = snapshot_hashes.unwrap();
+        let SnapshotHash {
+            full: full_snapshot_hash,
+            incr: incremental_snapshot_hash,
+        } = snapshot_hash.unwrap();
 
         // If the local snapshots are new enough, then use 'em; no need to download new snapshots
         if should_use_local_snapshot(
@@ -1589,8 +1595,23 @@ mod with_incremental_snapshots {
 
     #[cfg(test)]
     mod tests {
-        #![allow(clippy::type_complexity)]
         use super::*;
+
+        impl PeerSnapshotHash {
+            fn new(
+                rpc_contact_info: ContactInfo,
+                full_snapshot_hash: (Slot, Hash),
+                incremental_snapshot_hash: Option<(Slot, Hash)>,
+            ) -> Self {
+                Self {
+                    rpc_contact_info,
+                    snapshot_hash: SnapshotHash {
+                        full: full_snapshot_hash,
+                        incr: incremental_snapshot_hash,
+                    },
+                }
+            }
+        }
 
         fn default_contact_info_for_tests() -> ContactInfo {
             let sock_addr = SocketAddr::from(([1, 1, 1, 1], 11_111));
@@ -1612,122 +1633,105 @@ mod with_incremental_snapshots {
         }
 
         #[test]
-        fn test_get_only_trusted_incremental_snapshot_hashes() {
-            let trusted_incremental_snapshot_hashes: HashMap<(Slot, Hash), HashSet<(Slot, Hash)>> =
-                [
-                    (
-                        (200_000, Hash::new_unique()),
-                        [
-                            (200_200, Hash::new_unique()),
-                            (200_400, Hash::new_unique()),
-                            (200_600, Hash::new_unique()),
-                            (200_800, Hash::new_unique()),
-                        ]
-                        .iter()
-                        .cloned()
-                        .collect(),
-                    ),
-                    (
-                        (300_000, Hash::new_unique()),
-                        [
-                            (300_200, Hash::new_unique()),
-                            (300_400, Hash::new_unique()),
-                            (300_600, Hash::new_unique()),
-                        ]
-                        .iter()
-                        .cloned()
-                        .collect(),
-                    ),
-                ]
-                .iter()
-                .cloned()
-                .collect();
+        fn test_retain_trusted_peer_snapshot_hashes() {
+            let trusted_snapshot_hashes: HashMap<(Slot, Hash), HashSet<(Slot, Hash)>> = [
+                (
+                    (200_000, Hash::new_unique()),
+                    [
+                        (200_200, Hash::new_unique()),
+                        (200_400, Hash::new_unique()),
+                        (200_600, Hash::new_unique()),
+                        (200_800, Hash::new_unique()),
+                    ]
+                    .iter()
+                    .cloned()
+                    .collect(),
+                ),
+                (
+                    (300_000, Hash::new_unique()),
+                    [
+                        (300_200, Hash::new_unique()),
+                        (300_400, Hash::new_unique()),
+                        (300_600, Hash::new_unique()),
+                    ]
+                    .iter()
+                    .cloned()
+                    .collect(),
+                ),
+            ]
+            .iter()
+            .cloned()
+            .collect();
 
-            let trusted_incremental_snapshot_hash_elem =
-                trusted_incremental_snapshot_hashes.iter().next().unwrap();
-            let trusted_full_snapshot_hash = trusted_incremental_snapshot_hash_elem.0;
-            let trusted_incremental_snapshot_hash = trusted_incremental_snapshot_hash_elem
-                .1
-                .iter()
-                .next()
-                .unwrap();
+            let trusted_snapshot_hash = trusted_snapshot_hashes.iter().next().unwrap();
+            let trusted_full_snapshot_hash = trusted_snapshot_hash.0;
+            let trusted_incremental_snapshot_hash = trusted_snapshot_hash.1.iter().next().unwrap();
 
             let contact_info = default_contact_info_for_tests();
-            let incremental_snapshot_hashes: Vec<(
-                ContactInfo,
-                (Slot, Hash),
-                Option<(Slot, Hash)>,
-            )> = vec![
+            let peer_snapshot_hashes = vec![
                 // bad full snapshot hash, no incremental snapshot hash
-                (contact_info.clone(), (111_000, Hash::default()), None),
+                PeerSnapshotHash::new(contact_info.clone(), (111_000, Hash::default()), None),
                 // bad everything
-                (
+                PeerSnapshotHash::new(
                     contact_info.clone(),
                     (111_000, Hash::default()),
                     Some((111_111, Hash::default())),
                 ),
                 // good full snapshot hash, no incremental snapshot hash
-                (contact_info.clone(), (*trusted_full_snapshot_hash), None),
+                PeerSnapshotHash::new(contact_info.clone(), *trusted_full_snapshot_hash, None),
                 // bad full snapshot hash, good (not possible) incremental snapshot hash
-                (
+                PeerSnapshotHash::new(
                     contact_info.clone(),
                     (111_000, Hash::default()),
                     Some(*trusted_incremental_snapshot_hash),
                 ),
                 // good full snapshot hash, bad incremental snapshot hash
-                (
+                PeerSnapshotHash::new(
                     contact_info.clone(),
-                    (*trusted_full_snapshot_hash),
+                    *trusted_full_snapshot_hash,
                     Some((111_111, Hash::default())),
                 ),
                 // good everything
-                (
+                PeerSnapshotHash::new(
                     contact_info.clone(),
-                    (*trusted_full_snapshot_hash),
+                    *trusted_full_snapshot_hash,
                     Some(*trusted_incremental_snapshot_hash),
                 ),
             ];
 
-            let expected: Vec<(ContactInfo, (Slot, Hash), Option<(Slot, Hash)>)> = vec![(
+            let expected = vec![PeerSnapshotHash::new(
                 contact_info,
                 *trusted_full_snapshot_hash,
                 Some(*trusted_incremental_snapshot_hash),
             )];
-            let mut actual = incremental_snapshot_hashes;
-            retain_trusted_incremental_snapshot_hashes(
-                &trusted_incremental_snapshot_hashes,
-                &mut actual,
-            );
+            let mut actual = peer_snapshot_hashes;
+            retain_trusted_peer_snapshot_hashes(&trusted_snapshot_hashes, &mut actual);
             assert_eq!(expected, actual);
         }
 
         #[test]
-        fn test_get_incremental_snapshot_hashes_with_a_multiple_of_our_full_snapshot_interval() {
+        fn test_retain_peer_snapshot_hashes_with_a_multiple_of_full_snapshot_interval() {
             let full_snapshot_archive_interval = 100_000;
             let contact_info = default_contact_info_for_tests();
-            let incremental_snapshot_hashes: Vec<(
-                ContactInfo,
-                (Slot, Hash),
-                Option<(Slot, Hash)>,
-            )> = vec![
+            let per_snapshot_hashes = vec![
                 // good full snapshot hash slots
-                (contact_info.clone(), (100_000, Hash::default()), None),
-                (contact_info.clone(), (200_000, Hash::default()), None),
-                (contact_info.clone(), (300_000, Hash::default()), None),
+                PeerSnapshotHash::new(contact_info.clone(), (100_000, Hash::default()), None),
+                PeerSnapshotHash::new(contact_info.clone(), (200_000, Hash::default()), None),
+                PeerSnapshotHash::new(contact_info.clone(), (300_000, Hash::default()), None),
                 // bad full snapshot hash slots
-                (contact_info.clone(), (999, Hash::default()), None),
-                (contact_info.clone(), (100_777, Hash::default()), None),
-                (contact_info.clone(), (101_000, Hash::default()), None),
-                (contact_info.clone(), (999_000, Hash::default()), None),
+                PeerSnapshotHash::new(contact_info.clone(), (999, Hash::default()), None),
+                PeerSnapshotHash::new(contact_info.clone(), (100_777, Hash::default()), None),
+                PeerSnapshotHash::new(contact_info.clone(), (101_000, Hash::default()), None),
+                PeerSnapshotHash::new(contact_info.clone(), (999_000, Hash::default()), None),
             ];
 
-            let expected: Vec<(ContactInfo, (Slot, Hash), Option<(Slot, Hash)>)> = vec![
-                (contact_info.clone(), (100_000, Hash::default()), None),
-                (contact_info.clone(), (200_000, Hash::default()), None),
-                (contact_info, (300_000, Hash::default()), None),
+            let expected = vec![
+                PeerSnapshotHash::new(contact_info.clone(), (100_000, Hash::default()), None),
+                PeerSnapshotHash::new(contact_info.clone(), (200_000, Hash::default()), None),
+                PeerSnapshotHash::new(contact_info, (300_000, Hash::default()), None),
             ];
-            let mut actual = incremental_snapshot_hashes;
-            retain_incremental_snapshot_hashes_with_a_multiple_of_full_snapshot_archive_interval(
+            let mut actual = per_snapshot_hashes;
+            retain_peer_snapshot_hashes_with_a_multiple_of_full_snapshot_archive_interval(
                 full_snapshot_archive_interval,
                 &mut actual,
             );
@@ -1735,117 +1739,109 @@ mod with_incremental_snapshots {
         }
 
         #[test]
-        fn test_retain_incremental_snapshot_hashes_with_highest_full_snapshot_slot() {
+        fn test_retain_peer_snapshot_hashes_with_highest_full_snapshot_slot() {
             let contact_info = default_contact_info_for_tests();
-            let incremental_snapshot_hashes: Vec<(
-                ContactInfo,
-                (Slot, Hash),
-                Option<(Slot, Hash)>,
-            )> = vec![
+            let peer_snapshot_hashes = vec![
                 // old
-                (
+                PeerSnapshotHash::new(
                     contact_info.clone(),
                     (100_000, Hash::default()),
                     Some((100_100, Hash::default())),
                 ),
-                (
+                PeerSnapshotHash::new(
                     contact_info.clone(),
                     (100_000, Hash::default()),
                     Some((100_200, Hash::default())),
                 ),
-                (
+                PeerSnapshotHash::new(
                     contact_info.clone(),
                     (100_000, Hash::default()),
                     Some((100_300, Hash::default())),
                 ),
                 // new
-                (
+                PeerSnapshotHash::new(
                     contact_info.clone(),
                     (200_000, Hash::default()),
                     Some((200_100, Hash::default())),
                 ),
-                (
+                PeerSnapshotHash::new(
                     contact_info.clone(),
                     (200_000, Hash::default()),
                     Some((200_200, Hash::default())),
                 ),
-                (
+                PeerSnapshotHash::new(
                     contact_info.clone(),
                     (200_000, Hash::default()),
                     Some((200_300, Hash::default())),
                 ),
             ];
 
-            let expected: Vec<(ContactInfo, (Slot, Hash), Option<(Slot, Hash)>)> = vec![
-                (
+            let expected = vec![
+                PeerSnapshotHash::new(
                     contact_info.clone(),
                     (200_000, Hash::default()),
                     Some((200_100, Hash::default())),
                 ),
-                (
+                PeerSnapshotHash::new(
                     contact_info.clone(),
                     (200_000, Hash::default()),
                     Some((200_200, Hash::default())),
                 ),
-                (
+                PeerSnapshotHash::new(
                     contact_info,
                     (200_000, Hash::default()),
                     Some((200_300, Hash::default())),
                 ),
             ];
-            let mut actual = incremental_snapshot_hashes;
-            retain_incremental_snapshot_hashes_with_highest_full_snapshot_slot(&mut actual);
+            let mut actual = peer_snapshot_hashes;
+            retain_peer_snapshot_hashes_with_highest_full_snapshot_slot(&mut actual);
             assert_eq!(expected, actual);
         }
 
         #[test]
-        fn test_retain_incremental_snapshot_hashes_with_highest_incremental_snasphot_slot() {
+        fn test_retain_peer_snapshot_hashes_with_highest_incremental_snasphot_slot() {
             let contact_info = default_contact_info_for_tests();
-            let incremental_snapshot_hashes: Vec<(
-                ContactInfo,
-                (Slot, Hash),
-                Option<(Slot, Hash)>,
-            )> = vec![
-                (contact_info.clone(), (200_000, Hash::default()), None),
-                (
+            let peer_snapshot_hashes = vec![
+                PeerSnapshotHash::new(contact_info.clone(), (200_000, Hash::default()), None),
+                PeerSnapshotHash::new(
                     contact_info.clone(),
                     (200_000, Hash::default()),
                     Some((200_100, Hash::default())),
                 ),
-                (
+                PeerSnapshotHash::new(
                     contact_info.clone(),
                     (200_000, Hash::default()),
                     Some((200_200, Hash::default())),
                 ),
-                (
+                PeerSnapshotHash::new(
                     contact_info.clone(),
                     (200_000, Hash::default()),
                     Some((200_300, Hash::default())),
                 ),
-                (
+                PeerSnapshotHash::new(
                     contact_info.clone(),
                     (200_000, Hash::default()),
                     Some((200_010, Hash::default())),
                 ),
-                (
+                PeerSnapshotHash::new(
                     contact_info.clone(),
                     (200_000, Hash::default()),
                     Some((200_020, Hash::default())),
                 ),
-                (
+                PeerSnapshotHash::new(
                     contact_info.clone(),
                     (200_000, Hash::default()),
                     Some((200_030, Hash::default())),
                 ),
             ];
 
-            let expected: Vec<(ContactInfo, (Slot, Hash), Option<(Slot, Hash)>)> = vec![(
+            let expected = vec![PeerSnapshotHash::new(
                 contact_info,
                 (200_000, Hash::default()),
                 Some((200_300, Hash::default())),
             )];
-            let mut actual = incremental_snapshot_hashes;
-            retain_incremental_snapshot_hashes_with_highest_incremental_snapshot_slot(&mut actual);
+            let mut actual = peer_snapshot_hashes;
+            retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(&mut actual);
             assert_eq!(expected, actual);
         }
     }
