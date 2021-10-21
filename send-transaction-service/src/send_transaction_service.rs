@@ -163,6 +163,7 @@ impl SendTransactionService {
                             );
                         }
                         if transactions.len() < MAX_TRANSACTION_QUEUE_SIZE {
+                            inc_new_counter_info!("send_transaction_service-insert-tx", 1);
                             transactions.insert(transaction_info.signature, transaction_info);
                         } else {
                             datapoint_warn!("send_transaction_service-queue-overflow");
