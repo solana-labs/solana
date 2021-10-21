@@ -2560,6 +2560,7 @@ fn test_fail_entry_verification_leader() {
     let (cluster, _) = test_faulty_node(
         BroadcastStageType::FailEntryVerification,
         vec![leader_stake, validator_stake1, validator_stake2],
+        None,
     );
     cluster.check_for_new_roots(
         16,
@@ -2574,12 +2575,43 @@ fn test_fail_entry_verification_leader() {
 #[allow(unused_attributes)]
 fn test_fake_shreds_broadcast_leader() {
     let node_stakes = vec![300, 100];
-    let (cluster, _) = test_faulty_node(BroadcastStageType::BroadcastFakeShreds, node_stakes);
+    let (cluster, _) = test_faulty_node(BroadcastStageType::BroadcastFakeShreds, node_stakes, None);
     cluster.check_for_new_roots(
         16,
         "test_fake_shreds_broadcast_leader",
         SocketAddrSpace::Unspecified,
     );
+}
+
+#[test]
+#[serial]
+#[allow(unused_attributes)]
+fn test_repair_sinkhole() {
+    // Create 3 validators:
+    // 1) One leader transmitting a slot with one missing shred. Has a stake of 1.
+    //
+    // 2) One highly staked validator node with stake of 10000000000.
+    // This validator will see that validator 3 has much more stake than validator 1.
+    //
+    // 3) One highly staked validator node with stake of 10000000000.
+    // This validator will see that validator 2 has much more stake than validator 1.
+
+    let validator1_stake = 1;
+    let validator2_stake = 10000000000;
+    let validator3_stake = 10000000000;
+
+    // 1) Set up the cluster
+    let node_stakes = vec![validator1_stake, validator2_stake, validator3_stake];
+    let (cluster, _validator_keys) = test_faulty_node(
+        BroadcastStageType::BroadcastMissingShreds,
+        node_stakes,
+        // Make the first leader the only one with any slots in the leader
+        // schedule
+        Some(vec![1]),
+    );
+
+    // 2) Check for new roots
+    cluster.check_for_new_roots(16, "test_repair_sinkhole", SocketAddrSpace::Unspecified);
 }
 
 #[test]
@@ -2642,6 +2674,7 @@ fn test_duplicate_shreds_broadcast_leader() {
             stake_partition: partition_node_stake,
         }),
         node_stakes,
+        None,
     );
 
     // This is why it's important our node was last in `node_stakes`
@@ -2784,22 +2817,45 @@ fn test_duplicate_shreds_broadcast_leader() {
 fn test_faulty_node(
     faulty_node_type: BroadcastStageType,
     node_stakes: Vec<u64>,
+    fixed_leader_schedule: Option<Vec<usize>>,
 ) -> (LocalCluster, Vec<Arc<Keypair>>) {
     solana_logger::setup_with_default("solana_local_cluster=info");
     let num_nodes = node_stakes.len();
 
+    let (fixed_leader_schedule, mut validator_keys) = {
+        if let Some(fixed_leader_schedule) = fixed_leader_schedule {
+            let (fixed_leader_schedule, validator_keys) =
+                create_custom_leader_schedule(&fixed_leader_schedule);
+            let fixed_leader_schedule = FixedSchedule {
+                start_epoch: 0,
+                leader_schedule: Arc::new(fixed_leader_schedule),
+            };
+            (Some(fixed_leader_schedule), validator_keys)
+        } else {
+            (None, Vec::with_capacity(num_nodes))
+        }
+    };
+
+    validator_keys.resize_with(num_nodes, || (Arc::new(Keypair::new())));
+    let validator_keys: Vec<(Arc<Keypair>, bool)> = validator_keys
+        .into_iter()
+        .zip(iter::repeat_with(|| true))
+        .collect();
+
     let error_validator_config = ValidatorConfig {
         broadcast_stage_type: faulty_node_type,
+        fixed_leader_schedule: fixed_leader_schedule.clone(),
         ..ValidatorConfig::default()
     };
     let mut validator_configs = Vec::with_capacity(num_nodes);
 
     // First validator is the bootstrap leader with the malicious broadcast logic.
     validator_configs.push(error_validator_config);
-    validator_configs.resize_with(num_nodes, ValidatorConfig::default);
 
-    let mut validator_keys = Vec::with_capacity(num_nodes);
-    validator_keys.resize_with(num_nodes, || (Arc::new(Keypair::new()), true));
+    validator_configs.resize_with(num_nodes, || ValidatorConfig {
+        fixed_leader_schedule: fixed_leader_schedule.clone(),
+        ..ValidatorConfig::default()
+    });
 
     assert_eq!(node_stakes.len(), num_nodes);
     assert_eq!(validator_keys.len(), num_nodes);
