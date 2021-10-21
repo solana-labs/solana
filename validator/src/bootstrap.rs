@@ -91,7 +91,7 @@ pub fn rpc_bootstrap(
     }
 
     if bootstrap_config.incremental_snapshot_fetch {
-        debug!("rpc_bootstrap with incremental snapshot fetch");
+        info!("rpc_bootstrap with incremental snapshot fetch");
         with_incremental_snapshots::rpc_bootstrap(
             node,
             identity_keypair,
