@@ -25,11 +25,11 @@ use solana_sdk::{
     entrypoint::SUCCESS,
     instruction::{AccountMeta, Instruction},
     message::Message,
-    process_instruction::{InvokeContext, MockInvokeContext},
+    process_instruction::{InvokeContext, MockComputeMeter, MockInvokeContext},
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
-use std::{cell::RefCell, env, fs::File, io::Read, mem, path::PathBuf, sync::Arc};
+use std::{cell::RefCell, env, fs::File, io::Read, mem, path::PathBuf, rc::Rc, sync::Arc};
 use test::Bencher;
 
 /// BPF program file extension
@@ -237,7 +237,7 @@ fn bench_create_vm(bencher: &mut Bencher) {
     let instruction_data = vec![0u8];
 
     let mut invoke_context = MockInvokeContext::new(&loader_id, keyed_accounts);
-    invoke_context.compute_meter.remaining = BUDGET;
+    invoke_context.compute_meter = Rc::new(RefCell::new(MockComputeMeter { remaining: BUDGET }));
 
     // Serialize account data
     let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
@@ -296,7 +296,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
         .collect();
     let instruction_data = vec![0u8];
     let mut invoke_context = MockInvokeContext::new(&program_id, keyed_accounts);
-    invoke_context.compute_meter.remaining = BUDGET;
+    invoke_context.compute_meter = Rc::new(RefCell::new(MockComputeMeter { remaining: BUDGET }));
 
     // Serialize account data
     let (mut serialized, account_lengths) = serialize_parameters(

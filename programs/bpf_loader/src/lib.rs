@@ -1328,7 +1328,7 @@ mod tests {
         keyed_accounts.insert(0, (false, false, &program_key, &processor_account));
         let mut invoke_context =
             MockInvokeContext::new(&program_key, create_keyed_accounts_unified(&keyed_accounts));
-        invoke_context.compute_meter = MockComputeMeter::default();
+        invoke_context.compute_meter = Rc::new(RefCell::new(MockComputeMeter::default()));
         assert_eq!(
             Err(InstructionError::ProgramFailedToComplete),
             super::process_instruction(1, &[], &mut invoke_context)

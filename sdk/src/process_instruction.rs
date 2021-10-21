@@ -354,7 +354,7 @@ pub struct MockInvokeContext<'a> {
     pub invoke_stack: Vec<InvokeContextStackFrame<'a>>,
     pub logger: MockLogger,
     pub compute_budget: ComputeBudget,
-    pub compute_meter: MockComputeMeter,
+    pub compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     pub programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
     pub accounts: Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
     #[allow(clippy::type_complexity)]
@@ -372,9 +372,9 @@ impl<'a> MockInvokeContext<'a> {
             invoke_stack: Vec::with_capacity(compute_budget.max_invoke_depth),
             logger: MockLogger::default(),
             compute_budget,
-            compute_meter: MockComputeMeter {
+            compute_meter: Rc::new(RefCell::new(MockComputeMeter {
                 remaining: std::i64::MAX as u64,
-            },
+            })),
             programs: vec![],
             accounts: vec![],
             sysvars: RefCell::new(Vec::new()),
@@ -464,7 +464,7 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
         Rc::new(RefCell::new(self.logger.clone()))
     }
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
-        Rc::new(RefCell::new(self.compute_meter.clone()))
+        self.compute_meter.clone()
     }
     fn add_executor(&self, _pubkey: &Pubkey, _executor: Arc<dyn Executor>) {}
     fn get_executor(&self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
