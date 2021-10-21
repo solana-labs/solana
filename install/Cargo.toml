@@ -21,7 +21,7 @@ dirs-next = "2.0.0"
 indicatif = "0.16.2"
 lazy_static = "1.4.0"
 nix = "0.23.0"
-reqwest = { version = "0.11.5", default-features = false, features = ["blocking", "rustls-tls", "json"] }
+reqwest = { version = "0.11.6", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 serde = { version = "1.0.130", features = ["derive"] }
 serde_yaml = "0.8.21"
 solana-clap-utils = { path = "../clap-utils", version = "=1.9.0" }
