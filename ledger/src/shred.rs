@@ -52,11 +52,7 @@
 use {
     crate::{blockstore::MAX_DATA_SHREDS_PER_SLOT, erasure::Session},
     bincode::config::Options,
-    rayon::{
-        iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator},
-        slice::ParallelSlice,
-        ThreadPool,
-    },
+    rayon::{prelude::*, ThreadPool},
     serde::{Deserialize, Serialize},
     solana_entry::entry::{create_ticks, Entry},
     solana_measure::measure::Measure,
@@ -1657,12 +1653,19 @@ pub mod tests {
     fn run_recovery_with_expanded_coding_shreds(num_tx: usize, is_last_in_slot: bool) {
         let mut rng = rand::thread_rng();
         let txs = repeat_with(|| {
-            system_transaction::transfer(
-                &Keypair::new(),          // from
-                &Pubkey::new_unique(),    // to
-                rng.gen(),                // lamports
-                hash::new_rand(&mut rng), // recent block hash
-            )
+            let from_pubkey = Pubkey::new_unique();
+            let instruction = solana_sdk::system_instruction::transfer(
+                &from_pubkey,
+                &Pubkey::new_unique(), // to
+                rng.gen(),             // lamports
+            );
+            let message = solana_sdk::message::Message::new(&[instruction], Some(&from_pubkey));
+            let mut tx = solana_sdk::transaction::Transaction::new_unsigned(message);
+            // Also randomize the signatre bytes.
+            let mut signature = [0u8; 64];
+            rng.fill(&mut signature[..]);
+            tx.signatures = vec![Signature::new(&signature)];
+            tx
         })
         .take(num_tx)
         .collect();
@@ -1720,7 +1723,7 @@ pub mod tests {
 
     #[test]
     fn test_recovery_with_expanded_coding_shreds() {
-        for num_tx in 0..100 {
+        for num_tx in 0..50 {
             run_recovery_with_expanded_coding_shreds(num_tx, false);
             run_recovery_with_expanded_coding_shreds(num_tx, true);
         }
