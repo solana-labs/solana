@@ -4005,7 +4005,7 @@ impl Bank {
         )
     }
 
-    /// Calculate transaction fee
+    /// Calculate fee for `SanitizedMessage`
     pub fn calculate_fee(message: &SanitizedMessage, lamports_per_signature: u64) -> u64 {
         let mut num_signatures = u64::from(message.header().num_required_signatures);
         for (program_id, instruction) in message.program_instructions_iter() {
