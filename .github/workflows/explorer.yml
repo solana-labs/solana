@@ -62,3 +62,4 @@ jobs:
           vercel-args: '--prod' #for production
           vercel-org-id: ${{ secrets.ORG_ID}}  #Required
           vercel-project-id: ${{ secrets.PROJECT_ID}} #Required 
+          scope: ${{ secrets.TEAM_ID }}
