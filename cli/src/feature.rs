@@ -19,6 +19,7 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use std::{
+    cmp::Ordering,
     collections::{HashMap, HashSet},
     fmt,
     sync::Arc,
@@ -371,6 +372,34 @@ fn feature_activation_allowed(rpc_client: &RpcClient, quiet: bool) -> Result<boo
             "\n\n{}",
             style(format!("Tool Feature Set: {}", my_feature_set)).bold()
         );
+
+        let mut feature_set_stats = feature_set_stats.into_iter().collect::<Vec<_>>();
+        feature_set_stats.sort_by(|l, r| {
+            match l.1.software_versions[0]
+                .cmp(&r.1.software_versions[0])
+                .reverse()
+            {
+                Ordering::Equal => {
+                    match l
+                        .1
+                        .stake_percent
+                        .partial_cmp(&r.1.stake_percent)
+                        .unwrap()
+                        .reverse()
+                    {
+                        Ordering::Equal => {
+                            l.1.rpc_nodes_percent
+                                .partial_cmp(&r.1.rpc_nodes_percent)
+                                .unwrap()
+                                .reverse()
+                        }
+                        o => o,
+                    }
+                }
+                o => o,
+            }
+        });
+
         let software_versions_title = "Software Version";
         let feature_set_title = "Feature Set";
         let stake_percent_title = "Stake";
