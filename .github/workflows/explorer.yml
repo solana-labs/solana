@@ -10,7 +10,7 @@ on:
     paths:
       - 'explorer/**'
 jobs:
-  preview:
+  check-explorer:
     runs-on: ubuntu-latest
 
     defaults:
@@ -33,11 +33,15 @@ jobs:
       - uses: amondnet/vercel-action@v20
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }} # Required
+          github-token: ${{ secrets.PAT }} #Optional 
+#           vercel-args: '--prod' #for production
           vercel-org-id: ${{ secrets.ORG_ID}}  #Required
-          vercel-project-id: ${{ secrets.PROJECT_ID}} #Required
+          vercel-project-id: ${{ secrets.PROJECT_ID}} #Required 
+          working-directory: ./explorer
           scope: ${{ secrets.TEAM_ID }}
   production:
    runs-on: ubuntu-latest
+   
    defaults:
       run:
         working-directory: explorer
@@ -59,7 +63,9 @@ jobs:
       - uses: amondnet/vercel-action@v20
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }} # Required
+          github-token: ${{ secrets.PAT }} #Optional 
           vercel-args: '--prod' #for production
           vercel-org-id: ${{ secrets.ORG_ID}}  #Required
           vercel-project-id: ${{ secrets.PROJECT_ID}} #Required 
+          working-directory: ./explorer
           scope: ${{ secrets.TEAM_ID }}
