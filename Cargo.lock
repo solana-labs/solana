@@ -351,9 +351,9 @@ dependencies = [
 
 [[package]]
 name = "blake3"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcd555c66291d5f836dbb6883b48660ece810fe25a31f3bdfb911945dff2691f"
+checksum = "2607a74355ce2e252d0c483b2d8a348e1bba36036e786ccc2dcd777213c86ffd"
 dependencies = [
  "arrayref",
  "arrayvec 0.7.1",
@@ -5272,7 +5272,7 @@ dependencies = [
  "base64 0.13.0",
  "bincode",
  "bitflags",
- "blake3 1.0.0",
+ "blake3 1.1.0",
  "borsh",
  "borsh-derive",
  "bs58 0.4.0",
@@ -5476,7 +5476,7 @@ dependencies = [
  "arrayref",
  "assert_matches",
  "bincode",
- "blake3 1.0.0",
+ "blake3 1.1.0",
  "bv",
  "byteorder",
  "bzip2",
