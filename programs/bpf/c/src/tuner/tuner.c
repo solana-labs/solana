@@ -18,6 +18,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
   }
   size_t current = 1;
   uint64_t iterations = params.data[0] * 18;
+  iterations = iterations == 0 ? UINT64_MAX : iterations;
   size_t rand = params.data[1];
   size_t account_index = rand % params.ka_num;
   uint8_t *val = (uint8_t *)ka[account_index].data;

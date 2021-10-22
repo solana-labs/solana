@@ -294,7 +294,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
         .iter()
         .map(|(key, account)| solana_sdk::keyed_account::KeyedAccount::new(&key, false, &account))
         .collect();
-    let instruction_data = vec![0u8];
+    let instruction_data = vec![0u8; 2];
     let mut invoke_context = MockInvokeContext::new(&program_id, keyed_accounts);
     invoke_context.compute_meter = Rc::new(RefCell::new(MockComputeMeter { remaining: BUDGET }));
 
