@@ -12,7 +12,7 @@ receive, collect, and swap tokens.
 - Beautiful NFT support
 - Ledger hardware wallet support
 
-Available for Chrome, Brave, Firefox, and Edge
+Available for Chrome, Brave, Firefox, Vivaldi, and Edge
 
 ## SolFlare
 
