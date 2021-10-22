@@ -731,9 +731,9 @@ impl ParallelPostgresClient {
             != self.good_worker_count.load(Ordering::Relaxed)
         {
             info!(
-                "Startup done count: {}, thread count: {}",
+                "Startup done count: {}, good worker thread count: {}",
                 self.startup_done_count.load(Ordering::Relaxed),
-                self.workers.len()
+                self.good_worker_count.load(Ordering::Relaxed)
             );
             sleep(Duration::from_millis(100));
         }
