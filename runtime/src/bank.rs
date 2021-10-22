@@ -175,28 +175,13 @@ pub struct ExecuteTimings {
 
 impl ExecuteTimings {
     pub fn accumulate(&mut self, other: &ExecuteTimings) {
-<<<<<<< HEAD
         self.check_us += other.check_us;
         self.load_us += other.load_us;
         self.execute_us += other.execute_us;
         self.store_us += other.store_us;
+        self.update_stakes_cache_us += other.update_stakes_cache_us;
         self.total_batches_len += other.total_batches_len;
         self.num_execute_batches += other.num_execute_batches;
-=======
-        self.check_us = self.check_us.saturating_add(other.check_us);
-        self.load_us = self.load_us.saturating_add(other.load_us);
-        self.execute_us = self.execute_us.saturating_add(other.execute_us);
-        self.store_us = self.store_us.saturating_add(other.store_us);
-        self.update_stakes_cache_us = self
-            .update_stakes_cache_us
-            .saturating_add(other.update_stakes_cache_us);
-        self.total_batches_len = self
-            .total_batches_len
-            .saturating_add(other.total_batches_len);
-        self.num_execute_batches = self
-            .num_execute_batches
-            .saturating_add(other.num_execute_batches);
->>>>>>> 735016661 (Report timing info for stakes cache updates from txs (#20856))
         self.details.accumulate(&other.details);
     }
 }
@@ -3936,12 +3921,8 @@ impl Bank {
 
         let mut update_stakes_cache_time = Measure::start("update_stakes_cache_time");
         let overwritten_vote_accounts =
-<<<<<<< HEAD
-            self.update_cached_accounts(hashed_txs.as_transactions_iter(), executed, loaded_txs);
-=======
-            self.update_stakes_cache(sanitized_txs, executed, loaded_txs);
+            self.update_stakes_cache(hashed_txs.as_transactions_iter(), executed, loaded_txs);
         update_stakes_cache_time.stop();
->>>>>>> 735016661 (Report timing info for stakes cache updates from txs (#20856))
 
         // once committed there is no way to unroll
         write_time.stop();
@@ -3950,16 +3931,9 @@ impl Bank {
             write_time.as_us(),
             hashed_txs.len()
         );
-<<<<<<< HEAD
         timings.store_us += write_time.as_us();
+        timings.update_stakes_cache_us += update_stakes_cache_time.as_us();
         self.update_transaction_statuses(hashed_txs, executed);
-=======
-        timings.store_us = timings.store_us.saturating_add(write_time.as_us());
-        timings.update_stakes_cache_us = timings
-            .update_stakes_cache_us
-            .saturating_add(update_stakes_cache_time.as_us());
-        self.update_transaction_statuses(sanitized_txs, executed);
->>>>>>> 735016661 (Report timing info for stakes cache updates from txs (#20856))
         let fee_collection_results =
             self.filter_program_errors_and_collect_fee(hashed_txs.as_transactions_iter(), executed);
 
@@ -5332,13 +5306,8 @@ impl Bank {
         self.epoch_schedule.get_leader_schedule_epoch(slot)
     }
 
-<<<<<<< HEAD
-    /// a bank-level cache of vote accounts
-    fn update_cached_accounts<'a>(
-=======
     /// a bank-level cache of vote accounts and stake delegation info
-    fn update_stakes_cache(
->>>>>>> 735016661 (Report timing info for stakes cache updates from txs (#20856))
+    fn update_stakes_cache<'a>(
         &self,
         txs: impl Iterator<Item = &'a Transaction>,
         res: &[TransactionExecutionResult],
