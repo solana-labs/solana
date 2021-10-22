@@ -12,10 +12,14 @@ use {
         scalar::Scalar,
     },
     serde::{Deserialize, Serialize},
-    solana_sdk::pubkey::Pubkey,
-    solana_sdk::signature::Keypair as SigningKeypair,
-    std::collections::HashMap,
-    std::convert::TryInto,
+    solana_sdk::{
+        instruction::Instruction,
+        message::Message,
+        pubkey::Pubkey,
+        signature::Signature,
+        signer::{Signer, SignerError},
+    },
+    std::{collections::HashMap, convert::TryInto},
     subtle::{Choice, ConstantTimeEq},
     zeroize::Zeroize,
 };
@@ -136,11 +140,11 @@ impl ElGamalKeypair {
     /// address.
     #[cfg(not(target_arch = "bpf"))]
     #[allow(non_snake_case)]
-    pub fn new(signing_keypair: &SigningKeypair, address: &Pubkey) -> Self {
-        let secret = ElGamalSecretKey::new(signing_keypair, address);
+    pub fn new(signer: &dyn Signer, address: &Pubkey) -> Result<Self, SignerError> {
+        let secret = ElGamalSecretKey::new(signer, address)?;
         let public = ElGamalPubkey::new(&secret);
 
-        Self { public, secret }
+        Ok(Self { public, secret })
     }
 
     /// Generates the public and secret keys for ElGamal encryption.
@@ -292,11 +296,26 @@ impl fmt::Display for ElGamalPubkey {
 #[zeroize(drop)]
 pub struct ElGamalSecretKey(Scalar);
 impl ElGamalSecretKey {
-    pub fn new(signing_keypair: &SigningKeypair, address: &Pubkey) -> Self {
-        let mut hashable = [0_u8; 64];
-        hashable[..32].copy_from_slice(&signing_keypair.secret().to_bytes());
-        hashable[32..].copy_from_slice(&address.to_bytes());
-        ElGamalSecretKey(Scalar::hash_from_bytes::<Sha3_512>(&hashable))
+    pub fn new(signer: &dyn Signer, address: &Pubkey) -> Result<Self, SignerError> {
+        let message = Message::new(
+            &[Instruction::new_with_bytes(
+                *address,
+                b"ElGamalSecretKey",
+                vec![],
+            )],
+            Some(&signer.try_pubkey()?),
+        );
+        let signature = signer.try_sign_message(&message.serialize())?;
+
+        // Some `Signer` implementations return the default signature, which is not suitable for
+        // use as key material
+        if signature == Signature::default() {
+            Err(SignerError::Custom("Rejecting default signature".into()))
+        } else {
+            Ok(ElGamalSecretKey(Scalar::hash_from_bytes::<Sha3_512>(
+                &signature.as_ref(),
+            )))
+        }
     }
 
     pub fn get_scalar(&self) -> Scalar {
@@ -494,8 +513,11 @@ define_div_variants!(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::encryption::pedersen::Pedersen;
+    use {
+        super::*,
+        crate::encryption::pedersen::Pedersen,
+        solana_sdk::{signature::Keypair, signer::null_signer::NullSigner},
+    };
 
     #[test]
     fn test_encrypt_decrypt_correctness() {
@@ -722,5 +744,23 @@ mod tests {
         }
         ElGamalKeypair::default().write_json_file(&outfile).unwrap();
         ElGamalKeypair::read_json_file(&outfile).unwrap();
+    }
+
+    #[test]
+    fn test_secret_key_new() {
+        let keypair1 = Keypair::new();
+        let keypair2 = Keypair::new();
+
+        assert_ne!(
+            ElGamalSecretKey::new(&keypair1, &Pubkey::default())
+                .unwrap()
+                .0,
+            ElGamalSecretKey::new(&keypair2, &Pubkey::default())
+                .unwrap()
+                .0,
+        );
+
+        let null_signer = NullSigner::new(&Pubkey::default());
+        assert!(ElGamalSecretKey::new(&null_signer, &Pubkey::default()).is_err());
     }
 }

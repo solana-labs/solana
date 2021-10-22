@@ -2,12 +2,16 @@
 use {
     aes_gcm::{aead::Aead, Aes128Gcm, NewAead},
     rand::{rngs::OsRng, CryptoRng, Rng, RngCore},
-    sha3::{Digest, Sha3_256},
 };
 use {
     arrayref::{array_ref, array_refs},
-    solana_sdk::pubkey::Pubkey,
-    solana_sdk::signature::Keypair as SigningKeypair,
+    solana_sdk::{
+        instruction::Instruction,
+        message::Message,
+        pubkey::Pubkey,
+        signature::Signature,
+        signer::{Signer, SignerError},
+    },
     std::convert::TryInto,
     zeroize::Zeroize,
 };
@@ -54,16 +58,20 @@ impl Aes {
 #[derive(Debug, Zeroize)]
 pub struct AesKey([u8; 16]);
 impl AesKey {
-    pub fn new(signing_keypair: &SigningKeypair, address: &Pubkey) -> Self {
-        let mut hashable = [0_u8; 64];
-        hashable[..32].copy_from_slice(&signing_keypair.secret().to_bytes());
-        hashable[32..].copy_from_slice(&address.to_bytes());
+    pub fn new(signer: &dyn Signer, address: &Pubkey) -> Result<Self, SignerError> {
+        let message = Message::new(
+            &[Instruction::new_with_bytes(*address, b"AesKey", vec![])],
+            Some(&signer.try_pubkey()?),
+        );
+        let signature = signer.try_sign_message(&message.serialize())?;
 
-        let mut hasher = Sha3_256::new();
-        hasher.update(hashable);
-
-        let result: [u8; 16] = hasher.finalize()[..16].try_into().unwrap();
-        AesKey(result)
+        // Some `Signer` implementations return the default signature, which is not suitable for
+        // use as key material
+        if signature == Signature::default() {
+            Err(SignerError::Custom("Rejecting default signature".into()))
+        } else {
+            Ok(AesKey(signature.as_ref()[..16].try_into().unwrap()))
+        }
     }
 
     pub fn random<T: RngCore + CryptoRng>(rng: &mut T) -> Self {
@@ -117,7 +125,10 @@ impl Default for AesCiphertext {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use {
+        super::*,
+        solana_sdk::{signature::Keypair, signer::null_signer::NullSigner},
+    };
 
     #[test]
     fn test_aes_encrypt_decrypt_correctness() {
@@ -128,5 +139,19 @@ mod tests {
         let decrypted_amount = ct.decrypt(&key).unwrap();
 
         assert_eq!(amount, decrypted_amount);
+    }
+
+    #[test]
+    fn test_aes_new() {
+        let keypair1 = Keypair::new();
+        let keypair2 = Keypair::new();
+
+        assert_ne!(
+            AesKey::new(&keypair1, &Pubkey::default()).unwrap().0,
+            AesKey::new(&keypair2, &Pubkey::default()).unwrap().0,
+        );
+
+        let null_signer = NullSigner::new(&Pubkey::default());
+        assert!(AesKey::new(&null_signer, &Pubkey::default()).is_err());
     }
 }
