@@ -20,12 +20,12 @@ provides the knobs that a cost model can use to determine those costs.
 
 ### Fee
 
-The goal of the fees is to cover the computation cost of processing a
-transaction.  Each of the fee categories below will be represented as a compute
-unit cost that, when added together, encompasses the entire cost of processing
-the transaction.  By calculating the total cost of the transaction, the runtime
-can charge a more representative fee and make better transaction scheduling
-decisions.
+The goal of the fees are to prevent the abuse of on-chain compute resources when
+processing  a transaction.  Each of the fee categories below will be represented
+as a compute unit cost that, when added together, encompasses the entire cost of
+processing the transaction.  By calculating the total cost of the transaction,
+the runtime can charge a more representative fee and make better transaction
+scheduling decisions.
 
 A fee will be calculated based on:
 
