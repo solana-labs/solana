@@ -25,7 +25,7 @@ use {
         entrypoint::{ProgramResult, SUCCESS},
         epoch_schedule::EpochSchedule,
         feature_set::demote_program_write_locks,
-        fee_calculator::{FeeCalculator, FeeRateGovernor},
+        fee_calculator::FeeRateGovernor,
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
         instruction::Instruction,
@@ -416,9 +416,9 @@ pub fn read_file<P: AsRef<Path>>(path: P) -> Vec<u8> {
     file_data
 }
 
-fn setup_fee_calculator(bank: Bank) -> Bank {
-    // Realistic fee_calculator part 1: Fake a single signature by calling
-    // `bank.commit_transactions()` so that the fee calculator in the child bank will be
+fn setup_fees(bank: Bank) -> Bank {
+    // Realistic fees part 1: Fake a single signature by calling
+    // `bank.commit_transactions()` so that the fee in the child bank will be
     // initialized with a non-zero fee.
     assert_eq!(bank.signature_count(), 0);
     bank.commit_transactions(
@@ -436,19 +436,15 @@ fn setup_fee_calculator(bank: Bank) -> Bank {
     let bank = Bank::new_from_parent(&bank, bank.collector_id(), bank.slot() + 1);
     debug!("Bank slot: {}", bank.slot());
 
-    // Realistic fee_calculator part 2: Tick until a new blockhash is produced to pick up the
-    // non-zero fee calculator
+    // Realistic fees part 2: Tick until a new blockhash is produced to pick up the
+    // non-zero fees
     let last_blockhash = bank.last_blockhash();
     while last_blockhash == bank.last_blockhash() {
         bank.register_tick(&Hash::new_unique());
     }
-    let last_blockhash = bank.last_blockhash();
-    // Make sure the new last_blockhash now requires a fee
-    #[allow(deprecated)]
-    let lamports_per_signature = bank
-        .get_fee_calculator(&last_blockhash)
-        .expect("fee_calculator")
-        .lamports_per_signature;
+
+    // Make sure a fee is now required
+    let lamports_per_signature = bank.get_lamports_per_signature();
     assert_ne!(lamports_per_signature, 0);
 
     bank
@@ -807,7 +803,7 @@ impl ProgramTest {
                 ..ComputeBudget::default()
             }));
         }
-        let bank = setup_fee_calculator(bank);
+        let bank = setup_fees(bank);
         let slot = bank.slot();
         let last_blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
@@ -884,9 +880,10 @@ impl ProgramTest {
     }
 }
 
+// TODO need to return lamports_per_signature?
 #[async_trait]
 pub trait ProgramTestBanksClientExt {
-    async fn get_new_blockhash(&mut self, blockhash: &Hash) -> io::Result<(Hash, FeeCalculator)>;
+    async fn get_new_blockhash(&mut self, blockhash: &Hash) -> io::Result<(Hash, u64)>;
 }
 
 #[async_trait]
@@ -894,13 +891,13 @@ impl ProgramTestBanksClientExt for BanksClient {
     /// Get a new blockhash, similar in spirit to RpcClient::get_new_blockhash()
     ///
     /// This probably should eventually be moved into BanksClient proper in some form
-    async fn get_new_blockhash(&mut self, blockhash: &Hash) -> io::Result<(Hash, FeeCalculator)> {
+    async fn get_new_blockhash(&mut self, blockhash: &Hash) -> io::Result<(Hash, u64)> {
         let mut num_retries = 0;
         let start = Instant::now();
         while start.elapsed().as_secs() < 5 {
             if let Ok((fee_calculator, new_blockhash, _slot)) = self.get_fees().await {
                 if new_blockhash != *blockhash {
-                    return Ok((new_blockhash, fee_calculator));
+                    return Ok((new_blockhash, fee_calculator.lamports_per_signature));
                 }
             }
             debug!("Got same blockhash ({:?}), will retry...", blockhash);

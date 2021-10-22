@@ -57,6 +57,7 @@ use {
         epoch_schedule::EpochSchedule,
         exit::Exit,
         feature_set,
+        fee_calculator::FeeCalculator,
         hash::Hash,
         message::{Message, SanitizedMessage},
         pubkey::Pubkey,
@@ -546,21 +547,25 @@ impl JsonRpcRequestProcessor {
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<RpcBlockhashFeeCalculator> {
         let bank = self.bank(commitment);
-        #[allow(deprecated)]
-        let (blockhash, fee_calculator) = bank.confirmed_last_blockhash_with_fee_calculator();
+        let blockhash = bank.confirmed_last_blockhash();
+        let lamports_per_signature = bank
+            .get_lamports_per_signature_for_blockhash(&blockhash)
+            .unwrap();
         new_response(
             &bank,
             RpcBlockhashFeeCalculator {
                 blockhash: blockhash.to_string(),
-                fee_calculator,
+                fee_calculator: FeeCalculator::new(lamports_per_signature),
             },
         )
     }
 
     fn get_fees(&self, commitment: Option<CommitmentConfig>) -> RpcResponse<RpcFees> {
         let bank = self.bank(commitment);
-        #[allow(deprecated)]
-        let (blockhash, fee_calculator) = bank.confirmed_last_blockhash_with_fee_calculator();
+        let blockhash = bank.confirmed_last_blockhash();
+        let lamports_per_signature = bank
+            .get_lamports_per_signature_for_blockhash(&blockhash)
+            .unwrap();
         #[allow(deprecated)]
         let last_valid_slot = bank
             .get_blockhash_last_valid_slot(&blockhash)
@@ -572,7 +577,7 @@ impl JsonRpcRequestProcessor {
             &bank,
             RpcFees {
                 blockhash: blockhash.to_string(),
-                fee_calculator,
+                fee_calculator: FeeCalculator::new(lamports_per_signature),
                 last_valid_slot,
                 last_valid_block_height,
             },
@@ -585,11 +590,12 @@ impl JsonRpcRequestProcessor {
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<Option<RpcFeeCalculator>> {
         let bank = self.bank(commitment);
-        #[allow(deprecated)]
-        let fee_calculator = bank.get_fee_calculator(blockhash);
+        let lamports_per_signature = bank.get_lamports_per_signature_for_blockhash(blockhash);
         new_response(
             &bank,
-            fee_calculator.map(|fee_calculator| RpcFeeCalculator { fee_calculator }),
+            lamports_per_signature.map(|lamports_per_signature| RpcFeeCalculator {
+                fee_calculator: FeeCalculator::new(lamports_per_signature),
+            }),
         )
     }
 
@@ -1967,7 +1973,7 @@ impl JsonRpcRequestProcessor {
     ) -> Result<RpcResponse<Option<u64>>> {
         let bank = self.bank(commitment);
         let fee = bank.get_fee_for_message(message);
-        Ok(new_response(&bank, fee))
+        Ok(new_response(&bank, Some(fee)))
     }
 }
 
@@ -5890,9 +5896,11 @@ pub mod tests {
         let bob_pubkey = solana_sdk::pubkey::new_rand();
         let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
-        #[allow(deprecated)]
-        let (blockhash, fee_calculator) = bank.last_blockhash_with_fee_calculator();
-        let fee_calculator = RpcFeeCalculator { fee_calculator };
+        let blockhash = bank.last_blockhash();
+        let lamports_per_signature = bank.get_lamports_per_signature();
+        let fee_calculator = RpcFeeCalculator {
+            fee_calculator: FeeCalculator::new(lamports_per_signature),
+        };
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getFeeCalculatorForBlockhash","params":["{:?}"]}}"#,

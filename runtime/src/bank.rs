@@ -86,10 +86,11 @@ use solana_sdk::{
         MAX_TRANSACTION_FORWARDING_DELAY, SECONDS_PER_DAY,
     },
     compute_budget::ComputeBudget,
+    ed25519_program,
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
     feature,
-    feature_set::{self, tx_wide_compute_cap, FeatureSet},
+    feature_set::{self, disable_fee_calculator, tx_wide_compute_cap, FeatureSet},
     fee_calculator::{FeeCalculator, FeeRateGovernor},
     genesis_config::{ClusterType, GenesisConfig},
     hard_forks::HardForks,
@@ -107,6 +108,7 @@ use solana_sdk::{
     process_instruction::{ComputeMeter, Executor, ProcessInstructionWithContext},
     program_utils::limited_deserialize,
     pubkey::Pubkey,
+    secp256k1_program,
     signature::{Keypair, Signature},
     slot_hashes::SlotHashes,
     slot_history::SlotHistory,
@@ -563,7 +565,7 @@ pub struct TransactionLogCollector {
 pub trait NonceRollbackInfo {
     fn nonce_address(&self) -> &Pubkey;
     fn nonce_account(&self) -> &AccountSharedData;
-    fn fee_calculator(&self) -> Option<FeeCalculator>;
+    fn lamports_per_signature(&self) -> Option<u64>;
     fn fee_account(&self) -> Option<&AccountSharedData>;
 }
 
@@ -589,8 +591,8 @@ impl NonceRollbackInfo for NonceRollbackPartial {
     fn nonce_account(&self) -> &AccountSharedData {
         &self.nonce_account
     }
-    fn fee_calculator(&self) -> Option<FeeCalculator> {
-        nonce_account::fee_calculator_of(&self.nonce_account)
+    fn lamports_per_signature(&self) -> Option<u64> {
+        nonce_account::lamports_per_signature_of(&self.nonce_account)
     }
     fn fee_account(&self) -> Option<&AccountSharedData> {
         None
@@ -652,6 +654,9 @@ impl NonceRollbackFull {
             Err(TransactionError::AccountNotFound)
         }
     }
+    pub fn lamports_per_signature(&self) -> Option<u64> {
+        nonce_account::lamports_per_signature_of(&self.nonce_account)
+    }
 }
 
 impl NonceRollbackInfo for NonceRollbackFull {
@@ -661,8 +666,8 @@ impl NonceRollbackInfo for NonceRollbackFull {
     fn nonce_account(&self) -> &AccountSharedData {
         &self.nonce_account
     }
-    fn fee_calculator(&self) -> Option<FeeCalculator> {
-        nonce_account::fee_calculator_of(&self.nonce_account)
+    fn lamports_per_signature(&self) -> Option<u64> {
+        nonce_account::lamports_per_signature_of(&self.nonce_account)
     }
     fn fee_account(&self) -> Option<&AccountSharedData> {
         self.fee_account.as_ref()
@@ -929,6 +934,7 @@ pub struct Bank {
     /// Fees that have been collected
     collector_fees: AtomicU64,
 
+    /// Deprecated, do not use
     /// Latest transaction fees for transactions processed by this bank
     fee_calculator: FeeCalculator,
 
@@ -1322,6 +1328,12 @@ impl Bank {
         let fee_rate_governor =
             FeeRateGovernor::new_derived(&parent.fee_rate_governor, parent.signature_count());
 
+        let fee_calculator = if parent.feature_set.is_active(&disable_fee_calculator::id()) {
+            FeeCalculator::default()
+        } else {
+            fee_rate_governor.create_fee_calculator()
+        };
+
         let bank_id = rc.bank_id_generator.fetch_add(1, Relaxed) + 1;
         let mut new = Bank {
             rc,
@@ -1343,7 +1355,7 @@ impl Bank {
             rent_collector: parent.rent_collector.clone_with_epoch(epoch),
             max_tick_height: (slot + 1) * parent.ticks_per_slot,
             block_height: parent.block_height + 1,
-            fee_calculator: fee_rate_governor.create_fee_calculator(),
+            fee_calculator,
             fee_rate_governor,
             capitalization: AtomicU64::new(parent.capitalization()),
             vote_only_bank,
@@ -1612,11 +1624,14 @@ impl Bank {
         );
         assert_eq!(bank.epoch_schedule, genesis_config.epoch_schedule);
         assert_eq!(bank.epoch, bank.epoch_schedule.get_epoch(bank.slot));
-        bank.fee_rate_governor.lamports_per_signature = bank.fee_calculator.lamports_per_signature;
-        assert_eq!(
-            bank.fee_rate_governor.create_fee_calculator(),
-            bank.fee_calculator
-        );
+        if !bank.feature_set.is_active(&disable_fee_calculator::id()) {
+            bank.fee_rate_governor.lamports_per_signature =
+                bank.fee_calculator.lamports_per_signature;
+            assert_eq!(
+                bank.fee_rate_governor.create_fee_calculator(),
+                bank.fee_calculator
+            );
+        }
         bank
     }
 
@@ -1934,7 +1949,7 @@ impl Bank {
         {
             self.update_sysvar_account(&sysvar::fees::id(), |account| {
                 create_account(
-                    &sysvar::fees::Fees::new(&self.fee_calculator),
+                    &sysvar::fees::Fees::new(&self.fee_rate_governor.create_fee_calculator()),
                     self.inherit_specially_retained_account_fields(account),
                 )
             });
@@ -2942,10 +2957,10 @@ impl Bank {
             .highest_staked_node()
             .unwrap_or_default();
 
-        self.blockhash_queue
-            .write()
-            .unwrap()
-            .genesis_hash(&genesis_config.hash(), &self.fee_calculator);
+        self.blockhash_queue.write().unwrap().genesis_hash(
+            &genesis_config.hash(),
+            self.fee_rate_governor.lamports_per_signature,
+        );
 
         self.hashes_per_tick = genesis_config.hashes_per_tick();
         self.ticks_per_slot = genesis_config.ticks_per_slot();
@@ -3089,28 +3104,13 @@ impl Bank {
         self.rent_collector.rent.minimum_balance(data_len).max(1)
     }
 
-    #[deprecated(
-        since = "1.8.0",
-        note = "Please use `last_blockhash` and `get_fee_for_message` instead"
-    )]
-    pub fn last_blockhash_with_fee_calculator(&self) -> (Hash, FeeCalculator) {
-        let blockhash_queue = self.blockhash_queue.read().unwrap();
-        let last_hash = blockhash_queue.last_hash();
-        (
-            last_hash,
-            #[allow(deprecated)]
-            blockhash_queue
-                .get_fee_calculator(&last_hash)
-                .unwrap()
-                .clone(),
-        )
+    pub fn get_lamports_per_signature(&self) -> u64 {
+        self.fee_rate_governor.lamports_per_signature
     }
 
-    #[deprecated(since = "1.8.0", note = "Please use `get_fee_for_message` instead")]
-    pub fn get_fee_calculator(&self, hash: &Hash) -> Option<FeeCalculator> {
+    pub fn get_lamports_per_signature_for_blockhash(&self, hash: &Hash) -> Option<u64> {
         let blockhash_queue = self.blockhash_queue.read().unwrap();
-        #[allow(deprecated)]
-        blockhash_queue.get_fee_calculator(hash).cloned()
+        blockhash_queue.get_lamports_per_signature(hash)
     }
 
     #[deprecated(since = "1.8.0", note = "Please use `get_fee_for_message` instead")]
@@ -3118,8 +3118,15 @@ impl Bank {
         &self.fee_rate_governor
     }
 
-    pub fn get_fee_for_message(&self, message: &SanitizedMessage) -> Option<u64> {
-        Some(message.calculate_fee(self.fee_rate_governor.lamports_per_signature))
+    pub fn get_fee_for_message(&self, message: &SanitizedMessage) -> u64 {
+        Self::calculate_fee(message, self.fee_rate_governor.lamports_per_signature)
+    }
+
+    pub fn get_fee_for_message_with_lamports_per_signature(
+        message: &SanitizedMessage,
+        lamports_per_signature: u64,
+    ) -> u64 {
+        Self::calculate_fee(message, lamports_per_signature)
     }
 
     #[deprecated(
@@ -3142,24 +3149,6 @@ impl Bank {
         blockhash_queue
             .get_hash_age(blockhash)
             .map(|age| self.block_height + blockhash_queue.len() as u64 - age)
-    }
-
-    #[deprecated(
-        since = "1.8.0",
-        note = "Please use `confirmed_last_blockhash` and `get_fee_for_message` instead"
-    )]
-    pub fn confirmed_last_blockhash_with_fee_calculator(&self) -> (Hash, FeeCalculator) {
-        const NUM_BLOCKHASH_CONFIRMATIONS: usize = 3;
-
-        let parents = self.parents();
-        if parents.is_empty() {
-            #[allow(deprecated)]
-            self.last_blockhash_with_fee_calculator()
-        } else {
-            let index = NUM_BLOCKHASH_CONFIRMATIONS.min(parents.len() - 1);
-            #[allow(deprecated)]
-            parents[index].last_blockhash_with_fee_calculator()
-        }
     }
 
     pub fn confirmed_last_blockhash(&self) -> Hash {
@@ -3238,7 +3227,7 @@ impl Bank {
         inc_new_counter_debug!("bank-register_tick-registered", 1);
         let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
         if self.is_block_boundary(self.tick_height.load(Relaxed) + 1) {
-            w_blockhash_queue.register_hash(hash, &self.fee_calculator);
+            w_blockhash_queue.register_hash(hash, self.fee_rate_governor.lamports_per_signature);
             self.update_recent_blockhashes_locked(&w_blockhash_queue);
         }
         // ReplayStage will start computing the accounts delta hash when it
@@ -3847,16 +3836,14 @@ impl Bank {
                             compute_budget.max_units,
                         )));
 
-                        let (blockhash, fee_calculator) = {
+                        let (blockhash, lamports_per_signature) = {
                             let blockhash_queue = self.blockhash_queue.read().unwrap();
                             let blockhash = blockhash_queue.last_hash();
                             (
                                 blockhash,
-                                #[allow(deprecated)]
                                 blockhash_queue
-                                    .get_fee_calculator(&blockhash)
-                                    .cloned()
-                                    .unwrap_or_else(|| self.fee_calculator.clone()),
+                                    .get_lamports_per_signature(&blockhash)
+                                    .unwrap_or(self.fee_rate_governor.lamports_per_signature),
                             )
                         };
 
@@ -3877,7 +3864,7 @@ impl Bank {
                                 self.rc.accounts.clone(),
                                 &self.ancestors,
                                 blockhash,
-                                fee_calculator,
+                                lamports_per_signature,
                             );
                         } else {
                             // TODO: support versioned messages
@@ -4022,6 +4009,20 @@ impl Bank {
         )
     }
 
+    /// Calculate fee for `SanitizedMessage`
+    pub fn calculate_fee(message: &SanitizedMessage, lamports_per_signature: u64) -> u64 {
+        let mut num_signatures = u64::from(message.header().num_required_signatures);
+        for (program_id, instruction) in message.program_instructions_iter() {
+            if secp256k1_program::check_id(program_id) || ed25519_program::check_id(program_id) {
+                if let Some(num_verifies) = instruction.data.get(0) {
+                    num_signatures = num_signatures.saturating_add(u64::from(*num_verifies));
+                }
+            }
+        }
+
+        lamports_per_signature.saturating_mul(num_signatures)
+    }
+
     fn filter_program_errors_and_collect_fee(
         &self,
         txs: &[SanitizedTransaction],
@@ -4034,24 +4035,20 @@ impl Bank {
             .iter()
             .zip(executed)
             .map(|(tx, (res, nonce_rollback))| {
-                let (fee_calculator, is_durable_nonce) = nonce_rollback
+                let (lamports_per_signature, is_durable_nonce) = nonce_rollback
                     .as_ref()
-                    .map(|nonce_rollback| nonce_rollback.fee_calculator())
-                    .map(|maybe_fee_calculator| (maybe_fee_calculator, true))
+                    .map(|nonce_rollback| nonce_rollback.lamports_per_signature())
+                    .map(|maybe_lamports_per_signature| (maybe_lamports_per_signature, true))
                     .unwrap_or_else(|| {
                         (
-                            #[allow(deprecated)]
-                            hash_queue
-                                .get_fee_calculator(tx.message().recent_blockhash())
-                                .cloned(),
+                            hash_queue.get_lamports_per_signature(tx.message().recent_blockhash()),
                             false,
                         )
                     });
 
-                let fee_calculator = fee_calculator.ok_or(TransactionError::BlockhashNotFound)?;
-                let fee = tx
-                    .message()
-                    .calculate_fee(fee_calculator.lamports_per_signature);
+                let lamports_per_signature =
+                    lamports_per_signature.ok_or(TransactionError::BlockhashNotFound)?;
+                let fee = Self::calculate_fee(tx.message(), lamports_per_signature);
 
                 match *res {
                     Err(TransactionError::InstructionError(_, _)) => {
@@ -4118,14 +4115,14 @@ impl Bank {
         }
 
         let mut write_time = Measure::start("write_time");
-        #[allow(deprecated)]
         self.rc.accounts.store_cached(
             self.slot(),
             sanitized_txs,
             executed,
             loaded_txs,
             &self.rent_collector,
-            &self.last_blockhash_with_fee_calculator(),
+            &self.last_blockhash(),
+            self.get_lamports_per_signature(),
             self.rent_for_sysvars(),
             self.merge_nonce_error_into_system_error(),
             self.demote_program_write_locks(),
@@ -6376,20 +6373,24 @@ pub(crate) mod tests {
     fn test_nonce_rollback_info() {
         let nonce_authority = keypair_from_seed(&[0; 32]).unwrap();
         let nonce_address = nonce_authority.pubkey();
-        let fee_calculator = FeeCalculator::new(42);
-        let state =
-            nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
-                authority: Pubkey::default(),
-                blockhash: Hash::new_unique(),
-                fee_calculator: fee_calculator.clone(),
-            }));
+        let lamports_per_signature = 42;
+        let state = nonce::state::Versions::new_current(nonce::State::Initialized(
+            nonce::state::Data::new(
+                Pubkey::default(),
+                Hash::new_unique(),
+                lamports_per_signature,
+            ),
+        ));
         let nonce_account = AccountSharedData::new_data(43, &state, &system_program::id()).unwrap();
 
         // NonceRollbackPartial create + NonceRollbackInfo impl
         let partial = NonceRollbackPartial::new(nonce_address, nonce_account.clone());
         assert_eq!(*partial.nonce_address(), nonce_address);
         assert_eq!(*partial.nonce_account(), nonce_account);
-        assert_eq!(partial.fee_calculator(), Some(fee_calculator.clone()));
+        assert_eq!(
+            partial.lamports_per_signature(),
+            Some(lamports_per_signature)
+        );
         assert_eq!(partial.fee_account(), None);
 
         let from = keypair_from_seed(&[1; 32]).unwrap();
@@ -6418,7 +6419,7 @@ pub(crate) mod tests {
         let full = NonceRollbackFull::from_partial(partial.clone(), &message, &accounts).unwrap();
         assert_eq!(*full.nonce_address(), nonce_address);
         assert_eq!(*full.nonce_account(), nonce_account);
-        assert_eq!(full.fee_calculator(), Some(fee_calculator));
+        assert_eq!(full.lamports_per_signature(), Some(lamports_per_signature));
         assert_eq!(full.fee_account(), Some(&from_account));
 
         let message = new_sanitized_message(&instructions, Some(&nonce_address));
@@ -8949,19 +8950,15 @@ pub(crate) mod tests {
 
         let mut bank = Bank::new_for_tests(&genesis_config);
         goto_end_of_slot(&mut bank);
-        #[allow(deprecated)]
-        let (cheap_blockhash, cheap_fee_calculator) = bank.last_blockhash_with_fee_calculator();
-        assert_eq!(cheap_fee_calculator.lamports_per_signature, 0);
+        let cheap_blockhash = bank.last_blockhash();
+        let cheap_lamports_per_signature = bank.get_lamports_per_signature();
+        assert_eq!(cheap_lamports_per_signature, 0);
 
         let mut bank = Bank::new_from_parent(&Arc::new(bank), &leader, 1);
         goto_end_of_slot(&mut bank);
-        #[allow(deprecated)]
-        let (expensive_blockhash, expensive_fee_calculator) =
-            bank.last_blockhash_with_fee_calculator();
-        assert!(
-            cheap_fee_calculator.lamports_per_signature
-                < expensive_fee_calculator.lamports_per_signature
-        );
+        let expensive_blockhash = bank.last_blockhash();
+        let expensive_lamports_per_signature = bank.get_lamports_per_signature();
+        assert!(cheap_lamports_per_signature < expensive_lamports_per_signature);
 
         let bank = Bank::new_from_parent(&Arc::new(bank), &leader, 2);
 
@@ -8973,7 +8970,7 @@ pub(crate) mod tests {
         assert_eq!(bank.get_balance(&key.pubkey()), 1);
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
-            initial_mint_balance - 1 - cheap_fee_calculator.lamports_per_signature
+            initial_mint_balance - 1 - cheap_lamports_per_signature
         );
 
         // Send a transfer using expensive_blockhash
@@ -8984,7 +8981,7 @@ pub(crate) mod tests {
         assert_eq!(bank.get_balance(&key.pubkey()), 1);
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
-            initial_mint_balance - 1 - expensive_fee_calculator.lamports_per_signature
+            initial_mint_balance - 1 - expensive_lamports_per_signature
         );
     }
 
@@ -9028,7 +9025,7 @@ pub(crate) mod tests {
             initial_balance
                 + bank
                     .fee_rate_governor
-                    .burn(bank.fee_calculator.lamports_per_signature * 2)
+                    .burn(bank.fee_rate_governor.lamports_per_signature * 2)
                     .0
         );
         assert_eq!(results[0], Ok(()));
@@ -9937,7 +9934,7 @@ pub(crate) mod tests {
         solana_logger::setup();
         let (genesis_config, mint_keypair) = create_genesis_config(500);
         let mut bank = Bank::new_for_tests(&genesis_config);
-        bank.fee_calculator.lamports_per_signature = 2;
+        bank.fee_rate_governor.lamports_per_signature = 2;
         let key = Keypair::new();
 
         let mut transfer_instruction =
@@ -10175,7 +10172,7 @@ pub(crate) mod tests {
         let fees_account = bank.get_account(&sysvar::fees::id()).unwrap();
         let fees = from_account::<Fees, _>(&fees_account).unwrap();
         assert_eq!(
-            bank.fee_calculator.lamports_per_signature,
+            bank.fee_rate_governor.lamports_per_signature,
             fees.fee_calculator.lamports_per_signature
         );
         assert_eq!(fees.fee_calculator.lamports_per_signature, 12345);
@@ -10936,10 +10933,8 @@ pub(crate) mod tests {
         assert_eq!(bank.process_transaction(&durable_tx), Ok(()));
 
         /* Check balances */
-        let mut expected_balance = 4_650_000
-            - bank
-                .get_fee_for_message(&durable_tx.message.try_into().unwrap())
-                .unwrap();
+        let mut expected_balance =
+            4_650_000 - bank.get_fee_for_message(&durable_tx.message.try_into().unwrap());
         assert_eq!(bank.get_balance(&custodian_pubkey), expected_balance);
         assert_eq!(bank.get_balance(&nonce_pubkey), 250_000);
         assert_eq!(bank.get_balance(&alice_pubkey), 100_000);
@@ -10992,8 +10987,7 @@ pub(crate) mod tests {
         );
         /* Check fee charged and nonce has advanced */
         expected_balance -= bank
-            .get_fee_for_message(&SanitizedMessage::try_from(durable_tx.message.clone()).unwrap())
-            .unwrap();
+            .get_fee_for_message(&SanitizedMessage::try_from(durable_tx.message.clone()).unwrap());
         assert_eq!(bank.get_balance(&custodian_pubkey), expected_balance);
         assert_ne!(nonce_hash, get_nonce_account(&bank, &nonce_pubkey).unwrap());
         /* Confirm replaying a TX that failed with InstructionError::* now
@@ -11055,9 +11049,7 @@ pub(crate) mod tests {
         assert_eq!(
             bank.get_balance(&custodian_pubkey),
             initial_custodian_balance
-                - bank
-                    .get_fee_for_message(&durable_tx.message.try_into().unwrap())
-                    .unwrap()
+                - bank.get_fee_for_message(&durable_tx.message.try_into().unwrap())
         );
         assert_eq!(nonce_hash, get_nonce_account(&bank, &nonce_pubkey).unwrap());
     }
@@ -11107,9 +11099,7 @@ pub(crate) mod tests {
         assert_eq!(
             bank.get_balance(&nonce_pubkey),
             nonce_starting_balance
-                - bank
-                    .get_fee_for_message(&durable_tx.message.try_into().unwrap())
-                    .unwrap()
+                - bank.get_fee_for_message(&durable_tx.message.try_into().unwrap())
         );
         assert_ne!(nonce_hash, get_nonce_account(&bank, &nonce_pubkey).unwrap());
     }
@@ -15016,5 +15006,62 @@ pub(crate) mod tests {
         // calling the program should be successful when called from the bank
         // even if the program itself is not called
         bank.process_transaction(&tx).unwrap();
+    }
+
+    #[test]
+    fn test_calculate_fee() {
+        // Default: no fee.
+        let message =
+            SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
+        assert_eq!(Bank::calculate_fee(&message, 0), 0);
+
+        // One signature, a fee.
+        assert_eq!(Bank::calculate_fee(&message, 1), 1);
+
+        // Two signatures, double the fee.
+        let key0 = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+        let ix0 = system_instruction::transfer(&key0, &key1, 1);
+        let ix1 = system_instruction::transfer(&key1, &key0, 1);
+        let message = SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&key0))).unwrap();
+        assert_eq!(Bank::calculate_fee(&message, 2), 4);
+    }
+
+    #[test]
+    fn test_calculate_fee_secp256k1() {
+        let key0 = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+        let ix0 = system_instruction::transfer(&key0, &key1, 1);
+
+        let mut secp_instruction1 = Instruction {
+            program_id: secp256k1_program::id(),
+            accounts: vec![],
+            data: vec![],
+        };
+        let mut secp_instruction2 = Instruction {
+            program_id: secp256k1_program::id(),
+            accounts: vec![],
+            data: vec![1],
+        };
+
+        let message = SanitizedMessage::try_from(Message::new(
+            &[
+                ix0.clone(),
+                secp_instruction1.clone(),
+                secp_instruction2.clone(),
+            ],
+            Some(&key0),
+        ))
+        .unwrap();
+        assert_eq!(Bank::calculate_fee(&message, 1), 2);
+
+        secp_instruction1.data = vec![0];
+        secp_instruction2.data = vec![10];
+        let message = SanitizedMessage::try_from(Message::new(
+            &[ix0, secp_instruction1, secp_instruction2],
+            Some(&key0),
+        ))
+        .unwrap();
+        assert_eq!(Bank::calculate_fee(&message, 1), 11);
     }
 }
