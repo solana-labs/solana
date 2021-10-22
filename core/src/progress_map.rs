@@ -66,6 +66,11 @@ impl ReplaySlotStats {
             ("execute_us", self.execute_timings.execute_us, i64),
             ("store_us", self.execute_timings.store_us, i64),
             (
+                "update_stakes_cache_us",
+                self.execute_timings.update_stakes_cache_us,
+                i64
+            ),
+            (
                 "total_batches_len",
                 self.execute_timings.total_batches_len,
                 i64
