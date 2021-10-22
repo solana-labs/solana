@@ -69,7 +69,7 @@
     "bs58": "^4.0.1",
     "buffer": "6.0.1",
     "cross-fetch": "^3.1.4",
-    "crypto-hash": "^1.2.2",
+    "ethers": "^5.5.1",
     "jayson": "^3.4.4",
     "js-sha3": "^0.8.0",
     "rpc-websockets": "^7.4.2",
