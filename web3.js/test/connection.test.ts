@@ -887,7 +887,7 @@ describe('Connection', () => {
         total: 1000000,
         circulating: 100000,
         nonCirculating: 900000,
-        nonCirculatingAccounts: [Keypair.generate().publicKey.toBase58()],
+        nonCirculatingAccounts: [],
       },
       withContext: true,
     });
@@ -2289,7 +2289,7 @@ describe('Connection', () => {
   it('get supply', async () => {
     await mockRpcResponse({
       method: 'getSupply',
-      params: [],
+      params: [{commitment: 'finalized'}],
       value: {
         total: 1000,
         circulating: 100,
@@ -2299,11 +2299,36 @@ describe('Connection', () => {
       withContext: true,
     });
 
-    const supply = (await connection.getSupply()).value;
+    const supply = (await connection.getSupply('finalized')).value;
     expect(supply.total).to.be.greaterThan(0);
     expect(supply.circulating).to.be.greaterThan(0);
     expect(supply.nonCirculating).to.be.at.least(0);
     expect(supply.nonCirculatingAccounts.length).to.be.at.least(0);
+  });
+
+  it('get supply without accounts', async () => {
+    await mockRpcResponse({
+      method: 'getSupply',
+      params: [{commitment: 'finalized'}],
+      value: {
+        total: 1000,
+        circulating: 100,
+        nonCirculating: 900,
+        nonCirculatingAccounts: [],
+      },
+      withContext: true,
+    });
+
+    const supply = (
+      await connection.getSupply({
+        commitment: 'finalized',
+        excludeNonCirculatingAccountsList: true,
+      })
+    ).value;
+    expect(supply.total).to.be.greaterThan(0);
+    expect(supply.circulating).to.be.greaterThan(0);
+    expect(supply.nonCirculating).to.be.at.least(0);
+    expect(supply.nonCirculatingAccounts.length).to.eq(0);
   });
 
   it('get performance samples', async () => {
