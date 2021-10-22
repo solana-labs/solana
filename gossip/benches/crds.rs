@@ -6,7 +6,9 @@ use {
     rand::{thread_rng, Rng},
     rayon::ThreadPoolBuilder,
     solana_gossip::{
-        crds::Crds, crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS, crds_value::CrdsValue,
+        crds::{Crds, GossipRoute},
+        crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
+        crds_value::CrdsValue,
     },
     solana_sdk::pubkey::Pubkey,
     std::collections::HashMap,
@@ -21,7 +23,7 @@ fn bench_find_old_labels(bencher: &mut Bencher) {
     let now = CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS + CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS / 1000;
     std::iter::repeat_with(|| (CrdsValue::new_rand(&mut rng, None), rng.gen_range(0, now)))
         .take(50_000)
-        .for_each(|(v, ts)| assert!(crds.insert(v, ts).is_ok()));
+        .for_each(|(v, ts)| assert!(crds.insert(v, ts, GossipRoute::LocalMessage).is_ok()));
     let mut timeouts = HashMap::new();
     timeouts.insert(Pubkey::default(), CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS);
     bencher.iter(|| {
