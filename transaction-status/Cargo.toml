@@ -1,6 +1,6 @@
 [package]
 name = "solana-transaction-status"
-version = "1.7.16"
+version = "1.7.17"
 description = "Solana transaction status types"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -19,12 +19,12 @@ log = "0.4.11"
 serde = "1.0.122"
 serde_derive = "1.0.103"
 serde_json = "1.0.56"
-solana-account-decoder = { path = "../account-decoder", version = "=1.7.16" }
-solana-measure = { path = "../measure", version = "=1.7.16" }
-solana-metrics = { path = "../metrics", version = "=1.7.16" }
-solana-sdk = { path = "../sdk", version = "=1.7.16" }
-solana-runtime = { path = "../runtime", version = "=1.7.16" }
-solana-vote-program = { path = "../programs/vote", version = "=1.7.16" }
+solana-account-decoder = { path = "../account-decoder", version = "=1.7.17" }
+solana-measure = { path = "../measure", version = "=1.7.17" }
+solana-metrics = { path = "../metrics", version = "=1.7.17" }
+solana-sdk = { path = "../sdk", version = "=1.7.17" }
+solana-runtime = { path = "../runtime", version = "=1.7.17" }
+solana-vote-program = { path = "../programs/vote", version = "=1.7.17" }
 spl-associated-token-account-v1-0 = { package = "spl-associated-token-account", version = "=1.0.3", features = ["no-entrypoint"] }
 spl-memo = { version = "=3.0.1", features = ["no-entrypoint"] }
 spl-token-v2-0 = { package = "spl-token", version = "=3.2.0", features = ["no-entrypoint"] }

@@ -1,7 +1,7 @@
 [package]
 name = "solana-core"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.7.16"
+version = "1.7.17"
 homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-core"
 readme = "../README.md"
@@ -43,33 +43,33 @@ retain_mut = "0.1.2"
 serde = "1.0.122"
 serde_bytes = "0.11"
 serde_derive = "1.0.103"
-solana-account-decoder = { path = "../account-decoder", version = "=1.7.16" }
-solana-banks-server = { path = "../banks-server", version = "=1.7.16" }
-solana-clap-utils = { path = "../clap-utils", version = "=1.7.16" }
-solana-client = { path = "../client", version = "=1.7.16" }
-solana-gossip = { path = "../gossip", version = "=1.7.16" }
-solana-ledger = { path = "../ledger", version = "=1.7.16" }
-solana-logger = { path = "../logger", version = "=1.7.16" }
-solana-merkle-tree = { path = "../merkle-tree", version = "=1.7.16" }
-solana-metrics = { path = "../metrics", version = "=1.7.16" }
-solana-measure = { path = "../measure", version = "=1.7.16" }
-solana-net-utils = { path = "../net-utils", version = "=1.7.16" }
-solana-perf = { path = "../perf", version = "=1.7.16" }
-solana-poh = { path = "../poh", version = "=1.7.16" }
-solana-program-test = { path = "../program-test", version = "=1.7.16" }
-solana-rpc = { path = "../rpc", version = "=1.7.16" }
-solana-runtime = { path = "../runtime", version = "=1.7.16" }
-solana-sdk = { path = "../sdk", version = "=1.7.16" }
-solana-frozen-abi = { path = "../frozen-abi", version = "=1.7.16" }
-solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.7.16" }
-solana-streamer = { path = "../streamer", version = "=1.7.16" }
-solana-transaction-status = { path = "../transaction-status", version = "=1.7.16" }
-solana-version = { path = "../version", version = "=1.7.16" }
-solana-vote-program = { path = "../programs/vote", version = "=1.7.16" }
+solana-account-decoder = { path = "../account-decoder", version = "=1.7.17" }
+solana-banks-server = { path = "../banks-server", version = "=1.7.17" }
+solana-clap-utils = { path = "../clap-utils", version = "=1.7.17" }
+solana-client = { path = "../client", version = "=1.7.17" }
+solana-gossip = { path = "../gossip", version = "=1.7.17" }
+solana-ledger = { path = "../ledger", version = "=1.7.17" }
+solana-logger = { path = "../logger", version = "=1.7.17" }
+solana-merkle-tree = { path = "../merkle-tree", version = "=1.7.17" }
+solana-metrics = { path = "../metrics", version = "=1.7.17" }
+solana-measure = { path = "../measure", version = "=1.7.17" }
+solana-net-utils = { path = "../net-utils", version = "=1.7.17" }
+solana-perf = { path = "../perf", version = "=1.7.17" }
+solana-poh = { path = "../poh", version = "=1.7.17" }
+solana-program-test = { path = "../program-test", version = "=1.7.17" }
+solana-rpc = { path = "../rpc", version = "=1.7.17" }
+solana-runtime = { path = "../runtime", version = "=1.7.17" }
+solana-sdk = { path = "../sdk", version = "=1.7.17" }
+solana-frozen-abi = { path = "../frozen-abi", version = "=1.7.17" }
+solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.7.17" }
+solana-streamer = { path = "../streamer", version = "=1.7.17" }
+solana-transaction-status = { path = "../transaction-status", version = "=1.7.17" }
+solana-version = { path = "../version", version = "=1.7.17" }
+solana-vote-program = { path = "../programs/vote", version = "=1.7.17" }
 spl-token-v2-0 = { package = "spl-token", version = "=3.2.0", features = ["no-entrypoint"] }
 tempfile = "3.1.0"
 thiserror = "1.0"
-solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.7.16" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.7.17" }
 trees = "0.2.1"
 
 [dev-dependencies]
@@ -82,8 +82,8 @@ num_cpus = "1.13.0"
 reqwest = { version = "0.11.2", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 serde_json = "1.0.56"
 serial_test = "0.4.0"
-solana-stake-program = { path = "../programs/stake", version = "=1.7.16" }
-solana-version = { path = "../version", version = "=1.7.16" }
+solana-stake-program = { path = "../programs/stake", version = "=1.7.17" }
+solana-version = { path = "../version", version = "=1.7.17" }
 symlink = "0.1.0"
 systemstat = "0.1.5"
 tokio = { version = "1", features = ["full"] }
