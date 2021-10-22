@@ -18,7 +18,11 @@ use solana_sdk::{
     pubkey::Pubkey,
     transaction::Transaction,
 };
-use std::{collections::HashMap, fmt, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+    sync::Arc,
+};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ForceActivation {
@@ -226,6 +230,7 @@ pub fn process_feature_subcommand(
 struct WorkingFeatureSetStatsEntry {
     stake: u64,
     rpc_nodes_count: u32,
+    software_versions: HashSet<Option<semver::Version>>,
 }
 type WorkingFeatureSetStats = HashMap<u32, WorkingFeatureSetStatsEntry>;
 
@@ -233,6 +238,7 @@ type WorkingFeatureSetStats = HashMap<u32, WorkingFeatureSetStatsEntry>;
 struct FeatureSetStatsEntry {
     stake_percent: f64,
     rpc_nodes_percent: f32,
+    software_versions: Vec<Option<semver::Version>>,
 }
 type FeatureSetStats = HashMap<u32, FeatureSetStatsEntry>;
 
@@ -246,6 +252,9 @@ fn feature_set_stats(rpc_client: &RpcClient) -> Result<FeatureSetStats, ClientEr
                 contact_info.pubkey,
                 contact_info.feature_set,
                 contact_info.rpc.is_some(),
+                contact_info
+                    .version
+                    .and_then(|v| semver::Version::parse(&v).ok()),
             )
         })
         .collect::<Vec<_>>();
@@ -269,9 +278,11 @@ fn feature_set_stats(rpc_client: &RpcClient) -> Result<FeatureSetStats, ClientEr
 
     let mut feature_set_stats: WorkingFeatureSetStats = HashMap::new();
     let mut total_rpc_nodes = 0;
-    for (node_id, feature_set, is_rpc) in feature_sets {
+    for (node_id, feature_set, is_rpc, version) in feature_sets {
         let feature_set = feature_set.unwrap_or(0);
         let feature_set_entry = feature_set_stats.entry(feature_set).or_default();
+
+        feature_set_entry.software_versions.insert(version);
 
         if let Some(vote_stake) = vote_stakes.get(&node_id) {
             feature_set_entry.stake += *vote_stake;
@@ -291,16 +302,20 @@ fn feature_set_stats(rpc_client: &RpcClient) -> Result<FeatureSetStats, ClientEr
                 WorkingFeatureSetStatsEntry {
                     stake,
                     rpc_nodes_count,
+                    software_versions,
                 },
             )| {
                 let stake_percent = stake as f64 * 100. / total_active_stake as f64;
                 let rpc_nodes_percent = rpc_nodes_count as f32 * 100. / total_rpc_nodes as f32;
+                let mut software_versions = software_versions.into_iter().collect::<Vec<_>>();
+                software_versions.sort();
                 if stake_percent >= 0.001 || rpc_nodes_percent >= 0.001 {
                     Some((
                         feature_set,
                         FeatureSetStatsEntry {
                             stake_percent,
                             rpc_nodes_percent,
+                            software_versions,
                         },
                     ))
                 } else {
@@ -323,6 +338,7 @@ fn feature_activation_allowed(rpc_client: &RpcClient, quiet: bool) -> Result<boo
             |FeatureSetStatsEntry {
                  stake_percent,
                  rpc_nodes_percent,
+                 ..
              }| (*stake_percent >= 95., *rpc_nodes_percent >= 95.),
         )
         .unwrap_or((false, false));
@@ -355,10 +371,12 @@ fn feature_activation_allowed(rpc_client: &RpcClient, quiet: bool) -> Result<boo
             "\n\n{}",
             style(format!("Tool Feature Set: {}", my_feature_set)).bold()
         );
+        let software_versions_title = "Software Version";
         let feature_set_title = "Feature Set";
         let stake_percent_title = "Stake";
         let rpc_percent_title = "RPC";
         let mut stats_output = Vec::new();
+        let mut max_software_versions_len = software_versions_title.len();
         let mut max_feature_set_len = feature_set_title.len();
         let mut max_stake_percent_len = stake_percent_title.len();
         let mut max_rpc_percent_len = rpc_percent_title.len();
@@ -367,6 +385,7 @@ fn feature_activation_allowed(rpc_client: &RpcClient, quiet: bool) -> Result<boo
             FeatureSetStatsEntry {
                 stake_percent,
                 rpc_nodes_percent,
+                software_versions,
             },
         ) in feature_set_stats.into_iter()
         {
@@ -379,16 +398,41 @@ fn feature_activation_allowed(rpc_client: &RpcClient, quiet: bool) -> Result<boo
             let stake_percent = format!("{:.2}%", stake_percent);
             let rpc_percent = format!("{:.2}%", rpc_nodes_percent);
 
+            let mut has_unknown = false;
+            let mut software_versions = software_versions
+                .iter()
+                .filter_map(|v| {
+                    if v.is_none() {
+                        has_unknown = true;
+                    }
+                    v.as_ref()
+                })
+                .map(ToString::to_string)
+                .collect::<Vec<_>>();
+            if has_unknown {
+                software_versions.push("unknown".to_string());
+            }
+            let software_versions = software_versions.join(", ");
+            max_software_versions_len = max_software_versions_len.max(software_versions.len());
+
             max_feature_set_len = max_feature_set_len.max(feature_set.len());
             max_stake_percent_len = max_stake_percent_len.max(stake_percent.len());
             max_rpc_percent_len = max_rpc_percent_len.max(rpc_percent.len());
 
-            stats_output.push((feature_set, stake_percent, rpc_percent, me));
+            stats_output.push((
+                software_versions,
+                feature_set,
+                stake_percent,
+                rpc_percent,
+                me,
+            ));
         }
         println!(
             "{}",
             style(format!(
-                "{1:<0$}  {3:<2$}  {5:<4$}",
+                "{1:<0$}  {3:<2$}  {5:<4$}  {7:<6$}",
+                max_software_versions_len,
+                software_versions_title,
                 max_feature_set_len,
                 feature_set_title,
                 max_stake_percent_len,
@@ -398,9 +442,11 @@ fn feature_activation_allowed(rpc_client: &RpcClient, quiet: bool) -> Result<boo
             ))
             .bold(),
         );
-        for (feature_set, stake_percent, rpc_percent, me) in stats_output {
+        for (software_versions, feature_set, stake_percent, rpc_percent, me) in stats_output {
             println!(
-                "{1:>0$}  {3:>2$}  {5:>4$} {6}",
+                "{1:<0$}  {3:>2$}  {5:>4$} {7:>6$}  {8}",
+                max_software_versions_len,
+                software_versions,
                 max_feature_set_len,
                 feature_set,
                 max_stake_percent_len,

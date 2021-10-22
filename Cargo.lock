@@ -4480,6 +4480,7 @@ dependencies = [
  "num-traits",
  "pretty-hex",
  "reqwest",
+ "semver 1.0.4",
  "serde",
  "serde_derive",
  "serde_json",
