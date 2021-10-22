@@ -414,13 +414,18 @@ mod tests {
 
     #[test]
     fn test_check_details_length() {
-        let short_details = (0..10).map(|_| "X").collect::<String>();
+        let short_details = (0..MAX_LONG_FIELD_LENGTH).map(|_| "X").collect::<String>();
         assert_eq!(check_details_length(short_details), Ok(()));
 
-        let long_details = (0..1000).map(|_| "X").collect::<String>();
+        let long_details = (0..MAX_LONG_FIELD_LENGTH + 1)
+            .map(|_| "X")
+            .collect::<String>();
         assert_eq!(
             check_details_length(long_details),
-            Err("validator details longer than 300-byte limit".to_string())
+            Err(format!(
+                "validator details longer than {:?}-byte limit",
+                MAX_LONG_FIELD_LENGTH
+            ))
         );
     }
 
