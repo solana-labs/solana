@@ -411,6 +411,70 @@ fn get_cluster_shred_version(entrypoints: &[SocketAddr]) -> Option<u16> {
     None
 }
 
+#[cfg(target_os = "linux")]
+fn check_os_network_limits() {
+    use std::collections::HashMap;
+    use sysctl::Sysctl;
+
+    fn sysctl_read(name: &str) -> Result<String, sysctl::SysctlError> {
+        let ctl = sysctl::Ctl::new(name)?;
+        let val = ctl.value_string()?;
+        Ok(val)
+    }
+    let mut check_failed = false;
+
+    info!("Testing OS network limits:");
+
+    // Reference: https://medium.com/@CameronSparr/increase-os-udp-buffers-to-improve-performance-51d167bb1360
+    let mut recommended_limits: HashMap<String, usize> = HashMap::default();
+    recommended_limits.insert(String::from("net.core.rmem_max"), 134217728);
+    recommended_limits.insert(String::from("net.core.rmem_default"), 134217728);
+    recommended_limits.insert(String::from("net.core.wmem_max"), 134217728);
+    recommended_limits.insert(String::from("net.core.wmem_default"), 134217728);
+    recommended_limits.insert(String::from("vm.max_map_count"), 1000000);
+
+    let mut current_limits: HashMap<String, usize> = HashMap::default();
+    for (key, _) in recommended_limits.iter() {
+        let current_val = match sysctl_read(key) {
+            Ok(val) => val.parse::<usize>().unwrap(),
+            Err(e) => {
+                error!("Failed to query value for {}: {}", key, e);
+                check_failed = true;
+                0
+            }
+        };
+        current_limits.insert(key.to_string(), current_val);
+    }
+
+    for (key, recommended_val) in recommended_limits.iter() {
+        let current_val = current_limits.get(key).unwrap();
+        if current_val < recommended_val {
+            error!(
+                "  {}: recommended={} current={}, too small",
+                key, recommended_val, current_val
+            );
+            check_failed = true;
+        } else {
+            info!(
+                "  {}: recommended={} current={}",
+                key, recommended_val, current_val
+            );
+        }
+    }
+
+    if check_failed {
+        let err_msg = "OS network limit test failed. If you wish to continue, try --no-os-network-limits-test";
+        error!("{}", err_msg);
+        eprintln!("{}", err_msg);
+        exit(1);
+    } else {
+        info!("OS network limits test passed.");
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn check_os_network_limits() {}
+
 pub fn main() {
     let default_dynamic_port_range =
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
@@ -866,6 +930,11 @@ pub fn main() {
             Arg::with_name("no_poh_speed_test")
                 .long("no-poh-speed-test")
                 .help("Skip the check for PoH speed."),
+        )
+        .arg(
+            Arg::with_name("no_os_network_limits_test")
+                .long("no-os-network-limits-test")
+                .help("Skip checks for OS network limits.")
         )
         .arg(
             Arg::with_name("accounts-hash-interval-slots")
@@ -2330,6 +2399,10 @@ pub fn main() {
             exit(1);
         })
     });
+
+    if !matches.is_present("no_os_network_limits_test") {
+        check_os_network_limits();
+    }
 
     let mut ledger_lock = ledger_lockfile(&ledger_path);
     let _ledger_write_guard = lock_ledger(&ledger_path, &mut ledger_lock);
