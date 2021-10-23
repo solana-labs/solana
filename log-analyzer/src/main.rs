@@ -40,11 +40,9 @@ impl LogLine {
         format!(
             "Lost {}%, {}, ({} - {}), sender {}, receiver {}",
             ((v1 - v2) * 100 / v1),
-            Byte::from_bytes(v1 - v2)
-                .get_appropriate_unit(true)
-                .to_string(),
-            Byte::from_bytes(v1).get_appropriate_unit(true).to_string(),
-            Byte::from_bytes(v2).get_appropriate_unit(true).to_string(),
+            Byte::from_bytes(v1 - v2).get_appropriate_unit(true),
+            Byte::from_bytes(v1).get_appropriate_unit(true),
+            Byte::from_bytes(v2).get_appropriate_unit(true),
             a,
             b
         )

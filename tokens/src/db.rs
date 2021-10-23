@@ -162,11 +162,7 @@ pub fn update_finalized_transaction(
 
     if let Some(e) = &transaction_status.err {
         // The transaction was finalized, but execution failed. Drop it.
-        eprintln!(
-            "Error in transaction with signature {}: {}",
-            signature,
-            e.to_string()
-        );
+        eprintln!("Error in transaction with signature {}: {}", signature, e);
         eprintln!("Discarding transaction record");
         db.rem(&signature.to_string())?;
         return Ok(None);

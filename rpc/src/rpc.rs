@@ -1999,6 +1999,7 @@ fn verify_transaction(
     transaction: &SanitizedTransaction,
     feature_set: &Arc<feature_set::FeatureSet>,
 ) -> Result<()> {
+    #[allow(clippy::question_mark)]
     if transaction.verify().is_err() {
         return Err(RpcCustomError::TransactionSignatureVerificationFailure.into());
     }
@@ -4912,11 +4913,11 @@ pub mod tests {
             r#"{"jsonrpc":"2.0","id":1,"method":"getLeaderSchedule"}"#,
             &format!(
                 r#"{{"jsonrpc":"2.0","id":1,"method":"getLeaderSchedule", "params": [null, {{ "identity": "{}" }}]}}"#,
-                bank.collector_id().to_string()
+                bank.collector_id()
             ),
             &format!(
                 r#"{{"jsonrpc":"2.0","id":1,"method":"getLeaderSchedule", "params": [{{ "identity": "{}" }}]}}"#,
-                bank.collector_id().to_string()
+                bank.collector_id()
             ),
         ]
         .iter()
@@ -5657,7 +5658,6 @@ pub mod tests {
                 "sigVerify": true,
                 "replaceRecentBlockhash": true,
             })
-            .to_string()
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let expected = json!({
