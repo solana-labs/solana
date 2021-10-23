@@ -18,7 +18,6 @@ use {
     thiserror::Error,
 };
 
-
 #[derive(Default)]
 pub struct AccountsDbPluginPostgres {
     client: Option<ParallelPostgresClient>,
