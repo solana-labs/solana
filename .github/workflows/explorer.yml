@@ -1,4 +1,3 @@
-
 name: Explorer
 on:
   push:
@@ -13,9 +12,11 @@ on:
 jobs:
   check-explorer:
     runs-on: ubuntu-latest
+
     defaults:
       run:
         working-directory: explorer
+    if: github.event_name == 'pull_request_target' && github.event.action == 'opened'
     steps:
       - uses: actions/checkout@v2
         with:
@@ -34,21 +35,60 @@ jobs:
       - uses: amondnet/vercel-action@v20
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }} # Required
-          github-token: ${{ secrets.PAT }} #Optional 
+          github-token: ${{ secrets.GITHUB_TOKEN }} #Optional 
           vercel-org-id: ${{ secrets.ORG_ID}}  #Required
           vercel-project-id: ${{ secrets.PROJECT_ID}} #Required 
           working-directory: ./explorer
           scope: ${{ secrets.TEAM_ID }}
-  production:
-   needs: check-explorer
+  push:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    defaults:
+      run:
+        working-directory: explorer
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+          cache: 'npm'
+          cache-dependency-path: explorer/package-lock.json
+      - run: npm i -g npm@7
+      - run: npm ci
+      - run: npm run format
+      - run: npm run build
+      - run: npm run test
+          
+  production_deployment:
+   needs: push
    runs-on: ubuntu-latest
+   defaults:
+      run:
+        working-directory: explorer
    if: github.event_name == 'push'
    steps:
-     - uses: actions/checkout@v2
-     - uses: amondnet/vercel-action@v20
-       with:
+      - uses: actions/checkout@v2
+        with:
+           ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+          cache: 'npm'
+          cache-dependency-path: explorer/package-lock.json
+      - run: npm i -g npm@7
+      - run: npm ci
+      - run: npm run format
+      - run: npm run build
+      - run: npm run test
+      - uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: amondnet/vercel-action@v20
+        with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }} # Required
-          github-token: ${{ secrets.PAT }} #Optional 
+          github-token: ${{ secrets.GITHUB_TOKEN }} #Optional 
           vercel-args: '--prod' #for production
           vercel-org-id: ${{ secrets.ORG_ID}}  #Required
           vercel-project-id: ${{ secrets.PROJECT_ID}} #Required 
