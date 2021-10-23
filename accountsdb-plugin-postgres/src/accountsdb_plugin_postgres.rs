@@ -17,6 +17,7 @@ use {
     thiserror::Error,
 };
 
+#[allow(clippy::large_enum_variant)]
 enum PostgresClientEnum {
     Simple(SimplePostgresClient),
     Parallel(ParallelPostgresClient),
