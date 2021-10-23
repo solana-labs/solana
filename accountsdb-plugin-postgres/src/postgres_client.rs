@@ -575,7 +575,7 @@ pub struct ParallelPostgresClient {
     exit_worker: Arc<AtomicBool>,
     is_startup_done: Arc<AtomicBool>,
     startup_done_count: Arc<AtomicUsize>,
-    good_worker_count: Arc<AtomicUsize>,
+    initialized_worker_count: Arc<AtomicUsize>,
     sender: Sender<DbWorkItem>,
     last_report: AtomicInterval,
 }
@@ -589,13 +589,13 @@ impl ParallelPostgresClient {
         let is_startup_done = Arc::new(AtomicBool::new(false));
         let startup_done_count = Arc::new(AtomicUsize::new(0));
         let worker_count = config.threads.unwrap_or(DEFAULT_THREADS_COUNT);
-        let good_worker_count = Arc::new(AtomicUsize::new(0));
+        let initialized_worker_count = Arc::new(AtomicUsize::new(0));
         for i in 0..worker_count {
             let cloned_receiver = receiver.clone();
             let exit_clone = exit_worker.clone();
             let is_startup_done_clone = is_startup_done.clone();
             let startup_done_count_clone = startup_done_count.clone();
-            let good_worker_count_clone = good_worker_count.clone();
+            let initialized_worker_count_clone = initialized_worker_count.clone();
             let config = config.clone();
             let worker = Builder::new()
                 .name(format!("worker-{}", i))
@@ -604,7 +604,7 @@ impl ParallelPostgresClient {
 
                     match result {
                         Ok(mut worker) => {
-                            good_worker_count_clone.fetch_add(1, Ordering::Relaxed);
+                            initialized_worker_count_clone.fetch_add(1, Ordering::Relaxed);
                             worker.do_work(
                                 cloned_receiver,
                                 exit_clone,
@@ -628,7 +628,7 @@ impl ParallelPostgresClient {
             exit_worker,
             is_startup_done,
             startup_done_count,
-            good_worker_count,
+            initialized_worker_count,
             sender,
         })
     }
@@ -728,12 +728,12 @@ impl ParallelPostgresClient {
 
         // Wait for all worker threads to be done with flushing
         while self.startup_done_count.load(Ordering::Relaxed)
-            != self.good_worker_count.load(Ordering::Relaxed)
+            != self.initialized_worker_count.load(Ordering::Relaxed)
         {
             info!(
                 "Startup done count: {}, good worker thread count: {}",
                 self.startup_done_count.load(Ordering::Relaxed),
-                self.good_worker_count.load(Ordering::Relaxed)
+                self.initialized_worker_count.load(Ordering::Relaxed)
             );
             sleep(Duration::from_millis(100));
         }
