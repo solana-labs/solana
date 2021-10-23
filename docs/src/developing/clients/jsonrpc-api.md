@@ -2479,37 +2479,41 @@ Result:
     },
     "value": [
       {
-        "data": {
-          "program": "spl-token",
-          "parsed": {
-            "info": {
-              "tokenAmount": {
-                "amount": "1",
-                "decimals": 1,
-                "uiAmount": 0.1,
-                "uiAmountString": "0.1",
+        "account": {
+          "data": {
+            "program": "spl-token",
+            "parsed": {
+              "info": {
+                "tokenAmount": {
+                  "amount": "1",
+                  "decimals": 1,
+                  "uiAmount": 0.1,
+                  "uiAmountString": "0.1"
+                },
+                "delegate": "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T",
+                "delegatedAmount": {
+                  "amount": "1",
+                  "decimals": 1,
+                  "uiAmount": 0.1,
+                  "uiAmountString": "0.1"
+                },
+                "state": "initialized",
+                "isNative": false,
+                "mint": "3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E",
+                "owner": "CnPoSPKXu7wJqxe59Fs72tkBeALovhsCxYeFwPCQH9TD"
               },
-              "delegate": "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T",
-              "delegatedAmount": {
-                "amount": "1",
-                "decimals": 1,
-                "uiAmount": 0.1,
-                "uiAmountString": "0.1",
-              },
-              "state": "initialized",
-              "isNative": false,
-              "mint": "3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E",
-              "owner": "CnPoSPKXu7wJqxe59Fs72tkBeALovhsCxYeFwPCQH9TD"
+              "type": "account"
             },
-            "type": "account"
+            "space": 165
           },
-          "space": 165
+          "executable": false,
+          "lamports": 1726080,
+          "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "rentEpoch": 4
         },
-        "executable": false,
-        "lamports": 1726080,
-        "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-        "rentEpoch": 4
+        "pubkey": "28YTZEwqtMHWrhWcvv34se7pjS7wctgqzCPB3gReCFKp"
       }
+
     ]
   },
   "id": 1
@@ -2577,37 +2581,40 @@ Result:
     },
     "value": [
       {
-        "data": {
-          "program": "spl-token",
-          "parsed": {
-            "accountType": "account",
-            "info": {
-              "tokenAmount": {
-                "amount": "1",
-                "decimals": 1,
-                "uiAmount": 0.1,
-                "uiAmountString": "0.1",
+        "account": {
+          "data": {
+              "program": "spl-token",
+              "parsed": {
+                "accountType": "account",
+                "info": {
+                  "tokenAmount": {
+                    "amount": "1",
+                    "decimals": 1,
+                    "uiAmount": 0.1,
+                    "uiAmountString": "0.1"
+                  },
+                  "delegate": "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T",
+                  "delegatedAmount": {
+                    "amount": "1",
+                    "decimals": 1,
+                    "uiAmount": 0.1,
+                    "uiAmountString": "0.1"
+                  },
+                  "state": "initialized",
+                  "isNative": false,
+                  "mint": "3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E",
+                  "owner": "4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F"
+                },
+                "type": "account"
               },
-              "delegate": "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T",
-              "delegatedAmount": {
-                "amount": "1",
-                "decimals": 1,
-                "uiAmount": 0.1,
-                "uiAmountString": "0.1",
-              },
-              "state": "initialized",
-              "isNative": false,
-              "mint": "3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E",
-              "owner": "4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F"
+              "space": 165
             },
-            "type": "account"
-          },
-          "space": 165
+            "executable": false,
+            "lamports": 1726080,
+            "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+            "rentEpoch": 4
         },
-        "executable": false,
-        "lamports": 1726080,
-        "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-        "rentEpoch": 4
+        "pubkey": "C2gJg6tKpQs41PRS1nC8aw3ZKNZK3HQQZGVrDFDup5nx"
       }
     ]
   },
