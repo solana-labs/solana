@@ -1,28 +1,27 @@
+
 name: Explorer
 on:
   push:
-    branches: [ master ]
+   branches: [master]
+   paths:
+      - 'explorer/**'
+  pull_request_target:
+    branches:
+     - master
     paths:
-      - "explorer/**"
-  pull_request:
-    branches: [ master ]
-    paths:
-      - "explorer/**"
-
+      - 'explorer/**'
 jobs:
   check-explorer:
     runs-on: ubuntu-latest
-
     defaults:
       run:
         working-directory: explorer
-
     steps:
       - uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - uses: actions/setup-node@v2
         with:
-          # "node" (v16) is not supported by node-sass yet
-          # https://github.com/sass/node-sass/pull/3090
           node-version: '14'
           cache: 'npm'
           cache-dependency-path: explorer/package-lock.json
@@ -31,3 +30,27 @@ jobs:
       - run: npm run format
       - run: npm run build
       - run: npm run test
+      - uses: actions/checkout@v2
+      - uses: amondnet/vercel-action@v20
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }} # Required
+          github-token: ${{ secrets.PAT }} #Optional 
+          vercel-org-id: ${{ secrets.ORG_ID}}  #Required
+          vercel-project-id: ${{ secrets.PROJECT_ID}} #Required 
+          working-directory: ./explorer
+          scope: ${{ secrets.TEAM_ID }}
+  production:
+   needs: check-explorer
+   runs-on: ubuntu-latest
+   if: github.event_name == 'push'
+   steps:
+     - uses: actions/checkout@v2
+     - uses: amondnet/vercel-action@v20
+       with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }} # Required
+          github-token: ${{ secrets.PAT }} #Optional 
+          vercel-args: '--prod' #for production
+          vercel-org-id: ${{ secrets.ORG_ID}}  #Required
+          vercel-project-id: ${{ secrets.PROJECT_ID}} #Required 
+          working-directory: ./explorer
+          scope: ${{ secrets.TEAM_ID }}
