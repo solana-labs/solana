@@ -30,7 +30,7 @@ use {
         contact_info::ContactInfo,
     },
     solana_ledger::blockstore_db::BlockstoreRecoveryMode,
-    solana_metrics::{datapoint_warn, datapoint_info},
+    solana_metrics::datapoint_info,
     solana_perf::recycler::enable_recycler_warming,
     solana_poh::poh_service,
     solana_replica_lib::accountsdb_repl_server::AccountsDbReplServiceConfig,
@@ -423,6 +423,7 @@ fn platform_id() -> String {
 
 #[cfg(target_os = "linux")]
 fn check_os_network_limits() {
+    use solana_metrics::datapoint_warn;
     use std::collections::HashMap;
     use sysctl::Sysctl;
 
@@ -436,33 +437,33 @@ fn check_os_network_limits() {
     info!("Testing OS network limits:");
 
     // Reference: https://medium.com/@CameronSparr/increase-os-udp-buffers-to-improve-performance-51d167bb1360
-    let mut recommended_limits: HashMap<String, usize> = HashMap::default();
-    recommended_limits.insert(String::from("net.core.rmem_max"), 134217728);
-    recommended_limits.insert(String::from("net.core.rmem_default"), 134217728);
-    recommended_limits.insert(String::from("net.core.wmem_max"), 134217728);
-    recommended_limits.insert(String::from("net.core.wmem_default"), 134217728);
-    recommended_limits.insert(String::from("vm.max_map_count"), 1000000);
+    let mut recommended_limits: HashMap<&str, i64> = HashMap::default();
+    recommended_limits.insert("net.core.rmem_max", 134217728);
+    recommended_limits.insert("net.core.rmem_default", 134217728);
+    recommended_limits.insert("net.core.wmem_max", 134217728);
+    recommended_limits.insert("net.core.wmem_default", 134217728);
+    recommended_limits.insert("vm.max_map_count", 1000000);
 
     // Additionally collect the following limits
-    recommended_limits.insert(String::from("net.core.optmem_max"), 0);
-    recommended_limits.insert(String::from("net.core.netdev_max_backlog", 0);
+    recommended_limits.insert("net.core.optmem_max", 0);
+    recommended_limits.insert("net.core.netdev_max_backlog", 0);
 
-    let mut current_limits: HashMap<String, usize> = HashMap::default();
+    let mut current_limits: HashMap<&str, i64> = HashMap::default();
     for (key, _) in recommended_limits.iter() {
         let current_val = match sysctl_read(key) {
-            Ok(val) => val.parse::<usize>().unwrap(),
+            Ok(val) => val.parse::<i64>().unwrap(),
             Err(e) => {
                 error!("Failed to query value for {}: {}", key, e);
                 check_failed = true;
-                0
+                -1
             }
         };
-        current_limits.insert(key.to_string(), current_val);
+        current_limits.insert(key, current_val);
     }
 
     for (key, recommended_val) in recommended_limits.iter() {
-        let current_val = current_limits.get(key).unwrap();
-        if current_val < recommended_val {
+        let current_val = *current_limits.get(key).unwrap();
+        if current_val < *recommended_val {
             datapoint_warn!("os-config", (key, current_val, i64));
             warn!(
                 "  {}: recommended={} current={}, too small",
@@ -477,7 +478,6 @@ fn check_os_network_limits() {
             );
         }
     }
-
     datapoint_info!("os-config", ("platform", platform_id(), String));
 
     if check_failed {
