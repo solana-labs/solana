@@ -237,21 +237,26 @@ async function fetchAccountInfo(
               const parsed = create(info, TokenAccount);
               let nftData;
 
-              // Generate a PDA and check for a Metadata Account
-              if (parsed.type === "mint") {
-                const metadata = await Metadata.load(
-                  connection,
-                  await Metadata.getPDA(pubkey)
-                );
-                if (metadata) {
-                  // We have a valid Metadata account. Try and pull edition data.
-                  const editionInfo = await getEditionInfo(
-                    metadata,
-                    connection
+              try {
+                // Generate a PDA and check for a Metadata Account
+                if (parsed.type === "mint") {
+                  const metadata = await Metadata.load(
+                    connection,
+                    await Metadata.getPDA(pubkey)
                   );
-                  nftData = { metadata: metadata.data, editionInfo };
+                  if (metadata) {
+                    // We have a valid Metadata account. Try and pull edition data.
+                    const editionInfo = await getEditionInfo(
+                      metadata,
+                      connection
+                    );
+                    nftData = { metadata: metadata.data, editionInfo };
+                  }
                 }
+              } catch (error) {
+                // unable to find NFT metadata account
               }
+
               data = {
                 program: result.data.program,
                 parsed,
