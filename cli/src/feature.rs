@@ -306,8 +306,8 @@ fn feature_set_stats(rpc_client: &RpcClient) -> Result<FeatureSetStats, ClientEr
                     software_versions,
                 },
             )| {
-                let stake_percent = stake as f64 * 100. / total_active_stake as f64;
-                let rpc_nodes_percent = rpc_nodes_count as f32 * 100. / total_rpc_nodes as f32;
+                let stake_percent = (stake as f64 / total_active_stake as f64) * 100.;
+                let rpc_nodes_percent = (rpc_nodes_count as f32 / total_rpc_nodes as f32) * 100.;
                 let mut software_versions = software_versions.into_iter().collect::<Vec<_>>();
                 software_versions.sort();
                 if stake_percent >= 0.001 || rpc_nodes_percent >= 0.001 {
