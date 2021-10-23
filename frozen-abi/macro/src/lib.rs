@@ -310,10 +310,7 @@ fn quote_for_test(
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 fn test_mod_name(type_name: &Ident) -> Ident {
-    Ident::new(
-        &format!("{}_frozen_abi", type_name.to_string()),
-        Span::call_site(),
-    )
+    Ident::new(&format!("{}_frozen_abi", type_name), Span::call_site())
 }
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]

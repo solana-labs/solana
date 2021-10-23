@@ -316,10 +316,10 @@ impl fmt::Display for CliEpochInfo {
             "Epoch Completed Time:",
             &format!(
                 "{}{}/{} ({} remaining)",
-                humantime::format_duration(time_elapsed).to_string(),
+                humantime::format_duration(time_elapsed),
                 if annotation.is_some() { "*" } else { "" },
-                humantime::format_duration(time_elapsed + time_remaining).to_string(),
-                humantime::format_duration(time_remaining).to_string(),
+                humantime::format_duration(time_elapsed + time_remaining),
+                humantime::format_duration(time_remaining),
             ),
         )?;
         if let Some(annotation) = annotation {
@@ -2593,11 +2593,7 @@ mod tests {
             CliSignOnlyData {
                 blockhash: blockhash.to_string(),
                 message: None,
-                signers: vec![format!(
-                    "{}={}",
-                    present.pubkey().to_string(),
-                    tx.signatures[1]
-                )],
+                signers: vec![format!("{}={}", present.pubkey(), tx.signatures[1])],
                 absent: vec![absent.pubkey().to_string()],
                 bad_sig: vec![bad.pubkey().to_string()],
             }
@@ -2627,11 +2623,7 @@ mod tests {
             CliSignOnlyData {
                 blockhash: blockhash.to_string(),
                 message: Some(expected_msg),
-                signers: vec![format!(
-                    "{}={}",
-                    present.pubkey().to_string(),
-                    tx.signatures[1]
-                )],
+                signers: vec![format!("{}={}", present.pubkey(), tx.signatures[1])],
                 absent: vec![absent.pubkey().to_string()],
                 bad_sig: vec![bad.pubkey().to_string()],
             }

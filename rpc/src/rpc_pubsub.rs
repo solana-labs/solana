@@ -714,7 +714,7 @@ mod tests {
         let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash);
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"signatureSubscribe","params":["{}"]}}"#,
-            tx.signatures[0].to_string()
+            tx.signatures[0]
         );
         let _res = io.handle_request_sync(&req);
 
@@ -971,7 +971,7 @@ mod tests {
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"accountSubscribe","params":["{}"]}}"#,
-            bob_pubkey.to_string()
+            bob_pubkey
         );
         let _res = io.handle_request_sync(&req);
 
