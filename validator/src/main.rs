@@ -30,6 +30,7 @@ use {
         contact_info::ContactInfo,
     },
     solana_ledger::blockstore_db::BlockstoreRecoveryMode,
+    solana_metrics::{datapoint_warn, datapoint_info},
     solana_perf::recycler::enable_recycler_warming,
     solana_poh::poh_service,
     solana_replica_lib::accountsdb_repl_server::AccountsDbReplServiceConfig,
@@ -411,6 +412,15 @@ fn get_cluster_shred_version(entrypoints: &[SocketAddr]) -> Option<u16> {
     None
 }
 
+fn platform_id() -> String {
+    format!(
+        "{}/{}/{}",
+        std::env::consts::FAMILY,
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    )
+}
+
 #[cfg(target_os = "linux")]
 fn check_os_network_limits() {
     use std::collections::HashMap;
@@ -433,6 +443,10 @@ fn check_os_network_limits() {
     recommended_limits.insert(String::from("net.core.wmem_default"), 134217728);
     recommended_limits.insert(String::from("vm.max_map_count"), 1000000);
 
+    // Additionally collect the following limits
+    recommended_limits.insert(String::from("net.core.optmem_max"), 0);
+    recommended_limits.insert(String::from("net.core.netdev_max_backlog", 0);
+
     let mut current_limits: HashMap<String, usize> = HashMap::default();
     for (key, _) in recommended_limits.iter() {
         let current_val = match sysctl_read(key) {
@@ -449,12 +463,14 @@ fn check_os_network_limits() {
     for (key, recommended_val) in recommended_limits.iter() {
         let current_val = current_limits.get(key).unwrap();
         if current_val < recommended_val {
-            error!(
+            datapoint_warn!("os-config", (key, current_val, i64));
+            warn!(
                 "  {}: recommended={} current={}, too small",
                 key, recommended_val, current_val
             );
             check_failed = true;
         } else {
+            datapoint_info!("os-config", (key, current_val, i64));
             info!(
                 "  {}: recommended={} current={}",
                 key, recommended_val, current_val
@@ -462,18 +478,20 @@ fn check_os_network_limits() {
         }
     }
 
+    datapoint_info!("os-config", ("platform", platform_id(), String));
+
     if check_failed {
-        let err_msg = "OS network limit test failed. If you wish to continue, try --no-os-network-limits-test";
-        error!("{}", err_msg);
-        eprintln!("{}", err_msg);
-        exit(1);
+        datapoint_warn!("os-config", ("network_limit_test_failed", 1, i64));
+        warn!("OS network limit test failed. solana-sys-tuner may be used to configure OS network limits. Bypass check with --no-os-network-limits-test.");
     } else {
         info!("OS network limits test passed.");
     }
 }
 
 #[cfg(not(target_os = "linux"))]
-fn check_os_network_limits() {}
+fn check_os_network_limits() {
+    datapoint_info!("os-config", ("platform", platform_id(), String));
+}
 
 pub fn main() {
     let default_dynamic_port_range =
@@ -933,6 +951,7 @@ pub fn main() {
         )
         .arg(
             Arg::with_name("no_os_network_limits_test")
+                .hidden(true)
                 .long("no-os-network-limits-test")
                 .help("Skip checks for OS network limits.")
         )
