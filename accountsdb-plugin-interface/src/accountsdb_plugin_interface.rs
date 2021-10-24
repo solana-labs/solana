@@ -25,19 +25,19 @@ pub enum ReplicaAccountInfoVersions<'a> {
 
 #[derive(Error, Debug)]
 pub enum AccountsDbPluginError {
-    #[error("Error opening config file.")]
+    #[error("Error opening config file. Error detail: ({0}).")]
     ConfigFileOpenError(#[from] io::Error),
 
-    #[error("Error reading config file.")]
+    #[error("Error reading config file. Error message: ({msg})")]
     ConfigFileReadError { msg: String },
 
-    #[error("Error updating account.")]
+    #[error("Error updating account. Error message: ({msg})")]
     AccountsUpdateError { msg: String },
 
-    #[error("Error updating slot status.")]
+    #[error("Error updating slot status. Error message: ({msg})")]
     SlotStatusUpdateError { msg: String },
 
-    #[error("Plugin-defined custom error.")]
+    #[error("Plugin-defined custom error. Error message: ({0})")]
     Custom(Box<dyn error::Error + Send + Sync>),
 }
 
@@ -78,7 +78,15 @@ pub trait AccountsDbPlugin: Any + Send + Sync + std::fmt::Debug {
     fn on_unload(&mut self) {}
 
     /// Called when an account is updated at a slot.
-    fn update_account(&mut self, account: ReplicaAccountInfoVersions, slot: u64) -> Result<()>;
+    fn update_account(
+        &mut self,
+        account: ReplicaAccountInfoVersions,
+        slot: u64,
+        is_startup: bool,
+    ) -> Result<()>;
+
+    /// Called when all accounts are notified of during startup.
+    fn notify_end_of_startup(&mut self) -> Result<()>;
 
     /// Called when a slot status is updated
     fn update_slot_status(
