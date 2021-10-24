@@ -1,10 +1,10 @@
+use solana_measure::measure::Measure;
+
 /// Main entry for the PostgreSQL plugin
 use {
     crate::{
         accounts_selector::AccountsSelector,
-        postgres_client::{
-            ParallelPostgresClient, PostgresClient, PostgresClientBuilder, SimplePostgresClient,
-        },
+        postgres_client::{ParallelPostgresClient, PostgresClientBuilder},
     },
     bs58,
     log::*,
@@ -13,19 +13,14 @@ use {
     solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
         AccountsDbPlugin, AccountsDbPluginError, ReplicaAccountInfoVersions, Result, SlotStatus,
     },
+    solana_metrics::*,
     std::{fs::File, io::Read},
     thiserror::Error,
 };
 
-#[allow(clippy::large_enum_variant)]
-enum PostgresClientEnum {
-    Simple(SimplePostgresClient),
-    Parallel(ParallelPostgresClient),
-}
-
 #[derive(Default)]
 pub struct AccountsDbPluginPostgres {
-    client: Option<PostgresClientEnum>,
+    client: Option<ParallelPostgresClient>,
     accounts_selector: Option<AccountsSelector>,
 }
 
@@ -41,14 +36,15 @@ pub struct AccountsDbPluginPostgresConfig {
     pub user: String,
     pub threads: Option<usize>,
     pub port: Option<u16>,
+    pub batch_size: Option<usize>,
 }
 
 #[derive(Error, Debug)]
 pub enum AccountsDbPluginPostgresError {
-    #[error("Error connecting to the backend data store.")]
+    #[error("Error connecting to the backend data store. Error message: ({msg})")]
     DataStoreConnectionError { msg: String },
 
-    #[error("Error preparing data store schema.")]
+    #[error("Error preparing data store schema. Error message: ({msg})")]
     DataSchemaError { msg: String },
 }
 
@@ -79,7 +75,9 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
     /// "host" specifies the PostgreSQL server.
     /// "user" specifies the PostgreSQL user.
     /// "threads" optional, specifies the number of worker threads for the plugin. A thread
-    /// maintains a PostgreSQL connection to the server.
+    /// maintains a PostgreSQL connection to the server. The default is 10.
+    /// "batch_size" optional, specifies the batch size of bulk insert when the AccountsDb is created
+    /// from restoring a snapshot. The default is "10".
     /// # Examples
     /// {
     ///    "libpath": "/home/solana/target/release/libsolana_accountsdb_plugin_postgres.so",
@@ -116,13 +114,8 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                 })
             }
             Ok(config) => {
-                self.client = if config.threads.is_some() && config.threads.unwrap() > 1 {
-                    let client = PostgresClientBuilder::build_pararallel_postgres_client(&config)?;
-                    Some(PostgresClientEnum::Parallel(client))
-                } else {
-                    let client = PostgresClientBuilder::build_simple_postgres_client(&config)?;
-                    Some(PostgresClientEnum::Simple(client))
-                };
+                let client = PostgresClientBuilder::build_pararallel_postgres_client(&config)?;
+                self.client = Some(client);
             }
         }
 
@@ -134,18 +127,23 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
 
         match &mut self.client {
             None => {}
-            Some(client) => match client {
-                PostgresClientEnum::Parallel(client) => client.join().unwrap(),
-                PostgresClientEnum::Simple(client) => {
-                    client.join().unwrap();
-                }
-            },
+            Some(client) => {
+                client.join().unwrap();
+            }
         }
     }
 
-    fn update_account(&mut self, account: ReplicaAccountInfoVersions, slot: u64) -> Result<()> {
+    fn update_account(
+        &mut self,
+        account: ReplicaAccountInfoVersions,
+        slot: u64,
+        is_startup: bool,
+    ) -> Result<()> {
+        let mut measure_all = Measure::start("accountsdb-plugin-postgres-update-account-main");
         match account {
             ReplicaAccountInfoVersions::V0_0_1(account) => {
+                let mut measure_select =
+                    Measure::start("accountsdb-plugin-postgres-update-account-select");
                 if let Some(accounts_selector) = &self.accounts_selector {
                     if !accounts_selector.is_account_selected(account.pubkey, account.owner) {
                         return Ok(());
@@ -153,6 +151,13 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                 } else {
                     return Ok(());
                 }
+                measure_select.stop();
+                inc_new_counter_debug!(
+                    "accountsdb-plugin-postgres-update-account-select-us",
+                    measure_select.as_us() as usize,
+                    100000,
+                    100000
+                );
 
                 debug!(
                     "Updating account {:?} with owner {:?} at slot {:?} using account selector {:?}",
@@ -172,14 +177,17 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                         )));
                     }
                     Some(client) => {
-                        let result = match client {
-                            PostgresClientEnum::Parallel(client) => {
-                                client.update_account(account, slot)
-                            }
-                            PostgresClientEnum::Simple(client) => {
-                                client.update_account(account, slot)
-                            }
-                        };
+                        let mut measure_update =
+                            Measure::start("accountsdb-plugin-postgres-update-account-client");
+                        let result = { client.update_account(account, slot, is_startup) };
+                        measure_update.stop();
+
+                        inc_new_counter_debug!(
+                            "accountsdb-plugin-postgres-update-account-client-us",
+                            measure_update.as_us() as usize,
+                            100000,
+                            100000
+                        );
 
                         if let Err(err) = result {
                             return Err(AccountsDbPluginError::AccountsUpdateError {
@@ -190,6 +198,16 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                 }
             }
         }
+
+        measure_all.stop();
+
+        inc_new_counter_debug!(
+            "accountsdb-plugin-postgres-update-account-main-us",
+            measure_all.as_us() as usize,
+            100000,
+            100000
+        );
+
         Ok(())
     }
 
@@ -210,14 +228,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                 )));
             }
             Some(client) => {
-                let result = match client {
-                    PostgresClientEnum::Parallel(client) => {
-                        client.update_slot_status(slot, parent, status)
-                    }
-                    PostgresClientEnum::Simple(client) => {
-                        client.update_slot_status(slot, parent, status)
-                    }
-                };
+                let result = client.update_slot_status(slot, parent, status);
 
                 if let Err(err) = result {
                     return Err(AccountsDbPluginError::SlotStatusUpdateError{
@@ -227,6 +238,29 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
             }
         }
 
+        Ok(())
+    }
+
+    fn notify_end_of_startup(&mut self) -> Result<()> {
+        info!("Notifying the end of startup for accounts notifications");
+        match &mut self.client {
+            None => {
+                return Err(AccountsDbPluginError::Custom(Box::new(
+                    AccountsDbPluginPostgresError::DataStoreConnectionError {
+                        msg: "There is no connection to the PostgreSQL database.".to_string(),
+                    },
+                )));
+            }
+            Some(client) => {
+                let result = client.notify_end_of_startup();
+
+                if let Err(err) = result {
+                    return Err(AccountsDbPluginError::SlotStatusUpdateError{
+                        msg: format!("Failed to notify the end of startup for accounts notifications. Error: {:?}", err)
+                    });
+                }
+            }
+        }
         Ok(())
     }
 }
