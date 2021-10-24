@@ -278,25 +278,16 @@ fn retransmit(
             };
         let cluster_nodes =
             cluster_nodes_cache.get(shred_slot, &root_bank, &working_bank, cluster_info);
-<<<<<<< HEAD
         let shred_seed = shred.seed(slot_leader, &root_bank);
         let (neighbors, children) =
             cluster_nodes.get_retransmit_peers(shred_seed, DATA_PLANE_FANOUT, slot_leader);
         let anchor_node = neighbors[0].id == my_id;
-=======
-        let addrs: Vec<_> = cluster_nodes
-            .get_retransmit_addrs(slot_leader, shred, &root_bank, DATA_PLANE_FANOUT)
-            .into_iter()
-            .filter(|addr| ContactInfo::is_valid_address(addr, socket_addr_space))
-            .collect();
->>>>>>> 5e1cf39c7 (adds metrics for number of outgoing shreds in retransmit stage (#20882))
         compute_turbine_peers.stop();
         stats
             .compute_turbine_peers_total
             .fetch_add(compute_turbine_peers.as_us(), Ordering::Relaxed);
 
         let mut retransmit_time = Measure::start("retransmit_to");
-<<<<<<< HEAD
         // If the node is on the critical path (i.e. the first node in each
         // neighborhood), it should send the packet to tvu socket of its
         // children and also tvu_forward socket of its neighbors. Otherwise it
@@ -318,23 +309,12 @@ fn retransmit(
             !anchor_node, // send to forward socket!
             socket_addr_space,
         );
-=======
-        let num_nodes = match multi_target_send(socket, &shred.payload, &addrs) {
-            Ok(()) => addrs.len(),
-            Err(SendPktsError::IoError(ioerr, num_failed)) => {
-                inc_new_counter_info!("cluster_info-retransmit-packets", addrs.len(), 1);
-                inc_new_counter_error!("cluster_info-retransmit-error", num_failed, 1);
-                error!(
-                    "retransmit_to multi_target_send error: {:?}, {}/{} packets failed",
-                    ioerr,
-                    num_failed,
-                    addrs.len(),
-                );
-                addrs.len() - num_failed
-            }
-        };
->>>>>>> 5e1cf39c7 (adds metrics for number of outgoing shreds in retransmit stage (#20882))
         retransmit_time.stop();
+        let num_nodes = if anchor_node {
+            neighbors.len() + children.len() - 1
+        } else {
+            children.len()
+        };
         stats.num_nodes.fetch_add(num_nodes, Ordering::Relaxed);
         stats
             .retransmit_total
