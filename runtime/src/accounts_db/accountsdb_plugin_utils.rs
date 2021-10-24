@@ -214,7 +214,7 @@ pub mod tests {
 
     #[test]
     fn test_notify_account_restore_from_snapshot_once_per_slot() {
-        let mut accounts = AccountsDb::new_single_for_tests();
+        let mut accounts = AccountsDb::new_single();
         // Account with key1 is updated twice in the store -- should only get notified once.
         let key1 = solana_sdk::pubkey::new_rand();
         let mut account1_lamports: u64 = 1;
@@ -283,7 +283,7 @@ pub mod tests {
 
     #[test]
     fn test_notify_account_restore_from_snapshot_once_across_slots() {
-        let mut accounts = AccountsDb::new_single_for_tests();
+        let mut accounts = AccountsDb::new_single();
         // Account with key1 is updated twice in two different slots -- should only get notified once.
         // Account with key2 is updated slot0, should get notified once
         // Account with key3 is updated in slot1, should get notified once
@@ -377,7 +377,7 @@ pub mod tests {
 
     #[test]
     fn test_notify_account_at_accounts_update() {
-        let mut accounts = AccountsDb::new_single_for_tests();
+        let mut accounts = AccountsDb::new_single();
         let notifier = AccountsDbTestPlugin::default();
 
         let notifier = Arc::new(RwLock::new(notifier));
