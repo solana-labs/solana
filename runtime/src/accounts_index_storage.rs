@@ -114,7 +114,7 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
             .and_then(|config| config.flush_threads)
             .unwrap_or_else(Self::num_threads);
 
-        let storage = Arc::new(BucketMapHolder::new(bins, config));
+        let storage = Arc::new(BucketMapHolder::new(bins, config, threads));
 
         let in_mem = (0..bins)
             .into_iter()
