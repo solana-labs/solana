@@ -12,7 +12,7 @@ use serde_json::json;
 use solana_clap_utils::{
     input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
     input_validators::{
-        is_bin, is_parsable, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
+        is_parsable, is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
     },
 };
 use solana_entry::entry::Entry;
@@ -870,7 +870,7 @@ fn main() {
     let accounts_index_bins = Arg::with_name("accounts_index_bins")
         .long("accounts-index-bins")
         .value_name("BINS")
-        .validator(is_bin)
+        .validator(is_pow2)
         .takes_value(true)
         .help("Number of bins to divide the accounts index into");
     let accounts_index_limit = Arg::with_name("accounts_index_memory_limit_mb")
@@ -1996,6 +1996,7 @@ fn main() {
                 index: Some(accounts_index_config),
                 accounts_hash_cache_path: Some(ledger_path.clone()),
                 filler_account_count,
+                ..AccountsDbConfig::default()
             });
 
             let process_options = ProcessOptions {

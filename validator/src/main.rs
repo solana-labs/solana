@@ -10,7 +10,7 @@ use {
     solana_clap_utils::{
         input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
         input_validators::{
-            is_bin, is_keypair, is_keypair_or_ask_keyword, is_parsable, is_pubkey,
+            is_keypair, is_keypair_or_ask_keyword, is_parsable, is_pow2, is_pubkey,
             is_pubkey_or_keypair, is_slot, is_valid_percentage,
         },
         keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
@@ -1396,9 +1396,17 @@ pub fn main() {
             Arg::with_name("accounts_index_bins")
                 .long("accounts-index-bins")
                 .value_name("BINS")
-                .validator(is_bin)
+                .validator(is_pow2)
                 .takes_value(true)
                 .help("Number of bins to divide the accounts index into"),
+        )
+        .arg(
+            Arg::with_name("accounts_hash_num_passes")
+                .long("accounts-hash-num-passes")
+                .value_name("PASSES")
+                .validator(is_pow2)
+                .takes_value(true)
+                .help("Number of passes to calculate the hash of all accounts"),
         )
         .arg(
             Arg::with_name("accounts_index_path")
@@ -1987,11 +1995,17 @@ pub fn main() {
     }
 
     let filler_account_count = value_t!(matches, "accounts_filler_count", usize).ok();
-    let accounts_db_config = Some(AccountsDbConfig {
+    let mut accounts_db_config = AccountsDbConfig {
         index: Some(accounts_index_config),
         accounts_hash_cache_path: Some(ledger_path.clone()),
         filler_account_count,
-    });
+        ..AccountsDbConfig::default()
+    };
+
+    if let Some(passes) = value_t!(matches, "accounts_hash_num_passes", usize).ok() {
+        accounts_db_config.hash_calc_num_passes = Some(passes);
+    }
+    let accounts_db_config = Some(accounts_db_config);
 
     let accountsdb_repl_service_config = if matches.is_present("enable_accountsdb_repl") {
         let accountsdb_repl_bind_address = if matches.is_present("accountsdb_repl_bind_address") {
