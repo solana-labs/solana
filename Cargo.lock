@@ -5489,7 +5489,6 @@ dependencies = [
  "ed25519-dalek",
  "flate2",
  "fnv",
- "histogram",
  "itertools 0.10.1",
  "lazy_static",
  "libsecp256k1 0.6.0",
