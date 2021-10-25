@@ -88,9 +88,8 @@ impl BucketMapHolderStats {
         now.saturating_sub(last) // could saturate to 0. That is ok.
     }
 
-    fn ms_per_age<T: IndexValue>(&self, storage: &BucketMapHolder<T>) -> u64 {
+    fn ms_per_age<T: IndexValue>(&self, storage: &BucketMapHolder<T>, elapsed_ms: u64) -> u64 {
         if !storage.get_startup() {
-            let elapsed_ms = self.get_elapsed_ms_and_reset();
             let age_now = storage.current_age();
             let last_age = self.last_age.swap(age_now, Ordering::Relaxed) as u64;
             let mut age_now = age_now as u64;
@@ -126,12 +125,22 @@ impl BucketMapHolderStats {
         }
     }
 
+    fn calc_percent(&self, ms: u64, elapsed_ms: u64) -> f32 {
+        if elapsed_ms == 0 {
+            0.0
+        } else {
+            ms as f32 / elapsed_ms as f32
+        }
+    }
+
     pub fn report_stats<T: IndexValue>(&self, storage: &BucketMapHolder<T>) {
         if !self.last_time.should_update(STATS_INTERVAL_MS) {
             return;
         }
 
-        let ms_per_age = self.ms_per_age(storage);
+        let elapsed_ms = self.get_elapsed_ms_and_reset();
+
+        let ms_per_age = self.ms_per_age(storage, elapsed_ms);
 
         let in_mem_per_bucket_counts = self
             .per_bucket_count
@@ -151,11 +160,17 @@ impl BucketMapHolderStats {
         let in_mem_stats = Self::get_stats(in_mem_per_bucket_counts);
         let disk_stats = Self::get_stats(disk_per_bucket_counts);
 
+        const US_PER_MS: u64 = 1_000;
+
         // all metrics during startup are written to a different data point
         let startup = storage.get_startup();
         let was_startup = self.last_was_startup.swap(startup, Ordering::Relaxed);
+
+        // sum of elapsed time in each thread
+        let mut thread_time_elapsed_ms = elapsed_ms * storage.threads as u64;
         datapoint_info!(
             if startup || was_startup {
+                thread_time_elapsed_ms *= 2; // more threads are allocated during startup
                 "accounts_index_startup"
             } else {
                 "accounts_index"
@@ -167,14 +182,20 @@ impl BucketMapHolderStats {
             ),
             ("count", self.count.load(Ordering::Relaxed), i64),
             (
-                "bg_waiting_us",
-                self.bg_waiting_us.swap(0, Ordering::Relaxed),
-                i64
+                "bg_waiting_percent",
+                self.calc_percent(
+                    self.bg_waiting_us.swap(0, Ordering::Relaxed) / US_PER_MS,
+                    thread_time_elapsed_ms
+                ),
+                f64
             ),
             (
-                "bg_throttling_wait_us",
-                self.bg_throttling_wait_us.swap(0, Ordering::Relaxed),
-                i64
+                "bg_throttling_wait_percent",
+                self.calc_percent(
+                    self.bg_throttling_wait_us.swap(0, Ordering::Relaxed) / US_PER_MS,
+                    thread_time_elapsed_ms
+                ),
+                f64
             ),
             (
                 "held_in_mem_slot_list_len",

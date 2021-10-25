@@ -28,7 +28,7 @@ pub struct BucketMapHolder<T: IndexValue> {
     next_bucket_to_flush: Mutex<usize>,
     bins: usize,
 
-    threads: usize,
+    pub threads: usize,
 
     // how much mb are we allowed to keep in the in-mem index?
     // Rest goes to disk.
