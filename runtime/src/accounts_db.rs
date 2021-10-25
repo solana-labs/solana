@@ -322,6 +322,8 @@ pub enum LoadedAccountAccessor<'a> {
     Cached(Option<(Pubkey, Cow<'a, CachedAccount>)>),
 }
 
+mod accountsdb_plugin_utils;
+
 impl<'a> LoadedAccountAccessor<'a> {
     fn check_and_get_loaded_account(&mut self) -> LoadedAccount {
         // all of these following .expect() and .unwrap() are like serious logic errors,
@@ -5469,15 +5471,7 @@ impl AccountsDb {
     pub fn store_cached(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
         self.store(slot, accounts, self.caching_enabled);
 
-        if let Some(accounts_update_notifier) = &self.accounts_update_notifier {
-            let notifier = &accounts_update_notifier.read().unwrap();
-
-            for account in accounts {
-                let pubkey = account.0;
-                let account = account.1;
-                notifier.notify_account_update(slot, pubkey, account);
-            }
-        }
+        self.notify_account_at_accounts_update(slot, accounts);
     }
 
     /// Store the account update.
@@ -6093,24 +6087,6 @@ impl AccountsDb {
                     entry.accounts.len(),
                     entry.accounts.capacity(),
                 );
-            }
-        }
-    }
-
-    pub fn notify_account_restore_from_snapshot(&self) {
-        if let Some(accounts_update_notifier) = &self.accounts_update_notifier {
-            let notifier = &accounts_update_notifier.read().unwrap();
-            let slots = self.storage.all_slots();
-            for slot in &slots {
-                let slot_stores = self.storage.get_slot_stores(*slot).unwrap();
-
-                let slot_stores = slot_stores.read().unwrap();
-                for (_, storage_entry) in slot_stores.iter() {
-                    let accounts = storage_entry.all_accounts();
-                    for account in &accounts {
-                        notifier.notify_account_restore_from_snapshot(*slot, account);
-                    }
-                }
             }
         }
     }
