@@ -40,7 +40,7 @@ jobs:
           vercel-project-id: ${{ secrets.PROJECT_ID}} #Required 
           working-directory: ./explorer
           scope: ${{ secrets.TEAM_ID }} #added solana(vercel) as "TEAM_ID"
-  push:
+  Testing_before_merging:
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
     defaults:
@@ -62,7 +62,7 @@ jobs:
       - run: npm run test
           
   production_deployment:
-   needs: push
+   needs: Testing_before_merging
    runs-on: ubuntu-latest
    defaults:
       run:
