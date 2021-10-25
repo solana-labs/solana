@@ -740,7 +740,7 @@ impl RpcSubscriptions {
                     datapoint_info!(
                         "pubsub_notification_entries",
                         (
-                            "notification_entry_processing_time",
+                            "notification_entry_processing_time_us",
                             queued_at.elapsed().as_micros() as i64,
                             i64
                         )
