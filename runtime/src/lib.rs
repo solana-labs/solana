@@ -38,6 +38,7 @@ pub mod log_collector;
 pub mod message_processor;
 pub mod neon_evm_program;
 pub mod non_circulating_supply;
+mod nonce_keyed_account;
 mod pubkey_bins;
 mod read_only_accounts_cache;
 pub mod rent_collector;
