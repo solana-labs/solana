@@ -172,7 +172,7 @@ impl TestBroadcastReceiver {
         use std::time::{Duration, Instant};
         use tokio::sync::broadcast::error::TryRecvError;
 
-        let timeout = Duration::from_millis(500);
+        let timeout = Duration::from_secs(5);
         let started = Instant::now();
 
         loop {
