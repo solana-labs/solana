@@ -38,7 +38,7 @@ use {
     },
     solana_vote_program::vote_state::Vote,
     std::{
-    cell::RefCell,
+        cell::RefCell,
         collections::{HashMap, VecDeque},
         io::Cursor,
         iter, str,
