@@ -172,12 +172,16 @@ impl TestBroadcastReceiver {
         use std::time::{Duration, Instant};
         use tokio::sync::broadcast::error::TryRecvError;
 
-        let timeout = Duration::from_millis(500);
+        let timeout = Duration::from_secs(5);
         let started = Instant::now();
 
         loop {
             match self.inner.try_recv() {
                 Ok(notification) => {
+                    debug!(
+                        "TestBroadcastReceiver: {:?}ms elapsed",
+                        started.elapsed().as_millis()
+                    );
                     if let Some(json) = self.handler.handle(notification).expect("handler failed") {
                         return json.to_string();
                     }
