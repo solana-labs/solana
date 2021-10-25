@@ -77,7 +77,7 @@ solana-program-runtime = { path = "../program-runtime", version = "=1.9.0" }
 solana-stake-program = { path = "../programs/stake", version = "=1.9.0" }
 solana-version = { path = "../version", version = "=1.9.0" }
 static_assertions = "1.1.0"
-systemstat = "0.1.8"
+systemstat = "0.1.10"
 
 [build-dependencies]
 rustc_version = "0.4"
