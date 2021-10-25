@@ -919,12 +919,6 @@ pub fn confirm_slot(
         None
     };
 
-    let verify_transaction = {
-        let bank = bank.clone();
-        move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
-            bank.verify_transaction(versioned_tx, skip_verification)
-        }
-    };
     let mut check_result = entries.start_verify_and_hash_transactions(
         skip_verification,
         bank.libsecp256k1_0_5_upgrade_enabled(),
