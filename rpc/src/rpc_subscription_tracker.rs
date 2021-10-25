@@ -543,7 +543,7 @@ mod tests {
 
     struct ControlWrapper {
         control: SubscriptionControl,
-        receiver: crossbeam_channel::Receiver<NotificationEntry>,
+        receiver: crossbeam_channel::Receiver<TimestampedNotificationEntry>,
     }
 
     impl ControlWrapper {
@@ -560,7 +560,7 @@ mod tests {
         }
 
         fn assert_subscribed(&self, expected_params: &SubscriptionParams, expected_id: u64) {
-            if let NotificationEntry::Subscribed(params, id) = self.receiver.recv().unwrap() {
+            if let NotificationEntry::Subscribed(params, id) = self.receiver.recv().unwrap().entry {
                 assert_eq!(&params, expected_params);
                 assert_eq!(id, SubscriptionId::from(expected_id));
             } else {
@@ -570,7 +570,8 @@ mod tests {
         }
 
         fn assert_unsubscribed(&self, expected_params: &SubscriptionParams, expected_id: u64) {
-            if let NotificationEntry::Unsubscribed(params, id) = self.receiver.recv().unwrap() {
+            if let NotificationEntry::Unsubscribed(params, id) = self.receiver.recv().unwrap().entry
+            {
                 assert_eq!(&params, expected_params);
                 assert_eq!(id, SubscriptionId::from(expected_id));
             } else {
