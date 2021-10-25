@@ -27,7 +27,7 @@ winapi = { version = "0.3.8", features=["basetsd", "consoleapi", "errhandlingapi
 
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-reqwest = { version = "0.11.2", default-features = false, features = ["blocking", "rustls-tls", "json"] }
+reqwest = { version = "0.11.6", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 ring = { version = "0.16.17" }
 
 [package.metadata.docs.rs]

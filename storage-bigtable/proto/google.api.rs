@@ -1,5 +1,5 @@
 /// Defines the HTTP configuration for an API service. It contains a list of
-/// [HttpRule][google.api.HttpRule], each specifying the mapping of an RPC method
+/// \[HttpRule][google.api.HttpRule\], each specifying the mapping of an RPC method
 /// to one or more HTTP REST API methods.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Http {
@@ -22,10 +22,10 @@ pub struct Http {
 /// gRPC Transcoding is a feature for mapping between a gRPC method and one or
 /// more HTTP REST endpoints. It allows developers to build a single API service
 /// that supports both gRPC APIs and REST APIs. Many systems, including [Google
-/// APIs](https://github.com/googleapis/googleapis),
-/// [Cloud Endpoints](https://cloud.google.com/endpoints), [gRPC
-/// Gateway](https://github.com/grpc-ecosystem/grpc-gateway),
-/// and [Envoy](https://github.com/envoyproxy/envoy) proxy support this feature
+/// APIs](<https://github.com/googleapis/googleapis>),
+/// [Cloud Endpoints](<https://cloud.google.com/endpoints>), [gRPC
+/// Gateway](<https://github.com/grpc-ecosystem/grpc-gateway>),
+/// and \[Envoy\](<https://github.com/envoyproxy/envoy>) proxy support this feature
 /// and use it for large scale production services.
 ///
 /// `HttpRule` defines the schema of the gRPC/REST mapping. The mapping specifies
@@ -186,15 +186,15 @@ pub struct Http {
 /// 1. Leaf request fields (recursive expansion nested messages in the request
 ///    message) are classified into three categories:
 ///    - Fields referred by the path template. They are passed via the URL path.
-///    - Fields referred by the [HttpRule.body][google.api.HttpRule.body]. They are passed via the HTTP
+///    - Fields referred by the \[HttpRule.body][google.api.HttpRule.body\]. They are passed via the HTTP
 ///      request body.
 ///    - All other fields are passed via the URL query parameters, and the
 ///      parameter name is the field path in the request message. A repeated
 ///      field can be represented as multiple query parameters under the same
 ///      name.
-///  2. If [HttpRule.body][google.api.HttpRule.body] is "*", there is no URL query parameter, all fields
+///  2. If \[HttpRule.body][google.api.HttpRule.body\] is "*", there is no URL query parameter, all fields
 ///     are passed via URL path and HTTP request body.
-///  3. If [HttpRule.body][google.api.HttpRule.body] is omitted, there is no HTTP request body, all
+///  3. If \[HttpRule.body][google.api.HttpRule.body\] is omitted, there is no HTTP request body, all
 ///     fields are passed via URL path and URL query parameters.
 ///
 /// ### Path template syntax
@@ -221,19 +221,19 @@ pub struct Http {
 ///
 /// If a variable contains exactly one path segment, such as `"{var}"` or
 /// `"{var=*}"`, when such a variable is expanded into a URL path on the client
-/// side, all characters except `[-_.~0-9a-zA-Z]` are percent-encoded. The
+/// side, all characters except `\[-_.~0-9a-zA-Z\]` are percent-encoded. The
 /// server side does the reverse decoding. Such variables show up in the
 /// [Discovery
-/// Document](https://developers.google.com/discovery/v1/reference/apis) as
+/// Document](<https://developers.google.com/discovery/v1/reference/apis>) as
 /// `{var}`.
 ///
 /// If a variable contains multiple path segments, such as `"{var=foo/*}"`
 /// or `"{var=**}"`, when such a variable is expanded into a URL path on the
-/// client side, all characters except `[-_.~/0-9a-zA-Z]` are percent-encoded.
+/// client side, all characters except `\[-_.~/0-9a-zA-Z\]` are percent-encoded.
 /// The server side does the reverse decoding, except "%2F" and "%2f" are left
 /// unchanged. Such variables show up in the
 /// [Discovery
-/// Document](https://developers.google.com/discovery/v1/reference/apis) as
+/// Document](<https://developers.google.com/discovery/v1/reference/apis>) as
 /// `{+var}`.
 ///
 /// ## Using gRPC API Service Configuration
@@ -263,10 +263,10 @@ pub struct Http {
 ///
 /// When gRPC Transcoding is used to map a gRPC to JSON REST endpoints, the
 /// proto to JSON conversion must follow the [proto3
-/// specification](https://developers.google.com/protocol-buffers/docs/proto3#json).
+/// specification](<https://developers.google.com/protocol-buffers/docs/proto3#json>).
 ///
 /// While the single segment variable follows the semantics of
-/// [RFC 6570](https://tools.ietf.org/html/rfc6570) Section 3.2.2 Simple String
+/// [RFC 6570](<https://tools.ietf.org/html/rfc6570>) Section 3.2.2 Simple String
 /// Expansion, the multi segment variable **does not** follow RFC 6570 Section
 /// 3.2.3 Reserved Expansion. The reason is that the Reserved Expansion
 /// does not expand special characters like `?` and `#`, which would lead
@@ -290,7 +290,7 @@ pub struct Http {
 pub struct HttpRule {
     /// Selects a method to which this rule applies.
     ///
-    /// Refer to [selector][google.api.DocumentationRule.selector] for syntax details.
+    /// Refer to \[selector][google.api.DocumentationRule.selector\] for syntax details.
     #[prost(string, tag = "1")]
     pub selector: ::prost::alloc::string::String,
     /// The name of the request field whose value is mapped to the HTTP request
@@ -393,6 +393,16 @@ pub enum FieldBehavior {
     /// This indicates that the field may be set once in a request to create a
     /// resource, but may not be changed thereafter.
     Immutable = 5,
+    /// Denotes that a (repeated) field is an unordered list.
+    /// This indicates that the service may provide the elements of the list
+    /// in any arbitrary  order, rather than the order the user originally
+    /// provided. Additionally, the list's order may or may not be stable.
+    UnorderedList = 6,
+    /// Denotes that this field returns a non-empty default value if not set.
+    /// This indicates that if the user provides the empty value in a request,
+    /// a non-empty value will be returned. The user will not be aware of what
+    /// non-empty value to expect.
+    NonEmptyDefault = 7,
 }
 /// A simple descriptor of a resource type.
 ///
@@ -511,7 +521,7 @@ pub struct ResourceDescriptor {
     /// Example: `storage.googleapis.com/Bucket`
     ///
     /// The value of the resource_type_kind must follow the regular expression
-    /// /[A-Za-z][a-zA-Z0-9]+/. It should start with an upper case character and
+    /// /\[A-Za-z][a-zA-Z0-9\]+/. It should start with an upper case character and
     /// should use PascalCase (UpperCamelCase). The maximum number of
     /// characters allowed for the `resource_type_kind` is 100.
     #[prost(string, tag = "1")]
@@ -562,14 +572,14 @@ pub struct ResourceDescriptor {
     /// 'projects' for the resource name of 'projects/{project}' and the permission
     /// name of 'cloudresourcemanager.googleapis.com/projects.get'. It is the same
     /// concept of the `plural` field in k8s CRD spec
-    /// https://kubernetes.io/docs/tasks/access-kubernetes-api/custom-resources/custom-resource-definitions/
+    /// <https://kubernetes.io/docs/tasks/access-kubernetes-api/custom-resources/custom-resource-definitions/>
     ///
     /// Note: The plural form is required even for singleton resources. See
-    /// https://aip.dev/156
+    /// <https://aip.dev/156>
     #[prost(string, tag = "5")]
     pub plural: ::prost::alloc::string::String,
     /// The same concept of the `singular` field in k8s CRD spec
-    /// https://kubernetes.io/docs/tasks/access-kubernetes-api/custom-resources/custom-resource-definitions/
+    /// <https://kubernetes.io/docs/tasks/access-kubernetes-api/custom-resources/custom-resource-definitions/>
     /// Such as "project" for the `resourcemanager.googleapis.com/Project` type.
     #[prost(string, tag = "6")]
     pub singular: ::prost::alloc::string::String,
