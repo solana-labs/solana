@@ -9,7 +9,7 @@ use crate::{
 use std::{cmp::Ordering, collections::BinaryHeap, iter::FromIterator, ops::Deref};
 
 #[deprecated(
-    since = "1.8.0",
+    since = "1.9.0",
     note = "Please do not use, will no longer be available in the future"
 )]
 pub const MAX_ENTRIES: usize = 150;
@@ -20,7 +20,7 @@ declare_deprecated_sysvar_id!(
 );
 
 #[deprecated(
-    since = "1.8.0",
+    since = "1.9.0",
     note = "Please do not use, will no longer be available in the future"
 )]
 #[repr(C)]
@@ -39,7 +39,7 @@ impl Entry {
 }
 
 #[deprecated(
-    since = "1.8.0",
+    since = "1.9.0",
     note = "Please do not use, will no longer be available in the future"
 )]
 #[derive(Clone, Debug)]
@@ -70,7 +70,7 @@ impl<'a> PartialOrd for IterItem<'a> {
 /// The entries are ordered by descending block height, so the first entry holds
 /// the most recent block hash, and the last entry holds an old block hash.
 #[deprecated(
-    since = "1.8.0",
+    since = "1.9.0",
     note = "Please do not use, will no longer be available in the future"
 )]
 #[repr(C)]

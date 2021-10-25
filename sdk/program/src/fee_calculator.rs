@@ -21,7 +21,7 @@ impl FeeCalculator {
     }
 
     #[deprecated(
-        since = "1.8.0",
+        since = "1.9.0",
         note = "Please do not use, will no longer be available in the future"
     )]
     pub fn calculate_fee(&self, message: &Message) -> u64 {
