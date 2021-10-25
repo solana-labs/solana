@@ -12,6 +12,7 @@ CREATE TABLE account (
     executable BOOL NOT NULL,
     rent_epoch BIGINT NOT NULL,
     data BYTEA,
+    write_version BIGINT NOT NULL,
     updated_on TIMESTAMP NOT NULL
 );
 
@@ -35,14 +36,15 @@ CREATE TABLE account_audit (
     executable BOOL NOT NULL,
     rent_epoch BIGINT NOT NULL,
     data BYTEA,
+    write_version BIGINT NOT NULL,
     updated_on TIMESTAMP NOT NULL
 );
 
 CREATE FUNCTION audit_account_update() RETURNS trigger AS $audit_account_update$
     BEGIN
-		INSERT INTO account_audit (pubkey, owner, lamports, slot, executable, rent_epoch, data, updated_on)
+		INSERT INTO account_audit (pubkey, owner, lamports, slot, executable, rent_epoch, data, write_version, updated_on)
             VALUES (OLD.pubkey, OLD.owner, OLD.lamports, OLD.slot,
-                    OLD.executable, OLD.rent_epoch, OLD.data, OLD.updated_on);
+                    OLD.executable, OLD.rent_epoch, OLD.data, OLD.write_version, OLD.updated_on);
         RETURN NEW;
     END;
 
