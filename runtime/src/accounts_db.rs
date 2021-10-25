@@ -1601,6 +1601,18 @@ impl AccountsDb {
         )
     }
 
+    pub fn new_for_tests_with_caching(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
+        AccountsDb::new_with_config(
+            paths,
+            cluster_type,
+            AccountSecondaryIndexes::default(),
+            true,
+            AccountShrinkThreshold::default(),
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            None,
+        )
+    }
+
     pub fn new_with_config(
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
@@ -1677,6 +1689,13 @@ impl AccountsDb {
         AccountsDb {
             min_num_stores: 0,
             ..AccountsDb::new_for_tests(Vec::new(), &ClusterType::Development)
+        }
+    }
+
+    pub fn new_single_for_tests_with_caching() -> Self {
+        AccountsDb {
+            min_num_stores: 0,
+            ..AccountsDb::new_for_tests_with_caching(Vec::new(), &ClusterType::Development)
         }
     }
 
