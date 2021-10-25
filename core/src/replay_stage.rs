@@ -1,10 +1,60 @@
 //! The `replay_stage` replays transactions broadcast by the leader.
+<<<<<<< HEAD
 
 use crate::{
     broadcast_stage::RetransmitSlotsSender,
     cache_block_meta_service::CacheBlockMetaSender,
     cluster_info_vote_listener::{
         GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver, VoteTracker,
+=======
+use {
+    crate::{
+        ancestor_hashes_service::AncestorHashesReplayUpdateSender,
+        broadcast_stage::RetransmitSlotsSender,
+        cache_block_meta_service::CacheBlockMetaSender,
+        cluster_info_vote_listener::{
+            GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver, VoteTracker,
+        },
+        cluster_slot_state_verifier::*,
+        cluster_slots::ClusterSlots,
+        cluster_slots_service::ClusterSlotsUpdateSender,
+        commitment_service::{AggregateCommitmentService, CommitmentAggregationData},
+        consensus::{
+            ComputedBankState, Stake, SwitchForkDecision, Tower, VotedStakes, SWITCH_FORK_THRESHOLD,
+        },
+        cost_update_service::CostUpdate,
+        fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
+        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
+        latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
+        progress_map::{ForkProgress, ProgressMap, PropagatedStats},
+        repair_service::DuplicateSlotsResetReceiver,
+        rewards_recorder_service::RewardsRecorderSender,
+        tower_storage::{SavedTower, TowerStorage},
+        unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
+        voting_service::VoteOp,
+        window_service::DuplicateSlotReceiver,
+    },
+    solana_client::rpc_response::SlotUpdate,
+    solana_entry::entry::VerifyRecyclers,
+    solana_gossip::cluster_info::ClusterInfo,
+    solana_ledger::{
+        block_error::BlockError,
+        blockstore::Blockstore,
+        blockstore_processor::{self, BlockstoreProcessorError, TransactionStatusSender},
+        leader_schedule_cache::LeaderScheduleCache,
+    },
+    solana_measure::measure::Measure,
+    solana_metrics::inc_new_counter_info,
+    solana_poh::poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
+    solana_rpc::{
+        optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
+        rpc_subscriptions::RpcSubscriptions,
+    },
+    solana_runtime::{
+        accounts_background_service::AbsRequestSender, bank::Bank, bank::ExecuteTimings,
+        bank::NewBankOptions, bank_forks::BankForks, commitment::BlockCommitmentCache,
+        vote_sender_types::ReplayVoteSender,
+>>>>>>> c2bfce90b (- cost_tracker is data member of a bank, it can report metrics when bank is frozen (#20802))
     },
     cluster_slot_state_verifier::*,
     cluster_slots::ClusterSlots,
@@ -313,6 +363,10 @@ impl ReplayStage {
         gossip_duplicate_confirmed_slots_receiver: GossipDuplicateConfirmedSlotsReceiver,
         gossip_verified_vote_hash_receiver: GossipVerifiedVoteHashReceiver,
         cluster_slots_update_sender: ClusterSlotsUpdateSender,
+<<<<<<< HEAD
+=======
+        cost_update_sender: Sender<CostUpdate>,
+>>>>>>> c2bfce90b (- cost_tracker is data member of a bank, it can report metrics when bank is frozen (#20802))
         voting_sender: Sender<VoteOp>,
         cost_update_sender: Sender<ExecuteTimings>,
     ) -> Self {
@@ -1690,7 +1744,13 @@ impl ReplayStage {
         unfrozen_gossip_verified_vote_hashes: &mut UnfrozenGossipVerifiedVoteHashes,
         latest_validator_votes_for_frozen_banks: &mut LatestValidatorVotesForFrozenBanks,
         cluster_slots_update_sender: &ClusterSlotsUpdateSender,
+<<<<<<< HEAD
         cost_update_sender: &Sender<ExecuteTimings>,
+=======
+        cost_update_sender: &Sender<CostUpdate>,
+        duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
+        ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
+>>>>>>> c2bfce90b (- cost_tracker is data member of a bank, it can report metrics when bank is frozen (#20802))
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
@@ -1783,6 +1843,13 @@ impl ReplayStage {
                     transaction_status_sender.send_transaction_status_freeze_message(&bank);
                 }
                 bank.freeze();
+                // report cost tracker stats
+                cost_update_sender
+                    .send(CostUpdate::FrozenBank { bank: bank.clone() })
+                    .unwrap_or_else(|err| {
+                        warn!("cost_update_sender failed sending bank stats: {:?}", err)
+                    });
+
                 let bank_hash = bank.hash();
                 assert_ne!(bank_hash, Hash::default());
                 // Needs to be updated before `check_slot_agrees_with_cluster()` so that
@@ -1836,7 +1903,7 @@ impl ReplayStage {
         // send accumulated excute-timings to cost_update_service
         if !execute_timings.details.per_program_timings.is_empty() {
             cost_update_sender
-                .send(execute_timings)
+                .send(CostUpdate::ExecuteTiming { execute_timings })
                 .unwrap_or_else(|err| warn!("cost_update_sender failed: {:?}", err));
         }
 

@@ -5416,8 +5416,12 @@ dependencies = [
  "dir-diff",
  "flate2",
  "fnv",
+<<<<<<< HEAD
  "histogram",
  "itertools 0.9.0",
+=======
+ "itertools 0.10.1",
+>>>>>>> c2bfce90b (- cost_tracker is data member of a bank, it can report metrics when bank is frozen (#20802))
  "lazy_static",
  "libc",
  "libloading 0.6.2",

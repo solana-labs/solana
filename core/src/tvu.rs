@@ -39,8 +39,12 @@ use solana_runtime::{
         AbsRequestHandler, AbsRequestSender, AccountsBackgroundService, SnapshotRequestHandler,
     },
     accounts_db::AccountShrinkThreshold,
+<<<<<<< HEAD
     bank::ExecuteTimings,
     bank_forks::{BankForks, SnapshotConfig},
+=======
+    bank_forks::BankForks,
+>>>>>>> c2bfce90b (- cost_tracker is data member of a bank, it can report metrics when bank is frozen (#20802))
     commitment::BlockCommitmentCache,
     cost_model::CostModel,
     vote_sender_types::ReplayVoteSender,
@@ -55,7 +59,7 @@ use std::{
     net::UdpSocket,
     sync::{
         atomic::AtomicBool,
-        mpsc::{channel, Receiver, Sender},
+        mpsc::{channel, Receiver},
         Arc, Mutex, RwLock,
     },
     thread,
@@ -290,10 +294,7 @@ impl Tvu {
             bank_forks.clone(),
         );
 
-        let (cost_update_sender, cost_update_receiver): (
-            Sender<ExecuteTimings>,
-            Receiver<ExecuteTimings>,
-        ) = channel();
+        let (cost_update_sender, cost_update_receiver) = channel();
         let cost_update_service = CostUpdateService::new(
             exit.clone(),
             blockstore.clone(),

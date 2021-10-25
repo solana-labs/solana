@@ -29,7 +29,6 @@ use solana_runtime::{
     bank_forks::{ArchiveFormat, BankForks, SnapshotConfig},
     cost_model::CostModel,
     cost_tracker::CostTracker,
-    cost_tracker_stats::CostTrackerStats,
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     snapshot_utils,
     snapshot_utils::{SnapshotVersion, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
@@ -746,7 +745,6 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
     let mut cost_model = CostModel::default();
     cost_model.initialize_cost_table(&blockstore.read_program_costs().unwrap());
     let mut cost_tracker = CostTracker::default();
-    let mut cost_tracker_stats = CostTrackerStats::default();
 
     for entry in &entries {
         transactions += entry.transactions.len();
@@ -763,6 +761,7 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
                     transaction,
                     cost_tracker.get_stats()
                 );
+<<<<<<< HEAD
             }
             for instruction in &transaction.message().instructions {
                 let program_id =
@@ -779,6 +778,25 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
         transactions,
         programs,
         cost_tracker.get_stats()
+=======
+                let result = cost_tracker.try_add(&transaction, &tx_cost);
+                if result.is_err() {
+                    println!(
+                        "Slot: {}, CostModel rejected transaction {:?}, reason {:?}",
+                        slot, transaction, result,
+                    );
+                }
+                for (program_id, _instruction) in transaction.message().program_instructions_iter()
+                {
+                    *program_ids.entry(*program_id).or_insert(0) += 1;
+                }
+            });
+    }
+
+    println!(
+        "Slot: {}, Entries: {}, Transactions: {}, Programs {}",
+        slot, num_entries, num_transactions, num_programs,
+>>>>>>> c2bfce90b (- cost_tracker is data member of a bank, it can report metrics when bank is frozen (#20802))
     );
     println!("  Programs: {:?}", program_ids);
 
