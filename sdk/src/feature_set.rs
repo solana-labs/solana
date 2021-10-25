@@ -253,6 +253,10 @@ pub mod disable_fee_calculator {
     solana_sdk::declare_id!("2jXx2yDmGysmBKfKYNgLj2DQyAQv6mMk2BPh4eSbyB4H");
 }
 
+pub mod add_compute_budget_program {
+    solana_sdk::declare_id!("4d5AKtxoh93Dwm1vHXUU3iRATuMndx1c431KgT2td52r");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -311,6 +315,7 @@ lazy_static! {
         (turbine_peers_shuffle::id(), "turbine peers shuffle patch"),
         (requestable_heap_size::id(), "Requestable heap frame size"),
         (disable_fee_calculator::id(), "deprecate fee calculator"),
+        (add_compute_budget_program::id(), "Add compute_budget_program"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

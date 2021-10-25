@@ -158,7 +158,7 @@ fn feature_builtins() -> Vec<(Builtin, Pubkey, ActivationType)> {
                 solana_sdk::compute_budget::id(),
                 solana_compute_budget_program::process_instruction,
             ),
-            feature_set::tx_wide_compute_cap::id(),
+            feature_set::add_compute_budget_program::id(),
             ActivationType::NewProgram,
         ),
         // TODO when feature `prevent_calling_precompiles_as_programs` is
