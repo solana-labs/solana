@@ -4817,7 +4817,7 @@ impl AccountsDb {
             hashes
         });
 
-        accounts_and_meta_to_store
+        let account_infos = accounts_and_meta_to_store
             .iter()
             .enumerate()
             .map(|(i, (meta, account))| {
@@ -4833,6 +4833,8 @@ impl AccountsDb {
                     lamports: account.lamports(),
                 };
 
+                self.notify_account_at_accounts_update(slot, meta, &account);
+
                 let cached_account = self.accounts_cache.store(slot, &meta.pubkey, account, hash);
                 // hash this account in the bg
                 match &self.sender_bg_hasher {
@@ -4843,7 +4845,9 @@ impl AccountsDb {
                 };
                 account_info
             })
-            .collect()
+            .collect();
+
+        account_infos
     }
 
     fn store_accounts_to<
@@ -6226,8 +6230,6 @@ impl AccountsDb {
 
     pub fn store_cached(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
         self.store(slot, accounts, self.caching_enabled);
-
-        self.notify_account_at_accounts_update(slot, accounts);
     }
 
     /// Store the account update.

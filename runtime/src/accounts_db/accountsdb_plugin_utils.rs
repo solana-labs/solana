@@ -1,5 +1,8 @@
 use {
-    crate::{accounts_db::AccountsDb, append_vec::StoredAccountMeta},
+    crate::{
+        accounts_db::AccountsDb,
+        append_vec::{StoredAccountMeta, StoredMeta},
+    },
     solana_measure::measure::Measure,
     solana_metrics::*,
     solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey},
@@ -59,16 +62,12 @@ impl AccountsDb {
     pub fn notify_account_at_accounts_update(
         &self,
         slot: Slot,
-        accounts: &[(&Pubkey, &AccountSharedData)],
+        meta: &StoredMeta,
+        account: &AccountSharedData,
     ) {
         if let Some(accounts_update_notifier) = &self.accounts_update_notifier {
             let notifier = &accounts_update_notifier.read().unwrap();
-
-            for account in accounts {
-                let pubkey = account.0;
-                let account = account.1;
-                notifier.notify_account_update(slot, pubkey, account);
-            }
+            notifier.notify_account_update(slot, meta, account);
         }
     }
 

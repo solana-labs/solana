@@ -12,6 +12,7 @@ CREATE TABLE account (
     executable BOOL NOT NULL,
     rent_epoch BIGINT NOT NULL,
     data BYTEA,
+    write_version BIGINT NOT NULL,
     updated_on TIMESTAMP NOT NULL
 );
 
