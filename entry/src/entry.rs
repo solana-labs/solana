@@ -262,7 +262,7 @@ pub struct EntrySigVerificationState {
     verification_status: EntryVerificationStatus,
     entries: Option<Vec<EntryType>>,
     device_verification_data: DeviceSigVerificationData,
-    verify_duration_us: u64,
+    pub verify_duration_us: u64,
 }
 
 impl<'a> EntrySigVerificationState {
@@ -772,6 +772,7 @@ impl EntrySlice for [Entry] {
             }
         };
 
+        let check_start = Instant::now();
         let entries = PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool.borrow().install(|| {
                 self.par_iter()
@@ -791,11 +792,13 @@ impl EntrySlice for [Entry] {
                     .collect()
             })
         });
+
+        let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
         EntrySigVerificationState {
             verification_status: EntryVerificationStatus::Success,
             entries,
             device_verification_data: DeviceSigVerificationData::Cpu(),
-            verify_duration_us: 0,
+            verify_duration_us: transaction_duration_us,
         }
     }
 

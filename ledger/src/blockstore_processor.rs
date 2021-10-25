@@ -925,23 +925,18 @@ pub fn confirm_slot(
             bank.verify_transaction(versioned_tx, skip_verification)
         }
     };
-    let check_start = Instant::now();
     let mut check_result = entries.start_verify_and_hash_transactions(
         skip_verification,
         bank.libsecp256k1_0_5_upgrade_enabled(),
         bank.verify_tx_signatures_len_enabled(),
         recyclers.clone(),
     );
-    // todo: we should use _b_finished. Also, we're not taking advatnage of the async nature of start_verify_and_hash_transactions
-    // is there something else we can do in the meantime?
-    let _b_finished = check_result.finish_verify();
-    let check_result = check_result.entries();
-    if check_result.is_none() {
+
+    let entries = check_result.entries();
+    if entries.is_none() {
         warn!("Ledger proof of history failed at slot: {}", slot);
         return Err(BlockError::InvalidEntryHash.into());
     }
-    let mut entries = check_result.unwrap();
-    let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
 
     let mut replay_elapsed = Measure::start("replay_elapsed");
     let mut execute_timings = ExecuteTimings::default();
@@ -949,7 +944,7 @@ pub fn confirm_slot(
     // Note: This will shuffle entries' transactions in-place.
     let process_result = process_entries_with_callback(
         bank,
-        &mut entries,
+        &mut entries.unwrap(),
         true, // shuffle transactions.
         entry_callback,
         transaction_status_sender,
@@ -962,6 +957,14 @@ pub fn confirm_slot(
     timing.replay_elapsed += replay_elapsed.as_us();
 
     timing.execute_timings.accumulate(&execute_timings);
+
+    if !check_result.finish_verify() {
+        warn!("Ledger proof of history failed at slot: {}", slot);
+        return Err(BlockError::InvalidEntryHash.into());
+    }
+
+    // todo: is this correct?
+    let transaction_duration_us = check_result.verify_duration_us;
 
     if let Some(mut verifier) = verifier {
         let verified = verifier.finish_verify();
