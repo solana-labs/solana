@@ -2213,20 +2213,7 @@ pub fn main() {
                 usize
             ),
             worker_threads: value_t_or_exit!(matches, "rpc_pubsub_worker_threads", usize),
-            notification_threads: if let Some(v) =
-                matches.value_of("rpc_pubsub_notification_threads")
-            {
-                match v.parse::<usize>() {
-                    Ok(val) => Some(val),
-                    Err(err) => clap::Error::value_validation_auto(format!(
-                        "The argument '{}' isn't a valid value: {}",
-                        v, err
-                    ))
-                    .exit(),
-                }
-            } else {
-                None
-            },
+            notification_threads: value_of(&matches, "rpc_pubsub_notification_threads"),
         },
         voting_disabled: matches.is_present("no_voting") || restricted_repair_only_mode,
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
