@@ -156,13 +156,14 @@ fn main() {
         .arg(
             Arg::with_name("bpf_program")
                 .long("bpf-program")
-                .value_name("ADDRESS BPF_PROGRAM.SO")
+                .value_name("ADDRESS_OR_PATH BPF_PROGRAM.SO")
                 .takes_value(true)
                 .number_of_values(2)
                 .multiple(true)
                 .help(
                     "Add a BPF program to the genesis configuration. \
-                       If the ledger already exists then this parameter is silently ignored",
+                       If the ledger already exists then this parameter is silently ignored. \
+                       First argument can be a public key or path to file that can be parsed as a keypair",
                 ),
         )
         .arg(
@@ -404,10 +405,13 @@ fn main() {
         for address_program in values.chunks(2) {
             match address_program {
                 [address, program] => {
-                    let address = address.parse::<Pubkey>().unwrap_or_else(|err| {
-                        println!("Error: invalid address {}: {}", address, err);
-                        exit(1);
-                    });
+                    let address = address
+                        .parse::<Pubkey>()
+                        .or_else(|_| read_keypair_file(address).map(|keypair| keypair.pubkey()))
+                        .unwrap_or_else(|err| {
+                            println!("Error: invalid address {}: {}", address, err);
+                            exit(1);
+                        });
 
                     let program_path = PathBuf::from(program);
                     if !program_path.exists() {
