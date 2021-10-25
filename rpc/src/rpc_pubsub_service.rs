@@ -178,6 +178,10 @@ impl TestBroadcastReceiver {
         loop {
             match self.inner.try_recv() {
                 Ok(notification) => {
+                    debug!(
+                        "TestBroadcastReceiver: {:?}ms elapsed",
+                        started.elapsed().as_millis()
+                    );
                     if let Some(json) = self.handler.handle(notification).expect("handler failed") {
                         return json.to_string();
                     }
