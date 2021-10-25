@@ -153,7 +153,7 @@ pub mod tests {
             accounts_update_notifier_interface::{
                 AccountsUpdateNotifier, AccountsUpdateNotifierInterface,
             },
-            append_vec::StoredAccountMeta,
+            append_vec::{StoredAccountMeta, StoredMeta}
         },
         dashmap::DashMap,
         solana_sdk::{
@@ -181,9 +181,9 @@ pub mod tests {
 
     impl AccountsUpdateNotifierInterface for AccountsDbTestPlugin {
         /// Notified when an account is updated at runtime, due to transaction activities
-        fn notify_account_update(&self, slot: Slot, pubkey: &Pubkey, account: &AccountSharedData) {
+        fn notify_account_update(&self, slot: Slot, meta: &StoredMeta, account: &AccountSharedData) {
             self.accounts_at_snapshot_restore
-                .entry(*pubkey)
+                .entry(meta.pubkey)
                 .or_insert(Vec::default())
                 .push((slot, account.clone()));
         }
