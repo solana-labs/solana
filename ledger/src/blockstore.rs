@@ -1521,7 +1521,7 @@ impl Blockstore {
     }
 
     pub fn get_data_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
-        if let Ok(Some(shred)) = self.get_data_shred_from_cache(slot, index) {
+        if let Some(shred) = self.get_data_shred_from_cache(slot, index) {
             Ok(Some(shred))
         } else {
             // No luck in the cache, let's try the filesystem
@@ -1585,7 +1585,7 @@ impl Blockstore {
     }
 
     pub fn get_coding_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
-        if let Ok(Some(shred)) = self.get_code_shred_from_cache(slot, index) {
+        if let Some(shred) = self.get_code_shred_from_cache(slot, index) {
             Ok(Some(shred))
         } else {
             // No luck in the cache, let's try the filesystem
@@ -2724,17 +2724,22 @@ impl Blockstore {
                     .and_then(|serialized_shred| {
                         if serialized_shred.is_none() {
                             if let Some(slot_meta) = slot_meta {
+                                let cache_indexes = self
+                                    .get_data_shred_indexes_from_cache(slot)
+                                    .unwrap_or_default();
                                 panic!(
                                     "Shred with
                                     slot: {},
                                     index: {},
                                     consumed: {},
+                                    cache_indexes: {:?},
                                     completed_indexes: {:?}
                                     must exist if shred index was included in a range: {} {}",
                                     slot,
                                     i,
                                     slot_meta.consumed,
                                     slot_meta.completed_data_indexes,
+                                    cache_indexes,
                                     start_index,
                                     end_index
                                 );

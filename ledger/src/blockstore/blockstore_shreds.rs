@@ -151,26 +151,19 @@ impl Blockstore {
             .insert(index, shred.payload.clone());
     }
 
-    pub(crate) fn get_data_shred_from_cache(
-        &self,
-        slot: Slot,
-        index: u64,
-    ) -> Result<Option<Vec<u8>>> {
-        let payload = self
-            .data_shred_slot_cache(slot)
-            .and_then(|slot_cache| slot_cache.read().unwrap().get(&index).cloned());
-        Ok(payload)
+    pub(crate) fn get_data_shred_from_cache(&self, slot: Slot, index: u64) -> Option<Vec<u8>> {
+        self.data_shred_slot_cache(slot)
+            .and_then(|slot_cache| slot_cache.read().unwrap().get(&index).cloned())
     }
 
-    pub(crate) fn get_code_shred_from_cache(
-        &self,
-        slot: Slot,
-        index: u64,
-    ) -> Result<Option<Vec<u8>>> {
-        let payload = self
-            .code_shred_slot_cache(slot)
-            .and_then(|slot_cache| slot_cache.read().unwrap().get(&index).cloned());
-        Ok(payload)
+    pub(crate) fn get_code_shred_from_cache(&self, slot: Slot, index: u64) -> Option<Vec<u8>> {
+        self.code_shred_slot_cache(slot)
+            .and_then(|slot_cache| slot_cache.read().unwrap().get(&index).cloned())
+    }
+
+    pub(crate) fn get_data_shred_indexes_from_cache(&self, slot: Slot) -> Option<Vec<u64>> {
+        self.data_shred_slot_cache(slot)
+            .map(|slot_cache| slot_cache.read().unwrap().keys().cloned().collect())
     }
 
     pub(crate) fn get_data_shred_from_fs(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
@@ -665,9 +658,7 @@ impl Blockstore {
 
     // Used for tests only
     pub fn is_data_shred_in_cache(&self, slot: Slot, index: u64) -> bool {
-        self.get_data_shred_from_cache(slot, index)
-            .unwrap()
-            .is_some()
+        self.get_data_shred_from_cache(slot, index).is_some()
     }
 }
 
@@ -706,13 +697,11 @@ pub mod tests {
                 blockstore
                     .get_data_shred_from_cache(shred.slot(), shred.index().into())
                     .unwrap()
-                    .unwrap()
             );
         }
         // Try retrieving a shred that wasn't inserted
         assert!(blockstore
             .get_data_shred_from_cache(num_slots + 1, 0)
-            .unwrap()
             .is_none());
     }
 
@@ -751,7 +740,6 @@ pub mod tests {
             );
             assert!(blockstore
                 .get_data_shred_from_cache(shred.slot(), shred.index().into())
-                .unwrap()
                 .is_none());
         }
     }
