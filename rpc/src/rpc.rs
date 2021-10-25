@@ -1034,7 +1034,7 @@ impl JsonRpcRequestProcessor {
                             confirmed_block.configure(encoding, transaction_details, show_rewards)
                         }));
                     } else {
-                        return Err(RpcCustomError::BlockStatusNotAvailableYet.into());
+                        return Err(RpcCustomError::BlockStatusNotAvailableYet { slot }.into());
                     }
                 }
             }

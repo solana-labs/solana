@@ -56,7 +56,7 @@ pub enum RpcCustomError {
     #[error("TransactionSignatureLenMismatch")]
     TransactionSignatureLenMismatch,
     #[error("BlockStatusNotAvailableYet")]
-    BlockStatusNotAvailableYet,
+    BlockStatusNotAvailableYet { slot: Slot },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -164,9 +164,9 @@ impl From<RpcCustomError> for Error {
                 message: "Transaction signature length mismatch".to_string(),
                 data: None,
             },
-            RpcCustomError::BlockStatusNotAvailableYet => Self {
+            RpcCustomError::BlockStatusNotAvailableYet { slot } => Self {
                 code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_BLOCK_STATUS_NOT_AVAILABLE_YET),
-                message: "Block Status not available yet".to_string(),
+                message: format!("Block status not yet available for slot {}", slot),
                 data: None,
             },
         }
