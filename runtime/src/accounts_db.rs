@@ -4836,7 +4836,7 @@ impl AccountsDb {
             hashes
         });
 
-        let account_infos = accounts_and_meta_to_store
+        accounts_and_meta_to_store
             .iter()
             .enumerate()
             .map(|(i, (meta, account))| {
@@ -4864,9 +4864,7 @@ impl AccountsDb {
                 };
                 account_info
             })
-            .collect();
-
-        account_infos
+            .collect()
     }
 
     fn store_accounts_to<
