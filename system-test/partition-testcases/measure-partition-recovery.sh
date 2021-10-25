@@ -31,6 +31,7 @@ fi
 execution_step "Measuring validator confirmation time for $PRE_PARTITION_DURATION seconds"
 sleep "$PRE_PARTITION_DURATION"
 get_validator_confirmation_time "$PRE_PARTITION_DURATION"
+# shellcheck disable=SC2154
 execution_step "Pre partition validator confirmation time is $mean_confirmation_ms ms"
 echo "Pre partition validator confirmation time: $mean_confirmation_ms ms" >> "$RESULT_FILE"
 
