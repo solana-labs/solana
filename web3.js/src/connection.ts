@@ -266,6 +266,16 @@ export type GetLargestAccountsConfig = {
 };
 
 /**
+ * Configuration object for changing `getSupply` request behavior
+ */
+export type GetSupplyConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+  /** Exclude non circulating accounts list from response */
+  excludeNonCirculatingAccountsList?: boolean;
+};
+
+/**
  * Configuration object for changing query behavior
  */
 export type SignatureStatusConfig = {
@@ -2222,10 +2232,23 @@ export class Connection {
    * Fetch information about the current supply
    */
   async getSupply(
-    commitment?: Commitment,
+    config?: GetSupplyConfig | Commitment,
   ): Promise<RpcResponseAndContext<Supply>> {
-    const args = this._buildArgs([], commitment);
-    const unsafeRes = await this._rpcRequest('getSupply', args);
+    let configArg: GetSupplyConfig = {};
+    if (typeof config === 'string') {
+      configArg = {commitment: config};
+    } else if (config) {
+      configArg = {
+        ...config,
+        commitment: (config && config.commitment) || this.commitment,
+      };
+    } else {
+      configArg = {
+        commitment: this.commitment,
+      };
+    }
+
+    const unsafeRes = await this._rpcRequest('getSupply', [configArg]);
     const res = create(unsafeRes, GetSupplyRpcResult);
     if ('error' in res) {
       throw new Error('failed to get supply: ' + res.error.message);
@@ -2794,13 +2817,11 @@ export class Connection {
    * @deprecated Deprecated since v1.2.8. Please use {@link getSupply} instead.
    */
   async getTotalSupply(commitment?: Commitment): Promise<number> {
-    const args = this._buildArgs([], commitment);
-    const unsafeRes = await this._rpcRequest('getSupply', args);
-    const res = create(unsafeRes, GetSupplyRpcResult);
-    if ('error' in res) {
-      throw new Error('failed to get total supply: ' + res.error.message);
-    }
-    return res.result.value.total;
+    const result = await this.getSupply({
+      commitment,
+      excludeNonCirculatingAccountsList: true,
+    });
+    return result.value.total;
   }
 
   /**

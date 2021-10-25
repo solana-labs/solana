@@ -254,12 +254,8 @@ mod test {
                 SysvarAccountType::Fees(UiFees::default()),
             );
 
-            let fee_calculator = FeeCalculator {
-                lamports_per_signature: 10,
-            };
-            let recent_blockhashes: RecentBlockhashes = vec![IterItem(0, &hash, &fee_calculator)]
-                .into_iter()
-                .collect();
+            let recent_blockhashes: RecentBlockhashes =
+                vec![IterItem(0, &hash, 10)].into_iter().collect();
             let recent_blockhashes_sysvar = create_account_for_test(&recent_blockhashes);
             assert_eq!(
                 parse_sysvar(
@@ -269,7 +265,7 @@ mod test {
                 .unwrap(),
                 SysvarAccountType::RecentBlockhashes(vec![UiRecentBlockhashesEntry {
                     blockhash: hash.to_string(),
-                    fee_calculator: fee_calculator.into(),
+                    fee_calculator: FeeCalculator::new(10).into(),
                 }]),
             );
         }

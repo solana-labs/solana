@@ -83,7 +83,6 @@ mod tests {
     use crate::account::from_account;
     use rand::{seq::SliceRandom, thread_rng};
     use solana_program::{
-        fee_calculator::FeeCalculator,
         hash::{Hash, HASH_BYTES},
         sysvar::recent_blockhashes::Entry,
     };
@@ -98,9 +97,9 @@ mod tests {
     #[test]
     fn test_create_account_full() {
         let def_hash = Hash::default();
-        let def_fees = FeeCalculator::default();
+        let def_lamports_per_signature = 0;
         let account = create_account_with_data_for_test(
-            vec![IterItem(0u64, &def_hash, &def_fees); MAX_ENTRIES].into_iter(),
+            vec![IterItem(0u64, &def_hash, def_lamports_per_signature); MAX_ENTRIES].into_iter(),
         );
         let recent_blockhashes = from_account::<RecentBlockhashes, _>(&account).unwrap();
         assert_eq!(recent_blockhashes.len(), MAX_ENTRIES);
@@ -109,9 +108,10 @@ mod tests {
     #[test]
     fn test_create_account_truncate() {
         let def_hash = Hash::default();
-        let def_fees = FeeCalculator::default();
+        let def_lamports_per_signature = 0;
         let account = create_account_with_data_for_test(
-            vec![IterItem(0u64, &def_hash, &def_fees); MAX_ENTRIES + 1].into_iter(),
+            vec![IterItem(0u64, &def_hash, def_lamports_per_signature); MAX_ENTRIES + 1]
+                .into_iter(),
         );
         let recent_blockhashes = from_account::<RecentBlockhashes, _>(&account).unwrap();
         assert_eq!(recent_blockhashes.len(), MAX_ENTRIES);
@@ -119,7 +119,7 @@ mod tests {
 
     #[test]
     fn test_create_account_unsorted() {
-        let def_fees = FeeCalculator::default();
+        let def_lamports_per_signature = 0;
         let mut unsorted_blocks: Vec<_> = (0..MAX_ENTRIES)
             .map(|i| {
                 (i as u64, {
@@ -135,13 +135,13 @@ mod tests {
         let account = create_account_with_data_for_test(
             unsorted_blocks
                 .iter()
-                .map(|(i, hash)| IterItem(*i, hash, &def_fees)),
+                .map(|(i, hash)| IterItem(*i, hash, def_lamports_per_signature)),
         );
         let recent_blockhashes = from_account::<RecentBlockhashes, _>(&account).unwrap();
 
         let mut unsorted_recent_blockhashes: Vec<_> = unsorted_blocks
             .iter()
-            .map(|(i, hash)| IterItem(*i, hash, &def_fees))
+            .map(|(i, hash)| IterItem(*i, hash, def_lamports_per_signature))
             .collect();
         unsorted_recent_blockhashes.sort();
         unsorted_recent_blockhashes.reverse();

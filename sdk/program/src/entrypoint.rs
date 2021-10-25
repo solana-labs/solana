@@ -139,9 +139,9 @@ pub const MAX_PERMITTED_DATA_INCREASE: usize = 1_024 * 10;
 /// The integer arithmetic in this method is safe when called on a buffer that was
 /// serialized by runtime. Use with buffers serialized otherwise is unsupported and
 /// done at one's own risk.
-#[allow(clippy::integer_arithmetic)]
 ///
 /// # Safety
+#[allow(clippy::integer_arithmetic)]
 #[allow(clippy::type_complexity)]
 pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a>>, &'a [u8]) {
     let mut offset: usize = 0;

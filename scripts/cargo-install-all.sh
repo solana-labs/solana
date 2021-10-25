@@ -4,6 +4,7 @@
 # other workspace crates or native program crates.
 here="$(dirname "$0")"
 readlink_cmd="readlink"
+echo "OSTYPE IS: $OSTYPE"
 if [[ $OSTYPE == darwin* ]]; then
   # Mac OS X's version of `readlink` does not support the -f option,
   # But `greadlink` does, which you can get with `brew install coreutils`

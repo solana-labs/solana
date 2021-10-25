@@ -93,12 +93,7 @@ pub const DEFAULT_NUM_DIRS: u32 = 4;
 // When calculating hashes, it is helpful to break the pubkeys found into bins based on the pubkey value.
 // More bins means smaller vectors to sort, copy, etc.
 pub const PUBKEY_BINS_FOR_CALCULATING_HASHES: usize = 65536;
-// # of passes should be a function of the total # of accounts that are active.
-// higher passes = slower total time, lower dynamic memory usage
-// lower passes = faster total time, higher dynamic memory usage
-// passes=2 cuts dynamic memory usage in approximately half.
-pub const NUM_SCAN_PASSES: usize = 2;
-pub const BINS_PER_PASS: usize = PUBKEY_BINS_FOR_CALCULATING_HASHES / NUM_SCAN_PASSES;
+pub const NUM_SCAN_PASSES_DEFAULT: usize = 2;
 
 // Without chunks, we end up with 1 output vec for each outer snapshot storage.
 // This results in too many vectors to be efficient.
@@ -131,11 +126,13 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
     accounts_hash_cache_path: None,
     filler_account_count: None,
+    hash_calc_num_passes: None,
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
     accounts_hash_cache_path: None,
     filler_account_count: None,
+    hash_calc_num_passes: None,
 };
 
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
@@ -145,6 +142,7 @@ pub struct AccountsDbConfig {
     pub index: Option<AccountsIndexConfig>,
     pub accounts_hash_cache_path: Option<PathBuf>,
     pub filler_account_count: Option<usize>,
+    pub hash_calc_num_passes: Option<usize>,
 }
 
 struct FoundStoredAccount<'a> {
@@ -399,6 +397,8 @@ pub enum LoadedAccountAccessor<'a> {
     // None value in Cached variant means the cache was flushed
     Cached(Option<(Pubkey, Cow<'a, CachedAccount>)>),
 }
+
+mod accountsdb_plugin_utils;
 
 impl<'a> LoadedAccountAccessor<'a> {
     fn check_and_get_loaded_account(&mut self) -> LoadedAccount {
@@ -1051,6 +1051,12 @@ pub struct AccountsDb {
 
     filler_account_count: usize,
     pub filler_account_suffix: Option<Pubkey>,
+
+    // # of passes should be a function of the total # of accounts that are active.
+    // higher passes = slower total time, lower dynamic memory usage
+    // lower passes = faster total time, higher dynamic memory usage
+    // passes=2 cuts dynamic memory usage in approximately half.
+    pub num_hash_scan_passes: Option<usize>,
 }
 
 #[derive(Debug, Default)]
@@ -1489,12 +1495,30 @@ type GenerateIndexAccountsMap<'a> = HashMap<Pubkey, IndexAccountMapEntry<'a>>;
 
 impl AccountsDb {
     pub fn default_for_tests() -> Self {
-        Self::default_with_accounts_index(AccountInfoAccountsIndex::default_for_tests(), None)
+        Self::default_with_accounts_index(AccountInfoAccountsIndex::default_for_tests(), None, None)
+    }
+
+    /// return (num_hash_scan_passes, bins_per_pass)
+    fn bins_per_pass(num_hash_scan_passes: Option<usize>) -> (usize, usize) {
+        let num_hash_scan_passes = num_hash_scan_passes.unwrap_or(NUM_SCAN_PASSES_DEFAULT);
+        let bins_per_pass = PUBKEY_BINS_FOR_CALCULATING_HASHES / num_hash_scan_passes;
+        assert!(
+            num_hash_scan_passes <= PUBKEY_BINS_FOR_CALCULATING_HASHES,
+            "num_hash_scan_passes must be <= {}",
+            PUBKEY_BINS_FOR_CALCULATING_HASHES
+        );
+        assert_eq!(
+            bins_per_pass * num_hash_scan_passes,
+            PUBKEY_BINS_FOR_CALCULATING_HASHES
+        ); // evenly divisible
+
+        (num_hash_scan_passes, bins_per_pass)
     }
 
     fn default_with_accounts_index(
         accounts_index: AccountInfoAccountsIndex,
         accounts_hash_cache_path: Option<PathBuf>,
+        num_hash_scan_passes: Option<usize>,
     ) -> Self {
         let num_threads = get_thread_count();
         const MAX_READ_ONLY_CACHE_DATA_SIZE: usize = 200_000_000;
@@ -1511,6 +1535,10 @@ impl AccountsDb {
 
         let mut bank_hashes = HashMap::new();
         bank_hashes.insert(0, BankHashInfo::default());
+
+        // validate inside here
+        Self::bins_per_pass(num_hash_scan_passes);
+
         AccountsDb {
             accounts_index,
             storage: AccountStorage::default(),
@@ -1557,6 +1585,7 @@ impl AccountsDb {
             accounts_update_notifier: None,
             filler_account_count: 0,
             filler_account_suffix: None,
+            num_hash_scan_passes,
         }
     }
 
@@ -1605,7 +1634,13 @@ impl AccountsDb {
             accounts_update_notifier,
             filler_account_count,
             filler_account_suffix,
-            ..Self::default_with_accounts_index(accounts_index, accounts_hash_cache_path)
+            ..Self::default_with_accounts_index(
+                accounts_index,
+                accounts_hash_cache_path,
+                accounts_db_config
+                    .as_ref()
+                    .and_then(|cfg| cfg.hash_calc_num_passes),
+            )
         };
         if paths_is_empty {
             // Create a temporary set of accounts directories, used primarily
@@ -5406,6 +5441,7 @@ impl AccountsDb {
                 } else {
                     None
                 },
+                self.num_hash_scan_passes,
             )
         } else {
             self.calculate_accounts_hash(slot, ancestors, check_hash)
@@ -5606,21 +5642,19 @@ impl AccountsDb {
             &AccountInfoAccountsIndex,
         )>,
         filler_account_suffix: Option<&Pubkey>,
+        num_hash_scan_passes: Option<usize>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
+        let (num_hash_scan_passes, bins_per_pass) = Self::bins_per_pass(num_hash_scan_passes);
         let mut scan_and_hash = move || {
-            assert_eq!(
-                BINS_PER_PASS * NUM_SCAN_PASSES,
-                PUBKEY_BINS_FOR_CALCULATING_HASHES
-            ); // evenly divisible
             let mut previous_pass = PreviousPass::default();
             let mut final_result = (Hash::default(), 0);
 
             let cache_hash_data = CacheHashData::new(&accounts_hash_cache_path);
 
-            for pass in 0..NUM_SCAN_PASSES {
+            for pass in 0..num_hash_scan_passes {
                 let bounds = Range {
-                    start: pass * BINS_PER_PASS,
-                    end: (pass + 1) * BINS_PER_PASS,
+                    start: pass * bins_per_pass,
+                    end: (pass + 1) * bins_per_pass,
                 };
 
                 let result = Self::scan_snapshot_stores_with_cache(
@@ -5640,9 +5674,9 @@ impl AccountsDb {
                 let (hash, lamports, for_next_pass) = hash.rest_of_hash_calculation(
                     result,
                     &mut stats,
-                    pass == NUM_SCAN_PASSES - 1,
+                    pass == num_hash_scan_passes - 1,
                     previous_pass,
-                    BINS_PER_PASS,
+                    bins_per_pass,
                 );
                 previous_pass = for_next_pass;
                 final_result = (hash, lamports);
@@ -6193,15 +6227,7 @@ impl AccountsDb {
     pub fn store_cached(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
         self.store(slot, accounts, self.caching_enabled);
 
-        if let Some(accounts_update_notifier) = &self.accounts_update_notifier {
-            let notifier = &accounts_update_notifier.read().unwrap();
-
-            for account in accounts {
-                let pubkey = account.0;
-                let account = account.1;
-                notifier.notify_account_update(slot, pubkey, account);
-            }
-        }
+        self.notify_account_at_accounts_update(slot, accounts);
     }
 
     /// Store the account update.
@@ -7067,24 +7093,6 @@ impl AccountsDb {
             }
         }
     }
-
-    pub fn notify_account_restore_from_snapshot(&self) {
-        if let Some(accounts_update_notifier) = &self.accounts_update_notifier {
-            let notifier = &accounts_update_notifier.read().unwrap();
-            let slots = self.storage.all_slots();
-            for slot in &slots {
-                let slot_stores = self.storage.get_slot_stores(*slot).unwrap();
-
-                let slot_stores = slot_stores.read().unwrap();
-                for (_, storage_entry) in slot_stores.iter() {
-                    let accounts = storage_entry.all_accounts();
-                    for account in &accounts {
-                        notifier.notify_account_restore_from_snapshot(*slot, account);
-                    }
-                }
-            }
-        }
-    }
 }
 
 #[cfg(test)]
@@ -7693,6 +7701,7 @@ pub mod tests {
             false,
             None,
             None,
+            None,
         )
         .unwrap();
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
@@ -7715,6 +7724,7 @@ pub mod tests {
             None,
             HashStats::default(),
             false,
+            None,
             None,
             None,
         )

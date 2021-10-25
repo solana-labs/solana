@@ -143,6 +143,7 @@ impl SendTransactionService {
                     Err(RecvTimeoutError::Disconnected) => break,
                     Err(RecvTimeoutError::Timeout) => {}
                     Ok(transaction_info) => {
+                        inc_new_counter_info!("send_transaction_service-recv-tx", 1);
                         let addresses = leader_info.as_ref().map(|leader_info| {
                             leader_info.get_leader_tpus(config.leader_forward_count)
                         });
@@ -163,6 +164,7 @@ impl SendTransactionService {
                             );
                         }
                         if transactions.len() < MAX_TRANSACTION_QUEUE_SIZE {
+                            inc_new_counter_info!("send_transaction_service-insert-tx", 1);
                             transactions.insert(transaction_info.signature, transaction_info);
                         } else {
                             datapoint_warn!("send_transaction_service-queue-overflow");
@@ -326,9 +328,8 @@ mod test {
         super::*,
         crate::tpu_info::NullTpuInfo,
         solana_sdk::{
-            account::AccountSharedData, fee_calculator::FeeCalculator,
-            genesis_config::create_genesis_config, nonce, pubkey::Pubkey, signature::Signer,
-            system_program, system_transaction,
+            account::AccountSharedData, genesis_config::create_genesis_config, nonce,
+            pubkey::Pubkey, signature::Signer, system_program, system_transaction,
         },
         std::sync::mpsc::channel,
     };
@@ -623,12 +624,9 @@ mod test {
 
         let nonce_address = Pubkey::new_unique();
         let durable_nonce = Hash::new_unique();
-        let nonce_state =
-            nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
-                authority: Pubkey::default(),
-                blockhash: durable_nonce,
-                fee_calculator: FeeCalculator::new(42),
-            }));
+        let nonce_state = nonce::state::Versions::new_current(nonce::State::Initialized(
+            nonce::state::Data::new(Pubkey::default(), durable_nonce, 42),
+        ));
         let nonce_account =
             AccountSharedData::new_data(43, &nonce_state, &system_program::id()).unwrap();
         root_bank.store_account(&nonce_address, &nonce_account);
@@ -855,12 +853,9 @@ mod test {
         );
         // Advance nonce
         let new_durable_nonce = Hash::new_unique();
-        let new_nonce_state =
-            nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
-                authority: Pubkey::default(),
-                blockhash: new_durable_nonce,
-                fee_calculator: FeeCalculator::new(42),
-            }));
+        let new_nonce_state = nonce::state::Versions::new_current(nonce::State::Initialized(
+            nonce::state::Data::new(Pubkey::default(), new_durable_nonce, 42),
+        ));
         let nonce_account =
             AccountSharedData::new_data(43, &new_nonce_state, &system_program::id()).unwrap();
         working_bank.store_account(&nonce_address, &nonce_account);

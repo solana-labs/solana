@@ -1542,7 +1542,7 @@ mod tests {
         use std::env;
         let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
 
-        format!("{}/tmp/{}-{}", out_dir, name, pubkey.to_string())
+        format!("{}/tmp/{}-{}", out_dir, name, pubkey)
     }
 
     fn initialize_check_payer_balances_inputs(

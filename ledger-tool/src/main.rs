@@ -12,7 +12,7 @@ use serde_json::json;
 use solana_clap_utils::{
     input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
     input_validators::{
-        is_bin, is_parsable, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
+        is_parsable, is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
     },
 };
 use solana_entry::entry::Entry;
@@ -31,7 +31,6 @@ use solana_runtime::{
     bank_forks::BankForks,
     cost_model::CostModel,
     cost_tracker::CostTracker,
-    cost_tracker_stats::CostTrackerStats,
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     snapshot_archive_info::SnapshotArchiveInfoGetter,
     snapshot_config::SnapshotConfig,
@@ -94,19 +93,16 @@ fn output_slot_rewards(blockstore: &Blockstore, slot: Slot, method: &LedgerOutpu
                 for reward in rewards {
                     let sign = if reward.lamports < 0 { "-" } else { "" };
                     println!(
-                        "    {:<44}  {:^15}  {:<15}  {}   {}",
+                        "    {:<44}  {:^15}  {}◎{:<14.9}  ◎{:<18.9}   {}",
                         reward.pubkey,
                         if let Some(reward_type) = reward.reward_type {
                             format!("{}", reward_type)
                         } else {
                             "-".to_string()
                         },
-                        format!(
-                            "{}◎{:<14.9}",
-                            sign,
-                            lamports_to_sol(reward.lamports.abs() as u64)
-                        ),
-                        format!("◎{:<18.9}", lamports_to_sol(reward.post_balance)),
+                        sign,
+                        lamports_to_sol(reward.lamports.abs() as u64),
+                        lamports_to_sol(reward.post_balance),
                         reward
                             .commission
                             .map(|commission| format!("{:>9}%", commission))
@@ -776,7 +772,6 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
     let mut cost_model = CostModel::default();
     cost_model.initialize_cost_table(&blockstore.read_program_costs().unwrap());
     let mut cost_tracker = CostTracker::default();
-    let mut cost_tracker_stats = CostTrackerStats::default();
 
     for entry in entries {
         num_transactions += entry.transactions.len();
@@ -799,15 +794,11 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
                     &transaction,
                     true, // demote_program_write_locks
                 );
-                if cost_tracker
-                    .try_add(&transaction, &tx_cost, &mut cost_tracker_stats)
-                    .is_err()
-                {
+                let result = cost_tracker.try_add(&transaction, &tx_cost);
+                if result.is_err() {
                     println!(
-                        "Slot: {}, CostModel rejected transaction {:?}, stats {:?}!",
-                        slot,
-                        transaction,
-                        cost_tracker.get_stats()
+                        "Slot: {}, CostModel rejected transaction {:?}, reason {:?}",
+                        slot, transaction, result,
                     );
                 }
                 for (program_id, _instruction) in transaction.message().program_instructions_iter()
@@ -818,12 +809,8 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
     }
 
     println!(
-        "Slot: {}, Entries: {}, Transactions: {}, Programs {}, {:?}",
-        slot,
-        num_entries,
-        num_transactions,
-        num_programs,
-        cost_tracker.get_stats()
+        "Slot: {}, Entries: {}, Transactions: {}, Programs {}",
+        slot, num_entries, num_transactions, num_programs,
     );
     println!("  Programs: {:?}", program_ids);
 
@@ -883,7 +870,7 @@ fn main() {
     let accounts_index_bins = Arg::with_name("accounts_index_bins")
         .long("accounts-index-bins")
         .value_name("BINS")
-        .validator(is_bin)
+        .validator(is_pow2)
         .takes_value(true)
         .help("Number of bins to divide the accounts index into");
     let accounts_index_limit = Arg::with_name("accounts_index_memory_limit_mb")
@@ -1414,6 +1401,15 @@ fn main() {
                     .long("remove-stake-accounts")
                     .takes_value(false)
                     .help("Remove all existing stake accounts from the new snapshot")
+            )
+            .arg(
+                Arg::with_name("incremental")
+                    .long("incremental")
+                    .takes_value(false)
+                    .help("Create an incremental snapshot instead of a full snapshot. This requires \
+                          that the ledger is loaded from a full snapshot, which will be used as the \
+                          base for the incremental snapshot.")
+                    .conflicts_with("no_snapshot")
             )
         ).subcommand(
             SubCommand::with_name("accounts")
@@ -2000,6 +1996,7 @@ fn main() {
                 index: Some(accounts_index_config),
                 accounts_hash_cache_path: Some(ledger_path.clone()),
                 filler_account_count,
+                ..AccountsDbConfig::default()
             });
 
             let process_options = ProcessOptions {
@@ -2154,6 +2151,7 @@ fn main() {
                 AccessType::TryPrimaryThenSecondary,
                 wal_recovery_mode,
             );
+            let is_incremental = arg_matches.is_present("incremental");
 
             let snapshot_slot = if Some("ROOT") == arg_matches.value_of("snapshot_slot") {
                 blockstore
@@ -2166,7 +2164,8 @@ fn main() {
             };
 
             info!(
-                "Creating snapshot of slot {} in {}",
+                "Creating {}snapshot of slot {} in {}",
+                if is_incremental { "incremental " } else { "" },
                 snapshot_slot,
                 output_directory.display()
             );
@@ -2183,7 +2182,7 @@ fn main() {
                 },
                 snapshot_archive_path,
             ) {
-                Ok((bank_forks, ..)) => {
+                Ok((bank_forks, .., starting_snapshot_hashes)) => {
                     let mut bank = bank_forks
                         .get(snapshot_slot)
                         .unwrap_or_else(|| {
@@ -2381,31 +2380,73 @@ fn main() {
                     };
 
                     println!(
-                        "Creating a version {} snapshot of slot {}",
+                        "Creating a version {} {}snapshot of slot {}",
                         snapshot_version,
+                        if is_incremental { "incremental " } else { "" },
                         bank.slot(),
                     );
 
-                    let full_snapshot_archive_info = snapshot_utils::bank_to_full_snapshot_archive(
-                        ledger_path,
-                        &bank,
-                        Some(snapshot_version),
-                        output_directory,
-                        ArchiveFormat::TarZstd,
-                        maximum_full_snapshot_archives_to_retain,
-                        maximum_incremental_snapshot_archives_to_retain,
-                    )
-                    .unwrap_or_else(|err| {
-                        eprintln!("Unable to create snapshot: {}", err);
-                        exit(1);
-                    });
+                    if is_incremental {
+                        if starting_snapshot_hashes.is_none() {
+                            eprintln!("Unable to create incremental snapshot without a base full snapshot");
+                            exit(1);
+                        }
+                        let full_snapshot_slot = starting_snapshot_hashes.unwrap().full.hash.0;
+                        if bank.slot() <= full_snapshot_slot {
+                            eprintln!("Unable to create incremental snapshot: Slot must be greater than full snapshot slot. slot: {}, full snapshot slot: {}",
+                                bank.slot(),
+                                full_snapshot_slot,
+                            );
+                            exit(1);
+                        }
 
-                    println!(
-                        "Successfully created snapshot for slot {}, hash {}: {}",
-                        bank.slot(),
-                        bank.hash(),
-                        full_snapshot_archive_info.path().display(),
-                    );
+                        let incremental_snapshot_archive_info =
+                            snapshot_utils::bank_to_incremental_snapshot_archive(
+                                ledger_path,
+                                &bank,
+                                full_snapshot_slot,
+                                Some(snapshot_version),
+                                output_directory,
+                                ArchiveFormat::TarZstd,
+                                maximum_full_snapshot_archives_to_retain,
+                                maximum_incremental_snapshot_archives_to_retain,
+                            )
+                            .unwrap_or_else(|err| {
+                                eprintln!("Unable to create incremental snapshot: {}", err);
+                                exit(1);
+                            });
+
+                        println!(
+                            "Successfully created incremental snapshot for slot {}, hash {}, base slot: {}: {}",
+                            bank.slot(),
+                            bank.hash(),
+                            full_snapshot_slot,
+                            incremental_snapshot_archive_info.path().display(),
+                        );
+                    } else {
+                        let full_snapshot_archive_info =
+                            snapshot_utils::bank_to_full_snapshot_archive(
+                                ledger_path,
+                                &bank,
+                                Some(snapshot_version),
+                                output_directory,
+                                ArchiveFormat::TarZstd,
+                                maximum_full_snapshot_archives_to_retain,
+                                maximum_incremental_snapshot_archives_to_retain,
+                            )
+                            .unwrap_or_else(|err| {
+                                eprintln!("Unable to create snapshot: {}", err);
+                                exit(1);
+                            });
+
+                        println!(
+                            "Successfully created snapshot for slot {}, hash {}: {}",
+                            bank.slot(),
+                            bank.hash(),
+                            full_snapshot_archive_info.path().display(),
+                        );
+                    }
+
                     println!(
                         "Shred version: {}",
                         compute_shred_version(

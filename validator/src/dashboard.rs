@@ -108,7 +108,7 @@ impl Dashboard {
                     println_name_value("TPU Address:", &tpu.to_string());
                 }
                 if let Some(rpc) = contact_info.rpc {
-                    println_name_value("JSON RPC URL:", &format!("http://{}", rpc.to_string()));
+                    println_name_value("JSON RPC URL:", &format!("http://{}", rpc));
                 }
             }
 

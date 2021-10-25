@@ -1,5 +1,6 @@
 use {
-    clap::{value_t, value_t_or_exit, App, Arg},
+    clap::{crate_name, value_t, value_t_or_exit, App, Arg},
+    log::*,
     solana_clap_utils::{
         input_parsers::{pubkey_of, pubkeys_of, value_of},
         input_validators::{
@@ -340,6 +341,8 @@ fn main() {
     };
     let _logger_thread = redirect_stderr_to_file(logfile);
 
+    info!("{} {}", crate_name!(), solana_version::version!());
+    info!("Starting validator with: {:#?}", std::env::args_os());
     solana_core::validator::report_target_features();
 
     // TODO: Ideally test-validator should *only* allow private addresses.

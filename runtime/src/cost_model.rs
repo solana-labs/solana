@@ -42,34 +42,16 @@ impl TransactionCost {
     }
 }
 
-#[derive(AbiExample, Debug)]
+#[derive(Debug, Default)]
 pub struct CostModel {
-    account_cost_limit: u64,
-    block_cost_limit: u64,
     instruction_execution_cost_table: ExecuteCostTable,
 }
 
-impl Default for CostModel {
-    fn default() -> Self {
-        CostModel::new(MAX_WRITABLE_ACCOUNT_UNITS, MAX_BLOCK_UNITS)
-    }
-}
-
 impl CostModel {
-    pub fn new(account_max: u64, block_max: u64) -> Self {
+    pub fn new() -> Self {
         Self {
-            account_cost_limit: account_max,
-            block_cost_limit: block_max,
             instruction_execution_cost_table: ExecuteCostTable::default(),
         }
-    }
-
-    pub fn get_account_cost_limit(&self) -> u64 {
-        self.account_cost_limit
-    }
-
-    pub fn get_block_cost_limit(&self) -> u64 {
-        self.block_cost_limit
     }
 
     pub fn initialize_cost_table(&mut self, cost_table: &[(Pubkey, u64)]) {

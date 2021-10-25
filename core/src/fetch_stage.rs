@@ -95,6 +95,7 @@ impl FetchStage {
         {
             inc_new_counter_debug!("fetch_stage-honor_forwards", len);
             for packets in batch {
+                #[allow(clippy::question_mark)]
                 if sendr.send(packets).is_err() {
                     return Err(Error::Send);
                 }

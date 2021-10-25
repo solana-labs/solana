@@ -23,7 +23,7 @@ use solana_rbpf::{
     vm::{Config, Executable, Tracer},
 };
 use solana_runtime::{
-    bank::{Bank, ExecuteTimings, NonceRollbackInfo, TransactionBalancesSet, TransactionResults},
+    bank::{Bank, ExecuteTimings, TransactionBalancesSet, TransactionResults},
     bank_client::BankClient,
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
     loader_utils::{
@@ -42,7 +42,7 @@ use solana_sdk::{
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     keyed_account::KeyedAccount,
     loader_instruction,
-    message::Message,
+    message::{Message, SanitizedMessage},
     process_instruction::{InvokeContext, MockInvokeContext},
     pubkey::Pubkey,
     signature::{keypair_from_seed, Keypair, Signer},
@@ -56,8 +56,8 @@ use solana_transaction_status::{
     TransactionStatusMeta, TransactionWithStatusMeta, UiTransactionEncoding,
 };
 use std::{
-    cell::RefCell, collections::HashMap, convert::TryInto, env, fs::File, io::Read, path::PathBuf,
-    str::FromStr, sync::Arc,
+    cell::RefCell, collections::HashMap, convert::TryFrom, convert::TryInto, env, fs::File,
+    io::Read, path::PathBuf, str::FromStr, sync::Arc,
 };
 
 /// BPF program file extension
@@ -370,13 +370,16 @@ fn execute_transactions(bank: &Bank, txs: Vec<Transaction>) -> Vec<ConfirmedTran
             post_token_balances,
             log_messages,
         )| {
-            #[allow(deprecated)]
-            let fee_calculator = nonce_rollback
-                .map(|nonce_rollback| nonce_rollback.fee_calculator())
-                .unwrap_or_else(|| bank.get_fee_calculator(&tx.message().recent_blockhash))
-                .expect("FeeCalculator must exist");
-            #[allow(deprecated)]
-            let fee = fee_calculator.calculate_fee(tx.message());
+            let lamports_per_signature = nonce_rollback
+                .map(|nonce_rollback| nonce_rollback.lamports_per_signature())
+                .unwrap_or_else(|| {
+                    bank.get_lamports_per_signature_for_blockhash(&tx.message().recent_blockhash)
+                })
+                .expect("lamports_per_signature must exist");
+            let fee = Bank::get_fee_for_message_with_lamports_per_signature(
+                &SanitizedMessage::try_from(tx.message().clone()).unwrap(),
+                lamports_per_signature,
+            );
 
             let inner_instructions = inner_instructions.map(|inner_instructions| {
                 inner_instructions
@@ -1365,39 +1368,39 @@ fn assert_instruction_count() {
     #[cfg(feature = "bpf_c")]
     {
         programs.extend_from_slice(&[
-            ("alloc", 1137),
-            ("bpf_to_bpf", 13),
-            ("multiple_static", 8),
+            ("alloc", 1237),
+            ("bpf_to_bpf", 96),
+            ("multiple_static", 52),
             ("noop", 5),
             ("noop++", 5),
-            ("relative_call", 10),
-            ("return_data", 480),
-            ("sanity", 169),
-            ("sanity++", 168),
-            ("secp256k1_recover", 359),
-            ("sha", 1040),
-            ("struct_pass", 8),
-            ("struct_ret", 22),
+            ("relative_call", 26),
+            ("return_data", 980),
+            ("sanity", 1246),
+            ("sanity++", 1250),
+            ("secp256k1_recover", 25357),
+            ("sha", 1328),
+            ("struct_pass", 108),
+            ("struct_ret", 28),
         ]);
     }
     #[cfg(feature = "bpf_rust")]
     {
         programs.extend_from_slice(&[
             ("solana_bpf_rust_128bit", 584),
-            ("solana_bpf_rust_alloc", 7143),
-            ("solana_bpf_rust_custom_heap", 522),
+            ("solana_bpf_rust_alloc", 7388),
+            ("solana_bpf_rust_custom_heap", 512),
             ("solana_bpf_rust_dep_crate", 47),
-            ("solana_bpf_rust_external_spend", 504),
-            ("solana_bpf_rust_iter", 724),
-            ("solana_bpf_rust_many_args", 233),
-            ("solana_bpf_rust_mem", 3119),
-            ("solana_bpf_rust_membuiltins", 4065),
-            ("solana_bpf_rust_noop", 478),
-            ("solana_bpf_rust_param_passing", 46),
-            ("solana_bpf_rust_rand", 481),
-            ("solana_bpf_rust_sanity", 922),
-            ("solana_bpf_rust_secp256k1_recover", 301),
-            ("solana_bpf_rust_sha", 32337),
+            ("solana_bpf_rust_external_spend", 483),
+            ("solana_bpf_rust_iter", 824),
+            ("solana_bpf_rust_many_args", 941),
+            ("solana_bpf_rust_mem", 3083),
+            ("solana_bpf_rust_membuiltins", 3976),
+            ("solana_bpf_rust_noop", 457),
+            ("solana_bpf_rust_param_passing", 146),
+            ("solana_bpf_rust_rand", 464),
+            ("solana_bpf_rust_sanity", 1714),
+            ("solana_bpf_rust_secp256k1_recover", 25216),
+            ("solana_bpf_rust_sha", 30704),
         ]);
     }
 

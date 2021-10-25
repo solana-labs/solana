@@ -653,7 +653,6 @@ mod tests {
     use solana_sdk::{
         account::Account,
         account_utils::StateMut,
-        fee_calculator::FeeCalculator,
         hash::hash,
         nonce::{self, state::Versions, State},
         nonce_account,
@@ -916,11 +915,11 @@ mod tests {
     fn test_check_nonce_account() {
         let blockhash = Hash::default();
         let nonce_pubkey = solana_sdk::pubkey::new_rand();
-        let data = Versions::new_current(State::Initialized(nonce::state::Data {
-            authority: nonce_pubkey,
+        let data = Versions::new_current(State::Initialized(nonce::state::Data::new(
+            nonce_pubkey,
             blockhash,
-            fee_calculator: FeeCalculator::default(),
-        }));
+            0,
+        )));
         let valid = Account::new_data(1, &data, &system_program::ID);
         assert!(check_nonce_account(&valid.unwrap(), &nonce_pubkey, &blockhash).is_ok());
 
@@ -938,11 +937,11 @@ mod tests {
             assert_eq!(err, Error::InvalidAccountData,);
         }
 
-        let data = Versions::new_current(State::Initialized(nonce::state::Data {
-            authority: nonce_pubkey,
-            blockhash: hash(b"invalid"),
-            fee_calculator: FeeCalculator::default(),
-        }));
+        let data = Versions::new_current(State::Initialized(nonce::state::Data::new(
+            nonce_pubkey,
+            hash(b"invalid"),
+            0,
+        )));
         let invalid_hash = Account::new_data(1, &data, &system_program::ID);
         if let CliError::InvalidNonce(err) =
             check_nonce_account(&invalid_hash.unwrap(), &nonce_pubkey, &blockhash).unwrap_err()
@@ -950,11 +949,11 @@ mod tests {
             assert_eq!(err, Error::InvalidHash,);
         }
 
-        let data = Versions::new_current(State::Initialized(nonce::state::Data {
-            authority: solana_sdk::pubkey::new_rand(),
+        let data = Versions::new_current(State::Initialized(nonce::state::Data::new(
+            solana_sdk::pubkey::new_rand(),
             blockhash,
-            fee_calculator: FeeCalculator::default(),
-        }));
+            0,
+        )));
         let invalid_authority = Account::new_data(1, &data, &system_program::ID);
         if let CliError::InvalidNonce(err) =
             check_nonce_account(&invalid_authority.unwrap(), &nonce_pubkey, &blockhash).unwrap_err()
@@ -995,11 +994,7 @@ mod tests {
         let mut nonce_account = nonce_account::create_account(1).into_inner();
         assert_eq!(state_from_account(&nonce_account), Ok(State::Uninitialized));
 
-        let data = nonce::state::Data {
-            authority: Pubkey::new(&[1u8; 32]),
-            blockhash: Hash::new(&[42u8; 32]),
-            fee_calculator: FeeCalculator::new(42),
-        };
+        let data = nonce::state::Data::new(Pubkey::new(&[1u8; 32]), Hash::new(&[42u8; 32]), 42);
         nonce_account
             .set_state(&Versions::new_current(State::Initialized(data.clone())))
             .unwrap();
@@ -1028,11 +1023,7 @@ mod tests {
             Err(Error::InvalidStateForOperation)
         );
 
-        let data = nonce::state::Data {
-            authority: Pubkey::new(&[1u8; 32]),
-            blockhash: Hash::new(&[42u8; 32]),
-            fee_calculator: FeeCalculator::new(42),
-        };
+        let data = nonce::state::Data::new(Pubkey::new(&[1u8; 32]), Hash::new(&[42u8; 32]), 42);
         nonce_account
             .set_state(&Versions::new_current(State::Initialized(data.clone())))
             .unwrap();

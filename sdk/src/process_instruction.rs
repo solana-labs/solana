@@ -5,7 +5,6 @@ use solana_sdk::{
     account::AccountSharedData,
     compute_budget::ComputeBudget,
     feature_set::remove_native_loader,
-    fee_calculator::FeeCalculator,
     hash::Hash,
     instruction::{CompiledInstruction, Instruction, InstructionError},
     keyed_account::{create_keyed_accounts_unified, KeyedAccount},
@@ -132,10 +131,10 @@ pub trait InvokeContext {
     fn set_blockhash(&mut self, hash: Hash);
     /// Get this invocation's blockhash
     fn get_blockhash(&self) -> &Hash;
-    /// Set this invocation's `FeeCalculator`
-    fn set_fee_calculator(&mut self, fee_calculator: FeeCalculator);
-    /// Get this invocation's `FeeCalculator`
-    fn get_fee_calculator(&self) -> &FeeCalculator;
+    /// Set this invocation's lamports_per_signature value
+    fn set_lamports_per_signature(&mut self, lamports_per_signature: u64);
+    /// Get this invocation's lamports_per_signature value
+    fn get_lamports_per_signature(&self) -> u64;
     /// Set the return data
     fn set_return_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError>;
     /// Get the return data
@@ -354,14 +353,14 @@ pub struct MockInvokeContext<'a> {
     pub invoke_stack: Vec<InvokeContextStackFrame<'a>>,
     pub logger: MockLogger,
     pub compute_budget: ComputeBudget,
-    pub compute_meter: MockComputeMeter,
+    pub compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     pub programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
     pub accounts: Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
     #[allow(clippy::type_complexity)]
     pub sysvars: RefCell<Vec<(Pubkey, Option<Rc<Vec<u8>>>)>>,
     pub disabled_features: HashSet<Pubkey>,
     pub blockhash: Hash,
-    pub fee_calculator: FeeCalculator,
+    pub lamports_per_signature: u64,
     pub return_data: (Pubkey, Vec<u8>),
 }
 
@@ -372,15 +371,15 @@ impl<'a> MockInvokeContext<'a> {
             invoke_stack: Vec::with_capacity(compute_budget.max_invoke_depth),
             logger: MockLogger::default(),
             compute_budget,
-            compute_meter: MockComputeMeter {
+            compute_meter: Rc::new(RefCell::new(MockComputeMeter {
                 remaining: std::i64::MAX as u64,
-            },
+            })),
             programs: vec![],
             accounts: vec![],
             sysvars: RefCell::new(Vec::new()),
             disabled_features: HashSet::default(),
             blockhash: Hash::default(),
-            fee_calculator: FeeCalculator::default(),
+            lamports_per_signature: 0,
             return_data: (Pubkey::default(), Vec::new()),
         };
         let number_of_program_accounts = keyed_accounts
@@ -464,7 +463,7 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
         Rc::new(RefCell::new(self.logger.clone()))
     }
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
-        Rc::new(RefCell::new(self.compute_meter.clone()))
+        self.compute_meter.clone()
     }
     fn add_executor(&self, _pubkey: &Pubkey, _executor: Arc<dyn Executor>) {}
     fn get_executor(&self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
@@ -510,11 +509,11 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     fn get_blockhash(&self) -> &Hash {
         &self.blockhash
     }
-    fn set_fee_calculator(&mut self, fee_calculator: FeeCalculator) {
-        self.fee_calculator = fee_calculator;
+    fn set_lamports_per_signature(&mut self, lamports_per_signature: u64) {
+        self.lamports_per_signature = lamports_per_signature;
     }
-    fn get_fee_calculator(&self) -> &FeeCalculator {
-        &self.fee_calculator
+    fn get_lamports_per_signature(&self) -> u64 {
+        self.lamports_per_signature
     }
     fn set_return_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError> {
         self.return_data = (*self.get_caller()?, data);
