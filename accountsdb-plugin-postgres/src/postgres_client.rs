@@ -291,6 +291,7 @@ impl SimplePostgresClient {
                 &account.executable(),
                 &rent_epoch,
                 &account.data(),
+                &account.write_version(),
                 &updated_on,
             ],
         );
