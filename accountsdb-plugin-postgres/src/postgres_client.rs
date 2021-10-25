@@ -32,7 +32,7 @@ const MAX_ASYNC_REQUESTS: usize = 40960;
 const DEFAULT_POSTGRES_PORT: u16 = 5432;
 const DEFAULT_THREADS_COUNT: usize = 100;
 const DEFAULT_ACCOUNTS_INSERT_BATCH_SIZE: usize = 10;
-const ACCOUNT_COLUMN_COUNT: usize = 8;
+const ACCOUNT_COLUMN_COUNT: usize = 9;
 
 struct PostgresSqlClientWrapper {
     client: Client,
@@ -63,6 +63,7 @@ pub struct DbAccountInfo {
     pub rent_epoch: i64,
     pub data: Vec<u8>,
     pub slot: i64,
+    pub write_version: i64,
 }
 
 impl DbAccountInfo {
@@ -76,6 +77,7 @@ impl DbAccountInfo {
             rent_epoch: account.rent_epoch() as i64,
             data,
             slot: slot as i64,
+            write_version: account.write_version(),
         }
     }
 }
@@ -87,6 +89,7 @@ pub trait ReadableAccountInfo: Sized {
     fn executable(&self) -> bool;
     fn rent_epoch(&self) -> i64;
     fn data(&self) -> &[u8];
+    fn write_version(&self) -> i64;
 }
 
 impl ReadableAccountInfo for DbAccountInfo {
@@ -113,6 +116,10 @@ impl ReadableAccountInfo for DbAccountInfo {
     fn data(&self) -> &[u8] {
         &self.data
     }
+
+    fn write_version(&self) -> i64 {
+        self.write_version
+    }
 }
 
 impl<'a> ReadableAccountInfo for ReplicaAccountInfo<'a> {
@@ -138,6 +145,10 @@ impl<'a> ReadableAccountInfo for ReplicaAccountInfo<'a> {
 
     fn data(&self) -> &[u8] {
         self.data
+    }
+
+    fn write_version(&self) -> i64 {
+        self.write_version as i64
     }
 }
 
@@ -191,11 +202,11 @@ impl SimplePostgresClient {
         let batch_size = config
             .batch_size
             .unwrap_or(DEFAULT_ACCOUNTS_INSERT_BATCH_SIZE);
-        let mut stmt = String::from("INSERT INTO account AS acct (pubkey, slot, owner, lamports, executable, rent_epoch, data, updated_on) VALUES");
+        let mut stmt = String::from("INSERT INTO account AS acct (pubkey, slot, owner, lamports, executable, rent_epoch, data, write_version, updated_on) VALUES");
         for j in 0..batch_size {
             let row = j * ACCOUNT_COLUMN_COUNT;
             let val_str = format!(
-                "(${}, ${}, ${}, ${}, ${}, ${}, ${}, ${})",
+                "(${}, ${}, ${}, ${}, ${}, ${}, ${}, ${}, ${})",
                 row + 1,
                 row + 2,
                 row + 3,
@@ -204,6 +215,7 @@ impl SimplePostgresClient {
                 row + 6,
                 row + 7,
                 row + 8,
+                row + 9,
             );
 
             if j == 0 {
@@ -214,7 +226,8 @@ impl SimplePostgresClient {
         }
 
         let handle_conflict = "ON CONFLICT (pubkey) DO UPDATE SET slot=excluded.slot, owner=excluded.owner, lamports=excluded.lamports, executable=excluded.executable, rent_epoch=excluded.rent_epoch, \
-            data=excluded.data, updated_on=excluded.updated_on WHERE acct.slot <= excluded.slot";
+            data=excluded.data, write_version=excluded.write_version, updated_on=excluded.updated_on WHERE acct.slot < excluded.slot OR (\
+            acct.slot = excluded.slot AND acct.write_version < excluded.write_version)";
 
         stmt = format!("{} {}", stmt, handle_conflict);
 
@@ -238,10 +251,11 @@ impl SimplePostgresClient {
         client: &mut Client,
         config: &AccountsDbPluginPostgresConfig,
     ) -> Result<Statement, AccountsDbPluginError> {
-        let stmt = "INSERT INTO account AS acct (pubkey, slot, owner, lamports, executable, rent_epoch, data, updated_on) \
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) \
+        let stmt = "INSERT INTO account AS acct (pubkey, slot, owner, lamports, executable, rent_epoch, data, write_version, updated_on) \
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
         ON CONFLICT (pubkey) DO UPDATE SET slot=excluded.slot, owner=excluded.owner, lamports=excluded.lamports, executable=excluded.executable, rent_epoch=excluded.rent_epoch, \
-        data=excluded.data, updated_on=excluded.updated_on WHERE acct.slot <= excluded.slot";
+        data=excluded.data, write_version=excluded.write_version, updated_on=excluded.updated_on  WHERE acct.slot < excluded.slot OR (\
+        acct.slot = excluded.slot AND acct.write_version < excluded.write_version)";
 
         let stmt = client.prepare(stmt);
 
@@ -277,6 +291,7 @@ impl SimplePostgresClient {
                 &account.executable(),
                 &rent_epoch,
                 &account.data(),
+                &account.write_version(),
                 &updated_on,
             ],
         );
@@ -324,6 +339,7 @@ impl SimplePostgresClient {
                 values.push(&account.executable);
                 values.push(&account.rent_epoch);
                 values.push(&account.data);
+                values.push(&account.write_version);
                 values.push(&updated_on);
             }
             measure.stop();

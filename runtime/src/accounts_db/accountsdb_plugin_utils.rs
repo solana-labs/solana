@@ -1,5 +1,8 @@
 use {
-    crate::{accounts_db::AccountsDb, append_vec::StoredAccountMeta},
+    crate::{
+        accounts_db::AccountsDb,
+        append_vec::{StoredAccountMeta, StoredMeta},
+    },
     solana_measure::measure::Measure,
     solana_metrics::*,
     solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey},
@@ -59,16 +62,12 @@ impl AccountsDb {
     pub fn notify_account_at_accounts_update(
         &self,
         slot: Slot,
-        accounts: &[(&Pubkey, &AccountSharedData)],
+        meta: &StoredMeta,
+        account: &AccountSharedData,
     ) {
         if let Some(accounts_update_notifier) = &self.accounts_update_notifier {
             let notifier = &accounts_update_notifier.read().unwrap();
-
-            for account in accounts {
-                let pubkey = account.0;
-                let account = account.1;
-                notifier.notify_account_update(slot, pubkey, account);
-            }
+            notifier.notify_account_update(slot, meta, account);
         }
     }
 
@@ -154,7 +153,7 @@ pub mod tests {
             accounts_update_notifier_interface::{
                 AccountsUpdateNotifier, AccountsUpdateNotifierInterface,
             },
-            append_vec::StoredAccountMeta,
+            append_vec::{StoredAccountMeta, StoredMeta},
         },
         dashmap::DashMap,
         solana_sdk::{
@@ -176,15 +175,20 @@ pub mod tests {
 
     #[derive(Debug, Default)]
     struct AccountsDbTestPlugin {
-        pub accounts_at_snapshot_restore: DashMap<Pubkey, Vec<(Slot, AccountSharedData)>>,
+        pub accounts_notified: DashMap<Pubkey, Vec<(Slot, AccountSharedData)>>,
         pub is_startup_done: AtomicBool,
     }
 
     impl AccountsUpdateNotifierInterface for AccountsDbTestPlugin {
         /// Notified when an account is updated at runtime, due to transaction activities
-        fn notify_account_update(&self, slot: Slot, pubkey: &Pubkey, account: &AccountSharedData) {
-            self.accounts_at_snapshot_restore
-                .entry(*pubkey)
+        fn notify_account_update(
+            &self,
+            slot: Slot,
+            meta: &StoredMeta,
+            account: &AccountSharedData,
+        ) {
+            self.accounts_notified
+                .entry(meta.pubkey)
                 .or_insert(Vec::default())
                 .push((slot, account.clone()));
         }
@@ -192,7 +196,7 @@ pub mod tests {
         /// Notified when the AccountsDb is initialized at start when restored
         /// from a snapshot.
         fn notify_account_restore_from_snapshot(&self, slot: Slot, account: &StoredAccountMeta) {
-            self.accounts_at_snapshot_restore
+            self.accounts_notified
                 .entry(account.meta.pubkey)
                 .or_insert(Vec::default())
                 .push((slot, account.clone_account()));
@@ -241,42 +245,22 @@ pub mod tests {
         accounts.notify_account_restore_from_snapshot();
 
         let notifier = notifier.write().unwrap();
+        assert_eq!(notifier.accounts_notified.get(&key1).unwrap().len(), 1);
         assert_eq!(
-            notifier
-                .accounts_at_snapshot_restore
-                .get(&key1)
-                .unwrap()
-                .len(),
-            1
-        );
-        assert_eq!(
-            notifier.accounts_at_snapshot_restore.get(&key1).unwrap()[0]
+            notifier.accounts_notified.get(&key1).unwrap()[0]
                 .1
                 .lamports(),
             account1_lamports
         );
+        assert_eq!(notifier.accounts_notified.get(&key1).unwrap()[0].0, slot0);
+        assert_eq!(notifier.accounts_notified.get(&key2).unwrap().len(), 1);
         assert_eq!(
-            notifier.accounts_at_snapshot_restore.get(&key1).unwrap()[0].0,
-            slot0
-        );
-        assert_eq!(
-            notifier
-                .accounts_at_snapshot_restore
-                .get(&key2)
-                .unwrap()
-                .len(),
-            1
-        );
-        assert_eq!(
-            notifier.accounts_at_snapshot_restore.get(&key2).unwrap()[0]
+            notifier.accounts_notified.get(&key2).unwrap()[0]
                 .1
                 .lamports(),
             account2_lamports
         );
-        assert_eq!(
-            notifier.accounts_at_snapshot_restore.get(&key2).unwrap()[0].0,
-            slot0
-        );
+        assert_eq!(notifier.accounts_notified.get(&key2).unwrap()[0].0, slot0);
 
         assert!(notifier.is_startup_done.load(Ordering::Relaxed));
     }
@@ -318,66 +302,37 @@ pub mod tests {
         accounts.notify_account_restore_from_snapshot();
 
         let notifier = notifier.write().unwrap();
+        assert_eq!(notifier.accounts_notified.get(&key1).unwrap().len(), 1);
         assert_eq!(
-            notifier
-                .accounts_at_snapshot_restore
-                .get(&key1)
-                .unwrap()
-                .len(),
-            1
-        );
-        assert_eq!(
-            notifier.accounts_at_snapshot_restore.get(&key1).unwrap()[0]
+            notifier.accounts_notified.get(&key1).unwrap()[0]
                 .1
                 .lamports(),
             account1_lamports
         );
+        assert_eq!(notifier.accounts_notified.get(&key1).unwrap()[0].0, slot1);
+        assert_eq!(notifier.accounts_notified.get(&key2).unwrap().len(), 1);
         assert_eq!(
-            notifier.accounts_at_snapshot_restore.get(&key1).unwrap()[0].0,
-            slot1
-        );
-        assert_eq!(
-            notifier
-                .accounts_at_snapshot_restore
-                .get(&key2)
-                .unwrap()
-                .len(),
-            1
-        );
-        assert_eq!(
-            notifier.accounts_at_snapshot_restore.get(&key2).unwrap()[0]
+            notifier.accounts_notified.get(&key2).unwrap()[0]
                 .1
                 .lamports(),
             account2_lamports
         );
+        assert_eq!(notifier.accounts_notified.get(&key2).unwrap()[0].0, slot0);
+        assert_eq!(notifier.accounts_notified.get(&key3).unwrap().len(), 1);
         assert_eq!(
-            notifier.accounts_at_snapshot_restore.get(&key2).unwrap()[0].0,
-            slot0
-        );
-        assert_eq!(
-            notifier
-                .accounts_at_snapshot_restore
-                .get(&key3)
-                .unwrap()
-                .len(),
-            1
-        );
-        assert_eq!(
-            notifier.accounts_at_snapshot_restore.get(&key3).unwrap()[0]
+            notifier.accounts_notified.get(&key3).unwrap()[0]
                 .1
                 .lamports(),
             account3_lamports
         );
-        assert_eq!(
-            notifier.accounts_at_snapshot_restore.get(&key3).unwrap()[0].0,
-            slot1
-        );
+        assert_eq!(notifier.accounts_notified.get(&key3).unwrap()[0].0, slot1);
         assert!(notifier.is_startup_done.load(Ordering::Relaxed));
     }
 
     #[test]
     fn test_notify_account_at_accounts_update() {
-        let mut accounts = AccountsDb::new_single_for_tests();
+        let mut accounts = AccountsDb::new_single_for_tests_with_caching();
+
         let notifier = AccountsDbTestPlugin::default();
 
         let notifier = Arc::new(RwLock::new(notifier));
@@ -411,70 +366,37 @@ pub mod tests {
         accounts.store_cached(slot1, &[(&key3, &account3)]);
 
         let notifier = notifier.write().unwrap();
+        assert_eq!(notifier.accounts_notified.get(&key1).unwrap().len(), 2);
         assert_eq!(
-            notifier
-                .accounts_at_snapshot_restore
-                .get(&key1)
-                .unwrap()
-                .len(),
-            2
-        );
-        assert_eq!(
-            notifier.accounts_at_snapshot_restore.get(&key1).unwrap()[0]
+            notifier.accounts_notified.get(&key1).unwrap()[0]
                 .1
                 .lamports(),
             account1_lamports1
         );
+        assert_eq!(notifier.accounts_notified.get(&key1).unwrap()[0].0, slot0);
         assert_eq!(
-            notifier.accounts_at_snapshot_restore.get(&key1).unwrap()[0].0,
-            slot0
-        );
-        assert_eq!(
-            notifier.accounts_at_snapshot_restore.get(&key1).unwrap()[1]
+            notifier.accounts_notified.get(&key1).unwrap()[1]
                 .1
                 .lamports(),
             account1_lamports2
         );
-        assert_eq!(
-            notifier.accounts_at_snapshot_restore.get(&key1).unwrap()[1].0,
-            slot1
-        );
+        assert_eq!(notifier.accounts_notified.get(&key1).unwrap()[1].0, slot1);
 
+        assert_eq!(notifier.accounts_notified.get(&key2).unwrap().len(), 1);
         assert_eq!(
-            notifier
-                .accounts_at_snapshot_restore
-                .get(&key2)
-                .unwrap()
-                .len(),
-            1
-        );
-        assert_eq!(
-            notifier.accounts_at_snapshot_restore.get(&key2).unwrap()[0]
+            notifier.accounts_notified.get(&key2).unwrap()[0]
                 .1
                 .lamports(),
             account2_lamports
         );
+        assert_eq!(notifier.accounts_notified.get(&key2).unwrap()[0].0, slot0);
+        assert_eq!(notifier.accounts_notified.get(&key3).unwrap().len(), 1);
         assert_eq!(
-            notifier.accounts_at_snapshot_restore.get(&key2).unwrap()[0].0,
-            slot0
-        );
-        assert_eq!(
-            notifier
-                .accounts_at_snapshot_restore
-                .get(&key3)
-                .unwrap()
-                .len(),
-            1
-        );
-        assert_eq!(
-            notifier.accounts_at_snapshot_restore.get(&key3).unwrap()[0]
+            notifier.accounts_notified.get(&key3).unwrap()[0]
                 .1
                 .lamports(),
             account3_lamports
         );
-        assert_eq!(
-            notifier.accounts_at_snapshot_restore.get(&key3).unwrap()[0].0,
-            slot1
-        );
+        assert_eq!(notifier.accounts_notified.get(&key3).unwrap()[0].0, slot1);
     }
 }
