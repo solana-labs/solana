@@ -39,7 +39,7 @@ jobs:
           vercel-org-id: ${{ secrets.ORG_ID}}  #Required
           vercel-project-id: ${{ secrets.PROJECT_ID}} #Required 
           working-directory: ./explorer
-          scope: ${{ secrets.TEAM_ID }}
+          scope: ${{ secrets.TEAM_ID }} #added solana(vercel) as "TEAM_ID"
   push:
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
