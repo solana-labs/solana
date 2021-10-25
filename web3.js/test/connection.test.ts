@@ -116,7 +116,7 @@ describe('Connection', () => {
           options.headers = Object.assign(options.headers, {
             Authorization: 'Bearer 123',
           });
-          fetch(url, options);
+          return fetch(url, options);
         },
       });
 
