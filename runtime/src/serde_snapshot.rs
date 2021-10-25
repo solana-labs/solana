@@ -44,6 +44,7 @@ use {
             atomic::{AtomicUsize, Ordering},
             Arc, RwLock,
         },
+        thread::Builder,
     },
 };
 
@@ -534,11 +535,22 @@ where
     accounts_db
         .write_version
         .fetch_add(snapshot_version, Ordering::Relaxed);
+
+    let mut measure_notify = Measure::start("accounts_notify");
+
+    let accounts_db = Arc::new(accounts_db);
+    let accoounts_db_clone = accounts_db.clone();
+    let handle = Builder::new()
+        .name("notify_account_restore_from_snapshot".to_string())
+        .spawn(move || {
+            accoounts_db_clone.notify_account_restore_from_snapshot();
+        })
+        .unwrap();
+
     accounts_db.generate_index(limit_load_slot_count_from_snapshot, verify_index);
     accounts_db.maybe_add_filler_accounts(genesis_config.ticks_per_slot());
 
-    let mut measure_notify = Measure::start("accounts_notify");
-    accounts_db.notify_account_restore_from_snapshot();
+    handle.join().unwrap();
     measure_notify.stop();
 
     datapoint_info!(
@@ -552,5 +564,5 @@ where
         ("accountsdb-notify-at-start-us", measure_notify.as_us(), i64),
     );
 
-    Ok(accounts_db)
+    Ok(Arc::try_unwrap(accounts_db).unwrap())
 }

@@ -39,7 +39,6 @@ use solana_runtime::{
         AbsRequestHandler, AbsRequestSender, AccountsBackgroundService, SnapshotRequestHandler,
     },
     accounts_db::AccountShrinkThreshold,
-    bank::ExecuteTimings,
     bank_forks::BankForks,
     commitment::BlockCommitmentCache,
     cost_model::CostModel,
@@ -54,7 +53,7 @@ use std::{
     net::UdpSocket,
     sync::{
         atomic::AtomicBool,
-        mpsc::{channel, Receiver, Sender},
+        mpsc::{channel, Receiver},
         Arc, Mutex, RwLock,
     },
     thread,
@@ -295,10 +294,7 @@ impl Tvu {
             bank_forks.clone(),
         );
 
-        let (cost_update_sender, cost_update_receiver): (
-            Sender<ExecuteTimings>,
-            Receiver<ExecuteTimings>,
-        ) = channel();
+        let (cost_update_sender, cost_update_receiver) = channel();
         let cost_update_service = CostUpdateService::new(
             exit.clone(),
             blockstore.clone(),

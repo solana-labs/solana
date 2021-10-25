@@ -16,7 +16,7 @@ jobs:
     defaults:
       run:
         working-directory: explorer
-    if: github.event_name == 'pull_request_target' && github.event.action == 'opened'
+    if: github.event_name == 'pull_request_target' 
     steps:
       - uses: actions/checkout@v2
         with:
@@ -39,8 +39,8 @@ jobs:
           vercel-org-id: ${{ secrets.ORG_ID}}  #Required
           vercel-project-id: ${{ secrets.PROJECT_ID}} #Required 
           working-directory: ./explorer
-          scope: ${{ secrets.TEAM_ID }}
-  push:
+          scope: ${{ secrets.TEAM_ID }} #added solana(vercel) as "TEAM_ID"
+  Testing_before_merging:
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
     defaults:
@@ -62,7 +62,7 @@ jobs:
       - run: npm run test
           
   production_deployment:
-   needs: push
+   needs: Testing_before_merging
    runs-on: ubuntu-latest
    defaults:
       run:

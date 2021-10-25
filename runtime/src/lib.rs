@@ -26,7 +26,6 @@ pub mod commitment;
 pub mod contains;
 pub mod cost_model;
 pub mod cost_tracker;
-pub mod cost_tracker_stats;
 pub mod epoch_stakes;
 pub mod execute_cost_table;
 pub mod genesis_utils;

@@ -3,9 +3,7 @@
 //! - would_transaction_fit(&tx_cost), immutable function to test if tx with tx_cost would fit into current block
 //! - add_transaction_cost(&tx_cost), mutable function to accumulate tx_cost to tracker.
 //!
-use crate::block_cost_limits::*;
-use crate::cost_model::TransactionCost;
-use crate::cost_tracker_stats::CostTrackerStats;
+use crate::{block_cost_limits::*, cost_model::TransactionCost};
 use solana_sdk::{clock::Slot, pubkey::Pubkey, transaction::SanitizedTransaction};
 use std::collections::HashMap;
 
@@ -24,9 +22,9 @@ pub enum CostTrackerError {
 pub struct CostTracker {
     account_cost_limit: u64,
     block_cost_limit: u64,
-    current_bank_slot: Slot,
     cost_by_writable_accounts: HashMap<Pubkey, u64>,
     block_cost: u64,
+    transaction_count: u64,
 }
 
 impl Default for CostTracker {
@@ -41,9 +39,9 @@ impl CostTracker {
         Self {
             account_cost_limit,
             block_cost_limit,
-            current_bank_slot: 0,
             cost_by_writable_accounts: HashMap::with_capacity(WRITABLE_ACCOUNTS_PER_BLOCK),
             block_cost: 0,
+            transaction_count: 0,
         }
     }
 
@@ -57,44 +55,66 @@ impl CostTracker {
         &self,
         _transaction: &SanitizedTransaction,
         tx_cost: &TransactionCost,
-        stats: &mut CostTrackerStats,
     ) -> Result<(), CostTrackerError> {
-        self.would_fit(&tx_cost.writable_accounts, &tx_cost.sum(), stats)
+        self.would_fit(&tx_cost.writable_accounts, &tx_cost.sum())
     }
 
     pub fn add_transaction_cost(
         &mut self,
         _transaction: &SanitizedTransaction,
         tx_cost: &TransactionCost,
-        stats: &mut CostTrackerStats,
     ) {
-        let cost = tx_cost.sum();
-        self.add_transaction(&tx_cost.writable_accounts, &cost);
-
-        stats.transaction_count += 1;
-        stats.block_cost += cost;
+        self.add_transaction(&tx_cost.writable_accounts, &tx_cost.sum());
     }
 
     pub fn try_add(
         &mut self,
         _transaction: &SanitizedTransaction,
         tx_cost: &TransactionCost,
-        stats: &mut CostTrackerStats,
     ) -> Result<u64, CostTrackerError> {
         let cost = tx_cost.sum();
-        self.would_fit(&tx_cost.writable_accounts, &cost, stats)?;
+        self.would_fit(&tx_cost.writable_accounts, &cost)?;
         self.add_transaction(&tx_cost.writable_accounts, &cost);
         Ok(self.block_cost)
     }
 
-    fn would_fit(
-        &self,
-        keys: &[Pubkey],
-        cost: &u64,
-        stats: &mut CostTrackerStats,
-    ) -> Result<(), CostTrackerError> {
-        stats.transaction_cost_histogram.increment(*cost).unwrap();
+    pub fn report_stats(&self, bank_slot: Slot) {
+        // skip reporting if block is empty
+        if self.transaction_count == 0 {
+            return;
+        }
 
+        let (costliest_account, costliest_account_cost) = self.find_costliest_account();
+
+        datapoint_info!(
+            "cost_tracker_stats",
+            ("bank_slot", bank_slot as i64, i64),
+            ("block_cost", self.block_cost as i64, i64),
+            ("transaction_count", self.transaction_count as i64, i64),
+            (
+                "number_of_accounts",
+                self.cost_by_writable_accounts.len() as i64,
+                i64
+            ),
+            ("costliest_account", costliest_account.to_string(), String),
+            ("costliest_account_cost", costliest_account_cost as i64, i64),
+        );
+    }
+
+    fn find_costliest_account(&self) -> (Pubkey, u64) {
+        let mut costliest_account = Pubkey::default();
+        let mut costliest_account_cost = 0;
+        for (key, cost) in self.cost_by_writable_accounts.iter() {
+            if *cost > costliest_account_cost {
+                costliest_account = *key;
+                costliest_account_cost = *cost;
+            }
+        }
+
+        (costliest_account, costliest_account_cost)
+    }
+
+    fn would_fit(&self, keys: &[Pubkey], cost: &u64) -> Result<(), CostTrackerError> {
         // check against the total package cost
         if self.block_cost + cost > self.block_cost_limit {
             return Err(CostTrackerError::WouldExceedBlockMaxLimit);
@@ -109,11 +129,6 @@ impl CostTracker {
         for account_key in keys.iter() {
             match self.cost_by_writable_accounts.get(account_key) {
                 Some(chained_cost) => {
-                    stats
-                        .writable_accounts_cost_histogram
-                        .increment(*chained_cost)
-                        .unwrap();
-
                     if chained_cost + cost > self.account_cost_limit {
                         return Err(CostTrackerError::WouldExceedAccountMaxLimit);
                     } else {
@@ -135,37 +150,7 @@ impl CostTracker {
                 .or_insert(0) += cost;
         }
         self.block_cost += cost;
-    }
-}
-
-// CostStats can be collected by util, such as ledger_tool
-#[derive(Default, Debug)]
-pub struct CostStats {
-    pub bank_slot: Slot,
-    pub total_cost: u64,
-    pub number_of_accounts: usize,
-    pub costliest_account: Pubkey,
-    pub costliest_account_cost: u64,
-}
-
-impl CostTracker {
-    pub fn get_stats(&self) -> CostStats {
-        let mut stats = CostStats {
-            bank_slot: self.current_bank_slot,
-            total_cost: self.block_cost,
-            number_of_accounts: self.cost_by_writable_accounts.len(),
-            costliest_account: Pubkey::default(),
-            costliest_account_cost: 0,
-        };
-
-        for (key, cost) in self.cost_by_writable_accounts.iter() {
-            if cost > &stats.costliest_account_cost {
-                stats.costliest_account = *key;
-                stats.costliest_account_cost = *cost;
-            }
-        }
-
-        stats
+        self.transaction_count += 1;
     }
 }
 
@@ -223,9 +208,7 @@ mod tests {
 
         // build testee to have capacity for one simple transaction
         let mut testee = CostTracker::new(cost, cost);
-        assert!(testee
-            .would_fit(&keys, &cost, &mut CostTrackerStats::default())
-            .is_ok());
+        assert!(testee.would_fit(&keys, &cost).is_ok());
         testee.add_transaction(&keys, &cost);
         assert_eq!(cost, testee.block_cost);
     }
@@ -240,15 +223,11 @@ mod tests {
         // build testee to have capacity for two simple transactions, with same accounts
         let mut testee = CostTracker::new(cost1 + cost2, cost1 + cost2);
         {
-            assert!(testee
-                .would_fit(&keys1, &cost1, &mut CostTrackerStats::default())
-                .is_ok());
+            assert!(testee.would_fit(&keys1, &cost1).is_ok());
             testee.add_transaction(&keys1, &cost1);
         }
         {
-            assert!(testee
-                .would_fit(&keys2, &cost2, &mut CostTrackerStats::default())
-                .is_ok());
+            assert!(testee.would_fit(&keys2, &cost2).is_ok());
             testee.add_transaction(&keys2, &cost2);
         }
         assert_eq!(cost1 + cost2, testee.block_cost);
@@ -266,15 +245,11 @@ mod tests {
         // build testee to have capacity for two simple transactions, with same accounts
         let mut testee = CostTracker::new(cmp::max(cost1, cost2), cost1 + cost2);
         {
-            assert!(testee
-                .would_fit(&keys1, &cost1, &mut CostTrackerStats::default())
-                .is_ok());
+            assert!(testee.would_fit(&keys1, &cost1).is_ok());
             testee.add_transaction(&keys1, &cost1);
         }
         {
-            assert!(testee
-                .would_fit(&keys2, &cost2, &mut CostTrackerStats::default())
-                .is_ok());
+            assert!(testee.would_fit(&keys2, &cost2).is_ok());
             testee.add_transaction(&keys2, &cost2);
         }
         assert_eq!(cost1 + cost2, testee.block_cost);
@@ -292,16 +267,12 @@ mod tests {
         let mut testee = CostTracker::new(cmp::min(cost1, cost2), cost1 + cost2);
         // should have room for first transaction
         {
-            assert!(testee
-                .would_fit(&keys1, &cost1, &mut CostTrackerStats::default())
-                .is_ok());
+            assert!(testee.would_fit(&keys1, &cost1).is_ok());
             testee.add_transaction(&keys1, &cost1);
         }
         // but no more sapce on the same chain (same signer account)
         {
-            assert!(testee
-                .would_fit(&keys2, &cost2, &mut CostTrackerStats::default())
-                .is_err());
+            assert!(testee.would_fit(&keys2, &cost2).is_err());
         }
     }
 
@@ -317,16 +288,12 @@ mod tests {
         let mut testee = CostTracker::new(cmp::max(cost1, cost2), cost1 + cost2 - 1);
         // should have room for first transaction
         {
-            assert!(testee
-                .would_fit(&keys1, &cost1, &mut CostTrackerStats::default())
-                .is_ok());
+            assert!(testee.would_fit(&keys1, &cost1).is_ok());
             testee.add_transaction(&keys1, &cost1);
         }
         // but no more room for package as whole
         {
-            assert!(testee
-                .would_fit(&keys2, &cost2, &mut CostTrackerStats::default())
-                .is_err());
+            assert!(testee.would_fit(&keys2, &cost2).is_err());
         }
     }
 
@@ -348,7 +315,7 @@ mod tests {
         // case 1: a tx writes to 3 accounts, should success, we will have:
         // | acct1 | $cost |
         // | acct2 | $cost |
-        // | acct2 | $cost |
+        // | acct3 | $cost |
         // and block_cost = $cost
         {
             let tx_cost = TransactionCost {
@@ -356,19 +323,17 @@ mod tests {
                 execution_cost: cost,
                 ..TransactionCost::default()
             };
-            assert!(testee
-                .try_add(&tx, &tx_cost, &mut CostTrackerStats::default())
-                .is_ok());
-            let stat = testee.get_stats();
-            assert_eq!(cost, stat.total_cost);
-            assert_eq!(3, stat.number_of_accounts);
-            assert_eq!(cost, stat.costliest_account_cost);
+            assert!(testee.try_add(&tx, &tx_cost).is_ok());
+            let (_costliest_account, costliest_account_cost) = testee.find_costliest_account();
+            assert_eq!(cost, testee.block_cost);
+            assert_eq!(3, testee.cost_by_writable_accounts.len());
+            assert_eq!(cost, costliest_account_cost);
         }
 
         // case 2: add tx writes to acct2 with $cost, should succeed, result to
         // | acct1 | $cost |
         // | acct2 | $cost * 2 |
-        // | acct2 | $cost |
+        // | acct3 | $cost |
         // and block_cost = $cost * 2
         {
             let tx_cost = TransactionCost {
@@ -376,36 +341,32 @@ mod tests {
                 execution_cost: cost,
                 ..TransactionCost::default()
             };
-            assert!(testee
-                .try_add(&tx, &tx_cost, &mut CostTrackerStats::default())
-                .is_ok());
-            let stat = testee.get_stats();
-            assert_eq!(cost * 2, stat.total_cost);
-            assert_eq!(3, stat.number_of_accounts);
-            assert_eq!(cost * 2, stat.costliest_account_cost);
-            assert_eq!(acct2, stat.costliest_account);
+            assert!(testee.try_add(&tx, &tx_cost).is_ok());
+            let (costliest_account, costliest_account_cost) = testee.find_costliest_account();
+            assert_eq!(cost * 2, testee.block_cost);
+            assert_eq!(3, testee.cost_by_writable_accounts.len());
+            assert_eq!(cost * 2, costliest_account_cost);
+            assert_eq!(acct2, costliest_account);
         }
 
         // case 3: add tx writes to [acct1, acct2], acct2 exceeds limit, should failed atomically,
         // we shoudl still have:
         // | acct1 | $cost |
-        // | acct2 | $cost |
-        // | acct2 | $cost |
-        // and block_cost = $cost
+        // | acct2 | $cost * 2 |
+        // | acct3 | $cost |
+        // and block_cost = $cost * 2
         {
             let tx_cost = TransactionCost {
                 writable_accounts: vec![acct1, acct2],
                 execution_cost: cost,
                 ..TransactionCost::default()
             };
-            assert!(testee
-                .try_add(&tx, &tx_cost, &mut CostTrackerStats::default())
-                .is_err());
-            let stat = testee.get_stats();
-            assert_eq!(cost * 2, stat.total_cost);
-            assert_eq!(3, stat.number_of_accounts);
-            assert_eq!(cost * 2, stat.costliest_account_cost);
-            assert_eq!(acct2, stat.costliest_account);
+            assert!(testee.try_add(&tx, &tx_cost).is_err());
+            let (costliest_account, costliest_account_cost) = testee.find_costliest_account();
+            assert_eq!(cost * 2, testee.block_cost);
+            assert_eq!(3, testee.cost_by_writable_accounts.len());
+            assert_eq!(cost * 2, costliest_account_cost);
+            assert_eq!(acct2, costliest_account);
         }
     }
 }
