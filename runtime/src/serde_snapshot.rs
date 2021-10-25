@@ -548,7 +548,7 @@ where
         .unwrap();
 
     accounts_db.generate_index(limit_load_slot_count_from_snapshot, verify_index);
-    accounts_db.maybe_add_filler_accounts(genesis_config.ticks_per_slot());
+    accounts_db.maybe_add_filler_accounts(&genesis_config.epoch_schedule);
 
     handle.join().unwrap();
     measure_notify.stop();
