@@ -504,7 +504,7 @@ impl RpcSubscriptions {
             .spawn(move || {
                 let pool = rayon::ThreadPoolBuilder::new()
                     .num_threads(notification_threads.unwrap_or(0))
-                    .thread_name(|i| format!("solana-rpcray-{}", i))
+                    .thread_name(|i| format!("sol-sub-notif-{}", i))
                     .build()
                     .unwrap();
                 pool.install(|| {
