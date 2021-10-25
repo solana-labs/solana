@@ -132,8 +132,7 @@ Recover the intermediate account's ephemeral keypair file with
 valley flat great hockey share token excess clever benefit traffic avocado athlete
 ==================================================================================
 To resume a deploy, pass the recovered keypair as
-the [PROGRAM_ADDRESS_SIGNER] argument to `solana deploy` or
-as the [BUFFER_SIGNER] to `solana program deploy` or `solana write-buffer'.
+the [BUFFER_SIGNER] to `solana program deploy` or `solana write-buffer'.
 Or to recover the account's lamports, pass it as the
 [BUFFER_ACCOUNT_ADDRESS] argument to `solana program drain`.
 ==================================================================================
@@ -242,16 +241,6 @@ Or anytime after:
 ```bash
 solana program set-upgrade-authority <PROGRAM_ADDRESS> --final
 ```
-
-`solana program deploy ...` utilizes Solana's upgradeable loader, but there is
-another way to deploy immutable programs using the original on-chain loader:
-
-```bash
-solana deploy <PROGRAM_FILEPATH>
-```
-
-Programs deployed with `solana deploy ...` are not redeployable and are not
-compatible with the `solana program ...` commands.
 
 ### Dumping a program to a file
 
