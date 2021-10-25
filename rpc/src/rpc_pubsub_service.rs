@@ -158,7 +158,7 @@ impl BroadcastHandler {
             datapoint_info!(
                 "pubsub_notifications",
                 (
-                    "created_to_queue_time",
+                    "created_to_queue_time_us",
                     time_since_created.as_micros() as i64,
                     i64
                 ),
