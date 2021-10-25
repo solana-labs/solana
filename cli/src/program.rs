@@ -387,6 +387,7 @@ impl ProgramSubCommands for App<'_, '_> {
         .subcommand(
             SubCommand::with_name("deploy")
                 .about("Deploy a program")
+                .setting(AppSettings::Hidden)
                 .arg(
                     Arg::with_name("program_location")
                         .index(1)
@@ -2190,9 +2191,8 @@ fn report_ephemeral_mnemonic(words: usize, mnemonic: bip39::Mnemonic) {
         words
     );
     eprintln!("{}\n{}\n{}", divider, phrase, divider);
-    eprintln!("To resume a deploy, pass the recovered keypair as");
-    eprintln!("the [PROGRAM_ADDRESS_SIGNER] argument to `solana deploy` or");
-    eprintln!("as the [BUFFER_SIGNER] to `solana program deploy` or `solana write-buffer'.");
+    eprintln!("To resume a deploy, pass the recovered keypair as the");
+    eprintln!("[BUFFER_SIGNER] to `solana program deploy` or `solana write-buffer'.");
     eprintln!("Or to recover the account's lamports, pass it as the");
     eprintln!(
         "[BUFFER_ACCOUNT_ADDRESS] argument to `solana program close`.\n{}",
