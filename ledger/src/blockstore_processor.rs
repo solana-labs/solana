@@ -3434,7 +3434,7 @@ pub mod tests {
             Hash::default(),
         );
         let txs = vec![account_not_found_tx, invalid_blockhash_tx];
-        let batch = bank.prepare_batch(txs).unwrap();
+        let batch = bank.prepare_batch_for_tests(txs);
         let (
             TransactionResults {
                 fee_collection_results,

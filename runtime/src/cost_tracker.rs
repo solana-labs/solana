@@ -167,7 +167,7 @@ mod tests {
         system_transaction,
         transaction::Transaction,
     };
-    use std::{cmp, convert::TryFrom, sync::Arc};
+    use std::{cmp, sync::Arc};
 
     fn test_setup() -> (Keypair, Hash) {
         solana_logger::setup();
@@ -301,7 +301,7 @@ mod tests {
     fn test_cost_tracker_try_add_is_atomic() {
         let (mint_keypair, start_hash) = test_setup();
         let (tx, _keys, _cost) = build_simple_transaction(&mint_keypair, &start_hash);
-        let tx = SanitizedTransaction::try_from(tx).unwrap();
+        let tx = SanitizedTransaction::from_transaction_for_tests(tx);
 
         let acct1 = Pubkey::new_unique();
         let acct2 = Pubkey::new_unique();

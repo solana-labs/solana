@@ -1688,7 +1688,6 @@ mod tests {
     use solana_transaction_status::TransactionWithStatusMeta;
     use solana_vote_program::vote_transaction;
     use std::{
-        convert::{TryFrom, TryInto},
         net::SocketAddr,
         path::Path,
         sync::{
@@ -2045,7 +2044,7 @@ mod tests {
 
     fn sanitize_transactions(txs: Vec<Transaction>) -> Vec<SanitizedTransaction> {
         txs.into_iter()
-            .map(|tx| SanitizedTransaction::try_from(tx).unwrap())
+            .map(SanitizedTransaction::from_transaction_for_tests)
             .collect()
     }
 
@@ -2302,12 +2301,12 @@ mod tests {
         let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
         let pubkey = solana_sdk::pubkey::new_rand();
 
-        let transactions =
-            vec![
-                system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash())
-                    .try_into()
-                    .unwrap(),
-            ];
+        let transactions = sanitize_transactions(vec![system_transaction::transfer(
+            &mint_keypair,
+            &pubkey,
+            1,
+            genesis_config.hash(),
+        )]);
 
         let ledger_path = get_tmp_ledger_path!();
         {
@@ -2366,14 +2365,12 @@ mod tests {
 
             assert!(done);
 
-            let transactions = vec![system_transaction::transfer(
+            let transactions = sanitize_transactions(vec![system_transaction::transfer(
                 &mint_keypair,
                 &pubkey,
                 2,
                 genesis_config.hash(),
-            )
-            .try_into()
-            .unwrap()];
+            )]);
 
             assert_matches!(
                 BankingStage::process_and_record_transactions(
@@ -2433,14 +2430,10 @@ mod tests {
         let pubkey = solana_sdk::pubkey::new_rand();
         let pubkey1 = solana_sdk::pubkey::new_rand();
 
-        let transactions = vec![
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash())
-                .try_into()
-                .unwrap(),
-            system_transaction::transfer(&mint_keypair, &pubkey1, 1, genesis_config.hash())
-                .try_into()
-                .unwrap(),
-        ];
+        let transactions = sanitize_transactions(vec![
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey1, 1, genesis_config.hash()),
+        ]);
 
         let ledger_path = get_tmp_ledger_path!();
         {
@@ -2542,12 +2535,12 @@ mod tests {
 
         let pubkey = solana_sdk::pubkey::new_rand();
 
-        let transactions =
-            vec![
-                system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash())
-                    .try_into()
-                    .unwrap(),
-            ];
+        let transactions = sanitize_transactions(vec![system_transaction::transfer(
+            &mint_keypair,
+            &pubkey,
+            1,
+            genesis_config.hash(),
+        )]);
 
         let ledger_path = get_tmp_ledger_path!();
         {
@@ -2623,11 +2616,7 @@ mod tests {
         let entry_3 = next_entry(&entry_2.hash, 1, vec![fail_tx.clone()]);
         let entries = vec![entry_1, entry_2, entry_3];
 
-        let transactions = vec![
-            success_tx.try_into().unwrap(),
-            ix_error_tx.try_into().unwrap(),
-            fail_tx.try_into().unwrap(),
-        ];
+        let transactions = sanitize_transactions(vec![success_tx, ix_error_tx, fail_tx]);
         bank.transfer(4, &mint_keypair, &keypair1.pubkey()).unwrap();
 
         let ledger_path = get_tmp_ledger_path!();
