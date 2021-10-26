@@ -338,6 +338,20 @@ impl RpcSender for MockSender {
                     feature_set: Some(version.feature_set),
                 })
             }
+<<<<<<< HEAD
+=======
+            "getLatestBlockhash" => serde_json::to_value(Response {
+                context: RpcResponseContext { slot: 1 },
+                value: RpcBlockhash {
+                    blockhash: PUBKEY.to_string(),
+                    last_valid_block_height: 1234,
+                },
+            })?,
+            "getFeeForMessage" => serde_json::to_value(Response {
+                context: RpcResponseContext { slot: 1 },
+                value: json!(Some(0)),
+            })?,
+>>>>>>> 5f7b60576 (tpu-client: Move `send_messages_with_spinner` from program (#20960))
             "getClusterNodes" => serde_json::to_value(vec![RpcContactInfo {
                 pubkey: PUBKEY.to_string(),
                 gossip: Some(SocketAddr::from(([10, 239, 6, 48], 8899))),

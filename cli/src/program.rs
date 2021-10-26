@@ -12,9 +12,9 @@ use solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig};
 use solana_bpf_loader_program::{bpf_verifier, BpfError, ThisInstructionMeter};
 use solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*};
 use solana_cli_output::{
-    display::new_spinner_progress_bar, CliProgram, CliProgramAccountType, CliProgramAuthority,
-    CliProgramBuffer, CliProgramId, CliUpgradeableBuffer, CliUpgradeableBuffers,
-    CliUpgradeableProgram, CliUpgradeableProgramClosed, CliUpgradeablePrograms,
+    CliProgram, CliProgramAccountType, CliProgramAuthority, CliProgramBuffer, CliProgramId,
+    CliUpgradeableBuffer, CliUpgradeableBuffers, CliUpgradeableProgram,
+    CliUpgradeableProgramClosed, CliUpgradeablePrograms,
 };
 use solana_client::{
     client_error::ClientErrorKind,
@@ -22,8 +22,11 @@ use solana_client::{
     rpc_config::RpcSendTransactionConfig,
     rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
     rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
+<<<<<<< HEAD
     rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
     rpc_response::Fees,
+=======
+>>>>>>> 5f7b60576 (tpu-client: Move `send_messages_with_spinner` from program (#20960))
     tpu_client::{TpuClient, TpuClientConfig},
 };
 use solana_rbpf::vm::{Config, Executable};
@@ -42,24 +45,18 @@ use solana_sdk::{
     packet::PACKET_DATA_SIZE,
     pubkey::Pubkey,
     signature::{keypair_from_seed, read_keypair_file, Keypair, Signature, Signer},
-    signers::Signers,
     system_instruction::{self, SystemError},
     system_program,
     transaction::Transaction,
     transaction::TransactionError,
 };
-use solana_transaction_status::TransactionConfirmationStatus;
 use std::{
-    collections::HashMap,
-    error,
     fs::File,
     io::{Read, Write},
     mem::size_of,
     path::PathBuf,
     str::FromStr,
     sync::Arc,
-    thread::sleep,
-    time::Duration,
 };
 
 #[derive(Debug, PartialEq)]
@@ -2116,6 +2113,7 @@ fn send_deploy_messages(
     if let Some(write_messages) = write_messages {
         if let Some(write_signer) = write_signer {
             trace!("Writing program data");
+<<<<<<< HEAD
             let Fees {
                 blockhash,
                 last_valid_block_height,
@@ -2139,6 +2137,31 @@ fn send_deploy_messages(
                 last_valid_block_height,
             )
             .map_err(|err| format!("Data writes to account failed: {}", err))?;
+=======
+            let tpu_client = TpuClient::new(
+                rpc_client.clone(),
+                &config.websocket_url,
+                TpuClientConfig::default(),
+            )?;
+            let transaction_errors = tpu_client
+                .send_and_confirm_messages_with_spinner(
+                    write_messages,
+                    &[payer_signer, write_signer],
+                )
+                .map_err(|err| format!("Data writes to account failed: {}", err))?
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>();
+
+            if !transaction_errors.is_empty() {
+                for transaction_error in &transaction_errors {
+                    error!("{:?}", transaction_error);
+                }
+                return Err(
+                    format!("{} write transactions failed", transaction_errors.len()).into(),
+                );
+            }
+>>>>>>> 5f7b60576 (tpu-client: Move `send_messages_with_spinner` from program (#20960))
         }
     }
 
@@ -2199,6 +2222,7 @@ fn report_ephemeral_mnemonic(words: usize, mnemonic: bip39::Mnemonic) {
     );
 }
 
+<<<<<<< HEAD
 fn send_and_confirm_transactions_with_spinner<T: Signers>(
     rpc_client: Arc<RpcClient>,
     websocket_url: &str,
@@ -2327,6 +2351,8 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
     }
 }
 
+=======
+>>>>>>> 5f7b60576 (tpu-client: Move `send_messages_with_spinner` from program (#20960))
 #[cfg(test)]
 mod tests {
     use super::*;
