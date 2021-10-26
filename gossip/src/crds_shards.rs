@@ -134,7 +134,10 @@ where
 mod test {
     use {
         super::*,
-        crate::{crds::Crds, crds_value::CrdsValue},
+        crate::{
+            crds::{Crds, GossipRoute},
+            crds_value::CrdsValue,
+        },
         rand::{thread_rng, Rng},
         solana_sdk::timing::timestamp,
         std::{collections::HashSet, iter::repeat_with, ops::Index},
@@ -144,8 +147,14 @@ mod test {
         let value = CrdsValue::new_rand(rng, None);
         let label = value.label();
         let mut crds = Crds::default();
+<<<<<<< HEAD
         crds.insert(value, timestamp()).unwrap();
         crds.get(&label).cloned().unwrap()
+=======
+        crds.insert(value, timestamp(), GossipRoute::LocalMessage)
+            .unwrap();
+        crds.get::<&VersionedCrdsValue>(&label).cloned().unwrap()
+>>>>>>> 1297a1358 (adds metrics tracking crds writes and votes (#20953))
     }
 
     // Returns true if the first mask_bits most significant bits of hash is the
