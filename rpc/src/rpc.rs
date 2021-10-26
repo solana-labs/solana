@@ -1873,7 +1873,6 @@ impl JsonRpcRequestProcessor {
                     index_key: owner_key.to_string(),
                 });
             }
-            optimize_filters(&mut filters);
             Ok(bank
                 .get_filtered_indexed_accounts(&IndexKey::SplTokenOwner(*owner_key), |account| {
                     account.owner() == &spl_token_id_v2_0()
@@ -1922,7 +1921,6 @@ impl JsonRpcRequestProcessor {
                     index_key: mint_key.to_string(),
                 });
             }
-            optimize_filters(&mut filters);
             Ok(bank
                 .get_filtered_indexed_accounts(&IndexKey::SplTokenMint(*mint_key), |account| {
                     account.owner() == &spl_token_id_v2_0()
