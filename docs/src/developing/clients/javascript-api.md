@@ -135,7 +135,7 @@ The above code achieves creating a transaction ready to be signed and broadcaste
 All that is left is to sign the transaction with keypair and send it over the network. You can accomplish sending a transaction by using `sendAndConfirmTransaction` if you wish to alert the user or do something after a transaction is finished, or use `sendTransaction` if you don't need to wait for the transaction to be confirmed.
 
 ```javascript
-const {sendAndConfirmTransaction, clusterApiUrl} = require("@solana/web3.js");
+const {sendAndConfirmTransaction, clusterApiUrl, Connection} = require("@solana/web3.js");
 
 let keypair = Keypair.generate();
 let connection = new Connection(clusterApiUrl('testnet'));
