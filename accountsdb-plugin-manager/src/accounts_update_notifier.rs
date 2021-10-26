@@ -9,12 +9,11 @@ use {
     solana_metrics::*,
     solana_runtime::{
         accounts_update_notifier_interface::AccountsUpdateNotifierInterface,
-        append_vec::StoredAccountMeta,
+        append_vec::{StoredAccountMeta, StoredMeta},
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::Slot,
-        pubkey::Pubkey,
     },
     std::sync::{Arc, RwLock},
 };
@@ -24,8 +23,8 @@ pub(crate) struct AccountsUpdateNotifierImpl {
 }
 
 impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
-    fn notify_account_update(&self, slot: Slot, pubkey: &Pubkey, account: &AccountSharedData) {
-        if let Some(account_info) = self.accountinfo_from_shared_account_data(pubkey, account) {
+    fn notify_account_update(&self, slot: Slot, meta: &StoredMeta, account: &AccountSharedData) {
+        if let Some(account_info) = self.accountinfo_from_shared_account_data(meta, account) {
             self.notify_plugins_of_account_update(account_info, slot, false);
         }
     }
@@ -108,16 +107,17 @@ impl AccountsUpdateNotifierImpl {
 
     fn accountinfo_from_shared_account_data<'a>(
         &self,
-        pubkey: &'a Pubkey,
+        meta: &'a StoredMeta,
         account: &'a AccountSharedData,
     ) -> Option<ReplicaAccountInfo<'a>> {
         Some(ReplicaAccountInfo {
-            pubkey: pubkey.as_ref(),
+            pubkey: meta.pubkey.as_ref(),
             lamports: account.lamports(),
             owner: account.owner().as_ref(),
             executable: account.executable(),
             rent_epoch: account.rent_epoch(),
             data: account.data(),
+            write_version: meta.write_version,
         })
     }
 
@@ -132,6 +132,7 @@ impl AccountsUpdateNotifierImpl {
             executable: stored_account_meta.account_meta.executable,
             rent_epoch: stored_account_meta.account_meta.rent_epoch,
             data: stored_account_meta.data,
+            write_version: stored_account_meta.meta.write_version,
         })
     }
 
