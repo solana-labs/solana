@@ -2150,6 +2150,10 @@ fn encode_account<T: ReadableAccount>(
     }
 }
 
+/// Analyze custom filters to determine if the result will be a subset of spl-token accounts by
+/// owner.
+/// NOTE: `optimize_filters()` should almost always be called before using this method because of
+/// the strict match on `MemcmpEncodedBytes::Bytes`.
 fn get_spl_token_owner_filter(program_id: &Pubkey, filters: &[RpcFilterType]) -> Option<Pubkey> {
     if program_id != &spl_token_id_v2_0() {
         return None;
@@ -2178,6 +2182,10 @@ fn get_spl_token_owner_filter(program_id: &Pubkey, filters: &[RpcFilterType]) ->
     }
 }
 
+/// Analyze custom filters to determine if the result will be a subset of spl-token accounts by
+/// mint.
+/// NOTE: `optimize_filters()` should almost always be called before using this method because of
+/// the strict match on `MemcmpEncodedBytes::Bytes`.
 fn get_spl_token_mint_filter(program_id: &Pubkey, filters: &[RpcFilterType]) -> Option<Pubkey> {
     if program_id != &spl_token_id_v2_0() {
         return None;
