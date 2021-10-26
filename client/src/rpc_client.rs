@@ -4113,7 +4113,7 @@ impl RpcClient {
     }
 
     #[deprecated(
-        since = "1.8.0",
+        since = "1.9.0",
         note = "Please use `get_latest_blockhash` and `get_fee_for_message` instead"
     )]
     #[allow(deprecated)]
@@ -4123,7 +4123,7 @@ impl RpcClient {
     }
 
     #[deprecated(
-        since = "1.8.0",
+        since = "1.9.0",
         note = "Please use `get_latest_blockhash_with_commitment` and `get_fee_for_message` instead"
     )]
     #[allow(deprecated)]
@@ -4151,7 +4151,7 @@ impl RpcClient {
         })
     }
 
-    #[deprecated(since = "1.8.0", note = "Please use `get_latest_blockhash` instead")]
+    #[deprecated(since = "1.9.0", note = "Please use `get_latest_blockhash` instead")]
     #[allow(deprecated)]
     pub fn get_recent_blockhash(&self) -> ClientResult<(Hash, FeeCalculator)> {
         #[allow(deprecated)]
@@ -4162,7 +4162,7 @@ impl RpcClient {
     }
 
     #[deprecated(
-        since = "1.8.0",
+        since = "1.9.0",
         note = "Please use `get_latest_blockhash_with_commitment` instead"
     )]
     #[allow(deprecated)]
@@ -4229,7 +4229,7 @@ impl RpcClient {
         })
     }
 
-    #[deprecated(since = "1.8.0", note = "Please `get_fee_for_message` instead")]
+    #[deprecated(since = "1.9.0", note = "Please `get_fee_for_message` instead")]
     #[allow(deprecated)]
     pub fn get_fee_calculator_for_blockhash(
         &self,
@@ -4242,7 +4242,7 @@ impl RpcClient {
     }
 
     #[deprecated(
-        since = "1.8.0",
+        since = "1.9.0",
         note = "Please `get_latest_blockhash_with_commitment` and `get_fee_for_message` instead"
     )]
     #[allow(deprecated)]
@@ -4266,7 +4266,7 @@ impl RpcClient {
     }
 
     #[deprecated(
-        since = "1.8.0",
+        since = "1.9.0",
         note = "Please do not use, will no longer be available in the future"
     )]
     #[allow(deprecated)]
@@ -4284,7 +4284,7 @@ impl RpcClient {
     }
 
     #[deprecated(
-        since = "1.8.0",
+        since = "1.9.0",
         note = "Please use `get_new_latest_blockhash` instead"
     )]
     #[allow(deprecated)]

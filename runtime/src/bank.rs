@@ -3113,7 +3113,7 @@ impl Bank {
         blockhash_queue.get_lamports_per_signature(hash)
     }
 
-    #[deprecated(since = "1.8.0", note = "Please use `get_fee_for_message` instead")]
+    #[deprecated(since = "1.9.0", note = "Please use `get_fee_for_message` instead")]
     pub fn get_fee_rate_governor(&self) -> &FeeRateGovernor {
         &self.fee_rate_governor
     }
