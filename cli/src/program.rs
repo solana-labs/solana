@@ -22,11 +22,6 @@ use solana_client::{
     rpc_config::RpcSendTransactionConfig,
     rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
     rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
-<<<<<<< HEAD
-    rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
-    rpc_response::Fees,
-=======
->>>>>>> 5f7b60576 (tpu-client: Move `send_messages_with_spinner` from program (#20960))
     tpu_client::{TpuClient, TpuClientConfig},
 };
 use solana_rbpf::vm::{Config, Executable};
@@ -36,7 +31,6 @@ use solana_sdk::{
     account_utils::StateMut,
     bpf_loader, bpf_loader_deprecated,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    commitment_config::CommitmentConfig,
     instruction::Instruction,
     instruction::InstructionError,
     loader_instruction,
@@ -2113,31 +2107,6 @@ fn send_deploy_messages(
     if let Some(write_messages) = write_messages {
         if let Some(write_signer) = write_signer {
             trace!("Writing program data");
-<<<<<<< HEAD
-            let Fees {
-                blockhash,
-                last_valid_block_height,
-                ..
-            } = rpc_client
-                .get_fees_with_commitment(config.commitment)?
-                .value;
-            let mut write_transactions = vec![];
-            for message in write_messages.iter() {
-                let mut tx = Transaction::new_unsigned(message.clone());
-                tx.try_sign(&[payer_signer, write_signer], blockhash)?;
-                write_transactions.push(tx);
-            }
-
-            send_and_confirm_transactions_with_spinner(
-                rpc_client.clone(),
-                &config.websocket_url,
-                write_transactions,
-                &[payer_signer, write_signer],
-                config.commitment,
-                last_valid_block_height,
-            )
-            .map_err(|err| format!("Data writes to account failed: {}", err))?;
-=======
             let tpu_client = TpuClient::new(
                 rpc_client.clone(),
                 &config.websocket_url,
@@ -2161,7 +2130,6 @@ fn send_deploy_messages(
                     format!("{} write transactions failed", transaction_errors.len()).into(),
                 );
             }
->>>>>>> 5f7b60576 (tpu-client: Move `send_messages_with_spinner` from program (#20960))
         }
     }
 
@@ -2222,137 +2190,6 @@ fn report_ephemeral_mnemonic(words: usize, mnemonic: bip39::Mnemonic) {
     );
 }
 
-<<<<<<< HEAD
-fn send_and_confirm_transactions_with_spinner<T: Signers>(
-    rpc_client: Arc<RpcClient>,
-    websocket_url: &str,
-    mut transactions: Vec<Transaction>,
-    signer_keys: &T,
-    commitment: CommitmentConfig,
-    mut last_valid_block_height: u64,
-) -> Result<(), Box<dyn error::Error>> {
-    let progress_bar = new_spinner_progress_bar();
-    let mut send_retries = 5;
-
-    progress_bar.set_message("Finding leader nodes...");
-    let tpu_client = TpuClient::new(
-        rpc_client.clone(),
-        websocket_url,
-        TpuClientConfig::default(),
-    )?;
-    loop {
-        // Send all transactions
-        let mut pending_transactions = HashMap::new();
-        let num_transactions = transactions.len();
-        for transaction in transactions {
-            if !tpu_client.send_transaction(&transaction) {
-                let _result = rpc_client
-                    .send_transaction_with_config(
-                        &transaction,
-                        RpcSendTransactionConfig {
-                            preflight_commitment: Some(commitment.commitment),
-                            ..RpcSendTransactionConfig::default()
-                        },
-                    )
-                    .ok();
-            }
-            pending_transactions.insert(transaction.signatures[0], transaction);
-            progress_bar.set_message(&format!(
-                "[{}/{}] Transactions sent",
-                pending_transactions.len(),
-                num_transactions
-            ));
-
-            // Throttle transactions to about 100 TPS
-            sleep(Duration::from_millis(10));
-        }
-
-        // Collect statuses for all the transactions, drop those that are confirmed
-        loop {
-            let mut block_height = 0;
-            let pending_signatures = pending_transactions.keys().cloned().collect::<Vec<_>>();
-            for pending_signatures_chunk in
-                pending_signatures.chunks(MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS)
-            {
-                if let Ok(result) = rpc_client.get_signature_statuses(pending_signatures_chunk) {
-                    let statuses = result.value;
-                    for (signature, status) in
-                        pending_signatures_chunk.iter().zip(statuses.into_iter())
-                    {
-                        if let Some(status) = status {
-                            if let Some(confirmation_status) = &status.confirmation_status {
-                                if *confirmation_status != TransactionConfirmationStatus::Processed
-                                {
-                                    let _ = pending_transactions.remove(signature);
-                                }
-                            } else if status.confirmations.is_none()
-                                || status.confirmations.unwrap() > 1
-                            {
-                                let _ = pending_transactions.remove(signature);
-                            }
-                        }
-                    }
-                }
-
-                block_height = rpc_client.get_block_height()?;
-                progress_bar.set_message(&format!(
-                    "[{}/{}] Transactions confirmed. Retrying in {} blocks",
-                    num_transactions - pending_transactions.len(),
-                    num_transactions,
-                    last_valid_block_height.saturating_sub(block_height)
-                ));
-            }
-
-            if pending_transactions.is_empty() {
-                return Ok(());
-            }
-
-            if block_height > last_valid_block_height {
-                break;
-            }
-
-            for transaction in pending_transactions.values() {
-                if !tpu_client.send_transaction(transaction) {
-                    let _result = rpc_client
-                        .send_transaction_with_config(
-                            transaction,
-                            RpcSendTransactionConfig {
-                                preflight_commitment: Some(commitment.commitment),
-                                ..RpcSendTransactionConfig::default()
-                            },
-                        )
-                        .ok();
-                }
-            }
-
-            if cfg!(not(test)) {
-                // Retry twice a second
-                sleep(Duration::from_millis(500));
-            }
-        }
-
-        if send_retries == 0 {
-            return Err("Transactions failed".into());
-        }
-        send_retries -= 1;
-
-        // Re-sign any failed transactions with a new blockhash and retry
-        let Fees {
-            blockhash,
-            last_valid_block_height: new_last_valid_block_height,
-            ..
-        } = rpc_client.get_fees_with_commitment(commitment)?.value;
-        last_valid_block_height = new_last_valid_block_height;
-        transactions = vec![];
-        for (_, mut transaction) in pending_transactions.into_iter() {
-            transaction.try_sign(signer_keys, blockhash)?;
-            transactions.push(transaction);
-        }
-    }
-}
-
-=======
->>>>>>> 5f7b60576 (tpu-client: Move `send_messages_with_spinner` from program (#20960))
 #[cfg(test)]
 mod tests {
     use super::*;

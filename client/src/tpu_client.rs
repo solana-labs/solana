@@ -3,7 +3,7 @@ use crate::{
     pubsub_client::{PubsubClient, PubsubClientError, PubsubClientSubscription},
     rpc_client::RpcClient,
     rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
-    rpc_response::SlotUpdate,
+    rpc_response::{Fees, SlotUpdate},
     spinner,
 };
 use bincode::serialize;
@@ -147,7 +147,7 @@ impl TpuClient {
                            block_height: Option<u64>,
                            last_valid_block_height: u64,
                            status: &str| {
-            progress_bar.set_message(format!(
+            progress_bar.set_message(&format!(
                 "{:>5.1}% | {:<40}{}",
                 confirmed_transactions as f64 * 100. / num_transactions,
                 status,
@@ -165,9 +165,11 @@ impl TpuClient {
         let mut confirmed_transactions = 0;
         let mut block_height = self.rpc_client.get_block_height()?;
         while expired_blockhash_retries > 0 {
-            let (blockhash, last_valid_block_height) = self
-                .rpc_client
-                .get_latest_blockhash_with_commitment(self.rpc_client.commitment())?;
+            let Fees {
+                blockhash,
+                fee_calculator: _,
+                last_valid_block_height,
+            } = self.rpc_client.get_fees()?;
 
             let mut pending_transactions = HashMap::new();
             for (i, mut transaction) in transactions {
