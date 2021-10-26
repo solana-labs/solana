@@ -5,7 +5,7 @@ extern crate test;
 use {
     rand::{thread_rng, Rng},
     solana_gossip::{
-        crds::{Crds, VersionedCrdsValue},
+        crds::{Crds, GossipRoute, VersionedCrdsValue},
         crds_shards::CrdsShards,
         crds_value::CrdsValue,
     },
@@ -20,7 +20,8 @@ fn new_test_crds_value<R: Rng>(rng: &mut R) -> VersionedCrdsValue {
     let value = CrdsValue::new_rand(rng, None);
     let label = value.label();
     let mut crds = Crds::default();
-    crds.insert(value, timestamp()).unwrap();
+    crds.insert(value, timestamp(), GossipRoute::LocalMessage)
+        .unwrap();
     crds.get::<&VersionedCrdsValue>(&label).cloned().unwrap()
 }
 

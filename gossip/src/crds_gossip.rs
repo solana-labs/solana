@@ -8,7 +8,7 @@ use {
     crate::{
         cluster_info::Ping,
         contact_info::ContactInfo,
-        crds::Crds,
+        crds::{Crds, GossipRoute},
         crds_gossip_error::CrdsGossipError,
         crds_gossip_pull::{CrdsFilter, CrdsGossipPull, ProcessPullStats},
         crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE},
@@ -89,7 +89,7 @@ impl CrdsGossip {
         {
             let mut crds = self.crds.write().unwrap();
             for entry in pending_push_messages {
-                let _ = crds.insert(entry, now);
+                let _ = crds.insert(entry, now, GossipRoute::LocalMessage);
             }
         }
         self.push.new_push_messages(&self.crds, now)
@@ -151,7 +151,7 @@ impl CrdsGossip {
         });
         let now = timestamp();
         for entry in entries {
-            if let Err(err) = crds.insert(entry, now) {
+            if let Err(err) = crds.insert(entry, now, GossipRoute::LocalMessage) {
                 error!("push_duplicate_shred faild: {:?}", err);
             }
         }
@@ -337,7 +337,7 @@ impl CrdsGossip {
 
     // Only for tests and simulations.
     pub(crate) fn mock_clone(&self) -> Self {
-        let crds = self.crds.read().unwrap().clone();
+        let crds = self.crds.read().unwrap().mock_clone();
         Self {
             crds: RwLock::new(crds),
             push: self.push.mock_clone(),
@@ -385,6 +385,7 @@ mod test {
             .insert(
                 CrdsValue::new_unsigned(CrdsData::ContactInfo(ci.clone())),
                 0,
+                GossipRoute::LocalMessage,
             )
             .unwrap();
         crds_gossip.refresh_push_active_set(
