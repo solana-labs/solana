@@ -689,7 +689,6 @@ impl EntrySlice for [Entry] {
                     } else {
                         tx.message.hash()
                     };
-                    // todo: is there a more efficient way to do this?
                     let sanitized_transaction_result = SanitizedTransaction::try_create(vtx.clone(), message_hash, |_| {
                         Err(TransactionError::UnsupportedVersion)
                     });
@@ -758,7 +757,6 @@ impl EntrySlice for [Entry] {
                     } else {
                         tx.message.hash()
                     };
-                    // todo: is there a more efficient way to do this?
                     let sanitized_transaction_result = SanitizedTransaction::try_create(vtx.clone(), message_hash, |_| {
                         Err(TransactionError::UnsupportedVersion)
                     });
