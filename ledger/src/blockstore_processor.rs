@@ -40,7 +40,6 @@ use solana_sdk::{
     hash::Hash,
     pubkey::Pubkey,
     signature::{Keypair, Signature},
-    timing,
     transaction::{Result, SanitizedTransaction, TransactionError, VersionedTransaction},
 };
 use solana_transaction_status::token_balances::{

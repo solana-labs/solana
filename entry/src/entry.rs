@@ -32,7 +32,6 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Instant;
 use std::{cmp, thread};
-use solana_sdk::feature_set::{libsecp256k1_0_5_upgrade_enabled, libsecp256k1_fail_on_bad_count, FeatureSet};
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
