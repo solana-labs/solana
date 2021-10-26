@@ -34,23 +34,33 @@ get_validator_confirmation_time "$PRE_PARTITION_DURATION"
 # shellcheck disable=SC2154
 execution_step "Pre partition validator confirmation time is $mean_confirmation_ms ms"
 echo "Pre partition validator confirmation time: $mean_confirmation_ms ms" >> "$RESULT_FILE"
-
-execution_step "Applying partition config $NETEM_CONFIG_FILE for $PARTITION_DURATION seconds"
-"${REPO_ROOT}"/net/net.sh netem --config-file "$NETEM_CONFIG_FILE" -n $num_online_nodes
-sleep "$PARTITION_DURATION"
-
-execution_step "Resolving partition"
-"${REPO_ROOT}"/net/net.sh netem --config-file "$NETEM_CONFIG_FILE" --netem-cmd cleanup -n $num_online_nodes
-
 target=$mean_confirmation_ms
-get_validator_confirmation_time 10
-time=0
-echo "Validator confirmation is $mean_confirmation_ms ms immediately after the partition" >> "$RESULT_FILE"
 
-while [[ $mean_confirmation_ms == "expected" || $mean_confirmation_ms -gt $target ]]; do
-  sleep 1
-  time=$(( time + 1 ))
+while true; do
+  execution_step "Applying partition config $NETEM_CONFIG_FILE for $PARTITION_DURATION seconds"
+  "${REPO_ROOT}"/net/net.sh netem --config-file "$NETEM_CONFIG_FILE" -n $num_online_nodes
+  sleep "$PARTITION_DURATION"
+
+  execution_step "Resolving partition"
+  "${REPO_ROOT}"/net/net.sh netem --config-file "$NETEM_CONFIG_FILE" --netem-cmd cleanup -n $num_online_nodes
+
   get_validator_confirmation_time 10
-done
+  time=0
+  echo "Validator confirmation is $mean_confirmation_ms ms immediately after resolving the partition" >> "$RESULT_FILE"
 
-echo "$time seconds after resolving the partition, validator confirmation time fell to $mean_confirmation_ms" >> "$RESULT_FILE"
+  while [[ $mean_confirmation_ms == "expected" || $mean_confirmation_ms -gt $target ]]; do
+    sleep 1
+    time=$(( time + 1 ))
+
+    if [[ $time -gt $PARTITION_DURATION ]]; then
+      echo "Unable to make progress after $time seconds. confirmation time is still $mean_confirmation_ms ms" >> "$RESULT_FILE"
+      exit 0
+    fi
+    get_validator_confirmation_time 10
+  done
+
+  echo "$time seconds after resolving the partition, validator confirmation time fell to $mean_confirmation_ms ms" >> "$RESULT_FILE"
+  printf "\n" >> "$RESULT_FILE"
+
+  PARTITION_DURATION=$(( PARTITION_DURATION + 60 ))
+done
