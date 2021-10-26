@@ -5833,6 +5833,7 @@ dependencies = [
  "solana-version",
  "solana-vote-program",
  "symlink",
+ "sysctl",
  "tikv-jemallocator",
 ]
 

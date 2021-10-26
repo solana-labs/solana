@@ -30,6 +30,7 @@ use {
         contact_info::ContactInfo,
     },
     solana_ledger::blockstore_db::BlockstoreRecoveryMode,
+    solana_metrics::datapoint_info,
     solana_perf::recycler::enable_recycler_warming,
     solana_poh::poh_service,
     solana_replica_lib::accountsdb_repl_server::AccountsDbReplServiceConfig,
@@ -409,6 +410,87 @@ fn get_cluster_shred_version(entrypoints: &[SocketAddr]) -> Option<u16> {
         }
     }
     None
+}
+
+fn platform_id() -> String {
+    format!(
+        "{}/{}/{}",
+        std::env::consts::FAMILY,
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    )
+}
+
+#[cfg(target_os = "linux")]
+fn check_os_network_limits() {
+    use solana_metrics::datapoint_warn;
+    use std::collections::HashMap;
+    use sysctl::Sysctl;
+
+    fn sysctl_read(name: &str) -> Result<String, sysctl::SysctlError> {
+        let ctl = sysctl::Ctl::new(name)?;
+        let val = ctl.value_string()?;
+        Ok(val)
+    }
+    let mut check_failed = false;
+
+    info!("Testing OS network limits:");
+
+    // Reference: https://medium.com/@CameronSparr/increase-os-udp-buffers-to-improve-performance-51d167bb1360
+    let mut recommended_limits: HashMap<&str, i64> = HashMap::default();
+    recommended_limits.insert("net.core.rmem_max", 134217728);
+    recommended_limits.insert("net.core.rmem_default", 134217728);
+    recommended_limits.insert("net.core.wmem_max", 134217728);
+    recommended_limits.insert("net.core.wmem_default", 134217728);
+    recommended_limits.insert("vm.max_map_count", 1000000);
+
+    // Additionally collect the following limits
+    recommended_limits.insert("net.core.optmem_max", 0);
+    recommended_limits.insert("net.core.netdev_max_backlog", 0);
+
+    let mut current_limits: HashMap<&str, i64> = HashMap::default();
+    for (key, _) in recommended_limits.iter() {
+        let current_val = match sysctl_read(key) {
+            Ok(val) => val.parse::<i64>().unwrap(),
+            Err(e) => {
+                error!("Failed to query value for {}: {}", key, e);
+                check_failed = true;
+                -1
+            }
+        };
+        current_limits.insert(key, current_val);
+    }
+
+    for (key, recommended_val) in recommended_limits.iter() {
+        let current_val = *current_limits.get(key).unwrap();
+        if current_val < *recommended_val {
+            datapoint_warn!("os-config", (key, current_val, i64));
+            warn!(
+                "  {}: recommended={} current={}, too small",
+                key, recommended_val, current_val
+            );
+            check_failed = true;
+        } else {
+            datapoint_info!("os-config", (key, current_val, i64));
+            info!(
+                "  {}: recommended={} current={}",
+                key, recommended_val, current_val
+            );
+        }
+    }
+    datapoint_info!("os-config", ("platform", platform_id(), String));
+
+    if check_failed {
+        datapoint_warn!("os-config", ("network_limit_test_failed", 1, i64));
+        warn!("OS network limit test failed. solana-sys-tuner may be used to configure OS network limits. Bypass check with --no-os-network-limits-test.");
+    } else {
+        info!("OS network limits test passed.");
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn check_os_network_limits() {
+    datapoint_info!("os-config", ("platform", platform_id(), String));
 }
 
 pub fn main() {
@@ -866,6 +948,12 @@ pub fn main() {
             Arg::with_name("no_poh_speed_test")
                 .long("no-poh-speed-test")
                 .help("Skip the check for PoH speed."),
+        )
+        .arg(
+            Arg::with_name("no_os_network_limits_test")
+                .hidden(true)
+                .long("no-os-network-limits-test")
+                .help("Skip checks for OS network limits.")
         )
         .arg(
             Arg::with_name("accounts-hash-interval-slots")
@@ -2344,6 +2432,10 @@ pub fn main() {
             exit(1);
         })
     });
+
+    if !matches.is_present("no_os_network_limits_test") {
+        check_os_network_limits();
+    }
 
     let mut ledger_lock = ledger_lockfile(&ledger_path);
     let _ledger_write_guard = lock_ledger(&ledger_path, &mut ledger_lock);

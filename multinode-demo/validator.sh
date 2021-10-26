@@ -9,6 +9,7 @@ source "$here"/common.sh
 args=(
   --max-genesis-archive-unpacked-size 1073741824
   --no-poh-speed-test
+  --no-os-network-limits-test
 )
 airdrops_enabled=1
 node_sol=500 # 500 SOL: number of SOL to airdrop the node for transaction fees and vote account rent exemption (ignored if airdrops_enabled=0)
