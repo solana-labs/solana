@@ -37,6 +37,7 @@ import { TokenInstructionsCard } from "components/account/history/TokenInstructi
 import { RewardsCard } from "components/account/RewardsCard";
 import { MetaplexMetadataCard } from "components/account/MetaplexMetadataCard";
 import { NFTHeader } from "components/account/MetaplexNFTHeader";
+import { DomainsCard } from "components/account/DomainsCard";
 
 const IDENTICON_WIDTH = 64;
 
@@ -310,7 +311,8 @@ export type MoreTabs =
   | "transfers"
   | "instructions"
   | "rewards"
-  | "metadata";
+  | "metadata"
+  | "domains";
 
 function MoreSection({
   account,
@@ -379,6 +381,7 @@ function MoreSection({
           nftData={(account.details?.data as TokenProgramData).nftData!}
         />
       )}
+      {tab === "domains" && <DomainsCard pubkey={pubkey} />}
     </>
   );
 }
@@ -425,6 +428,11 @@ function getTabs(data?: ProgramData): Tab[] {
       slug: "tokens",
       title: "Tokens",
       path: "/tokens",
+    });
+    tabs.push({
+      slug: "domains",
+      title: "Domains",
+      path: "/domains",
     });
   }
 
