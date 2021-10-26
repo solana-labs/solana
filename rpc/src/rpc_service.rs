@@ -474,6 +474,7 @@ mod tests {
         crate::rpc::create_validator_exit,
         solana_gossip::{
             contact_info::ContactInfo,
+            crds::GossipRoute,
             crds_value::{CrdsData, CrdsValue, SnapshotHash},
         },
         solana_ledger::{
@@ -759,6 +760,7 @@ mod tests {
                     ],
                 ))),
                 1,
+                GossipRoute::LocalMessage,
             )
             .unwrap();
         assert_eq!(rm.health_check(), "ok");
@@ -775,6 +777,7 @@ mod tests {
                     vec![(1000 + health_check_slot_distance - 1, Hash::default())],
                 ))),
                 1,
+                GossipRoute::LocalMessage,
             )
             .unwrap();
         assert_eq!(rm.health_check(), "ok");
@@ -791,6 +794,7 @@ mod tests {
                     vec![(1000 + health_check_slot_distance, Hash::default())],
                 ))),
                 1,
+                GossipRoute::LocalMessage,
             )
             .unwrap();
         assert_eq!(rm.health_check(), "behind");
