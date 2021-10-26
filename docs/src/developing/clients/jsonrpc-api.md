@@ -877,12 +877,12 @@ None
 The result field will be an array of JSON objects, each with the following sub fields:
 
 - `pubkey: <string>` - Node public key, as base-58 encoded string
-- `gossip: <string>` - Gossip network address for the node
-- `tpu: <string>` - TPU network address for the node
-- `rpc: <string>|null` - JSON RPC network address for the node, or `null` if the JSON RPC service is not enabled
-- `version: <string>|null` - The software version of the node, or `null` if the version information is not available
-- `featureSet: <number>|null` - The unique identifier of the node's feature set
-- `shredVersion: <number>|null` - The shred version the node has been configured to use
+- `gossip: <string | null>` - Gossip network address for the node
+- `tpu: <string | null>` - TPU network address for the node
+- `rpc: <string | null>` - JSON RPC network address for the node, or `null` if the JSON RPC service is not enabled
+- `version: <string | null>` - The software version of the node, or `null` if the version information is not available
+- `featureSet: <u32 | null >` - The unique identifier of the node's feature set
+- `shredVersion: <u16 | null>` - The shred version the node has been configured to use
 
 #### Example:
 
