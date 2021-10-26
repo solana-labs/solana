@@ -22,22 +22,11 @@ impl RpcFilterType {
                     MemcmpEncoding::Binary => {
                         use MemcmpEncodedBytes::*;
                         match &compare.bytes {
-                            Binary(bytes) if bytes.len() > MAX_DATA_BASE58_SIZE => {
-                                Err(RpcFilterError::Base58DataTooLarge)
-                            }
-                            Base58(bytes) if bytes.len() > MAX_DATA_BASE58_SIZE => {
-                                Err(RpcFilterError::DataTooLarge)
-                            }
-                            Base64(bytes) if bytes.len() > MAX_DATA_BASE64_SIZE => {
-                                Err(RpcFilterError::DataTooLarge)
-                            }
-                            Bytes(bytes) if bytes.len() > MAX_DATA_SIZE => {
-                                Err(RpcFilterError::DataTooLarge)
-                            }
-                            _ => Ok(()),
-                        }?;
-                        match &compare.bytes {
+                            // DEPRECATED
                             Binary(bytes) => {
+                                if bytes.len() > MAX_DATA_BASE58_SIZE {
+                                    return Err(RpcFilterError::Base58DataTooLarge);
+                                }
                                 let bytes = bs58::decode(&bytes)
                                     .into_vec()
                                     .map_err(RpcFilterError::DecodeError)?;
@@ -48,6 +37,9 @@ impl RpcFilterType {
                                 }
                             }
                             Base58(bytes) => {
+                                if bytes.len() > MAX_DATA_BASE58_SIZE {
+                                    return Err(RpcFilterError::DataTooLarge);
+                                }
                                 let bytes = bs58::decode(&bytes).into_vec()?;
                                 if bytes.len() > MAX_DATA_SIZE {
                                     Err(RpcFilterError::DataTooLarge)
@@ -56,6 +48,9 @@ impl RpcFilterType {
                                 }
                             }
                             Base64(bytes) => {
+                                if bytes.len() > MAX_DATA_BASE64_SIZE {
+                                    return Err(RpcFilterError::DataTooLarge);
+                                }
                                 let bytes = base64::decode(&bytes)?;
                                 if bytes.len() > MAX_DATA_SIZE {
                                     Err(RpcFilterError::DataTooLarge)
@@ -63,7 +58,12 @@ impl RpcFilterType {
                                     Ok(())
                                 }
                             }
-                            Bytes(_) => Ok(()),
+                            Bytes(bytes) => {
+                                if bytes.len() > MAX_DATA_SIZE {
+                                    return Err(RpcFilterError::DataTooLarge);
+                                }
+                                Ok(())
+                            }
                         }
                     }
                 }
