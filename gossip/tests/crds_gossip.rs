@@ -118,40 +118,23 @@ fn star_network_create(num: usize) -> Network {
             let node_keypair = Arc::new(Keypair::new());
             let contact_info = ContactInfo::new_localhost(&node_keypair.pubkey(), 0);
             let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(contact_info.clone()));
-<<<<<<< HEAD
             let mut node = CrdsGossip::default();
-            node.crds.insert(new.clone(), timestamp()).unwrap();
-            node.crds.insert(entry.clone(), timestamp()).unwrap();
+            node.crds
+                .insert(new.clone(), timestamp(), GossipRoute::LocalMessage)
+                .unwrap();
+            node.crds
+                .insert(entry.clone(), timestamp(), GossipRoute::LocalMessage)
+                .unwrap();
             let node = Node::new(node_keypair, contact_info, Arc::new(Mutex::new(node)));
-=======
-            let node = CrdsGossip::default();
-            {
-                let mut node_crds = node.crds.write().unwrap();
-                node_crds
-                    .insert(new.clone(), timestamp(), GossipRoute::LocalMessage)
-                    .unwrap();
-                node_crds
-                    .insert(entry.clone(), timestamp(), GossipRoute::LocalMessage)
-                    .unwrap();
-            }
-            let node = Node::new(node_keypair, contact_info, Arc::new(node));
->>>>>>> 1297a1358 (adds metrics tracking crds writes and votes (#20953))
             (new.label().pubkey(), node)
         })
         .collect();
     let mut node = CrdsGossip::default();
     let id = entry.label().pubkey();
-<<<<<<< HEAD
-    node.crds.insert(entry, timestamp()).unwrap();
-    let node = Node::new(node_keypair, contact_info, Arc::new(Mutex::new(node)));
-=======
     node.crds
-        .write()
-        .unwrap()
         .insert(entry, timestamp(), GossipRoute::LocalMessage)
         .unwrap();
-    let node = Node::new(node_keypair, contact_info, Arc::new(node));
->>>>>>> 1297a1358 (adds metrics tracking crds writes and votes (#20953))
+    let node = Node::new(node_keypair, contact_info, Arc::new(Mutex::new(node)));
     network.insert(id, node);
     Network::new(network)
 }
@@ -162,41 +145,24 @@ fn rstar_network_create(num: usize) -> Network {
     let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(contact_info.clone()));
     let mut origin = CrdsGossip::default();
     let id = entry.label().pubkey();
-<<<<<<< HEAD
-    origin.crds.insert(entry, timestamp()).unwrap();
-=======
     origin
         .crds
-        .write()
-        .unwrap()
         .insert(entry, timestamp(), GossipRoute::LocalMessage)
         .unwrap();
->>>>>>> 1297a1358 (adds metrics tracking crds writes and votes (#20953))
     let mut network: HashMap<_, _> = (1..num)
         .map(|_| {
             let node_keypair = Arc::new(Keypair::new());
             let contact_info = ContactInfo::new_localhost(&node_keypair.pubkey(), 0);
             let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(contact_info.clone()));
-<<<<<<< HEAD
             let mut node = CrdsGossip::default();
-            node.crds.insert(new.clone(), timestamp()).unwrap();
-            origin.crds.insert(new.clone(), timestamp()).unwrap();
-            let node = Node::new(node_keypair, contact_info, Arc::new(Mutex::new(node)));
-=======
-            let node = CrdsGossip::default();
             node.crds
-                .write()
-                .unwrap()
                 .insert(new.clone(), timestamp(), GossipRoute::LocalMessage)
                 .unwrap();
             origin
                 .crds
-                .write()
-                .unwrap()
                 .insert(new.clone(), timestamp(), GossipRoute::LocalMessage)
                 .unwrap();
-            let node = Node::new(node_keypair, contact_info, Arc::new(node));
->>>>>>> 1297a1358 (adds metrics tracking crds writes and votes (#20953))
+            let node = Node::new(node_keypair, contact_info, Arc::new(Mutex::new(node)));
             (new.label().pubkey(), node)
         })
         .collect();
@@ -211,19 +177,11 @@ fn ring_network_create(num: usize) -> Network {
             let node_keypair = Arc::new(Keypair::new());
             let contact_info = ContactInfo::new_localhost(&node_keypair.pubkey(), 0);
             let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(contact_info.clone()));
-<<<<<<< HEAD
             let mut node = CrdsGossip::default();
-            node.crds.insert(new.clone(), timestamp()).unwrap();
-            let node = Node::new(node_keypair, contact_info, Arc::new(Mutex::new(node)));
-=======
-            let node = CrdsGossip::default();
             node.crds
-                .write()
-                .unwrap()
                 .insert(new.clone(), timestamp(), GossipRoute::LocalMessage)
                 .unwrap();
-            let node = Node::new(node_keypair, contact_info, Arc::new(node));
->>>>>>> 1297a1358 (adds metrics tracking crds writes and votes (#20953))
+            let node = Node::new(node_keypair, contact_info, Arc::new(Mutex::new(node)));
             (new.label().pubkey(), node)
         })
         .collect();
@@ -237,16 +195,10 @@ fn ring_network_create(num: usize) -> Network {
             gossip.crds.get(&label).unwrap().value.clone()
         };
         let end = network.get_mut(&keys[(k + 1) % keys.len()]).unwrap();
-<<<<<<< HEAD
         end.lock()
             .unwrap()
             .crds
-            .insert(start_info, timestamp())
-=======
-        let mut end_crds = end.gossip.crds.write().unwrap();
-        end_crds
             .insert(start_info, timestamp(), GossipRoute::LocalMessage)
->>>>>>> 1297a1358 (adds metrics tracking crds writes and votes (#20953))
             .unwrap();
     }
     Network::new(network)
@@ -259,24 +211,16 @@ fn connected_staked_network_create(stakes: &[u64]) -> Network {
             let node_keypair = Arc::new(Keypair::new());
             let contact_info = ContactInfo::new_localhost(&node_keypair.pubkey(), 0);
             let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(contact_info.clone()));
-<<<<<<< HEAD
             let mut node = CrdsGossip::default();
-            node.crds.insert(new.clone(), timestamp()).unwrap();
+            node.crds
+                .insert(new.clone(), timestamp(), GossipRoute::LocalMessage)
+                .unwrap();
             let node = Node::staked(
                 node_keypair,
                 contact_info,
                 Arc::new(Mutex::new(node)),
                 stakes[n],
             );
-=======
-            let node = CrdsGossip::default();
-            node.crds
-                .write()
-                .unwrap()
-                .insert(new.clone(), timestamp(), GossipRoute::LocalMessage)
-                .unwrap();
-            let node = Node::staked(node_keypair, contact_info, Arc::new(node), stakes[n]);
->>>>>>> 1297a1358 (adds metrics tracking crds writes and votes (#20953))
             (new.label().pubkey(), node)
         })
         .collect();
@@ -295,13 +239,9 @@ fn connected_staked_network_create(stakes: &[u64]) -> Network {
             let mut end = end.lock().unwrap();
             if keys[k] != *end_pubkey {
                 let start_info = start_entries[k].clone();
-<<<<<<< HEAD
-                end.crds.insert(start_info, timestamp()).unwrap();
-=======
-                end_crds
+                end.crds
                     .insert(start_info, timestamp(), GossipRoute::LocalMessage)
                     .unwrap();
->>>>>>> 1297a1358 (adds metrics tracking crds writes and votes (#20953))
             }
         }
     }

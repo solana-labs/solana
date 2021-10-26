@@ -87,16 +87,8 @@ impl CrdsGossip {
         pending_push_messages: Vec<CrdsValue>,
         now: u64,
     ) -> HashMap<Pubkey, Vec<CrdsValue>> {
-<<<<<<< HEAD
         for entry in pending_push_messages {
-            let _ = self.crds.insert(entry, now);
-=======
-        {
-            let mut crds = self.crds.write().unwrap();
-            for entry in pending_push_messages {
-                let _ = crds.insert(entry, now, GossipRoute::LocalMessage);
-            }
->>>>>>> 1297a1358 (adds metrics tracking crds writes and votes (#20953))
+            let _ = self.crds.insert(entry, now, GossipRoute::LocalMessage);
         }
         self.push.new_push_messages(&self.crds, now)
     }
@@ -158,11 +150,7 @@ impl CrdsGossip {
         });
         let now = timestamp();
         for entry in entries {
-<<<<<<< HEAD
-            if let Err(err) = self.crds.insert(entry, now) {
-=======
-            if let Err(err) = crds.insert(entry, now, GossipRoute::LocalMessage) {
->>>>>>> 1297a1358 (adds metrics tracking crds writes and votes (#20953))
+            if let Err(err) = self.crds.insert(entry, now, GossipRoute::LocalMessage) {
                 error!("push_duplicate_shred faild: {:?}", err);
             }
         }
@@ -345,12 +333,8 @@ impl CrdsGossip {
 
     // Only for tests and simulations.
     pub(crate) fn mock_clone(&self) -> Self {
-<<<<<<< HEAD
-=======
-        let crds = self.crds.read().unwrap().mock_clone();
->>>>>>> 1297a1358 (adds metrics tracking crds writes and votes (#20953))
         Self {
-            crds: self.crds.clone(),
+            crds: self.crds.mock_clone(),
             push: self.push.mock_clone(),
             pull: self.pull.mock_clone(),
         }

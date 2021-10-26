@@ -171,7 +171,6 @@ impl CrdsGossipPush {
         from: &Pubkey,
         value: CrdsValue,
         now: u64,
-<<<<<<< HEAD
     ) -> Result<(), CrdsGossipError> {
         self.num_total += 1;
         if !self.wallclock_window(now).contains(&value.wallclock()) {
@@ -184,48 +183,11 @@ impl CrdsGossipPush {
             .entry(*from)
             .and_modify(|(_pruned, timestamp)| *timestamp = now)
             .or_insert((/*pruned:*/ false, now));
-        crds.insert(value, now).map_err(|_| {
-            self.num_old += 1;
-            CrdsGossipError::PushMessageOldVersion
-        })
-=======
-    ) -> Vec<Result<Pubkey, CrdsGossipError>> {
-        self.num_total.fetch_add(values.len(), Ordering::Relaxed);
-        let values: Vec<_> = {
-            let wallclock_window = self.wallclock_window(now);
-            let mut received_cache = self.received_cache.lock().unwrap();
-            values
-                .into_iter()
-                .map(|value| {
-                    if !wallclock_window.contains(&value.wallclock()) {
-                        return Err(CrdsGossipError::PushMessageTimeout);
-                    }
-                    let origin = value.pubkey();
-                    let peers = received_cache.entry(origin).or_default();
-                    peers
-                        .entry(*from)
-                        .and_modify(|(_pruned, timestamp)| *timestamp = now)
-                        .or_insert((/*pruned:*/ false, now));
-                    Ok(value)
-                })
-                .collect()
-        };
-        let mut crds = crds.write().unwrap();
-        values
-            .into_iter()
-            .map(|value| {
-                let value = value?;
-                let origin = value.pubkey();
-                match crds.insert(value, now, GossipRoute::PushMessage) {
-                    Ok(()) => Ok(origin),
-                    Err(_) => {
-                        self.num_old.fetch_add(1, Ordering::Relaxed);
-                        Err(CrdsGossipError::PushMessageOldVersion)
-                    }
-                }
+        crds.insert(value, now, GossipRoute::PushMessage)
+            .map_err(|_| {
+                self.num_old += 1;
+                CrdsGossipError::PushMessageOldVersion
             })
-            .collect()
->>>>>>> 1297a1358 (adds metrics tracking crds writes and votes (#20953))
     }
 
     /// New push message to broadcast to peers.
@@ -595,15 +557,10 @@ mod test {
             0,
         )));
 
-<<<<<<< HEAD
-        assert_eq!(crds.insert(value1.clone(), now), Ok(()));
-=======
         assert_eq!(
             crds.insert(value1.clone(), now, GossipRoute::LocalMessage),
             Ok(())
         );
-        let crds = RwLock::new(crds);
->>>>>>> 1297a1358 (adds metrics tracking crds writes and votes (#20953))
         push.refresh_push_active_set(
             &crds,
             &HashMap::new(),
@@ -620,19 +577,11 @@ mod test {
             &solana_sdk::pubkey::new_rand(),
             0,
         )));
-<<<<<<< HEAD
         assert!(push.active_set.get(&value2.label().pubkey()).is_none());
-        assert_eq!(crds.insert(value2.clone(), now), Ok(()));
-=======
-        assert!(active_set.get(&value2.label().pubkey()).is_none());
-        drop(active_set);
         assert_eq!(
-            crds.write()
-                .unwrap()
-                .insert(value2.clone(), now, GossipRoute::LocalMessage),
+            crds.insert(value2.clone(), now, GossipRoute::LocalMessage),
             Ok(())
         );
->>>>>>> 1297a1358 (adds metrics tracking crds writes and votes (#20953))
         for _ in 0..30 {
             push.refresh_push_active_set(
                 &crds,
@@ -654,16 +603,10 @@ mod test {
             let value2 = CrdsValue::new_unsigned(CrdsData::ContactInfo(
                 ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0),
             ));
-<<<<<<< HEAD
-            assert_eq!(crds.insert(value2.clone(), now), Ok(()));
-=======
             assert_eq!(
-                crds.write()
-                    .unwrap()
-                    .insert(value2.clone(), now, GossipRoute::LocalMessage),
+                crds.insert(value2.clone(), now, GossipRoute::LocalMessage),
                 Ok(())
             );
->>>>>>> 1297a1358 (adds metrics tracking crds writes and votes (#20953))
         }
         push.refresh_push_active_set(
             &crds,
@@ -746,12 +689,6 @@ mod test {
             ..ContactInfo::default()
         }));
 
-<<<<<<< HEAD
-        crds.insert(me.clone(), now).unwrap();
-        crds.insert(spy.clone(), now).unwrap();
-        crds.insert(node_123.clone(), now).unwrap();
-        crds.insert(node_456, now).unwrap();
-=======
         crds.insert(me.clone(), now, GossipRoute::LocalMessage)
             .unwrap();
         crds.insert(spy.clone(), now, GossipRoute::LocalMessage)
@@ -760,8 +697,6 @@ mod test {
             .unwrap();
         crds.insert(node_456, now, GossipRoute::LocalMessage)
             .unwrap();
-        let crds = RwLock::new(crds);
->>>>>>> 1297a1358 (adds metrics tracking crds writes and votes (#20953))
 
         // shred version 123 should ignore nodes with versions 0 and 456
         let options = node
@@ -815,16 +750,10 @@ mod test {
             ..ContactInfo::default()
         }));
 
-<<<<<<< HEAD
-        crds.insert(me.clone(), 0).unwrap();
-        crds.insert(node_123.clone(), now).unwrap();
-=======
         crds.insert(me.clone(), 0, GossipRoute::LocalMessage)
             .unwrap();
         crds.insert(node_123.clone(), now, GossipRoute::LocalMessage)
             .unwrap();
-        let crds = RwLock::new(crds);
->>>>>>> 1297a1358 (adds metrics tracking crds writes and votes (#20953))
 
         // Unknown pubkey in gossip_validators -- will push to nobody
         let mut gossip_validators = HashSet::new();
@@ -875,15 +804,10 @@ mod test {
             &solana_sdk::pubkey::new_rand(),
             0,
         )));
-<<<<<<< HEAD
-        assert_eq!(crds.insert(peer.clone(), now), Ok(()));
-=======
         assert_eq!(
             crds.insert(peer.clone(), now, GossipRoute::LocalMessage),
             Ok(())
         );
-        let crds = RwLock::new(crds);
->>>>>>> 1297a1358 (adds metrics tracking crds writes and votes (#20953))
         push.refresh_push_active_set(
             &crds,
             &HashMap::new(),
@@ -922,11 +846,6 @@ mod test {
                 CrdsValue::new_unsigned(CrdsData::ContactInfo(peer))
             })
             .collect();
-<<<<<<< HEAD
-        assert_eq!(crds.insert(peers[0].clone(), now), Ok(()));
-        assert_eq!(crds.insert(peers[1].clone(), now), Ok(()));
-=======
-        let origin: Vec<_> = peers.iter().map(|node| node.pubkey()).collect();
         assert_eq!(
             crds.insert(peers[0].clone(), now, GossipRoute::LocalMessage),
             Ok(())
@@ -935,8 +854,6 @@ mod test {
             crds.insert(peers[1].clone(), now, GossipRoute::LocalMessage),
             Ok(())
         );
-        let crds = RwLock::new(crds);
->>>>>>> 1297a1358 (adds metrics tracking crds writes and votes (#20953))
         assert_eq!(
             push.process_push_message(&mut crds, &Pubkey::default(), peers[2].clone(), now),
             Ok(())
@@ -971,15 +888,10 @@ mod test {
             &solana_sdk::pubkey::new_rand(),
             0,
         )));
-<<<<<<< HEAD
-        assert_eq!(crds.insert(peer.clone(), 0), Ok(()));
-=======
         assert_eq!(
             crds.insert(peer.clone(), 0, GossipRoute::LocalMessage),
             Ok(())
         );
-        let crds = RwLock::new(crds);
->>>>>>> 1297a1358 (adds metrics tracking crds writes and votes (#20953))
         push.refresh_push_active_set(
             &crds,
             &HashMap::new(),
@@ -1015,12 +927,7 @@ mod test {
             &solana_sdk::pubkey::new_rand(),
             0,
         )));
-<<<<<<< HEAD
-        assert_eq!(crds.insert(peer, 0), Ok(()));
-=======
         assert_eq!(crds.insert(peer, 0, GossipRoute::LocalMessage), Ok(()));
-        let crds = RwLock::new(crds);
->>>>>>> 1297a1358 (adds metrics tracking crds writes and votes (#20953))
         push.refresh_push_active_set(
             &crds,
             &HashMap::new(),

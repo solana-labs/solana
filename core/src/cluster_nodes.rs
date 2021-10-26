@@ -385,14 +385,10 @@ mod tests {
             for node in nodes.iter().skip(1) {
                 let node = CrdsData::ContactInfo(node.clone());
                 let node = CrdsValue::new_unsigned(node);
-<<<<<<< HEAD
-                assert_eq!(gossip.crds.insert(node, now), Ok(()));
-=======
                 assert_eq!(
-                    gossip_crds.insert(node, now, GossipRoute::LocalMessage),
+                    gossip.crds.insert(node, now, GossipRoute::LocalMessage),
                     Ok(())
                 );
->>>>>>> 1297a1358 (adds metrics tracking crds writes and votes (#20953))
             }
         }
         (nodes, stakes, cluster_info)

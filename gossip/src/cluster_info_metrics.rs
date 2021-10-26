@@ -164,26 +164,15 @@ pub(crate) fn submit_gossip_stats(
     gossip: &RwLock<CrdsGossip>,
     stakes: &HashMap<Pubkey, u64>,
 ) {
-<<<<<<< HEAD
-    let (table_size, num_nodes, num_pubkeys, purged_values_size, failed_inserts_size) = {
+    let (crds_stats, table_size, num_nodes, num_pubkeys, purged_values_size, failed_inserts_size) = {
         let gossip = gossip.read().unwrap();
         (
+            gossip.crds.take_stats(),
             gossip.crds.len(),
             gossip.crds.num_nodes(),
             gossip.crds.num_pubkeys(),
             gossip.crds.num_purged(),
             gossip.pull.failed_inserts.len(),
-=======
-    let (crds_stats, table_size, num_nodes, num_pubkeys, purged_values_size, failed_inserts_size) = {
-        let gossip_crds = gossip.crds.read().unwrap();
-        (
-            gossip_crds.take_stats(),
-            gossip_crds.len(),
-            gossip_crds.num_nodes(),
-            gossip_crds.num_pubkeys(),
-            gossip_crds.num_purged(),
-            gossip.pull.failed_inserts_size(),
->>>>>>> 1297a1358 (adds metrics tracking crds writes and votes (#20953))
         )
     };
     let num_nodes_staked = stakes.values().filter(|stake| **stake > 0).count();
