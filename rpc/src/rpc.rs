@@ -60,13 +60,8 @@ use {
         exit::Exit,
         feature_set,
         hash::Hash,
-<<<<<<< HEAD
-        pubkey::Pubkey,
-        sanitize::Sanitize,
-=======
-        message::{Message, SanitizedMessage},
         pubkey::{Pubkey, PUBKEY_BYTES},
->>>>>>> b2f6cfb9f (Restore getProgramAccounts spl-token secondary-index functionality (#20993))
+        sanitize::Sanitize,
         signature::{Keypair, Signature, Signer},
         stake::state::{StakeActivationStatus, StakeState},
         stake_history::StakeHistory,
