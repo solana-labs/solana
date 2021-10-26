@@ -21,9 +21,9 @@ use {
         rpc_request::{RpcError, RpcRequest, RpcResponseErrorData, TokenAccountsFilter},
         rpc_response::*,
         rpc_sender::*,
+        spinner,
     },
     bincode::serialize,
-    indicatif::{ProgressBar, ProgressStyle},
     log::*,
     serde_json::{json, Value},
     solana_account_decoder::{
@@ -1062,7 +1062,7 @@ impl RpcClient {
         };
         let mut confirmations = 0;
 
-        let progress_bar = new_spinner_progress_bar();
+        let progress_bar = spinner::new_progress_bar();
 
         progress_bar.set_message(format!(
             "[{}/{}] Finalizing transaction {}",
@@ -4874,14 +4874,6 @@ pub struct GetConfirmedSignaturesForAddress2Config {
     pub until: Option<Signature>,
     pub limit: Option<usize>,
     pub commitment: Option<CommitmentConfig>,
-}
-
-fn new_spinner_progress_bar() -> ProgressBar {
-    let progress_bar = ProgressBar::new(42);
-    progress_bar
-        .set_style(ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}"));
-    progress_bar.enable_steady_tick(100);
-    progress_bar
 }
 
 fn get_rpc_request_str(rpc_addr: SocketAddr, tls: bool) -> String {
