@@ -1369,6 +1369,7 @@ fn assert_instruction_count() {
     #[cfg(feature = "bpf_c")]
     {
         programs.extend_from_slice(&[
+<<<<<<< HEAD
             ("alloc", 1137),
             ("bpf_to_bpf", 13),
             ("multiple_static", 8),
@@ -1382,6 +1383,21 @@ fn assert_instruction_count() {
             ("sha", 694),
             ("struct_pass", 8),
             ("struct_ret", 22),
+=======
+            ("alloc", 1237),
+            ("bpf_to_bpf", 96),
+            ("multiple_static", 52),
+            ("noop", 5),
+            ("noop++", 5),
+            ("relative_call", 26),
+            ("return_data", 980),
+            ("sanity", 1246),
+            ("sanity++", 1250),
+            ("secp256k1_recover", 25383),
+            ("sha", 1328),
+            ("struct_pass", 108),
+            ("struct_ret", 28),
+>>>>>>> 4287bf6b8 (Bump bpf-tools to v1.18 (#20991))
         ]);
     }
     #[cfg(feature = "bpf_rust")]
