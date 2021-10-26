@@ -2160,6 +2160,7 @@ fn get_spl_token_owner_filter(program_id: &Pubkey, filters: &[RpcFilterType]) ->
     }
     let mut data_size_filter: Option<u64> = None;
     let mut owner_key: Option<Pubkey> = None;
+    let mut incorrect_owner_len: Option<usize> = None;
     for filter in filters {
         match filter {
             RpcFilterType::DataSize(size) => data_size_filter = Some(*size),
@@ -2170,14 +2171,23 @@ fn get_spl_token_owner_filter(program_id: &Pubkey, filters: &[RpcFilterType]) ->
             }) => {
                 if bytes.len() == PUBKEY_BYTES {
                     owner_key = Some(Pubkey::new(bytes));
+                } else {
+                    incorrect_owner_len = Some(bytes.len());
                 }
             }
             _ => {}
         }
     }
     if data_size_filter == Some(TokenAccount::get_packed_len() as u64) {
+        if let Some(incorrect_owner_len) = incorrect_owner_len {
+            info!(
+                "Incorrect num bytes ({:?}) provided for spl_token_owner_filter",
+                incorrect_owner_len
+            );
+        }
         owner_key
     } else {
+        debug!("spl_token program filters do not match by-owner index requisites");
         None
     }
 }
@@ -2192,6 +2202,7 @@ fn get_spl_token_mint_filter(program_id: &Pubkey, filters: &[RpcFilterType]) -> 
     }
     let mut data_size_filter: Option<u64> = None;
     let mut mint: Option<Pubkey> = None;
+    let mut incorrect_mint_len: Option<usize> = None;
     for filter in filters {
         match filter {
             RpcFilterType::DataSize(size) => data_size_filter = Some(*size),
@@ -2202,14 +2213,23 @@ fn get_spl_token_mint_filter(program_id: &Pubkey, filters: &[RpcFilterType]) -> 
             }) => {
                 if bytes.len() == PUBKEY_BYTES {
                     mint = Some(Pubkey::new(bytes));
+                } else {
+                    incorrect_mint_len = Some(bytes.len());
                 }
             }
             _ => {}
         }
     }
     if data_size_filter == Some(TokenAccount::get_packed_len() as u64) {
+        if let Some(incorrect_mint_len) = incorrect_mint_len {
+            info!(
+                "Incorrect num bytes ({:?}) provided for spl_token_mint_filter",
+                incorrect_mint_len
+            );
+        }
         mint
     } else {
+        debug!("spl_token program filters do not match by-mint index requisites");
         None
     }
 }
