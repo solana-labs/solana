@@ -3,7 +3,9 @@ use crate::{
     replay_stage::DUPLICATE_THRESHOLD,
     result::{Error, Result},
     sigverify,
-    verified_vote_packets::{ValidatorGossipVotesIterator, VerifiedVotePackets},
+    verified_vote_packets::{
+        ValidatorGossipVotesIterator, VerifiedVoteMetadata, VerifiedVotePackets,
+    },
     vote_stake_tracker::VoteStakeTracker,
 };
 use crossbeam_channel::{
@@ -36,12 +38,13 @@ use solana_sdk::{
     epoch_schedule::EpochSchedule,
     hash::Hash,
     pubkey::Pubkey,
+    signature::Signature,
     slot_hashes,
     transaction::Transaction,
 };
 use solana_vote_program::{self, vote_state::Vote, vote_transaction};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{
         atomic::{AtomicBool, Ordering},
         {Arc, Mutex, RwLock},
@@ -53,8 +56,8 @@ use std::{
 // Map from a vote account to the authorized voter for an epoch
 pub type ThresholdConfirmedSlots = Vec<(Slot, Hash)>;
 pub type VotedHashUpdates = HashMap<Hash, Vec<Pubkey>>;
-pub type VerifiedLabelVotePacketsSender = CrossbeamSender<Vec<(CrdsValueLabel, Vote, Packets)>>;
-pub type VerifiedLabelVotePacketsReceiver = CrossbeamReceiver<Vec<(CrdsValueLabel, Vote, Packets)>>;
+pub type VerifiedLabelVotePacketsSender = CrossbeamSender<Vec<VerifiedVoteMetadata>>;
+pub type VerifiedLabelVotePacketsReceiver = CrossbeamReceiver<Vec<VerifiedVoteMetadata>>;
 pub type VerifiedVoteTransactionsSender = CrossbeamSender<Vec<Transaction>>;
 pub type VerifiedVoteTransactionsReceiver = CrossbeamReceiver<Vec<Transaction>>;
 pub type VerifiedVoteSender = CrossbeamSender<(Pubkey, Vec<Slot>)>;
@@ -349,7 +352,7 @@ impl ClusterInfoVoteListener {
     fn verify_votes(
         votes: Vec<Transaction>,
         labels: Vec<CrdsValueLabel>,
-    ) -> (Vec<Transaction>, Vec<(CrdsValueLabel, Vote, Packets)>) {
+    ) -> (Vec<Transaction>, Vec<VerifiedVoteMetadata>) {
         let mut msgs = packet::to_packets_chunked(&votes, 1);
 
         // Votes should already be filtered by this point.
@@ -371,10 +374,19 @@ impl ClusterInfoVoteListener {
                 // to_packets_chunked() above split into 1 packet long chunks
                 assert_eq!(packet.packets.len(), 1);
                 if !packet.packets[0].meta.discard {
-                    Some((vote_tx, (label, vote, packet)))
-                } else {
-                    None
+                    if let Some(signature) = vote_tx.signatures.first().cloned() {
+                        return Some((
+                            vote_tx,
+                            VerifiedVoteMetadata {
+                                label,
+                                vote,
+                                packet,
+                                signature,
+                            },
+                        ));
+                    }
                 }
+                None
             })
             .unzip();
         (vote_txs, vote_metadata)
@@ -388,7 +400,8 @@ impl ClusterInfoVoteListener {
     ) -> Result<()> {
         let mut verified_vote_packets = VerifiedVotePackets::default();
         let mut time_since_lock = Instant::now();
-        let mut update_version = 0;
+        let mut last_bank_slot = None;
+        let mut previously_sent_to_bank_votes: HashSet<Signature> = HashSet::new();
         loop {
             if exit.load(Ordering::Relaxed) {
                 return Ok(());
@@ -400,14 +413,11 @@ impl ClusterInfoVoteListener {
                 .would_be_leader(3 * slot_hashes::MAX_ENTRIES as u64 * DEFAULT_TICKS_PER_SLOT);
             if let Err(e) = verified_vote_packets.receive_and_process_vote_packets(
                 &verified_vote_label_packets_receiver,
-                &mut update_version,
                 would_be_leader,
             ) {
                 match e {
-                    Error::CrossbeamRecvTimeout(RecvTimeoutError::Disconnected) => {
-                        return Ok(());
-                    }
-                    Error::CrossbeamRecvTimeout(RecvTimeoutError::Timeout) => (),
+                    Error::CrossbeamRecvTimeout(RecvTimeoutError::Disconnected)
+                    | Error::ReadyTimeout => (),
                     _ => {
                         error!("thread {:?} error {:?}", thread::current().name(), e);
                     }
@@ -417,23 +427,20 @@ impl ClusterInfoVoteListener {
             if time_since_lock.elapsed().as_millis() > GOSSIP_SLEEP_MILLIS as u128 {
                 let bank = poh_recorder.lock().unwrap().bank();
                 if let Some(bank) = bank {
-                    // TODO uncomment and handle getting new votes in the middle of a slot
-                    // more efficiently without recreating the iterator...
+                    // This logic may run multiple times for the same leader bank,
+                    // we just have to ensure that the same votes are not sent
+                    // to the bank multiple times, which is guaranteed by
+                    // `previously_sent_to_bank_votes`
+                    if Some(bank.slot()) != last_bank_slot {
+                        previously_sent_to_bank_votes.clear();
+                        last_bank_slot = Some(bank.slot());
+                    }
 
-                    /*let last_version = bank.last_vote_sync.load(Ordering::Relaxed);
-                    let (new_version, msgs) = verified_vote_packets.get_latest_votes(last_version);
-                    inc_new_counter_info!("bank_send_loop_batch_size", msgs.packets.len());
-                    inc_new_counter_info!("bank_send_loop_num_batches", 1);
-                    verified_packets_sender.send(vec![msgs])?;
-                    #[allow(deprecated)]
-                    bank.last_vote_sync.compare_and_swap(
-                        last_version,
-                        new_version,
-                        Ordering::Relaxed,
-                    );*/
-
-                    let gossip_votes_iterator =
-                        ValidatorGossipVotesIterator::new(bank, &verified_vote_packets);
+                    let gossip_votes_iterator = ValidatorGossipVotesIterator::new(
+                        bank,
+                        &verified_vote_packets,
+                        &mut previously_sent_to_bank_votes,
+                    );
                     for single_validator_votes in gossip_votes_iterator {
                         verified_packets_sender.send(single_validator_votes)?;
                     }
@@ -498,7 +505,7 @@ impl ClusterInfoVoteListener {
                         .add_new_optimistic_confirmed_slots(confirmed_slots.clone());
                 }
                 Err(e) => match e {
-                    Error::CrossbeamRecvTimeout(RecvTimeoutError::Timeout)
+                    Error::CrossbeamRecvTimeout(RecvTimeoutError::Disconnected)
                     | Error::ReadyTimeout => (),
                     _ => {
                         error!("thread {:?} error {:?}", thread::current().name(), e);
@@ -1717,8 +1724,11 @@ mod tests {
         assert!(packets.is_empty());
     }
 
-    fn verify_packets_len(packets: &[(CrdsValueLabel, Slot, Packets)], ref_value: usize) {
-        let num_packets: usize = packets.iter().map(|(_, _, p)| p.packets.len()).sum();
+    fn verify_packets_len(packets: &[VerifiedVoteMetadata], ref_value: usize) {
+        let num_packets: usize = packets
+            .iter()
+            .map(|vote_metadata| vote_metadata.packet.packets.len())
+            .sum();
         assert_eq!(num_packets, ref_value);
     }
 

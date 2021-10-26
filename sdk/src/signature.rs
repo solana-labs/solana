@@ -32,6 +32,11 @@ impl Signature {
         Self(GenericArray::clone_from_slice(signature_slice))
     }
 
+    pub fn new_unique() -> Self {
+        let random_bytes: Vec<u8> = (0..64).map(|_| rand::random::<u8>()).collect();
+        Self::new(&random_bytes)
+    }
+
     pub(self) fn verify_verbose(
         &self,
         pubkey_bytes: &[u8],
