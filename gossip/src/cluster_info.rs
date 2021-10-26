@@ -255,7 +255,7 @@ pub fn make_accounts_hashes_message(
 pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "3qq56sFGXGbNqr7qKq8x47t144ugdfv5adCkVJUMnMf3")]
+#[frozen_abi(digest = "D2ebKKmm6EQ8JJjYc3xUpzpBTJguqgEzShhj9fiUcP6F")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Protocol {
@@ -372,7 +372,7 @@ fn retain_staked(values: &mut Vec<CrdsValue>, stakes: &HashMap<Pubkey, u64>) {
             // Unstaked nodes can still help repair.
             CrdsData::EpochSlots(_, _) => true,
             // Unstaked nodes can still serve snapshots.
-            CrdsData::SnapshotHashes(_) => true,
+            CrdsData::SnapshotHashes(_) | CrdsData::IncrementalSnapshotHashes(_) => true,
             // Otherwise unstaked voting nodes will show up with no version in
             // the various dashboards.
             CrdsData::Version(_) => true,
