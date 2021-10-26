@@ -6,11 +6,6 @@
 //!
 //! [JSON-RPC]: https://www.jsonrpc.org/specification
 
-#[allow(deprecated)]
-use crate::rpc_deprecated_config::{
-    RpcConfirmedBlockConfig, RpcConfirmedTransactionConfig,
-    RpcGetConfirmedSignaturesForAddress2Config,
-};
 use {
     crate::{
         client_error::{ClientError, ClientErrorKind, Result as ClientResult},
@@ -2436,7 +2431,7 @@ impl RpcClient {
     pub fn get_confirmed_block_with_config(
         &self,
         slot: Slot,
-        config: RpcConfirmedBlockConfig,
+        config: crate::rpc_deprecated_config::RpcConfirmedBlockConfig,
     ) -> ClientResult<UiConfirmedBlock> {
         self.send(RpcRequest::GetConfirmedBlock, json!([slot, config]))
     }
@@ -2875,7 +2870,7 @@ impl RpcClient {
         address: &Pubkey,
         config: GetConfirmedSignaturesForAddress2Config,
     ) -> ClientResult<Vec<RpcConfirmedTransactionStatusWithSignature>> {
-        let config = RpcGetConfirmedSignaturesForAddress2Config {
+        let config = crate::rpc_deprecated_config::RpcGetConfirmedSignaturesForAddress2Config {
             before: config.before.map(|signature| signature.to_string()),
             until: config.until.map(|signature| signature.to_string()),
             limit: config.limit,
@@ -3031,7 +3026,7 @@ impl RpcClient {
     pub fn get_confirmed_transaction_with_config(
         &self,
         signature: &Signature,
-        config: RpcConfirmedTransactionConfig,
+        config: crate::rpc_deprecated_config::RpcConfirmedTransactionConfig,
     ) -> ClientResult<EncodedConfirmedTransaction> {
         self.send(
             RpcRequest::GetConfirmedTransaction,
