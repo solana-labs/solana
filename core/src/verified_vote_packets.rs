@@ -160,6 +160,7 @@ mod tests {
     use crate::result::Error;
     use crossbeam_channel::unbounded;
     use solana_perf::packet::Packet;
+    use solana_sdk::slot_hashes::MAX_ENTRIES;
 
     #[test]
     fn test_verified_vote_packets_receive_and_process_vote_packets() {
@@ -190,7 +191,7 @@ mod tests {
         // Same slot, same hash, should not be inserted
         s.send(vec![VerifiedVoteMetadata {
             label: label.clone(),
-            vote: vote.clone(),
+            vote,
             packet: Packets::default(),
             signature: Signature::new(&[1u8; 64]),
         }])
@@ -275,58 +276,111 @@ mod tests {
     }
 
     #[test]
-    fn test_verified_vote_packets_validator_gossip_votes_iterator() {
+    fn test_verified_vote_packets_validator_gossip_votes_iterator_wrong_fork() {
         let (s, r) = unbounded();
-        let pubkey = solana_sdk::pubkey::new_rand();
+        let pubkey = Pubkey::new_unique();
+        let my_leader_bank = Arc::new(Bank::default_for_tests());
 
-        // Construct the buffer
-        let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
-
-        // Create two validators with `MAX_VOTES_PER_VALIDATOR` each
-        let mut pubkey = Pubkey::new_unique();
-        let mut num_packets = 1;
-        for i in 0..2 * MAX_VOTES_PER_VALIDATOR {
-            if i % MAX_VOTES_PER_VALIDATOR == 0 {
-                pubkey = Pubkey::new_unique();
-                num_packets += 1;
-            }
+        // Create a bunch of votes with random vote hashes, which should all be ignored
+        // since they are not on the same fork as `my_leader_bank`, i.e. their hashes do
+        // not exist in the SlotHashes sysvar for `my_leader_bank`
+        for _ in 0..MAX_VOTES_PER_VALIDATOR {
             let vote_slot = 0;
             let vote_hash = Hash::new_unique();
             let vote_index = 0;
             let label = CrdsValueLabel::Vote(vote_index, pubkey);
             let vote = Vote::new(vec![vote_slot], vote_hash);
             s.send(vec![VerifiedVoteMetadata {
-                label: label.clone(),
+                label,
                 vote,
-                packet: Packets::new(vec![Packet::default(); num_packets]),
+                packet: Packets::default(),
                 signature: Signature::new_unique(),
             }])
             .unwrap();
         }
 
         // Ingest the votes into the buffer
+        let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
         verified_vote_packets
             .receive_and_process_vote_packets(&r, true)
             .unwrap();
 
         // Create tracker for previously sent bank votes
         let mut previously_sent_to_bank_votes = HashSet::new();
-        let my_leader_bank = Arc::new(Bank::default_for_tests());
+        let mut gossip_votes_iterator = ValidatorGossipVotesIterator::new(
+            my_leader_bank,
+            &verified_vote_packets,
+            &mut previously_sent_to_bank_votes,
+        );
+
+        // Wrong fork, we should get no hashes
+        assert!(gossip_votes_iterator.next().is_none());
+    }
+
+    #[test]
+    fn test_verified_vote_packets_validator_gossip_votes_iterator_correct_fork() {
+        let (s, r) = unbounded();
+        let pubkey = Pubkey::new_unique();
+        let mut my_leader_bank = Arc::new(Bank::default_for_tests());
+
+        // Create a set of valid ancestor hashes for this fork
+        for _ in 0..MAX_ENTRIES {
+            my_leader_bank = Arc::new(Bank::new_from_parent(
+                &my_leader_bank,
+                &Pubkey::default(),
+                my_leader_bank.slot() + 1,
+            ));
+        }
+        let slot_hashes_account = my_leader_bank
+            .get_account(&sysvar::slot_hashes::id())
+            .expect("Slot hashes sysvar must exist");
+        let slot_hashes = from_account::<SlotHashes, _>(&slot_hashes_account).unwrap();
+
+        // Create valid votes now
+        let num_validators = 2;
+        let vote_index = 0;
+        for i in 0..num_validators {
+            let pubkey = Pubkey::new_unique();
+            // Used to uniquely identify the packets for each validator
+            let num_packets = i + 1;
+            for (vote_slot, vote_hash) in slot_hashes.slot_hashes().iter() {
+                let label = CrdsValueLabel::Vote(vote_index, pubkey);
+                let vote = Vote::new(vec![*vote_slot], *vote_hash);
+                s.send(vec![VerifiedVoteMetadata {
+                    label,
+                    vote,
+                    packet: Packets::new(vec![Packet::default(); num_packets]),
+                    signature: Signature::new_unique(),
+                }])
+                .unwrap();
+            }
+        }
+
+        // Ingest the votes into the buffer
+        let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
+
+        verified_vote_packets
+            .receive_and_process_vote_packets(&r, true)
+            .unwrap();
+
+        // Check we get two batches, one for each validator. Each batch
+        // should only contain a packets structure with the specific number
+        // of packets associated with that batch
+        let mut previously_sent_to_bank_votes = HashSet::new();
         let mut gossip_votes_iterator = ValidatorGossipVotesIterator::new(
             my_leader_bank.clone(),
             &verified_vote_packets,
             &mut previously_sent_to_bank_votes,
         );
-
-        // Check we get two batches, one for each validator. Each batch
-        // should only contain a packets structure with the specific number
-        // of packets associated with that batch
         let first_validator_batch: Vec<Packets> = gossip_votes_iterator.next().unwrap();
-        assert_eq!(first_validator_batch.len(), MAX_VOTES_PER_VALIDATOR);
+        assert_eq!(first_validator_batch.len(), slot_hashes.slot_hashes().len());
         assert!(first_validator_batch.iter().all(|p| p.packets.len() == 1));
 
         let second_validator_batch: Vec<Packets> = gossip_votes_iterator.next().unwrap();
-        assert_eq!(second_validator_batch.len(), MAX_VOTES_PER_VALIDATOR);
+        assert_eq!(
+            second_validator_batch.len(),
+            slot_hashes.slot_hashes().len()
+        );
         assert!(gossip_votes_iterator
             .next()
             .unwrap()
@@ -338,7 +392,7 @@ mod tests {
         // If we construct another iterator, should return nothing because `previously_sent_to_bank_votes`
         // should filter out everything
         let mut gossip_votes_iterator = ValidatorGossipVotesIterator::new(
-            my_leader_bank,
+            my_leader_bank.clone(),
             &verified_vote_packets,
             &mut previously_sent_to_bank_votes,
         );
@@ -351,12 +405,16 @@ mod tests {
         let label = CrdsValueLabel::Vote(vote_index, pubkey);
         let vote = Vote::new(vec![vote_slot], vote_hash);
         s.send(vec![VerifiedVoteMetadata {
-            label: label.clone(),
+            label,
             vote,
-            packet: Packets::new(vec![Packet::default(); num_packets]),
+            packet: Packets::default(),
             signature: Signature::new_unique(),
         }])
         .unwrap();
+        // Ingest the votes into the buffer
+        verified_vote_packets
+            .receive_and_process_vote_packets(&r, true)
+            .unwrap();
         let mut gossip_votes_iterator = ValidatorGossipVotesIterator::new(
             my_leader_bank,
             &verified_vote_packets,
