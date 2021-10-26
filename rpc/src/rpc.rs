@@ -60,7 +60,7 @@ use {
         fee_calculator::FeeCalculator,
         hash::Hash,
         message::{Message, SanitizedMessage},
-        pubkey::Pubkey,
+        pubkey::{Pubkey, PUBKEY_BYTES},
         signature::{Keypair, Signature, Signer},
         stake::state::{StakeActivationStatus, StakeState},
         stake_history::StakeHistory,
@@ -377,7 +377,7 @@ impl JsonRpcRequestProcessor {
         &self,
         program_id: &Pubkey,
         config: Option<RpcAccountInfoConfig>,
-        filters: Vec<RpcFilterType>,
+        mut filters: Vec<RpcFilterType>,
         with_context: bool,
     ) -> Result<OptionalContext<Vec<RpcKeyedAccount>>> {
         let config = config.unwrap_or_default();
@@ -385,6 +385,7 @@ impl JsonRpcRequestProcessor {
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
         let data_slice_config = config.data_slice;
         check_slice_and_encoding(&encoding, data_slice_config.is_some())?;
+        optimize_filters(&mut filters);
         let keyed_accounts = {
             if let Some(owner) = get_spl_token_owner_filter(program_id, &filters) {
                 self.get_filtered_spl_token_accounts_by_owner(&bank, &owner, filters)?
@@ -2162,11 +2163,11 @@ fn get_spl_token_owner_filter(program_id: &Pubkey, filters: &[RpcFilterType]) ->
             RpcFilterType::DataSize(size) => data_size_filter = Some(*size),
             RpcFilterType::Memcmp(Memcmp {
                 offset: SPL_TOKEN_ACCOUNT_OWNER_OFFSET,
-                bytes: MemcmpEncodedBytes::Base58(bytes),
+                bytes: MemcmpEncodedBytes::Bytes(bytes),
                 ..
             }) => {
-                if let Ok(key) = Pubkey::from_str(bytes) {
-                    owner_key = Some(key)
+                if bytes.len() == PUBKEY_BYTES {
+                    owner_key = Some(Pubkey::new(bytes));
                 }
             }
             _ => {}
@@ -2190,11 +2191,11 @@ fn get_spl_token_mint_filter(program_id: &Pubkey, filters: &[RpcFilterType]) -> 
             RpcFilterType::DataSize(size) => data_size_filter = Some(*size),
             RpcFilterType::Memcmp(Memcmp {
                 offset: SPL_TOKEN_ACCOUNT_MINT_OFFSET,
-                bytes: MemcmpEncodedBytes::Base58(bytes),
+                bytes: MemcmpEncodedBytes::Bytes(bytes),
                 ..
             }) => {
-                if let Ok(key) = Pubkey::from_str(bytes) {
-                    mint = Some(key)
+                if bytes.len() == PUBKEY_BYTES {
+                    mint = Some(Pubkey::new(bytes));
                 }
             }
             _ => {}
@@ -7673,7 +7674,7 @@ pub mod tests {
                 &[
                     RpcFilterType::Memcmp(Memcmp {
                         offset: 32,
-                        bytes: MemcmpEncodedBytes::Base58(owner.to_string()),
+                        bytes: MemcmpEncodedBytes::Bytes(owner.to_bytes().to_vec()),
                         encoding: None
                     }),
                     RpcFilterType::DataSize(165)
@@ -7689,7 +7690,7 @@ pub mod tests {
             &[
                 RpcFilterType::Memcmp(Memcmp {
                     offset: 0,
-                    bytes: MemcmpEncodedBytes::Base58(owner.to_string()),
+                    bytes: MemcmpEncodedBytes::Bytes(owner.to_bytes().to_vec()),
                     encoding: None
                 }),
                 RpcFilterType::DataSize(165)
@@ -7703,7 +7704,7 @@ pub mod tests {
             &[
                 RpcFilterType::Memcmp(Memcmp {
                     offset: 32,
-                    bytes: MemcmpEncodedBytes::Base58(owner.to_string()),
+                    bytes: MemcmpEncodedBytes::Bytes(owner.to_bytes().to_vec()),
                     encoding: None
                 }),
                 RpcFilterType::DataSize(165)
