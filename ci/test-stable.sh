@@ -29,7 +29,7 @@ NPROC=$((NPROC>14 ? 14 : NPROC))
 echo "Executing $testName"
 case $testName in
 test-stable)
-  _ "$cargo" stable test --jobs "$NPROC" --all --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
+  _ "$cargo" stable test --jobs "$NPROC" --all --exclude solana-local-cluster ${V:+--verbose} -- --nocapture --report-time -Z unstable-options
   ;;
 test-stable-bpf)
   # Clear the C dependency files, if dependency moves these files are not regenerated
@@ -94,13 +94,13 @@ test-stable-perf)
     export SOLANA_CUDA=1
   fi
 
-  _ "$cargo" stable build --bins ${V:+--verbose}
-  _ "$cargo" stable test --package solana-perf --package solana-ledger --package solana-core --lib ${V:+--verbose} -- --nocapture
-  _ "$cargo" stable run --manifest-path poh-bench/Cargo.toml ${V:+--verbose} -- --hashes-per-tick 10
+  _ "$cargo" nightly build --bins ${V:+--verbose}
+  _ "$cargo" nightly test --package solana-perf --package solana-ledger --package solana-core --lib ${V:+--verbose} -- --nocapture --report-time -Z unstable-options
+  _ "$cargo" nightly run --manifest-path poh-bench/Cargo.toml ${V:+--verbose} -- --hashes-per-tick 10
   ;;
 test-local-cluster)
-  _ "$cargo" stable build --release --bins ${V:+--verbose}
-  _ "$cargo" stable test --release --package solana-local-cluster ${V:+--verbose} -- --nocapture --test-threads=1
+  _ "$cargo" nightly build --release --bins ${V:+--verbose}
+  _ "$cargo" nightly test --release --package solana-local-cluster ${V:+--verbose} -- --nocapture --test-threads=1 --report-time -Z unstable-options
   exit 0
   ;;
 *)
