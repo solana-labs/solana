@@ -314,7 +314,7 @@ impl ElGamalSecretKey {
             Err(SignerError::Custom("Rejecting default signature".into()))
         } else {
             Ok(ElGamalSecretKey(Scalar::hash_from_bytes::<Sha3_512>(
-                &signature.as_ref(),
+                signature.as_ref(),
             )))
         }
     }
