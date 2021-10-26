@@ -52,9 +52,24 @@ pub trait SyscallStubs: Sync + Send {
     }
     /// # Safety
     unsafe fn sol_memcpy(&self, dst: *mut u8, src: *const u8, n: usize) {
+        // Copied from libcore
+        fn is_nonoverlapping<T>(src: *const T, dst: *const T, count: usize) -> bool {
+            let src_usize = src as usize;
+            let dst_usize = dst as usize;
+            let size = std::mem::size_of::<T>().checked_mul(count).unwrap();
+            let diff = if src_usize > dst_usize {
+                src_usize - dst_usize
+            } else {
+                dst_usize - src_usize
+            };
+            // If the absolute distance between the ptrs is at least as big as the size of the buffer,
+            // they do not overlap.
+            diff >= size
+        }
+
         // cannot be overlapping
         assert!(
-            !(dst as usize + n > src as usize && src as usize > dst as usize),
+            is_nonoverlapping(src, dst, n),
             "memcpy does not support overlapping regions"
         );
         std::ptr::copy_nonoverlapping(src, dst, n as usize);
