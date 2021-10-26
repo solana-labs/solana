@@ -1,6 +1,11 @@
 {
   "presets": [
-    ["@babel/preset-env"],
+    [
+      "@babel/preset-env",
+      {
+        "bugfixes": true
+      }
+    ],
     ["@babel/preset-typescript"]
   ],
   "plugins": [
