@@ -16,4 +16,4 @@ solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.9.0
 solana-logger = { path = "../logger", version = "=1.9.0" }
 solana-sdk = { path = "../sdk", version = "=1.9.0" }
 solana_rbpf = "=0.2.14"
-time = "0.3.3"
+time = "0.3.4"
