@@ -2781,7 +2781,7 @@ impl RpcClient {
     ) -> ClientResult<Vec<RpcConfirmedTransactionStatusWithSignature>> {
         self.get_signatures_for_address_with_config(
             address,
-            GetConfirmedSignaturesForAddress2Config::default(),
+            RpcSignaturesForAddressConfig::default(),
         )
     }
 
@@ -2840,15 +2840,8 @@ impl RpcClient {
     pub fn get_signatures_for_address_with_config(
         &self,
         address: &Pubkey,
-        config: GetConfirmedSignaturesForAddress2Config,
+        config: RpcSignaturesForAddressConfig,
     ) -> ClientResult<Vec<RpcConfirmedTransactionStatusWithSignature>> {
-        let config = RpcSignaturesForAddressConfig {
-            before: config.before.map(|signature| signature.to_string()),
-            until: config.until.map(|signature| signature.to_string()),
-            limit: config.limit,
-            commitment: config.commitment,
-        };
-
         let result: Vec<RpcConfirmedTransactionStatusWithSignature> = self.send(
             self.maybe_map_request(RpcRequest::GetSignaturesForAddress)?,
             json!([address.to_string(), config]),

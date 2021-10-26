@@ -21,11 +21,11 @@ use solana_cli_output::{
 use solana_client::{
     client_error::ClientErrorKind,
     pubsub_client::PubsubClient,
-    rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
+    rpc_client::RpcClient,
     rpc_config::{
         RpcAccountInfoConfig, RpcBlockConfig, RpcGetVoteAccountsConfig, RpcLargestAccountsConfig,
-        RpcLargestAccountsFilter, RpcProgramAccountsConfig, RpcTransactionConfig,
-        RpcTransactionLogsConfig, RpcTransactionLogsFilter,
+        RpcLargestAccountsFilter, RpcProgramAccountsConfig, RpcSignaturesForAddressConfig,
+        RpcTransactionConfig, RpcTransactionLogsConfig, RpcTransactionLogsFilter,
     },
     rpc_filter,
     rpc_request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
@@ -1974,7 +1974,7 @@ pub fn process_transaction_history(
 ) -> ProcessResult {
     let results = rpc_client.get_signatures_for_address_with_config(
         address,
-        GetConfirmedSignaturesForAddress2Config {
+        RpcSignaturesForAddressConfig {
             before,
             until,
             limit: Some(limit),
