@@ -28,8 +28,8 @@ pub struct SlotMeta {
     // True if this slot is full (consumed == last_index + 1) and if every
     // slot that is a parent of this slot is also connected.
     pub is_connected: bool,
-    // List of start indexes for completed data slots
-    pub completed_data_indexes: Vec<u32>,
+    // Shreds indices which are marked data complete.
+    pub completed_data_indexes: BTreeSet<u32>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
@@ -199,14 +199,10 @@ impl SlotMeta {
     pub(crate) fn new(slot: Slot, parent_slot: Slot) -> Self {
         SlotMeta {
             slot,
-            consumed: 0,
-            received: 0,
-            first_shred_timestamp: 0,
             parent_slot,
-            next_slots: vec![],
             is_connected: slot == 0,
             last_index: std::u64::MAX,
-            completed_data_indexes: vec![],
+            ..SlotMeta::default()
         }
     }
 
