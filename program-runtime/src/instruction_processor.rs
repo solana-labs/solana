@@ -4,9 +4,7 @@ use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    feature_set::{
-        demote_program_write_locks, do_support_realloc, fix_write_privs, remove_native_loader,
-    },
+    feature_set::{demote_program_write_locks, do_support_realloc, remove_native_loader},
     ic_msg,
     instruction::{Instruction, InstructionError},
     keyed_account::keyed_account_at_index,
@@ -523,7 +521,6 @@ impl InstructionProcessor {
     pub fn native_invoke(
         invoke_context: &mut dyn InvokeContext,
         instruction: Instruction,
-        keyed_account_indices_obsolete: &[usize],
         signers: &[Pubkey],
     ) -> Result<(), InstructionError> {
         let do_support_realloc = invoke_context.is_feature_active(&do_support_realloc::id());
@@ -531,17 +528,8 @@ impl InstructionProcessor {
         let mut invoke_context = invoke_context.borrow_mut();
 
         // Translate and verify caller's data
-        let (message, mut caller_write_privileges, program_indices) =
+        let (message, caller_write_privileges, program_indices) =
             Self::create_message(&instruction, signers, &invoke_context)?;
-        if !invoke_context.is_feature_active(&fix_write_privs::id()) {
-            let caller_keyed_accounts = invoke_context.get_keyed_accounts()?;
-            caller_write_privileges = Vec::with_capacity(1 + keyed_account_indices_obsolete.len());
-            caller_write_privileges.push(false);
-            for index in keyed_account_indices_obsolete.iter() {
-                caller_write_privileges
-                    .push(keyed_account_at_index(caller_keyed_accounts, *index)?.is_writable());
-            }
-        };
         let mut account_indices = Vec::with_capacity(message.account_keys.len());
         let mut accounts = Vec::with_capacity(message.account_keys.len());
         for account_key in message.account_keys.iter() {
