@@ -10,6 +10,7 @@ use {
             pedersen::{
                 Pedersen, PedersenBase, PedersenCommitment, PedersenDecryptHandle, PedersenOpening,
             },
+            discrete_log::*,
         },
         errors::ProofError,
         instruction::Verifiable,
@@ -140,36 +141,49 @@ impl TransferData {
         }
     }
 
-    /// Extracts the lo and hi source ciphertexts associated with a transfer data and returns the
-    /// *combined* ciphertext
-    pub fn source_ciphertext(&self) -> Result<ElGamalCiphertext, ProofError> {
-        let transfer_comms_lo: PedersenCommitment = self.amount_comms.lo.try_into()?;
-        let transfer_comms_hi: PedersenCommitment = self.amount_comms.hi.try_into()?;
-        let transfer_comm = combine_u32_comms(transfer_comms_lo, transfer_comms_hi);
+    /// Extracts the lo ciphertexts associated with a transfer data
+    pub fn ciphertext_lo(&self, role: &TransferRole) -> Result<ElGamalCiphertext, ProofError> {
+        let transfer_comm_lo: PedersenCommitment = self.amount_comms.lo.try_into()?;
 
-        let decryption_handle_lo: PedersenDecryptHandle =
-            self.decrypt_handles_lo.source.try_into()?;
-        let decryption_handle_hi: PedersenDecryptHandle =
-            self.decrypt_handles_hi.source.try_into()?;
-        let decryption_handle = combine_u32_handles(decryption_handle_lo, decryption_handle_hi);
+        let decryption_handle_lo = match role {
+            TransferRole::Source => self.decrypt_handles_lo.source,
+            TransferRole::Dest => self.decrypt_handles_lo.dest,
+            TransferRole::Auditor => self.decrypt_handles_lo.auditor,
+        }.try_into()?;
 
-        Ok((transfer_comm, decryption_handle).into())
+        Ok((transfer_comm_lo, decryption_handle_lo).into())
     }
 
-    /// Extracts the lo and hi destination ciphertexts associated with a transfer data and returns
-    /// the *combined* ciphertext
-    pub fn dest_ciphertext(&self) -> Result<ElGamalCiphertext, ProofError> {
-        let transfer_comms_lo: PedersenCommitment = self.amount_comms.lo.try_into()?;
-        let transfer_comms_hi: PedersenCommitment = self.amount_comms.hi.try_into()?;
-        let transfer_comm = combine_u32_comms(transfer_comms_lo, transfer_comms_hi);
+    /// Extracts the lo ciphertexts associated with a transfer data
+    pub fn ciphertext_hi(&self, role: &TransferRole) -> Result<ElGamalCiphertext, ProofError> {
+        let transfer_comm_hi: PedersenCommitment = self.amount_comms.hi.try_into()?;
 
-        let decryption_handle_lo: PedersenDecryptHandle =
-            self.decrypt_handles_lo.dest.try_into()?;
-        let decryption_handle_hi: PedersenDecryptHandle =
-            self.decrypt_handles_hi.dest.try_into()?;
-        let decryption_handle = combine_u32_handles(decryption_handle_lo, decryption_handle_hi);
+        let decryption_handle_hi = match role {
+            TransferRole::Source => self.decrypt_handles_hi.source,
+            TransferRole::Dest => self.decrypt_handles_hi.dest,
+            TransferRole::Auditor => self.decrypt_handles_hi.auditor,
+        }.try_into()?;
 
-        Ok((transfer_comm, decryption_handle).into())
+        Ok((transfer_comm_hi, decryption_handle_hi).into())
+    }
+
+    /// Decrypts transfer amount from transfer data
+    ///
+    /// TODO: This function should run in constant time. Use `subtle::Choice` for the if statement
+    /// and make sure that the function does not terminate prematurely due to errors
+    pub fn decrypt_amount(&self, role: &TransferRole, sk: &ElGamalSecretKey) -> Result<u64, ProofError> {
+        let ciphertext_lo = self.ciphertext_lo(role)?;
+        let ciphertext_hi = self.ciphertext_hi(role)?;
+
+        let amount_lo = ciphertext_lo.decrypt_u32_online(sk, &DECODE_U32_PRECOMPUTATION_FOR_G);
+        let amount_hi = ciphertext_hi.decrypt_u32_online(sk, &DECODE_U32_PRECOMPUTATION_FOR_G);
+
+        if amount_lo.is_some() && amount_hi.is_some() {
+            // Will panic if overflown
+            Ok((amount_lo.unwrap() as u64) + (TWO_32 * amount_hi.unwrap() as u64))
+        } else {
+            Err(ProofError::VerificationError)
+        }
     }
 }
 
@@ -427,6 +441,13 @@ pub struct TransferDecryptHandles {
     pub auditor: pod::PedersenDecryptHandle, // 32 bytes
 }
 
+#[cfg(not(target_arch = "bpf"))]
+pub enum TransferRole {
+    Source,
+    Dest,
+    Auditor,
+}
+
 /// Split u64 number into two u32 numbers
 #[cfg(not(target_arch = "bpf"))]
 pub fn split_u64_into_u32(amt: u64) -> (u32, u32) {
@@ -504,11 +525,16 @@ mod test {
             public: source_pk,
             secret: source_sk,
         } = ElGamalKeypair::default();
+
         let ElGamalKeypair {
             public: dest_pk,
             secret: dest_sk,
         } = ElGamalKeypair::default();
-        let auditor_pk = ElGamalKeypair::default().public;
+
+        let ElGamalKeypair {
+            public: auditor_pk,
+            secret: auditor_sk,
+        } = ElGamalKeypair::default();
 
         // create source account spendable ciphertext
         let spendable_balance: u64 = 77;
@@ -528,20 +554,19 @@ mod test {
             auditor_pk,
         );
 
-        let source_ciphertext = transfer_data.source_ciphertext().unwrap();
         assert_eq!(
-            source_ciphertext
-                .decrypt_u32_online(&source_sk, &discrete_log::DECODE_U32_PRECOMPUTATION_FOR_G)
-                .unwrap(),
-            55_u32
+            transfer_data.decrypt_amount(&TransferRole::Source, &source_sk).unwrap(),
+            55_u64,
         );
 
-        let dest_ciphertext = transfer_data.dest_ciphertext().unwrap();
         assert_eq!(
-            dest_ciphertext
-                .decrypt_u32_online(&dest_sk, &discrete_log::DECODE_U32_PRECOMPUTATION_FOR_G)
-                .unwrap(),
-            55_u32
+            transfer_data.decrypt_amount(&TransferRole::Dest, &dest_sk).unwrap(),
+            55_u64,
+        );
+
+        assert_eq!(
+            transfer_data.decrypt_amount(&TransferRole::Auditor, &auditor_sk).unwrap(),
+            55_u64,
         );
     }
 }
