@@ -29,6 +29,7 @@ use solana_rbpf::{
     vm::{Config, Executable},
 };
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
+use solana_runtime::message_processor::ThisInvokeContext;
 use solana_sdk::{
     account::Account,
     account_utils::StateMut,
@@ -40,7 +41,6 @@ use solana_sdk::{
     message::Message,
     native_token::Sol,
     packet::PACKET_DATA_SIZE,
-    process_instruction::MockInvokeContext,
     pubkey::Pubkey,
     signature::{keypair_from_seed, read_keypair_file, Keypair, Signature, Signer},
     system_instruction::{self, SystemError},
@@ -1994,7 +1994,7 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     let mut program_data = Vec::new();
     file.read_to_end(&mut program_data)
         .map_err(|err| format!("Unable to read program file: {}", err))?;
-    let mut invoke_context = MockInvokeContext::new(&Pubkey::default(), vec![]);
+    let mut invoke_context = ThisInvokeContext::new_mock(&[], &[]);
 
     // Verify the program
     <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
