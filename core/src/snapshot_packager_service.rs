@@ -1,6 +1,7 @@
 use solana_gossip::cluster_info::{
     ClusterInfo, MAX_INCREMENTAL_SNAPSHOT_HASHES, MAX_SNAPSHOT_HASHES,
 };
+use solana_perf::thread::renice_this_thread;
 use solana_runtime::{
     snapshot_archive_info::SnapshotArchiveInfoGetter,
     snapshot_config::SnapshotConfig,
@@ -48,6 +49,7 @@ impl SnapshotPackagerService {
         let t_snapshot_packager = Builder::new()
             .name("snapshot-packager".to_string())
             .spawn(move || {
+                renice_this_thread(snapshot_config.packager_thread_niceness_adj).unwrap();
                 let mut snapshot_gossip_manager = if enable_gossip_push {
                     Some(SnapshotGossipManager {
                         cluster_info,

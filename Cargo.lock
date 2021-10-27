@@ -4558,6 +4558,7 @@ dependencies = [
  "chrono",
  "clap 2.33.3",
  "rpassword",
+ "solana-perf",
  "solana-remote-wallet",
  "solana-sdk",
  "tempfile",

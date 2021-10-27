@@ -35,6 +35,9 @@ pub struct SnapshotConfig {
 
     /// This is the `debug_verify` parameter to use when calling `update_accounts_hash()`
     pub accounts_hash_debug_verify: bool,
+
+    // Thread niceness adjustment for snapshot packager service
+    pub packager_thread_niceness_adj: i8,
 }
 
 impl Default for SnapshotConfig {
@@ -54,6 +57,7 @@ impl Default for SnapshotConfig {
                 snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             accounts_hash_use_index: false,
             accounts_hash_debug_verify: false,
+            packager_thread_niceness_adj: 0,
         }
     }
 }
