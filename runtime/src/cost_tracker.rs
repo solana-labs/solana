@@ -3,15 +3,9 @@
 //! - would_transaction_fit(&tx_cost), immutable function to test if tx with tx_cost would fit into current block
 //! - add_transaction_cost(&tx_cost), mutable function to accumulate tx_cost to tracker.
 //!
-<<<<<<< HEAD
 use crate::block_cost_limits::*;
 use crate::cost_model::TransactionCost;
-use crate::cost_tracker_stats::CostTrackerStats;
 use solana_sdk::{clock::Slot, pubkey::Pubkey, transaction::Transaction};
-=======
-use crate::{block_cost_limits::*, cost_model::TransactionCost};
-use solana_sdk::{clock::Slot, pubkey::Pubkey, transaction::SanitizedTransaction};
->>>>>>> c2bfce90b (- cost_tracker is data member of a bank, it can report metrics when bank is frozen (#20802))
 use std::collections::HashMap;
 
 const WRITABLE_ACCOUNTS_PER_BLOCK: usize = 512;
@@ -66,11 +60,7 @@ impl CostTracker {
         self.would_fit(&tx_cost.writable_accounts, &tx_cost.sum())
     }
 
-    pub fn add_transaction_cost(
-        &mut self,
-        _transaction: &Transaction,
-        tx_cost: &TransactionCost,
-    ) {
+    pub fn add_transaction_cost(&mut self, _transaction: &Transaction, tx_cost: &TransactionCost) {
         self.add_transaction(&tx_cost.writable_accounts, &tx_cost.sum());
     }
 

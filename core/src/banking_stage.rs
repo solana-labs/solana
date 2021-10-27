@@ -26,11 +26,7 @@ use solana_runtime::{
     bank_utils,
     cost_model::CostModel,
     cost_tracker::CostTracker,
-<<<<<<< HEAD
-    cost_tracker_stats::CostTrackerStats,
     hashed_transaction::HashedTransaction,
-=======
->>>>>>> c2bfce90b (- cost_tracker is data member of a bank, it can report metrics when bank is frozen (#20802))
     transaction_batch::TransactionBatch,
     vote_sender_types::ReplayVoteSender,
 };
@@ -1093,12 +1089,7 @@ impl BankingStage {
         demote_program_write_locks: bool,
         votes_only: bool,
         cost_model: &Arc<RwLock<CostModel>>,
-<<<<<<< HEAD
-        cost_tracker_stats: &mut CostTrackerStats,
     ) -> (Vec<HashedTransaction<'static>>, Vec<usize>, Vec<usize>) {
-=======
-    ) -> (Vec<SanitizedTransaction>, Vec<usize>, Vec<usize>) {
->>>>>>> c2bfce90b (- cost_tracker is data member of a bank, it can report metrics when bank is frozen (#20802))
         let mut retryable_transaction_packet_indexes: Vec<usize> = vec![];
 
         let verified_transactions_with_packet_indexes: Vec<_> = transaction_indexes
@@ -1279,12 +1270,7 @@ impl BankingStage {
                     &cost_model
                         .read()
                         .unwrap()
-<<<<<<< HEAD
                         .calculate_cost(tx.transaction(), bank.demote_program_write_locks()),
-                    cost_tracker_stats,
-=======
-                        .calculate_cost(tx, bank.demote_program_write_locks()),
->>>>>>> c2bfce90b (- cost_tracker is data member of a bank, it can report metrics when bank is frozen (#20802))
                 );
             }
         });

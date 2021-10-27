@@ -39,12 +39,7 @@ use solana_runtime::{
         AbsRequestHandler, AbsRequestSender, AccountsBackgroundService, SnapshotRequestHandler,
     },
     accounts_db::AccountShrinkThreshold,
-<<<<<<< HEAD
-    bank::ExecuteTimings,
     bank_forks::{BankForks, SnapshotConfig},
-=======
-    bank_forks::BankForks,
->>>>>>> c2bfce90b (- cost_tracker is data member of a bank, it can report metrics when bank is frozen (#20802))
     commitment::BlockCommitmentCache,
     cost_model::CostModel,
     vote_sender_types::ReplayVoteSender,

@@ -751,17 +751,12 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
         for transaction in &entry.transactions {
             programs += transaction.message().instructions.len();
             let tx_cost = cost_model.calculate_cost(transaction, true);
-            if cost_tracker
-                .try_add(transaction, &tx_cost, &mut cost_tracker_stats)
-                .is_err()
-            {
+            let result = cost_tracker.try_add(transaction, &tx_cost);
+            if result.is_err() {
                 println!(
-                    "Slot: {}, CostModel rejected transaction {:?}, stats {:?}!",
-                    slot,
-                    transaction,
-                    cost_tracker.get_stats()
+                    "Slot: {}, CostModel rejected transaction {:?}, reason {:?}",
+                    slot, transaction, result
                 );
-<<<<<<< HEAD
             }
             for instruction in &transaction.message().instructions {
                 let program_id =
@@ -772,31 +767,11 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
     }
 
     println!(
-        "Slot: {}, Entries: {}, Transactions: {}, Programs {}, {:?}",
+        "Slot: {}, Entries: {}, Transactions: {}, Programs {}",
         slot,
         entries.len(),
         transactions,
         programs,
-        cost_tracker.get_stats()
-=======
-                let result = cost_tracker.try_add(&transaction, &tx_cost);
-                if result.is_err() {
-                    println!(
-                        "Slot: {}, CostModel rejected transaction {:?}, reason {:?}",
-                        slot, transaction, result,
-                    );
-                }
-                for (program_id, _instruction) in transaction.message().program_instructions_iter()
-                {
-                    *program_ids.entry(*program_id).or_insert(0) += 1;
-                }
-            });
-    }
-
-    println!(
-        "Slot: {}, Entries: {}, Transactions: {}, Programs {}",
-        slot, num_entries, num_transactions, num_programs,
->>>>>>> c2bfce90b (- cost_tracker is data member of a bank, it can report metrics when bank is frozen (#20802))
     );
     println!("  Programs: {:?}", program_ids);
 
