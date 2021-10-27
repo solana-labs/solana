@@ -23,8 +23,11 @@ pub struct DiscreteLog {
     pub target: RistrettoPoint,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct DecodeU32Precomputation(HashMap<[u8; 32], u32>);
+
 /// Builds a HashMap of 2^18 elements
-pub fn decode_u32_precomputation(generator: RistrettoPoint) -> HashMap<[u8; 32], u32> {
+fn decode_u32_precomputation(generator: RistrettoPoint) -> DecodeU32Precomputation {
     let mut hashmap = HashMap::new();
 
     let two12_scalar = Scalar::from(TWO14);
@@ -46,12 +49,12 @@ pub fn decode_u32_precomputation(generator: RistrettoPoint) -> HashMap<[u8; 32],
     });
     println!("     [8/8] completed");
 
-    hashmap
+    DecodeU32Precomputation(hashmap)
 }
 
 /// Pre-compute HashMap needed for decryption. The HashMap is independent of (works for) any key.
 #[allow(non_snake_case)]
-pub fn decode_u32_precomputation_for_G() -> HashMap<[u8; 32], u32> {
+pub fn decode_u32_precomputation_for_G() -> DecodeU32Precomputation {
     decode_u32_precomputation(G)
 }
 
@@ -59,22 +62,21 @@ pub fn decode_u32_precomputation_for_G() -> HashMap<[u8; 32], u32> {
 impl DiscreteLog {
     /// Solves the discrete log problem under the assumption that the solution
     /// is a 32-bit number.
-    pub fn decode_u32(self) -> Option<u32> {
-        let hashmap = decode_u32_precomputation(self.generator);
-        self.decode_u32_online(&hashmap)
+    pub(crate) fn decode_u32(self) -> Option<u32> {
+        self.decode_u32_online(&decode_u32_precomputation(self.generator))
     }
 
     /// Solves the discrete log instance using the pre-computed HashMap by enumerating through 2^14
     /// possible solutions
-    pub fn decode_u32_online(self, hashmap: &HashMap<[u8; 32], u32>) -> Option<u32> {
+    pub fn decode_u32_online(self, hashmap: &DecodeU32Precomputation) -> Option<u32> {
         // iterator for 0G, -1G, -2G, ...
         let ristretto_iter = RistrettoIterator::new(self.target, -self.generator);
 
         let mut decoded = None;
         ristretto_iter.zip(0..TWO14).for_each(|(elem, x_lo)| {
             let key = elem.compress().to_bytes();
-            if hashmap.contains_key(&key) {
-                let x_hi = hashmap[&key];
+            if hashmap.0.contains_key(&key) {
+                let x_hi = hashmap.0[&key];
                 decoded = Some(x_lo + TWO14 * x_hi);
             }
         });

@@ -1,6 +1,6 @@
 use {
     crate::encryption::{
-        discrete_log::DiscreteLog,
+        discrete_log::{DecodeU32Precomputation, DiscreteLog},
         pedersen::{
             Pedersen, PedersenBase, PedersenCommitment, PedersenDecryptHandle, PedersenOpening,
         },
@@ -19,7 +19,7 @@ use {
         signature::Signature,
         signer::{Signer, SignerError},
     },
-    std::{collections::HashMap, convert::TryInto},
+    std::convert::TryInto,
     subtle::{Choice, ConstantTimeEq},
     zeroize::Zeroize,
 };
@@ -120,7 +120,7 @@ impl ElGamal {
     fn decrypt_u32_online(
         secret: &ElGamalSecretKey,
         ct: &ElGamalCiphertext,
-        hashmap: &HashMap<[u8; 32], u32>,
+        hashmap: &DecodeU32Precomputation,
     ) -> Option<u32> {
         let discrete_log_instance = Self::decrypt(secret, ct);
         discrete_log_instance.decode_u32_online(hashmap)
@@ -337,7 +337,7 @@ impl ElGamalSecretKey {
     pub fn decrypt_u32_online(
         &self,
         ct: &ElGamalCiphertext,
-        hashmap: &HashMap<[u8; 32], u32>,
+        hashmap: &DecodeU32Precomputation,
     ) -> Option<u32> {
         ElGamal::decrypt_u32_online(self, ct, hashmap)
     }
@@ -429,7 +429,7 @@ impl ElGamalCiphertext {
     pub fn decrypt_u32_online(
         &self,
         secret: &ElGamalSecretKey,
-        hashmap: &HashMap<[u8; 32], u32>,
+        hashmap: &DecodeU32Precomputation,
     ) -> Option<u32> {
         ElGamal::decrypt_u32_online(secret, self, hashmap)
     }
