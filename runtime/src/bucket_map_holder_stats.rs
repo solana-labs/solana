@@ -129,7 +129,7 @@ impl BucketMapHolderStats {
         if elapsed_ms == 0 {
             0.0
         } else {
-            ms as f32 / elapsed_ms as f32
+            (ms as f32 / elapsed_ms as f32) * 100.0
         }
     }
 
