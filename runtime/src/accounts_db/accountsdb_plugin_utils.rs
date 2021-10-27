@@ -216,7 +216,12 @@ pub mod tests {
             self.is_startup_done.store(true, Ordering::Relaxed);
         }
 
-        fn notify_transaction_log_info(&self, _transaction_log_info: &TransactionLogInfo, _slot: Slot) {}
+        fn notify_transaction_log_info(
+            &self,
+            _transaction_log_info: &TransactionLogInfo,
+            _slot: Slot,
+        ) {
+        }
     }
 
     #[test]

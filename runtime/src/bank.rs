@@ -3979,9 +3979,12 @@ impl Bank {
                 }
             }
 
-            info!("zzzzzzz processing txn filter {:?} notifier: {:?} can commit: {:?}",
-                transaction_log_collector_config.filter, self.accounts_update_notifier.is_some(),
-                Self::can_commit(r));
+            info!(
+                "zzzzzzz processing txn filter {:?} notifier: {:?} can commit: {:?}",
+                transaction_log_collector_config.filter,
+                self.accounts_update_notifier.is_some(),
+                Self::can_commit(r)
+            );
             if Self::can_commit(r) // Skip log collection for unprocessed transactions
                 && (transaction_log_collector_config.filter != TransactionLogCollectorFilter::None
                     || self.accounts_update_notifier.is_some())

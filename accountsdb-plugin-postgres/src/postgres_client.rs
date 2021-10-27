@@ -313,7 +313,6 @@ impl SimplePostgresClient {
         }
     }
 
-
     fn build_transaction_log_upsert_statement(
         client: &mut Client,
         config: &AccountsDbPluginPostgresConfig,

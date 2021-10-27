@@ -1,5 +1,8 @@
 use {
-    crate::{append_vec::{StoredAccountMeta, StoredMeta}, bank::TransactionLogInfo},
+    crate::{
+        append_vec::{StoredAccountMeta, StoredMeta},
+        bank::TransactionLogInfo,
+    },
     solana_sdk::{account::AccountSharedData, clock::Slot},
     std::sync::{Arc, RwLock},
 };
