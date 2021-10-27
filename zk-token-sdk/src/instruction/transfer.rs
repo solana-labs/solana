@@ -464,9 +464,7 @@ pub fn combine_u32_ciphertexts(ct_lo: ElGamalCiphertext, ct_hi: ElGamalCiphertex
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::encryption::{
-        discrete_log::decode_u32_precomputation_for_G, elgamal::ElGamalKeypair,
-    };
+    use crate::encryption::{discrete_log, elgamal::ElGamalKeypair};
 
     #[test]
     fn test_transfer_correctness() {
@@ -530,12 +528,10 @@ mod test {
             auditor_pk,
         );
 
-        let decryption_data = decode_u32_precomputation_for_G();
-
         let source_ciphertext = transfer_data.source_ciphertext().unwrap();
         assert_eq!(
             source_ciphertext
-                .decrypt_u32_online(&source_sk, &decryption_data)
+                .decrypt_u32_online(&source_sk, &discrete_log::DECODE_U32_PRECOMPUTATION_FOR_G)
                 .unwrap(),
             55_u32
         );
@@ -543,7 +539,7 @@ mod test {
         let dest_ciphertext = transfer_data.dest_ciphertext().unwrap();
         assert_eq!(
             dest_ciphertext
-                .decrypt_u32_online(&dest_sk, &decryption_data)
+                .decrypt_u32_online(&dest_sk, &discrete_log::DECODE_U32_PRECOMPUTATION_FOR_G)
                 .unwrap(),
             55_u32
         );

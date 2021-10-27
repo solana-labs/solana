@@ -1,8 +1,7 @@
+#![cfg(not(target_arch = "bpf"))]
+
 use {
-    curve25519_dalek::{
-        constants::RISTRETTO_BASEPOINT_POINT as G, ristretto::RistrettoPoint, scalar::Scalar,
-        traits::Identity,
-    },
+    curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar, traits::Identity},
     serde::{Deserialize, Serialize},
     std::collections::HashMap,
 };
@@ -23,7 +22,7 @@ pub struct DiscreteLog {
     pub target: RistrettoPoint,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct DecodeU32Precomputation(HashMap<[u8; 32], u32>);
 
 /// Builds a HashMap of 2^18 elements
@@ -52,10 +51,13 @@ fn decode_u32_precomputation(generator: RistrettoPoint) -> DecodeU32Precomputati
     DecodeU32Precomputation(hashmap)
 }
 
-/// Pre-compute HashMap needed for decryption. The HashMap is independent of (works for) any key.
-#[allow(non_snake_case)]
-pub fn decode_u32_precomputation_for_G() -> DecodeU32Precomputation {
-    decode_u32_precomputation(G)
+lazy_static::lazy_static! {
+    /// Pre-computed HashMap needed for decryption. The HashMap is independent of (works for) any key.
+    pub static ref DECODE_U32_PRECOMPUTATION_FOR_G: DecodeU32Precomputation = {
+        static DECODE_U32_PRECOMPUTATION_FOR_G_BINCODE: &[u8] =
+            include_bytes!("decode_u32_precomputation_for_G.bincode");
+        bincode::deserialize(DECODE_U32_PRECOMPUTATION_FOR_G_BINCODE).unwrap_or_default()
+    };
 }
 
 /// Solves the discrete log instance using a 18/14 bit offline/online split
@@ -111,7 +113,24 @@ impl Iterator for RistrettoIterator {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use {super::*, curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT as G};
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test_serialize_decode_u32_precomputation_for_G() {
+        let decode_u32_precomputation_for_G = decode_u32_precomputation(G);
+
+        if decode_u32_precomputation_for_G.0 != DECODE_U32_PRECOMPUTATION_FOR_G.0 {
+            use std::{fs::File, io::Write, path::PathBuf};
+            let mut f = File::create(PathBuf::from(
+                "src/encryption/decode_u32_precomputation_for_G.bincode",
+            ))
+            .unwrap();
+            f.write_all(&bincode::serialize(&decode_u32_precomputation_for_G).unwrap())
+                .unwrap();
+            panic!("Rebuild and run this test again");
+        }
+    }
 
     /// Discrete log test for 16/16 split
     ///
