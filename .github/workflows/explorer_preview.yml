@@ -5,7 +5,7 @@ on:
     types: 
       - completed
 jobs:
-   expo_push_tr:
+   eexplorer_preview:
     runs-on: ubuntu-latest
 
     steps:
