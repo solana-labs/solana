@@ -624,8 +624,8 @@ impl AccountsHash {
 
             while first_item_index < loop_stop {
                 first_item_index += 1;
-                let (key, _) = first_items[first_item_index];
-                let cmp = min_pubkey.cmp(&key);
+                let (key, _) = &first_items[first_item_index];
+                let cmp = min_pubkey.cmp(key);
                 match cmp {
                     std::cmp::Ordering::Less => {
                         continue; // we still have the min item
@@ -636,10 +636,10 @@ impl AccountsHash {
                     }
                     std::cmp::Ordering::Greater => {
                         // this is the new min pubkey
-                        min_pubkey = key;
+                        min_pubkey = *key;
                     }
                 }
-                // this is the new min pubkey
+                // this is the new index of the min entry
                 min_index = first_item_index;
             }
             // skip past duplicate keys in earlier slots
@@ -665,7 +665,7 @@ impl AccountsHash {
                 pubkey_division,
                 &mut indexes,
             );
-            if !self.is_filler_account(&item.pubkey) && item.lamports != ZERO_RAW_LAMPORTS_SENTINEL
+            if item.lamports != ZERO_RAW_LAMPORTS_SENTINEL && !self.is_filler_account(&item.pubkey)
             {
                 overall_sum = Self::checked_cast_for_capitalization(
                     item.lamports as u128 + overall_sum as u128,
