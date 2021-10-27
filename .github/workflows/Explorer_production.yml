@@ -5,7 +5,7 @@ on:
    paths:
       - 'explorer/**'
 jobs:
-    production:
+    Explorer_production_build_test:
       runs-on: ubuntu-latest
       defaults:
         run:
@@ -26,7 +26,7 @@ jobs:
        - run: npm run test
        
     Explorer_production_deploy:
-      needs: production
+      needs: Explorer_production_build_test
       runs-on: ubuntu-latest
       defaults:
         run:
