@@ -15,7 +15,7 @@ use solana_merkle_tree::MerkleTree;
 use solana_metrics::*;
 use solana_perf::{
     cuda_runtime::PinnedVec,
-    packet::{Packet, Packets, PacketsRecycler, PACKET_DATA_SIZE},
+    packet::{Packet, Packets, PacketsRecycler},
     perf_libs,
     recycler::Recycler,
     sigverify,
@@ -23,7 +23,7 @@ use solana_perf::{
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::hash::Hash;
 use solana_sdk::timing;
-use solana_sdk::transaction::{Result, SanitizedTransaction, Transaction, VersionedTransaction, TransactionError};
+use solana_sdk::transaction::{Result, SanitizedTransaction, Transaction, VersionedTransaction};
 use std::cell::RefCell;
 use std::ffi::OsStr;
 use std::sync::mpsc::{Receiver, Sender};
@@ -381,6 +381,113 @@ pub fn verify_transactions(
     })
 }
 
+pub fn start_verify_transactions(
+    entries: Vec<Entry>,
+    skip_verification: bool,
+    verify_recyclers: VerifyRecyclers,
+    verify: Arc<dyn Fn(VersionedTransaction, bool) -> Result<SanitizedTransaction> + Send + Sync>
+) -> EntrySigVerificationState {
+    let api = perf_libs::api();
+
+    if api.is_none() || skip_verification {
+        let verify_func = {
+            move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
+                verify(versioned_tx, skip_verification)
+            }
+        };
+
+        let check_start = Instant::now();
+        let entries = verify_transactions(entries, Arc::new(verify_func));
+
+        let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
+
+        match entries {
+            Ok(entries_val) => {
+                return EntrySigVerificationState {
+                    verification_status: EntryVerificationStatus::Success,
+                    entries: Some(entries_val),
+                    device_verification_data: DeviceSigVerificationData::Cpu(),
+                    verify_duration_us: transaction_duration_us,
+                };
+            },
+            _=> {
+                return EntrySigVerificationState {
+                    verification_status: EntryVerificationStatus::Failure,
+                    entries: None,
+                    device_verification_data: DeviceSigVerificationData::Cpu(),
+                    verify_duration_us: transaction_duration_us,
+                };
+            }
+        }
+    }
+
+    let verify_func = {
+        move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
+            verify(versioned_tx, true)
+        }
+    };
+    let check_start = Instant::now();
+    let entries = verify_transactions(
+        entries,
+        Arc::new(verify_func)
+    );
+    match entries {
+        Ok(entries) => {
+            let mut packets = Packets::new_with_recycler(
+                verify_recyclers.packet_recycler,
+                entries.len(),
+                "entry-sig-verify",
+            );
+
+            for (i, entry) in entries.iter().enumerate() {
+                match entry {
+                    EntryType::Transactions(transactions) => {
+                        for hashed_tx in transactions {
+                            Packet::populate_packet(
+                                &mut packets.packets[i],
+                                None,
+                                &hashed_tx.to_versioned_transaction(),
+                            )
+                            .unwrap();
+                        }
+                    }
+                    EntryType::Tick(_) => {}
+                }
+            }
+        
+            let mut packets = vec![packets];
+            let tx_offset_recycler = verify_recyclers.tx_offset_recycler.clone();
+            let out_recycler = verify_recyclers.out_recycler.clone();
+            let gpu_verify_thread = thread::spawn(move || {
+                let mut verify_time = Measure::start("sigverify");
+                // todo: what should reject_non_vote be?
+                sigverify::ed25519_verify(&mut packets, &tx_offset_recycler, &out_recycler, false);
+                let verified = packets[0].packets.iter().all(|p| !p.meta.discard);
+                verify_time.stop();
+                (verified, verify_time.as_us())
+            });
+            let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
+            return EntrySigVerificationState {
+                verification_status: EntryVerificationStatus::Pending,
+                entries: Some(entries),
+                device_verification_data: DeviceSigVerificationData::Gpu(GpuSigVerificationData {
+                    thread_h: Some(gpu_verify_thread),
+                }),
+                verify_duration_us: transaction_duration_us,
+            }
+        },
+        _=>{
+            let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
+            return EntrySigVerificationState {
+                verification_status: EntryVerificationStatus::Failure,
+                entries: None,
+                device_verification_data: DeviceSigVerificationData::Cpu(),
+                verify_duration_us: transaction_duration_us,
+            };
+        }
+    }
+}
+
 fn compare_hashes(computed_hash: Hash, ref_entry: &Entry) -> bool {
     let actual = if !ref_entry.transactions.is_empty() {
         let tx_hash = hash_transactions(&ref_entry.transactions);
@@ -410,25 +517,6 @@ pub trait EntrySlice {
     fn verify_tick_hash_count(&self, tick_hash_count: &mut u64, hashes_per_tick: u64) -> bool;
     /// Counts tick entries
     fn tick_count(&self) -> u64;
-    fn verify_and_hash_transactions(
-        &self,
-        skip_verification: bool,
-        libsecp256k1_0_5_upgrade_enabled: bool,
-        verify_tx_signatures_len: bool,
-    ) -> EntrySigVerificationState;
-    fn start_verify_and_hash_transactions(
-        &self,
-        skip_verification: bool,
-        secp256k1_program_enabled: bool,
-        verify_tx_signatures_len: bool,
-        recyclers: VerifyRecyclers,
-    ) -> EntrySigVerificationState;
-    fn hash_and_verify_precompiles(
-        &self,
-        skip_verification: bool,
-        secp256k1_program_enabled: bool,
-        verify_tx_signatures_len: bool,
-    ) -> Option<Vec<EntryType>>;
 }
 
 impl EntrySlice for [Entry] {
@@ -576,226 +664,6 @@ impl EntrySlice for [Entry] {
             }
         } else {
             self.verify_cpu_generic(start_hash)
-        }
-    }
-
-    fn start_verify_and_hash_transactions<'a>(
-        &'a self,
-        skip_verification: bool,
-        secp256k1_program_enabled: bool,
-        verify_tx_signatures_len: bool,
-        verify_recyclers: VerifyRecyclers,
-    ) -> EntrySigVerificationState {
-        let api = perf_libs::api();
-        if api.is_none() {
-            return self.verify_and_hash_transactions(
-                skip_verification,
-                secp256k1_program_enabled,
-                verify_tx_signatures_len,
-            );
-        }
-
-        let entries = self.hash_and_verify_precompiles(
-            skip_verification,
-            secp256k1_program_enabled,
-            verify_tx_signatures_len,
-        );
-        if entries.is_none() {
-            return EntrySigVerificationState {
-                verification_status: EntryVerificationStatus::Failure,
-                entries: None,
-                device_verification_data: DeviceSigVerificationData::Cpu(),
-                verify_duration_us: 0,
-            };
-        }
-        let entries = entries.unwrap();
-
-        let mut packets = Packets::new_with_recycler(
-            verify_recyclers.packet_recycler,
-            entries.len(),
-            "entry-sig-verify",
-        );
-        for (i, entry) in entries.iter().enumerate() {
-            match entry {
-                EntryType::Transactions(transactions) => {
-                    for hashed_tx in transactions {
-                        Packet::populate_packet(
-                            &mut packets.packets[i],
-                            None,
-                            &hashed_tx.to_versioned_transaction(),
-                        )
-                        .unwrap();
-                    }
-                }
-                EntryType::Tick(_) => {}
-            }
-        }
-
-        let mut packets = vec![packets];
-        let tx_offset_recycler = verify_recyclers.tx_offset_recycler.clone();
-        let out_recycler = verify_recyclers.out_recycler.clone();
-        let gpu_verify_thread = thread::spawn(move || {
-            let mut verify_time = Measure::start("sigverify");
-            // todo: what should reject_non_vote be?
-            sigverify::ed25519_verify(&mut packets, &tx_offset_recycler, &out_recycler, false);
-            let verified = packets[0].packets.iter().all(|p| !p.meta.discard);
-            verify_time.stop();
-            (verified, verify_time.as_us())
-        });
-
-        EntrySigVerificationState {
-            verification_status: EntryVerificationStatus::Pending,
-            entries: Some(entries),
-            device_verification_data: DeviceSigVerificationData::Gpu(GpuSigVerificationData {
-                thread_h: Some(gpu_verify_thread),
-            }),
-            verify_duration_us: 0,
-        }
-    }
-
-    fn hash_and_verify_precompiles<'a>(
-        &'a self,
-        skip_verification: bool,
-        secp256k1_program_enabled: bool,
-        verify_tx_signatures_len: bool,
-    ) -> Option<Vec<EntryType>> {
-        let verify_and_hash = |vtx: & VersionedTransaction| -> Option<SanitizedTransaction> {
-            // todo: is there a more efficient way to do this?
-            let maybe_tx=vtx.clone().into_legacy_transaction();
-            match maybe_tx {
-                Some(tx)=>
-                {
-                    let message_hash = if !skip_verification {
-                        if secp256k1_program_enabled {
-                            // Verify tx precompiles if secp256k1 program is enabled.
-                            //todo: what should the featureset be?
-                            let mut feature_set = solana_sdk::feature_set::FeatureSet::all_enabled();
-                            if !secp256k1_program_enabled {
-                                feature_set
-                                .active
-                                .remove(&solana_sdk::feature_set::libsecp256k1_0_5_upgrade_enabled::id());
-                            feature_set
-                                .inactive
-                                .insert(solana_sdk::feature_set::libsecp256k1_0_5_upgrade_enabled::id());
-                            }
-                            let feature_set = Arc::new(feature_set);
-                            tx.verify_precompiles(&feature_set).ok()?;
-                        }
-                        if verify_tx_signatures_len && !tx.verify_signatures_len() {
-                            return None;
-                        }
-                        tx.message.hash()
-                    } else {
-                        tx.message.hash()
-                    };
-                    let sanitized_transaction_result = SanitizedTransaction::try_create(vtx.clone(), message_hash, |_| {
-                        Err(TransactionError::UnsupportedVersion)
-                    });
-                    match sanitized_transaction_result {
-                        Ok(val)=>Some(val),
-                        Err(_)=>None,
-                    }
-                },
-                None => None
-            }
-        };
-
-        PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                self.par_iter()
-                    .map(|entry| {
-                        if entry.transactions.is_empty() {
-                            Some(EntryType::Tick(entry.hash))
-                        } else {
-                            Some(EntryType::Transactions(
-                                entry
-                                    .transactions
-                                    .par_iter()
-                                    .map(verify_and_hash)
-                                    .collect::<Option<Vec<SanitizedTransaction>>>()?,
-                            ))
-                        }
-                    })
-                    .collect()
-            })
-        })
-    }
-
-    fn verify_and_hash_transactions<'a>(
-        &'a self,
-        skip_verification: bool,
-        libsecp256k1_0_5_upgrade_enabled: bool,
-        verify_tx_signatures_len: bool,
-    ) -> EntrySigVerificationState {
-        let verify_and_hash = |vtx: & VersionedTransaction| -> Option<SanitizedTransaction> {
-            // todo: is there a more efficient way to do this?
-            let maybe_tx=vtx.clone().into_legacy_transaction();
-            match maybe_tx {
-                Some(tx)=>{
-                    let message_hash = if !skip_verification {
-                        let size =
-                            bincode::serialized_size(&tx).ok()?;
-                        if size > PACKET_DATA_SIZE as u64 {
-                            return None;
-                        }
-                        let mut feature_set = solana_sdk::feature_set::FeatureSet::all_enabled();
-                        if !libsecp256k1_0_5_upgrade_enabled {
-                            feature_set
-                            .active
-                            .remove(&solana_sdk::feature_set::libsecp256k1_0_5_upgrade_enabled::id());
-                        feature_set
-                            .inactive
-                            .insert(solana_sdk::feature_set::libsecp256k1_0_5_upgrade_enabled::id());
-                        }
-                        let feature_set = Arc::new(feature_set);
-                        tx.verify_precompiles(&feature_set).ok()?;
-                        if verify_tx_signatures_len && !tx.verify_signatures_len() {
-                            return None;
-                        }
-                        tx.verify_and_hash_message().ok()?
-                    } else {
-                        tx.message.hash()
-                    };
-                    let sanitized_transaction_result = SanitizedTransaction::try_create(vtx.clone(), message_hash, |_| {
-                        Err(TransactionError::UnsupportedVersion)
-                    });
-                    match sanitized_transaction_result {
-                        Ok(val)=>Some(val),
-                        Err(_)=>None,
-                    }
-
-                },
-                None => None
-            }
-        };
-
-        let check_start = Instant::now();
-        let entries = PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                self.par_iter()
-                    .map(|entry| {
-                        if entry.transactions.is_empty() {
-                            Some(EntryType::Tick(entry.hash))
-                        } else {
-                            Some(EntryType::Transactions(
-                                entry
-                                    .transactions
-                                    .par_iter()
-                                    .map(verify_and_hash)
-                                    .collect::<Option<Vec<SanitizedTransaction>>>()?,
-                            ))
-                        }
-                    })
-                    .collect()
-            })
-        });
-
-        let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
-        EntrySigVerificationState {
-            verification_status: EntryVerificationStatus::Success,
-            entries,
-            device_verification_data: DeviceSigVerificationData::Cpu(),
-            verify_duration_us: transaction_duration_us,
         }
     }
 
