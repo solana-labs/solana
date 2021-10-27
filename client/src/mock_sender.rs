@@ -146,8 +146,8 @@ impl RpcSender for MockSender {
                 value: serde_json::to_value(RpcFees {
                     blockhash: PUBKEY.to_string(),
                     fee_calculator: FeeCalculator::default(),
-                    last_valid_slot: 42,
-                    last_valid_block_height: 42,
+                    last_valid_slot: 1234,
+                    last_valid_block_height: 1234,
                 })
                 .unwrap(),
             })?,
