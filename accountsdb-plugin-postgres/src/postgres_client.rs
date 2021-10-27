@@ -612,7 +612,7 @@ impl PostgresClientWorker {
         exit_worker: Arc<AtomicBool>,
         is_startup_done: Arc<AtomicBool>,
         startup_done_count: Arc<AtomicUsize>,
-        panic_on_db_error: bool,
+        panic_on_db_errors: bool,
     ) -> Result<(), AccountsDbPluginError> {
         while !exit_worker.load(Ordering::Relaxed) {
             let mut measure = Measure::start("accountsdb-plugin-postgres-worker-recv");
@@ -632,7 +632,7 @@ impl PostgresClientWorker {
                             .update_account(request.account, request.is_startup)
                         {
                             error!("Failed to update account: ({})", err);
-                            if panic_on_db_error {
+                            if panic_on_db_errors {
                                 abort();
                             }
                         }
@@ -644,7 +644,7 @@ impl PostgresClientWorker {
                             request.slot_status,
                         ) {
                             error!("Failed to update slot: ({})", err);
-                            if panic_on_db_error {
+                            if panic_on_db_errors {
                                 abort();
                             }
                         }
@@ -655,7 +655,7 @@ impl PostgresClientWorker {
                         if !self.is_startup_done && is_startup_done.load(Ordering::Relaxed) {
                             if let Err(err) = self.client.notify_end_of_startup() {
                                 error!("Error in notifying end of startup: ({})", err);
-                                if panic_on_db_error {
+                                if panic_on_db_errors {
                                     abort();
                                 }
                             }
@@ -667,7 +667,7 @@ impl PostgresClientWorker {
                     }
                     _ => {
                         error!("Error in receiving the item {:?}", err);
-                        if panic_on_db_error {
+                        if panic_on_db_errors {
                             abort();
                         }
                         break;
@@ -708,7 +708,7 @@ impl ParallelPostgresClient {
             let worker = Builder::new()
                 .name(format!("worker-{}", i))
                 .spawn(move || -> Result<(), AccountsDbPluginError> {
-                    let panic_on_db_error = *config
+                    let panic_on_db_errors = *config
                         .panic_on_db_errors
                         .as_ref()
                         .unwrap_or(&DEFAULT_PANIC_ON_DB_ERROR);
@@ -722,13 +722,13 @@ impl ParallelPostgresClient {
                                 exit_clone,
                                 is_startup_done_clone,
                                 startup_done_count_clone,
-                                panic_on_db_error.clone(),
+                                panic_on_db_errors.clone(),
                             )?;
                             Ok(())
                         }
                         Err(err) => {
                             error!("Error when making connection to database: ({})", err);
-                            if panic_on_db_error {
+                            if panic_on_db_errors {
                                 abort();
                             }
                             Err(err)
