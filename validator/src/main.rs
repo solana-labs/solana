@@ -1174,6 +1174,16 @@ pub fn main() {
                 .help("Number of threads to use for servicing RPC requests"),
         )
         .arg(
+            Arg::with_name("rpc_niceness_adj")
+                .long("rpc-niceness-adjustment")
+                .value_name("ADJUSTMENT")
+                .takes_value(true)
+                .validator(is_niceness_adjustment_valid)
+                .default_value("0")
+                .help("Add this value to niceness of RPC threads. Negative value \
+                      increases priority, positive value decreases priority.")
+        )
+        .arg(
             Arg::with_name("rpc_bigtable_timeout")
                 .long("rpc-bigtable-timeout")
                 .value_name("SECONDS")
@@ -2180,6 +2190,7 @@ pub fn main() {
                 u64
             ),
             rpc_threads: value_t_or_exit!(matches, "rpc_threads", usize),
+            rpc_niceness_adj: value_t_or_exit!(matches, "rpc_niceness_adj", i8),
             rpc_bigtable_timeout: value_t!(matches, "rpc_bigtable_timeout", u64)
                 .ok()
                 .map(Duration::from_secs),
