@@ -33,6 +33,7 @@ const DEFAULT_POSTGRES_PORT: u16 = 5432;
 const DEFAULT_THREADS_COUNT: usize = 100;
 const DEFAULT_ACCOUNTS_INSERT_BATCH_SIZE: usize = 10;
 const ACCOUNT_COLUMN_COUNT: usize = 9;
+const DEFAULT_PANIC_ON_DB_ERROR: bool = false;
 
 struct PostgresSqlClientWrapper {
     client: Client,
@@ -64,6 +65,19 @@ pub struct DbAccountInfo {
     pub data: Vec<u8>,
     pub slot: i64,
     pub write_version: i64,
+}
+
+pub(crate) fn abort() -> ! {
+    #[cfg(not(test))]
+    {
+        // standard error is usually redirected to a log file, cry for help on standard output as
+        // well
+        println!("Validator process aborted. The validator log may contain further details");
+        std::process::exit(1);
+    }
+
+    #[cfg(test)]
+    panic!("process::exit(1) is intercepted for friendly test failure...");
 }
 
 impl DbAccountInfo {
@@ -551,6 +565,7 @@ impl PostgresClientWorker {
         exit_worker: Arc<AtomicBool>,
         is_startup_done: Arc<AtomicBool>,
         startup_done_count: Arc<AtomicUsize>,
+        panic_on_db_error: bool,
     ) -> Result<(), AccountsDbPluginError> {
         while !exit_worker.load(Ordering::Relaxed) {
             let mut measure = Measure::start("accountsdb-plugin-postgres-worker-recv");
@@ -565,21 +580,36 @@ impl PostgresClientWorker {
             match work {
                 Ok(work) => match work {
                     DbWorkItem::UpdateAccount(request) => {
-                        self.client
-                            .update_account(request.account, request.is_startup)?;
+                        if let Err(err) = self.client
+                            .update_account(request.account, request.is_startup) {
+                            error!("Failed to update account: ({})", err);
+                            if panic_on_db_error {
+                                abort();
+                            }
+                        }
                     }
                     DbWorkItem::UpdateSlot(request) => {
-                        self.client.update_slot_status(
+                        if let Err(err) = self.client.update_slot_status(
                             request.slot,
                             request.parent,
                             request.slot_status,
-                        )?;
+                        ) {
+                            error!("Failed to update slot: ({})", err);
+                            if panic_on_db_error {
+                                abort();
+                            }
+                        }
                     }
                 },
                 Err(err) => match err {
                     RecvTimeoutError::Timeout => {
                         if !self.is_startup_done && is_startup_done.load(Ordering::Relaxed) {
-                            self.client.notify_end_of_startup()?;
+                            if let Err(err) = self.client.notify_end_of_startup() {
+                                error!("Error in notifying end of startup: ({})", err);
+                                if panic_on_db_error {
+                                    abort();
+                                }
+                            }
                             self.is_startup_done = true;
                             startup_done_count.fetch_add(1, Ordering::Relaxed);
                         }
@@ -626,6 +656,7 @@ impl ParallelPostgresClient {
             let worker = Builder::new()
                 .name(format!("worker-{}", i))
                 .spawn(move || -> Result<(), AccountsDbPluginError> {
+                    let panic_on_db_error = *config.panic_on_db_errors.as_ref().unwrap_or(&DEFAULT_PANIC_ON_DB_ERROR);
                     let result = PostgresClientWorker::new(config);
 
                     match result {
@@ -636,10 +667,17 @@ impl ParallelPostgresClient {
                                 exit_clone,
                                 is_startup_done_clone,
                                 startup_done_count_clone,
+                                panic_on_db_error.clone(),
                             )?;
                             Ok(())
                         }
-                        Err(err) => Err(err),
+                        Err(err) => {
+                            if panic_on_db_error {
+                                error!("Error when making connection to database: ({})", err);
+                                abort();
+                            }
+                            Err(err)
+                        }
                     }
                 })
                 .unwrap();

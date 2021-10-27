@@ -38,6 +38,7 @@ pub struct AccountsDbPluginPostgresConfig {
     pub connection_str: Option<String>,
     pub threads: Option<usize>,
     pub batch_size: Option<usize>,
+    pub panic_on_db_errors: Option<bool>,
 }
 
 #[derive(Error, Debug)]
