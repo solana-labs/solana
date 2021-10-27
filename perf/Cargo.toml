@@ -25,6 +25,11 @@ solana-sdk = { path = "../sdk", version = "=1.9.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.9.0" }
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.9.0" }
 
+[target."cfg(target_os = \"linux\")".dependencies]
+caps = "0.5.3"
+libc = "0.2.105"
+nix = "0.23.0"
+
 [lib]
 name = "solana_perf"
 

@@ -566,6 +566,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "caps"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61bf7211aad104ce2769ec05efcdfabf85ee84ac92461d142f22cf8badd0e54c"
+dependencies = [
+ "errno",
+ "libc",
+ "thiserror",
+]
+
+[[package]]
 name = "cargo-platform"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1268,6 +1279,27 @@ dependencies = [
  "log 0.4.14",
  "regex",
  "termcolor",
+]
+
+[[package]]
+name = "errno"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f639046355ee4f37944e44f60642c6f3a7efa3cf6b78c78a0d989a8ce6c396a1"
+dependencies = [
+ "errno-dragonfly",
+ "libc",
+ "winapi 0.3.9",
+]
+
+[[package]]
+name = "errno-dragonfly"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aa68f1b12764fab894d2755d2518754e71b4fd80ecfb822714a1206c2aab39bf"
+dependencies = [
+ "cc",
+ "libc",
 ]
 
 [[package]]
@@ -5268,12 +5300,15 @@ name = "solana-perf"
 version = "1.9.0"
 dependencies = [
  "bincode",
+ "caps",
  "curve25519-dalek 3.2.0",
  "dlopen",
  "dlopen_derive",
  "lazy_static",
+ "libc",
  "log 0.4.14",
  "matches",
+ "nix",
  "rand 0.7.3",
  "rayon",
  "serde",
