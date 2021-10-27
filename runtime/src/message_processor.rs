@@ -539,6 +539,45 @@ pub fn prepare_mock_invoke_context(
     }
 }
 
+pub fn with_mock_invoke_context<R, F: FnMut(&mut ThisInvokeContext) -> R>(
+    loader_id: Pubkey,
+    account_size: usize,
+    mut callback: F,
+) -> R {
+    let program_indices = vec![0, 1];
+    let keyed_accounts = [
+        (
+            false,
+            false,
+            loader_id,
+            AccountSharedData::new_ref(0, 0, &solana_sdk::native_loader::id()),
+        ),
+        (
+            false,
+            false,
+            Pubkey::new_unique(),
+            AccountSharedData::new_ref(1, 0, &loader_id),
+        ),
+        (
+            false,
+            false,
+            Pubkey::new_unique(),
+            AccountSharedData::new_ref(2, account_size, &Pubkey::new_unique()),
+        ),
+    ];
+    let preparation = prepare_mock_invoke_context(&program_indices, &[], &keyed_accounts);
+    let mut invoke_context = ThisInvokeContext::new_mock(&preparation.accounts, &[]);
+    invoke_context
+        .push(
+            &preparation.message,
+            &preparation.message.instructions[0],
+            &program_indices,
+            Some(&preparation.account_indices),
+        )
+        .unwrap();
+    callback(&mut invoke_context)
+}
+
 pub fn mock_process_instruction(
     loader_id: &Pubkey,
     mut program_indices: Vec<usize>,
