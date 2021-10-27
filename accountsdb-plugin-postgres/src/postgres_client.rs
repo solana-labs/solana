@@ -722,7 +722,7 @@ impl ParallelPostgresClient {
                                 exit_clone,
                                 is_startup_done_clone,
                                 startup_done_count_clone,
-                                panic_on_db_errors.clone(),
+                                panic_on_db_errors,
                             )?;
                             Ok(())
                         }
