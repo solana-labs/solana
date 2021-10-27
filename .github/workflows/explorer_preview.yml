@@ -5,7 +5,7 @@ on:
     types: 
       - completed
 jobs:
-   eexplorer_preview:
+   explorer_preview:
     runs-on: ubuntu-latest
 
     steps:
