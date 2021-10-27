@@ -52,7 +52,8 @@ use solana_measure::measure::Measure;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
-    clock::{BankId, Epoch, Slot, SlotCount},
+    clock::{BankId, Epoch, Slot},
+    epoch_schedule::EpochSchedule,
     genesis_config::ClusterType,
     hash::{Hash, Hasher},
     pubkey::Pubkey,
@@ -6766,7 +6767,7 @@ impl AccountsDb {
     /// The filler accounts are added to each slot in the snapshot after index generation.
     /// The accounts added in a slot are setup to have pubkeys such that rent will be collected from them before (or when?) their slot becomes an epoch old.
     /// Thus, the filler accounts are rewritten by rent and the old slot can be thrown away successfully.
-    pub fn maybe_add_filler_accounts(&self, ticks_per_slot: SlotCount) {
+    pub fn maybe_add_filler_accounts(&self, epoch_schedule: &EpochSchedule) {
         if self.filler_account_count == 0 {
             return;
         }
@@ -6792,8 +6793,6 @@ impl AccountsDb {
                 .skip(pass * per_pass)
                 .take(per_pass)
                 .collect::<Vec<_>>();
-            let slot_count_in_two_day =
-                crate::bank::Bank::slot_count_in_two_day_helper(ticks_per_slot);
             self.thread_pool.install(|| {
                 roots_in_this_pass.into_par_iter().for_each(|slot| {
                     let storage_maps: Vec<Arc<AccountStorageEntry>> = self
@@ -6804,13 +6803,10 @@ impl AccountsDb {
                         return;
                     }
 
-                    let partition = *crate::bank::Bank::get_partitions(
+                    let partition = crate::bank::Bank::variable_cycle_partition_from_previous_slot(
+                        epoch_schedule,
                         *slot,
-                        slot.saturating_sub(1),
-                        slot_count_in_two_day,
-                    )
-                    .last()
-                    .unwrap();
+                    );
                     let subrange = crate::bank::Bank::pubkey_range_from_partition(partition);
 
                     let idx = overall_index.fetch_add(1, Ordering::Relaxed);
