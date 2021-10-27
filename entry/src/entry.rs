@@ -454,7 +454,6 @@ pub fn start_verify_transactions(
                     EntryType::Tick(_) => {}
                 }
             }
-        
             let mut packets = vec![packets];
             let tx_offset_recycler = verify_recyclers.tx_offset_recycler.clone();
             let out_recycler = verify_recyclers.out_recycler.clone();
