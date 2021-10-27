@@ -52,7 +52,7 @@ use solana_measure::measure::Measure;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
-    clock::{BankId, Epoch, Slot},
+    clock::{BankId, Epoch, Slot, SlotCount},
     epoch_schedule::EpochSchedule,
     genesis_config::ClusterType,
     hash::{Hash, Hasher},
@@ -6761,6 +6761,14 @@ impl AccountsDb {
         Self::is_filler_account_helper(pubkey, self.filler_account_suffix.as_ref())
     }
 
+    /// retain slots in 'roots' that are > (max(roots) - slots_per_epoch)
+    fn retain_roots_within_one_epoch_range(roots: &mut Vec<Slot>, slots_per_epoch: SlotCount) {
+        if let Some(max) = roots.iter().max() {
+            let min = max - slots_per_epoch;
+            roots.retain(|slot| slot > &min);
+        }
+    }
+
     /// filler accounts are space-holding accounts which are ignored by hash calculations and rent.
     /// They are designed to allow a validator to run against a network successfully while simulating having many more accounts present.
     /// All filler accounts share a common pubkey suffix. The suffix is randomly generated per validator on startup.
@@ -6775,7 +6783,8 @@ impl AccountsDb {
         info!("adding {} filler accounts", self.filler_account_count);
         // break this up to force the accounts out of memory after each pass
         let passes = 100;
-        let roots = self.storage.all_slots();
+        let mut roots = self.storage.all_slots();
+        Self::retain_roots_within_one_epoch_range(&mut roots, epoch_schedule.slots_per_epoch);
         let root_count = roots.len();
         let per_pass = std::cmp::max(1, root_count / passes);
         let overall_index = AtomicUsize::new(0);
@@ -7372,6 +7381,14 @@ pub mod tests {
                 None,
             )
         }
+    }
+
+    #[test]
+    fn test_retain_roots_within_one_epoch_range() {
+        let mut roots = vec![0, 1, 2];
+        let slots_per_epoch = 2;
+        AccountsDb::retain_roots_within_one_epoch_range(&mut roots, slots_per_epoch);
+        assert_eq!(&vec![1, 2], &roots);
     }
 
     #[test]
