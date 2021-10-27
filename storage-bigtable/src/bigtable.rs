@@ -134,7 +134,7 @@ impl BigTableConnection {
                     access_token: None,
                     channel: tonic::transport::Channel::from_shared(format!("http://{}", endpoint))
                         .map_err(|err| Error::InvalidUri(endpoint, err.to_string()))?
-                        .connect_lazy()?,
+                        .connect_lazy(),
                     table_prefix: format!("projects/emulator/instances/{}/tables/", instance_name),
                     timeout,
                 })
@@ -175,7 +175,7 @@ impl BigTableConnection {
 
                 Ok(Self {
                     access_token: Some(access_token),
-                    channel: endpoint.connect_lazy()?,
+                    channel: endpoint.connect_lazy(),
                     table_prefix,
                     timeout,
                 })
