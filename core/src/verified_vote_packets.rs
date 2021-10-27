@@ -37,14 +37,23 @@ impl<'a> ValidatorGossipVotesIterator<'a> {
         verified_vote_packets: &'a VerifiedVotePackets,
         previously_sent_to_bank_votes: &'a mut HashSet<Signature>,
     ) -> Self {
-        let slot_hashes_account = my_leader_bank
-            .get_account(&sysvar::slot_hashes::id())
-            .expect("Slot hashes sysvar must exist");
-        let slot_hashes = from_account::<SlotHashes, _>(&slot_hashes_account).unwrap();
+        let slot_hashes_account = my_leader_bank.get_account(&sysvar::slot_hashes::id());
+
+        if slot_hashes_account.is_none() {
+            warn!(
+                "Slot hashes sysvar doesn't exist on bank {}",
+                my_leader_bank.slot()
+            );
+        }
+
+        let slot_hashes_account = slot_hashes_account.unwrap_or_default();
+        let slot_hashes = from_account::<SlotHashes, _>(&slot_hashes_account).unwrap_or_default();
+
         // TODO: my_leader_bank.vote_accounts() may not contain zero-staked validators
         // in this epoch, but those validators may have stake warming up in the next epoch
         let vote_account_keys: Vec<Pubkey> =
             my_leader_bank.vote_accounts().keys().copied().collect();
+
         Self {
             my_leader_bank,
             slot_hashes,
@@ -64,9 +73,14 @@ impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         // TODO: Maybe prioritize by stake weight
-        self.vote_account_keys.pop().and_then(|vote_account_key| {
+        while !self.vote_account_keys.is_empty() {
+            let vote_account_key = self.vote_account_keys.pop().unwrap();
             // Get all the gossip votes we've queued up for this validator
-            self.verified_vote_packets
+            // that are:
+            // 1) missing from the current leader bank
+            // 2) on the same fork
+            let validator_votes = self
+                .verified_vote_packets
                 .0
                 .get(&vote_account_key)
                 .and_then(|validator_gossip_votes| {
@@ -76,10 +90,11 @@ impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
                         .get(&vote_account_key)
                         .and_then(|(_stake, vote_account)| {
                             vote_account.vote_state().as_ref().ok().map(|vote_state| {
-                                let latest_vote = vote_state.last_voted_slot().unwrap_or(0);
+                                let start_vote_slot =
+                                    vote_state.last_voted_slot().map(|x| x + 1).unwrap_or(0);
                                 // Filter out the votes that are outdated
                                 validator_gossip_votes
-                                    .range((latest_vote + 1, Hash::default())..)
+                                    .range((start_vote_slot, Hash::default())..)
                                     .filter_map(|((slot, hash), (packet, tx_signature))| {
                                         if self.previously_sent_to_bank_votes.contains(tx_signature)
                                         {
@@ -103,8 +118,14 @@ impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
                                     .collect::<Vec<Packets>>()
                             })
                         })
-                })
-        })
+                });
+            if let Some(validator_votes) = validator_votes {
+                if !validator_votes.is_empty() {
+                    return Some(validator_votes);
+                }
+            }
+        }
+        None
     }
 }
 
@@ -140,7 +161,6 @@ impl VerifiedVotePackets {
                     let hash = vote.hash;
 
                     let validator_votes = self.0.entry(validator_key).or_default();
-
                     validator_votes.insert((*slot, hash), (packet, signature));
 
                     if validator_votes.len() > MAX_VOTES_PER_VALIDATOR {
@@ -157,7 +177,7 @@ impl VerifiedVotePackets {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::result::Error;
+    use crate::{result::Error, vote_simulator::VoteSimulator};
     use crossbeam_channel::unbounded;
     use solana_perf::packet::Packet;
     use solana_sdk::slot_hashes::MAX_ENTRIES;
@@ -278,8 +298,9 @@ mod tests {
     #[test]
     fn test_verified_vote_packets_validator_gossip_votes_iterator_wrong_fork() {
         let (s, r) = unbounded();
-        let pubkey = Pubkey::new_unique();
-        let my_leader_bank = Arc::new(Bank::default_for_tests());
+        let vote_simulator = VoteSimulator::new(1);
+        let my_leader_bank = vote_simulator.bank_forks.read().unwrap().root_bank();
+        let pubkey = vote_simulator.vote_pubkeys[0];
 
         // Create a bunch of votes with random vote hashes, which should all be ignored
         // since they are not on the same fork as `my_leader_bank`, i.e. their hashes do
@@ -320,8 +341,9 @@ mod tests {
     #[test]
     fn test_verified_vote_packets_validator_gossip_votes_iterator_correct_fork() {
         let (s, r) = unbounded();
-        let pubkey = Pubkey::new_unique();
-        let mut my_leader_bank = Arc::new(Bank::default_for_tests());
+        let num_validators = 2;
+        let vote_simulator = VoteSimulator::new(2);
+        let mut my_leader_bank = vote_simulator.bank_forks.read().unwrap().root_bank();
 
         // Create a set of valid ancestor hashes for this fork
         for _ in 0..MAX_ENTRIES {
@@ -336,11 +358,10 @@ mod tests {
             .expect("Slot hashes sysvar must exist");
         let slot_hashes = from_account::<SlotHashes, _>(&slot_hashes_account).unwrap();
 
-        // Create valid votes now
-        let num_validators = 2;
+        // Create valid votes
         let vote_index = 0;
         for i in 0..num_validators {
-            let pubkey = Pubkey::new_unique();
+            let pubkey = vote_simulator.vote_pubkeys[i];
             // Used to uniquely identify the packets for each validator
             let num_packets = i + 1;
             for (vote_slot, vote_hash) in slot_hashes.slot_hashes().iter() {
@@ -358,7 +379,6 @@ mod tests {
 
         // Ingest the votes into the buffer
         let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
-
         verified_vote_packets
             .receive_and_process_vote_packets(&r, true)
             .unwrap();
@@ -366,27 +386,32 @@ mod tests {
         // Check we get two batches, one for each validator. Each batch
         // should only contain a packets structure with the specific number
         // of packets associated with that batch
+        assert_eq!(verified_vote_packets.0.len(), 2);
+        // Every validator should have `slot_hashes.slot_hashes().len()` votes
+        assert!(verified_vote_packets
+            .0
+            .values()
+            .all(|validator_votes| validator_votes.len() == slot_hashes.slot_hashes().len()));
+
         let mut previously_sent_to_bank_votes = HashSet::new();
         let mut gossip_votes_iterator = ValidatorGossipVotesIterator::new(
             my_leader_bank.clone(),
             &verified_vote_packets,
             &mut previously_sent_to_bank_votes,
         );
-        let first_validator_batch: Vec<Packets> = gossip_votes_iterator.next().unwrap();
-        assert_eq!(first_validator_batch.len(), slot_hashes.slot_hashes().len());
-        assert!(first_validator_batch.iter().all(|p| p.packets.len() == 1));
 
-        let second_validator_batch: Vec<Packets> = gossip_votes_iterator.next().unwrap();
-        assert_eq!(
-            second_validator_batch.len(),
-            slot_hashes.slot_hashes().len()
-        );
-        assert!(gossip_votes_iterator
-            .next()
-            .unwrap()
-            .iter()
-            .all(|p| p.packets.len() == 2));
+        // Get and verify batches
+        let num_expected_batches = 2;
+        for _ in 0..num_expected_batches {
+            let validator_batch: Vec<Packets> = gossip_votes_iterator.next().unwrap();
+            assert_eq!(validator_batch.len(), slot_hashes.slot_hashes().len());
+            let expected_len = validator_batch[0].packets.len();
+            assert!(validator_batch
+                .iter()
+                .all(|p| p.packets.len() == expected_len));
+        }
 
+        // Should be empty now
         assert!(gossip_votes_iterator.next().is_none());
 
         // If we construct another iterator, should return nothing because `previously_sent_to_bank_votes`
@@ -398,11 +423,17 @@ mod tests {
         );
         assert!(gossip_votes_iterator.next().is_none());
 
-        // If we add some new votes, we should return those
-        let vote_slot = 1;
-        let vote_hash = Hash::new_unique();
+        // If we add a new vote, we should return it
+        my_leader_bank.freeze();
+        let vote_slot = my_leader_bank.slot();
+        let vote_hash = my_leader_bank.hash();
         let vote_index = 0;
-        let label = CrdsValueLabel::Vote(vote_index, pubkey);
+        let my_leader_bank = Arc::new(Bank::new_from_parent(
+            &my_leader_bank,
+            &Pubkey::default(),
+            my_leader_bank.slot() + 1,
+        ));
+        let label = CrdsValueLabel::Vote(vote_index, vote_simulator.vote_pubkeys[1]);
         let vote = Vote::new(vec![vote_slot], vote_hash);
         s.send(vec![VerifiedVoteMetadata {
             label,
