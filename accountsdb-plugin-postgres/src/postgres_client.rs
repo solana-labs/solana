@@ -39,6 +39,8 @@ struct PostgresSqlClientWrapper {
     client: Client,
     update_account_stmt: Statement,
     bulk_account_insert_stmt: Statement,
+    update_slot_with_parent_stmt: Statement,
+    update_slot_without_parent_stmt: Statement,
 }
 
 pub struct SimplePostgresClient {
@@ -195,21 +197,30 @@ impl SimplePostgresClient {
 
         let connection_str = if let Some(connection_str) = &config.connection_str {
             connection_str.clone()
-        }
-        else {
+        } else {
             if config.host.is_none() || config.user.is_none() {
-                let msg = format!("\"connection_str\": {:?}, or \"host\": {:?} \"user\": {:?} must be specified",
-                    config.connection_str, config.host, config.user);
-                return Err(AccountsDbPluginError::Custom(Box::new(AccountsDbPluginPostgresError::ConfigurationError { msg })));
+                let msg = format!(
+                    "\"connection_str\": {:?}, or \"host\": {:?} \"user\": {:?} must be specified",
+                    config.connection_str, config.host, config.user
+                );
+                return Err(AccountsDbPluginError::Custom(Box::new(
+                    AccountsDbPluginPostgresError::ConfigurationError { msg },
+                )));
             }
-            format!("host={} user={} port={}", config.host.as_ref().unwrap(), config.user.as_ref().unwrap(), port)
+            format!(
+                "host={} user={} port={}",
+                config.host.as_ref().unwrap(),
+                config.user.as_ref().unwrap(),
+                port
+            )
         };
 
         match Client::connect(&connection_str, NoTls) {
             Err(err) => {
                 let msg = format!(
-                        "Error in connecting to the PostgreSQL database: {:?} connection_str: {:?}",
-                        err, connection_str);
+                    "Error in connecting to the PostgreSQL database: {:?} connection_str: {:?}",
+                    err, connection_str
+                );
                 error!("{}", msg);
                 Err(AccountsDbPluginError::Custom(Box::new(
                     AccountsDbPluginPostgresError::DataStoreConnectionError { msg },
@@ -293,6 +304,52 @@ impl SimplePostgresClient {
                 })));
             }
             Ok(update_account_stmt) => Ok(update_account_stmt),
+        }
+    }
+
+    fn build_slot_upsert_statement_with_parent(
+        client: &mut Client,
+        config: &AccountsDbPluginPostgresConfig,
+    ) -> Result<Statement, AccountsDbPluginError> {
+        let stmt = "INSERT INTO slot (slot, parent, status, updated_on) \
+        VALUES ($1, $2, $3, $4) \
+        ON CONFLICT (slot) DO UPDATE SET parent=excluded.parent, status=excluded.status, updated_on=excluded.updated_on";
+
+        let stmt = client.prepare(stmt);
+
+        match stmt {
+            Err(err) => {
+                return Err(AccountsDbPluginError::Custom(Box::new(AccountsDbPluginPostgresError::DataSchemaError {
+                    msg: format!(
+                        "Error in preparing for the slot update PostgreSQL database: {} host: {:?} user: {:?} config: {:?}",
+                        err, config.host, config.user, config
+                    ),
+                })));
+            }
+            Ok(stmt) => Ok(stmt),
+        }
+    }
+
+    fn build_slot_upsert_statement_without_parent(
+        client: &mut Client,
+        config: &AccountsDbPluginPostgresConfig,
+    ) -> Result<Statement, AccountsDbPluginError> {
+        let stmt = "INSERT INTO slot (slot, status, updated_on) \
+        VALUES ($1, $2, $3) \
+        ON CONFLICT (slot) DO UPDATE SET status=excluded.status, updated_on=excluded.updated_on";
+
+        let stmt = client.prepare(stmt);
+
+        match stmt {
+            Err(err) => {
+                return Err(AccountsDbPluginError::Custom(Box::new(AccountsDbPluginPostgresError::DataSchemaError {
+                    msg: format!(
+                        "Error in preparing for the slot update PostgreSQL database: {} host: {:?} user: {:?} config: {:?}",
+                        err, config.host, config.user, config
+                    ),
+                })));
+            }
+            Ok(stmt) => Ok(stmt),
         }
     }
 
@@ -430,6 +487,11 @@ impl SimplePostgresClient {
             Self::build_bulk_account_insert_statement(&mut client, config)?;
         let update_account_stmt = Self::build_single_account_upsert_statement(&mut client, config)?;
 
+        let update_slot_with_parent_stmt =
+            Self::build_slot_upsert_statement_with_parent(&mut client, config)?;
+        let update_slot_without_parent_stmt =
+            Self::build_slot_upsert_statement_without_parent(&mut client, config)?;
+
         let batch_size = config
             .batch_size
             .unwrap_or(DEFAULT_ACCOUNTS_INSERT_BATCH_SIZE);
@@ -441,6 +503,8 @@ impl SimplePostgresClient {
                 client,
                 update_account_stmt,
                 bulk_account_insert_stmt,
+                update_slot_with_parent_stmt,
+                update_slot_without_parent_stmt,
             }),
         })
     }
@@ -479,32 +543,15 @@ impl PostgresClient for SimplePostgresClient {
         let client = self.client.get_mut().unwrap();
 
         let result = match parent {
-                        Some(parent) => {
-                            client.client.execute(
-                                "INSERT INTO slot (slot, parent, status, updated_on) \
-                                VALUES ($1, $2, $3, $4) \
-                                ON CONFLICT (slot) DO UPDATE SET parent=$2, status=$3, updated_on=$4",
-                                &[
-                                    &slot,
-                                    &parent,
-                                    &status_str,
-                                    &updated_on,
-                                ],
-                            )
-                        }
-                        None => {
-                            client.client.execute(
-                                "INSERT INTO slot (slot, status, updated_on) \
-                                VALUES ($1, $2, $3) \
-                                ON CONFLICT (slot) DO UPDATE SET status=$2, updated_on=$3",
-                                &[
-                                    &slot,
-                                    &status_str,
-                                    &updated_on,
-                                ],
-                            )
-                        }
-                };
+            Some(parent) => client.client.execute(
+                &client.update_slot_with_parent_stmt,
+                &[&slot, &parent, &status_str, &updated_on],
+            ),
+            None => client.client.execute(
+                &client.update_slot_without_parent_stmt,
+                &[&slot, &status_str, &updated_on],
+            ),
+        };
 
         match result {
             Err(err) => {
@@ -580,8 +627,10 @@ impl PostgresClientWorker {
             match work {
                 Ok(work) => match work {
                     DbWorkItem::UpdateAccount(request) => {
-                        if let Err(err) = self.client
-                            .update_account(request.account, request.is_startup) {
+                        if let Err(err) = self
+                            .client
+                            .update_account(request.account, request.is_startup)
+                        {
                             error!("Failed to update account: ({})", err);
                             if panic_on_db_error {
                                 abort();
@@ -618,6 +667,9 @@ impl PostgresClientWorker {
                     }
                     _ => {
                         error!("Error in receiving the item {:?}", err);
+                        if panic_on_db_error {
+                            abort();
+                        }
                         break;
                     }
                 },
@@ -656,7 +708,10 @@ impl ParallelPostgresClient {
             let worker = Builder::new()
                 .name(format!("worker-{}", i))
                 .spawn(move || -> Result<(), AccountsDbPluginError> {
-                    let panic_on_db_error = *config.panic_on_db_errors.as_ref().unwrap_or(&DEFAULT_PANIC_ON_DB_ERROR);
+                    let panic_on_db_error = *config
+                        .panic_on_db_errors
+                        .as_ref()
+                        .unwrap_or(&DEFAULT_PANIC_ON_DB_ERROR);
                     let result = PostgresClientWorker::new(config);
 
                     match result {
