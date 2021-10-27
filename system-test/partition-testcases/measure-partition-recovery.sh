@@ -23,6 +23,10 @@ if [[ -z $PARTITION_DURATION ]]; then
   PARTITION_DURATION=300
 fi
 
+if [[ -z $PARTITION_INCREMENT ]]; then
+  PARTITION_INCREMENT=60
+fi
+
 num_online_nodes=$(( NUMBER_OF_VALIDATOR_NODES + 1 ))
 if [[ -n "$NUMBER_OF_OFFLINE_NODES" ]]; then
   num_online_nodes=$(( num_online_nodes - NUMBER_OF_OFFLINE_NODES ))
@@ -46,21 +50,20 @@ while true; do
 
   get_validator_confirmation_time 10
   time=0
-  echo "Validator confirmation is $mean_confirmation_ms ms immediately after resolving the partition" >> "$RESULT_FILE"
+  echo "Validator confirmation is $mean_confirmation_ms ms immediately after resolving the partition"
 
   while [[ $mean_confirmation_ms == "expected" || $mean_confirmation_ms -gt $target ]]; do
     sleep 1
     time=$(( time + 1 ))
 
     if [[ $time -gt $PARTITION_DURATION ]]; then
-      echo "Unable to make progress after $time seconds. confirmation time is still $mean_confirmation_ms ms" >> "$RESULT_FILE"
+      echo "Partition Duration: $PARTITION_DURATION: Unable to make progress after $time seconds. Confirmation time did not fall below pre partition confirmation time" >> "$RESULT_FILE"
       exit 0
     fi
     get_validator_confirmation_time 10
   done
 
-  echo "$time seconds after resolving the partition, validator confirmation time fell to $mean_confirmation_ms ms" >> "$RESULT_FILE"
-  printf "\n" >> "$RESULT_FILE"
+  echo "Partition Duration: $PARTITION: $time seconds for validator confirmation to fall to $mean_confirmation_ms ms" >> "$RESULT_FILE"
 
-  PARTITION_DURATION=$(( PARTITION_DURATION + 60 ))
+  PARTITION_DURATION=$(( PARTITION_DURATION + PARTITION_INCREMENT ))
 done

@@ -15,7 +15,8 @@ steps:
       TEST_TYPE: "script"
       WARMUP_SLOTS_BEFORE_TEST: 400
       PRE_PARTITION_DURATION: 120
-      PARTITION_DURATION: 120
+      PARTITION_DURATION: 600
+      PARTITION_INCREMENT: 120
       NETEM_CONFIG_FILE: "system-test/netem-configs/complete-loss-two-partitions"
       CUSTOM_SCRIPT: "system-test/partition-testcases/measure-partition-recovery.sh"
     agents:
