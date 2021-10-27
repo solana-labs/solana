@@ -13,15 +13,15 @@ documentation = "https://docs.rs/solana-validator"
 crossbeam-channel = "0.5"
 futures-util = "0.3"
 log = "0.4.11"
-prost = "0.8.0"
+prost = "0.9.0"
 solana-rpc = { path = "../rpc", version = "=1.9.0" }
 solana-runtime = { path = "../runtime", version = "=1.9.0" }
 solana-sdk = { path = "../sdk", version = "=1.9.0" }
 tokio = { version = "1", features = ["full"] }
-tonic = { version = "0.5.0", features = ["tls", "transport"] }
+tonic = { version = "0.6.1", features = ["tls", "transport"] }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [build-dependencies]
-tonic-build = "0.5.1"
+tonic-build = "0.6.0"
