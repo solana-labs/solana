@@ -13,6 +13,7 @@ use crate::{
     consensus::{
         ComputedBankState, Stake, SwitchForkDecision, Tower, VotedStakes, SWITCH_FORK_THRESHOLD,
     },
+    cost_update_service::CostUpdate,
     fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
     heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
     latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
@@ -314,7 +315,7 @@ impl ReplayStage {
         gossip_verified_vote_hash_receiver: GossipVerifiedVoteHashReceiver,
         cluster_slots_update_sender: ClusterSlotsUpdateSender,
         voting_sender: Sender<VoteOp>,
-        cost_update_sender: Sender<ExecuteTimings>,
+        cost_update_sender: Sender<CostUpdate>,
     ) -> Self {
         let ReplayStageConfig {
             my_pubkey,
@@ -1690,7 +1691,7 @@ impl ReplayStage {
         unfrozen_gossip_verified_vote_hashes: &mut UnfrozenGossipVerifiedVoteHashes,
         latest_validator_votes_for_frozen_banks: &mut LatestValidatorVotesForFrozenBanks,
         cluster_slots_update_sender: &ClusterSlotsUpdateSender,
-        cost_update_sender: &Sender<ExecuteTimings>,
+        cost_update_sender: &Sender<CostUpdate>,
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
@@ -1783,6 +1784,13 @@ impl ReplayStage {
                     transaction_status_sender.send_transaction_status_freeze_message(&bank);
                 }
                 bank.freeze();
+                // report cost tracker stats
+                cost_update_sender
+                    .send(CostUpdate::FrozenBank { bank: bank.clone() })
+                    .unwrap_or_else(|err| {
+                        warn!("cost_update_sender failed sending bank stats: {:?}", err)
+                    });
+
                 let bank_hash = bank.hash();
                 assert_ne!(bank_hash, Hash::default());
                 // Needs to be updated before `check_slot_agrees_with_cluster()` so that
@@ -1836,7 +1844,7 @@ impl ReplayStage {
         // send accumulated excute-timings to cost_update_service
         if !execute_timings.details.per_program_timings.is_empty() {
             cost_update_sender
-                .send(execute_timings)
+                .send(CostUpdate::ExecuteTiming { execute_timings })
                 .unwrap_or_else(|err| warn!("cost_update_sender failed: {:?}", err));
         }
 

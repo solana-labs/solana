@@ -29,7 +29,6 @@ use solana_runtime::{
     bank_forks::{ArchiveFormat, BankForks, SnapshotConfig},
     cost_model::CostModel,
     cost_tracker::CostTracker,
-    cost_tracker_stats::CostTrackerStats,
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     snapshot_utils,
     snapshot_utils::{SnapshotVersion, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
@@ -746,22 +745,17 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
     let mut cost_model = CostModel::default();
     cost_model.initialize_cost_table(&blockstore.read_program_costs().unwrap());
     let mut cost_tracker = CostTracker::default();
-    let mut cost_tracker_stats = CostTrackerStats::default();
 
     for entry in &entries {
         transactions += entry.transactions.len();
         for transaction in &entry.transactions {
             programs += transaction.message().instructions.len();
             let tx_cost = cost_model.calculate_cost(transaction, true);
-            if cost_tracker
-                .try_add(transaction, &tx_cost, &mut cost_tracker_stats)
-                .is_err()
-            {
+            let result = cost_tracker.try_add(transaction, &tx_cost);
+            if result.is_err() {
                 println!(
-                    "Slot: {}, CostModel rejected transaction {:?}, stats {:?}!",
-                    slot,
-                    transaction,
-                    cost_tracker.get_stats()
+                    "Slot: {}, CostModel rejected transaction {:?}, reason {:?}",
+                    slot, transaction, result
                 );
             }
             for instruction in &transaction.message().instructions {
@@ -773,12 +767,11 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
     }
 
     println!(
-        "Slot: {}, Entries: {}, Transactions: {}, Programs {}, {:?}",
+        "Slot: {}, Entries: {}, Transactions: {}, Programs {}",
         slot,
         entries.len(),
         transactions,
         programs,
-        cost_tracker.get_stats()
     );
     println!("  Programs: {:?}", program_ids);
 

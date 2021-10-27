@@ -1177,12 +1177,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "histogram"
-version = "0.6.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12cb882ccb290b8646e554b157ab0b71e64e8d5bef775cd66b6531e52d302669"
-
-[[package]]
 name = "hmac"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3428,7 +3422,6 @@ dependencies = [
  "dir-diff",
  "flate2",
  "fnv",
- "histogram",
  "itertools 0.9.0",
  "lazy_static",
  "libc",
