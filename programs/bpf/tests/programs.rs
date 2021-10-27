@@ -49,15 +49,15 @@ use solana_sdk::{
     system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
     system_program, sysvar,
     sysvar::{clock, rent},
-    transaction::{Transaction, TransactionError},
+    transaction::{SanitizedTransaction, Transaction, TransactionError},
 };
 use solana_transaction_status::{
     token_balances::collect_token_balances, ConfirmedTransaction, InnerInstructions,
     TransactionStatusMeta, TransactionWithStatusMeta, UiTransactionEncoding,
 };
 use std::{
-    cell::RefCell, collections::HashMap, convert::TryFrom, convert::TryInto, env, fs::File,
-    io::Read, path::PathBuf, str::FromStr, sync::Arc,
+    cell::RefCell, collections::HashMap, convert::TryFrom, env, fs::File, io::Read, path::PathBuf,
+    str::FromStr, sync::Arc,
 };
 
 /// BPF program file extension
@@ -301,7 +301,7 @@ fn process_transaction_and_record_inner(
 ) -> (Result<(), TransactionError>, Vec<Vec<CompiledInstruction>>) {
     let signature = tx.signatures.get(0).unwrap().clone();
     let txs = vec![tx];
-    let tx_batch = bank.prepare_batch(txs).unwrap();
+    let tx_batch = bank.prepare_batch_for_tests(txs);
     let (mut results, _, mut inner_instructions, _transaction_logs) = bank
         .load_execute_and_commit_transactions(
             &tx_batch,
@@ -324,7 +324,7 @@ fn process_transaction_and_record_inner(
 }
 
 fn execute_transactions(bank: &Bank, txs: Vec<Transaction>) -> Vec<ConfirmedTransaction> {
-    let batch = bank.prepare_batch(txs.clone()).unwrap();
+    let batch = bank.prepare_batch_for_tests(txs.clone());
     let mut timings = ExecuteTimings::default();
     let mut mint_decimals = HashMap::new();
     let tx_pre_token_balances = collect_token_balances(&bank, &batch, &mut mint_decimals);
@@ -786,8 +786,9 @@ fn test_return_data_and_log_data_syscall() {
         let blockhash = bank.last_blockhash();
         let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
         let transaction = Transaction::new(&[&mint_keypair], message, blockhash);
+        let sanitized_tx = SanitizedTransaction::from_transaction_for_tests(transaction);
 
-        let result = bank.simulate_transaction(transaction.try_into().unwrap());
+        let result = bank.simulate_transaction(sanitized_tx);
 
         assert!(result.result.is_ok());
 

@@ -14,7 +14,6 @@ use {
         transaction::{Result, Transaction, TransactionError, VersionedTransaction},
     },
     solana_program::{system_instruction::SystemInstruction, system_program},
-    std::convert::TryFrom,
     std::sync::Arc,
 };
 
@@ -33,23 +32,6 @@ pub struct TransactionAccountLocks<'a> {
     pub readonly: Vec<&'a Pubkey>,
     /// List of writable account key locks
     pub writable: Vec<&'a Pubkey>,
-}
-
-impl TryFrom<Transaction> for SanitizedTransaction {
-    type Error = TransactionError;
-    fn try_from(tx: Transaction) -> Result<Self> {
-        tx.sanitize()?;
-
-        if tx.message.has_duplicates() {
-            return Err(TransactionError::AccountLoadedTwice);
-        }
-
-        Ok(Self {
-            message_hash: tx.message.hash(),
-            message: SanitizedMessage::Legacy(tx.message),
-            signatures: tx.signatures,
-        })
-    }
 }
 
 impl SanitizedTransaction {
@@ -81,6 +63,21 @@ impl SanitizedTransaction {
             message_hash,
             signatures,
         })
+    }
+
+    /// Create a sanitized transaction from a legacy transaction. Used for tests only.
+    pub fn from_transaction_for_tests(tx: Transaction) -> Self {
+        tx.sanitize().unwrap();
+
+        if tx.message.has_duplicates() {
+            Result::<Self>::Err(TransactionError::AccountLoadedTwice).unwrap();
+        }
+
+        Self {
+            message_hash: tx.message.hash(),
+            message: SanitizedMessage::Legacy(tx.message),
+            signatures: tx.signatures,
+        }
     }
 
     /// Return the first signature for this transaction.

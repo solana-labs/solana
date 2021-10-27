@@ -1868,7 +1868,7 @@ mod tests {
         system_transaction,
         transaction::SanitizedTransaction,
     };
-    use std::{convert::TryFrom, mem::size_of};
+    use std::mem::size_of;
 
     #[test]
     fn test_serialize_snapshot_data_file_under_limit() {
@@ -3042,13 +3042,12 @@ mod tests {
 
         let slot = slot + 1;
         let bank2 = Arc::new(Bank::new_from_parent(&bank1, &collector, slot));
-        let tx = SanitizedTransaction::try_from(system_transaction::transfer(
+        let tx = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
             &key1,
             &key2.pubkey(),
             lamports_to_transfer,
             bank2.last_blockhash(),
-        ))
-        .unwrap();
+        ));
         let fee = bank2.get_fee_for_message(tx.message());
         let tx = system_transaction::transfer(
             &key1,

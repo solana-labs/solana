@@ -3246,21 +3246,17 @@ impl Bank {
         tick_height % self.ticks_per_slot == 0
     }
 
-    /// Prepare a transaction batch from a list of legacy transactionsy. Used for tests only.
-    pub fn prepare_batch(&self, txs: Vec<Transaction>) -> Result<TransactionBatch> {
+    /// Prepare a transaction batch from a list of legacy transactions. Used for tests only.
+    pub fn prepare_batch_for_tests(&self, txs: Vec<Transaction>) -> TransactionBatch {
         let sanitized_txs = txs
             .into_iter()
-            .map(SanitizedTransaction::try_from)
-            .collect::<Result<Vec<_>>>()?;
+            .map(SanitizedTransaction::from_transaction_for_tests)
+            .collect::<Vec<_>>();
         let lock_results = self
             .rc
             .accounts
             .lock_accounts(sanitized_txs.iter(), self.demote_program_write_locks());
-        Ok(TransactionBatch::new(
-            lock_results,
-            self,
-            Cow::Owned(sanitized_txs),
-        ))
+        TransactionBatch::new(lock_results, self, Cow::Owned(sanitized_txs))
     }
 
     /// Prepare a transaction batch from a list of versioned transactions from
@@ -9084,14 +9080,18 @@ pub(crate) mod tests {
         let bank = Bank::new_for_tests(&genesis_config);
 
         let key = Keypair::new();
-        let tx1 =
-            system_transaction::transfer(&mint_keypair, &key.pubkey(), 2, genesis_config.hash())
-                .try_into()
-                .unwrap();
-        let tx2 =
-            system_transaction::transfer(&mint_keypair, &key.pubkey(), 5, genesis_config.hash())
-                .try_into()
-                .unwrap();
+        let tx1 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+            &mint_keypair,
+            &key.pubkey(),
+            2,
+            genesis_config.hash(),
+        ));
+        let tx2 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+            &mint_keypair,
+            &key.pubkey(),
+            5,
+            genesis_config.hash(),
+        ));
 
         let results = vec![
             (Ok(()), None),
@@ -9231,7 +9231,7 @@ pub(crate) mod tests {
             system_transaction::transfer(&mint_keypair, &alice.pubkey(), 1, genesis_config.hash());
         let pay_alice = vec![tx1];
 
-        let lock_result = bank.prepare_batch(pay_alice).unwrap();
+        let lock_result = bank.prepare_batch_for_tests(pay_alice);
         let results_alice = bank
             .load_execute_and_commit_transactions(
                 &lock_result,
@@ -9284,7 +9284,7 @@ pub(crate) mod tests {
         let tx = Transaction::new(&[&key0], message, genesis_config.hash());
         let txs = vec![tx];
 
-        let batch0 = bank.prepare_batch(txs).unwrap();
+        let batch0 = bank.prepare_batch_for_tests(txs);
         assert!(batch0.lock_results()[0].is_ok());
 
         // Try locking accounts, locking a previously read-only account as writable
@@ -9302,7 +9302,7 @@ pub(crate) mod tests {
         let tx = Transaction::new(&[&key1], message, genesis_config.hash());
         let txs = vec![tx];
 
-        let batch1 = bank.prepare_batch(txs).unwrap();
+        let batch1 = bank.prepare_batch_for_tests(txs);
         assert!(batch1.lock_results()[0].is_err());
 
         // Try locking a previously read-only account a 2nd time; should succeed
@@ -9319,7 +9319,7 @@ pub(crate) mod tests {
         let tx = Transaction::new(&[&key2], message, genesis_config.hash());
         let txs = vec![tx];
 
-        let batch2 = bank.prepare_batch(txs).unwrap();
+        let batch2 = bank.prepare_batch_for_tests(txs);
         assert!(batch2.lock_results()[0].is_ok());
     }
 
@@ -10851,7 +10851,7 @@ pub(crate) mod tests {
         );
         let nonce_account = bank.get_account(&nonce_pubkey).unwrap();
         assert_eq!(
-            bank.check_tx_durable_nonce(&tx.try_into().unwrap()),
+            bank.check_tx_durable_nonce(&SanitizedTransaction::from_transaction_for_tests(tx)),
             Some((nonce_pubkey, nonce_account))
         );
     }
@@ -10874,7 +10874,7 @@ pub(crate) mod tests {
             nonce_hash,
         );
         assert!(bank
-            .check_tx_durable_nonce(&tx.try_into().unwrap())
+            .check_tx_durable_nonce(&SanitizedTransaction::from_transaction_for_tests(tx,))
             .is_none());
     }
 
@@ -10897,7 +10897,7 @@ pub(crate) mod tests {
         );
         tx.message.instructions[0].accounts.clear();
         assert!(bank
-            .check_tx_durable_nonce(&tx.try_into().unwrap())
+            .check_tx_durable_nonce(&SanitizedTransaction::from_transaction_for_tests(tx))
             .is_none());
     }
 
@@ -10921,7 +10921,7 @@ pub(crate) mod tests {
             nonce_hash,
         );
         assert!(bank
-            .check_tx_durable_nonce(&tx.try_into().unwrap())
+            .check_tx_durable_nonce(&SanitizedTransaction::from_transaction_for_tests(tx))
             .is_none());
     }
 
@@ -10942,7 +10942,7 @@ pub(crate) mod tests {
             Hash::default(),
         );
         assert!(bank
-            .check_tx_durable_nonce(&tx.try_into().unwrap())
+            .check_tx_durable_nonce(&SanitizedTransaction::from_transaction_for_tests(tx))
             .is_none());
     }
 
@@ -11293,14 +11293,14 @@ pub(crate) mod tests {
             instructions,
         );
         let txs = vec![tx0, tx1];
-        let batch = bank0.prepare_batch(txs.clone()).unwrap();
+        let batch = bank0.prepare_batch_for_tests(txs.clone());
         let balances = bank0.collect_balances(&batch);
         assert_eq!(balances.len(), 2);
         assert_eq!(balances[0], vec![8, 11, 1]);
         assert_eq!(balances[1], vec![8, 0, 1]);
 
         let txs: Vec<_> = txs.into_iter().rev().collect();
-        let batch = bank0.prepare_batch(txs).unwrap();
+        let batch = bank0.prepare_batch_for_tests(txs);
         let balances = bank0.collect_balances(&batch);
         assert_eq!(balances.len(), 2);
         assert_eq!(balances[0], vec![8, 0, 1]);
@@ -11334,7 +11334,7 @@ pub(crate) mod tests {
         let tx2 = system_transaction::transfer(&keypair1, &pubkey2, 12, blockhash);
         let txs = vec![tx0, tx1, tx2];
 
-        let lock_result = bank0.prepare_batch(txs).unwrap();
+        let lock_result = bank0.prepare_batch_for_tests(txs);
         let (transaction_results, transaction_balances_set, inner_instructions, transaction_logs) =
             bank0.load_execute_and_commit_transactions(
                 &lock_result,
@@ -14511,7 +14511,7 @@ pub(crate) mod tests {
         let failure_sig = tx1.signatures[0];
         let tx2 = system_transaction::transfer(&sender0, &recipient0, 1, blockhash);
         let txs = vec![tx0, tx1, tx2];
-        let batch = bank.prepare_batch(txs).unwrap();
+        let batch = bank.prepare_batch_for_tests(txs);
 
         let log_results = bank
             .load_execute_and_commit_transactions(

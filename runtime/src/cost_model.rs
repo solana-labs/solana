@@ -197,7 +197,6 @@ mod tests {
         transaction::Transaction,
     };
     use std::{
-        convert::{TryFrom, TryInto},
         str::FromStr,
         sync::{Arc, RwLock},
         thread::{self, JoinHandle},
@@ -243,10 +242,9 @@ mod tests {
         let (mint_keypair, start_hash) = test_setup();
 
         let keypair = Keypair::new();
-        let simple_transaction: SanitizedTransaction =
-            system_transaction::transfer(&mint_keypair, &keypair.pubkey(), 2, start_hash)
-                .try_into()
-                .unwrap();
+        let simple_transaction = SanitizedTransaction::from_transaction_for_tests(
+            system_transaction::transfer(&mint_keypair, &keypair.pubkey(), 2, start_hash),
+        );
         debug!(
             "system_transaction simple_transaction {:?}",
             simple_transaction
@@ -274,9 +272,11 @@ mod tests {
         let instructions =
             system_instruction::transfer_many(&mint_keypair.pubkey(), &[(key1, 1), (key2, 1)]);
         let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
-        let tx: SanitizedTransaction = Transaction::new(&[&mint_keypair], message, start_hash)
-            .try_into()
-            .unwrap();
+        let tx = SanitizedTransaction::from_transaction_for_tests(Transaction::new(
+            &[&mint_keypair],
+            message,
+            start_hash,
+        ));
         debug!("many transfer transaction {:?}", tx);
 
         // expected cost for two system transfer instructions
@@ -303,15 +303,15 @@ mod tests {
             CompiledInstruction::new(3, &(), vec![0, 1]),
             CompiledInstruction::new(4, &(), vec![0, 2]),
         ];
-        let tx: SanitizedTransaction = Transaction::new_with_compiled_instructions(
-            &[&mint_keypair],
-            &[key1, key2],
-            start_hash,
-            vec![prog1, prog2],
-            instructions,
-        )
-        .try_into()
-        .unwrap();
+        let tx = SanitizedTransaction::from_transaction_for_tests(
+            Transaction::new_with_compiled_instructions(
+                &[&mint_keypair],
+                &[key1, key2],
+                start_hash,
+                vec![prog1, prog2],
+                instructions,
+            ),
+        );
         debug!("many random transaction {:?}", tx);
 
         let testee = CostModel::default();
@@ -335,15 +335,15 @@ mod tests {
             CompiledInstruction::new(4, &(), vec![0, 2]),
             CompiledInstruction::new(5, &(), vec![1, 3]),
         ];
-        let tx: SanitizedTransaction = Transaction::new_with_compiled_instructions(
-            &[&signer1, &signer2],
-            &[key1, key2],
-            Hash::new_unique(),
-            vec![prog1, prog2],
-            instructions,
-        )
-        .try_into()
-        .unwrap();
+        let tx = SanitizedTransaction::from_transaction_for_tests(
+            Transaction::new_with_compiled_instructions(
+                &[&signer1, &signer2],
+                &[key1, key2],
+                Hash::new_unique(),
+                vec![prog1, prog2],
+                instructions,
+            ),
+        );
 
         let cost_model = CostModel::default();
         let tx_cost = cost_model.calculate_cost(&tx, /*demote_program_write_locks=*/ true);
@@ -376,10 +376,12 @@ mod tests {
     #[test]
     fn test_cost_model_calculate_cost() {
         let (mint_keypair, start_hash) = test_setup();
-        let tx: SanitizedTransaction =
-            system_transaction::transfer(&mint_keypair, &Keypair::new().pubkey(), 2, start_hash)
-                .try_into()
-                .unwrap();
+        let tx = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+            &mint_keypair,
+            &Keypair::new().pubkey(),
+            2,
+            start_hash,
+        ));
 
         let expected_account_cost = WRITE_LOCK_UNITS * 2;
         let expected_execution_cost = 8;
@@ -424,16 +426,15 @@ mod tests {
             CompiledInstruction::new(3, &(), vec![0, 1]),
             CompiledInstruction::new(4, &(), vec![0, 2]),
         ];
-        let tx = Arc::new(
-            SanitizedTransaction::try_from(Transaction::new_with_compiled_instructions(
+        let tx = Arc::new(SanitizedTransaction::from_transaction_for_tests(
+            Transaction::new_with_compiled_instructions(
                 &[&mint_keypair],
                 &[key1, key2],
                 start_hash,
                 vec![prog1, prog2],
                 instructions,
-            ))
-            .unwrap(),
-        );
+            ),
+        ));
 
         let number_threads = 10;
         let expected_account_cost = WRITE_LOCK_UNITS * 3;
