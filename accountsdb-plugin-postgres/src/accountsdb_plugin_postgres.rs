@@ -81,7 +81,8 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
     /// * "port", optional, specifies the PostgreSQL server's port.
     /// * "connection_str", optional, the custom PostgreSQL connection string.
     /// Please refer to https://docs.rs/postgres/0.19.2/postgres/config/struct.Config.html for the connection configuration.
-    /// When `connection_str` is set, the values in "host", "user" and "port" are ignored.
+    /// When `connection_str` is set, the values in "host", "user" and "port" are ignored. If `connection_str` is not given,
+    /// `host` and `user` must be given. 
     /// * "threads" optional, specifies the number of worker threads for the plugin. A thread
     /// maintains a PostgreSQL connection to the server. The default is '10'.
     /// * "batch_size" optional, specifies the batch size of bulk insert when the AccountsDb is created
