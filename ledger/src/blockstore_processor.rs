@@ -3179,9 +3179,14 @@ pub mod tests {
             42,
             bank.last_blockhash(),
         );
+<<<<<<< HEAD
         account_loaded_twice.message.account_keys[1] = mint_keypair.pubkey();
         let transactions = [account_not_found_tx, account_loaded_twice];
         let batch = bank.prepare_batch(transactions.iter());
+=======
+        let txs = vec![account_not_found_tx, invalid_blockhash_tx];
+        let batch = bank.prepare_batch_for_tests(txs);
+>>>>>>> 036d7fcc8 (Clean up sanitized tx creation for tests (#21006))
         let (
             TransactionResults {
                 fee_collection_results,

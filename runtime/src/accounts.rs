@@ -1170,6 +1170,21 @@ mod tests {
         {thread, time},
     };
 
+<<<<<<< HEAD
+=======
+    fn new_sanitized_tx<T: Signers>(
+        from_keypairs: &T,
+        message: Message,
+        recent_blockhash: Hash,
+    ) -> SanitizedTransaction {
+        SanitizedTransaction::from_transaction_for_tests(Transaction::new(
+            from_keypairs,
+            message,
+            recent_blockhash,
+        ))
+    }
+
+>>>>>>> 036d7fcc8 (Clean up sanitized tx creation for tests (#21006))
     fn load_accounts_with_fee_and_rent(
         tx: Transaction,
         ka: &[(Pubkey, AccountSharedData)],
@@ -1191,6 +1206,10 @@ mod tests {
         }
 
         let ancestors = vec![(0, 0)].into_iter().collect();
+<<<<<<< HEAD
+=======
+        let sanitized_tx = SanitizedTransaction::from_transaction_for_tests(tx);
+>>>>>>> 036d7fcc8 (Clean up sanitized tx creation for tests (#21006))
         accounts.load_accounts(
             &ancestors,
             [tx].iter(),
@@ -2438,6 +2457,10 @@ mod tests {
     }
 
     fn load_accounts_no_store(accounts: &Accounts, tx: Transaction) -> Vec<TransactionLoadResult> {
+<<<<<<< HEAD
+=======
+        let tx = SanitizedTransaction::from_transaction_for_tests(tx);
+>>>>>>> 036d7fcc8 (Clean up sanitized tx creation for tests (#21006))
         let rent_collector = RentCollector::default();
         let fee_calculator = FeeCalculator::new(10);
         let mut hash_queue = BlockhashQueue::new(100);

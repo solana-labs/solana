@@ -109,8 +109,23 @@ mod tests {
         let pubkey2 = solana_sdk::pubkey::new_rand();
 
         let txs = vec![
+<<<<<<< HEAD
             system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash()),
             system_transaction::transfer(&keypair2, &pubkey2, 1, genesis_config.hash()),
+=======
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                &mint_keypair,
+                &pubkey,
+                1,
+                genesis_config.hash(),
+            )),
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                &keypair2,
+                &pubkey2,
+                1,
+                genesis_config.hash(),
+            )),
+>>>>>>> 036d7fcc8 (Clean up sanitized tx creation for tests (#21006))
         ];
 
         (bank, txs)
