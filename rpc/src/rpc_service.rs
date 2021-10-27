@@ -600,6 +600,7 @@ mod tests {
                 archive_format: ArchiveFormat::TarBzip2,
                 snapshot_version: SnapshotVersion::default(),
                 maximum_snapshots_to_retain: DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+                packager_thread_niceness_adj: 0,
             }),
             bank_forks,
             RpcHealth::stub(),

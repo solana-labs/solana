@@ -1,4 +1,5 @@
 use solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
+use solana_perf::thread::renice_this_thread;
 use solana_runtime::{snapshot_package::AccountsPackage, snapshot_utils};
 use solana_sdk::{clock::Slot, hash::Hash};
 use std::{
@@ -23,6 +24,7 @@ impl SnapshotPackagerService {
         exit: &Arc<AtomicBool>,
         cluster_info: &Arc<ClusterInfo>,
         maximum_snapshots_to_retain: usize,
+        niceness_adj: i8,
     ) -> Self {
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
@@ -30,6 +32,7 @@ impl SnapshotPackagerService {
         let t_snapshot_packager = Builder::new()
             .name("snapshot-packager".to_string())
             .spawn(move || {
+                renice_this_thread(niceness_adj).unwrap();
                 let mut hashes = vec![];
                 if let Some(starting_snapshot_hash) = starting_snapshot_hash {
                     hashes.push(starting_snapshot_hash);

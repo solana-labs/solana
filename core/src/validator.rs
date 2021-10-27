@@ -681,6 +681,7 @@ impl Validator {
                     &exit,
                     &cluster_info,
                     snapshot_config.maximum_snapshots_to_retain,
+                    snapshot_config.packager_thread_niceness_adj,
                 );
                 (
                     Some(snapshot_packager_service),

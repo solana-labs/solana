@@ -43,6 +43,9 @@ pub struct SnapshotConfig {
 
     // Maximum number of snapshots to retain
     pub maximum_snapshots_to_retain: usize,
+
+    // Thread niceness adjustment for snapshot packager service
+    pub packager_thread_niceness_adj: i8,
 }
 
 struct SetRootTimings {

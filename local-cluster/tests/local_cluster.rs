@@ -3277,6 +3277,7 @@ fn setup_snapshot_validator_config(
         archive_format: ArchiveFormat::TarBzip2,
         snapshot_version: snapshot_utils::SnapshotVersion::default(),
         maximum_snapshots_to_retain: snapshot_utils::DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+        packager_thread_niceness_adj: 0,
     };
 
     // Create the account paths
