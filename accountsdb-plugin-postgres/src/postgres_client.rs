@@ -727,8 +727,8 @@ impl ParallelPostgresClient {
                             Ok(())
                         }
                         Err(err) => {
+                            error!("Error when making connection to database: ({})", err);
                             if panic_on_db_error {
-                                error!("Error when making connection to database: ({})", err);
                                 abort();
                             }
                             Err(err)
