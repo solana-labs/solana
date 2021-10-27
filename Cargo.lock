@@ -4340,7 +4340,6 @@ dependencies = [
  "bincode",
  "clap",
  "log 0.4.14",
-<<<<<<< HEAD
  "rayon",
  "serde_json",
  "serde_yaml",
@@ -4353,11 +4352,6 @@ dependencies = [
  "solana-gossip",
  "solana-local-cluster",
  "solana-logger 1.8.2",
-=======
- "openssl",
- "rand 0.7.3",
- "regex",
->>>>>>> 920159fc6 (Force a recent version of the openssl crate to allow this to build on M1 macs)
  "solana-measure",
  "solana-metrics",
  "solana-net-utils",
@@ -4378,6 +4372,7 @@ dependencies = [
  "log 0.4.14",
  "num-derive",
  "num-traits",
+ "openssl",
  "rand 0.7.3",
  "rand_core 0.6.2",
  "rustversion",
