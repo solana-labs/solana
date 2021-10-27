@@ -92,12 +92,23 @@ pub fn process_request(
 #[cfg(test)]
 mod tests {
     use super::*;
+<<<<<<< HEAD
     use crate::{hash::Hash, message::Message, pubkey::Pubkey, signature::Keypair, signer::Signer};
+=======
+    use crate::{
+        hash::Hash, message::Message, pubkey::Pubkey, signature::Keypair, signer::Signer,
+        transaction::Transaction,
+    };
+>>>>>>> 036d7fcc8 (Clean up sanitized tx creation for tests (#21006))
 
     macro_rules! test {
         ( $instructions: expr, $expected_error: expr, $expected_budget: expr ) => {
             let payer_keypair = Keypair::new();
+<<<<<<< HEAD
             let tx = Transaction::new(
+=======
+            let tx = SanitizedTransaction::from_transaction_for_tests(Transaction::new(
+>>>>>>> 036d7fcc8 (Clean up sanitized tx creation for tests (#21006))
                 &[&payer_keypair],
                 Message::new($instructions, Some(&payer_keypair.pubkey())),
                 Hash::default(),

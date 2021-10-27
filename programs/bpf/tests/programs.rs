@@ -42,17 +42,29 @@ use solana_sdk::{
     process_instruction::{InvokeContext, MockInvokeContext},
     pubkey::Pubkey,
     signature::{keypair_from_seed, Keypair, Signer},
+<<<<<<< HEAD
     system_instruction,
     sysvar::{clock, fees, rent},
     transaction::{Transaction, TransactionError},
+=======
+    system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
+    system_program, sysvar,
+    sysvar::{clock, rent},
+    transaction::{SanitizedTransaction, Transaction, TransactionError},
+>>>>>>> 036d7fcc8 (Clean up sanitized tx creation for tests (#21006))
 };
 use solana_transaction_status::{
     token_balances::collect_token_balances, ConfirmedTransaction, InnerInstructions,
     TransactionStatusMeta, TransactionWithStatusMeta, UiTransactionEncoding,
 };
 use std::{
+<<<<<<< HEAD
     cell::RefCell, collections::HashMap, env, fs::File, io::Read, path::PathBuf, str::FromStr,
     sync::Arc,
+=======
+    cell::RefCell, collections::HashMap, convert::TryFrom, env, fs::File, io::Read, path::PathBuf,
+    str::FromStr, sync::Arc,
+>>>>>>> 036d7fcc8 (Clean up sanitized tx creation for tests (#21006))
 };
 
 /// BPF program file extension
@@ -294,7 +306,11 @@ fn process_transaction_and_record_inner(
 ) -> (Result<(), TransactionError>, Vec<Vec<CompiledInstruction>>) {
     let signature = tx.signatures.get(0).unwrap().clone();
     let txs = vec![tx];
+<<<<<<< HEAD
     let tx_batch = bank.prepare_batch(txs.iter());
+=======
+    let tx_batch = bank.prepare_batch_for_tests(txs);
+>>>>>>> 036d7fcc8 (Clean up sanitized tx creation for tests (#21006))
     let (mut results, _, mut inner_instructions, _transaction_logs) = bank
         .load_execute_and_commit_transactions(
             &tx_batch,
@@ -316,8 +332,13 @@ fn process_transaction_and_record_inner(
     )
 }
 
+<<<<<<< HEAD
 fn execute_transactions(bank: &Bank, txs: &[Transaction]) -> Vec<ConfirmedTransaction> {
     let batch = bank.prepare_batch(txs.iter());
+=======
+fn execute_transactions(bank: &Bank, txs: Vec<Transaction>) -> Vec<ConfirmedTransaction> {
+    let batch = bank.prepare_batch_for_tests(txs.clone());
+>>>>>>> 036d7fcc8 (Clean up sanitized tx creation for tests (#21006))
     let mut timings = ExecuteTimings::default();
     let mut mint_decimals = HashMap::new();
     let tx_pre_token_balances = collect_token_balances(&bank, &batch, &mut mint_decimals);
@@ -774,8 +795,13 @@ fn test_return_data_and_log_data_syscall() {
         let blockhash = bank.last_blockhash();
         let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
         let transaction = Transaction::new(&[&mint_keypair], message, blockhash);
+        let sanitized_tx = SanitizedTransaction::from_transaction_for_tests(transaction);
 
+<<<<<<< HEAD
         let (result, logs, _) = bank.simulate_transaction(&transaction);
+=======
+        let result = bank.simulate_transaction(sanitized_tx);
+>>>>>>> 036d7fcc8 (Clean up sanitized tx creation for tests (#21006))
 
         assert!(result.is_ok());
 

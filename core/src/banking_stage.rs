@@ -2040,6 +2040,15 @@ mod tests {
         Blockstore::destroy(&ledger_path).unwrap();
     }
 
+<<<<<<< HEAD
+=======
+    fn sanitize_transactions(txs: Vec<Transaction>) -> Vec<SanitizedTransaction> {
+        txs.into_iter()
+            .map(SanitizedTransaction::from_transaction_for_tests)
+            .collect()
+    }
+
+>>>>>>> 036d7fcc8 (Clean up sanitized tx creation for tests (#21006))
     #[test]
     fn test_bank_record_transactions() {
         solana_logger::setup();
@@ -2316,11 +2325,20 @@ mod tests {
         let bank = Arc::new(Bank::new_no_wallclock_throttle(&genesis_config));
         let pubkey = solana_sdk::pubkey::new_rand();
 
+<<<<<<< HEAD
         let transactions =
             vec![
                 system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash())
                     .into(),
             ];
+=======
+        let transactions = sanitize_transactions(vec![system_transaction::transfer(
+            &mint_keypair,
+            &pubkey,
+            1,
+            genesis_config.hash(),
+        )]);
+>>>>>>> 036d7fcc8 (Clean up sanitized tx creation for tests (#21006))
 
         let start = Arc::new(Instant::now());
         let working_bank = WorkingBank {
@@ -2382,13 +2400,17 @@ mod tests {
 
             assert!(done);
 
-            let transactions = vec![system_transaction::transfer(
+            let transactions = sanitize_transactions(vec![system_transaction::transfer(
                 &mint_keypair,
                 &pubkey,
                 2,
                 genesis_config.hash(),
+<<<<<<< HEAD
             )
             .into()];
+=======
+            )]);
+>>>>>>> 036d7fcc8 (Clean up sanitized tx creation for tests (#21006))
 
             assert_matches!(
                 BankingStage::process_and_record_transactions(
@@ -2448,10 +2470,17 @@ mod tests {
         let pubkey = solana_sdk::pubkey::new_rand();
         let pubkey1 = solana_sdk::pubkey::new_rand();
 
+<<<<<<< HEAD
         let transactions = vec![
             system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash()).into(),
             system_transaction::transfer(&mint_keypair, &pubkey1, 1, genesis_config.hash()).into(),
         ];
+=======
+        let transactions = sanitize_transactions(vec![
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey1, 1, genesis_config.hash()),
+        ]);
+>>>>>>> 036d7fcc8 (Clean up sanitized tx creation for tests (#21006))
 
         let start = Arc::new(Instant::now());
         let working_bank = WorkingBank {
@@ -2560,11 +2589,20 @@ mod tests {
 
         let pubkey = solana_sdk::pubkey::new_rand();
 
+<<<<<<< HEAD
         let transactions =
             vec![
                 system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash())
                     .into(),
             ];
+=======
+        let transactions = sanitize_transactions(vec![system_transaction::transfer(
+            &mint_keypair,
+            &pubkey,
+            1,
+            genesis_config.hash(),
+        )]);
+>>>>>>> 036d7fcc8 (Clean up sanitized tx creation for tests (#21006))
 
         let ledger_path = get_tmp_ledger_path!();
         {
@@ -2640,7 +2678,11 @@ mod tests {
         let entry_3 = next_entry(&entry_2.hash, 1, vec![fail_tx.clone()]);
         let entries = vec![entry_1, entry_2, entry_3];
 
+<<<<<<< HEAD
         let transactions = vec![success_tx.into(), ix_error_tx.into(), fail_tx.into()];
+=======
+        let transactions = sanitize_transactions(vec![success_tx, ix_error_tx, fail_tx]);
+>>>>>>> 036d7fcc8 (Clean up sanitized tx creation for tests (#21006))
         bank.transfer(4, &mint_keypair, &keypair1.pubkey()).unwrap();
 
         let start = Arc::new(Instant::now());

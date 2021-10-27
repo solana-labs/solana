@@ -298,6 +298,10 @@ mod tests {
     fn test_cost_tracker_try_add_is_atomic() {
         let (mint_keypair, start_hash) = test_setup();
         let (tx, _keys, _cost) = build_simple_transaction(&mint_keypair, &start_hash);
+<<<<<<< HEAD
+=======
+        let tx = SanitizedTransaction::from_transaction_for_tests(tx);
+>>>>>>> 036d7fcc8 (Clean up sanitized tx creation for tests (#21006))
 
         let acct1 = Pubkey::new_unique();
         let acct2 = Pubkey::new_unique();
