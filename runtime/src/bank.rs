@@ -14259,31 +14259,31 @@ pub(crate) mod tests {
         genesis_config
             .accounts
             .remove(&feature_set::requestable_heap_size::id());
-        let mut bank = Bank::new_for_tests(&genesis_config);
+        let mut bank = Bank::new(&genesis_config);
 
         fn mock_ix_processor(
-            _first_instruction_account: usize,
+            _pubkey: &Pubkey,
             _data: &[u8],
             invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
-            let compute_budget = invoke_context.get_compute_budget();
+            let compute_budget = invoke_context.get_bpf_compute_budget();
             assert_eq!(
                 *compute_budget,
-                ComputeBudget {
+                BpfComputeBudget {
                     max_units: 200_000,
                     heap_size: None,
-                    ..ComputeBudget::default()
+                    ..BpfComputeBudget::default()
                 }
             );
             Ok(())
         }
         let program_id = solana_sdk::pubkey::new_rand();
-        bank.add_builtin("mock_program", &program_id, mock_ix_processor);
+        bank.add_builtin("mock_program", program_id, mock_ix_processor);
 
         let message = Message::new(
             &[
-                ComputeBudgetInstruction::request_units(1),
-                ComputeBudgetInstruction::request_heap_frame(48 * 1024),
+                compute_budget::request_units(1),
+                compute_budget::request_heap_frame(48 * 1024),
                 Instruction::new_with_bincode(program_id, &0, vec![]),
             ],
             Some(&mint_keypair.pubkey()),

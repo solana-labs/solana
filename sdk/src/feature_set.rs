@@ -313,11 +313,7 @@ lazy_static! {
         (sol_log_data_syscall_enabled::id(), "enable sol_log_data syscall"),
         (ed25519_program_enabled::id(), "enable builtin ed25519 signature verify program"),
         (requestable_heap_size::id(), "Requestable heap frame size"),
-<<<<<<< HEAD
-=======
-        (disable_fee_calculator::id(), "deprecate fee calculator"),
         (add_compute_budget_program::id(), "Add compute_budget_program"),
->>>>>>> 1e2bef76e (Add compute budget program as a noop (#20992))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
