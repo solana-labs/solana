@@ -247,6 +247,10 @@ pub mod requestable_heap_size {
     solana_sdk::declare_id!("CCu4boMmfLuqcmfTLPHQiUo22ZdUsXjgzPAURYaWt1Bw");
 }
 
+pub mod add_compute_budget_program {
+    solana_sdk::declare_id!("4d5AKtxoh93Dwm1vHXUU3iRATuMndx1c431KgT2td52r");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -309,6 +313,7 @@ lazy_static! {
         (sol_log_data_syscall_enabled::id(), "enable sol_log_data syscall"),
         (ed25519_program_enabled::id(), "enable builtin ed25519 signature verify program"),
         (requestable_heap_size::id(), "Requestable heap frame size"),
+        (add_compute_budget_program::id(), "Add compute_budget_program"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
