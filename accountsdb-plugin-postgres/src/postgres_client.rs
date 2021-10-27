@@ -179,13 +179,23 @@ impl SimplePostgresClient {
     ) -> Result<Client, AccountsDbPluginError> {
         let port = config.port.unwrap_or(DEFAULT_POSTGRES_PORT);
 
-        let connection_str = format!("host={} user={} port={}", config.host, config.user, port);
+        let connection_str = if let Some(connection_str) = &config.connection_str {
+            connection_str.clone()
+        }
+        else {
+            if config.host.is_none() || config.user.is_none() {
+                let msg = format!("\"connection_str\": {:?}, or \"host\": {:?} \"user\": {:?} must be specified",
+                    config.connection_str, config.host, config.user);
+                return Err(AccountsDbPluginError::Custom(Box::new(AccountsDbPluginPostgresError::ConfigurationError { msg })));
+            }
+            format!("host={} user={} port={}", config.host.as_ref().unwrap(), config.user.as_ref().unwrap(), port)
+        };
 
         match Client::connect(&connection_str, NoTls) {
             Err(err) => {
                 let msg = format!(
-                        "Error in connecting to the PostgreSQL database: {:?} host: {:?} user: {:?} config: {:?}",
-                        err, config.host, config.user, connection_str);
+                        "Error in connecting to the PostgreSQL database: {:?} connection_str: {:?}",
+                        err, connection_str);
                 error!("{}", msg);
                 Err(AccountsDbPluginError::Custom(Box::new(
                     AccountsDbPluginPostgresError::DataStoreConnectionError { msg },
@@ -238,7 +248,7 @@ impl SimplePostgresClient {
             Err(err) => {
                 return Err(AccountsDbPluginError::Custom(Box::new(AccountsDbPluginPostgresError::DataSchemaError {
                     msg: format!(
-                        "Error in preparing for the accounts update PostgreSQL database: {} host: {} user: {} config: {:?}",
+                        "Error in preparing for the accounts update PostgreSQL database: {} host: {:?} user: {:?} config: {:?}",
                         err, config.host, config.user, config
                     ),
                 })));
@@ -263,7 +273,7 @@ impl SimplePostgresClient {
             Err(err) => {
                 return Err(AccountsDbPluginError::Custom(Box::new(AccountsDbPluginPostgresError::DataSchemaError {
                     msg: format!(
-                        "Error in preparing for the accounts update PostgreSQL database: {} host: {} user: {} config: {:?}",
+                        "Error in preparing for the accounts update PostgreSQL database: {} host: {:?} user: {:?} config: {:?}",
                         err, config.host, config.user, config
                     ),
                 })));

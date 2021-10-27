@@ -32,10 +32,11 @@ impl std::fmt::Debug for AccountsDbPluginPostgres {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AccountsDbPluginPostgresConfig {
-    pub host: String,
-    pub user: String,
-    pub threads: Option<usize>,
+    pub host: Option<String>,
+    pub user: Option<String>,
     pub port: Option<u16>,
+    pub connection_str: Option<String>,
+    pub threads: Option<usize>,
     pub batch_size: Option<usize>,
 }
 
@@ -46,6 +47,9 @@ pub enum AccountsDbPluginPostgresError {
 
     #[error("Error preparing data store schema. Error message: ({msg})")]
     DataSchemaError { msg: String },
+
+    #[error("Error preparing data store schema. Error message: ({msg})")]
+    ConfigurationError { msg: String },
 }
 
 impl AccountsDbPlugin for AccountsDbPluginPostgres {
@@ -72,8 +76,12 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
     /// "accounts_selector" : {
     ///     "accounts" : \["*"\],
     /// }
-    /// "host" specifies the PostgreSQL server.
-    /// "user" specifies the PostgreSQL user.
+    /// "host", optional, specifies the PostgreSQL server.
+    /// "user", optional, specifies the PostgreSQL user.
+    /// "port", optional, specifies the PostgreSQL server's port.
+    /// "connection_str", optional, the custom PostgreSQL connection string.
+    /// Please refer to https://docs.rs/postgres/0.19.2/postgres/config/struct.Config.html for the connection configuration.
+    /// When `connection_str` is set, the values in "host", "user" and "port" are ignored.
     /// "threads" optional, specifies the number of worker threads for the plugin. A thread
     /// maintains a PostgreSQL connection to the server. The default is 10.
     /// "batch_size" optional, specifies the batch size of bulk insert when the AccountsDb is created
