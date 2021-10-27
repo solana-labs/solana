@@ -962,6 +962,18 @@ impl JsonRpcRequestProcessor {
         Ok(())
     }
 
+    fn check_status_is_complete(&self, slot: Slot) -> Result<()> {
+        if slot
+            > self
+                .max_complete_transaction_status_slot
+                .load(Ordering::SeqCst)
+        {
+            Err(RpcCustomError::BlockStatusNotAvailableYet { slot }.into())
+        } else {
+            Ok(())
+        }
+    }
+
     pub async fn get_block(
         &self,
         slot: Slot,
@@ -985,6 +997,7 @@ impl JsonRpcRequestProcessor {
                     .unwrap()
                     .highest_confirmed_root()
             {
+                self.check_status_is_complete(slot)?;
                 let result = self.blockstore.get_rooted_block(slot, true);
                 self.check_blockstore_root(&result, slot)?;
                 let configure_block = |confirmed_block: ConfirmedBlock| {
@@ -1009,12 +1022,8 @@ impl JsonRpcRequestProcessor {
             } else if commitment.is_confirmed() {
                 // Check if block is confirmed
                 let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
-                if confirmed_bank.status_cache_ancestors().contains(&slot)
-                    && slot
-                        <= self
-                            .max_complete_transaction_status_slot
-                            .load(Ordering::SeqCst)
-                {
+                if confirmed_bank.status_cache_ancestors().contains(&slot) {
+                    self.check_status_is_complete(slot)?;
                     let result = self.blockstore.get_complete_block(slot, true);
                     return Ok(result.ok().map(|mut confirmed_block| {
                         if confirmed_block.block_time.is_none()

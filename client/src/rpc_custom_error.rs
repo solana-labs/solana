@@ -19,6 +19,7 @@ pub const JSON_RPC_SERVER_ERROR_KEY_EXCLUDED_FROM_SECONDARY_INDEX: i64 = -32010;
 pub const JSON_RPC_SERVER_ERROR_TRANSACTION_HISTORY_NOT_AVAILABLE: i64 = -32011;
 pub const JSON_RPC_SCAN_ERROR: i64 = -32012;
 pub const JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_LEN_MISMATCH: i64 = -32013;
+pub const JSON_RPC_SERVER_ERROR_BLOCK_STATUS_NOT_AVAILABLE_YET: i64 = -32014;
 
 #[derive(Error, Debug)]
 pub enum RpcCustomError {
@@ -54,6 +55,8 @@ pub enum RpcCustomError {
     ScanError { message: String },
     #[error("TransactionSignatureLenMismatch")]
     TransactionSignatureLenMismatch,
+    #[error("BlockStatusNotAvailableYet")]
+    BlockStatusNotAvailableYet { slot: Slot },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -159,6 +162,11 @@ impl From<RpcCustomError> for Error {
                     JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_LEN_MISMATCH,
                 ),
                 message: "Transaction signature length mismatch".to_string(),
+                data: None,
+            },
+            RpcCustomError::BlockStatusNotAvailableYet { slot } => Self {
+                code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_BLOCK_STATUS_NOT_AVAILABLE_YET),
+                message: format!("Block status not yet available for slot {}", slot),
                 data: None,
             },
         }
