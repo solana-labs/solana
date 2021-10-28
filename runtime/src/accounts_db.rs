@@ -5828,25 +5828,16 @@ impl AccountsDb {
                     if self.is_filler_account(loaded_account.pubkey()) {
                         return;
                     }
-                    let should_insert =
-                        if let Some(existing_entry) = accum.get(loaded_account.pubkey()) {
-                            loaded_write_version > existing_entry.value().version()
-                        } else {
-                            true
-                        };
-                    if should_insert {
-                        // Detected insertion is necessary, grabs the write lock to commit the write,
-                        match accum.entry(*loaded_account.pubkey()) {
-                            // Double check in case another thread interleaved a write between the read + write.
-                            Occupied(mut occupied_entry) => {
-                                if loaded_write_version > occupied_entry.get().version() {
-                                    occupied_entry.insert((loaded_write_version, loaded_hash));
-                                }
+                    // keep the latest write version for each pubkey
+                    match accum.entry(*loaded_account.pubkey()) {
+                        Occupied(mut occupied_entry) => {
+                            if loaded_write_version > occupied_entry.get().version() {
+                                occupied_entry.insert((loaded_write_version, loaded_hash));
                             }
+                        }
 
-                            Vacant(vacant_entry) => {
-                                vacant_entry.insert((loaded_write_version, loaded_hash));
-                            }
+                        Vacant(vacant_entry) => {
+                            vacant_entry.insert((loaded_write_version, loaded_hash));
                         }
                     }
                 },
