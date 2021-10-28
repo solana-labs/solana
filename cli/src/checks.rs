@@ -65,7 +65,7 @@ pub fn check_account_for_spend_multiple_fees_with_commitment(
     messages: &[&Message],
     commitment: CommitmentConfig,
 ) -> Result<(), CliError> {
-    let fee = get_fee_for_message(rpc_client, messages)?;
+    let fee = get_fee_for_messages(rpc_client, messages)?;
     if !check_account_for_balance_with_commitment(
         rpc_client,
         account_pubkey,
@@ -90,10 +90,16 @@ pub fn check_account_for_spend_multiple_fees_with_commitment(
     Ok(())
 }
 
-pub fn get_fee_for_message(rpc_client: &RpcClient, messages: &[&Message]) -> Result<u64, CliError> {
+pub fn get_fee_for_messages(
+    rpc_client: &RpcClient,
+    messages: &[&Message],
+) -> Result<u64, CliError> {
     Ok(messages
         .iter()
-        .map(|message| rpc_client.get_fee_for_message(message))
+        .map(|message| {
+            println!("msg {:?}", message.recent_blockhash);
+            rpc_client.get_fee_for_message(message)
+        })
         .collect::<Result<Vec<_>, _>>()?
         .iter()
         .sum())
@@ -235,7 +241,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_fee_for_message() {
+    fn test_get_fee_for_messages() {
         let check_fee_response = json!(Response {
             context: RpcResponseContext { slot: 1 },
             value: json!(1),
@@ -245,14 +251,14 @@ mod tests {
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
 
         // No messages, no fee.
-        assert_eq!(get_fee_for_message(&rpc_client, &[]).unwrap(), 0);
+        assert_eq!(get_fee_for_messages(&rpc_client, &[]).unwrap(), 0);
 
         // One message w/ one signature, a fee.
         let pubkey0 = Pubkey::new(&[0; 32]);
         let pubkey1 = Pubkey::new(&[1; 32]);
         let ix0 = system_instruction::transfer(&pubkey0, &pubkey1, 1);
         let message0 = Message::new(&[ix0], Some(&pubkey0));
-        assert_eq!(get_fee_for_message(&rpc_client, &[&message0]).unwrap(), 1);
+        assert_eq!(get_fee_for_messages(&rpc_client, &[&message0]).unwrap(), 1);
 
         // No signatures, no fee.
         let check_fee_response = json!(Response {
@@ -264,7 +270,7 @@ mod tests {
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         let message = Message::default();
         assert_eq!(
-            get_fee_for_message(&rpc_client, &[&message, &message]).unwrap(),
+            get_fee_for_messages(&rpc_client, &[&message, &message]).unwrap(),
             0
         );
     }

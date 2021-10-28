@@ -164,14 +164,14 @@ pub trait SyncClient {
         commitment_config: CommitmentConfig,
     ) -> Result<(Hash, u64)>;
 
+    /// Get a new blockhash after the one specified
+    fn get_new_latest_blockhash(&self, blockhash: &Hash) -> Result<Hash>;
+
     /// Check if the blockhash is valid
     fn is_blockhash_valid(&self, blockhash: &Hash, commitment: CommitmentConfig) -> Result<bool>;
 
     /// Calculate the fee for a `Message`
     fn get_fee_for_message(&self, message: &Message) -> Result<u64>;
-
-    /// Get a new blockhash after the one specified
-    fn get_new_latest_blockhash(&self, blockhash: &Hash) -> Result<Hash>;
 }
 
 pub trait AsyncClient {

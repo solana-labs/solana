@@ -888,13 +888,14 @@ pub fn generate_and_fund_keypairs<T: 'static + Client + Send + Sync>(
     //   pay for the transaction fees in a new run.
     let enough_lamports = 8 * lamports_per_account / 10;
     if first_keypair_balance < enough_lamports || last_keypair_balance < enough_lamports {
-        let single_sig_message = Message::new(
+        let single_sig_message = Message::new_with_blockhash(
             &[Instruction::new_with_bytes(
                 Pubkey::new_unique(),
                 &[],
                 vec![AccountMeta::new(Pubkey::new_unique(), true)],
             )],
             None,
+            &client.get_latest_blockhash().unwrap(),
         );
         let max_fee = client.get_fee_for_message(&single_sig_message).unwrap();
         let extra_fees = extra * max_fee;

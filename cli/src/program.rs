@@ -1710,6 +1710,7 @@ fn do_process_program_write_and_deploy(
 ) -> ProcessResult {
     // Build messages to calculate fees
     let mut messages: Vec<&Message> = Vec::new();
+    let blockhash = rpc_client.get_latest_blockhash()?;
 
     // Initialize buffer account or complete if already partially initialized
     let (initial_message, write_messages, balance_needed) =
@@ -1755,9 +1756,10 @@ fn do_process_program_write_and_deploy(
                 )
             };
             let initial_message = if !initial_instructions.is_empty() {
-                Some(Message::new(
+                Some(Message::new_with_blockhash(
                     &initial_instructions,
                     Some(&config.signers[0].pubkey()),
+                    &blockhash,
                 ))
             } else {
                 None
@@ -1777,7 +1779,7 @@ fn do_process_program_write_and_deploy(
                 } else {
                     loader_instruction::write(buffer_pubkey, loader_id, offset, bytes)
                 };
-                Message::new(&[instruction], Some(&payer_pubkey))
+                Message::new_with_blockhash(&[instruction], Some(&payer_pubkey), &blockhash)
             };
 
             let mut write_messages = vec![];
@@ -1806,7 +1808,7 @@ fn do_process_program_write_and_deploy(
 
     let final_message = if let Some(program_signers) = program_signers {
         let message = if loader_id == &bpf_loader_upgradeable::id() {
-            Message::new(
+            Message::new_with_blockhash(
                 &bpf_loader_upgradeable::deploy_with_max_program_len(
                     &config.signers[0].pubkey(),
                     &program_signers[0].pubkey(),
@@ -1818,11 +1820,13 @@ fn do_process_program_write_and_deploy(
                     programdata_len,
                 )?,
                 Some(&config.signers[0].pubkey()),
+                &blockhash,
             )
         } else {
-            Message::new(
+            Message::new_with_blockhash(
                 &[loader_instruction::finalize(buffer_pubkey, loader_id)],
                 Some(&config.signers[0].pubkey()),
+                &blockhash,
             )
         };
         Some(message)
@@ -1876,6 +1880,7 @@ fn do_process_program_upgrade(
 
     // Build messages to calculate fees
     let mut messages: Vec<&Message> = Vec::new();
+    let blockhash = rpc_client.get_latest_blockhash()?;
 
     let (initial_message, write_messages, balance_needed) =
         if let Some(buffer_signer) = buffer_signer {
@@ -1907,9 +1912,10 @@ fn do_process_program_upgrade(
             };
 
             let initial_message = if !initial_instructions.is_empty() {
-                Some(Message::new(
+                Some(Message::new_with_blockhash(
                     &initial_instructions,
                     Some(&config.signers[0].pubkey()),
+                    &blockhash,
                 ))
             } else {
                 None
@@ -1925,7 +1931,7 @@ fn do_process_program_upgrade(
                     offset,
                     bytes,
                 );
-                Message::new(&[instruction], Some(&payer_pubkey))
+                Message::new_with_blockhash(&[instruction], Some(&payer_pubkey), &blockhash)
             };
 
             // Create and add write messages
@@ -1952,7 +1958,7 @@ fn do_process_program_upgrade(
     }
 
     // Create and add final message
-    let final_message = Message::new(
+    let final_message = Message::new_with_blockhash(
         &[bpf_loader_upgradeable::upgrade(
             program_id,
             buffer_pubkey,
@@ -1960,6 +1966,7 @@ fn do_process_program_upgrade(
             &config.signers[0].pubkey(),
         )],
         Some(&config.signers[0].pubkey()),
+        &blockhash,
     );
     messages.push(&final_message);
 

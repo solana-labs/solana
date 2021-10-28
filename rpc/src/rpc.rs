@@ -1978,10 +1978,10 @@ impl JsonRpcRequestProcessor {
         &self,
         message: &SanitizedMessage,
         commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<Option<u64>>> {
+    ) -> RpcResponse<Option<u64>> {
         let bank = self.bank(commitment);
         let fee = bank.get_fee_for_message(message);
-        Ok(new_response(&bank, Some(fee)))
+        new_response(&bank, fee)
     }
 }
 
@@ -3706,11 +3706,10 @@ pub mod rpc_full {
             debug!("get_fee_for_message rpc request received");
             let (_, message) =
                 decode_and_deserialize::<Message>(data, UiTransactionEncoding::Base64)?;
-            SanitizedMessage::try_from(message)
-                .map_err(|err| {
-                    Error::invalid_params(format!("invalid transaction message: {}", err))
-                })
-                .and_then(|message| meta.get_fee_for_message(&message, commitment))
+            let sanitized_message = SanitizedMessage::try_from(message).map_err(|err| {
+                Error::invalid_params(format!("invalid transaction message: {}", err))
+            })?;
+            Ok(meta.get_fee_for_message(&sanitized_message, commitment))
         }
     }
 }
