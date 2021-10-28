@@ -4,7 +4,9 @@
 //!
 //! The main function is `calculate_cost` which returns &TransactionCost.
 //!
-use crate::{block_cost_limits::*, execute_cost_table::ExecuteCostTable};
+use crate::{
+    bank::is_simple_vote_transaction, block_cost_limits::*, execute_cost_table::ExecuteCostTable,
+};
 use log::*;
 use solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction};
 use std::collections::HashMap;
@@ -12,13 +14,31 @@ use std::collections::HashMap;
 const MAX_WRITABLE_ACCOUNTS: usize = 256;
 
 // costs are stored in number of 'compute unit's
-#[derive(AbiExample, Default, Debug)]
+#[derive(AbiExample, Debug)]
 pub struct TransactionCost {
     pub writable_accounts: Vec<Pubkey>,
     pub signature_cost: u64,
     pub write_lock_cost: u64,
     pub data_bytes_cost: u64,
     pub execution_cost: u64,
+    // `cost_weight` is a multiplier to be applied to tx cost, that
+    // allows to increase/decrease tx cost linearly based on algo.
+    // for example, vote tx could have weight zero to bypass cost
+    // limit checking during block packing.
+    pub cost_weight: u32,
+}
+
+impl Default for TransactionCost {
+    fn default() -> Self {
+        Self {
+            writable_accounts: Vec::with_capacity(MAX_WRITABLE_ACCOUNTS),
+            signature_cost: 0u64,
+            write_lock_cost: 0u64,
+            data_bytes_cost: 0u64,
+            execution_cost: 0u64,
+            cost_weight: 1u32,
+        }
+    }
 }
 
 impl TransactionCost {
@@ -35,6 +55,7 @@ impl TransactionCost {
         self.write_lock_cost = 0;
         self.data_bytes_cost = 0;
         self.execution_cost = 0;
+        self.cost_weight = 1;
     }
 
     pub fn sum(&self) -> u64 {
@@ -95,6 +116,7 @@ impl CostModel {
         self.get_write_lock_cost(&mut tx_cost, transaction, demote_program_write_locks);
         tx_cost.data_bytes_cost = self.get_data_bytes_cost(transaction);
         tx_cost.execution_cost = self.get_transaction_cost(transaction);
+        tx_cost.cost_weight = self.calculate_cost_weight(transaction);
 
         debug!("transaction {:?} has cost {:?}", transaction, tx_cost);
         tx_cost
@@ -177,6 +199,15 @@ impl CostModel {
             }
         }
     }
+
+    fn calculate_cost_weight(&self, transaction: &SanitizedTransaction) -> u32 {
+        if is_simple_vote_transaction(transaction) {
+            // vote has zero cost weight, so it bypasses block cost limit checking
+            0u32
+        } else {
+            1u32
+        }
+    }
 }
 
 #[cfg(test)]
@@ -196,6 +227,7 @@ mod tests {
         system_program, system_transaction,
         transaction::Transaction,
     };
+    use solana_vote_program::vote_transaction;
     use std::{
         str::FromStr,
         sync::{Arc, RwLock},
@@ -394,6 +426,7 @@ mod tests {
         assert_eq!(expected_account_cost, tx_cost.write_lock_cost);
         assert_eq!(expected_execution_cost, tx_cost.execution_cost);
         assert_eq!(2, tx_cost.writable_accounts.len());
+        assert_eq!(1u32, tx_cost.cost_weight);
     }
 
     #[test]
@@ -499,5 +532,32 @@ mod tests {
             .instruction_execution_cost_table
             .get_cost(&solana_vote_program::id())
             .is_some());
+    }
+
+    #[test]
+    fn test_calculate_cost_weight() {
+        let (mint_keypair, start_hash) = test_setup();
+
+        let keypair = Keypair::new();
+        let simple_transaction = SanitizedTransaction::from_transaction_for_tests(
+            system_transaction::transfer(&mint_keypair, &keypair.pubkey(), 2, start_hash),
+        );
+        let vote_transaction = SanitizedTransaction::from_transaction_for_tests(
+            vote_transaction::new_vote_transaction(
+                vec![42],
+                Hash::default(),
+                Hash::default(),
+                &keypair,
+                &keypair,
+                &keypair,
+                None,
+            ),
+        );
+
+        let testee = CostModel::default();
+
+        // For now, vote has zero weight, everything else is neutral, for now
+        assert_eq!(1u32, testee.calculate_cost_weight(&simple_transaction));
+        assert_eq!(0u32, testee.calculate_cost_weight(&vote_transaction));
     }
 }

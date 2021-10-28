@@ -110,9 +110,8 @@ pub enum TransactionError {
     #[error("Transaction processing left an account with an outstanding borrowed reference")]
     AccountBorrowOutstanding,
 
-    #[error(
-        "Transaction could not fit into current block without exceeding the Max Block Cost Limit"
-    )]
+    /// Transaction would exceed max Block Cost Limit
+    #[error("Transaction would exceed max Block Cost Limit")]
     WouldExceedMaxBlockCostLimit,
 
     /// Transaction version is unsupported
@@ -122,6 +121,10 @@ pub enum TransactionError {
     /// Transaction loads a writable account that cannot be written
     #[error("Transaction loads a writable account that cannot be written")]
     InvalidWritableAccount,
+
+    /// Transaction would exceed max account limit within the block
+    #[error("Transaction would exceed max account limit within the block")]
+    WouldExceedMaxAccountCostLimit,
 }
 
 pub type Result<T> = result::Result<T, TransactionError>;
