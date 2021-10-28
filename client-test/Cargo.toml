@@ -10,6 +10,8 @@ documentation = "https://docs.rs/solana-client-test"
 edition = "2018"
 
 [dependencies]
+serde_json = "1.0.68"
+serial_test = "0.5.1"
 solana-client = { path = "../client", version = "=1.9.0" }
 solana-measure = { path = "../measure", version = "=1.9.0" }
 solana-merkle-tree = { path = "../merkle-tree", version = "=1.9.0" }
