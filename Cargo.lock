@@ -4652,6 +4652,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-client-test"
+version = "1.9.0"
+dependencies = [
+ "solana-client",
+ "solana-logger 1.9.0",
+ "solana-measure",
+ "solana-merkle-tree",
+ "solana-metrics",
+ "solana-perf",
+ "solana-rayon-threadlimit",
+ "solana-rpc",
+ "solana-runtime",
+ "solana-sdk",
+ "solana-streamer",
+ "solana-test-validator",
+ "solana-version",
+ "systemstat",
+]
+
+[[package]]
 name = "solana-compute-budget-program"
 version = "1.9.0"
 dependencies = [

@@ -75,6 +75,7 @@ members = [
     "replica-lib",
     "test-validator",
     "rpc-test",
+    "client-test",
 ]
 
 exclude = [
