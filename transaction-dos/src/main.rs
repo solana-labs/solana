@@ -116,7 +116,7 @@ fn make_dos_message(
     num_instructions: usize,
     program_id: Pubkey,
     num_program_iterations: u8,
-    account_metas: &[AccountMeta], // Vec<AccountMeta>,
+    account_metas: &[AccountMeta],
 ) -> Message {
     let instructions: Vec<_> = (0..num_instructions)
         .into_iter()
@@ -172,7 +172,6 @@ fn run_transactions_dos(
 
     let program_account = client.get_account(&program_id);
 
-    // Create and close messages both require 2 signatures, fake a 2 signature message to calculate fees
     let message = Message::new(
         &[
             Instruction::new_with_bytes(
@@ -244,7 +243,7 @@ fn run_transactions_dos(
     }
 
     let mut tx_sent_count = 0;
-    let mut total_accounts_created = 0;
+    let mut total_dos_messages_sent = 0;
     let mut balances: Vec<_> = payer_keypairs
         .iter()
         .map(|keypair| client.get_balance(&keypair.pubkey()).unwrap_or(0))
@@ -264,7 +263,7 @@ fn run_transactions_dos(
         .collect();
 
     loop {
-        if latest_blockhash.elapsed().as_millis() > 10_000 {
+        if latest_blockhash.elapsed().as_secs() > 10 {
             blockhash = client.get_latest_blockhash().expect("blockhash");
             latest_blockhash = Instant::now();
         }
@@ -275,7 +274,7 @@ fn run_transactions_dos(
         let lamports = min_balance + fee;
 
         for (i, balance) in balances.iter_mut().enumerate() {
-            if *balance < lamports || last_balance.elapsed().as_millis() > 2000 {
+            if *balance < lamports || last_balance.elapsed().as_secs() > 2 {
                 if let Ok(b) = client.get_balance(&payer_keypairs[i].pubkey()) {
                     *balance = b;
                 }
@@ -328,7 +327,7 @@ fn run_transactions_dos(
                             space,
                             program_id,
                         );
-                        let signers: Vec<&Keypair> = vec![payer_keypairs[0], keypair];
+                        let signers: Vec<&Keypair> = vec![payer_keypairs[i % payer_keypairs.len()], keypair];
                         Transaction::new(&signers, message, blockhash)
                     })
                     .collect();
@@ -382,21 +381,21 @@ fn run_transactions_dos(
                         tx
                     })
                     .collect();
-                balances[i] = balances[i].saturating_sub(lamports * txs.len() as u64);
+                balances[i] = balances[i].saturating_sub(fee * txs.len() as u64);
                 info!("txs: {}", txs.len());
                 let new_ids = executor.push_transactions(txs);
                 info!("ids: {}", new_ids.len());
                 tx_sent_count += new_ids.len();
-                total_accounts_created += num_instructions * new_ids.len();
+                total_dos_messages_sent += num_instructions * new_ids.len();
             }
             let _ = executor.drain_cleared();
         }
 
         count += 1;
-        if last_log.elapsed().as_millis() > 3000 {
+        if last_log.elapsed().as_secs() > 3 {
             info!(
-                "total_accounts_created: {} tx_sent_count: {} loop_count: {} balance(s): {:?}",
-                total_accounts_created, tx_sent_count, count, balances
+                "total_dos_messages_sent: {} tx_sent_count: {} loop_count: {} balance(s): {:?}",
+                total_dos_messages_sent, tx_sent_count, count, balances
             );
             last_log = Instant::now();
         }
