@@ -4546,6 +4546,8 @@ impl Bank {
         Self::get_partitions(self.slot(), self.parent_slot(), slot_count_in_two_day)
     }
 
+    /// used only by filler accounts in debug path
+    /// previous means slot - 1, not parent
     pub fn variable_cycle_partition_from_previous_slot(
         epoch_schedule: &EpochSchedule,
         slot: Slot,
@@ -4630,7 +4632,7 @@ impl Bank {
         )
     }
 
-    pub fn get_partition_from_slot_indexes(
+    fn get_partition_from_slot_indexes(
         cycle_params: RentCollectionCycleParams,
         start_slot_index: SlotIndex,
         end_slot_index: SlotIndex,
@@ -4705,7 +4707,7 @@ impl Bank {
         self.do_partition_from_slot_indexes(start_slot_index, end_slot_index, epoch, true)
     }
 
-    pub fn rent_single_epoch_collection_cycle_params(
+    fn rent_single_epoch_collection_cycle_params(
         epoch: Epoch,
         slot_count_per_epoch: SlotCount,
     ) -> RentCollectionCycleParams {
