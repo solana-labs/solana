@@ -386,6 +386,21 @@ fn process_instruction(
                     ))
                 );
             }
+
+            msg!("Test accounts re-ordering");
+            {
+                let instruction = create_instruction(
+                    *accounts[INVOKED_PROGRAM_INDEX].key,
+                    &[(accounts[FROM_INDEX].key, true, true)],
+                    vec![RETURN_OK],
+                );
+                // put the relavant account at the end of a larger account list
+                let mut reordered_accounts = accounts.to_vec();
+                let ai = reordered_accounts.remove(FROM_INDEX);
+                reordered_accounts.push(accounts[0].clone());
+                reordered_accounts.push(ai);
+                invoke(&instruction, &reordered_accounts)?;
+            }
         }
         TEST_PRIVILEGE_ESCALATION_SIGNER => {
             msg!("Test privilege escalation signer");

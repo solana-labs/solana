@@ -953,6 +953,7 @@ fn test_program_bpf_invoke_sanity() {
                 invoked_program_id.clone(),
                 system_program::id(),
                 invoked_program_id.clone(),
+                invoked_program_id.clone(),
             ],
         };
         assert_eq!(invoked_programs.len(), expected_invoked_programs.len());
