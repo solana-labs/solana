@@ -90,7 +90,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
     /// * "panic_on_db_errors", optional, contols if to panic when there are errors replicating data to the
     /// PostgreSQL database. The default is 'false'.
     /// # Examples
-    /// ```
+    /// 
     /// {
     ///    "libpath": "/home/solana/target/release/libsolana_accountsdb_plugin_postgres.so",
     ///    "host": "host_foo",
@@ -100,7 +100,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
     ///       "owners" : ["9oT9R5ZyRovSVnt37QvVoBttGpNqR3J7unkb567NP8k3"]
     ///    }
     /// }
-    /// ```
+    /// 
 
     fn on_load(&mut self, config_file: &str) -> Result<()> {
         solana_logger::setup_with_default("info");
