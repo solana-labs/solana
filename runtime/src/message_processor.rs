@@ -1484,7 +1484,6 @@ mod tests {
             InstructionProcessor::native_invoke(
                 &mut invoke_context,
                 callee_instruction.clone(),
-                &[0, 1, 2, 3],
                 &[]
             ),
             Err(InstructionError::ExternalAccountDataModified)
@@ -1494,12 +1493,7 @@ mod tests {
         // readonly account modified by the invoker
         accounts[2].1.borrow_mut().data_as_mut_slice()[0] = 1;
         assert_eq!(
-            InstructionProcessor::native_invoke(
-                &mut invoke_context,
-                callee_instruction,
-                &[0, 1, 2, 3],
-                &[]
-            ),
+            InstructionProcessor::native_invoke(&mut invoke_context, callee_instruction, &[]),
             Err(InstructionError::ReadonlyDataModified)
         );
         accounts[2].1.borrow_mut().data_as_mut_slice()[0] = 0;
@@ -1531,12 +1525,7 @@ mod tests {
                 .push(&message, &caller_instruction, &program_indices, None)
                 .unwrap();
             assert_eq!(
-                InstructionProcessor::native_invoke(
-                    &mut invoke_context,
-                    callee_instruction,
-                    &[0, 1, 2, 3],
-                    &[]
-                ),
+                InstructionProcessor::native_invoke(&mut invoke_context, callee_instruction, &[]),
                 case.1
             );
             invoke_context.pop();

@@ -31,8 +31,7 @@ use solana_sdk::{
     clock::Clock,
     entrypoint::{HEAP_LENGTH, SUCCESS},
     feature_set::{
-        add_missing_program_error_mappings, close_upgradeable_program_accounts, do_support_realloc,
-        fix_write_privs, reduce_required_deploy_balance, requestable_heap_size,
+        do_support_realloc, reduce_required_deploy_balance, requestable_heap_size,
         stop_verify_mul64_imm_nonzero,
     },
     ic_logger_msg, ic_msg,
@@ -41,7 +40,6 @@ use solana_sdk::{
     loader_instruction::LoaderInstruction,
     loader_upgradeable_instruction::UpgradeableLoaderInstruction,
     process_instruction::{stable_log, ComputeMeter, Executor, InvokeContext, Logger},
-    program_error::{ACCOUNT_NOT_RENT_EXEMPT, BORSH_IO_ERROR},
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     rent::Rent,
@@ -441,9 +439,8 @@ fn process_loader_upgradeable_instruction(
                 return Err(InstructionError::InvalidArgument);
             }
 
-            let predrain_buffer = invoke_context
-                .is_feature_active(&reduce_required_deploy_balance::id())
-                && invoke_context.is_feature_active(&fix_write_privs::id());
+            let predrain_buffer =
+                invoke_context.is_feature_active(&reduce_required_deploy_balance::id());
             if predrain_buffer {
                 // Drain the Buffer account to payer before paying for programdata account
                 payer
@@ -470,12 +467,7 @@ fn process_loader_upgradeable_instruction(
                 .iter()
                 .map(|seeds| Pubkey::create_program_address(*seeds, caller_program_id))
                 .collect::<Result<Vec<Pubkey>, solana_sdk::pubkey::PubkeyError>>()?;
-            InstructionProcessor::native_invoke(
-                invoke_context,
-                instruction,
-                &[0, 1, 3, 6],
-                signers.as_slice(),
-            )?;
+            InstructionProcessor::native_invoke(invoke_context, instruction, signers.as_slice())?;
 
             // Load and verify the program bits
             let executor = create_executor(
@@ -726,24 +718,8 @@ fn process_loader_upgradeable_instruction(
             let close_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             let recipient_account =
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
-            if !invoke_context.is_feature_active(&close_upgradeable_program_accounts::id()) {
-                let _ = keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?;
-            }
-
             if close_account.unsigned_key() == recipient_account.unsigned_key() {
                 ic_logger_msg!(logger, "Recipient is the same as the account being closed");
-                return Err(InstructionError::InvalidArgument);
-            }
-
-            if !invoke_context.is_feature_active(&close_upgradeable_program_accounts::id())
-                && !matches!(
-                    close_account.state()?,
-                    UpgradeableLoaderState::Buffer {
-                        authority_address: _,
-                    }
-                )
-            {
-                ic_logger_msg!(logger, "Account does not support closing");
                 return Err(InstructionError::InvalidArgument);
             }
 
@@ -770,8 +746,6 @@ fn process_loader_upgradeable_instruction(
                         close_account,
                         recipient_account,
                         logger.clone(),
-                        !invoke_context
-                            .is_feature_active(&close_upgradeable_program_accounts::id()),
                     )?;
 
                     ic_logger_msg!(logger, "Closed Buffer {}", close_account.unsigned_key());
@@ -814,8 +788,6 @@ fn process_loader_upgradeable_instruction(
                                 close_account,
                                 recipient_account,
                                 logger.clone(),
-                                !invoke_context
-                                    .is_feature_active(&close_upgradeable_program_accounts::id()),
                             )?;
                         }
                         _ => {
@@ -843,7 +815,6 @@ fn common_close_account(
     close_account: &KeyedAccount,
     recipient_account: &KeyedAccount,
     logger: Rc<RefCell<dyn Logger>>,
-    do_clear_data: bool,
 ) -> Result<(), InstructionError> {
     if authority_address.is_none() {
         ic_logger_msg!(logger, "Account is immutable");
@@ -862,13 +833,7 @@ fn common_close_account(
         .try_account_ref_mut()?
         .checked_add_lamports(close_account.lamports()?)?;
     close_account.try_account_ref_mut()?.set_lamports(0);
-    if do_clear_data {
-        for elt in close_account.try_account_ref_mut()?.data_as_mut_slice() {
-            *elt = 0;
-        }
-    } else {
-        close_account.set_state(&UpgradeableLoaderState::Uninitialized)?;
-    }
+    close_account.set_state(&UpgradeableLoaderState::Uninitialized)?;
     Ok(())
 }
 
@@ -965,8 +930,6 @@ impl Executor for BpfExecutor {
     ) -> Result<(), InstructionError> {
         let logger = invoke_context.get_logger();
         let invoke_depth = invoke_context.invoke_depth();
-        let add_missing_program_error_mappings =
-            invoke_context.is_feature_active(&add_missing_program_error_mappings::id());
 
         let mut serialize_time = Measure::start("serialize");
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
@@ -1032,14 +995,7 @@ impl Executor for BpfExecutor {
             match result {
                 Ok(status) => {
                     if status != SUCCESS {
-                        let error: InstructionError = if !add_missing_program_error_mappings
-                            && (status == ACCOUNT_NOT_RENT_EXEMPT || status == BORSH_IO_ERROR)
-                        {
-                            // map originally missing error mappings to InvalidError
-                            InstructionError::InvalidError
-                        } else {
-                            status.into()
-                        };
+                        let error: InstructionError = status.into();
                         stable_log::program_failure(&logger, &program_id, &error);
                         return Err(error);
                     }
