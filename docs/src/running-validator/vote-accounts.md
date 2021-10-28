@@ -19,9 +19,9 @@ of the account.
 - To change the [validator identity](#validator-identity), use
   [vote-update-validator](../cli/usage.md#solana-vote-update-validator).
 - To change the [vote authority](#vote-authority), use
-  [vote-authorize-voter](../cli/usage.md#solana-vote-authorize-voter).
+  [vote-authorize-voter-checked](../cli/usage.md#solana-vote-authorize-voter-checked).
 - To change the [authorized withdrawer](#authorized-withdrawer), use
-  [vote-authorize-withdrawer](../cli/usage.md#solana-vote-authorize-withdrawer).
+  [vote-authorize-withdrawer-checked](../cli/usage.md#solana-vote-authorize-withdrawer-checked).
 - To change the [commission](#commission), use
   [vote-update-commission](../cli/usage.md#solana-vote-update-commission).
 
@@ -84,10 +84,10 @@ different accounts.
 The vote authority can be set when the vote account is created. If it is not
 provided, the default behavior is to assign it the same as the validator identity.
 The vote authority can be changed later with the
-[vote-authorize-voter](../cli/usage.md#solana-vote-authorize-voter) command.
+[vote-authorize-voter-checked](../cli/usage.md#solana-vote-authorize-voter-checked) command.
 
 The vote authority can be changed at most once per epoch. If the authority is
-changed with [vote-authorize-voter](../cli/usage.md#solana-vote-authorize-voter),
+changed with [vote-authorize-voter-checked](../cli/usage.md#solana-vote-authorize-voter-checked),
 this will not take effect until the beginning of the next epoch.
 To support a smooth transition of the vote signing,
 `solana-validator` allows the `--authorized-voter` argument to be specified
@@ -117,7 +117,7 @@ not be set to a keypair that is the same as either the validator identity
 keypair or the vote authority keypair.
 
 The authorized withdrawer can be changed later with the
-[vote-authorize-withdrawer](../cli/usage.md#solana-vote-authorize-withdrawer)
+[vote-authorize-withdrawer-checked](../cli/usage.md#solana-vote-authorize-withdrawer-checked)
 command.
 
 ### Commission
