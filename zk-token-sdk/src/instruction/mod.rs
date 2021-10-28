@@ -14,3 +14,10 @@ pub use {
 pub trait Verifiable {
     fn verify(&self) -> Result<(), ProofError>;
 }
+
+#[cfg(not(target_arch = "bpf"))]
+pub enum Role {
+    Source,
+    Dest,
+    Auditor,
+}
