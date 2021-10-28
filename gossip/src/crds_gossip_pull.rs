@@ -629,7 +629,8 @@ pub(crate) mod tests {
             crds_value::{CrdsData, Vote},
         },
         itertools::Itertools,
-        rand::{seq::SliceRandom, thread_rng},
+        rand::{seq::SliceRandom, thread_rng, SeedableRng},
+        rand_chacha::ChaChaRng,
         rayon::ThreadPoolBuilder,
         solana_perf::test_tx::test_tx,
         solana_sdk::{
@@ -913,11 +914,14 @@ pub(crate) mod tests {
 
     #[test]
     fn test_build_crds_filter() {
-        let mut rng = thread_rng();
+        const SEED: [u8; 32] = [0x55; 32];
+        let mut rng = ChaChaRng::from_seed(SEED);
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let crds_gossip_pull = CrdsGossipPull::default();
         let mut crds = Crds::default();
-        let keypairs: Vec<_> = repeat_with(Keypair::new).take(10_000).collect();
+        let keypairs: Vec<_> = repeat_with(|| Keypair::generate(&mut rng))
+            .take(10_000)
+            .collect();
         let mut num_inserts = 0;
         for _ in 0..40_000 {
             let keypair = keypairs.choose(&mut rng).unwrap();
@@ -934,7 +938,13 @@ pub(crate) mod tests {
         assert_eq!(filters.len(), MIN_NUM_BLOOM_FILTERS.max(32));
         let purged: Vec<_> = thread_pool.install(|| crds.purged().collect());
         let hash_values: Vec<_> = crds.values().map(|v| v.value_hash).chain(purged).collect();
-        assert_eq!(hash_values.len(), 40_000);
+        // CrdsValue::new_rand may generate exact same value twice in which
+        // case its hash-value is not added to purged values.
+        assert!(
+            hash_values.len() >= 40_000 - 5,
+            "hash_values.len(): {}",
+            hash_values.len()
+        );
         let mut false_positives = 0;
         for hash_value in hash_values {
             let mut num_hits = 0;
