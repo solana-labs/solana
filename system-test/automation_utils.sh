@@ -121,7 +121,7 @@ function get_validator_confirmation_time {
       curl -G "${INFLUX_HOST}/query?u=ro&p=topsecret" \
         --data-urlencode "db=${TESTNET_TAG}" \
         --data-urlencode "q=$q_mean_confirmation" |
-      python3 "${REPO_ROOT}"/system-test/testnet-automation-json-parser.py |
+      python3 "${REPO_ROOT}"/system-test/testnet-automation-json-parser.py --empty_error |
       cut -d' ' -f2)
 }
 

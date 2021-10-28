@@ -42,6 +42,7 @@ target=$mean_confirmation_ms
 
 while true; do
   execution_step "Applying partition config $NETEM_CONFIG_FILE for $PARTITION_DURATION seconds"
+  echo "Partitioning for $PARTITION_DURATION seconds" >> "$RESULT_FILE"
   "${REPO_ROOT}"/net/net.sh netem --config-file "$NETEM_CONFIG_FILE" -n $num_online_nodes
   sleep "$PARTITION_DURATION"
 
@@ -49,21 +50,32 @@ while true; do
   "${REPO_ROOT}"/net/net.sh netem --config-file "$NETEM_CONFIG_FILE" --netem-cmd cleanup -n $num_online_nodes
 
   get_validator_confirmation_time 10
-  time=0
-  echo "Validator confirmation is $mean_confirmation_ms ms immediately after resolving the partition"
+  SECONDS=0
 
-  while [[ $mean_confirmation_ms == "expected" || $mean_confirmation_ms -gt $target ]]; do
-    sleep 1
-    time=$(( time + 1 ))
-
-    if [[ $time -gt $PARTITION_DURATION ]]; then
-      echo "Partition Duration: $PARTITION_DURATION: Unable to make progress after $time seconds. Confirmation time did not fall below pre partition confirmation time" >> "$RESULT_FILE"
+  # This happens when we haven't confirmed anything recently so the query returns an empty string
+  while [[ -z $mean_confirmation_ms ]]; do
+    sleep 5
+    get_validator_confirmation_time 10
+    if [[ $SECONDS -gt $PARTITION_DURATION ]]; then
+      echo "  No confirmations seen after $SECONDS seconds" >> "$RESULT_FILE"
       exit 0
     fi
+  done
+  echo "  Validator confirmation is $mean_confirmation_ms ms $SECONDS seconds after resolving the partition" >> "$RESULT_FILE"
+
+  last=""
+  while [[ -z $mean_confirmation_ms || $mean_confirmation_ms -gt $target ]]; do
+    sleep 5
+
+    if [[ -n $mean_confirmation_ms && -n $last && $mean_confirmation_ms -gt $(echo "$last * 1.2" | bc) || $SECONDS -gt $PARTITION_DURATION ]]; then
+      echo "  Unable to make progress after $SECONDS seconds. Last confirmation time was $mean_confirmation_ms ms" >> "$RESULT_FILE"
+      exit 0
+    fi
+    last=$mean_confirmation_ms
     get_validator_confirmation_time 10
   done
 
-  echo "Partition Duration: $PARTITION: $time seconds for validator confirmation to fall to $mean_confirmation_ms ms" >> "$RESULT_FILE"
+  echo "  Recovered in $SECONDS seconds: validator confirmation to fall to $mean_confirmation_ms ms" >> "$RESULT_FILE"
 
   PARTITION_DURATION=$(( PARTITION_DURATION + PARTITION_INCREMENT ))
 done
