@@ -635,10 +635,12 @@ impl Blockstore {
                 full_insert_shreds.len()
             );
         }
-        // TODO: is leader_schedule as None here ok ? Not sure what else could be gathered ?
         // TODO: insert_shreds() will deadlock as blockstore::recover() holds the WAL lock; need a
         // flag to avoid writing WAL in this special case, we want that anyways as any insertions
         // generated below are already in the WAL so we don't want them duplicated
+
+        // leader_schedule as None is fine since by virtue of being in this WAL, these shreds were
+        // deemed valid by blockstore insertion logic previously; this is just restoring state.
         // self.insert_shreds(full_insert_shreds, None, false);
         Ok(())
     }
