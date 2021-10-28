@@ -743,7 +743,15 @@ pub fn process_vote_authorize(
                     )
                 })?
                 .1;
-            check_current_authority(current_authorized_voter, &authorized.pubkey())?
+            check_current_authority(current_authorized_voter, &authorized.pubkey())?;
+            if let Some(signer) = new_authorized_signer {
+                if signer.is_interactive() {
+                    return Err(CliError::BadParameter(format!(
+                        "invalid new authorized vote signer {:?}. Interactive vote signers not supported",
+                        new_authorized_pubkey
+                    )).into());
+                }
+            }
         }
         VoteAuthorize::Withdrawer => {
             check_current_authority(&vote_state.authorized_withdrawer, &authorized.pubkey())?
