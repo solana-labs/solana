@@ -142,7 +142,7 @@ impl TransferData {
     }
 
     /// Extracts the lo ciphertexts associated with a transfer data
-    fn ciphertext_lo(&self, role: &Role) -> Result<ElGamalCiphertext, ProofError> {
+    fn ciphertext_lo(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
         let transfer_comm_lo: PedersenCommitment = self.amount_comms.lo.try_into()?;
 
         let decryption_handle_lo = match role {
@@ -156,7 +156,7 @@ impl TransferData {
     }
 
     /// Extracts the lo ciphertexts associated with a transfer data
-    fn ciphertext_hi(&self, role: &Role) -> Result<ElGamalCiphertext, ProofError> {
+    fn ciphertext_hi(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
         let transfer_comm_hi: PedersenCommitment = self.amount_comms.hi.try_into()?;
 
         let decryption_handle_hi = match role {
@@ -175,7 +175,7 @@ impl TransferData {
     /// and make sure that the function does not terminate prematurely due to errors
     ///
     /// TODO: Define specific error type for decryption error
-    pub fn decrypt_amount(&self, role: &Role, sk: &ElGamalSecretKey) -> Result<u64, ProofError> {
+    pub fn decrypt_amount(&self, role: Role, sk: &ElGamalSecretKey) -> Result<u64, ProofError> {
         let ciphertext_lo = self.ciphertext_lo(role)?;
         let ciphertext_hi = self.ciphertext_hi(role)?;
 
@@ -552,19 +552,19 @@ mod test {
 
         assert_eq!(
             transfer_data
-                .decrypt_amount(&Role::Source, &source_sk)
+                .decrypt_amount(Role::Source, &source_sk)
                 .unwrap(),
             55_u64,
         );
 
         assert_eq!(
-            transfer_data.decrypt_amount(&Role::Dest, &dest_sk).unwrap(),
+            transfer_data.decrypt_amount(Role::Dest, &dest_sk).unwrap(),
             55_u64,
         );
 
         assert_eq!(
             transfer_data
-                .decrypt_amount(&Role::Auditor, &auditor_sk)
+                .decrypt_amount(Role::Auditor, &auditor_sk)
                 .unwrap(),
             55_u64,
         );

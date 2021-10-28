@@ -16,6 +16,7 @@ pub trait Verifiable {
 }
 
 #[cfg(not(target_arch = "bpf"))]
+#[derive(Debug,Copy,Clone)]
 pub enum Role {
     Source,
     Dest,
