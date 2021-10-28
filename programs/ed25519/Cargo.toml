@@ -1,7 +1,7 @@
 [package]
 name = "solana-ed25519-program"
 description = "Solana Ed25519 program"
-version = "1.8.2"
+version = "1.8.3"
 homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-ed25519-program"
 repository = "https://github.com/solana-labs/solana"
@@ -10,13 +10,13 @@ license = "Apache-2.0"
 edition = "2018"
 
 [dependencies]
-solana-sdk = { path = "../../sdk", version = "=1.8.2" }
+solana-sdk = { path = "../../sdk", version = "=1.8.3" }
 
 [dev-dependencies]
 bytemuck = { version = "1.7.2", features = ["derive"] }
 ed25519-dalek = "=1.0.1"
 rand = "0.7.0"
-solana-logger = { path = "../../logger", version = "=1.8.2" }
+solana-logger = { path = "../../logger", version = "=1.8.3" }
 
 [lib]
 crate-type = ["lib"]
