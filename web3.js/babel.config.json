@@ -3,6 +3,7 @@
     [
       "@babel/preset-env",
       {
+        "modules": false,
         "bugfixes": true
       }
     ],

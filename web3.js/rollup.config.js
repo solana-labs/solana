@@ -69,36 +69,6 @@ function generateConfig(configType, format) {
   switch (configType) {
     case 'browser':
       switch (format) {
-        case 'esm': {
-          config.output = [
-            {
-              file: 'lib/index.browser.esm.js',
-              format: 'es',
-              sourcemap: true,
-            },
-          ];
-
-          // Prevent dependencies from being bundled
-          config.external = [
-            /@babel\/runtime/,
-            '@solana/buffer-layout',
-            'bn.js',
-            'borsh',
-            'bs58',
-            'buffer',
-            'crypto-hash',
-            'http',
-            'https',
-            'jayson/lib/client/browser',
-            'js-sha3',
-            'rpc-websockets',
-            'secp256k1',
-            'superstruct',
-            'tweetnacl',
-          ];
-
-          break;
-        }
         case 'iife': {
           config.external = ['http', 'https'];
 
@@ -152,6 +122,5 @@ function generateConfig(configType, format) {
 
 export default [
   generateConfig('node'),
-  generateConfig('browser', 'esm'),
   generateConfig('browser', 'iife'),
 ];

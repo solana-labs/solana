@@ -19,9 +19,9 @@
   "publishConfig": {
     "access": "public"
   },
+  "sideEffects": false,
   "browser": {
-    "./lib/index.cjs.js": "./lib/index.browser.esm.js",
-    "./lib/index.esm.js": "./lib/index.browser.esm.js"
+    "./lib/index.esm.js": "./lib/transpiled-esm/index.js"
   },
   "main": "lib/index.cjs.js",
   "module": "lib/index.esm.js",
@@ -37,9 +37,10 @@
     "/src"
   ],
   "scripts": {
-    "build": "npm run clean; cross-env NODE_ENV=production rollup -c; npm run type:gen; npm run flow:gen; npm run flow:check",
+    "build": "npm run clean; cross-env NODE_ENV=production rollup -c; npm run build:transpiled-esm; npm run type:gen; npm run flow:gen; npm run flow:check",
     "build:browser-test": "rollup -c test/rollup.config.js",
     "build:fixtures": "set -ex; ./test/fixtures/noop-program/build.sh",
+    "build:transpiled-esm": "babel src --extensions .ts --source-maps true --out-dir ./lib/transpiled-esm",
     "clean": "rimraf ./coverage ./lib",
     "codecov": "set -ex; npm run test:cover; cat ./coverage/lcov.info | codecov",
     "dev": "cross-env NODE_ENV=development rollup -c",
@@ -78,6 +79,7 @@
     "tweetnacl": "^1.0.0"
   },
   "devDependencies": {
+    "@babel/cli": "^7.15.7",
     "@babel/core": "^7.12.13",
     "@babel/plugin-proposal-class-properties": "^7.12.1",
     "@babel/plugin-transform-runtime": "^7.12.10",
