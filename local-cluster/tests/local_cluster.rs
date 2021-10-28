@@ -3397,6 +3397,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     );
 
     info!("Waiting for A to vote");
+    let mut last_print = Instant::now();
     loop {
         if let Some((last_vote_slot, _)) =
             last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey)
@@ -3404,8 +3405,9 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
             if last_vote_slot >= next_slot_on_a {
                 info!("Validator A has caught up: {}", last_vote_slot);
                 break;
-            } else {
+            } else if last_print.elapsed().as_secs() >= 10 {
                 info!("Validator A latest vote: {}", last_vote_slot);
+                last_print = Instant::now();
             }
         }
 
