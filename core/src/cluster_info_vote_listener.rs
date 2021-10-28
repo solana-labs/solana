@@ -360,16 +360,15 @@ impl ClusterInfoVoteListener {
         sigverify::ed25519_verify_cpu(&mut msgs, reject_non_vote);
 
         let (vote_txs, vote_metadata) = izip!(labels.into_iter(), votes.into_iter(), msgs,)
-            .filter_map(|(label, vote_tx, packet)| {
-                let vote = vote_transaction::parse_vote_transaction(&vote_tx).and_then(
-                    |(_, vote, _)| {
-                        if vote.slots.is_empty() {
-                            None
-                        } else {
-                            Some(vote)
-                        }
-                    },
-                )?;
+            .filter_map(|(_label, vote_tx, packet)| {
+                let (vote, vote_account_key) = vote_transaction::parse_vote_transaction(&vote_tx)
+                    .and_then(|(vote_account_key, vote, _)| {
+                    if vote.slots.is_empty() {
+                        None
+                    } else {
+                        Some((vote, vote_account_key))
+                    }
+                })?;
 
                 // to_packets_chunked() above split into 1 packet long chunks
                 assert_eq!(packet.packets.len(), 1);
@@ -378,7 +377,7 @@ impl ClusterInfoVoteListener {
                         return Some((
                             vote_tx,
                             VerifiedVoteMetadata {
-                                label,
+                                vote_account_key,
                                 vote,
                                 packet,
                                 signature,

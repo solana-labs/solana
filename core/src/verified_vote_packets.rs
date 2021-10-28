@@ -1,6 +1,5 @@
 use crate::{cluster_info_vote_listener::VerifiedLabelVotePacketsReceiver, result::Result};
 use crossbeam_channel::Select;
-use solana_gossip::crds_value::CrdsValueLabel;
 use solana_perf::packet::Packets;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
@@ -17,7 +16,7 @@ use std::{
 const MAX_VOTES_PER_VALIDATOR: usize = 1000;
 
 pub struct VerifiedVoteMetadata {
-    pub label: CrdsValueLabel,
+    pub vote_account_key: Pubkey,
     pub vote: Vote,
     pub packet: Packets,
     pub signature: Signature,
@@ -147,12 +146,11 @@ impl VerifiedVotePackets {
             if would_be_leader {
                 for verfied_vote_metadata in gossip_votes {
                     let VerifiedVoteMetadata {
-                        label,
+                        vote_account_key,
                         vote,
                         packet,
                         signature,
                     } = verfied_vote_metadata;
-                    let validator_key = label.pubkey();
                     if vote.slots.is_empty() {
                         error!("Empty votes should have been filtered out earlier in the pipeline");
                         continue;
@@ -160,7 +158,7 @@ impl VerifiedVotePackets {
                     let slot = vote.slots.last().unwrap();
                     let hash = vote.hash;
 
-                    let validator_votes = self.0.entry(validator_key).or_default();
+                    let validator_votes = self.0.entry(vote_account_key).or_default();
                     validator_votes.insert((*slot, hash), (packet, signature));
 
                     if validator_votes.len() > MAX_VOTES_PER_VALIDATOR {
@@ -185,19 +183,17 @@ mod tests {
     #[test]
     fn test_verified_vote_packets_receive_and_process_vote_packets() {
         let (s, r) = unbounded();
-        let pubkey = solana_sdk::pubkey::new_rand();
+        let vote_account_key = solana_sdk::pubkey::new_rand();
 
         // Construct the buffer
         let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
 
-        // Send a vote from `pubkey`, check that it was inserted
+        // Send a vote from `vote_account_key`, check that it was inserted
         let vote_slot = 0;
         let vote_hash = Hash::new_unique();
-        let vote_index = 0;
-        let label = CrdsValueLabel::Vote(vote_index, pubkey);
         let vote = Vote::new(vec![vote_slot], vote_hash);
         s.send(vec![VerifiedVoteMetadata {
-            label: label.clone(),
+            vote_account_key,
             vote: vote.clone(),
             packet: Packets::default(),
             signature: Signature::new(&[1u8; 64]),
@@ -206,11 +202,18 @@ mod tests {
         verified_vote_packets
             .receive_and_process_vote_packets(&r, true)
             .unwrap();
-        assert_eq!(verified_vote_packets.0.get(&pubkey).unwrap().len(), 1);
+        assert_eq!(
+            verified_vote_packets
+                .0
+                .get(&vote_account_key)
+                .unwrap()
+                .len(),
+            1
+        );
 
         // Same slot, same hash, should not be inserted
         s.send(vec![VerifiedVoteMetadata {
-            label: label.clone(),
+            vote_account_key,
             vote,
             packet: Packets::default(),
             signature: Signature::new(&[1u8; 64]),
@@ -219,13 +222,20 @@ mod tests {
         verified_vote_packets
             .receive_and_process_vote_packets(&r, true)
             .unwrap();
-        assert_eq!(verified_vote_packets.0.get(&pubkey).unwrap().len(), 1);
+        assert_eq!(
+            verified_vote_packets
+                .0
+                .get(&vote_account_key)
+                .unwrap()
+                .len(),
+            1
+        );
 
         // Same slot, different hash, should still be inserted
         let new_vote_hash = Hash::new_unique();
         let vote = Vote::new(vec![vote_slot], new_vote_hash);
         s.send(vec![VerifiedVoteMetadata {
-            label,
+            vote_account_key,
             vote,
             packet: Packets::default(),
             signature: Signature::new(&[1u8; 64]),
@@ -234,16 +244,21 @@ mod tests {
         verified_vote_packets
             .receive_and_process_vote_packets(&r, true)
             .unwrap();
-        assert_eq!(verified_vote_packets.0.get(&pubkey).unwrap().len(), 2);
+        assert_eq!(
+            verified_vote_packets
+                .0
+                .get(&vote_account_key)
+                .unwrap()
+                .len(),
+            2
+        );
 
         // Different vote slot, should be inserted
         let vote_slot = 1;
         let vote_hash = Hash::new_unique();
-        let vote_index = 0;
-        let label = CrdsValueLabel::Vote(vote_index, pubkey);
         let vote = Vote::new(vec![vote_slot], vote_hash);
         s.send(vec![VerifiedVoteMetadata {
-            label,
+            vote_account_key,
             vote,
             packet: Packets::default(),
             signature: Signature::new(&[2u8; 64]),
@@ -252,7 +267,14 @@ mod tests {
         verified_vote_packets
             .receive_and_process_vote_packets(&r, true)
             .unwrap();
-        assert_eq!(verified_vote_packets.0.get(&pubkey).unwrap().len(), 3);
+        assert_eq!(
+            verified_vote_packets
+                .0
+                .get(&vote_account_key)
+                .unwrap()
+                .len(),
+            3
+        );
 
         // No new messages, should time out
         assert_matches!(
@@ -264,7 +286,7 @@ mod tests {
     #[test]
     fn test_verified_vote_packets_receive_and_process_vote_packets_max_len() {
         let (s, r) = unbounded();
-        let pubkey = solana_sdk::pubkey::new_rand();
+        let vote_account_key = solana_sdk::pubkey::new_rand();
 
         // Construct the buffer
         let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
@@ -273,11 +295,9 @@ mod tests {
         for _ in 0..2 * MAX_VOTES_PER_VALIDATOR {
             let vote_slot = 0;
             let vote_hash = Hash::new_unique();
-            let vote_index = 0;
-            let label = CrdsValueLabel::Vote(vote_index, pubkey);
             let vote = Vote::new(vec![vote_slot], vote_hash);
             s.send(vec![VerifiedVoteMetadata {
-                label,
+                vote_account_key,
                 vote,
                 packet: Packets::default(),
                 signature: Signature::new(&[1u8; 64]),
@@ -290,7 +310,11 @@ mod tests {
             .receive_and_process_vote_packets(&r, true)
             .unwrap();
         assert_eq!(
-            verified_vote_packets.0.get(&pubkey).unwrap().len(),
+            verified_vote_packets
+                .0
+                .get(&vote_account_key)
+                .unwrap()
+                .len(),
             MAX_VOTES_PER_VALIDATOR
         );
     }
@@ -300,7 +324,7 @@ mod tests {
         let (s, r) = unbounded();
         let vote_simulator = VoteSimulator::new(1);
         let my_leader_bank = vote_simulator.bank_forks.read().unwrap().root_bank();
-        let pubkey = vote_simulator.vote_pubkeys[0];
+        let vote_account_key = vote_simulator.vote_pubkeys[0];
 
         // Create a bunch of votes with random vote hashes, which should all be ignored
         // since they are not on the same fork as `my_leader_bank`, i.e. their hashes do
@@ -308,11 +332,9 @@ mod tests {
         for _ in 0..MAX_VOTES_PER_VALIDATOR {
             let vote_slot = 0;
             let vote_hash = Hash::new_unique();
-            let vote_index = 0;
-            let label = CrdsValueLabel::Vote(vote_index, pubkey);
             let vote = Vote::new(vec![vote_slot], vote_hash);
             s.send(vec![VerifiedVoteMetadata {
-                label,
+                vote_account_key,
                 vote,
                 packet: Packets::default(),
                 signature: Signature::new_unique(),
@@ -359,16 +381,14 @@ mod tests {
         let slot_hashes = from_account::<SlotHashes, _>(&slot_hashes_account).unwrap();
 
         // Create valid votes
-        let vote_index = 0;
         for i in 0..num_validators {
-            let pubkey = vote_simulator.vote_pubkeys[i];
+            let vote_account_key = vote_simulator.vote_pubkeys[i];
             // Used to uniquely identify the packets for each validator
             let num_packets = i + 1;
             for (vote_slot, vote_hash) in slot_hashes.slot_hashes().iter() {
-                let label = CrdsValueLabel::Vote(vote_index, pubkey);
                 let vote = Vote::new(vec![*vote_slot], *vote_hash);
                 s.send(vec![VerifiedVoteMetadata {
-                    label,
+                    vote_account_key,
                     vote,
                     packet: Packets::new(vec![Packet::default(); num_packets]),
                     signature: Signature::new_unique(),
@@ -427,16 +447,15 @@ mod tests {
         my_leader_bank.freeze();
         let vote_slot = my_leader_bank.slot();
         let vote_hash = my_leader_bank.hash();
-        let vote_index = 0;
         let my_leader_bank = Arc::new(Bank::new_from_parent(
             &my_leader_bank,
             &Pubkey::default(),
             my_leader_bank.slot() + 1,
         ));
-        let label = CrdsValueLabel::Vote(vote_index, vote_simulator.vote_pubkeys[1]);
+        let vote_account_key = vote_simulator.vote_pubkeys[1];
         let vote = Vote::new(vec![vote_slot], vote_hash);
         s.send(vec![VerifiedVoteMetadata {
-            label,
+            vote_account_key,
             vote,
             packet: Packets::default(),
             signature: Signature::new_unique(),
