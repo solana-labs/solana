@@ -1,33 +1,35 @@
 #![allow(clippy::integer_arithmetic)]
-use clap::{crate_description, crate_name, value_t, values_t_or_exit, App, Arg};
-use log::*;
-use rand::{thread_rng, Rng};
-use rayon::prelude::*;
-use solana_clap_utils::input_parsers::pubkey_of;
-use solana_cli::{cli::CliConfig, program::process_deploy};
-use solana_client::{rpc_client::RpcClient, transaction_executor::TransactionExecutor};
-use solana_faucet::faucet::{request_airdrop_transaction, FAUCET_PORT};
-use solana_gossip::gossip_service::discover;
-use solana_sdk::{
-    commitment_config::CommitmentConfig,
-    instruction::{AccountMeta, Instruction},
-    message::Message,
-    pubkey::Pubkey,
-    rpc_port::DEFAULT_RPC_PORT,
-    signature::{read_keypair_file, Keypair, Signer},
-    system_instruction,
-    transaction::Transaction,
-};
-use solana_streamer::socket::SocketAddrSpace;
-use std::{
-    net::SocketAddr,
-    process::exit,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
+use {
+    clap::{crate_description, crate_name, value_t, values_t_or_exit, App, Arg},
+    log::*,
+    rand::{thread_rng, Rng},
+    rayon::prelude::*,
+    solana_clap_utils::input_parsers::pubkey_of,
+    solana_cli::{cli::CliConfig, program::process_deploy},
+    solana_client::{rpc_client::RpcClient, transaction_executor::TransactionExecutor},
+    solana_faucet::faucet::{request_airdrop_transaction, FAUCET_PORT},
+    solana_gossip::gossip_service::discover,
+    solana_sdk::{
+        commitment_config::CommitmentConfig,
+        instruction::{AccountMeta, Instruction},
+        message::Message,
+        pubkey::Pubkey,
+        rpc_port::DEFAULT_RPC_PORT,
+        signature::{read_keypair_file, Keypair, Signer},
+        system_instruction,
+        transaction::Transaction,
     },
-    thread::sleep,
-    time::{Duration, Instant},
+    solana_streamer::socket::SocketAddrSpace,
+    std::{
+        net::SocketAddr,
+        process::exit,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
+        thread::sleep,
+        time::{Duration, Instant},
+    },
 };
 
 pub fn airdrop_lamports(
@@ -327,7 +329,8 @@ fn run_transactions_dos(
                             space,
                             program_id,
                         );
-                        let signers: Vec<&Keypair> = vec![payer_keypairs[i % payer_keypairs.len()], keypair];
+                        let signers: Vec<&Keypair> =
+                            vec![payer_keypairs[i % payer_keypairs.len()], keypair];
                         Transaction::new(&signers, message, blockhash)
                     })
                     .collect();
