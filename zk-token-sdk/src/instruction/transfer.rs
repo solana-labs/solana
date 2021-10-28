@@ -6,14 +6,14 @@ use {
 use {
     crate::{
         encryption::{
+            discrete_log::*,
             elgamal::{ElGamalCiphertext, ElGamalPubkey, ElGamalSecretKey},
             pedersen::{
                 Pedersen, PedersenBase, PedersenCommitment, PedersenDecryptHandle, PedersenOpening,
             },
-            discrete_log::*,
         },
         errors::ProofError,
-        instruction::Verifiable,
+        instruction::{Role, Verifiable},
         range_proof::RangeProof,
         transcript::TranscriptProtocol,
     },
@@ -142,27 +142,29 @@ impl TransferData {
     }
 
     /// Extracts the lo ciphertexts associated with a transfer data
-    pub fn ciphertext_lo(&self, role: &TransferRole) -> Result<ElGamalCiphertext, ProofError> {
+    pub fn ciphertext_lo(&self, role: &Role) -> Result<ElGamalCiphertext, ProofError> {
         let transfer_comm_lo: PedersenCommitment = self.amount_comms.lo.try_into()?;
 
         let decryption_handle_lo = match role {
-            TransferRole::Source => self.decrypt_handles_lo.source,
-            TransferRole::Dest => self.decrypt_handles_lo.dest,
-            TransferRole::Auditor => self.decrypt_handles_lo.auditor,
-        }.try_into()?;
+            Role::Source => self.decrypt_handles_lo.source,
+            Role::Dest => self.decrypt_handles_lo.dest,
+            Role::Auditor => self.decrypt_handles_lo.auditor,
+        }
+        .try_into()?;
 
         Ok((transfer_comm_lo, decryption_handle_lo).into())
     }
 
     /// Extracts the lo ciphertexts associated with a transfer data
-    pub fn ciphertext_hi(&self, role: &TransferRole) -> Result<ElGamalCiphertext, ProofError> {
+    pub fn ciphertext_hi(&self, role: &Role) -> Result<ElGamalCiphertext, ProofError> {
         let transfer_comm_hi: PedersenCommitment = self.amount_comms.hi.try_into()?;
 
         let decryption_handle_hi = match role {
-            TransferRole::Source => self.decrypt_handles_hi.source,
-            TransferRole::Dest => self.decrypt_handles_hi.dest,
-            TransferRole::Auditor => self.decrypt_handles_hi.auditor,
-        }.try_into()?;
+            Role::Source => self.decrypt_handles_hi.source,
+            Role::Dest => self.decrypt_handles_hi.dest,
+            Role::Auditor => self.decrypt_handles_hi.auditor,
+        }
+        .try_into()?;
 
         Ok((transfer_comm_hi, decryption_handle_hi).into())
     }
@@ -171,16 +173,17 @@ impl TransferData {
     ///
     /// TODO: This function should run in constant time. Use `subtle::Choice` for the if statement
     /// and make sure that the function does not terminate prematurely due to errors
-    pub fn decrypt_amount(&self, role: &TransferRole, sk: &ElGamalSecretKey) -> Result<u64, ProofError> {
+    ///
+    /// TODO: Define specific error type for decryption error
+    pub fn decrypt_amount(&self, role: &Role, sk: &ElGamalSecretKey) -> Result<u64, ProofError> {
         let ciphertext_lo = self.ciphertext_lo(role)?;
         let ciphertext_hi = self.ciphertext_hi(role)?;
 
         let amount_lo = ciphertext_lo.decrypt_u32_online(sk, &DECODE_U32_PRECOMPUTATION_FOR_G);
         let amount_hi = ciphertext_hi.decrypt_u32_online(sk, &DECODE_U32_PRECOMPUTATION_FOR_G);
 
-        if amount_lo.is_some() && amount_hi.is_some() {
-            // Will panic if overflown
-            Ok((amount_lo.unwrap() as u64) + (TWO_32 * amount_hi.unwrap() as u64))
+        if let (Some(amount_lo), Some(amount_hi)) = (amount_lo, amount_hi) {
+            Ok((amount_lo as u64) + (TWO_32 * amount_hi as u64))
         } else {
             Err(ProofError::VerificationError)
         }
@@ -441,13 +444,6 @@ pub struct TransferDecryptHandles {
     pub auditor: pod::PedersenDecryptHandle, // 32 bytes
 }
 
-#[cfg(not(target_arch = "bpf"))]
-pub enum TransferRole {
-    Source,
-    Dest,
-    Auditor,
-}
-
 /// Split u64 number into two u32 numbers
 #[cfg(not(target_arch = "bpf"))]
 pub fn split_u64_into_u32(amt: u64) -> (u32, u32) {
@@ -485,7 +481,7 @@ pub fn combine_u32_ciphertexts(ct_lo: ElGamalCiphertext, ct_hi: ElGamalCiphertex
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::encryption::{discrete_log, elgamal::ElGamalKeypair};
+    use crate::encryption::elgamal::ElGamalKeypair;
 
     #[test]
     fn test_transfer_correctness() {
@@ -555,17 +551,21 @@ mod test {
         );
 
         assert_eq!(
-            transfer_data.decrypt_amount(&TransferRole::Source, &source_sk).unwrap(),
+            transfer_data
+                .decrypt_amount(&Role::Source, &source_sk)
+                .unwrap(),
             55_u64,
         );
 
         assert_eq!(
-            transfer_data.decrypt_amount(&TransferRole::Dest, &dest_sk).unwrap(),
+            transfer_data.decrypt_amount(&Role::Dest, &dest_sk).unwrap(),
             55_u64,
         );
 
         assert_eq!(
-            transfer_data.decrypt_amount(&TransferRole::Auditor, &auditor_sk).unwrap(),
+            transfer_data
+                .decrypt_amount(&Role::Auditor, &auditor_sk)
+                .unwrap(),
             55_u64,
         );
     }
