@@ -396,9 +396,9 @@ fn process_instruction(
                 );
                 // put the relavant account at the end of a larger account list
                 let mut reordered_accounts = accounts.to_vec();
-                let ai = reordered_accounts.remove(FROM_INDEX);
+                let account_info = reordered_accounts.remove(FROM_INDEX);
                 reordered_accounts.push(accounts[0].clone());
-                reordered_accounts.push(ai);
+                reordered_accounts.push(account_info);
                 invoke(&instruction, &reordered_accounts)?;
             }
         }
