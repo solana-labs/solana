@@ -142,7 +142,7 @@ impl TransferData {
     }
 
     /// Extracts the lo ciphertexts associated with a transfer data
-    pub fn ciphertext_lo(&self, role: &Role) -> Result<ElGamalCiphertext, ProofError> {
+    fn ciphertext_lo(&self, role: &Role) -> Result<ElGamalCiphertext, ProofError> {
         let transfer_comm_lo: PedersenCommitment = self.amount_comms.lo.try_into()?;
 
         let decryption_handle_lo = match role {
@@ -156,7 +156,7 @@ impl TransferData {
     }
 
     /// Extracts the lo ciphertexts associated with a transfer data
-    pub fn ciphertext_hi(&self, role: &Role) -> Result<ElGamalCiphertext, ProofError> {
+    fn ciphertext_hi(&self, role: &Role) -> Result<ElGamalCiphertext, ProofError> {
         let transfer_comm_hi: PedersenCommitment = self.amount_comms.hi.try_into()?;
 
         let decryption_handle_hi = match role {
