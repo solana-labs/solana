@@ -8,7 +8,6 @@ use {
             ProgramSubscriptionParams, SignatureSubscriptionParams, SubscriptionControl,
             SubscriptionId, SubscriptionParams, SubscriptionToken,
         },
-        rpc_subscriptions::RpcVote,
     },
     dashmap::DashMap,
     jsonrpc_core::{Error, ErrorCode, Result},
@@ -22,7 +21,7 @@ use {
         },
         rpc_response::{
             Response as RpcResponse, RpcKeyedAccount, RpcLogsResponse, RpcSignatureResult,
-            SlotInfo, SlotUpdate,
+            RpcVote, SlotInfo, SlotUpdate,
         },
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
