@@ -26,7 +26,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
   uint8_t *val = (uint8_t *)ka[account_index].data;
   uint64_t memory_size = ka[account_index].data_len;
 
-  for (uint64_t i = 0; i < UINT64_MAX; i++) {
+  for (uint64_t i = 0; i < iterations; i++) {
 
     // Uncomment for raw compute
     {
