@@ -177,7 +177,7 @@ fn test_account_subscription() {
     let response = receiver.recv();
     match response {
         Ok(response) => {
-            let actual = serde_json::to_value(response.clone()).unwrap();
+            let actual = serde_json::to_value(response).unwrap();
             if expected != actual {
                 errors.push((expected, actual));
             }
@@ -260,7 +260,7 @@ fn test_program_subscription() {
     let mut notifications = Vec::new();
     let mut pubkeys = HashSet::new();
     loop {
-        let response = receiver.recv_timeout(Duration::from_millis(1));
+        let response = receiver.recv_timeout(Duration::from_millis(100));
         match response {
             Ok(response) => {
                 notifications.push(response.clone());
@@ -295,10 +295,7 @@ fn test_root_subscription() {
     );
     let exit = Arc::new(AtomicBool::new(false));
 
-    let GenesisConfigInfo {
-        genesis_config,
-        ..
-    } = create_genesis_config(10_000);
+    let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
     let bank = Bank::new_for_tests(&genesis_config);
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
     let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
@@ -314,10 +311,8 @@ fn test_root_subscription() {
     let (trigger, pubsub_service) =
         PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr);
     std::thread::sleep(Duration::from_millis(400));
-    let (mut client, receiver) = PubsubClient::root_subscribe(
-        &format!("ws://0.0.0.0:{}/", pubsub_addr.port()),
-    )
-    .unwrap();
+    let (mut client, receiver) =
+        PubsubClient::root_subscribe(&format!("ws://0.0.0.0:{}/", pubsub_addr.port())).unwrap();
 
     let roots = vec![1, 2, 3];
     subscriptions.notify_roots(roots.clone());

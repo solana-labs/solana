@@ -20,8 +20,8 @@ use {
             RpcTransactionLogsConfig, RpcTransactionLogsFilter,
         },
         rpc_response::{
-            Response as RpcResponse, RpcKeyedAccount, RpcLogsResponse, RpcSignatureResult,
-            RpcVote, SlotInfo, SlotUpdate,
+            Response as RpcResponse, RpcKeyedAccount, RpcLogsResponse, RpcSignatureResult, RpcVote,
+            SlotInfo, SlotUpdate,
         },
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},

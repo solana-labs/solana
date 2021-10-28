@@ -500,7 +500,6 @@ impl PubsubClient {
             Ok(_) => (),
             Err(err) => {
                 info!("receive error: {:?}", err);
-                return;
             }
         };
         Self::cleanup_with_handler(exit, socket, handler);
@@ -519,7 +518,7 @@ impl PubsubClient {
                 break;
             }
 
-            match PubsubClientSubscription::read_message(&socket) {
+            match PubsubClientSubscription::read_message(socket) {
                 Ok(message) => handler(message),
                 Err(err) => {
                     info!("receive error: {:?}", err);
