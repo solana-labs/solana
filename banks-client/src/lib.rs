@@ -17,6 +17,7 @@ use {
     solana_sdk::{
         account::{from_account, Account},
         commitment_config::CommitmentLevel,
+        message::Message,
         signature::Signature,
         transaction::{self, Transaction},
         transport,
@@ -65,6 +66,7 @@ impl BanksClient {
         ctx: Context,
         commitment: CommitmentLevel,
     ) -> impl Future<Output = io::Result<(FeeCalculator, Hash, u64)>> + '_ {
+        #[allow(deprecated)]
         self.inner
             .get_fees_with_commitment_and_context(ctx, commitment)
     }
@@ -311,6 +313,16 @@ impl BanksClient {
 
         // Convert Vec<Result<_, _>> to Result<Vec<_>>
         statuses.into_iter().collect()
+    }
+
+    pub fn get_fee_for_message_with_commitment_and_context(
+        &mut self,
+        ctx: Context,
+        commitment: CommitmentLevel,
+        message: Message,
+    ) -> impl Future<Output = io::Result<Option<u64>>> + '_ {
+        self.inner
+            .get_fee_for_message_with_commitment_and_context(ctx, commitment, message)
     }
 }
 

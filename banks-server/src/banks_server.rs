@@ -13,6 +13,7 @@ use {
         commitment_config::CommitmentLevel,
         fee_calculator::FeeCalculator,
         hash::Hash,
+        message::{Message, SanitizedMessage},
         pubkey::Pubkey,
         signature::Signature,
         transaction::{self, Transaction},
@@ -22,6 +23,7 @@ use {
         tpu_info::NullTpuInfo,
     },
     std::{
+        convert::TryFrom,
         io,
         net::{Ipv4Addr, SocketAddr},
         sync::{
@@ -277,6 +279,17 @@ impl Banks for BanksServer {
     ) -> Option<Account> {
         let bank = self.bank(commitment);
         bank.get_account(&address).map(Account::from)
+    }
+
+    async fn get_fee_for_message_with_commitment_and_context(
+        self,
+        _: Context,
+        commitment: CommitmentLevel,
+        message: Message,
+    ) -> Option<u64> {
+        let bank = self.bank(commitment);
+        let sanitized_message = SanitizedMessage::try_from(message).ok()?;
+        Some(bank.get_fee_for_message(&sanitized_message))
     }
 }
 
