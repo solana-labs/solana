@@ -1640,7 +1640,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
             })
             .collect::<Result<Vec<_>, EbpfError<BpfError>>>()?;
 
-        let translate = |account_info: &AccountInfo, invoke_context: &mut dyn InvokeContext| {
+        let translate = |account_info: &AccountInfo, invoke_context: &dyn InvokeContext| {
             // Translate the account from user space
 
             let lamports = {
@@ -1929,7 +1929,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
             })
             .collect::<Result<Vec<_>, EbpfError<BpfError>>>()?;
 
-        let translate = |account_info: &SolAccountInfo, invoke_context: &mut dyn InvokeContext| {
+        let translate = |account_info: &SolAccountInfo, invoke_context: &dyn InvokeContext| {
             // Translate the account from user space
 
             let lamports = translate_type_mut::<u64>(
@@ -2081,10 +2081,13 @@ fn get_translated_accounts<'a, T, F>(
     do_translate: F,
 ) -> Result<TranslatedAccounts<'a>, EbpfError<BpfError>>
 where
-    F: Fn(&T, &mut dyn InvokeContext) -> Result<CallerAccount<'a>, EbpfError<BpfError>>,
+    F: Fn(&T, &dyn InvokeContext) -> Result<CallerAccount<'a>, EbpfError<BpfError>>,
 {
     let demote_program_write_locks =
         invoke_context.is_feature_active(&demote_program_write_locks::id());
+    let keyed_accounts = invoke_context
+        .get_keyed_accounts()
+        .map_err(SyscallError::InstructionError)?;
     let mut account_indices = Vec::with_capacity(message.account_keys.len());
     let mut accounts = Vec::with_capacity(message.account_keys.len());
     for (i, account_key) in message.account_keys.iter().enumerate() {
@@ -2104,13 +2107,43 @@ where
                 {
                     let mut account = account.borrow_mut();
                     account.copy_into_owner_from_slice(caller_account.owner.as_ref());
-                    caller_account.original_data_len = orig_data_lens[caller_account_index];
                     account.set_data_from_slice(caller_account.data);
                     account.set_lamports(*caller_account.lamports);
                     account.set_executable(caller_account.executable);
                     account.set_rent_epoch(caller_account.rent_epoch);
                 }
                 let caller_account = if message.is_writable(i, demote_program_write_locks) {
+                    if let Some(orig_data_len_index) = keyed_accounts
+                        .iter()
+                        .position(|keyed_account| keyed_account.unsigned_key() == account_key)
+                        .map(|index| {
+                            // index starts at first instruction account
+                            index - keyed_accounts.len().saturating_sub(orig_data_lens.len())
+                        })
+                    {
+                        if orig_data_len_index >= orig_data_lens.len() {
+                            ic_msg!(
+                                invoke_context,
+                                "Internal error: index mismatch for account {}",
+                                account_key
+                            );
+                            return Err(SyscallError::InstructionError(
+                                InstructionError::MissingAccount,
+                            )
+                            .into());
+                        }
+                        caller_account.original_data_len = orig_data_lens[orig_data_len_index];
+                    } else {
+                        ic_msg!(
+                            invoke_context,
+                            "Internal error: index mismatch for account {}",
+                            account_key
+                        );
+                        return Err(SyscallError::InstructionError(
+                            InstructionError::MissingAccount,
+                        )
+                        .into());
+                    }
                     Some(caller_account)
                 } else {
                     None
