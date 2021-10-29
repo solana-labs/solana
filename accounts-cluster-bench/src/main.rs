@@ -248,7 +248,7 @@ fn run_accounts_bench(
     let executor = TransactionExecutor::new(entrypoint_addr);
 
     // Create and close messages both require 2 signatures, fake a 2 signature message to calculate fees
-    let message = Message::new(
+    let mut message = Message::new(
         &[
             Instruction::new_with_bytes(
                 Pubkey::new_unique(),
@@ -270,6 +270,7 @@ fn run_accounts_bench(
             latest_blockhash = Instant::now();
         }
 
+        message.recent_blockhash = blockhash;
         let fee = client
             .get_fee_for_message(&message)
             .expect("get_fee_for_message");

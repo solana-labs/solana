@@ -289,7 +289,7 @@ impl Banks for BanksServer {
     ) -> Option<u64> {
         let bank = self.bank(commitment);
         let sanitized_message = SanitizedMessage::try_from(message).ok()?;
-        Some(bank.get_fee_for_message(&sanitized_message))
+        bank.get_fee_for_message(&sanitized_message)
     }
 }
 

@@ -3118,8 +3118,11 @@ impl Bank {
         &self.fee_rate_governor
     }
 
-    pub fn get_fee_for_message(&self, message: &SanitizedMessage) -> u64 {
-        Self::calculate_fee(message, self.fee_rate_governor.lamports_per_signature)
+    pub fn get_fee_for_message(&self, message: &SanitizedMessage) -> Option<u64> {
+        let blockhash_queue = self.blockhash_queue.read().unwrap();
+        let lamports_per_signature =
+            blockhash_queue.get_lamports_per_signature(message.recent_blockhash())?;
+        Some(Self::calculate_fee(message, lamports_per_signature))
     }
 
     pub fn get_fee_for_message_with_lamports_per_signature(
@@ -11022,8 +11025,12 @@ pub(crate) mod tests {
         assert_eq!(bank.process_transaction(&durable_tx), Ok(()));
 
         /* Check balances */
-        let mut expected_balance =
-            4_650_000 - bank.get_fee_for_message(&durable_tx.message.try_into().unwrap());
+        let mut recent_message = durable_tx.message;
+        recent_message.recent_blockhash = bank.last_blockhash();
+        let mut expected_balance = 4_650_000
+            - bank
+                .get_fee_for_message(&recent_message.try_into().unwrap())
+                .unwrap();
         assert_eq!(bank.get_balance(&custodian_pubkey), expected_balance);
         assert_eq!(bank.get_balance(&nonce_pubkey), 250_000);
         assert_eq!(bank.get_balance(&alice_pubkey), 100_000);
@@ -11075,8 +11082,11 @@ pub(crate) mod tests {
             ))
         );
         /* Check fee charged and nonce has advanced */
+        let mut recent_message = durable_tx.message.clone();
+        recent_message.recent_blockhash = bank.last_blockhash();
         expected_balance -= bank
-            .get_fee_for_message(&SanitizedMessage::try_from(durable_tx.message.clone()).unwrap());
+            .get_fee_for_message(&SanitizedMessage::try_from(recent_message).unwrap())
+            .unwrap();
         assert_eq!(bank.get_balance(&custodian_pubkey), expected_balance);
         assert_ne!(nonce_hash, get_nonce_account(&bank, &nonce_pubkey).unwrap());
         /* Confirm replaying a TX that failed with InstructionError::* now
@@ -11135,10 +11145,14 @@ pub(crate) mod tests {
             ))
         );
         /* Check fee charged and nonce has *not* advanced */
+        let mut recent_message = durable_tx.message;
+        recent_message.recent_blockhash = bank.last_blockhash();
         assert_eq!(
             bank.get_balance(&custodian_pubkey),
             initial_custodian_balance
-                - bank.get_fee_for_message(&durable_tx.message.try_into().unwrap())
+                - bank
+                    .get_fee_for_message(&recent_message.try_into().unwrap())
+                    .unwrap()
         );
         assert_eq!(nonce_hash, get_nonce_account(&bank, &nonce_pubkey).unwrap());
     }
@@ -11185,10 +11199,14 @@ pub(crate) mod tests {
             ))
         );
         /* Check fee charged and nonce has advanced */
+        let mut recent_message = durable_tx.message;
+        recent_message.recent_blockhash = bank.last_blockhash();
         assert_eq!(
             bank.get_balance(&nonce_pubkey),
             nonce_starting_balance
-                - bank.get_fee_for_message(&durable_tx.message.try_into().unwrap())
+                - bank
+                    .get_fee_for_message(&recent_message.try_into().unwrap())
+                    .unwrap()
         );
         assert_ne!(nonce_hash, get_nonce_account(&bank, &nonce_pubkey).unwrap());
     }
