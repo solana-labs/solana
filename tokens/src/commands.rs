@@ -1200,13 +1200,13 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_core::test_validator::TestValidator;
     use solana_sdk::{
         instruction::AccountMeta,
         signature::{read_keypair_file, write_keypair_file, Signer},
         stake::instruction::StakeInstruction,
     };
     use solana_streamer::socket::SocketAddrSpace;
+    use solana_test_validator::TestValidator;
     use solana_transaction_status::TransactionConfirmationStatus;
 
     fn one_signer_message() -> Message {

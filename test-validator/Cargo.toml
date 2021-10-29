@@ -1,0 +1,29 @@
+[package]
+name = "solana-test-validator"
+description = "Blockchain, Rebuilt for Scale"
+version = "1.9.0"
+homepage = "https://solana.com/"
+documentation = "https://docs.rs/solana-test-validator"
+readme = "../README.md"
+repository = "https://github.com/solana-labs/solana"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+license = "Apache-2.0"
+edition = "2018"
+
+[dependencies]
+base64 = "0.12.3"
+log = "0.4.14"
+solana-client = { path = "../client", version = "=1.9.0" }
+solana-core = { path = "../core", version = "=1.9.0" }
+solana-gossip = { path = "../gossip", version = "=1.9.0" }
+solana-ledger = { path = "../ledger", version = "=1.9.0" }
+solana-logger = { path = "../logger", version = "=1.9.0" }
+solana-net-utils = { path = "../net-utils", version = "=1.9.0" }
+solana-program-test = { path = "../program-test", version = "=1.9.0" }
+solana-rpc = { path = "../rpc", version = "=1.9.0" }
+solana-runtime = { path = "../runtime", version = "=1.9.0" }
+solana-sdk = { path = "../sdk", version = "=1.9.0" }
+solana-streamer = { path = "../streamer", version = "=1.9.0" }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

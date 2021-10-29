@@ -6,7 +6,6 @@ use solana_client::{
     rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
     rpc_response::SlotInfo,
 };
-use solana_core::test_validator::TestValidator;
 use solana_rpc::{
     optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
     rpc_pubsub_service::{PubSubConfig, PubSubService},
@@ -28,6 +27,7 @@ use solana_sdk::{
     system_program, system_transaction,
 };
 use solana_streamer::socket::SocketAddrSpace;
+use solana_test_validator::TestValidator;
 use std::{
     collections::HashSet,
     net::{IpAddr, SocketAddr},

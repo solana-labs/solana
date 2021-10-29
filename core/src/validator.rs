@@ -292,7 +292,7 @@ pub struct Validator {
 }
 
 // in the distant future, get rid of ::new()/exit() and use Result properly...
-pub(crate) fn abort() -> ! {
+pub fn abort() -> ! {
     #[cfg(not(test))]
     {
         // standard error is usually redirected to a log file, cry for help on standard output as
