@@ -81,6 +81,10 @@ impl AesKey {
     pub fn encrypt(&self, amount: u64) -> AesCiphertext {
         Aes::encrypt(self, amount)
     }
+
+    pub fn decrypt(&self, ct: &AesCiphertext) -> Option<u64> {
+        Aes::decrypt(self, ct)
+    }
 }
 
 #[derive(Debug)]
