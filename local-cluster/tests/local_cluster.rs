@@ -3920,6 +3920,105 @@ fn run_test_load_program_accounts_partition(scan_commitment: CommitmentConfig) {
     );
 }
 
+#[test]
+#[serial]
+fn test_votes_land_in_fork_during_long_partition() {
+    let total_stake = 100;
+    // Make `lighter_stake` insufficient for switching threshold
+    let lighter_stake = (SWITCH_FORK_THRESHOLD as f64 * total_stake as f64) as u64;
+    let heavier_stake = lighter_stake + 1;
+    let failures_stake = total_stake - lighter_stake - heavier_stake;
+
+    // Give lighter stake 30 consecutive slots before
+    // the heavier stake gets a single slot
+    let partitions: &[&[(usize, usize)]] = &[
+        &[(heavier_stake as usize, 1)],
+        &[(lighter_stake as usize, 30)],
+    ];
+
+    #[derive(Default)]
+    struct PartitionContext {
+        heaviest_validator_key: Pubkey,
+        lighter_validator_key: Pubkey,
+        heavier_fork_slot: Slot,
+    }
+
+    let on_partition_start = |_cluster: &mut LocalCluster,
+                              validator_keys: &[Pubkey],
+                              _dead_validator_infos: Vec<ClusterValidatorInfo>,
+                              context: &mut PartitionContext| {
+        // validator_keys[0] is the validator that will be killed, i.e. the validator with
+        // stake == `failures_stake`
+        context.heaviest_validator_key = validator_keys[1];
+        context.lighter_validator_key = validator_keys[2];
+    };
+
+    let on_before_partition_resolved =
+        |cluster: &mut LocalCluster, context: &mut PartitionContext| {
+            let lighter_validator_ledger_path = cluster.ledger_path(&context.lighter_validator_key);
+            let heavier_validator_ledger_path =
+                cluster.ledger_path(&context.heaviest_validator_key);
+
+            // Wait for each node to have created and voted on its own partition
+            loop {
+                let (heavier_validator_latest_vote_slot, _) = last_vote_in_tower(
+                    &heavier_validator_ledger_path,
+                    &context.heaviest_validator_key,
+                )
+                .unwrap();
+                info!(
+                    "Checking heavier validator's last vote {} is on a separate fork",
+                    heavier_validator_latest_vote_slot
+                );
+                let lighter_validator_blockstore = open_blockstore(&lighter_validator_ledger_path);
+                if lighter_validator_blockstore
+                    .meta(heavier_validator_latest_vote_slot)
+                    .unwrap()
+                    .is_none()
+                {
+                    context.heavier_fork_slot = heavier_validator_latest_vote_slot;
+                    return;
+                }
+                sleep(Duration::from_millis(100));
+            }
+        };
+
+    let on_partition_resolved = |cluster: &mut LocalCluster, context: &mut PartitionContext| {
+        let lighter_validator_ledger_path = cluster.ledger_path(&context.lighter_validator_key);
+        let start = Instant::now();
+        // Wait for the lighter node to switch over and root the `context.heavier_fork_slot`
+        loop {
+            assert!(
+                // 20 secs should be much shorter than the 150 blocks (~60s) if the cluster were
+                // relying on replay vote refreshing to refresh the vote on blockhash
+                // expiration for the vote transaction.
+                !(start.elapsed() > Duration::from_secs(20)),
+                "Went too long without a root"
+            );
+            let lighter_validator_blockstore = open_blockstore(&lighter_validator_ledger_path);
+            if lighter_validator_blockstore.is_root(context.heavier_fork_slot) {
+                info!(
+                    "Partition resolved, new root made in {}ms",
+                    start.elapsed().as_millis()
+                );
+                return;
+            }
+            sleep(Duration::from_millis(100));
+        }
+    };
+
+    run_kill_partition_switch_threshold(
+        &[&[(failures_stake as usize, 0)]],
+        partitions,
+        None,
+        None,
+        PartitionContext::default(),
+        on_partition_start,
+        on_before_partition_resolved,
+        on_partition_resolved,
+    );
+}
+
 fn setup_transfer_scan_threads(
     num_starting_accounts: usize,
     exit: Arc<AtomicBool>,
