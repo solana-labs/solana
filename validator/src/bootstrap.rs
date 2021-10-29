@@ -1152,10 +1152,7 @@ mod with_incremental_snapshots {
     ) -> HashMap<(Slot, Hash), HashSet<(Slot, Hash)>> {
         let mut trusted_snapshot_hashes: HashMap<(Slot, Hash), HashSet<(Slot, Hash)>> =
             HashMap::new();
-        validator_config
-        .trusted_validators
-        .as_ref()
-        .map(|trusted_validators| {
+        if let Some(trusted_validators) = validator_config.trusted_validators.as_ref() {
             trusted_validators
             .iter()
             .for_each(|trusted_validator| {
@@ -1198,7 +1195,7 @@ mod with_incremental_snapshots {
                     }
                 }
             })
-        });
+        }
 
         trace!("trusted snapshot hashes: {:?}", &trusted_snapshot_hashes);
         trusted_snapshot_hashes
