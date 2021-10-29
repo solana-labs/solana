@@ -245,6 +245,14 @@ impl Message {
     }
 
     pub fn new(instructions: &[Instruction], payer: Option<&Pubkey>) -> Self {
+        Self::new_with_blockhash(instructions, payer, &Hash::default())
+    }
+
+    pub fn new_with_blockhash(
+        instructions: &[Instruction],
+        payer: Option<&Pubkey>,
+        blockhash: &Hash,
+    ) -> Self {
         let InstructionKeys {
             mut signed_keys,
             unsigned_keys,
@@ -259,7 +267,7 @@ impl Message {
             num_readonly_signed_accounts,
             num_readonly_unsigned_accounts,
             signed_keys,
-            Hash::default(),
+            *blockhash,
             instructions,
         )
     }

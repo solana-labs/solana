@@ -1,0 +1,36 @@
+[package]
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+edition = "2018"
+name = "solana-transaction-dos"
+version = "1.9.0"
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
+publish = false
+
+[dependencies]
+bincode = "1.3.3"
+clap = "2.33.1"
+log = "0.4.14"
+rand = "0.7.0"
+rayon = "1.5.1"
+solana-cli = { path = "../cli", version = "=1.9.0" }
+solana-clap-utils = { path = "../clap-utils", version = "=1.9.0" }
+solana-client = { path = "../client", version = "=1.9.0" }
+solana-core = { path = "../core", version = "=1.9.0" }
+solana-faucet = { path = "../faucet", version = "=1.9.0" }
+solana-gossip = { path = "../gossip", version = "=1.9.0" }
+solana-logger = { path = "../logger", version = "=1.9.0" }
+solana-measure = { path = "../measure", version = "=1.9.0" }
+solana-net-utils = { path = "../net-utils", version = "=1.9.0" }
+solana-runtime = { path = "../runtime", version = "=1.9.0" }
+solana-sdk = { path = "../sdk", version = "=1.9.0" }
+solana-streamer = { path = "../streamer", version = "=1.9.0" }
+solana-transaction-status = { path = "../transaction-status", version = "=1.9.0" }
+solana-version = { path = "../version", version = "=1.9.0" }
+
+[dev-dependencies]
+solana-local-cluster = { path = "../local-cluster", version = "=1.9.0" }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

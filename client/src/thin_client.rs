@@ -605,12 +605,6 @@ impl SyncClient for ThinClient {
             .get_fee_for_message(message)
             .map_err(|e| e.into())
     }
-
-    fn get_new_latest_blockhash(&self, blockhash: &Hash) -> TransportResult<Hash> {
-        self.rpc_client()
-            .get_new_latest_blockhash(blockhash)
-            .map_err(|e| e.into())
-    }
 }
 
 impl AsyncClient for ThinClient {

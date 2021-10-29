@@ -562,7 +562,7 @@ impl TestValidator {
         {
             let rpc_client =
                 RpcClient::new_with_commitment(rpc_url.clone(), CommitmentConfig::processed());
-            let message = Message::new(
+            let mut message = Message::new(
                 &[Instruction::new_with_bytes(
                     Pubkey::new_unique(),
                     &[],
@@ -579,17 +579,20 @@ impl TestValidator {
                 }
                 println!("Waiting for fees to stabilize {:?}...", num_tries);
                 match rpc_client.get_latest_blockhash() {
-                    Ok(_) => match rpc_client.get_fee_for_message(&message) {
-                        Ok(fee) => {
-                            if fee != 0 {
+                    Ok(blockhash) => {
+                        message.recent_blockhash = blockhash;
+                        match rpc_client.get_fee_for_message(&message) {
+                            Ok(fee) => {
+                                if fee != 0 {
+                                    break;
+                                }
+                            }
+                            Err(err) => {
+                                warn!("get_fee_for_message() failed: {:?}", err);
                                 break;
                             }
                         }
-                        Err(err) => {
-                            warn!("get_fee_for_message() failed: {:?}", err);
-                            break;
-                        }
-                    },
+                    }
                     Err(err) => {
                         warn!("get_latest_blockhash() failed: {:?}", err);
                         break;

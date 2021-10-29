@@ -87,7 +87,7 @@ pub trait SyncClient {
     /// Get recent blockhash. Uses explicit commitment configuration.
     #[deprecated(
         since = "1.9.0",
-        note = "Please use `get_latest_blockhash_with_commitment` and `get_fee_for_message` instead"
+        note = "Please use `get_latest_blockhash_with_commitment` and `get_latest_blockhash_with_commitment` instead"
     )]
     fn get_recent_blockhash_with_commitment(
         &self,
@@ -151,7 +151,7 @@ pub trait SyncClient {
 
     #[deprecated(
         since = "1.9.0",
-        note = "Please use `get_new_latest_blockhash` instead"
+        note = "Please do not use, will no longer be available in the future"
     )]
     fn get_new_blockhash(&self, blockhash: &Hash) -> Result<(Hash, FeeCalculator)>;
 
@@ -169,9 +169,6 @@ pub trait SyncClient {
 
     /// Calculate the fee for a `Message`
     fn get_fee_for_message(&self, message: &Message) -> Result<u64>;
-
-    /// Get a new blockhash after the one specified
-    fn get_new_latest_blockhash(&self, blockhash: &Hash) -> Result<Hash>;
 }
 
 pub trait AsyncClient {

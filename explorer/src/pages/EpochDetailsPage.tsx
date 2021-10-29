@@ -8,6 +8,7 @@ import { Epoch } from "components/common/Epoch";
 import { Slot } from "components/common/Slot";
 import { useEpoch, useFetchEpoch } from "providers/epoch";
 import { displayTimestampUtc } from "utils/date";
+import { FetchStatus } from "providers/cache";
 
 type Props = { epoch: string };
 export function EpochDetailsPage({ epoch }: Props) {
@@ -58,6 +59,9 @@ function EpochOverviewCard({ epoch }: OverviewProps) {
   if (epoch > currentEpoch) {
     return <ErrorCard text={`Epoch ${epoch} hasn't started yet`} />;
   } else if (!epochState?.data) {
+    if (epochState?.status === FetchStatus.FetchFailed) {
+      return <ErrorCard text={`Failed to fetch details for epoch ${epoch}`} />;
+    }
     return <LoadingCard message="Loading epoch" />;
   }
 
