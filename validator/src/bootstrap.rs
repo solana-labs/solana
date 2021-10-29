@@ -1154,8 +1154,8 @@ mod with_incremental_snapshots {
             HashMap::new();
         validator_config
         .trusted_validators
-        .iter()
-        .for_each(|trusted_validators| {
+        .as_ref()
+        .map(|trusted_validators| {
             trusted_validators
             .iter()
             .for_each(|trusted_validator| {
