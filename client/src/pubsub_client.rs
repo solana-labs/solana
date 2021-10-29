@@ -478,7 +478,7 @@ impl PubsubClient {
 
     fn cleanup_with_sender<T>(
         exit: Arc<AtomicBool>,
-        socket: &Arc<RwLock<WebSocket<MaybeTlsStream<TcpStream>>>>,
+        socket: &Arc<RwLock<WebSocket<AutoStream>>>,
         sender: Sender<T>,
     ) where
         T: DeserializeOwned + Send + 'static,
@@ -494,7 +494,7 @@ impl PubsubClient {
 
     fn cleanup_with_handler<T, F>(
         exit: Arc<AtomicBool>,
-        socket: &Arc<RwLock<WebSocket<MaybeTlsStream<TcpStream>>>>,
+        socket: &Arc<RwLock<WebSocket<AutoStream>>>,
         handler: F,
     ) where
         T: DeserializeOwned,

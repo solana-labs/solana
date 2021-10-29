@@ -1,7 +1,3 @@
-<<<<<<< HEAD:core/tests/client.rs
-use solana_client::{pubsub_client::PubsubClient, rpc_client::RpcClient, rpc_response::SlotInfo};
-use solana_core::test_validator::TestValidator;
-=======
 use serde_json::{json, Value};
 use serial_test::serial;
 use solana_client::{
@@ -10,7 +6,7 @@ use solana_client::{
     rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
     rpc_response::SlotInfo,
 };
->>>>>>> a0f9e0e8e (Add missing websocket methods to rust RPC PubSub client (#21065)):client-test/tests/client.rs
+use solana_core::test_validator::TestValidator;
 use solana_rpc::{
     optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
     rpc_pubsub_service::{PubSubConfig, PubSubService},
@@ -114,7 +110,7 @@ fn test_account_subscription() {
         mint_keypair: alice,
         ..
     } = create_genesis_config(10_000);
-    let bank = Bank::new_for_tests(&genesis_config);
+    let bank = Bank::new(&genesis_config);
     let blockhash = bank.last_blockhash();
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
     let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
@@ -210,7 +206,7 @@ fn test_program_subscription() {
         mint_keypair: alice,
         ..
     } = create_genesis_config(10_000);
-    let bank = Bank::new_for_tests(&genesis_config);
+    let bank = Bank::new(&genesis_config);
     let blockhash = bank.last_blockhash();
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
     let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
@@ -300,7 +296,7 @@ fn test_root_subscription() {
     let exit = Arc::new(AtomicBool::new(false));
 
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-    let bank = Bank::new_for_tests(&genesis_config);
+    let bank = Bank::new(&genesis_config);
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
     let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
     let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
