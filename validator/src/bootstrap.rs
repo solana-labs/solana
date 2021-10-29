@@ -1275,7 +1275,9 @@ mod with_incremental_snapshots {
                 .get(&peer_snapshot_hash.snapshot_hash.full)
                 .map(|trusted_incremental_hashes| {
                     if peer_snapshot_hash.snapshot_hash.incr.is_none() {
-                        false
+                        // If the peer's full snapshot hashes match, but doesn't have any
+                        // incremental snapshots, that's fine; keep 'em!
+                        true
                     } else {
                         trusted_incremental_hashes
                             .contains(peer_snapshot_hash.snapshot_hash.incr.as_ref().unwrap())
