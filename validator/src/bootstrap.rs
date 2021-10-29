@@ -1701,11 +1701,14 @@ mod with_incremental_snapshots {
                 ),
             ];
 
-            let expected = vec![PeerSnapshotHash::new(
-                contact_info,
-                *trusted_full_snapshot_hash,
-                Some(*trusted_incremental_snapshot_hash),
-            )];
+            let expected = vec![
+                PeerSnapshotHash::new(contact_info.clone(), *trusted_full_snapshot_hash, None),
+                PeerSnapshotHash::new(
+                    contact_info,
+                    *trusted_full_snapshot_hash,
+                    Some(*trusted_incremental_snapshot_hash),
+                ),
+            ];
             let mut actual = peer_snapshot_hashes;
             retain_trusted_peer_snapshot_hashes(&trusted_snapshot_hashes, &mut actual);
             assert_eq!(expected, actual);
