@@ -288,6 +288,14 @@ pub struct RpcIdentity {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
+pub struct RpcVote {
+    pub slots: Vec<Slot>,
+    pub hash: String,
+    pub timestamp: Option<UnixTimestamp>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct RpcVoteAccountStatus {
     pub current: Vec<RpcVoteAccountInfo>,
     pub delinquent: Vec<RpcVoteAccountInfo>,
