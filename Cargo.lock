@@ -4628,6 +4628,8 @@ dependencies = [
 name = "solana-client-test"
 version = "1.9.0"
 dependencies = [
+ "serde_json",
+ "serial_test",
  "solana-client",
  "solana-logger 1.9.0",
  "solana-measure",
