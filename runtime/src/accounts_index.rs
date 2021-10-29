@@ -1717,7 +1717,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     // pubkey updates an existing entry in the index, returns false.
     pub fn upsert(
         &self,
-        slot: Slot,
+        slot: Slot, // bprumo TODO: need prev slot and new slot
         pubkey: &Pubkey,
         account_owner: &Pubkey,
         account_data: &[u8],
@@ -1746,7 +1746,13 @@ impl<T: IndexValue> AccountsIndex<T> {
 
         {
             let r_account_maps = map.read().unwrap();
-            r_account_maps.upsert(pubkey, new_item, reclaims, previous_slot_entry_was_cached);
+            r_account_maps.upsert(
+                pubkey,
+                new_item,
+                None, // bprumo TODO: needs real value
+                reclaims,
+                previous_slot_entry_was_cached,
+            );
         }
         self.update_secondary_indexes(pubkey, account_owner, account_data, account_indexes);
     }
@@ -3153,6 +3159,7 @@ pub mod tests {
         w_account_maps.upsert(
             &key.pubkey(),
             new_entry,
+            None, // bprumo TODO: needs real value
             &mut SlotList::default(),
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );

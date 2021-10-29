@@ -123,6 +123,9 @@ const CACHE_VIRTUAL_WRITE_VERSION: StoredMetaWriteVersion = 0;
 pub(crate) const CACHE_VIRTUAL_OFFSET: Offset = 0;
 const CACHE_VIRTUAL_STORED_SIZE: StoredSize = 0;
 
+/// bprumo TODO: doc
+const FLUSH_WINDOW_SIZE: usize = 1; // bprumo TODO: put back to 2
+
 pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
     accounts_hash_cache_path: None,
@@ -4560,22 +4563,29 @@ impl AccountsDb {
             let old_slots = self.accounts_cache.cached_frozen_slots();
             excess_slot_count = old_slots.len();
             let mut flush_stats = FlushStats::default();
-            old_slots.into_iter().for_each(|old_slot| {
-                // Don't flush slots that are known to be unrooted
-                if old_slot > max_flushed_root {
-                    if self.should_aggressively_flush_cache() {
+            (0..(excess_slot_count / FLUSH_WINDOW_SIZE + 1))
+                .into_iter()
+                .for_each(|chunk_index| {
+                    let old_slots = &old_slots
+                        [chunk_index * FLUSH_WINDOW_SIZE..];
+                    // Don't flush slots that are known to be unrooted
+                    if old_slots
+                        .iter()
+                        .take(FLUSH_WINDOW_SIZE)
+                        .all(|old_slot| *old_slot > max_flushed_root)
+                    {
+                        panic!("fix this");
                         if let Some(stats) =
-                            self.flush_slot_cache(old_slot, None::<&mut fn(&_, &_) -> bool>)
+                            self.flush_slot_cache(old_slots[0], None::<&mut fn(&_, &_) -> bool>)
                         {
                             flush_stats.num_flushed += stats.num_flushed;
                             flush_stats.num_purged += stats.num_purged;
                             flush_stats.total_size += stats.total_size;
                         }
+                    } else {
+                        unflushable_unrooted_slot_count += old_slots.len();
                     }
-                } else {
-                    unflushable_unrooted_slot_count += 1;
-                }
-            });
+                });
             datapoint_info!(
                 "accounts_db-flush_accounts_cache_aggressively",
                 ("num_flushed", flush_stats.num_flushed, i64),
@@ -4747,6 +4757,7 @@ impl AccountsDb {
         let is_dead_slot = accounts.is_empty();
         // Remove the account index entries from earlier roots that are outdated by later roots.
         // Safe because queries to the index will be reading updates from later roots.
+        //bprumo TODO: call purge_slot_cache_pubkeys() in loop for the slots
         self.purge_slot_cache_pubkeys(slot, purged_slot_pubkeys, pubkey_to_slot_set, is_dead_slot);
 
         if !is_dead_slot {
@@ -5895,7 +5906,7 @@ impl AccountsDb {
         &self,
         slot: Slot,
         infos: Vec<AccountInfo>,
-        accounts: &[(&Pubkey, &T)],
+        accounts: &[(&Pubkey, &T)], // bprumo TODO: add Slot to tuple
         previous_slot_entry_was_cached: bool,
     ) -> SlotList<AccountInfo> {
         // using a thread pool here results in deadlock panics from bank_hashes.write()
