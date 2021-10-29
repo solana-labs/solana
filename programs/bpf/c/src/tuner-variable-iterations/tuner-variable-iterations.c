@@ -1,6 +1,7 @@
 /**
- * @brief Compute budget tuner program.  Spins in a loop consuming the entire
- * budget, used by the tuner bench test to tune the compute budget costs.
+ * @brief Compute budget tuner program.  Spins in a loop for the specified number of iterations
+ * (or for UINT64_MAX iterations if 0 is specified for the number of iterations), in order to consume
+ * a configurable amount of the budget.
  *
  * Care should be taken because the compiler might optimize out the mechanism
  * you are trying to tune.
@@ -27,28 +28,10 @@ extern uint64_t entrypoint(const uint8_t *input) {
   uint64_t memory_size = ka[account_index].data_len;
 
   for (uint64_t i = 0; i < iterations; i++) {
-
-    // Uncomment for raw compute
     {
       *val ^= val[current % memory_size];
       current = current * 76510171 + 47123;
     }
-
-    // // Uncomment for SHA256 syscall
-    // {
-    //   uint8_t result[SHA256_RESULT_LENGTH];
-    //   uint8_t bytes1[1024];
-    //   const SolBytes bytes[] = {{bytes1, SOL_ARRAY_SIZE(bytes1)}};
-
-    //   sol_sha256(bytes, SOL_ARRAY_SIZE(bytes), result);
-    //   *val = result[0];
-    // }
-
-    // // Uncomment for Pubkey logging syscall
-    // {
-    //   SolPubkey pubkey;
-    //   sol_log_pubkey(&pubkey);
-    // }
   }
   return *val;
 }
