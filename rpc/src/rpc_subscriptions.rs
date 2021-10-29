@@ -23,6 +23,7 @@ use {
         },
     },
     solana_measure::measure::Measure,
+    solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{
         bank::{Bank, TransactionLogInfo},
         bank_forks::BankForks,
@@ -503,7 +504,7 @@ impl RpcSubscriptions {
             .name("solana-rpc-notifications".to_string())
             .spawn(move || {
                 let pool = rayon::ThreadPoolBuilder::new()
-                    .num_threads(notification_threads.unwrap_or(0))
+                    .num_threads(notification_threads.unwrap_or_else(get_thread_count))
                     .thread_name(|i| format!("sol-sub-notif-{}", i))
                     .build()
                     .unwrap();

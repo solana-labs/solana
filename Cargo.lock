@@ -5523,6 +5523,7 @@ dependencies = [
  "solana-net-utils",
  "solana-perf",
  "solana-poh",
+ "solana-rayon-threadlimit",
  "solana-runtime",
  "solana-sdk",
  "solana-send-transaction-service",
