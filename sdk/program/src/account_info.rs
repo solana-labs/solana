@@ -247,15 +247,104 @@ impl<'a, T: Account> IntoAccountInfo<'a> for &'a mut (Pubkey, T) {
     }
 }
 
-/// Return the next `AccountInfo` or a `NotEnoughAccountKeys` error.
+/// Convenience function for accessing the next item in an [`AccountInfo`]
+/// iterator.
+///
+/// This is simply a wrapper around [`Iterator::next`] that returns a
+/// [`ProgramError`] instead of an option.
+///
+/// # Errors
+///
+/// Returns [`ProgramError::NotEnoughAccountKeys`] if there are no more items in
+/// the iterator.
+///
+/// # Examples
+///
+/// ```
+/// use solana_program::{
+///    account_info::{AccountInfo, next_account_info},
+///    entrypoint::ProgramResult,
+///    pubkey::Pubkey,
+/// };
+/// # use solana_program::program_error::ProgramError;
+///
+/// pub fn process_instruction(
+///     program_id: &Pubkey,
+///     accounts: &[AccountInfo],
+///     instruction_data: &[u8],
+/// ) -> ProgramResult {
+///     let accounts_iter = &mut accounts.iter();
+///     let signer = next_account_info(accounts_iter)?;
+///     let payer = next_account_info(accounts_iter)?;
+///
+///     // do stuff ...
+///
+///     Ok(())
+/// }
+/// # let p = Pubkey::new_unique();
+/// # let l = &mut 0;
+/// # let d = &mut [0u8];
+/// # let a = AccountInfo::new(&p, false, false, l, d, &p, false, 0);
+/// # let accounts = &[a.clone(), a];
+/// # process_instruction(
+/// #    &Pubkey::new_unique(),
+/// #    accounts,
+/// #    &[],
+/// # )?;
+/// # Ok::<(), ProgramError>(())
+/// ```
 pub fn next_account_info<'a, 'b, I: Iterator<Item = &'a AccountInfo<'b>>>(
     iter: &mut I,
 ) -> Result<I::Item, ProgramError> {
     iter.next().ok_or(ProgramError::NotEnoughAccountKeys)
 }
 
-/// Return a slice of the next `count` `AccountInfo`s or a
-/// `NotEnoughAccountKeys` error.
+/// Convenience function for accessing multiple next items in an [`AccountInfo`]
+/// iterator.
+///
+/// Returns a slice containing the next `count` [`AccountInfo`]s.
+///
+/// # Errors
+///
+/// Returns [`ProgramError::NotEnoughAccountKeys`] if there are not enough items
+/// in the iterator to satisfy the request.
+///
+/// # Examples
+///
+/// ```
+/// use solana_program::{
+///    account_info::{AccountInfo, next_account_info, next_account_infos},
+///    entrypoint::ProgramResult,
+///    pubkey::Pubkey,
+/// };
+/// # use solana_program::program_error::ProgramError;
+///
+/// pub fn process_instruction(
+///     program_id: &Pubkey,
+///     accounts: &[AccountInfo],
+///     instruction_data: &[u8],
+/// ) -> ProgramResult {
+///     let accounts_iter = &mut accounts.iter();
+///     let signer = next_account_info(accounts_iter)?;
+///     let payer = next_account_info(accounts_iter)?;
+///     let outputs = next_account_infos(accounts_iter, 3)?;
+///
+///     // do stuff ...
+///
+///     Ok(())
+/// }
+/// # let p = Pubkey::new_unique();
+/// # let l = &mut 0;
+/// # let d = &mut [0u8];
+/// # let a = AccountInfo::new(&p, false, false, l, d, &p, false, 0);
+/// # let accounts = &[a.clone(), a.clone(), a.clone(), a.clone(), a];
+/// # process_instruction(
+/// #    &Pubkey::new_unique(),
+/// #    accounts,
+/// #    &[],
+/// # )?;
+/// # Ok::<(), ProgramError>(())
+/// ```
 pub fn next_account_infos<'a, 'b: 'a>(
     iter: &mut std::slice::Iter<'a, AccountInfo<'b>>,
     count: usize,
