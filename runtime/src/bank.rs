@@ -1338,6 +1338,7 @@ impl Bank {
         reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
         new_bank_options: NewBankOptions,
     ) -> Self {
+        let mut time = Measure::start("bank::new_from_parent");
         let NewBankOptions {
             vote_only_bank,
             disable_epoch_boundary_optimization,
@@ -1444,13 +1445,6 @@ impl Bank {
             sysvar_cache: RwLock::new(Vec::new()),
         };
 
-        datapoint_info!(
-            "bank-new_from_parent-heights",
-            ("slot_height", slot, i64),
-            ("block_height", new.block_height, i64),
-            ("parent_slot_height", parent.slot(), i64),
-        );
-
         let mut ancestors = Vec::with_capacity(1 + new.parents().len());
         ancestors.push(new.slot());
         new.parents().iter().for_each(|p| {
@@ -1515,6 +1509,17 @@ impl Bank {
         new.update_clock(Some(parent_epoch));
         new.update_fees();
         new.fill_sysvar_cache();
+
+        time.stop();
+
+        datapoint_info!(
+            "bank-new_from_parent-heights",
+            ("slot_height", slot, i64),
+            ("block_height", new.block_height, i64),
+            ("parent_slot_height", parent.slot(), i64),
+            ("time_us", time.as_us(), i64),
+        );
+
         new
     }
 
@@ -2102,6 +2107,7 @@ impl Bank {
         if prev_epoch == self.epoch() {
             return;
         }
+        let mut timing = Measure::start("epoch_rewards");
         // if I'm the first Bank in an epoch, count, claim, disburse rewards from Inflation
 
         let slot_in_year = self.slot_in_year_for_inflation();
@@ -2180,6 +2186,7 @@ impl Bank {
         } else {
             0
         };
+        timing.stop();
 
         datapoint_warn!(
             "epoch_rewards",
@@ -2191,7 +2198,8 @@ impl Bank {
             ("validator_rewards", validator_rewards_paid, i64),
             ("active_stake", active_stake, i64),
             ("pre_capitalization", capitalization, i64),
-            ("post_capitalization", self.capitalization(), i64)
+            ("post_capitalization", self.capitalization(), i64),
+            ("time_us", timing.as_us(), i64)
         );
     }
 
