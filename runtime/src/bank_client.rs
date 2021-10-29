@@ -304,18 +304,6 @@ impl SyncClient for BankClient {
         Ok((blockhash, last_valid_block_height))
     }
 
-    fn get_new_latest_blockhash(&self, blockhash: &Hash) -> Result<Hash> {
-        let latest_blockhash = self.get_latest_blockhash()?;
-        if latest_blockhash != *blockhash {
-            Ok(latest_blockhash)
-        } else {
-            Err(TransportError::IoError(io::Error::new(
-                io::ErrorKind::Other,
-                "Unable to get new blockhash",
-            )))
-        }
-    }
-
     fn is_blockhash_valid(
         &self,
         blockhash: &Hash,

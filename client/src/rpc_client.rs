@@ -4285,7 +4285,7 @@ impl RpcClient {
 
     #[deprecated(
         since = "1.9.0",
-        note = "Please use `get_new_latest_blockhash` instead"
+        note = "Please do not use, will no longer be available in the future"
     )]
     #[allow(deprecated)]
     pub fn get_new_blockhash(&self, blockhash: &Hash) -> ClientResult<(Hash, FeeCalculator)> {
