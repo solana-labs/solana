@@ -55,11 +55,12 @@ pub fn redirect_stderr_to_file(logfile: Option<String>) -> Option<JoinHandle<()>
             #[cfg(unix)]
             {
                 use log::info;
-                let signals = signal_hook::iterator::Signals::new(&[signal_hook::SIGUSR1])
-                    .unwrap_or_else(|err| {
-                        eprintln!("Unable to register SIGUSR1 handler: {:?}", err);
-                        exit(1);
-                    });
+                let mut signals =
+                    signal_hook::iterator::Signals::new(&[signal_hook::consts::SIGUSR1])
+                        .unwrap_or_else(|err| {
+                            eprintln!("Unable to register SIGUSR1 handler: {:?}", err);
+                            exit(1);
+                        });
 
                 solana_logger::setup_with_default(filter);
                 redirect_stderr(&logfile);
