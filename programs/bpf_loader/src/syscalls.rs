@@ -2041,18 +2041,14 @@ where
                             // index starts at first instruction account
                             index - keyed_accounts.len().saturating_sub(orig_data_lens.len())
                         })
+                        .and_then(|index| {
+                            if index >= orig_data_lens.len() {
+                                None
+                            } else {
+                                Some(index)
+                            }
+                        })
                     {
-                        if orig_data_len_index >= orig_data_lens.len() {
-                            ic_msg!(
-                                invoke_context,
-                                "Internal error: index mismatch for account {}",
-                                account_key
-                            );
-                            return Err(SyscallError::InstructionError(
-                                InstructionError::MissingAccount,
-                            )
-                            .into());
-                        }
                         caller_account.original_data_len = orig_data_lens[orig_data_len_index];
                     } else {
                         ic_msg!(
@@ -2065,6 +2061,7 @@ where
                         )
                         .into());
                     }
+
                     Some(caller_account)
                 } else {
                     None
