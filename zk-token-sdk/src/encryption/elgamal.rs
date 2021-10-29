@@ -37,8 +37,8 @@ use {
 
 struct ElGamal;
 impl ElGamal {
-    /// On input a randomness generator, the function generates the public and
-    /// secret keys for ElGamal encryption.
+    /// The function generates the public and secret keys for ElGamal encryption from the provided
+    /// randomness generator
     #[cfg(not(target_arch = "bpf"))]
     #[allow(non_snake_case)]
     fn keygen<T: RngCore + CryptoRng>(rng: &mut T) -> ElGamalKeypair {
@@ -51,6 +51,15 @@ impl ElGamal {
                 break;
             }
         }
+
+        Self::keygen_with_scalar(s)
+    }
+
+    /// Generates the public and secret keys for ElGamal encryption from a non-zero Scalar
+    #[cfg(not(target_arch = "bpf"))]
+    #[allow(non_snake_case)]
+    fn keygen_with_scalar(s: Scalar) -> ElGamalKeypair {
+        assert!(s != Scalar::zero());
 
         let H = PedersenBase::default().H;
         let P = s.invert() * H;
@@ -142,10 +151,24 @@ impl ElGamalKeypair {
     #[cfg(not(target_arch = "bpf"))]
     #[allow(non_snake_case)]
     pub fn new(signer: &dyn Signer, address: &Pubkey) -> Result<Self, SignerError> {
-        let secret = ElGamalSecretKey::new(signer, address)?;
-        let public = ElGamalPubkey::new(&secret);
+        let message = Message::new(
+            &[Instruction::new_with_bytes(
+                *address,
+                b"ElGamalSecretKey",
+                vec![],
+            )],
+            Some(&signer.try_pubkey()?),
+        );
+        let signature = signer.try_sign_message(&message.serialize())?;
 
-        Ok(Self { public, secret })
+        // Some `Signer` implementations return the default signature, which is not suitable for
+        // use as key material
+        if signature == Signature::default() {
+            return Err(SignerError::Custom("Rejecting default signature".into()));
+        }
+
+        let scalar = Scalar::hash_from_bytes::<Sha3_512>(signature.as_ref());
+        Ok(ElGamal::keygen_with_scalar(scalar))
     }
 
     /// Generates the public and secret keys for ElGamal encryption.
