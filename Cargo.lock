@@ -4566,12 +4566,12 @@ dependencies = [
  "solana-cli-output",
  "solana-client",
  "solana-config-program",
- "solana-core",
  "solana-faucet",
  "solana-logger 1.9.0",
  "solana-remote-wallet",
  "solana-sdk",
  "solana-streamer",
+ "solana-test-validator",
  "solana-transaction-status",
  "solana-version",
  "solana-vote-program",
@@ -4652,6 +4652,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-client-test"
+version = "1.9.0"
+dependencies = [
+ "solana-client",
+ "solana-logger 1.9.0",
+ "solana-measure",
+ "solana-merkle-tree",
+ "solana-metrics",
+ "solana-perf",
+ "solana-rayon-threadlimit",
+ "solana-rpc",
+ "solana-runtime",
+ "solana-sdk",
+ "solana-streamer",
+ "solana-test-validator",
+ "solana-version",
+ "systemstat",
+]
+
+[[package]]
 name = "solana-compute-budget-program"
 version = "1.9.0"
 dependencies = [
@@ -4703,10 +4723,8 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "serial_test",
- "solana-account-decoder",
  "solana-accountsdb-plugin-manager",
  "solana-client",
- "solana-config-program",
  "solana-entry",
  "solana-frozen-abi 1.9.0",
  "solana-frozen-abi-macro 1.9.0",
@@ -4719,7 +4737,6 @@ dependencies = [
  "solana-perf",
  "solana-poh",
  "solana-program-runtime",
- "solana-program-test",
  "solana-rayon-threadlimit",
  "solana-replica-lib",
  "solana-rpc",
@@ -5546,6 +5563,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-rpc-test"
+version = "1.9.0"
+dependencies = [
+ "bincode",
+ "bs58 0.4.0",
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "log 0.4.14",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "solana-account-decoder",
+ "solana-client",
+ "solana-logger 1.9.0",
+ "solana-rpc",
+ "solana-sdk",
+ "solana-streamer",
+ "solana-test-validator",
+ "solana-transaction-status",
+ "tokio",
+]
+
+[[package]]
 name = "solana-runtime"
 version = "1.9.0"
 dependencies = [
@@ -5796,6 +5836,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-test-validator"
+version = "1.9.0"
+dependencies = [
+ "base64 0.12.3",
+ "log 0.4.14",
+ "solana-client",
+ "solana-core",
+ "solana-gossip",
+ "solana-ledger",
+ "solana-logger 1.9.0",
+ "solana-net-utils",
+ "solana-program-test",
+ "solana-rpc",
+ "solana-runtime",
+ "solana-sdk",
+ "solana-streamer",
+]
+
+[[package]]
 name = "solana-tokens"
 version = "1.9.0"
 dependencies = [
@@ -5813,11 +5872,11 @@ dependencies = [
  "solana-clap-utils",
  "solana-cli-config",
  "solana-client",
- "solana-core",
  "solana-logger 1.9.0",
  "solana-remote-wallet",
  "solana-sdk",
  "solana-streamer",
+ "solana-test-validator",
  "solana-transaction-status",
  "solana-version",
  "spl-associated-token-account",
@@ -5900,6 +5959,7 @@ dependencies = [
  "solana-sdk",
  "solana-send-transaction-service",
  "solana-streamer",
+ "solana-test-validator",
  "solana-version",
  "solana-vote-program",
  "symlink",

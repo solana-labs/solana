@@ -5,7 +5,6 @@ use solana_cli::{
 };
 use solana_cli_output::OutputFormat;
 use solana_client::rpc_client::RpcClient;
-use solana_core::test_validator::TestValidator;
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     account_utils::StateMut,
@@ -16,6 +15,7 @@ use solana_sdk::{
     signature::{Keypair, Signer},
 };
 use solana_streamer::socket::SocketAddrSpace;
+use solana_test_validator::TestValidator;
 use std::{env, fs::File, io::Read, path::PathBuf, str::FromStr};
 
 #[test]

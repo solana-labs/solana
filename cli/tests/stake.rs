@@ -11,7 +11,6 @@ use solana_client::{
     nonce_utils,
     rpc_client::RpcClient,
 };
-use solana_core::test_validator::TestValidator;
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     account_utils::StateMut,
@@ -26,6 +25,7 @@ use solana_sdk::{
     },
 };
 use solana_streamer::socket::SocketAddrSpace;
+use solana_test_validator::TestValidator;
 
 #[test]
 fn test_stake_delegation_force() {

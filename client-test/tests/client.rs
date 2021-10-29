@@ -1,5 +1,4 @@
 use solana_client::{pubsub_client::PubsubClient, rpc_client::RpcClient, rpc_response::SlotInfo};
-use solana_core::test_validator::TestValidator;
 use solana_rpc::{
     optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
     rpc_pubsub_service::{PubSubConfig, PubSubService},
@@ -19,6 +18,7 @@ use solana_sdk::{
     system_transaction,
 };
 use solana_streamer::socket::SocketAddrSpace;
+use solana_test_validator::TestValidator;
 use std::{
     net::{IpAddr, SocketAddr},
     sync::{

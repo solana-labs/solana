@@ -73,6 +73,9 @@ members = [
     "watchtower",
     "replica-node",
     "replica-lib",
+    "test-validator",
+    "rpc-test",
+    "client-test",
 ]
 
 exclude = [
