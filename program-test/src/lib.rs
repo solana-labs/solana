@@ -714,9 +714,23 @@ impl ProgramTest {
         self.builtins
             .push(Builtin::new(program_name, program_id, process_instruction));
     }
-
     fn setup_bank(
         &self,
+    ) -> (
+        Arc<RwLock<BankForks>>,
+        Arc<RwLock<BlockCommitmentCache>>,
+        Hash,
+        GenesisConfigInfo,
+    ) {
+        let mint_keypair = Keypair::new();
+        let voting_keypair = Keypair::new();
+        self.setup_bank_with_keypairs(mint_keypair, voting_keypair)
+    }
+
+    fn setup_bank_with_keypairs(
+        &self,
+        mint_keypair: Keypair,
+        voting_keypair: Keypair,
     ) -> (
         Arc<RwLock<BankForks>>,
         Arc<RwLock<BlockCommitmentCache>>,
@@ -737,9 +751,6 @@ impl ProgramTest {
         let bootstrap_validator_pubkey = Pubkey::new_unique();
         let bootstrap_validator_stake_lamports =
             rent.minimum_balance(VoteState::size_of()) + sol_to_lamports(1_000_000.0);
-
-        let mint_keypair = Keypair::new();
-        let voting_keypair = Keypair::new();
 
         let mut genesis_config = create_genesis_config_with_leader_ex(
             sol_to_lamports(1_000_000.0),
@@ -824,7 +835,14 @@ impl ProgramTest {
     }
 
     pub async fn start(self) -> (BanksClient, Keypair, Hash) {
-        let (bank_forks, block_commitment_cache, last_blockhash, gci) = self.setup_bank();
+        let payer = Keypair::new();
+        self.start_with_payer(payer).await
+    }
+
+    pub async fn start_with_payer(self, payer: Keypair) -> (BanksClient, Keypair, Hash) {
+        let voting_keypair = Keypair::new();
+        let (bank_forks, block_commitment_cache, last_blockhash, gci) =
+            self.setup_bank_with_keypairs(payer, voting_keypair);
         let target_tick_duration = gci.genesis_config.poh_config.target_tick_duration;
         let transport = start_local_server(
             bank_forks.clone(),
