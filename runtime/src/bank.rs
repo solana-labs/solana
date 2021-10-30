@@ -148,24 +148,52 @@ pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct RentDebit {
+    rent_collected: u64,
+    post_balance: u64,
+}
+
+impl RentDebit {
+    fn try_into_reward_info(self) -> Option<RewardInfo> {
+        let rent_debit = i64::try_from(self.rent_collected)
+            .ok()
+            .and_then(|r| r.checked_neg());
+        rent_debit.map(|rent_debit| RewardInfo {
+            reward_type: RewardType::Rent,
+            lamports: rent_debit,
+            post_balance: self.post_balance,
+            commission: None, // Not applicable
+        })
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct RentDebits(pub Vec<(Pubkey, RewardInfo)>);
+pub struct RentDebits(HashMap<Pubkey, RentDebit>);
 impl RentDebits {
-    pub fn push(&mut self, account: &Pubkey, rent: u64, post_balance: u64) {
-        if rent != 0 {
-            let rent_debit = i64::try_from(rent).ok().and_then(|r| r.checked_neg());
-            if let Some(rent_debit) = rent_debit {
-                let reward_info = RewardInfo {
-                    reward_type: RewardType::Rent,
-                    lamports: rent_debit,
+    fn get_account_rent_debit(&self, address: &Pubkey) -> u64 {
+        self.0
+            .get(address)
+            .map(|r| r.rent_collected)
+            .unwrap_or_default()
+    }
+
+    pub fn insert(&mut self, address: &Pubkey, rent_collected: u64, post_balance: u64) {
+        if rent_collected != 0 {
+            self.0.insert(
+                *address,
+                RentDebit {
+                    rent_collected,
                     post_balance,
-                    commission: None, // Not applicable
-                };
-                self.0.push((*account, reward_info));
-            } else {
-                warn!("out of range rent debit from {}: {}", account, rent);
-            }
+                },
+            );
         }
+    }
+
+    pub fn into_unordered_rewards_iter(self) -> impl Iterator<Item = (Pubkey, RewardInfo)> {
+        self.0
+            .into_iter()
+            .filter_map(|(address, rent_debit)| Some((address, rent_debit.try_into_reward_info()?)))
     }
 }
 
@@ -622,6 +650,7 @@ impl NonceRollbackFull {
         partial: NonceRollbackPartial,
         message: &SanitizedMessage,
         accounts: &[(Pubkey, AccountSharedData)],
+        rent_debits: &RentDebits,
     ) -> Result<Self> {
         let NonceRollbackPartial {
             nonce_address,
@@ -636,17 +665,21 @@ impl NonceRollbackFull {
             None
         });
         if let Some((fee_pubkey, fee_account)) = fee_payer {
+            let mut fee_account = fee_account.clone();
+            let fee_payer_rent_debit = rent_debits.get_account_rent_debit(fee_pubkey);
+            fee_account.set_lamports(fee_account.lamports().saturating_add(fee_payer_rent_debit));
+
             if *fee_pubkey == nonce_address {
                 Ok(Self {
                     nonce_address,
-                    nonce_account: fee_account.clone(),
+                    nonce_account: fee_account,
                     fee_account: None,
                 })
             } else {
                 Ok(Self {
                     nonce_address,
                     nonce_account,
-                    fee_account: Some(fee_account.clone()),
+                    fee_account: Some(fee_account),
                 })
             }
         } else {
@@ -4451,10 +4484,13 @@ impl Bank {
             // ensures we verify the whole on-chain state (= all accounts)
             // via the account delta hash slowly once per an epoch.
             self.store_account(&pubkey, &account);
-            rent_debits.push(&pubkey, rent, account.lamports());
+            rent_debits.insert(&pubkey, rent, account.lamports());
         }
         self.collected_rent.fetch_add(total_rent, Relaxed);
-        self.rewards.write().unwrap().append(&mut rent_debits.0);
+        self.rewards
+            .write()
+            .unwrap()
+            .extend(rent_debits.into_unordered_rewards_iter());
 
         self.rc.accounts.hold_range_in_memory(&subrange, false);
         account_count
@@ -6465,77 +6501,140 @@ pub(crate) mod tests {
 
     #[test]
     fn test_nonce_rollback_info() {
+        let lamports_per_signature = 42;
+
         let nonce_authority = keypair_from_seed(&[0; 32]).unwrap();
         let nonce_address = nonce_authority.pubkey();
-        let lamports_per_signature = 42;
-        let state = nonce::state::Versions::new_current(nonce::State::Initialized(
-            nonce::state::Data::new(
-                Pubkey::default(),
-                Hash::new_unique(),
-                lamports_per_signature,
-            ),
-        ));
-        let nonce_account = AccountSharedData::new_data(43, &state, &system_program::id()).unwrap();
+        let from = keypair_from_seed(&[1; 32]).unwrap();
+        let from_address = from.pubkey();
+        let to_address = Pubkey::new_unique();
+
+        let nonce_account = AccountSharedData::new_data(
+            43,
+            &nonce::state::Versions::new_current(nonce::State::Initialized(
+                nonce::state::Data::new(
+                    Pubkey::default(),
+                    Hash::new_unique(),
+                    lamports_per_signature,
+                ),
+            )),
+            &system_program::id(),
+        )
+        .unwrap();
+        let from_account = AccountSharedData::new(44, 0, &Pubkey::default());
+        let to_account = AccountSharedData::new(45, 0, &Pubkey::default());
+        let recent_blockhashes_sysvar_account = AccountSharedData::new(4, 0, &Pubkey::default());
+
+        const TEST_RENT_DEBIT: u64 = 1;
+        let rent_collected_nonce_account = {
+            let mut account = nonce_account.clone();
+            account.set_lamports(nonce_account.lamports() - TEST_RENT_DEBIT);
+            account
+        };
+        let rent_collected_from_account = {
+            let mut account = from_account.clone();
+            account.set_lamports(from_account.lamports() - TEST_RENT_DEBIT);
+            account
+        };
+
+        let instructions = vec![
+            system_instruction::advance_nonce_account(&nonce_address, &nonce_authority.pubkey()),
+            system_instruction::transfer(&from_address, &to_address, 42),
+        ];
 
         // NonceRollbackPartial create + NonceRollbackInfo impl
-        let partial = NonceRollbackPartial::new(nonce_address, nonce_account.clone());
+        let partial =
+            NonceRollbackPartial::new(nonce_address, rent_collected_nonce_account.clone());
         assert_eq!(*partial.nonce_address(), nonce_address);
-        assert_eq!(*partial.nonce_account(), nonce_account);
+        assert_eq!(*partial.nonce_account(), rent_collected_nonce_account);
         assert_eq!(
             partial.lamports_per_signature(),
             Some(lamports_per_signature)
         );
         assert_eq!(partial.fee_account(), None);
 
-        let from = keypair_from_seed(&[1; 32]).unwrap();
-        let from_address = from.pubkey();
-        let to_address = Pubkey::new_unique();
-        let instructions = vec![
-            system_instruction::advance_nonce_account(&nonce_address, &nonce_authority.pubkey()),
-            system_instruction::transfer(&from_address, &to_address, 42),
-        ];
-        let message = new_sanitized_message(&instructions, Some(&from_address));
-
-        let from_account = AccountSharedData::new(44, 0, &Pubkey::default());
-        let to_account = AccountSharedData::new(45, 0, &Pubkey::default());
-        let recent_blockhashes_sysvar_account = AccountSharedData::new(4, 0, &Pubkey::default());
-        let accounts = [
-            (*message.get_account_key(0).unwrap(), from_account.clone()),
-            (*message.get_account_key(1).unwrap(), nonce_account.clone()),
-            (*message.get_account_key(2).unwrap(), to_account.clone()),
-            (
-                *message.get_account_key(3).unwrap(),
-                recent_blockhashes_sysvar_account.clone(),
-            ),
-        ];
+        // Add rent debits to ensure the rollback captures accounts without rent fees
+        let mut rent_debits = RentDebits::default();
+        rent_debits.insert(
+            &from_address,
+            TEST_RENT_DEBIT,
+            rent_collected_from_account.lamports(),
+        );
+        rent_debits.insert(
+            &nonce_address,
+            TEST_RENT_DEBIT,
+            rent_collected_nonce_account.lamports(),
+        );
 
         // NonceRollbackFull create + NonceRollbackInfo impl
-        let full = NonceRollbackFull::from_partial(partial.clone(), &message, &accounts).unwrap();
-        assert_eq!(*full.nonce_address(), nonce_address);
-        assert_eq!(*full.nonce_account(), nonce_account);
-        assert_eq!(full.lamports_per_signature(), Some(lamports_per_signature));
-        assert_eq!(full.fee_account(), Some(&from_account));
+        {
+            let message = new_sanitized_message(&instructions, Some(&from_address));
+            let accounts = [
+                (
+                    *message.get_account_key(0).unwrap(),
+                    rent_collected_from_account.clone(),
+                ),
+                (
+                    *message.get_account_key(1).unwrap(),
+                    rent_collected_nonce_account.clone(),
+                ),
+                (*message.get_account_key(2).unwrap(), to_account.clone()),
+                (
+                    *message.get_account_key(3).unwrap(),
+                    recent_blockhashes_sysvar_account.clone(),
+                ),
+            ];
 
-        let message = new_sanitized_message(&instructions, Some(&nonce_address));
-        let accounts = [
-            (*message.get_account_key(0).unwrap(), nonce_account),
-            (*message.get_account_key(1).unwrap(), from_account),
-            (*message.get_account_key(2).unwrap(), to_account),
-            (
-                *message.get_account_key(3).unwrap(),
-                recent_blockhashes_sysvar_account,
-            ),
-        ];
+            let full =
+                NonceRollbackFull::from_partial(partial.clone(), &message, &accounts, &rent_debits)
+                    .unwrap();
+            assert_eq!(*full.nonce_address(), nonce_address);
+            assert_eq!(*full.nonce_account(), rent_collected_nonce_account);
+            assert_eq!(full.lamports_per_signature(), Some(lamports_per_signature));
+            assert_eq!(
+                full.fee_account(),
+                Some(&from_account),
+                "rent debit should be refunded in captured fee account"
+            );
+        }
 
         // Nonce account is fee-payer
-        let full = NonceRollbackFull::from_partial(partial.clone(), &message, &accounts).unwrap();
-        assert_eq!(full.fee_account(), None);
+        {
+            let message = new_sanitized_message(&instructions, Some(&nonce_address));
+            let accounts = [
+                (
+                    *message.get_account_key(0).unwrap(),
+                    rent_collected_nonce_account,
+                ),
+                (
+                    *message.get_account_key(1).unwrap(),
+                    rent_collected_from_account,
+                ),
+                (*message.get_account_key(2).unwrap(), to_account),
+                (
+                    *message.get_account_key(3).unwrap(),
+                    recent_blockhashes_sysvar_account,
+                ),
+            ];
+
+            let full =
+                NonceRollbackFull::from_partial(partial.clone(), &message, &accounts, &rent_debits)
+                    .unwrap();
+            assert_eq!(*full.nonce_address(), nonce_address);
+            assert_eq!(*full.nonce_account(), nonce_account);
+            assert_eq!(full.lamports_per_signature(), Some(lamports_per_signature));
+            assert_eq!(full.fee_account(), None);
+        }
 
         // NonceRollbackFull create, fee-payer not in account_keys fails
-        assert_eq!(
-            NonceRollbackFull::from_partial(partial, &message, &[]).unwrap_err(),
-            TransactionError::AccountNotFound,
-        );
+        {
+            let message = new_sanitized_message(&instructions, Some(&nonce_address));
+            assert_eq!(
+                NonceRollbackFull::from_partial(partial, &message, &[], &RentDebits::default())
+                    .unwrap_err(),
+                TransactionError::AccountNotFound,
+            );
+        }
     }
 
     #[test]
@@ -14915,19 +15014,19 @@ pub(crate) mod tests {
         let mut rent_debits = RentDebits::default();
 
         // No entry for 0 rewards
-        rent_debits.push(&Pubkey::default(), 0, 0);
+        rent_debits.insert(&Pubkey::default(), 0, 0);
         assert_eq!(rent_debits.0.len(), 0);
 
         // Doesn't fit an `i64`, no entry. (we'll die elsewhere)
-        rent_debits.push(&Pubkey::default(), u64::MAX, 0);
+        rent_debits.insert(&Pubkey::default(), u64::MAX, 0);
         assert_eq!(rent_debits.0.len(), 0);
 
         // Since we're casting from `u64` the `i64::checked_neg()` is infallible
 
         // Some that actually work
-        rent_debits.push(&Pubkey::default(), 1, 0);
+        rent_debits.insert(&Pubkey::default(), 1, 0);
         assert_eq!(rent_debits.0.len(), 1);
-        rent_debits.push(&Pubkey::default(), i64::MAX as u64, 0);
+        rent_debits.insert(&Pubkey::default(), i64::MAX as u64, 0);
         assert_eq!(rent_debits.0.len(), 2);
     }
 
