@@ -74,7 +74,7 @@ pub(crate) fn abort() -> ! {
     {
         // standard error is usually redirected to a log file, cry for help on standard output as
         // well
-        println!("Validator process aborted. The validator log may contain further details");
+        eprintln!("Validator process aborted. The validator log may contain further details");
         std::process::exit(1);
     }
 
