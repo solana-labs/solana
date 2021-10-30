@@ -283,7 +283,7 @@ impl Accounts {
                         }
 
                         tx_rent += rent;
-                        rent_debits.push(key, rent, account.lamports());
+                        rent_debits.insert(key, rent, account.lamports());
 
                         account
                     }
@@ -476,6 +476,7 @@ impl Accounts {
                             nonce_rollback,
                             tx.message(),
                             &loaded_transaction.accounts,
+                            &loaded_transaction.rent_debits,
                         ) {
                             Ok(nonce_rollback) => Some(nonce_rollback),
                             Err(e) => return (Err(e), None),
@@ -1061,7 +1062,7 @@ impl Accounts {
                         loaded_transaction.rent += rent;
                         loaded_transaction
                             .rent_debits
-                            .push(key, rent, account.lamports());
+                            .insert(key, rent, account.lamports());
                     }
                     accounts.push((&*key, &*account));
                 }
