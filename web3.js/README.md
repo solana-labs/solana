@@ -88,7 +88,7 @@ console.log(solanaWeb3);
 
 Example scripts for the web3.js repo and native programs:
 
-- [Web3 Examples](./examples)
+- [Web3 Examples](https://github.com/solana-labs/solana/tree/master/web3.js/examples)
 
 Example scripts for the Solana Program Library:
 
