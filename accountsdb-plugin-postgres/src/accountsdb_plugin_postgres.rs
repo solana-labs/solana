@@ -32,11 +32,13 @@ impl std::fmt::Debug for AccountsDbPluginPostgres {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AccountsDbPluginPostgresConfig {
-    pub host: String,
-    pub user: String,
-    pub threads: Option<usize>,
+    pub host: Option<String>,
+    pub user: Option<String>,
     pub port: Option<u16>,
+    pub connection_str: Option<String>,
+    pub threads: Option<usize>,
     pub batch_size: Option<usize>,
+    pub panic_on_db_errors: Option<bool>,
 }
 
 #[derive(Error, Debug)]
@@ -46,6 +48,9 @@ pub enum AccountsDbPluginPostgresError {
 
     #[error("Error preparing data store schema. Error message: ({msg})")]
     DataSchemaError { msg: String },
+
+    #[error("Error preparing data store schema. Error message: ({msg})")]
+    ConfigurationError { msg: String },
 }
 
 impl AccountsDbPlugin for AccountsDbPluginPostgres {
@@ -54,10 +59,9 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
     }
 
     /// Do initialization for the PostgreSQL plugin.
-    /// # Arguments
     ///
-    /// Format of the config file:
-    /// The `accounts_selector` section allows the user to controls accounts selections.
+    /// # Format of the config file:
+    /// * The `accounts_selector` section allows the user to controls accounts selections.
     /// "accounts_selector" : {
     ///     "accounts" : \["pubkey-1", "pubkey-2", ..., "pubkey-n"\],
     /// }
@@ -72,13 +76,21 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
     /// "accounts_selector" : {
     ///     "accounts" : \["*"\],
     /// }
-    /// "host" specifies the PostgreSQL server.
-    /// "user" specifies the PostgreSQL user.
-    /// "threads" optional, specifies the number of worker threads for the plugin. A thread
-    /// maintains a PostgreSQL connection to the server. The default is 10.
-    /// "batch_size" optional, specifies the batch size of bulk insert when the AccountsDb is created
-    /// from restoring a snapshot. The default is "10".
+    /// * "host", optional, specifies the PostgreSQL server.
+    /// * "user", optional, specifies the PostgreSQL user.
+    /// * "port", optional, specifies the PostgreSQL server's port.
+    /// * "connection_str", optional, the custom PostgreSQL connection string.
+    /// Please refer to https://docs.rs/postgres/0.19.2/postgres/config/struct.Config.html for the connection configuration.
+    /// When `connection_str` is set, the values in "host", "user" and "port" are ignored. If `connection_str` is not given,
+    /// `host` and `user` must be given.
+    /// * "threads" optional, specifies the number of worker threads for the plugin. A thread
+    /// maintains a PostgreSQL connection to the server. The default is '10'.
+    /// * "batch_size" optional, specifies the batch size of bulk insert when the AccountsDb is created
+    /// from restoring a snapshot. The default is '10'.
+    /// * "panic_on_db_errors", optional, contols if to panic when there are errors replicating data to the
+    /// PostgreSQL database. The default is 'false'.
     /// # Examples
+    ///
     /// {
     ///    "libpath": "/home/solana/target/release/libsolana_accountsdb_plugin_postgres.so",
     ///    "host": "host_foo",
@@ -86,6 +98,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
     ///    "threads": 10,
     ///    "accounts_selector" : {
     ///       "owners" : ["9oT9R5ZyRovSVnt37QvVoBttGpNqR3J7unkb567NP8k3"]
+    ///    }
     /// }
 
     fn on_load(&mut self, config_file: &str) -> Result<()> {
