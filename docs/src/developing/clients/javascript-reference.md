@@ -578,34 +578,55 @@ let voteAccountFromData = web3.VoteAccount.fromAccountData(voteAccountInfo[0].ac
 console.log(voteAccountFromData);
 /*
 VoteAccount {
-    nodePubkey: PublicKey {
-        _bn: <BN: 100000096c4e1e61a6393e51937e548aee2c062e23c67cbaa8d04f289d18232>
-    },
-    authorizedVoterPubkey: PublicKey {
-        _bn: <BN: 5862b94396c4e1e61a6393e51937e548aee2c062e23c67cbaa8d04f289d18232>
-    },
-    authorizedWithdrawerPubkey: PublicKey {
-        _bn: <BN: 5862b9430a0800000000000000cb136204000000001f000000cc136204000000>
-    },
-    commission: 0,
-    votes: [
-        { slot: 124554051584, confirmationCount: 73536462 },
-        { slot: 120259084288, confirmationCount: 73536463 },
-        { slot: 115964116992, confirmationCount: 73536464 },
-        { slot: 111669149696, confirmationCount: 73536465 },
-        { slot: 107374182400, confirmationCount: 96542804 },
-        { slot: 4294967296, confirmationCount: 1645464065 },
-        { slot: 1099511627780, confirmationCount: 0 },
-        { slot: 57088, confirmationCount: 3787757056 },
-        { slot: 16516698632215534000, confirmationCount: 3236081224 },
-        { slot: 328106138455040640, confirmationCount: 2194770418 },
-        { slot: 290873038898, confirmationCount: 0 },
-    ],
-    rootSlot: null,
-    epoch: 0,
-    credits: 0,
-    lastEpochCredits: 0,
-    epochCredits: []
+  nodePubkey: PublicKey {
+    _bn: <BN: 65b8cc98c213ee79edbe8ce6640c611cae35112d490d60f837447c187de0599b>
+  },
+  authorizedWithdrawer: PublicKey {
+    _bn: <BN: 65b8cc98c213ee79edbe8ce6640c611cae35112d490d60f837447c187de0599b>
+  },
+  commission: 100,
+  rootSlot: 104543648,
+  votes: [
+    { slot: 104543649, confirmationCount: 31 },
+    { slot: 104543650, confirmationCount: 30 },
+    { slot: 104543651, confirmationCount: 29 },
+    { slot: 104543652, confirmationCount: 28 },
+    { slot: 104543653, confirmationCount: 27 },
+    { slot: 104543654, confirmationCount: 26 },
+    { slot: 104543655, confirmationCount: 25 },
+    { slot: 104543656, confirmationCount: 24 },
+    { slot: 104543657, confirmationCount: 23 },
+    { slot: 104543658, confirmationCount: 22 },
+    { slot: 104543659, confirmationCount: 21 },
+    { slot: 104543660, confirmationCount: 20 },
+    { slot: 104543661, confirmationCount: 19 },
+    { slot: 104543662, confirmationCount: 18 },
+    { slot: 104543663, confirmationCount: 17 },
+    { slot: 104543664, confirmationCount: 16 },
+    { slot: 104543665, confirmationCount: 15 },
+    { slot: 104543666, confirmationCount: 14 },
+    { slot: 104543667, confirmationCount: 13 },
+    { slot: 104543668, confirmationCount: 12 },
+    { slot: 104543669, confirmationCount: 11 },
+    { slot: 104543670, confirmationCount: 10 },
+    { slot: 104543671, confirmationCount: 9 },
+    { slot: 104543672, confirmationCount: 8 },
+    { slot: 104543673, confirmationCount: 7 },
+    { slot: 104543674, confirmationCount: 6 },
+    { slot: 104543675, confirmationCount: 5 },
+    { slot: 104543676, confirmationCount: 4 },
+    { slot: 104543688, confirmationCount: 2 },
+    { slot: 104543689, confirmationCount: 1 }
+  ],
+  authorizedVoters: [
+    {
+      epoch: 241,
+      authorizedVoter: <Buffer 65 b8 cc 98 c2 13 ee 79 ed be 8c e6 64 0c 61 1c ae 35 11 2d 49 0d 60 f8 37 44 7c 18 7d e0 59 9b>
+    }
+  ],
+  priorVoters: [],
+  epochCredits: [],
+  lastTimestamp: { slot: 0, timestamp: 0 }
 }
 */
 ```
