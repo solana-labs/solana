@@ -3715,11 +3715,11 @@ pub mod rpc_full {
 }
 
 // RPC methods deprecated in v1.8
-pub mod rpc_deprecated_v1_8 {
+pub mod rpc_deprecated_v1_9 {
     #![allow(deprecated)]
     use super::*;
     #[rpc]
-    pub trait DeprecatedV1_8 {
+    pub trait DeprecatedV1_9 {
         type Metadata;
 
         #[rpc(meta, name = "getRecentBlockhash")]
@@ -3754,8 +3754,8 @@ pub mod rpc_deprecated_v1_8 {
         fn get_snapshot_slot(&self, meta: Self::Metadata) -> Result<Slot>;
     }
 
-    pub struct DeprecatedV1_8Impl;
-    impl DeprecatedV1_8 for DeprecatedV1_8Impl {
+    pub struct DeprecatedV1_9Impl;
+    impl DeprecatedV1_9 for DeprecatedV1_9Impl {
         type Metadata = JsonRpcRequestProcessor;
 
         fn get_recent_blockhash(
@@ -4265,7 +4265,7 @@ pub fn create_test_transactions_and_populate_blockstore(
 pub mod tests {
     use {
         super::{
-            rpc_accounts::*, rpc_bank::*, rpc_deprecated_v1_8::*, rpc_full::*, rpc_minimal::*, *,
+            rpc_accounts::*, rpc_bank::*, rpc_deprecated_v1_9::*, rpc_full::*, rpc_minimal::*, *,
         },
         crate::{
             optimistically_confirmed_bank_tracker::{
@@ -4508,7 +4508,7 @@ pub mod tests {
         io.extend_with(rpc_bank::BankDataImpl.to_delegate());
         io.extend_with(rpc_accounts::AccountsDataImpl.to_delegate());
         io.extend_with(rpc_full::FullImpl.to_delegate());
-        io.extend_with(rpc_deprecated_v1_8::DeprecatedV1_8Impl.to_delegate());
+        io.extend_with(rpc_deprecated_v1_9::DeprecatedV1_9Impl.to_delegate());
         RpcHandler {
             io,
             meta,
