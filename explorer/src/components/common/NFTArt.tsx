@@ -242,7 +242,7 @@ export const ArtContent = ({
   uri,
   animationURL,
   files,
-  data
+  data,
 }: {
   metadata: MetadataData;
   category?: MetaDataJsonCategory;
@@ -251,7 +251,7 @@ export const ArtContent = ({
   uri?: string;
   animationURL?: string;
   files?: (MetadataJsonFile | string)[];
-  data: MetadataJson | undefined
+  data: MetadataJson | undefined;
 }) => {
   const id = pubkeyToString(pubkey);
 

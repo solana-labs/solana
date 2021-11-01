@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import "bootstrap/dist/js/bootstrap.min.js";
 import { NFTData } from "providers/accounts";
-import { Creator,MetadataJson, MetadataData } from "@metaplex/js";
+import { Creator, MetadataJson, MetadataData } from "@metaplex/js";
 import { ArtContent } from "components/common/NFTArt";
 import { InfoTooltip } from "components/common/InfoTooltip";
 import { clusterPath } from "utils/url";
@@ -63,17 +63,21 @@ export function NFTHeader({
     </div>
   );
 }
-const open = (url: string | undefined) =>{
-  window.open(url, '_blank')
-}
+const open = (url: string | undefined) => {
+  window.open(url, "_blank");
+};
 
-function getExternalSiteButton(data: MetadataJson | undefined){
-  if(!data || !data.external_url) return ("")
-  return (<button
-    className="btn btn-dark btn-sm external-url-button"
-    type="button" onClick={() => open(data.external_url)}>
-    {data.external_url}
-  </button>)
+function getExternalSiteButton(data: MetadataJson | undefined) {
+  if (!data || !data.external_url) return "";
+  return (
+    <button
+      className="btn btn-dark btn-sm external-url-button"
+      type="button"
+      onClick={() => open(data.external_url)}
+    >
+      {data.external_url}
+    </button>
+  );
 }
 function getCreatorDropdownItems(creators: Creator[] | null) {
   const CreatorHeader = () => {
@@ -194,7 +198,7 @@ export const useMetadataJSON = (id: string, metadata: MetadataData) => {
   const [data, setData] = useState<MetadataJson>();
 
   useEffect(() => {
-    if (id && !data ) {
+    if (id && !data) {
       if (metadata.data.uri) {
         const uri = metadata.data.uri;
 
