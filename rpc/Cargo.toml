@@ -22,9 +22,9 @@ jsonrpc-derive = "18.0.0"
 jsonrpc-http-server = "18.0.0"
 jsonrpc-pubsub = "18.0.0"
 jsonrpc-ws-server = "18.0.0"
-<<<<<<< HEAD
 libc = "0.2.81"
 log = "0.4.11"
+rayon = "1.5.1"
 regex = "1.3.9"
 serde = "1.0.122"
 serde_derive = "1.0.103"
@@ -39,6 +39,7 @@ solana-measure = { path = "../measure", version = "=1.8.3" }
 solana-metrics = { path = "../metrics", version = "=1.8.3" }
 solana-perf = { path = "../perf", version = "=1.8.3" }
 solana-poh = { path = "../poh", version = "=1.8.3" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.8.3" }
 solana-runtime = { path = "../runtime", version = "=1.8.3" }
 solana-sdk = { path = "../sdk", version = "=1.8.3" }
 solana-streamer = { path = "../streamer", version = "=1.8.3" }
@@ -46,35 +47,6 @@ solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.8.3" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.8.3" }
 solana-version = { path = "../version", version = "=1.8.3" }
 solana-vote-program = { path = "../programs/vote", version = "=1.8.3" }
-=======
-libc = "0.2.105"
-log = "0.4.14"
-rayon = "1.5.1"
-regex = "1.5.4"
-serde = "1.0.130"
-serde_derive = "1.0.103"
-serde_json = "1.0.68"
-soketto = "0.7"
-solana-account-decoder = { path = "../account-decoder", version = "=1.9.0" }
-solana-client = { path = "../client", version = "=1.9.0" }
-solana-entry = { path = "../entry", version = "=1.9.0" }
-solana-faucet = { path = "../faucet", version = "=1.9.0" }
-solana-gossip = { path = "../gossip", version = "=1.9.0" }
-solana-ledger = { path = "../ledger", version = "=1.9.0" }
-solana-measure = { path = "../measure", version = "=1.9.0" }
-solana-metrics = { path = "../metrics", version = "=1.9.0" }
-solana-perf = { path = "../perf", version = "=1.9.0" }
-solana-poh = { path = "../poh", version = "=1.9.0" }
-solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.9.0" }
-solana-runtime = { path = "../runtime", version = "=1.9.0" }
-solana-sdk = { path = "../sdk", version = "=1.9.0" }
-solana-send-transaction-service = { path = "../send-transaction-service", version = "=1.9.0" }
-solana-streamer = { path = "../streamer", version = "=1.9.0" }
-solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.9.0" }
-solana-transaction-status = { path = "../transaction-status", version = "=1.9.0" }
-solana-version = { path = "../version", version = "=1.9.0" }
-solana-vote-program = { path = "../programs/vote", version = "=1.9.0" }
->>>>>>> 9fabff512 (Parallel notifications in RPC PubSub (#20543))
 spl-token-v2-0 = { package = "spl-token", version = "=3.2.0", features = ["no-entrypoint"] }
 stream-cancel = "0.8.1"
 thiserror = "1.0"
