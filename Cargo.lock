@@ -105,9 +105,15 @@ checksum = "a4c527152e37cf757a3f78aae5a06fbeefdb07ccc535c980a3208ee3060dd544"
 
 [[package]]
 name = "arrayvec"
+<<<<<<< HEAD
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cff77d8686867eceff3105329d4698d96c2391c176d5d03adc90c7389162b5b8"
+=======
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8da52d66c7071e2e3fa2a1e5c6d088fec47b593032b254f5e980de8ea54454d6"
+>>>>>>> 9fabff512 (Parallel notifications in RPC PubSub (#20543))
 
 [[package]]
 name = "ascii"
@@ -334,7 +340,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e9ff35b701f3914bdb8fad3368d822c766ef2858b2583198e41639b936f09d3f"
 dependencies = [
  "arrayref",
+<<<<<<< HEAD
  "arrayvec",
+=======
+ "arrayvec 0.7.2",
+>>>>>>> 9fabff512 (Parallel notifications in RPC PubSub (#20543))
  "cc",
  "cfg-if 0.1.10",
  "constant_time_eq",
@@ -2732,9 +2742,9 @@ dependencies = [
 
 [[package]]
 name = "parity-ws"
-version = "0.11.0"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0ab8a461779bd022964cae2b4989fa9c99deb270bec162da2125ec03c09fcaa"
+checksum = "5983d3929ad50f12c3eb9a6743f19d691866ecd44da74c0a3308c3f8a56df0c6"
 dependencies = [
  "byteorder",
  "bytes 0.4.12",
@@ -5377,6 +5387,7 @@ dependencies = [
  "jsonrpc-ws-server",
  "libc",
  "log 0.4.14",
+ "rayon",
  "regex",
  "serde",
  "serde_derive",
@@ -5394,6 +5405,7 @@ dependencies = [
  "solana-net-utils",
  "solana-perf",
  "solana-poh",
+ "solana-rayon-threadlimit",
  "solana-runtime",
  "solana-sdk",
  "solana-stake-program",
@@ -6362,9 +6374,15 @@ dependencies = [
 
 [[package]]
 name = "tokio-macros"
+<<<<<<< HEAD
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "54473be61f4ebe4efd09cec9bd5d16fa51d70ea0192213d754d2d500457db110"
+=======
+version = "1.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "114383b041aa6212c579467afa0075fbbdd0718de036100bc0ba7961d8cb9095"
+>>>>>>> 9fabff512 (Parallel notifications in RPC PubSub (#20543))
 dependencies = [
  "proc-macro2 1.0.24",
  "quote 1.0.9",
@@ -6383,9 +6401,15 @@ dependencies = [
 
 [[package]]
 name = "tokio-postgres"
+<<<<<<< HEAD
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2f916ee7e52c8a74dfe4162dd73a073d0d7d4b387ea7b97a774c0c10b0776531"
+=======
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4b6c8b33df661b548dcd8f9bf87debb8c56c05657ed291122e1188698c2ece95"
+>>>>>>> 9fabff512 (Parallel notifications in RPC PubSub (#20543))
 dependencies = [
  "async-trait",
  "byteorder",
@@ -6498,9 +6522,15 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
+<<<<<<< HEAD
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebb7cb2f00c5ae8df755b252306272cd1790d39728363936e01827e11f0b017b"
+=======
+version = "0.6.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e99e1983e5d376cd8eb4b66604d2e99e79f5bd988c3055891dcd8c9e2604cc0"
+>>>>>>> 9fabff512 (Parallel notifications in RPC PubSub (#20543))
 dependencies = [
  "bytes 1.0.1",
  "futures-core",
