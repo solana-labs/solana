@@ -4721,58 +4721,69 @@ impl AccountsDb {
 
     fn do_flush_slot_cache(
         &self,
-        slot: Slot,
-        slot_cache: &SlotCache,
+        new_slot: Slot,
+        slot_caches: &[(Slot, SlotCache)],
         mut should_flush_f: Option<&mut impl FnMut(&Pubkey, &AccountSharedData) -> bool>,
     ) -> FlushStats {
         let mut num_purged = 0;
         let mut total_size = 0;
         let mut num_flushed = 0;
-        let iter_items: Vec<_> = slot_cache.iter().collect();
-        let mut purged_slot_pubkeys: HashSet<(Slot, Pubkey)> = HashSet::new();
-        let mut pubkey_to_slot_set: Vec<(Pubkey, Slot)> = vec![];
-        let (accounts, hashes): (Vec<(&Pubkey, &AccountSharedData)>, Vec<Hash>) = iter_items
-            .iter()
-            .filter_map(|iter_item| {
-                let key = iter_item.key();
-                let account = &iter_item.value().account;
-                let should_flush = should_flush_f
-                    .as_mut()
-                    .map(|should_flush_f| should_flush_f(key, account))
-                    .unwrap_or(true);
-                if should_flush {
-                    let hash = iter_item.value().hash();
-                    total_size += (account.data().len() + STORE_META_OVERHEAD) as u64;
-                    num_flushed += 1;
-                    Some(((key, account), hash))
-                } else {
-                    // If we don't flush, we have to remove the entry from the
-                    // index, since it's equivalent to purging
-                    purged_slot_pubkeys.insert((slot, *key));
-                    pubkey_to_slot_set.push((*key, slot));
-                    num_purged += 1;
-                    None
-                }
-            })
-            .unzip();
+        let mut all_accounts: Vec<(&Pubkey, &AccountSharedData, &Slot)> = Vec::new();
+        let mut all_hashes: Vec<Hash> = Vec::new();
+        for (slot, slot_cache) in slot_caches {
+            let iter_items: Vec<_> = slot_cache.iter().collect();
+            let mut purged_slot_pubkeys: HashSet<(Slot, Pubkey)> = HashSet::new();
+            let mut pubkey_to_slot_set: Vec<(Pubkey, Slot)> = vec![];
+            let (mut accounts, mut hashes): (Vec<(&Pubkey, &AccountSharedData, &Slot)>, Vec<Hash>) =
+                iter_items
+                    .iter()
+                    .filter_map(|iter_item| {
+                        let key = iter_item.key();
+                        let account = &iter_item.value().account;
+                        let should_flush = should_flush_f
+                            .as_mut()
+                            .map(|should_flush_f| should_flush_f(key, account))
+                            .unwrap_or(true);
+                        if should_flush {
+                            let hash = iter_item.value().hash();
+                            total_size += (account.data().len() + STORE_META_OVERHEAD) as u64;
+                            num_flushed += 1;
+                            Some(((key, account, slot), hash))
+                        } else {
+                            // If we don't flush, we have to remove the entry from the
+                            // index, since it's equivalent to purging
+                            purged_slot_pubkeys.insert((*slot, *key));
+                            pubkey_to_slot_set.push((*key, *slot));
+                            num_purged += 1;
+                            None
+                        }
+                    })
+                    .unzip();
 
-        let is_dead_slot = accounts.is_empty();
-        // Remove the account index entries from earlier roots that are outdated by later roots.
-        // Safe because queries to the index will be reading updates from later roots.
-        //bprumo TODO: call purge_slot_cache_pubkeys() in loop for the slots
-        self.purge_slot_cache_pubkeys(slot, purged_slot_pubkeys, pubkey_to_slot_set, is_dead_slot);
+            // Remove the account index entries from earlier roots that are outdated by later roots.
+            // Safe because queries to the index will be reading updates from later roots.
+            self.purge_slot_cache_pubkeys(
+                *slot,
+                purged_slot_pubkeys,
+                pubkey_to_slot_set,
+                accounts.is_empty(),
+            );
 
-        if !is_dead_slot {
+            all_accounts.append(&mut accounts);
+            all_hashes.append(&mut hashes);
+        }
+
+        if !all_accounts.is_empty() {
             let aligned_total_size = Self::page_align(total_size);
             // This ensures that all updates are written to an AppendVec, before any
             // updates to the index happen, so anybody that sees a real entry in the index,
             // will be able to find the account in storage
             let flushed_store =
-                self.create_and_insert_store(slot, aligned_total_size, "flush_slot_cache");
+                self.create_and_insert_store(new_slot, aligned_total_size, "flush_slot_cache");
             self.store_accounts_frozen(
-                slot,
-                &accounts,
-                Some(&hashes),
+                new_slot,
+                &all_accounts,
+                Some(&all_hashes),
                 Some(Box::new(move |_, _| flushed_store.clone())),
                 None,
             );
@@ -4780,7 +4791,7 @@ impl AccountsDb {
             // all the data for the slot
             assert_eq!(
                 self.storage
-                    .get_slot_stores(slot)
+                    .get_slot_stores(new_slot)
                     .unwrap()
                     .read()
                     .unwrap()
@@ -4789,13 +4800,20 @@ impl AccountsDb {
             );
         }
 
-        // Remove this slot from the cache, which will to AccountsDb's new readers should look like an
-        // atomic switch from the cache to storage.
-        // There is some racy condition for existing readers who just has read exactly while
-        // flushing. That case is handled by retry_to_get_account_accessor()
-        assert!(self.accounts_cache.remove_slot(slot).is_some());
+        slot_caches
+            .iter()
+            .map(|(slot, _)| slot)
+            .unique()
+            .for_each(|slot| {
+                // Remove this slot from the cache, which will to AccountsDb's new readers should look like an
+                // atomic switch from the cache to storage.
+                // There is some racy condition for existing readers who just has read exactly while
+                // flushing. That case is handled by retry_to_get_account_accessor()
+                assert!(self.accounts_cache.remove_slot(*slot).is_some());
+            });
+
         FlushStats {
-            slot,
+            slot: new_slot,
             num_flushed,
             num_purged,
             total_size,
