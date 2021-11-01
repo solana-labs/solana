@@ -4566,21 +4566,23 @@ impl AccountsDb {
             (0..(excess_slot_count / FLUSH_WINDOW_SIZE + 1))
                 .into_iter()
                 .for_each(|chunk_index| {
-                    let old_slots = &old_slots
-                        [chunk_index * FLUSH_WINDOW_SIZE..];
+                    let old_slots = &old_slots[chunk_index * FLUSH_WINDOW_SIZE..];
                     // Don't flush slots that are known to be unrooted
                     if old_slots
                         .iter()
                         .take(FLUSH_WINDOW_SIZE)
                         .all(|old_slot| *old_slot > max_flushed_root)
                     {
-                        panic!("fix this");
-                        if let Some(stats) =
-                            self.flush_slot_cache(old_slots[0], None::<&mut fn(&_, &_) -> bool>)
-                        {
-                            flush_stats.num_flushed += stats.num_flushed;
-                            flush_stats.num_purged += stats.num_purged;
-                            flush_stats.total_size += stats.total_size;
+                        if true {
+                            panic!("fix this");
+                        } else {
+                            if let Some(stats) =
+                                self.flush_slot_cache(old_slots[0], None::<&mut fn(&_, &_) -> bool>)
+                            {
+                                flush_stats.num_flushed += stats.num_flushed;
+                                flush_stats.num_purged += stats.num_purged;
+                                flush_stats.total_size += stats.total_size;
+                            }
                         }
                     } else {
                         unflushable_unrooted_slot_count += old_slots.len();
