@@ -1,11 +1,13 @@
+import { useEffect, useState } from "react";
 import "bootstrap/dist/js/bootstrap.min.js";
 import { NFTData } from "providers/accounts";
-import { Creator } from "@metaplex/js";
+import { Creator,MetadataJson, MetadataData } from "@metaplex/js";
 import { ArtContent } from "components/common/NFTArt";
 import { InfoTooltip } from "components/common/InfoTooltip";
 import { clusterPath } from "utils/url";
 import { Link } from "react-router-dom";
 import { EditionInfo } from "providers/accounts/utils/getEditionInfo";
+import { getLast, pubkeyToString } from "utils";
 
 export function NFTHeader({
   nftData,
@@ -15,10 +17,13 @@ export function NFTHeader({
   address: string;
 }) {
   const metadata = nftData.metadata;
+
+  const id = pubkeyToString(address);
+  const { data } = useMetadataJSON(id, metadata);
   return (
     <div className="row">
       <div className="col-auto ml-2 d-flex align-items-center">
-        <ArtContent metadata={metadata} pubkey={address} />
+        <ArtContent metadata={metadata} pubkey={address} data={data} />
       </div>
       <div className="col mb-3 ml-0.5 mt-3">
         {<h6 className="header-pretitle ml-1">Metaplex NFT</h6>}
@@ -49,6 +54,7 @@ export function NFTHeader({
           >
             Creators
           </button>
+          {getExternalSiteButton(data)}
           <div className="dropdown-menu mt-2">
             {getCreatorDropdownItems(metadata.data.creators)}
           </div>
@@ -57,7 +63,18 @@ export function NFTHeader({
     </div>
   );
 }
+const open = (url: string | undefined) =>{
+  window.open(url, '_blank')
+}
 
+function getExternalSiteButton(data: MetadataJson | undefined){
+  if(!data || !data.external_url) return ("")
+  return (<button
+    className="btn btn-dark btn-sm external-url-button"
+    type="button" onClick={() => open(data.external_url)}>
+    {data.external_url}
+  </button>)
+}
 function getCreatorDropdownItems(creators: Creator[] | null) {
   const CreatorHeader = () => {
     const creatorTooltip =
@@ -172,3 +189,53 @@ function getIsMutablePill(isMutable: boolean) {
     }`}</span>
   );
 }
+
+export const useMetadataJSON = (id: string, metadata: MetadataData) => {
+  const [data, setData] = useState<MetadataJson>();
+
+  useEffect(() => {
+    if (id && !data ) {
+      if (metadata.data.uri) {
+        const uri = metadata.data.uri;
+
+        const processJson = (extended: any) => {
+          if (!extended || extended?.properties?.files?.length === 0) {
+            return;
+          }
+
+          if (extended?.image) {
+            extended.image = extended.image.startsWith("http")
+              ? extended.image
+              : `${metadata.data.uri}/${extended.image}`;
+          }
+
+          return extended;
+        };
+
+        try {
+          fetch(uri)
+            .then(async (_) => {
+              try {
+                const data = await _.json();
+                try {
+                  localStorage.setItem(uri, JSON.stringify(data));
+                } catch {
+                  // ignore
+                }
+                setData(processJson(data));
+              } catch {
+                return undefined;
+              }
+            })
+            .catch(() => {
+              return undefined;
+            });
+        } catch (ex) {
+          console.error(ex);
+        }
+      }
+    }
+  }, [id, data, setData, metadata.data.uri]);
+
+  return { data };
+};
