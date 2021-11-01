@@ -106,11 +106,7 @@ impl ShredWAL {
                 let mut buffer = vec![0; WAL_ENTRY_SIZE];
                 match file.read_exact(&mut buffer).ok() {
                     Some(_) => {
-                        let entry_type = u32::from_le_bytes(
-                            buffer[SHRED_PAYLOAD_SIZE..WAL_ENTRY_SIZE]
-                                .try_into()
-                                .unwrap(),
-                        );
+                        let entry_type = Self::decode_entry_type(&buffer);
                         match entry_type {
                             WAL_ENTRY_INSERTION => {
                                 let slot = Shred::get_slot_from_data(&buffer).unwrap();
@@ -166,7 +162,7 @@ impl ShredWAL {
             .iter_mut()
             .map(|((slot, index), shred)| {
                 insert_max_slot = cmp::max(insert_max_slot, *slot);
-                shred.payload.extend(WAL_ENTRY_INSERTION.to_le_bytes());
+                Self::encode_insertion_entry(shred);
                 log.write_all(&shred.payload).map_err(|err| {
                     // TODO: slot / index possibly not relevant, also should we panic?
                     BlockstoreError::Io(IoError::new(
@@ -257,6 +253,20 @@ impl ShredWAL {
             // .append(true) ensures any contents in existing log are kept
             .append(true)
             .open(self.id_path(self.cur_id))
+    }
+
+    // Extract the entry type from a raw entry
+    fn decode_entry_type(buffer: &[u8]) -> u32 {
+        u32::from_le_bytes(
+            buffer[SHRED_PAYLOAD_SIZE..WAL_ENTRY_SIZE]
+                .try_into()
+                .unwrap(),
+        )
+    }
+
+    // Encode the WAL_ENTRY_INSERTION bytes into the payload
+    fn encode_insertion_entry(shred: &mut Shred) {
+        shred.payload.extend(WAL_ENTRY_INSERTION.to_le_bytes());
     }
 
     // Extract the range deletion information from an entry
