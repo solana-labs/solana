@@ -67,14 +67,20 @@ const VoteAccountLayout = BufferLayout.struct([
     BufferLayout.offset(BufferLayout.u32(), -8),
     'authorizedVoters',
   ),
-  BufferLayout.nu64(), // priorVoters.length
-  BufferLayout.seq(
-    BufferLayout.struct([
-      Layout.publicKey('authorizedPubkey'),
-      BufferLayout.nu64('epochOfLastAuthorizedSwitch'),
-      BufferLayout.nu64('targetEpoch'),
-    ]),
-    BufferLayout.offset(BufferLayout.u32(), -8),
+  BufferLayout.struct(
+    [
+      BufferLayout.seq(
+        BufferLayout.struct([
+          Layout.publicKey('authorizedPubkey'),
+          BufferLayout.nu64('epochOfLastAuthorizedSwitch'),
+          BufferLayout.nu64('targetEpoch'),
+        ]),
+        32,
+        'buf',
+      ),
+      BufferLayout.nu64('idx'),
+      BufferLayout.u8('isEmpty'),
+    ],
     'priorVoters',
   ),
   BufferLayout.nu64(), // epochCredits.length
