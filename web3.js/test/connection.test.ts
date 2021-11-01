@@ -116,7 +116,7 @@ describe('Connection', () => {
           options.headers = Object.assign(options.headers, {
             Authorization: 'Bearer 123',
           });
-          return fetch(url, options);
+          fetch(url, options);
         },
       });
 
@@ -130,6 +130,31 @@ describe('Connection', () => {
       });
 
       expect(await connection.getVersion()).to.be.not.null;
+    });
+
+    it('middleware should receive HTTP status code', async () => {
+      let connection = new Connection(url, {
+        fetchMiddleware: async (url, options, fetch) => {
+          options.headers = Object.assign(options.headers, {
+            Authorization: 'Bearer 123',
+          });
+          const result = await fetch(url, options);
+          expect(result.status).to.be.eq(503);
+        },
+      });
+
+      await mockRpcResponse({
+        method: 'getRecentPerformanceSamples',
+        params: [100000],
+        error: mockErrorResponse,
+        statusCode: 503,
+      });
+
+      try {
+        await connection.getRecentPerformanceSamples(100000);
+      } catch (e) {
+        expect(`${e}`).to.contain('503 Service Unavailable');
+      }
     });
   }
 

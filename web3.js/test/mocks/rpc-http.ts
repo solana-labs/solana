@@ -65,6 +65,7 @@ export const mockRpcResponse = async ({
   error,
   withContext,
   withHeaders,
+  statusCode,
 }: {
   method: string;
   params: Array<any>;
@@ -72,6 +73,7 @@ export const mockRpcResponse = async ({
   error?: any;
   withContext?: boolean;
   withHeaders?: HttpHeaders;
+  statusCode?: number;
 }) => {
   if (!mockServer) return;
 
@@ -94,7 +96,7 @@ export const mockRpcResponse = async ({
     })
     .withHeaders(withHeaders || {})
     .thenReply(
-      200,
+      statusCode || 200,
       JSON.stringify({
         jsonrpc: '2.0',
         id: '',
