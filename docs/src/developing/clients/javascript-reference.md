@@ -579,54 +579,58 @@ console.log(voteAccountFromData);
 /*
 VoteAccount {
   nodePubkey: PublicKey {
-    _bn: <BN: 65b8cc98c213ee79edbe8ce6640c611cae35112d490d60f837447c187de0599b>
+    _bn: <BN: cf1c635246d4a2ebce7b96bf9f44cacd7feed5552be3c714d8813c46c7e5ec02>
   },
   authorizedWithdrawer: PublicKey {
-    _bn: <BN: 65b8cc98c213ee79edbe8ce6640c611cae35112d490d60f837447c187de0599b>
+    _bn: <BN: b76ae0caa56f2b9906a37f1b2d4f8c9d2a74c1420cd9eebe99920b364d5cde54>
   },
-  commission: 100,
-  rootSlot: 104543648,
+  commission: 10,
+  rootSlot: 104570885,
   votes: [
-    { slot: 104543649, confirmationCount: 31 },
-    { slot: 104543650, confirmationCount: 30 },
-    { slot: 104543651, confirmationCount: 29 },
-    { slot: 104543652, confirmationCount: 28 },
-    { slot: 104543653, confirmationCount: 27 },
-    { slot: 104543654, confirmationCount: 26 },
-    { slot: 104543655, confirmationCount: 25 },
-    { slot: 104543656, confirmationCount: 24 },
-    { slot: 104543657, confirmationCount: 23 },
-    { slot: 104543658, confirmationCount: 22 },
-    { slot: 104543659, confirmationCount: 21 },
-    { slot: 104543660, confirmationCount: 20 },
-    { slot: 104543661, confirmationCount: 19 },
-    { slot: 104543662, confirmationCount: 18 },
-    { slot: 104543663, confirmationCount: 17 },
-    { slot: 104543664, confirmationCount: 16 },
-    { slot: 104543665, confirmationCount: 15 },
-    { slot: 104543666, confirmationCount: 14 },
-    { slot: 104543667, confirmationCount: 13 },
-    { slot: 104543668, confirmationCount: 12 },
-    { slot: 104543669, confirmationCount: 11 },
-    { slot: 104543670, confirmationCount: 10 },
-    { slot: 104543671, confirmationCount: 9 },
-    { slot: 104543672, confirmationCount: 8 },
-    { slot: 104543673, confirmationCount: 7 },
-    { slot: 104543674, confirmationCount: 6 },
-    { slot: 104543675, confirmationCount: 5 },
-    { slot: 104543676, confirmationCount: 4 },
-    { slot: 104543688, confirmationCount: 2 },
-    { slot: 104543689, confirmationCount: 1 }
+    { slot: 104570886, confirmationCount: 31 },
+    { slot: 104570887, confirmationCount: 30 },
+    { slot: 104570888, confirmationCount: 29 },
+    { slot: 104570889, confirmationCount: 28 },
+    { slot: 104570890, confirmationCount: 27 },
+    { slot: 104570891, confirmationCount: 26 },
+    { slot: 104570892, confirmationCount: 25 },
+    { slot: 104570893, confirmationCount: 24 },
+    { slot: 104570894, confirmationCount: 23 },
+    ...
   ],
-  authorizedVoters: [
-    {
-      epoch: 241,
-      authorizedVoter: <Buffer 65 b8 cc 98 c2 13 ee 79 ed be 8c e6 64 0c 61 1c ae 35 11 2d 49 0d 60 f8 37 44 7c 18 7d e0 59 9b>
-    }
+  authorizedVoters: [ { epoch: 242, authorizedVoter: [PublicKey] } ],
+  priorVoters: {
+    buf: [
+      [Object], [Object], [Object],
+      [Object], [Object], [Object],
+      [Object], [Object], [Object],
+      [Object], [Object], [Object],
+      [Object], [Object], [Object],
+      [Object], [Object], [Object],
+      [Object], [Object], [Object],
+      [Object], [Object], [Object],
+      [Object], [Object], [Object],
+      [Object], [Object], [Object],
+      [Object], [Object]
+    ],
+    idx: 31,
+    isEmpty: 1
+  },
+  epochCredits: [
+    { epoch: 179, credits: 33723163, prevCredits: 33431259 },
+    { epoch: 180, credits: 34022643, prevCredits: 33723163 },
+    { epoch: 181, credits: 34331103, prevCredits: 34022643 },
+    { epoch: 182, credits: 34619348, prevCredits: 34331103 },
+    { epoch: 183, credits: 34880375, prevCredits: 34619348 },
+    { epoch: 184, credits: 35074055, prevCredits: 34880375 },
+    { epoch: 185, credits: 35254965, prevCredits: 35074055 },
+    { epoch: 186, credits: 35437863, prevCredits: 35254965 },
+    { epoch: 187, credits: 35672671, prevCredits: 35437863 },
+    { epoch: 188, credits: 35950286, prevCredits: 35672671 },
+    { epoch: 189, credits: 36228439, prevCredits: 35950286 },
+    ...
   ],
-  priorVoters: [],
-  epochCredits: [],
-  lastTimestamp: { slot: 0, timestamp: 0 }
+  lastTimestamp: { slot: 104570916, timestamp: 1635730116 }
 }
 */
 ```

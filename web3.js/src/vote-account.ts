@@ -17,17 +17,24 @@ export type Lockout = {
 /**
  * History of how many credits earned by the end of each epoch
  */
-export type EpochCredits = {
+export type EpochCredit = {
   epoch: number;
   credits: number;
   prevCredits: number;
 };
 
-export type AuthorizedVoters = {
-  [key: string]: PublicKey;
+export type AuthorizedVoter = {
+  epoch: number;
+  authorizedVoter: PublicKey;
 };
 
 export type PriorVoters = {
+  buf: Buf;
+  idx: number;
+  isEmpty: boolean;
+};
+
+export type Buf = {
   authorizedPubkey: PublicKey;
   epochOfLastAuthorizedSwitch: number;
   targetEpoch: number;
@@ -105,9 +112,9 @@ type VoteAccountArgs = {
   commission: number;
   rootSlot: number | null;
   votes: Lockout[];
-  authorizedVoters: AuthorizedVoters[];
-  priorVoters: PriorVoters[];
-  epochCredits: EpochCredits[];
+  authorizedVoters: AuthorizedVoter[];
+  priorVoters: PriorVoters;
+  epochCredits: EpochCredit[];
   lastTimestamp: Timestamp;
 };
 
@@ -120,9 +127,9 @@ export class VoteAccount {
   commission: number;
   rootSlot: number | null;
   votes: Lockout[];
-  authorizedVoters: AuthorizedVoters[];
-  priorVoters: PriorVoters[];
-  epochCredits: EpochCredits[];
+  authorizedVoters: AuthorizedVoter[];
+  priorVoters: PriorVoters;
+  epochCredits: EpochCredit[];
   lastTimestamp: Timestamp;
 
   /**
@@ -163,8 +170,28 @@ export class VoteAccount {
       commission: va.commission,
       votes: va.votes,
       rootSlot,
-      authorizedVoters: va.authorizedVoters,
-      priorVoters: va.priorVoters,
+      authorizedVoters: va.authorizedVoters.map(
+        ({epoch, authorizedVoter}: AuthorizedVoter) => {
+          return ({
+            epoch,
+            authorizedVoter: new PublicKey(authorizedVoter),
+          });
+        },
+      ),
+      priorVoters: {
+        ...va.priorVoters,
+        buf: va.priorVoters.buf.map(
+          ({
+            authorizedPubkey,
+            epochOfLastAuthorizedSwitch,
+            targetEpoch,
+          }: Buf) => ({
+            authorizedPubkey: new PublicKey(authorizedPubkey),
+            epochOfLastAuthorizedSwitch,
+            targetEpoch,
+          }),
+        ),
+      },
       epochCredits: va.epochCredits,
       lastTimestamp: va.lastTimestamp,
     });
