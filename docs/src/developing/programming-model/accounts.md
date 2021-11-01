@@ -47,9 +47,11 @@ instruction's [program id](transactions.md#program-id). Accounts are marked as
 executable during a successful program deployment process by the loader that
 owns the account. When a program is deployed to the execution engine (BPF deployment),
 the loader determines that the bytecode in the account's data is valid.
-If so, the loader
-permanently marks the program account as executable. Once executable, the
-runtime enforces that the account's data (the program) is immutable.
+If so, the loader permanently marks the program account as executable.
+
+If a program is marked as final (non-upgradeable), the runtime enforces that the
+account's data (the program) is immutable. Through the upgradeable loader, it is
+possible to upload a totally new program to an existing program address.
 
 ## Creating
 
