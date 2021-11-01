@@ -85,7 +85,7 @@
     "@babel/preset-typescript": "^7.12.16",
     "@babel/register": "^7.12.13",
     "@commitlint/config-conventional": "^14.1.0",
-    "@commitlint/travis-cli": "^13.1.0",
+    "@commitlint/travis-cli": "^14.1.0",
     "@rollup/plugin-alias": "^3.1.2",
     "@rollup/plugin-babel": "^5.2.3",
     "@rollup/plugin-commonjs": "^21.0.0",
