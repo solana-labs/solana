@@ -25,7 +25,7 @@ solana_rbpf = "=0.2.14"
 thiserror = "1.0"
 
 [dev-dependencies]
-rand = "0.7.3"
+rand = "0.8.4"
 solana-runtime = { path = "../../runtime", version = "=1.9.0" }
 
 [lib]

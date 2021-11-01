@@ -17,7 +17,7 @@ solana-sdk = { path = "../sdk", version = "=1.9.0" }
 memmap2 = "0.5.0"
 log = { version = "0.4.11" }
 solana-measure = { path = "../measure", version = "=1.9.0" }
-rand = "0.7.0"
+rand = "0.8.4"
 fs_extra = "1.2.0"
 tempfile = "3.2.0"
 

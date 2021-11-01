@@ -11,7 +11,7 @@ documentation = "https://docs.rs/solana-poh-bench"
 [dependencies]
 clap = "2.33.1"
 log = "0.4.14"
-rand = "0.7.0"
+rand = "0.8.4"
 rayon = "1.5.1"
 solana-logger = { path = "../logger", version = "=1.9.0" }
 solana-entry = { path = "../entry", version = "=1.9.0" }
