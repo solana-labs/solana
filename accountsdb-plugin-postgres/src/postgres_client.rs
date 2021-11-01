@@ -657,7 +657,7 @@ pub struct LogTransactionRequest {
     signature: Vec<u8>,
     result: Option<String>,
     is_vote: bool,
-    log_messages: Vec<String>,
+    log_messages: Option<Vec<String>>,
     slot: u64,
 }
 
@@ -948,8 +948,10 @@ impl ParallelPostgresClient {
         let wrk_item = DbWorkItem::LogTransaction(LogTransactionRequest {
             signature: transaction_info.signature.to_vec(),
             is_vote: transaction_info.is_vote,
-            result: transaction_info.result.clone(),
-            log_messages: transaction_info.log_messages.to_vec(),
+            result: transaction_info.status.clone(),
+            log_messages: transaction_info
+                .log_messages
+                .map(|messages| messages.to_vec()),
             slot,
         });
 

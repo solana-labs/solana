@@ -2,12 +2,15 @@ use {
     crate::{
         accounts_update_notifier::AccountsUpdateNotifierImpl,
         accountsdb_plugin_manager::AccountsDbPluginManager,
-        slot_status_observer::SlotStatusObserver,
+        slot_status_observer::SlotStatusObserver, transaction_notifier::TransactionNotifierImpl,
     },
     crossbeam_channel::Receiver,
     log::*,
     serde_json,
-    solana_rpc::optimistically_confirmed_bank_tracker::BankNotification,
+    solana_rpc::{
+        optimistically_confirmed_bank_tracker::BankNotification,
+        transaction_notifier_interface::TransactionNotifier,
+    },
     solana_runtime::accounts_update_notifier_interface::AccountsUpdateNotifier,
     std::{
         fs::File,
@@ -45,6 +48,7 @@ pub struct AccountsDbPluginService {
     slot_status_observer: SlotStatusObserver,
     plugin_manager: Arc<RwLock<AccountsDbPluginManager>>,
     accounts_update_notifier: AccountsUpdateNotifier,
+    transaction_notifier: TransactionNotifier,
 }
 
 impl AccountsDbPluginService {
@@ -76,17 +80,20 @@ impl AccountsDbPluginService {
         }
 
         let plugin_manager = Arc::new(RwLock::new(plugin_manager));
-        let accounts_update_notifier = Arc::new(RwLock::new(AccountsUpdateNotifierImpl::new(
-            plugin_manager.clone(),
-        )));
+        let accounts_update_notifier = AccountsUpdateNotifierImpl::new(plugin_manager.clone());
+        let accounts_update_notifier = Arc::new(RwLock::new(accounts_update_notifier));
         let slot_status_observer =
             SlotStatusObserver::new(confirmed_bank_receiver, accounts_update_notifier.clone());
+
+        let transaction_notifier = TransactionNotifierImpl::new(plugin_manager.clone());
+        let transaction_notifier = Arc::new(RwLock::new(transaction_notifier));
 
         info!("Started AccountsDbPluginService");
         Ok(AccountsDbPluginService {
             slot_status_observer,
             plugin_manager,
             accounts_update_notifier,
+            transaction_notifier,
         })
     }
 
@@ -147,6 +154,10 @@ impl AccountsDbPluginService {
 
     pub fn get_accounts_update_notifier(&self) -> AccountsUpdateNotifier {
         self.accounts_update_notifier.clone()
+    }
+
+    pub fn get_transaction_notifier(&self) -> TransactionNotifier {
+        self.transaction_notifier.clone()
     }
 
     pub fn join(mut self) -> thread::Result<()> {

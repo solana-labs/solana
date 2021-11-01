@@ -1,19 +1,15 @@
-use solana_sdk::transaction::TransactionError;
-
 /// Module responsible for notifying plugins of account updates
 use {
     crate::accountsdb_plugin_manager::AccountsDbPluginManager,
     log::*,
     solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
-        ReplicaAccountInfo, ReplicaAccountInfoVersions, ReplicaTransactionLogInfo,
-        ReplicaTranscaionLogInfoVersions, SlotStatus,
+        ReplicaAccountInfo, ReplicaAccountInfoVersions, SlotStatus,
     },
     solana_measure::measure::Measure,
     solana_metrics::*,
     solana_runtime::{
         accounts_update_notifier_interface::AccountsUpdateNotifierInterface,
         append_vec::{StoredAccountMeta, StoredMeta},
-        bank::TransactionLogInfo,
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
@@ -102,43 +98,6 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
     fn notify_slot_rooted(&self, slot: Slot, parent: Option<Slot>) {
         self.notify_slot_status(slot, parent, SlotStatus::Rooted);
     }
-
-    fn notify_transaction_log_info(&self, transaction_log_info: &TransactionLogInfo, slot: Slot) {
-        self.notify_plugins_of_transaction_log_info(transaction_log_info, slot);
-    }
-}
-
-fn get_transaction_status(result: &Result<(), TransactionError>) -> Option<String> {
-    if result.is_ok() {
-        return None;
-    }
-
-    let err = match result.as_ref().err().unwrap() {
-        TransactionError::AccountInUse => "AccountInUse",
-        TransactionError::AccountLoadedTwice => "AccountLoadedTwice",
-        TransactionError::AccountNotFound => "AccountNotFound",
-        TransactionError::ProgramAccountNotFound => "ProgramAccountNotFound",
-        TransactionError::InsufficientFundsForFee => "InsufficientFundsForFee",
-        TransactionError::InvalidAccountForFee => "InvalidAccountForFee",
-        TransactionError::AlreadyProcessed => "AlreadyProcessed",
-        TransactionError::BlockhashNotFound => "BlockhashNotFound",
-        TransactionError::InstructionError(idx, error) => {
-            return Some(format!("InstructionError: idx ({}), error: {}", idx, error));
-        }
-        TransactionError::CallChainTooDeep => "CallChainTooDeep",
-        TransactionError::MissingSignatureForFee => "MissingSignatureForFee",
-        TransactionError::InvalidAccountIndex => "InvalidAccountIndex",
-        TransactionError::SignatureFailure => "SignatureFailure",
-        TransactionError::InvalidProgramForExecution => "InvalidProgramForExecution",
-        TransactionError::SanitizeFailure => "SanitizeFailure",
-        TransactionError::ClusterMaintenance => "ClusterMaintenance",
-        TransactionError::AccountBorrowOutstanding => "AccountBorrowOutstanding",
-        TransactionError::WouldExceedMaxBlockCostLimit => "WouldExceedMaxBlockCostLimit",
-        TransactionError::UnsupportedVersion => "UnsupportedVersion",
-        TransactionError::InvalidWritableAccount => "InvalidWritableAccount",
-    };
-
-    Some(err.to_string())
 }
 
 impl AccountsUpdateNotifierImpl {
@@ -175,17 +134,6 @@ impl AccountsUpdateNotifierImpl {
             data: stored_account_meta.data,
             write_version: stored_account_meta.meta.write_version,
         })
-    }
-
-    fn build_replica_transaction_log_info<'a>(
-        transaction_log_info: &'a TransactionLogInfo,
-    ) -> ReplicaTransactionLogInfo<'a> {
-        ReplicaTransactionLogInfo {
-            signature: transaction_log_info.signature.as_ref(),
-            result: get_transaction_status(&transaction_log_info.result),
-            is_vote: transaction_log_info.is_vote,
-            log_messages: &transaction_log_info.log_messages,
-        }
     }
 
     fn notify_plugins_of_account_update(
@@ -275,48 +223,5 @@ impl AccountsUpdateNotifierImpl {
                 1000
             );
         }
-    }
-
-    fn notify_plugins_of_transaction_log_info(
-        &self,
-        transaction_log_info: &TransactionLogInfo,
-        slot: Slot,
-    ) {
-        let mut measure =
-            Measure::start("accountsdb-plugin-notify_plugins_of_transaction_log_info");
-        let mut plugin_manager = self.plugin_manager.write().unwrap();
-
-        if plugin_manager.plugins.is_empty() {
-            return;
-        }
-
-        let transaction_log_info = Self::build_replica_transaction_log_info(transaction_log_info);
-        for plugin in plugin_manager.plugins.iter_mut() {
-            match plugin.notify_transaction(
-                ReplicaTranscaionLogInfoVersions::V0_0_1(&transaction_log_info),
-                slot,
-            ) {
-                Err(err) => {
-                    error!(
-                        "Failed to notify transaction, error: {} to plugin {}",
-                        err,
-                        plugin.name()
-                    )
-                }
-                Ok(_) => {
-                    trace!(
-                        "Successfully notified transaction to plugin {}",
-                        plugin.name()
-                    );
-                }
-            }
-        }
-        measure.stop();
-        inc_new_counter_debug!(
-            "accountsdb-plugin-notify_plugins_of_transaction_log_info-us",
-            measure.as_us() as usize,
-            10000,
-            10000
-        );
     }
 }

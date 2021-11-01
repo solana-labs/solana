@@ -1,4 +1,5 @@
 use {
+    crate::transaction_notifier_interface::TransactionNotifier,
     crossbeam_channel::{Receiver, RecvTimeoutError},
     itertools::izip,
     solana_ledger::{
@@ -28,6 +29,8 @@ impl TransactionStatusService {
     pub fn new(
         write_transaction_status_receiver: Receiver<TransactionStatusMessage>,
         max_complete_transaction_status_slot: Arc<AtomicU64>,
+        enable_rpc_transaction_history: bool,
+        transaction_notifier: Option<TransactionNotifier>,
         blockstore: Arc<Blockstore>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
@@ -41,6 +44,8 @@ impl TransactionStatusService {
                 if let Err(RecvTimeoutError::Disconnected) = Self::write_transaction_status_batch(
                     &write_transaction_status_receiver,
                     &max_complete_transaction_status_slot,
+                    enable_rpc_transaction_history,
+                    transaction_notifier.clone(),
                     &blockstore,
                 ) {
                     break;
@@ -53,6 +58,8 @@ impl TransactionStatusService {
     fn write_transaction_status_batch(
         write_transaction_status_receiver: &Receiver<TransactionStatusMessage>,
         max_complete_transaction_status_slot: &Arc<AtomicU64>,
+        enable_rpc_transaction_history: bool,
+        transaction_notifier: Option<TransactionNotifier>,
         blockstore: &Arc<Blockstore>,
     ) -> Result<(), RecvTimeoutError> {
         match write_transaction_status_receiver.recv_timeout(Duration::from_secs(1))? {
@@ -145,31 +152,50 @@ impl TransactionStatusService {
                                 .collect(),
                         );
 
-                        if let Some(memos) = extract_and_fmt_memos(transaction.message()) {
-                            blockstore
-                                .write_transaction_memos(transaction.signature(), memos)
-                                .expect("Expect database write to succeed: TransactionMemos");
-                        }
+                        let transaction_status = TransactionStatusMeta {
+                            status,
+                            fee,
+                            pre_balances,
+                            post_balances,
+                            inner_instructions,
+                            log_messages,
+                            pre_token_balances,
+                            post_token_balances,
+                            rewards,
+                        };
 
-                        blockstore
-                            .write_transaction_status(
-                                slot,
-                                *transaction.signature(),
-                                tx_account_locks.writable,
-                                tx_account_locks.readonly,
-                                TransactionStatusMeta {
-                                    status,
-                                    fee,
-                                    pre_balances,
-                                    post_balances,
-                                    inner_instructions,
-                                    log_messages,
-                                    pre_token_balances,
-                                    post_token_balances,
-                                    rewards,
-                                },
-                            )
-                            .expect("Expect database write to succeed: TransactionStatus");
+                        if transaction_notifier.as_ref().is_some() {
+                            transaction_notifier
+                                .as_ref()
+                                .unwrap()
+                                .write()
+                                .unwrap()
+                                .notify_transaction(
+                                    slot,
+                                    &transaction.signature(),
+                                    &tx_account_locks.writable,
+                                    &tx_account_locks.readonly,
+                                    &transaction_status,
+                                    &transaction,
+                                );
+                        }
+                        if enable_rpc_transaction_history {
+                            if let Some(memos) = extract_and_fmt_memos(transaction.message()) {
+                                blockstore
+                                    .write_transaction_memos(transaction.signature(), memos)
+                                    .expect("Expect database write to succeed: TransactionMemos");
+                            }
+
+                            blockstore
+                                .write_transaction_status(
+                                    slot,
+                                    *transaction.signature(),
+                                    tx_account_locks.writable,
+                                    tx_account_locks.readonly,
+                                    transaction_status,
+                                )
+                                .expect("Expect database write to succeed: TransactionStatus");
+                        }
                     }
                 }
             }

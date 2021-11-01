@@ -4020,7 +4020,7 @@ impl Bank {
                     TransactionLogCollectorFilter::OnlyMentionedAddresses => mentioned_address,
                 };
 
-                if store || self.accounts_update_notifier.is_some() {
+                if store {
                     if let Some(log_messages) = transaction_log_messages.get(i).cloned().flatten() {
                         let transaction_log_info = TransactionLogInfo {
                             signature: *tx.signature(),
@@ -4028,16 +4028,7 @@ impl Bank {
                             is_vote,
                             log_messages,
                         };
-
-                        if let Some(accounts_update_notifier) = &self.accounts_update_notifier {
-                            info!("zzzzzzzzzzzzz, notify transaction_log_info");
-                            let notifier = &accounts_update_notifier.read().unwrap();
-                            notifier
-                                .notify_transaction_log_info(&transaction_log_info, self.slot());
-                        }
-                        if store {
-                            transaction_log_collector.logs.push(transaction_log_info);
-                        }
+                        transaction_log_collector.logs.push(transaction_log_info);
                     }
                 }
             }

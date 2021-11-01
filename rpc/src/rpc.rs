@@ -4238,6 +4238,8 @@ pub fn create_test_transactions_and_populate_blockstore(
         crate::transaction_status_service::TransactionStatusService::new(
             transaction_status_receiver,
             max_complete_transaction_status_slot,
+            true,
+            None,
             blockstore,
             &Arc::new(AtomicBool::new(false)),
         );

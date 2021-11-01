@@ -4349,6 +4349,8 @@ name = "solana-accountsdb-plugin-interface"
 version = "1.9.0"
 dependencies = [
  "log 0.4.14",
+ "solana-sdk",
+ "solana-transaction-status",
  "thiserror",
 ]
 
@@ -4370,6 +4372,7 @@ dependencies = [
  "solana-rpc",
  "solana-runtime",
  "solana-sdk",
+ "solana-transaction-status",
  "thiserror",
 ]
 
