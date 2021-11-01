@@ -55,8 +55,8 @@ symlink = "0.1.0"
 jemallocator = {package = "tikv-jemallocator", version = "0.4.1", features = ["unprefixed_malloc_on_supported_platforms"]}
 
 [target."cfg(unix)".dependencies]
-libc = "0.2.105"
-signal-hook = "0.2.3"
+libc = "0.2.106"
+signal-hook = "0.3.10"
 sysctl = "0.4.2"
 
 [package.metadata.docs.rs]

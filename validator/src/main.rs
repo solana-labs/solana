@@ -1180,6 +1180,15 @@ pub fn main() {
                 .help("Number of seconds before timing out RPC requests backed by BigTable"),
         )
         .arg(
+            Arg::with_name("rpc_pubsub_worker_threads")
+                .long("rpc-pubsub-worker-threads")
+                .takes_value(true)
+                .value_name("NUMBER")
+                .validator(is_parsable::<usize>)
+                .default_value("4")
+                .help("PubSub worker threads"),
+        )
+        .arg(
             Arg::with_name("rpc_pubsub_enable_vote_subscription")
                 .long("rpc-pubsub-enable-vote-subscription")
                 .takes_value(false)
@@ -1255,6 +1264,15 @@ pub fn main() {
                 .default_value(&default_rpc_pubsub_queue_capacity_bytes)
                 .help("The maximum total size of notifications that RPC PubSub will store \
                        across all connections."),
+        )
+        .arg(
+            Arg::with_name("rpc_pubsub_notification_threads")
+                .long("rpc-pubsub-notification-threads")
+                .takes_value(true)
+                .value_name("NUM_THREADS")
+                .validator(is_parsable::<usize>)
+                .help("The maximum number of threads that RPC PubSub will use \
+                       for generating notifications."),
         )
         .arg(
             Arg::with_name("rpc_send_transaction_retry_ms")
@@ -2194,6 +2212,8 @@ pub fn main() {
                 "rpc_pubsub_queue_capacity_bytes",
                 usize
             ),
+            worker_threads: value_t_or_exit!(matches, "rpc_pubsub_worker_threads", usize),
+            notification_threads: value_of(&matches, "rpc_pubsub_notification_threads"),
         },
         voting_disabled: matches.is_present("no_voting") || restricted_repair_only_mode,
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),

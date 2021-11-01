@@ -837,7 +837,7 @@ fn main() {
         // `register()` is unsafe because the action is called in a signal handler
         // with the usual caveats. So long as this action body stays empty, we'll
         // be fine
-        unsafe { signal_hook::register(signal_hook::SIGUSR1, || {}) }.unwrap();
+        unsafe { signal_hook::low_level::register(signal_hook::consts::SIGUSR1, || {}) }.unwrap();
     }
 
     const DEFAULT_ROOT_COUNT: &str = "1";
