@@ -4854,7 +4854,7 @@ impl AccountsDb {
                 // still exists in the cache, we know the slot cannot be removed
                 // by any other threads past this point. We are now responsible for
                 // flushing this slot.
-                self.do_flush_slot_cache(slot, &slot_cache, should_flush_f)
+                self.do_flush_slot_cache(slot, &[(slot, slot_cache)], should_flush_f)
             });
 
             // Nobody else should have been purging this slot, so should not have been removed
