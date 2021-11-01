@@ -170,30 +170,32 @@ export class VoteAccount {
       commission: va.commission,
       votes: va.votes,
       rootSlot,
-      authorizedVoters: va.authorizedVoters.map(
-        ({epoch, authorizedVoter}: AuthorizedVoter) => {
-          return ({
-            epoch,
-            authorizedVoter: new PublicKey(authorizedVoter),
-          });
-        },
-      ),
+      authorizedVoters: va.authorizedVoters.map(parseAuthorizedVoter),
       priorVoters: {
         ...va.priorVoters,
-        buf: va.priorVoters.buf.map(
-          ({
-            authorizedPubkey,
-            epochOfLastAuthorizedSwitch,
-            targetEpoch,
-          }: Buf) => ({
-            authorizedPubkey: new PublicKey(authorizedPubkey),
-            epochOfLastAuthorizedSwitch,
-            targetEpoch,
-          }),
-        ),
+        buf: va.priorVoters.buf.map(parsePriorVoters),
       },
       epochCredits: va.epochCredits,
       lastTimestamp: va.lastTimestamp,
     });
   }
+}
+
+function parseAuthorizedVoter({epoch, authorizedVoter}: AuthorizedVoter) {
+  return {
+    epoch,
+    authorizedVoter: new PublicKey(authorizedVoter),
+  };
+}
+
+function parsePriorVoters({
+  authorizedPubkey,
+  epochOfLastAuthorizedSwitch,
+  targetEpoch,
+}: Buf) {
+  return {
+    authorizedPubkey: new PublicKey(authorizedPubkey),
+    epochOfLastAuthorizedSwitch,
+    targetEpoch,
+  };
 }
