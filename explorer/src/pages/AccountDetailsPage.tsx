@@ -7,6 +7,7 @@ import {
   Account,
   ProgramData,
   TokenProgramData,
+  useMintAccountInfo,
 } from "providers/accounts";
 import { StakeAccountSection } from "components/account/StakeAccountSection";
 import { TokenAccountSection } from "components/account/TokenAccountSection";
@@ -159,10 +160,11 @@ export function AccountHeader({
 }) {
   const { tokenRegistry } = useTokenRegistry();
   const tokenDetails = tokenRegistry.get(address);
+  const mintInfo = useMintAccountInfo(address);
   const account = info?.data;
   const data = account?.details?.data;
   const isToken = data?.program === "spl-token" && data?.parsed.type === "mint";
-  const isNFT = isToken && data.nftData;
+  const isNFT = isToken && data.nftData && mintInfo?.decimals === 0;
 
   if (isNFT) {
     return <NFTHeader nftData={data.nftData!} address={address} />;

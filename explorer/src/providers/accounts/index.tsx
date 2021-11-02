@@ -251,10 +251,6 @@ async function fetchAccountInfo(
                       connection
                     );
 
-                    if (!editionInfo.masterEdition && !editionInfo.edition) {
-                      throw new Error("No edition found");
-                    }
-
                     nftData = { metadata: metadata.data, editionInfo };
                   }
                 }
