@@ -7,6 +7,7 @@ import {
   Account,
   ProgramData,
   TokenProgramData,
+  useMintAccountInfo,
 } from "providers/accounts";
 import { StakeAccountSection } from "components/account/StakeAccountSection";
 import { TokenAccountSection } from "components/account/TokenAccountSection";
@@ -38,6 +39,7 @@ import { RewardsCard } from "components/account/RewardsCard";
 import { MetaplexMetadataCard } from "components/account/MetaplexMetadataCard";
 import { NFTHeader } from "components/account/MetaplexNFTHeader";
 import { DomainsCard } from "components/account/DomainsCard";
+import isMetaplexNFT from "providers/accounts/utils/isMetaplexNFT";
 
 const IDENTICON_WIDTH = 64;
 
@@ -159,13 +161,18 @@ export function AccountHeader({
 }) {
   const { tokenRegistry } = useTokenRegistry();
   const tokenDetails = tokenRegistry.get(address);
+  const mintInfo = useMintAccountInfo(address);
   const account = info?.data;
   const data = account?.details?.data;
   const isToken = data?.program === "spl-token" && data?.parsed.type === "mint";
-  const isNFT = isToken && data.nftData;
 
-  if (isNFT) {
-    return <NFTHeader nftData={data.nftData!} address={address} />;
+  if (isMetaplexNFT(data, mintInfo?.decimals)) {
+    return (
+      <NFTHeader
+        nftData={(data as TokenProgramData).nftData!}
+        address={address}
+      />
+    );
   }
 
   if (tokenDetails || isToken) {

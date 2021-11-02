@@ -1,4 +1,9 @@
-import { Account, NFTData, useFetchAccountInfo } from "providers/accounts";
+import {
+  Account,
+  NFTData,
+  TokenProgramData,
+  useFetchAccountInfo,
+} from "providers/accounts";
 import {
   TokenAccount,
   MintAccountInfo,
@@ -20,6 +25,7 @@ import { CoingeckoStatus, useCoinGecko } from "utils/coingecko";
 import { displayTimestampWithoutDate } from "utils/date";
 import { LoadingCard } from "components/common/LoadingCard";
 import { PublicKey } from "@solana/web3.js";
+import isMetaplexNFT from "providers/accounts/utils/isMetaplexNFT";
 
 const getEthAddress = (link?: string) => {
   let address = "";
@@ -48,14 +54,11 @@ export function TokenAccountSection({
       case "mint": {
         const info = create(tokenAccount.info, MintAccountInfo);
 
-        if (
-          account.details?.data?.program === "spl-token" &&
-          account.details.data.nftData
-        ) {
+        if (isMetaplexNFT(account.details?.data, info.decimals)) {
           return (
             <NonFungibleTokenMintAccountCard
               account={account}
-              nftData={account.details.data.nftData}
+              nftData={(account.details!.data as TokenProgramData).nftData!}
               mintInfo={info}
             />
           );

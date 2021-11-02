@@ -77,13 +77,13 @@ pub enum RpcFilterError {
     #[error("encoded binary data should be less than 129 bytes")]
     DataTooLarge,
     #[deprecated(
-        since = "1.9.0",
+        since = "1.8.1",
         note = "Error for MemcmpEncodedBytes::Binary which is deprecated"
     )]
     #[error("encoded binary (base 58) data should be less than 129 bytes")]
     Base58DataTooLarge,
     #[deprecated(
-        since = "1.9.0",
+        since = "1.8.1",
         note = "Error for MemcmpEncodedBytes::Binary which is deprecated"
     )]
     #[error("bs58 decode error")]
@@ -104,7 +104,7 @@ pub enum MemcmpEncoding {
 #[serde(rename_all = "camelCase", untagged)]
 pub enum MemcmpEncodedBytes {
     #[deprecated(
-        since = "1.9.0",
+        since = "1.8.1",
         note = "Please use MemcmpEncodedBytes::Base58 instead"
     )]
     Binary(String),
