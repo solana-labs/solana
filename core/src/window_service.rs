@@ -795,7 +795,7 @@ mod test {
             1
         ));
 
-        // substitue leader_pubkey for me_id so it looks I was the leader
+        // substitute leader_pubkey for me_id so it looks I was the leader
         // if the shred came back from me, it doesn't continue, whether or not I have a bank
         assert!(!should_retransmit_and_persist(
             &shreds[0],
