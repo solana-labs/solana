@@ -574,6 +574,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
             24 => TransactionError::InvalidAddressLookupTableOwner,
             25 => TransactionError::InvalidAddressLookupTableData,
             26 => TransactionError::InvalidAddressLookupTableIndex,
+            27 => TransactionError::InvalidRentPayingAccount,
             _ => return Err("Invalid TransactionError"),
         })
     }
@@ -661,6 +662,10 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                 }
                 TransactionError::InvalidAddressLookupTableIndex => {
                     tx_by_addr::TransactionErrorType::InvalidAddressLookupTableIndex
+                }
+
+                TransactionError::InvalidRentPayingAccount => {
+                    tx_by_addr::TransactionErrorType::InvalidRentPayingAccount
                 }
             } as i32,
             instruction_error: match transaction_error {
