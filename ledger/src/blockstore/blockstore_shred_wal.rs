@@ -81,9 +81,10 @@ impl ShredWAL {
     pub fn recover(&mut self) -> Result<RecoveredShreds> {
         assert!(&self.wal_path.is_dir());
         let mut buffer_map = HashMap::new();
-        // Log filenames are the timestamp at which they're created; we want to proceed
-        // through log files in the same order that they were created (ascending)
-        // fs::read_dir() doesn't guarantee results to be sorted, so we must do so
+        // We must proceed through log files in the same order that they were created so that any
+        // deletions remove proper shreds from recovered set. Log filenames are file creation
+        // timestamps so we just need to proceed through log files in ascending order of name
+        // fs::read_dir() doesn't guarantee results to be sorted, so we must do so ourselves
         let dir = fs::read_dir(&self.wal_path)?;
         let mut logs: Vec<_> = dir.filter_map(|log| log.ok()).collect();
         logs.sort_by_key(|log| log.path());
