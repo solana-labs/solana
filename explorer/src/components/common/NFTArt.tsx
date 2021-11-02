@@ -9,7 +9,7 @@ import {
 } from "@metaplex/js";
 import ContentLoader from "react-content-loader";
 import ErrorLogo from "img/logos-solana/dark-solana-logo.svg";
-import { getLast, pubkeyToString } from "utils";
+import { getLast } from "utils";
 
 const MAX_TIME_LOADING_IMAGE = 5000; /* 5 seconds */
 
@@ -253,8 +253,6 @@ export const ArtContent = ({
   files?: (MetadataJsonFile | string)[];
   data: MetadataJson | undefined;
 }) => {
-  const id = pubkeyToString(pubkey);
-
   if (pubkey && data) {
     uri = data.image;
     animationURL = data.animation_url;
