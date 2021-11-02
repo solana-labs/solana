@@ -122,6 +122,12 @@ pub enum TransactionError {
     /// Transaction loads a writable account that cannot be written
     #[error("Transaction loads a writable account that cannot be written")]
     InvalidWritableAccount,
+
+    /// Transaction leaves an account with a lower balance than rent-exempt minimum
+    #[error(
+        "Transaction leaves an account with data with a lower balance than rent-exempt minimum"
+    )]
+    InvalidRentPayingAccount,
 }
 
 pub type Result<T> = result::Result<T, TransactionError>;

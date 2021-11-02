@@ -553,6 +553,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
             17 => TransactionError::WouldExceedMaxBlockCostLimit,
             18 => TransactionError::UnsupportedVersion,
             19 => TransactionError::InvalidWritableAccount,
+            20 => TransactionError::InvalidRentPayingAccount,
             _ => return Err("Invalid TransactionError"),
         })
     }
@@ -619,6 +620,9 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                 }
                 TransactionError::InvalidWritableAccount => {
                     tx_by_addr::TransactionErrorType::InvalidWritableAccount
+                }
+                TransactionError::InvalidRentPayingAccount => {
+                    tx_by_addr::TransactionErrorType::InvalidRentPayingAccount
                 }
             } as i32,
             instruction_error: match transaction_error {
