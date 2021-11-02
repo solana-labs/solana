@@ -295,6 +295,10 @@ pub mod max_tx_account_locks {
     solana_sdk::declare_id!("CBkDroRDqm8HwHe6ak9cguPjUomrASEkfmxEaZ5CNNxz");
 }
 
+pub mod require_rent_exempt_accounts {
+    solana_sdk::declare_id!("BkFDxiJQWZXGTZaJQxH7wVEHkAmwCgSEVkrvswFfRJPD");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -363,6 +367,7 @@ lazy_static! {
         (reject_all_elf_rw::id(), "reject all read-write data in program elfs"),
         (cap_accounts_data_len::id(), "cap the accounts data len"),
         (max_tx_account_locks::id(), "enforce max number of locked accounts per transaction"),
+        (require_rent_exempt_accounts::id(), "require all new transaction accounts with data to be rent-exempt"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
