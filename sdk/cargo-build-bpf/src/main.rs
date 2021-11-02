@@ -132,6 +132,20 @@ fn install_if_missing(
         .join(version)
         .join(package);
 
+    // Check whether the target path is an empty directory. This can
+    // happen if package download failed on previous run of
+    // cargo-build-bpf.  Remove the target_path directory in this
+    // case.
+    if target_path.is_dir()
+        && target_path
+            .read_dir()
+            .map_err(|err| err.to_string())?
+            .next()
+            .is_none()
+    {
+        fs::remove_dir(&target_path).map_err(|err| err.to_string())?;
+    }
+
     if !target_path.is_dir()
         && !target_path
             .symlink_metadata()
