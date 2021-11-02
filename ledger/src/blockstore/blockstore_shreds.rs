@@ -111,36 +111,22 @@ impl ShredFileHeader {
 
 impl Blockstore {
     pub(crate) fn insert_data_shred_into_cache(&self, slot: Slot, index: u64, shred: &Shred) {
-        let slot_cache = self.data_shred_slot_cache(slot).unwrap_or_else(|| {
-            // Inner map for slot does not exist, let's create it
-            // DashMap .entry().or_insert() returns a RefMut, essentially a write lock,
-            // which is dropped after this block ends, minimizing time held by the lock.
-            // We still need a reference to the `ShredSlotCache` behind the lock; hence, we
-            // clone it out. It is an Arc so the clone is cheap.
-            Arc::clone(
-                &self
-                    .data_shred_cache
-                    .entry(slot)
-                    .or_insert(Arc::new(RwLock::new(ShredSlotCache::new()))),
-            )
-        });
-        slot_cache
-            .write()
-            .unwrap()
-            .insert(index, shred.payload.clone());
+        Self::insert_shred_into_cache(&self.data_shred_cache, slot, index, shred);
     }
 
     pub(crate) fn insert_code_shred_into_cache(&self, slot: Slot, index: u64, shred: &Shred) {
-        // TODO: This is nearly identical to insert_data_shred_into_cache ...
-        let slot_cache = self.code_shred_slot_cache(slot).unwrap_or_else(|| {
+        Self::insert_shred_into_cache(&self.code_shred_cache, slot, index, shred);
+    }
+
+    fn insert_shred_into_cache(shred_cache: &ShredCache, slot: Slot, index: u64, shred: &Shred) {
+        let slot_cache = Self::shred_slot_cache(shred_cache, slot).unwrap_or_else(|| {
             // Inner map for slot does not exist, let's create it
             // DashMap .entry().or_insert() returns a RefMut, essentially a write lock,
             // which is dropped after this block ends, minimizing time held by the lock.
             // We still need a reference to the `ShredSlotCache` behind the lock; hence, we
             // clone it out. It is an Arc so the clone is cheap.
             Arc::clone(
-                &self
-                    .code_shred_cache
+                &shred_cache
                     .entry(slot)
                     .or_insert(Arc::new(RwLock::new(ShredSlotCache::new()))),
             )
@@ -254,15 +240,15 @@ impl Blockstore {
     }
 
     pub(crate) fn data_shred_slot_cache(&self, slot: Slot) -> Option<ShredCacheInner> {
-        self.data_shred_cache
-            .get(&slot)
-            .map(|res| Arc::clone(res.value()))
+        Self::shred_slot_cache(&self.data_shred_cache, slot)
     }
 
     pub(crate) fn code_shred_slot_cache(&self, slot: Slot) -> Option<ShredCacheInner> {
-        self.code_shred_cache
-            .get(&slot)
-            .map(|res| Arc::clone(res.value()))
+        Self::shred_slot_cache(&self.code_shred_cache, slot)
+    }
+
+    fn shred_slot_cache(shred_cache: &ShredCache, slot: Slot) -> Option<ShredCacheInner> {
+        shred_cache.get(&slot).map(|res| Arc::clone(res.value()))
     }
 
     pub(crate) fn data_shred_slot_path(&self, slot: Slot) -> PathBuf {
