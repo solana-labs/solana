@@ -1,3 +1,4 @@
+use crate::bank::TransactionAccountRefCell;
 use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
 use solana_program_runtime::{
@@ -7,7 +8,7 @@ use solana_program_runtime::{
     log_collector::LogCollector,
 };
 use solana_sdk::{
-    account::{AccountSharedData, WritableAccount},
+    account::WritableAccount,
     compute_budget::ComputeBudget,
     feature_set::{
         neon_evm_compute_budget, prevent_calling_precompiles_as_programs, requestable_heap_size,
@@ -47,7 +48,7 @@ impl MessageProcessor {
         instruction_processor: &InstructionProcessor,
         message: &Message,
         program_indices: &[Vec<usize>],
-        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        accounts: &[TransactionAccountRefCell],
         rent: Rent,
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
@@ -156,7 +157,7 @@ mod tests {
     use crate::rent_collector::RentCollector;
     use solana_program_runtime::invoke_context::ThisComputeMeter;
     use solana_sdk::{
-        account::ReadableAccount,
+        account::{AccountSharedData, ReadableAccount},
         instruction::{AccountMeta, Instruction, InstructionError},
         keyed_account::keyed_account_at_index,
         message::Message,
