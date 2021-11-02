@@ -385,14 +385,14 @@ pub fn start_verify_transactions(
     entries: Vec<Entry>,
     skip_verification: bool,
     verify_recyclers: VerifyRecyclers,
-    verify: Arc<dyn Fn(VersionedTransaction, bool) -> Result<SanitizedTransaction> + Send + Sync>
+    verify: Arc<dyn Fn(VersionedTransaction, bool, bool) -> Result<SanitizedTransaction> + Send + Sync>
 ) -> EntrySigVerificationState {
     let api = perf_libs::api();
 
     if api.is_none() || skip_verification {
         let verify_func = {
             move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
-                verify(versioned_tx, skip_verification)
+                verify(versioned_tx, skip_verification, false)
             }
         };
 
@@ -423,7 +423,7 @@ pub fn start_verify_transactions(
 
     let verify_func = {
         move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
-            verify(versioned_tx, true)
+            verify(versioned_tx, true, true)
         }
     };
     let check_start = Instant::now();
