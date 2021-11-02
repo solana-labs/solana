@@ -39,6 +39,7 @@ import { RewardsCard } from "components/account/RewardsCard";
 import { MetaplexMetadataCard } from "components/account/MetaplexMetadataCard";
 import { NFTHeader } from "components/account/MetaplexNFTHeader";
 import { DomainsCard } from "components/account/DomainsCard";
+import isMetaplexNFT from "providers/accounts/utils/isMetaplexNFT";
 
 const IDENTICON_WIDTH = 64;
 
@@ -164,10 +165,14 @@ export function AccountHeader({
   const account = info?.data;
   const data = account?.details?.data;
   const isToken = data?.program === "spl-token" && data?.parsed.type === "mint";
-  const isNFT = isToken && data.nftData && mintInfo?.decimals === 0;
 
-  if (isNFT) {
-    return <NFTHeader nftData={data.nftData!} address={address} />;
+  if (isMetaplexNFT(data, mintInfo?.decimals)) {
+    return (
+      <NFTHeader
+        nftData={(data as TokenProgramData).nftData!}
+        address={address}
+      />
+    );
   }
 
   if (tokenDetails || isToken) {
