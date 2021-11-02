@@ -71,7 +71,7 @@ use rayon::{
     ThreadPool, ThreadPoolBuilder,
 };
 use solana_measure::measure::Measure;
-use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_info};
+use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
 use solana_sdk::{
     account::{
         create_account_shared_data_with_fields as create_account, from_account, Account,
@@ -211,6 +211,11 @@ type RentCollectionCycleParams = (
     EpochCount,
     PartitionsPerCycle,
 );
+
+pub struct SquashTiming {
+    pub squash_accounts_ms: u64,
+    pub squash_cache_ms: u64,
+}
 
 type EpochCount = u64;
 
@@ -2786,7 +2791,7 @@ impl Bank {
 
     /// squash the parent's state up into this Bank,
     ///   this Bank becomes a root
-    pub fn squash(&self) {
+    pub fn squash(&self) -> SquashTiming {
         self.freeze();
 
         //this bank and all its parents are now on the rooted path
@@ -2808,11 +2813,10 @@ impl Bank {
             .for_each(|slot| self.src.status_cache.write().unwrap().add_root(*slot));
         squash_cache_time.stop();
 
-        datapoint_debug!(
-            "tower-observed",
-            ("squash_accounts_ms", squash_accounts_time.as_ms(), i64),
-            ("squash_cache_ms", squash_cache_time.as_ms(), i64)
-        );
+        SquashTiming {
+            squash_accounts_ms: squash_accounts_time.as_ms(),
+            squash_cache_ms: squash_cache_time.as_ms(),
+        }
     }
 
     /// Return the more recent checkpoint of this bank instance.
