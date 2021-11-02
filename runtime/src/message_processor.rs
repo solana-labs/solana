@@ -97,9 +97,9 @@ impl MessageProcessor {
 
             // Fixup the special instructions key if present
             // before the account pre-values are taken care of
-            for (pubkey, accont) in accounts.iter().take(message.account_keys.len()) {
+            for (pubkey, account) in accounts.iter().take(message.account_keys.len()) {
                 if instructions::check_id(pubkey) {
-                    let mut mut_account_ref = accont.borrow_mut();
+                    let mut mut_account_ref = account.borrow_mut();
                     instructions::store_current_index(
                         mut_account_ref.data_as_mut_slice(),
                         instruction_index as u16,
