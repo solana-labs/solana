@@ -1,4 +1,5 @@
 use {
+    crate::bank::TransactionAccountRefCell,
     serde::{Deserialize, Serialize},
     solana_measure::measure::Measure,
     solana_program_runtime::{
@@ -8,7 +9,7 @@ use {
         timings::ExecuteDetailsTimings,
     },
     solana_sdk::{
-        account::{AccountSharedData, WritableAccount},
+        account::WritableAccount,
         compute_budget::ComputeBudget,
         feature_set::{prevent_calling_precompiles_as_programs, FeatureSet},
         hash::Hash,
@@ -45,7 +46,7 @@ impl MessageProcessor {
         builtin_programs: &[BuiltinProgram],
         message: &Message,
         program_indices: &[Vec<usize>],
-        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        accounts: &[TransactionAccountRefCell],
         rent: Rent,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         executors: Rc<RefCell<Executors>>,
@@ -128,7 +129,7 @@ mod tests {
         super::*,
         crate::rent_collector::RentCollector,
         solana_sdk::{
-            account::ReadableAccount,
+            account::{AccountSharedData, ReadableAccount},
             instruction::{AccountMeta, Instruction, InstructionError},
             keyed_account::keyed_account_at_index,
             message::Message,
