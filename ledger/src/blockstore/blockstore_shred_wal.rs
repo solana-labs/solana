@@ -87,7 +87,11 @@ impl ShredWAL {
         let dir = fs::read_dir(&self.wal_path)?;
         let mut logs: Vec<_> = dir.filter_map(|log| log.ok()).collect();
         logs.sort_by_key(|log| log.path());
-        debug!("Found {} WAL files to read in {:?}", logs.len(), &self.wal_path);
+        debug!(
+            "Found {} WAL files to read in {:?}",
+            logs.len(),
+            &self.wal_path
+        );
 
         for log in logs {
             // Panic if there are any extraneous files in the WAL directory
