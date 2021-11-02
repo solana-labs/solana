@@ -920,14 +920,16 @@ pub fn confirm_slot(
 
     let verify_transaction = {
         let bank = bank.clone();
-        move |versioned_tx: VersionedTransaction, skip_verification: bool, verify_precompiles: bool| -> Result<SanitizedTransaction> {
+        move |versioned_tx: VersionedTransaction,
+              skip_verification: bool,
+              verify_precompiles: bool|
+              -> Result<SanitizedTransaction> {
             let result = bank.verify_transaction(versioned_tx, skip_verification);
             if result.is_ok() && verify_precompiles && skip_verification {
                 let result = result.unwrap();
                 result.verify_precompiles(&bank.feature_set)?;
                 Ok(result)
-            }
-            else {
+            } else {
                 result
             }
         }
@@ -937,7 +939,7 @@ pub fn confirm_slot(
         entries,
         skip_verification,
         recyclers.clone(),
-        Arc::new(verify_transaction)
+        Arc::new(verify_transaction),
     );
 
     let entries = check_result.entries();

@@ -385,7 +385,9 @@ pub fn start_verify_transactions(
     entries: Vec<Entry>,
     skip_verification: bool,
     verify_recyclers: VerifyRecyclers,
-    verify: Arc<dyn Fn(VersionedTransaction, bool, bool) -> Result<SanitizedTransaction> + Send + Sync>
+    verify: Arc<
+        dyn Fn(VersionedTransaction, bool, bool) -> Result<SanitizedTransaction> + Send + Sync,
+    >,
 ) -> EntrySigVerificationState {
     let api = perf_libs::api();
 
@@ -409,8 +411,8 @@ pub fn start_verify_transactions(
                     device_verification_data: DeviceSigVerificationData::Cpu(),
                     verify_duration_us: transaction_duration_us,
                 };
-            },
-            _=> {
+            }
+            _ => {
                 return EntrySigVerificationState {
                     verification_status: EntryVerificationStatus::Failure,
                     entries: None,
@@ -427,10 +429,7 @@ pub fn start_verify_transactions(
         }
     };
     let check_start = Instant::now();
-    let entries = verify_transactions(
-        entries,
-        Arc::new(verify_func)
-    );
+    let entries = verify_transactions(entries, Arc::new(verify_func));
     match entries {
         Ok(entries) => {
             let mut packets = Packets::new_with_recycler(
@@ -473,9 +472,9 @@ pub fn start_verify_transactions(
                     thread_h: Some(gpu_verify_thread),
                 }),
                 verify_duration_us: transaction_duration_us,
-            }
-        },
-        _=>{
+            };
+        }
+        _ => {
             let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
             return EntrySigVerificationState {
                 verification_status: EntryVerificationStatus::Failure,
@@ -839,6 +838,13 @@ mod tests {
         signature::{Keypair, Signer},
         system_transaction,
     };
+    extern crate test;
+    use test::Bencher;
+
+    use std::sync::Arc;
+
+    use solana_perf::test_tx::test_tx;
+    use solana_sdk::transaction::{SanitizedTransaction, TransactionError, VersionedTransaction};
 
     #[test]
     fn test_entry_verify() {
@@ -1132,5 +1138,47 @@ mod tests {
             time.stop();
             info!("{} {}", time, res);
         }
+    }
+
+    #[bench]
+    fn bench_gpusigverify(bencher: &mut Bencher) {
+        let verify_transaction = {
+            move |versioned_tx: VersionedTransaction,
+                  skip_verification: bool,
+                  verify_precompiles: bool|
+                  -> Result<SanitizedTransaction> {
+                let sanitized_tx = {
+                    let message_hash = if !skip_verification {
+                        versioned_tx.verify_and_hash_message()?
+                    } else {
+                        versioned_tx.message.hash()
+                    };
+
+                    SanitizedTransaction::try_create(versioned_tx, message_hash, |_| {
+                        Err(TransactionError::UnsupportedVersion)
+                    })
+                }?;
+
+                Ok(sanitized_tx)
+            }
+        };
+
+        let recycler = VerifyRecyclers::default();
+
+        bencher.iter(|| {
+            let entries = (0..128)
+                .map(|_| {
+                    let transaction = test_tx();
+                    next_entry_mut(&mut Hash::default(), 0, vec![transaction])
+                })
+                .collect::<Vec<_>>();
+
+            let _ans = start_verify_transactions(
+                entries,
+                false,
+                recycler.clone(),
+                Arc::new(verify_transaction),
+            );
+        })
     }
 }
