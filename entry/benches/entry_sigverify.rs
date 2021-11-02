@@ -15,10 +15,18 @@ use solana_sdk::hash::Hash;
 
 #[bench]
 fn bench_gpusigverify(bencher: &mut Bencher) {
+
+    let entries = (0..128)
+    .map(|_| {
+        let transaction = test_tx();
+        entry::next_entry_mut(&mut Hash::default(), 0, vec![transaction])
+    })
+    .collect::<Vec<_>>();
+
     let verify_transaction = {
         move |versioned_tx: VersionedTransaction,
               skip_verification: bool,
-              verify_precompiles: bool|
+              _verify_precompiles: bool|
               -> Result<SanitizedTransaction> {
             let sanitized_tx = {
                 let message_hash = if !skip_verification {
@@ -39,15 +47,9 @@ fn bench_gpusigverify(bencher: &mut Bencher) {
     let recycler = VerifyRecyclers::default();
 
     bencher.iter(|| {
-        let entries = (0..128)
-            .map(|_| {
-                let transaction = test_tx();
-                entry::next_entry_mut(&mut Hash::default(), 0, vec![transaction])
-            })
-            .collect::<Vec<_>>();
 
         let _ans = entry::start_verify_transactions(
-            entries,
+            entries.clone(),
             false,
             recycler.clone(),
             Arc::new(verify_transaction),
