@@ -25,7 +25,7 @@ use {
         entrypoint::{ProgramResult, SUCCESS},
         epoch_schedule::EpochSchedule,
         feature_set::demote_program_write_locks,
-        fee_calculator::FeeRateGovernor,
+        fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
         instruction::Instruction,
@@ -880,25 +880,56 @@ impl ProgramTest {
     }
 }
 
-// TODO need to return lamports_per_signature?
 #[async_trait]
 pub trait ProgramTestBanksClientExt {
-    async fn get_new_blockhash(&mut self, blockhash: &Hash) -> io::Result<(Hash, u64)>;
+    /// Get a new blockhash, similar in spirit to RpcClient::get_new_blockhash()
+    ///
+    /// This probably should eventually be moved into BanksClient proper in some form
+    #[deprecated(
+        since = "1.9.0",
+        note = "Please use `get_new_latest_blockhash `instead"
+    )]
+    async fn get_new_blockhash(&mut self, blockhash: &Hash) -> io::Result<(Hash, FeeCalculator)>;
+    /// Get a new latest blockhash, similar in spirit to RpcClient::get_latest_blockhash()
+    async fn get_new_latest_blockhash(&mut self, blockhash: &Hash) -> io::Result<Hash>;
 }
 
 #[async_trait]
 impl ProgramTestBanksClientExt for BanksClient {
-    /// Get a new blockhash, similar in spirit to RpcClient::get_new_blockhash()
-    ///
-    /// This probably should eventually be moved into BanksClient proper in some form
-    async fn get_new_blockhash(&mut self, blockhash: &Hash) -> io::Result<(Hash, u64)> {
+    async fn get_new_blockhash(&mut self, blockhash: &Hash) -> io::Result<(Hash, FeeCalculator)> {
         let mut num_retries = 0;
         let start = Instant::now();
         while start.elapsed().as_secs() < 5 {
+            #[allow(deprecated)]
             if let Ok((fee_calculator, new_blockhash, _slot)) = self.get_fees().await {
                 if new_blockhash != *blockhash {
-                    return Ok((new_blockhash, fee_calculator.lamports_per_signature));
+                    return Ok((new_blockhash, fee_calculator));
                 }
+            }
+            debug!("Got same blockhash ({:?}), will retry...", blockhash);
+
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            num_retries += 1;
+        }
+
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!(
+                "Unable to get new blockhash after {}ms (retried {} times), stuck at {}",
+                start.elapsed().as_millis(),
+                num_retries,
+                blockhash
+            ),
+        ))
+    }
+
+    async fn get_new_latest_blockhash(&mut self, blockhash: &Hash) -> io::Result<Hash> {
+        let mut num_retries = 0;
+        let start = Instant::now();
+        while start.elapsed().as_secs() < 5 {
+            let new_blockhash = self.get_latest_blockhash().await?;
+            if new_blockhash != *blockhash {
+                return Ok(new_blockhash);
             }
             debug!("Got same blockhash ({:?}), will retry...", blockhash);
 
