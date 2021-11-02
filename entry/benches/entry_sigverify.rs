@@ -48,11 +48,13 @@ fn bench_gpusigverify(bencher: &mut Bencher) {
 
     bencher.iter(|| {
 
-        let _ans = entry::start_verify_transactions(
+        let mut res = entry::start_verify_transactions(
             entries.clone(),
             false,
             recycler.clone(),
             Arc::new(verify_transaction),
         );
+
+        let _ans = res.finish_verify();
     })
 }
