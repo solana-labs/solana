@@ -473,7 +473,7 @@ impl Blockstore {
         if initialize_transaction_status_index {
             blockstore.initialize_transaction_status_index()?;
         }
-        blockstore.recover()?;
+        blockstore.recover_wal_shreds()?;
         Ok(blockstore)
     }
 

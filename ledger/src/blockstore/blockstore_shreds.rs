@@ -546,20 +546,11 @@ impl Blockstore {
         }
     }
 
-    /// Recover shreds from WAL and re-establish consistent state in the blockstore
-    pub(crate) fn recover(&self) -> Result<()> {
+    /// Recover shreds from WAL and restore into proper blockstore container(s)
+    pub(crate) fn recover_wal_shreds(&self) -> Result<()> {
         let mut shred_wal = self.shred_wal.lock().unwrap();
         let recovered_shreds = shred_wal.recover()?;
         let mut full_insert_shreds = vec![];
-        // There several possible scenarios for what we need to do with shreds from the WAL
-        // 1) If the shred is in the metadata index ...
-        //    - If the shred is in slot file, it is already accounted for and do nothing
-        //    - If the shred is not in slot file or the slot file does not exist, it was in
-        //      memory and lost when process died. Insert directly into cache for this case
-        //      to avoid duplicating the shred in WAL
-        // 2) If the shred is not in the index (including the case where there is no index for
-        //    the slot), perform a regular insert so the metadata is updated. Collect all of
-        //    these until the end for single insert.
 
         let get_shred_file_index = |path| -> Result<Option<ShredFileIndex>> {
             match fs::File::open(&path) {
@@ -583,52 +574,76 @@ impl Blockstore {
 
                     while !shreds.is_empty() {
                         let shred = shreds.pop().unwrap();
-                        let index = shred.index() as u64;
+                        //let index = shred.index() as u64;
 
                         if shred.is_data() {
-                            if !shred_meta_index.data().is_present(index) {
-                                full_insert_shreds.push(shred);
-                            } else if data_shred_file_index.is_none()
-                                || data_shred_file_index
-                                    .as_ref()
-                                    .unwrap()
-                                    .get(&(index as u32))
-                                    .is_none()
-                            {
-                                self.insert_data_shred_into_cache(slot, index, &shred)
-                            }
-                        } else if !shred_meta_index.coding().is_present(index) {
-                            full_insert_shreds.push(shred);
-                        } else if code_shred_file_index.is_none()
-                            || code_shred_file_index
-                                .as_ref()
-                                .unwrap()
-                                .get(&(index as u32))
-                                .is_none()
-                        {
-                            self.insert_code_shred_into_cache(slot, index, &shred)
+                            Self::place_recovered_shred(
+                                &self.data_shred_cache,
+                                &shred_meta_index.data(),
+                                &data_shred_file_index,
+                                shred,
+                                &mut full_insert_shreds,
+                            );
+                        } else {
+                            Self::place_recovered_shred(
+                                &self.code_shred_cache,
+                                &shred_meta_index.coding(),
+                                &code_shred_file_index,
+                                shred,
+                                &mut full_insert_shreds,
+                            );
                         }
                     }
                 }
-                None => full_insert_shreds.extend(shreds),
+                None => {
+                    // No metadata index so we know this entire slot needs a regular insert
+                    full_insert_shreds.extend(shreds);
+                },
             }
         }
-        // For now, drop shreds found in WAL but not in metadata; state will be consistent
-        // like this, but we probably do want to do a full insert with these later
-        if !full_insert_shreds.is_empty() {
-            warn!(
-                "{} shreds found in WAL but not in Rocks",
-                full_insert_shreds.len()
-            );
-        }
+
+        debug!(
+            "{} shreds found in shred WAL(s) but not in metadata",
+            full_insert_shreds.len()
+        );
         // TODO: insert_shreds() will deadlock as blockstore::recover() holds the WAL lock; need a
         // flag to avoid writing WAL in this special case, we want that anyways as any insertions
-        // generated below are already in the WAL so we don't want them duplicated
+        // performed below are already in the WAL so we don't want them duplicated.
+        // Add a way to do this and then uncomment serlf.insert_shreds(...)
 
         // leader_schedule as None is fine since by virtue of being in this WAL, these shreds were
         // deemed valid by blockstore insertion logic previously; this is just restoring state.
         // self.insert_shreds(full_insert_shreds, None, false);
         Ok(())
+    }
+
+    fn place_recovered_shred(
+        shred_cache: &ShredCache,
+        shred_meta_index: &ShredIndex,
+        shred_file_index: &Option<ShredFileIndex>,
+        shred: Shred,
+        full_insert_shreds: &mut Vec<Shred>,
+    ) {
+        if !shred_meta_index.is_present(shred.index().into()) {
+            // Shred is not in metadata index
+            // Insert the shred regularly so all metadata is updated
+            full_insert_shreds.push(shred);
+        } else if shred_file_index.is_none()
+            || shred_file_index
+                .as_ref()
+                .unwrap()
+                .get(&shred.index())
+                .is_none()
+        {
+            // Shred is in metadata index but not in the file index (or no file & no file index)
+            // The shred was in cache when process exited and never flushed
+            // Insert the shred into cache directly as metadata is already up to date
+            Self::insert_shred_into_cache(shred_cache, shred.slot(), shred.index().into(), &shred);
+        } else {
+            // Shred is in metadata index and file index
+            // The shred was flushed from cache to fs before process exited
+            // Do nothing since the shred is already present in file
+        }
     }
 
     pub(crate) fn destroy_shreds(shred_db_path: &Path) -> Result<()> {
