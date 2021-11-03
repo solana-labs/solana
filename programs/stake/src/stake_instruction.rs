@@ -340,7 +340,7 @@ mod tests {
         },
         sysvar::{stake_history::StakeHistory, Sysvar},
     };
-    use std::{cell::RefCell, rc::Rc, str::FromStr};
+    use std::{cell::RefCell, str::FromStr};
 
     fn create_default_account() -> RefCell<AccountSharedData> {
         RefCell::new(AccountSharedData::default())
@@ -444,10 +444,8 @@ mod tests {
             );
             let mut data = Vec::with_capacity(sysvar::clock::Clock::size_of());
             bincode::serialize_into(&mut data, &sysvar::clock::Clock::default()).unwrap();
-            invoke_context
-                .get_sysvars()
-                .borrow_mut()
-                .push((sysvar::clock::id(), Some(Rc::new(data))));
+            let sysvars = &[(sysvar::clock::id(), data)];
+            invoke_context.sysvars = sysvars;
             super::process_instruction(1, &instruction.data, &mut invoke_context)
         }
     }
@@ -1102,10 +1100,8 @@ mod tests {
             MockInvokeContext::new(&id(), create_keyed_accounts_unified(&keyed_accounts));
         let mut data = Vec::with_capacity(sysvar::clock::Clock::size_of());
         bincode::serialize_into(&mut data, &sysvar::clock::Clock::default()).unwrap();
-        invoke_context
-            .get_sysvars()
-            .borrow_mut()
-            .push((sysvar::clock::id(), Some(Rc::new(data))));
+        let sysvars = &[(sysvar::clock::id(), data)];
+        invoke_context.sysvars = sysvars;
 
         assert_eq!(
             super::process_instruction(
