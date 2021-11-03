@@ -784,6 +784,7 @@ mod test {
             0,
             0
         ));
+
         // with the wrong shred_version, shred gets thrown out
         assert!(!should_retransmit_and_persist(
             &shreds[0],
@@ -794,36 +795,26 @@ mod test {
             1
         ));
 
-        // If it's a coding shred, test that slot >= root
-        let (common, coding) = Shredder::new_coding_shred_header(5, 5, 5, 6, 6, 0);
-        let mut coding_shred =
-            Shred::new_empty_from_header(common, DataShredHeader::default(), coding);
-        Shredder::sign_shred(&leader_keypair, &mut coding_shred);
-        assert!(should_retransmit_and_persist(
-            &coding_shred,
+        // substitute leader_pubkey for me_id so it looks I was the leader
+        // if the shred came back from me, it doesn't continue, whether or not I have a bank
+        assert!(!should_retransmit_and_persist(
+            &shreds[0],
             Some(bank.clone()),
             &cache,
-            &me_id,
+            &leader_pubkey,
             0,
             0
         ));
-        assert!(should_retransmit_and_persist(
-            &coding_shred,
-            Some(bank.clone()),
-            &cache,
-            &me_id,
-            5,
-            0
-        ));
         assert!(!should_retransmit_and_persist(
-            &coding_shred,
-            Some(bank.clone()),
+            &shreds[0],
+            None,
             &cache,
-            &me_id,
-            6,
+            &leader_pubkey,
+            0,
             0
         ));
 
+        // change the shred's slot so leader lookup fails
         // with a Bank and no idea who leader is, shred gets thrown out
         let mut bad_slot_shred = shreds[0].clone();
         bad_slot_shred.set_slot(MINIMUM_SLOTS_PER_EPOCH as u64 * 3);
@@ -848,34 +839,74 @@ mod test {
             0
         ));
 
+        // with an invalid index, shred gets thrown out
+        let mut bad_index_shred = shreds[0].clone();
+        bad_index_shred.common_header.index = (MAX_DATA_SHREDS_PER_SLOT + 1) as u32;
+        assert!(!should_retransmit_and_persist(
+            &bad_index_shred,
+            Some(bank.clone()),
+            &cache,
+            &me_id,
+            0,
+            0
+        ));
+
         // with a shred where shred.slot() == root, shred gets thrown out
-        let slot = MINIMUM_SLOTS_PER_EPOCH as u64 * 3;
-        let shreds = local_entries_to_shred(&[Entry::default()], slot, slot - 1, &leader_keypair);
+        let root = MINIMUM_SLOTS_PER_EPOCH as u64 * 3;
+        let shreds = local_entries_to_shred(&[Entry::default()], root, root - 1, &leader_keypair);
         assert!(!should_retransmit_and_persist(
             &shreds[0],
             Some(bank.clone()),
             &cache,
             &me_id,
-            slot,
+            root,
             0
         ));
 
         // with a shred where shred.parent() < root, shred gets thrown out
-        let slot = MINIMUM_SLOTS_PER_EPOCH as u64 * 3;
+        let root = MINIMUM_SLOTS_PER_EPOCH as u64 * 3;
         let shreds =
-            local_entries_to_shred(&[Entry::default()], slot + 1, slot - 1, &leader_keypair);
+            local_entries_to_shred(&[Entry::default()], root + 1, root - 1, &leader_keypair);
         assert!(!should_retransmit_and_persist(
             &shreds[0],
-            Some(bank),
+            Some(bank.clone()),
             &cache,
             &me_id,
-            slot,
+            root,
             0
         ));
 
-        // if the shred came back from me, it doesn't continue, whether or not I have a bank
+        // coding shreds don't contain parent slot information, test that slot >= root
+        let (common, coding) = Shredder::new_coding_shred_header(5, 5, 5, 6, 6, 0);
+        let mut coding_shred =
+            Shred::new_empty_from_header(common, DataShredHeader::default(), coding);
+        Shredder::sign_shred(&leader_keypair, &mut coding_shred);
+        // shred.slot() > root, shred continues
+        assert!(should_retransmit_and_persist(
+            &coding_shred,
+            Some(bank.clone()),
+            &cache,
+            &me_id,
+            0,
+            0
+        ));
+        // shred.slot() == root, shred continues
+        assert!(should_retransmit_and_persist(
+            &coding_shred,
+            Some(bank.clone()),
+            &cache,
+            &me_id,
+            5,
+            0
+        ));
+        // shred.slot() < root, shred gets thrown out
         assert!(!should_retransmit_and_persist(
-            &shreds[0], None, &cache, &me_id, 0, 0
+            &coding_shred,
+            Some(bank),
+            &cache,
+            &me_id,
+            6,
+            0
         ));
     }
 
