@@ -42,7 +42,7 @@ A leader can be scheduled to produce multiple blocks in a row. In that scenario 
 
 When the leader finishes the replay stage it can reset the balance cache by clearing it, and set a new fork as the base for the cache which can become active on the next block.
 
-## Reseting the Balance Cache
+## Resetting the Balance Cache
 
 1. At the start of the block, if the balance cache is uninitialized, set the base fork for the balance cache to be the parent of the block and create an empty cache.
 2. if the cache is initialized, check if block's parents has a new frozen bank that is newer than the current base fork for the balance cache.
