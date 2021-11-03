@@ -24,10 +24,11 @@ use solana_ledger::{
     blockstore_processor::ProcessOptions,
     shred::Shred,
 };
+use solana_measure::measure::Measure;
 use solana_runtime::{
     accounts_db::AccountsDbConfig,
     accounts_index::AccountsIndexConfig,
-    bank::{Bank, RewardCalculationEvent},
+    bank::{self, Bank, RewardCalculationEvent},
     bank_forks::BankForks,
     cost_model::CostModel,
     cost_tracker::CostTracker,
@@ -1595,6 +1596,19 @@ fn main() {
                     .takes_value(true)
                     .help("Slots that their blocks are computed for cost, default to all slots in ledger"),
             )
+        )
+        .subcommand(
+            SubCommand::with_name("stats")
+                .about("get total accounts statistics at the given slot")
+                .arg(&halt_at_slot_arg)
+                .arg(&hard_forks_arg)
+                .arg(&no_bpf_jit_arg)
+                .arg(&no_accounts_db_caching_arg)
+                .arg(&limit_load_slot_count_from_snapshot_arg)
+                .arg(&verify_index_arg)
+                .arg(&allow_dead_slots_arg)
+                .arg(&accounts_db_test_hash_calculation_arg)
+                .arg(&max_genesis_archive_unpacked_size_arg)
         )
         .get_matches();
 
@@ -3268,6 +3282,57 @@ fn main() {
                     eprintln!("{}", err);
                 }
             }
+        }
+        ("stats", Some(arg_matches)) => {
+            let process_options = ProcessOptions {
+                dev_halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
+                new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
+                bpf_jit: !matches.is_present("no_bpf_jit"),
+                accounts_db_caching_enabled: !arg_matches.is_present("no_accounts_db_caching"),
+                limit_load_slot_count_from_snapshot: value_t!(
+                    arg_matches,
+                    "limit_load_slot_count_from_snapshot",
+                    usize
+                )
+                .ok(),
+                accounts_db_config: None,
+                verify_index: arg_matches.is_present("verify_accounts_index"),
+                allow_dead_slots: arg_matches.is_present("allow_dead_slots"),
+                accounts_db_test_hash_calculation: arg_matches
+                    .is_present("accounts_db_test_hash_calculation"),
+                ..ProcessOptions::default()
+            };
+
+            let blockstore = open_blockstore(
+                &ledger_path,
+                AccessType::TryPrimaryThenSecondary,
+                wal_recovery_mode,
+            );
+            let (bank_forks, ..) = load_bank_forks(
+                arg_matches,
+                &open_genesis_config_by(&ledger_path, arg_matches),
+                &blockstore,
+                process_options,
+                snapshot_archive_path,
+            )
+            .unwrap_or_else(|err| {
+                eprintln!("Ledger verification failed: {:?}", err);
+                exit(1);
+            });
+
+            let (total_accounts_stats, measure) = Measure::this(
+                bank::get_total_accounts_stats,
+                &bank_forks.working_bank(),
+                "getting total accounts stats",
+            );
+            info!("{}", measure);
+            let total_accounts_stats = total_accounts_stats.unwrap_or_else(|err| {
+                eprintln!("Getting total accounts stats failed: {:?}", err);
+                exit(1);
+            });
+
+            println!("{:#?}", total_accounts_stats);
+            println!("Ok");
         }
         ("", _) => {
             eprintln!("{}", matches.usage());
