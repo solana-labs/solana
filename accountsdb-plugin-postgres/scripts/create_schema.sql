@@ -24,20 +24,11 @@ CREATE TABLE slot (
     updated_on TIMESTAMP NOT NULL
 );
 
-
+-- Types for Transactions
 CREATE TYPE CompiledInstruction AS (
     program_id_index SMALLINT,
     accounts SMALLINT[],
     data BYTEA
-);
-
-CREATE TYPE TransactionStatusMeta AS (
-    status VARCHAR(256),
-    fee BIGINT,
-    pre_balances BIGINT[],
-    post_balances BIGINT[],
-
-
 );
 
 CREATE TYPE InnerInstructions AS (
@@ -45,21 +36,76 @@ CREATE TYPE InnerInstructions AS (
     instructions CompiledInstruction[]
 );
 
--- The table storing transaction logs
-CREATE TABLE transaction_log (
-    signature BYTEA PRIMARY KEY,
-    is_vote BOOL NOT NULL,
-    result VARCHAR(256),
-    slot BIGINT NOT NULL,
-    logs TEXT[],
+CREATE TYPE TransactionTokenBalance AS (
+    account_index SMALLINT,
+    mint VARCHAR(256),
+    ui_token_amount DOUBLE PRECISION,
+    owner VARCHAR(256)
+);
+
+CREATE TYPE Rewards AS (
+    validator_point_value DOUBLE PRECISION,
+    unused DOUBLE PRECISION
+);
+
+CREATE TYPE TransactionStatusMeta AS (
+    status VARCHAR(256),
+    fee BIGINT,
+    pre_balances BIGINT[],
+    post_balances BIGINT[],
+    inner_instructions InnerInstructions[],
+    log_messages TEXT[],
+    pre_token_balances TransactionTokenBalance[],
+    post_token_balances TransactionTokenBalance[],
+    rewards Rewards
+);
+
+CREATE TYPE TransactionMessageHeader AS (
     num_required_signatures SMALLINT,
     num_readonly_signed_accounts SMALLINT,
-    num_readonly_unsigned_accounts SMALLINT,
+    num_readonly_unsigned_accounts SMALLINT
+);
+
+CREATE TYPE TransactionMessage AS (
+    header TransactionMessageHeader,
+    account_keys BYTEA[],
+    recent_blockhash BYTEA,
+    instructions CompiledInstruction[]
+);
+
+CREATE TYPE AddressMapIndexes AS (
+    writable SMALLINT[],
+    readonly SMALLINT[]
+);
+
+CREATE TYPE TransactionMessageV0 AS (
+    header TransactionMessageHeader,
     account_keys BYTEA[],
     recent_blockhash BYTEA,
     instructions CompiledInstruction[],
-    message_hash BYTEA,
+    address_map_indexes AddressMapIndexes[]
+);
+
+CREATE TYPE MappedAddresses AS (
+    writable BYTEA[],
+    readonly BYTEA[]
+);
+
+CREATE TYPE MappedMessage AS (
+    message TransactionMessageV0,
+    mapped_addresses MappedAddresses
+);
+
+-- The table storing transaction logs
+CREATE TABLE transaction (
+    signature BYTEA PRIMARY KEY,
+    is_vote BOOL NOT NULL,
+    slot BIGINT NOT NULL,
+    message_type SMALLINT, -- 0: legacy, 1: v0 message
+    legacy_message TransactionMessage,
+    v0_mapped_message MappedMessage,
     signatures BYTEA[],
+    message_hash BYTEA,
     updated_on TIMESTAMP NOT NULL
 );
 
@@ -78,6 +124,8 @@ CREATE TABLE account_audit (
     write_version BIGINT NOT NULL,
     updated_on TIMESTAMP NOT NULL
 );
+
+CREATE INDEX account_audit_account_key ON  account_audit (pubkey, write_version);
 
 CREATE FUNCTION audit_account_update() RETURNS trigger AS $audit_account_update$
     BEGIN
