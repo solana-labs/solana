@@ -2544,6 +2544,7 @@ dependencies = [
  "solana-cli-output",
  "solana-logger 1.9.0",
  "solana-measure",
+ "solana-program-runtime",
  "solana-runtime",
  "solana-sdk",
  "solana-transaction-status",
@@ -3208,6 +3209,7 @@ dependencies = [
 name = "solana-program-runtime"
 version = "1.9.0"
 dependencies = [
+ "bincode",
  "libc",
  "libloading",
  "log",
@@ -3416,6 +3418,7 @@ dependencies = [
  "solana-frozen-abi 1.9.0",
  "solana-frozen-abi-macro 1.9.0",
  "solana-metrics",
+ "solana-program-runtime",
  "solana-sdk",
  "solana-vote-program",
  "thiserror",

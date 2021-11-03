@@ -479,12 +479,9 @@ pub fn get_system_account_kind(account: &AccountSharedData) -> Option<SystemAcco
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        bank::Bank,
-        bank_client::BankClient,
-        message_processor::{mock_process_instruction, ThisInvokeContext},
-    };
+    use crate::{bank::Bank, bank_client::BankClient};
     use bincode::serialize;
+    use solana_program_runtime::invoke_context::{mock_process_instruction, ThisInvokeContext};
     #[allow(deprecated)]
     use solana_sdk::{
         account::{self, Account, AccountSharedData},

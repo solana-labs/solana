@@ -9,7 +9,6 @@ use solana_sdk::{
     keyed_account::KeyedAccount,
     message::Message,
     pubkey::Pubkey,
-    sysvar::Sysvar,
 };
 use std::{cell::RefCell, fmt::Debug, rc::Rc, sync::Arc};
 
@@ -27,32 +26,6 @@ pub type LoaderEntrypoint = unsafe extern "C" fn(
 
 pub type ProcessInstructionWithContext =
     fn(usize, &[u8], &mut dyn InvokeContext) -> Result<(), InstructionError>;
-
-pub struct InvokeContextStackFrame<'a> {
-    pub number_of_program_accounts: usize,
-    pub keyed_accounts: Vec<KeyedAccount<'a>>,
-    pub keyed_accounts_range: std::ops::Range<usize>,
-}
-
-impl<'a> InvokeContextStackFrame<'a> {
-    pub fn new(number_of_program_accounts: usize, keyed_accounts: Vec<KeyedAccount<'a>>) -> Self {
-        let keyed_accounts_range = std::ops::Range {
-            start: 0,
-            end: keyed_accounts.len(),
-        };
-        Self {
-            number_of_program_accounts,
-            keyed_accounts,
-            keyed_accounts_range,
-        }
-    }
-
-    pub fn program_id(&self) -> Option<&Pubkey> {
-        self.keyed_accounts
-            .get(self.number_of_program_accounts.saturating_sub(1))
-            .map(|keyed_account| keyed_account.unsigned_key())
-    }
-}
 
 /// Invocation context passed to loaders
 pub trait InvokeContext {
@@ -165,26 +138,6 @@ macro_rules! ic_msg {
     ($invoke_context:expr, $fmt:expr, $($arg:tt)*) => {
         $crate::ic_logger_msg!($invoke_context.get_logger(), $fmt, $($arg)*)
     };
-}
-
-pub fn get_sysvar<T: Sysvar>(
-    invoke_context: &dyn InvokeContext,
-    id: &Pubkey,
-) -> Result<T, InstructionError> {
-    invoke_context
-        .get_sysvars()
-        .iter()
-        .find_map(|(key, data)| {
-            if id == key {
-                bincode::deserialize(data).ok()
-            } else {
-                None
-            }
-        })
-        .ok_or_else(|| {
-            ic_msg!(invoke_context, "Unable to get sysvar {}", id);
-            InstructionError::UnsupportedSysvar
-        })
 }
 
 /// Compute meter

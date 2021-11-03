@@ -254,7 +254,7 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::message_processor::ThisInvokeContext;
+    use solana_program_runtime::invoke_context::ThisInvokeContext;
     use solana_sdk::{
         account::ReadableAccount,
         account_utils::State as AccountUtilsState,

@@ -14,7 +14,7 @@ use crate::{
 };
 use log::{log_enabled, trace, Level::Trace};
 use solana_measure::measure::Measure;
-use solana_program_runtime::InstructionProcessor;
+use solana_program_runtime::instruction_processor::InstructionProcessor;
 use solana_rbpf::{
     aligned_memory::AlignedMemory,
     ebpf::HOST_ALIGN,
@@ -1042,8 +1042,9 @@ impl Executor for BpfExecutor {
 mod tests {
     use super::*;
     use rand::Rng;
+    use solana_program_runtime::invoke_context::mock_process_instruction;
     use solana_rbpf::vm::SyscallRegistry;
-    use solana_runtime::{bank::Bank, bank_client::BankClient, message_processor};
+    use solana_runtime::{bank::Bank, bank_client::BankClient};
     use solana_sdk::{
         account::{
             create_account_shared_data_for_test as create_account_for_test, AccountSharedData,
@@ -1082,7 +1083,7 @@ mod tests {
         instruction_data: &[u8],
         keyed_accounts: &[(bool, bool, Pubkey, Rc<RefCell<AccountSharedData>>)],
     ) -> Result<(), InstructionError> {
-        message_processor::mock_process_instruction(
+        mock_process_instruction(
             loader_id,
             program_indices.to_vec(),
             instruction_data,
@@ -1276,7 +1277,7 @@ mod tests {
         // Case: limited budget
         assert_eq!(
             Err(InstructionError::ProgramFailedToComplete),
-            message_processor::mock_process_instruction(
+            mock_process_instruction(
                 &loader_id,
                 vec![0],
                 &[],

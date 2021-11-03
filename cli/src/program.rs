@@ -24,12 +24,12 @@ use solana_client::{
     rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
     tpu_client::{TpuClient, TpuClientConfig},
 };
+use solana_program_runtime::invoke_context::ThisInvokeContext;
 use solana_rbpf::{
     verifier,
     vm::{Config, Executable},
 };
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
-use solana_runtime::message_processor::ThisInvokeContext;
 use solana_sdk::{
     account::Account,
     account_utils::StateMut,

@@ -405,7 +405,7 @@ pub fn process_instruction(
 mod tests {
     use super::*;
     use bincode::serialize;
-    use solana_runtime::message_processor;
+    use solana_program_runtime::invoke_context::mock_process_instruction;
     use solana_sdk::{
         account::{self, Account, AccountSharedData},
         rent::Rent,
@@ -421,7 +421,7 @@ mod tests {
         instruction_data: &[u8],
         keyed_accounts: &[(bool, bool, Pubkey, Rc<RefCell<AccountSharedData>>)],
     ) -> Result<(), InstructionError> {
-        message_processor::mock_process_instruction(
+        mock_process_instruction(
             &id(),
             Vec::new(),
             instruction_data,
@@ -464,7 +464,7 @@ mod tests {
             .zip(accounts.into_iter())
             .map(|(meta, account)| (meta.is_signer, meta.is_writable, meta.pubkey, account))
             .collect();
-        message_processor::mock_process_instruction(
+        solana_program_runtime::invoke_context::mock_process_instruction(
             &id(),
             Vec::new(),
             &instruction.data,

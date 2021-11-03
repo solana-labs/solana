@@ -30,8 +30,8 @@ use solana_runtime::{
         load_buffer_account, load_program, load_upgradeable_program, set_upgrade_authority,
         upgrade_program,
     },
-    message_processor::with_mock_invoke_context,
 };
+use solana_program_runtime::invoke_context::with_mock_invoke_context;
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
     account_utils::StateMut,

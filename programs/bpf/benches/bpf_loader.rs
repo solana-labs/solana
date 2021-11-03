@@ -17,8 +17,8 @@ use solana_runtime::{
     bank_client::BankClient,
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
     loader_utils::load_program,
-    message_processor::with_mock_invoke_context,
 };
+use solana_program_runtime::invoke_context::with_mock_invoke_context;
 use solana_sdk::{
     bpf_loader,
     client::SyncClient,

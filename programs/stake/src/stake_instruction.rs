@@ -1,11 +1,12 @@
 use {
     crate::{config, stake_state::StakeAccount},
     log::*,
+    solana_program_runtime::invoke_context::get_sysvar,
     solana_sdk::{
         feature_set,
         instruction::InstructionError,
         keyed_account::{from_keyed_account, get_signers, keyed_account_at_index},
-        process_instruction::{get_sysvar, InvokeContext},
+        process_instruction::InvokeContext,
         program_utils::limited_deserialize,
         stake::{
             instruction::StakeInstruction,
@@ -326,7 +327,7 @@ mod tests {
     use super::*;
     use crate::stake_state::{Meta, StakeState};
     use bincode::serialize;
-    use solana_runtime::message_processor::{
+    use solana_program_runtime::invoke_context::{
         mock_process_instruction, prepare_mock_invoke_context, ThisInvokeContext,
     };
     use solana_sdk::{

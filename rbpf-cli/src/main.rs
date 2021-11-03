@@ -5,13 +5,13 @@ use solana_bpf_loader_program::{
     create_vm, serialization::serialize_parameters, syscalls::register_syscalls, BpfError,
     ThisInstructionMeter,
 };
+use solana_program_runtime::invoke_context::{prepare_mock_invoke_context, ThisInvokeContext};
 use solana_rbpf::{
     assembler::assemble,
     static_analysis::Analysis,
     verifier::check,
     vm::{Config, DynamicAnalysis, Executable},
 };
-use solana_runtime::message_processor::{prepare_mock_invoke_context, ThisInvokeContext};
 use solana_sdk::{
     account::AccountSharedData, bpf_loader, process_instruction::InvokeContext, pubkey::Pubkey,
 };

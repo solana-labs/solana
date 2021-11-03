@@ -1373,7 +1373,7 @@ fn do_create_account(
 mod tests {
     use super::*;
     use proptest::prelude::*;
-    use solana_runtime::message_processor::ThisInvokeContext;
+    use solana_program_runtime::invoke_context::ThisInvokeContext;
     use solana_sdk::{
         account::{AccountSharedData, WritableAccount},
         clock::UnixTimestamp,

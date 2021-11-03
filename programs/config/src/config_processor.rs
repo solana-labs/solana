@@ -138,7 +138,7 @@ mod tests {
     use crate::{config_instruction, get_config_data, id, ConfigKeys, ConfigState};
     use bincode::serialized_size;
     use serde_derive::{Deserialize, Serialize};
-    use solana_runtime::message_processor;
+    use solana_program_runtime::invoke_context::mock_process_instruction;
     use solana_sdk::{
         account::AccountSharedData,
         pubkey::Pubkey,
@@ -151,7 +151,7 @@ mod tests {
         instruction_data: &[u8],
         keyed_accounts: &[(bool, bool, Pubkey, Rc<RefCell<AccountSharedData>>)],
     ) -> Result<(), InstructionError> {
-        message_processor::mock_process_instruction(
+        mock_process_instruction(
             &id(),
             Vec::new(),
             instruction_data,

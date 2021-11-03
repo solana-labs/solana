@@ -1,8 +1,8 @@
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(min_specialization))]
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::integer_arithmetic)] // TODO: Remove
 
-mod instruction_processor;
-mod native_loader;
-
-pub use instruction_processor::*;
-pub use native_loader::*;
+pub mod instruction_processor;
+pub mod instruction_recorder;
+pub mod invoke_context;
+pub mod log_collector;
+pub mod native_loader;

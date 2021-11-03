@@ -1,6 +1,6 @@
 use crate::{alloc, BpfError};
 use alloc::Alloc;
-use solana_program_runtime::InstructionProcessor;
+use solana_program_runtime::instruction_processor::InstructionProcessor;
 use solana_rbpf::{
     aligned_memory::AlignedMemory,
     ebpf,
@@ -31,7 +31,7 @@ use solana_sdk::{
     message::Message,
     native_loader,
     precompiles::is_precompile,
-    process_instruction::{self, stable_log, ComputeMeter, InvokeContext, Logger},
+    process_instruction::{stable_log, ComputeMeter, InvokeContext, Logger},
     program::MAX_RETURN_DATA,
     pubkey::{Pubkey, PubkeyError, MAX_SEEDS, MAX_SEED_LEN},
     rent::Rent,
@@ -982,7 +982,7 @@ fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId>(
         .consume(invoke_context.get_compute_budget().sysvar_base_cost + size_of::<T>() as u64)?;
     let var = translate_type_mut::<T>(memory_mapping, var_addr, loader_id)?;
 
-    *var = process_instruction::get_sysvar::<T>(*invoke_context, id)
+    *var = solana_program_runtime::invoke_context::get_sysvar::<T>(*invoke_context, id)
         .map_err(SyscallError::InstructionError)?;
 
     Ok(SUCCESS)
@@ -2427,12 +2427,12 @@ impl<'a> SyscallObject<BpfError> for SyscallLogData<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use solana_program_runtime::{
+        invoke_context::{ThisComputeMeter, ThisInvokeContext, ThisLogger},
+        log_collector::LogCollector,
+    };
     use solana_rbpf::{
         ebpf::HOST_ALIGN, memory_region::MemoryRegion, user_error::UserError, vm::Config,
-    };
-    use solana_runtime::{
-        log_collector::LogCollector,
-        message_processor::{ThisComputeMeter, ThisInvokeContext, ThisLogger},
     };
     use solana_sdk::{
         bpf_loader, feature_set::FeatureSet, fee_calculator::FeeCalculator, hash::hashv,

@@ -3598,7 +3598,7 @@ dependencies = [
  "serde_json",
  "solana-bpf-loader-program",
  "solana-logger 1.9.0",
- "solana-runtime",
+ "solana-program-runtime",
  "solana-sdk",
  "solana_rbpf",
  "time 0.3.4",
@@ -4542,8 +4542,8 @@ dependencies = [
  "solana-config-program",
  "solana-faucet",
  "solana-logger 1.9.0",
+ "solana-program-runtime",
  "solana-remote-wallet",
- "solana-runtime",
  "solana-sdk",
  "solana-streamer",
  "solana-test-validator",
@@ -4664,7 +4664,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-logger 1.9.0",
- "solana-runtime",
+ "solana-program-runtime",
  "solana-sdk",
 ]
 
@@ -5380,6 +5380,7 @@ dependencies = [
 name = "solana-program-runtime"
 version = "1.9.0"
 dependencies = [
+ "bincode",
  "libc",
  "libloading",
  "log 0.4.14",
@@ -5733,7 +5734,7 @@ dependencies = [
  "solana-frozen-abi-macro 1.9.0",
  "solana-logger 1.9.0",
  "solana-metrics",
- "solana-runtime",
+ "solana-program-runtime",
  "solana-sdk",
  "solana-vote-program",
  "thiserror",
@@ -6004,7 +6005,7 @@ dependencies = [
  "solana-frozen-abi-macro 1.9.0",
  "solana-logger 1.9.0",
  "solana-metrics",
- "solana-runtime",
+ "solana-program-runtime",
  "solana-sdk",
  "thiserror",
 ]
