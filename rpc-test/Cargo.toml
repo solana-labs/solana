@@ -30,9 +30,5 @@ tokio = { version = "1", features = ["full"] }
 [dev-dependencies]
 solana-logger = { path = "../logger", version = "=1.9.0" }
 
-[lib]
-crate-type = ["lib"]
-name = "solana_entry"
-
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
