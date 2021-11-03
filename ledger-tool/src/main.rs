@@ -203,11 +203,33 @@ fn output_slot(
         for entry in &entries {
             transactions += entry.transactions.len();
             hashes += entry.num_hashes;
+<<<<<<< HEAD
             for transaction in &entry.transactions {
                 for instruction in &transaction.message().instructions {
                     let program_id =
                         transaction.message().account_keys[instruction.program_id_index as usize];
                     *program_ids.entry(program_id).or_insert(0) += 1;
+=======
+            for transaction in entry.transactions {
+                let tx_signature = transaction.signatures[0];
+                let sanitize_result =
+                    SanitizedTransaction::try_create(transaction, Hash::default(), None, |_| {
+                        Err(TransactionError::UnsupportedVersion)
+                    });
+
+                match sanitize_result {
+                    Ok(transaction) => {
+                        for (program_id, _) in transaction.message().program_instructions_iter() {
+                            *program_ids.entry(*program_id).or_insert(0) += 1;
+                        }
+                    }
+                    Err(err) => {
+                        warn!(
+                            "Failed to analyze unsupported transaction {}: {:?}",
+                            tx_signature, err
+                        );
+                    }
+>>>>>>> 140a5f633 (Simplify replay vote tracking by using packet metadata (#21112))
                 }
             }
         }
@@ -727,6 +749,71 @@ fn load_bank_forks(
     )
 }
 
+<<<<<<< HEAD
+=======
+fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> {
+    if blockstore.is_dead(slot) {
+        return Err("Dead slot".to_string());
+    }
+
+    let (entries, _num_shreds, _is_full) = blockstore
+        .get_slot_entries_with_shred_info(slot, 0, false)
+        .map_err(|err| format!(" Slot: {}, Failed to load entries, err {:?}", slot, err))?;
+
+    let num_entries = entries.len();
+    let mut num_transactions = 0;
+    let mut num_programs = 0;
+
+    let mut program_ids = HashMap::new();
+    let mut cost_model = CostModel::default();
+    cost_model.initialize_cost_table(&blockstore.read_program_costs().unwrap());
+    let mut cost_tracker = CostTracker::default();
+
+    for entry in entries {
+        num_transactions += entry.transactions.len();
+        entry
+            .transactions
+            .into_iter()
+            .filter_map(|transaction| {
+                SanitizedTransaction::try_create(transaction, Hash::default(), None, |_| {
+                    Err(TransactionError::UnsupportedVersion)
+                })
+                .map_err(|err| {
+                    warn!("Failed to compute cost of transaction: {:?}", err);
+                })
+                .ok()
+            })
+            .for_each(|transaction| {
+                num_programs += transaction.message().instructions().len();
+
+                let tx_cost = cost_model.calculate_cost(
+                    &transaction,
+                    true, // demote_program_write_locks
+                );
+                let result = cost_tracker.try_add(&transaction, &tx_cost);
+                if result.is_err() {
+                    println!(
+                        "Slot: {}, CostModel rejected transaction {:?}, reason {:?}",
+                        slot, transaction, result,
+                    );
+                }
+                for (program_id, _instruction) in transaction.message().program_instructions_iter()
+                {
+                    *program_ids.entry(*program_id).or_insert(0) += 1;
+                }
+            });
+    }
+
+    println!(
+        "Slot: {}, Entries: {}, Transactions: {}, Programs {}",
+        slot, num_entries, num_transactions, num_programs,
+    );
+    println!("  Programs: {:?}", program_ids);
+
+    Ok(())
+}
+
+>>>>>>> 140a5f633 (Simplify replay vote tracking by using packet metadata (#21112))
 fn open_genesis_config_by(ledger_path: &Path, matches: &ArgMatches<'_>) -> GenesisConfig {
     let max_genesis_archive_unpacked_size =
         value_t_or_exit!(matches, "max_genesis_archive_unpacked_size", u64);

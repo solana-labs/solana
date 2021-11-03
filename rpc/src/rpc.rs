@@ -3956,6 +3956,7 @@ fn deserialize_transaction(
             info!("transaction deserialize error: {:?}", err);
             Error::invalid_params(&err.to_string())
         })
+<<<<<<< HEAD
         .and_then(|transaction: Transaction| {
             if let Err(err) = transaction.sanitize() {
                 Err(Error::invalid_params(format!(
@@ -3967,6 +3968,17 @@ fn deserialize_transaction(
             }
         })
         .map(|transaction| (wire_transaction, transaction))
+=======
+        .map(|output| (wire_output, output))
+}
+
+fn sanitize_transaction(transaction: VersionedTransaction) -> Result<SanitizedTransaction> {
+    let message_hash = transaction.message.hash();
+    SanitizedTransaction::try_create(transaction, message_hash, None, |_| {
+        Err(TransactionError::UnsupportedVersion)
+    })
+    .map_err(|err| Error::invalid_params(format!("invalid transaction: {}", err)))
+>>>>>>> 140a5f633 (Simplify replay vote tracking by using packet metadata (#21112))
 }
 
 pub(crate) fn create_validator_exit(exit: &Arc<AtomicBool>) -> Arc<RwLock<Exit>> {
