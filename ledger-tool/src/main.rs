@@ -223,7 +223,7 @@ fn output_slot(
             for transaction in entry.transactions {
                 let tx_signature = transaction.signatures[0];
                 let sanitize_result =
-                    SanitizedTransaction::try_create(transaction, Hash::default(), |_| {
+                    SanitizedTransaction::try_create(transaction, Hash::default(), None, |_| {
                         Err(TransactionError::UnsupportedVersion)
                     });
 
@@ -779,7 +779,7 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
             .transactions
             .into_iter()
             .filter_map(|transaction| {
-                SanitizedTransaction::try_create(transaction, Hash::default(), |_| {
+                SanitizedTransaction::try_create(transaction, Hash::default(), None, |_| {
                     Err(TransactionError::UnsupportedVersion)
                 })
                 .map_err(|err| {

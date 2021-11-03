@@ -35,21 +35,21 @@ pub fn find_and_send_votes(
     vote_sender: Option<&ReplayVoteSender>,
 ) {
     let TransactionResults {
-        execution_results,
-        overwritten_vote_accounts,
-        ..
+        execution_results, ..
     } = tx_results;
     if let Some(vote_sender) = vote_sender {
-        for old_account in overwritten_vote_accounts {
-            assert!(execution_results[old_account.transaction_result_index]
-                .0
-                .is_ok());
-            let tx = &sanitized_txs[old_account.transaction_index];
-            if let Some(parsed_vote) = vote_transaction::parse_sanitized_vote_transaction(tx) {
-                if parsed_vote.1.slots.last().is_some() {
-                    let _ = vote_sender.send(parsed_vote);
+        sanitized_txs.iter().zip(execution_results.iter()).for_each(
+            |(tx, (result, _nonce_rollback))| {
+                if tx.is_simple_vote_transaction() && result.is_ok() {
+                    if let Some(parsed_vote) =
+                        vote_transaction::parse_sanitized_vote_transaction(tx)
+                    {
+                        if parsed_vote.1.slots.last().is_some() {
+                            let _ = vote_sender.send(parsed_vote);
+                        }
+                    }
                 }
-            }
-        }
+            },
+        );
     }
 }
