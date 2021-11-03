@@ -1,8 +1,8 @@
 use crate::{
     heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
     repair_service::{BestRepairsStats, RepairTiming},
+    repair_generic_traversal::{get_closest_completion, get_unknown_last_index},
     repair_weighted_traversal,
-    repair_weighted_traversal::{get_closest_completion, get_unknown_last_index},
     serve_repair::ShredRepairType,
     tree_diff::TreeDiff,
 };
