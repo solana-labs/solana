@@ -35,6 +35,7 @@ use crate::{
     contains::Contains,
     pubkey_bins::PubkeyBinCalculator24,
     read_only_accounts_cache::ReadOnlyAccountsCache,
+    rent_collector::RentCollector,
     sorted_storages::SortedStorages,
 };
 use blake3::traits::digest::Digest;
@@ -50,6 +51,7 @@ use rayon::{prelude::*, ThreadPool};
 use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
 use solana_rayon_threadlimit::get_thread_count;
+use solana_sdk::genesis_config::GenesisConfig;
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
     clock::{BankId, Epoch, Slot, SlotCount},
@@ -219,12 +221,13 @@ struct GenerateIndexTimings {
     pub insertion_time_us: u64,
     pub min_bin_size: usize,
     pub max_bin_size: usize,
-    #[allow(dead_code)]
     pub total_items: usize,
     pub storage_size_accounts_map_us: u64,
     pub storage_size_storages_us: u64,
     pub storage_size_accounts_map_flatten_us: u64,
     pub index_flush_us: u64,
+    pub rent_exempt: u64,
+    pub total_duplicates: u64,
 }
 
 #[derive(Default, Debug, PartialEq)]
@@ -260,6 +263,17 @@ impl GenerateIndexTimings {
                 i64
             ),
             ("index_flush_us", self.index_flush_us as i64, i64),
+            (
+                "total_not_rent_exempt_with_duplicates",
+                self.total_duplicates.saturating_sub(self.rent_exempt) as i64,
+                i64
+            ),
+            (
+                "total_items_with_duplicates",
+                self.total_duplicates as i64,
+                i64
+            ),
+            ("total_items", self.total_items as i64, i64),
         );
     }
 }
@@ -6666,17 +6680,20 @@ impl AccountsDb {
         accounts_map
     }
 
+    /// return time_us, # accts rent exempt, total # accts
     fn generate_index_for_slot<'a>(
         &self,
         accounts_map: GenerateIndexAccountsMap<'a>,
         slot: &Slot,
-    ) -> u64 {
+        rent_collector: &RentCollector,
+    ) -> (u64, u64, u64) {
         if accounts_map.is_empty() {
-            return 0;
+            return (0, 0, 0);
         }
 
         let secondary = !self.account_indexes.is_empty();
 
+        let mut rent_exempt = 0;
         let len = accounts_map.len();
         let items = accounts_map.into_iter().map(
             |(
@@ -6694,6 +6711,13 @@ impl AccountsDb {
                         stored_account.data,
                         &self.account_indexes,
                     );
+                }
+
+                if rent_collector.no_rent(&pubkey, &stored_account, false) || {
+                    let (_rent_due, exempt) = rent_collector.get_rent_due(&stored_account);
+                    exempt
+                } {
+                    rent_exempt += 1;
                 }
 
                 (
@@ -6718,7 +6742,7 @@ impl AccountsDb {
         if !dirty_pubkeys.is_empty() {
             self.uncleaned_pubkeys.insert(*slot, dirty_pubkeys);
         }
-        insert_us
+        (insert_us, rent_exempt, len as u64)
     }
 
     fn filler_unique_id_bytes() -> usize {
@@ -6849,13 +6873,27 @@ impl AccountsDb {
     }
 
     #[allow(clippy::needless_collect)]
-    pub fn generate_index(&self, limit_load_slot_count_from_snapshot: Option<usize>, verify: bool) {
+    pub fn generate_index(
+        &self,
+        limit_load_slot_count_from_snapshot: Option<usize>,
+        verify: bool,
+        genesis_config: &GenesisConfig,
+    ) {
         let mut slots = self.storage.all_slots();
         #[allow(clippy::stable_sort_primitive)]
         slots.sort();
         if let Some(limit) = limit_load_slot_count_from_snapshot {
             slots.truncate(limit); // get rid of the newer slots and keep just the older
         }
+        let max_slot = slots.last().cloned().unwrap_or_default();
+        let schedule = genesis_config.epoch_schedule;
+        let rent_collector = RentCollector::new(
+            schedule.get_epoch(max_slot),
+            &schedule,
+            genesis_config.slots_per_year(),
+            &genesis_config.rent,
+        );
+
         // pass == 0 always runs and generates the index
         // pass == 1 only runs if verify == true.
         // verify checks that all the expected items are in the accounts index and measures how long it takes to look them all up
@@ -6870,6 +6908,8 @@ impl AccountsDb {
             let chunk_size = (outer_slots_len / 7) + 1; // approximately 400k slots in a snapshot
             let mut index_time = Measure::start("index");
             let insertion_time_us = AtomicU64::new(0);
+            let rent_exempt = AtomicU64::new(0);
+            let total_duplicates = AtomicU64::new(0);
             let storage_info_timings = Mutex::new(GenerateIndexTimings::default());
             let scan_time: u64 = slots
                 .par_chunks(chunk_size)
@@ -6898,7 +6938,11 @@ impl AccountsDb {
 
                         let insert_us = if pass == 0 {
                             // generate index
-                            self.generate_index_for_slot(accounts_map, slot)
+                            let (insert_us, rent_exempt_this_slot, total_this_slot) =
+                                self.generate_index_for_slot(accounts_map, slot, &rent_collector);
+                            rent_exempt.fetch_add(rent_exempt_this_slot, Ordering::Relaxed);
+                            total_duplicates.fetch_add(total_this_slot, Ordering::Relaxed);
+                            insert_us
                         } else {
                             // verify index matches expected and measure the time to get all items
                             assert!(verify);
@@ -6969,6 +7013,8 @@ impl AccountsDb {
                 min_bin_size,
                 max_bin_size,
                 total_items,
+                rent_exempt: rent_exempt.load(Ordering::Relaxed),
+                total_duplicates: total_duplicates.load(Ordering::Relaxed),
                 storage_size_accounts_map_us: storage_info_timings.storage_size_accounts_map_us,
                 storage_size_accounts_map_flatten_us: storage_info_timings
                     .storage_size_accounts_map_flatten_us,

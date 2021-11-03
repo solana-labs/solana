@@ -1,4 +1,5 @@
 //! calculate and collect rent from Accounts
+use log::*;
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     clock::Epoch,
@@ -37,6 +38,11 @@ impl RentCollector {
         slots_per_year: f64,
         rent: &Rent,
     ) -> Self {
+        info!(
+            "creating RentCollector, epoch: {}, slots_per_year: {}, rent: {:?}",
+            epoch, slots_per_year, rent
+        );
+
         Self {
             epoch,
             epoch_schedule: *epoch_schedule,
@@ -52,6 +58,36 @@ impl RentCollector {
         }
     }
 
+    /// true if it is easy to determine this account should not have rent collected from it
+    pub fn no_rent(
+        &self,
+        address: &Pubkey,
+        account: &impl ReadableAccount,
+        rent_for_sysvars: bool,
+    ) -> bool {
+        account.executable() // executable accounts must be rent-exempt balance
+            || account.rent_epoch() > self.epoch
+            || (!rent_for_sysvars && sysvar::check_id(account.owner()))
+            || *address == incinerator::id()
+    }
+
+    /// true if it is easy to determine this account should not have rent collected from it
+    pub fn get_rent_due(&self, account: &impl ReadableAccount) -> (u64, bool) {
+        let slots_elapsed: u64 = (account.rent_epoch()..=self.epoch)
+            .map(|epoch| self.epoch_schedule.get_slots_in_epoch(epoch + 1))
+            .sum();
+
+        // avoid infinite rent in rust 1.45
+        let years_elapsed = if self.slots_per_year != 0.0 {
+            slots_elapsed as f64 / self.slots_per_year
+        } else {
+            0.0
+        };
+
+        self.rent
+            .due(account.lamports(), account.data().len(), years_elapsed)
+    }
+
     // updates this account's lamports and status and returns
     //  the account rent collected, if any
     // This is NOT thread safe at some level. If we try to collect from the same account in parallel, we may collect twice.
@@ -63,28 +99,15 @@ impl RentCollector {
         rent_for_sysvars: bool,
         filler_account_suffix: Option<&Pubkey>,
     ) -> u64 {
-        if account.executable() // executable accounts must be rent-exempt balance
-            || account.rent_epoch() > self.epoch
-            || (!rent_for_sysvars && sysvar::check_id(account.owner()))
-            || *address == incinerator::id()
-            || crate::accounts_db::AccountsDb::is_filler_account_helper(address, filler_account_suffix)
+        if self.no_rent(address, account, rent_for_sysvars)
+            || crate::accounts_db::AccountsDb::is_filler_account_helper(
+                address,
+                filler_account_suffix,
+            )
         {
             0
         } else {
-            let slots_elapsed: u64 = (account.rent_epoch()..=self.epoch)
-                .map(|epoch| self.epoch_schedule.get_slots_in_epoch(epoch + 1))
-                .sum();
-
-            // avoid infinite rent in rust 1.45
-            let years_elapsed = if self.slots_per_year != 0.0 {
-                slots_elapsed as f64 / self.slots_per_year
-            } else {
-                0.0
-            };
-
-            let (rent_due, exempt) =
-                self.rent
-                    .due(account.lamports(), account.data().len(), years_elapsed);
+            let (rent_due, exempt) = self.get_rent_due(account);
 
             if exempt || rent_due != 0 {
                 if account.lamports() > rent_due {
