@@ -4039,22 +4039,19 @@ impl RpcClient {
     /// # use solana_account_decoder::{UiDataSliceConfig, UiAccountEncoding};
     /// # let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// # let alice = Keypair::new();
-    /// # let base58_bytes = "\
-    /// #     1111111111111111111111111111111111111111111111111111111111111111\
-    /// #     1111111111111111111111111111111111111111111111111111111111111111";
+    /// # let base64_bytes = "\
+    /// #     AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\
+    /// #     AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\
+    /// #     AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
     /// let memcmp = RpcFilterType::Memcmp(Memcmp {
     ///     offset: 0,
-    ///     bytes: MemcmpEncodedBytes::Binary(base58_bytes.to_string()),
+    ///     bytes: MemcmpEncodedBytes::Base64(base64_bytes.to_string()),
     ///     encoding: None,
     /// });
     /// let config = RpcProgramAccountsConfig {
     ///     filters: Some(vec![
     ///         RpcFilterType::DataSize(128),
-    ///         RpcFilterType::Memcmp(Memcmp {
-    ///             offset: 0,
-    ///             bytes: MemcmpEncodedBytes::Binary(base58_bytes.to_string()),
-    ///             encoding: None,
-    ///         }),
+    ///         memcmp,
     ///     ]),
     ///     account_config: RpcAccountInfoConfig {
     ///         encoding: Some(UiAccountEncoding::Base64),

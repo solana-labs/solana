@@ -6,7 +6,7 @@ use crate::{
     snapshot_config::SnapshotConfig,
 };
 use log::*;
-use solana_metrics::inc_new_counter_info;
+use solana_measure::measure::Measure;
 use solana_sdk::{clock::Slot, hash::Hash, timing};
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
@@ -212,15 +212,22 @@ impl BankForks {
         let mut banks = vec![root_bank];
         let parents = root_bank.parents();
         banks.extend(parents.iter());
+        let total_banks = banks.len();
+        let mut total_squash_accounts_ms = 0;
+        let mut total_squash_cache_ms = 0;
+        let mut total_snapshot_ms = 0;
         for bank in banks.iter() {
             let bank_slot = bank.slot();
             if bank.block_height() % self.accounts_hash_interval_slots == 0
                 && bank_slot > self.last_accounts_hash_slot
             {
                 self.last_accounts_hash_slot = bank_slot;
-                bank.squash();
+                let squash_timing = bank.squash();
+                total_squash_accounts_ms += squash_timing.squash_accounts_ms;
+                total_squash_cache_ms += squash_timing.squash_cache_ms;
                 is_root_bank_squashed = bank_slot == root;
 
+                let mut snapshot_time = Measure::start("squash::snapshot_time");
                 if self.snapshot_config.is_some()
                     && accounts_background_request_sender.is_snapshot_creation_enabled()
                 {
@@ -241,22 +248,35 @@ impl BankForks {
                         );
                     }
                 }
+                snapshot_time.stop();
+                total_snapshot_ms += snapshot_time.as_ms();
                 break;
             }
         }
         if !is_root_bank_squashed {
-            root_bank.squash();
+            let squash_timing = root_bank.squash();
+            total_squash_accounts_ms += squash_timing.squash_accounts_ms;
+            total_squash_cache_ms += squash_timing.squash_cache_ms;
         }
         let new_tx_count = root_bank.transaction_count();
+        let mut prune_time = Measure::start("set_root::prune");
         self.prune_non_rooted(root, highest_confirmed_root);
+        prune_time.stop();
 
-        inc_new_counter_info!(
-            "bank-forks_set_root_ms",
-            timing::duration_as_ms(&set_root_start.elapsed()) as usize
-        );
-        inc_new_counter_info!(
-            "bank-forks_set_root_tx_count",
-            (new_tx_count - root_tx_count) as usize
+        datapoint_info!(
+            "bank-forks_set_root",
+            (
+                "elapsed_ms",
+                timing::duration_as_ms(&set_root_start.elapsed()) as usize,
+                i64
+            ),
+            ("slot", root, i64),
+            ("total_banks", total_banks, i64),
+            ("total_squash_cache_ms", total_squash_cache_ms, i64),
+            ("total_squash_accounts_ms", total_squash_accounts_ms, i64),
+            ("total_snapshot_ms", total_snapshot_ms, i64),
+            ("tx_count", (new_tx_count - root_tx_count) as usize, i64),
+            ("prune_non_rooted_ms", prune_time.as_ms(), i64),
         );
     }
 

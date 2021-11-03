@@ -45,7 +45,7 @@ $ npm install --save @solana/web3.js
 <!-- Development (un-minified) -->
 <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.js"></script>
 
-<!-- Production (un-minified) -->
+<!-- Production (minified) -->
 <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
 ```
 
@@ -88,7 +88,7 @@ console.log(solanaWeb3);
 
 Example scripts for the web3.js repo and native programs:
 
-- [Web3 Examples](./examples)
+- [Web3 Examples](https://github.com/solana-labs/solana/tree/master/web3.js/examples)
 
 Example scripts for the Solana Program Library:
 

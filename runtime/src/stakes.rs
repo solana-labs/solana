@@ -196,7 +196,7 @@ impl Stakes {
         pubkey: &Pubkey,
         account: &AccountSharedData,
         remove_delegation_on_inactive: bool,
-    ) -> Option<VoteAccount> {
+    ) {
         if solana_vote_program::check_id(account.owner()) {
             // unconditionally remove existing at first; there is no dependent calculated state for
             // votes, not like stakes (stake codepath maintains calculated stake value grouped by
@@ -213,7 +213,6 @@ impl Stakes {
                 self.vote_accounts
                     .insert(*pubkey, (stake, VoteAccount::from(account.clone())));
             }
-            old.map(|(_, account)| account)
         } else if stake::program::check_id(account.owner()) {
             //  old_stake is stake lamports and voter_pubkey from the pre-store() version
             let old_stake = self.stake_delegations.get(pubkey).map(|delegation| {
@@ -263,13 +262,11 @@ impl Stakes {
             } else if let Some(delegation) = delegation {
                 self.stake_delegations.insert(*pubkey, delegation);
             }
-            None
         } else {
             // there is no need to remove possibly existing Stakes cache entries with given
             // `pubkey` because this isn't possible, first of all.
             // Runtime always enforces an intermediary write of account.lamports == 0,
             // when not-System111-owned account.owner is swapped.
-            None
         }
     }
 
