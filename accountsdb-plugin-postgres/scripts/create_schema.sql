@@ -20,18 +20,46 @@ CREATE TABLE account (
 CREATE TABLE slot (
     slot BIGINT PRIMARY KEY,
     parent BIGINT,
-    status varchar(16) NOT NULL,
+    status VARCHAR(16) NOT NULL,
     updated_on TIMESTAMP NOT NULL
 );
 
 
+CREATE TYPE CompiledInstruction AS (
+    program_id_index SMALLINT,
+    accounts SMALLINT[],
+    data BYTEA
+);
+
+CREATE TYPE TransactionStatusMeta AS (
+    status VARCHAR(256),
+    fee BIGINT,
+    pre_balances BIGINT[],
+    post_balances BIGINT[],
+
+
+);
+
+CREATE TYPE InnerInstructions AS (
+    index SMALLINT,
+    instructions CompiledInstruction[]
+);
+
 -- The table storing transaction logs
-create TABLE transaction_log (
+CREATE TABLE transaction_log (
     signature BYTEA PRIMARY KEY,
     is_vote BOOL NOT NULL,
-    result varchar(256),
+    result VARCHAR(256),
     slot BIGINT NOT NULL,
-    logs text[],
+    logs TEXT[],
+    num_required_signatures SMALLINT,
+    num_readonly_signed_accounts SMALLINT,
+    num_readonly_unsigned_accounts SMALLINT,
+    account_keys BYTEA[],
+    recent_blockhash BYTEA,
+    instructions CompiledInstruction[],
+    message_hash BYTEA,
+    signatures BYTEA[],
     updated_on TIMESTAMP NOT NULL
 );
 
