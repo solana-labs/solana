@@ -1107,7 +1107,20 @@ impl BankingStage {
                     return None;
                 }
 
+<<<<<<< HEAD
                 let tx: Transaction = limited_deserialize(&p.data[0..p.meta.size]).ok()?;
+=======
+                let tx: VersionedTransaction = limited_deserialize(&p.data[0..p.meta.size]).ok()?;
+                let message_bytes = Self::packet_message(p)?;
+                let message_hash = Message::hash_raw_message(message_bytes);
+                let tx = SanitizedTransaction::try_create(
+                    tx,
+                    message_hash,
+                    Some(p.meta.is_simple_vote_tx),
+                    |_| Err(TransactionError::UnsupportedVersion),
+                )
+                .ok()?;
+>>>>>>> 140a5f633 (Simplify replay vote tracking by using packet metadata (#21112))
                 tx.verify_precompiles(feature_set).ok()?;
 
                 Some((tx, *tx_index))

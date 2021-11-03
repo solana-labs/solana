@@ -536,18 +536,20 @@ pub type TransactionExecutionResult = (Result<()>, Option<NonceRollbackFull>);
 pub struct TransactionResults {
     pub fee_collection_results: Vec<Result<()>>,
     pub execution_results: Vec<TransactionExecutionResult>,
-    pub overwritten_vote_accounts: Vec<OverwrittenVoteAccount>,
     pub rent_debits: Vec<RentDebits>,
 }
 pub struct TransactionBalancesSet {
     pub pre_balances: TransactionBalances,
     pub post_balances: TransactionBalances,
 }
+<<<<<<< HEAD
 pub struct OverwrittenVoteAccount {
     pub account: ArcVoteAccount,
     pub transaction_index: usize,
     pub transaction_result_index: usize,
 }
+=======
+>>>>>>> 140a5f633 (Simplify replay vote tracking by using packet metadata (#21112))
 
 impl TransactionBalancesSet {
     pub fn new(pre_balances: TransactionBalances, post_balances: TransactionBalances) -> Self {
@@ -3130,6 +3132,7 @@ impl Bank {
         tick_height % self.ticks_per_slot == 0
     }
 
+<<<<<<< HEAD
     pub fn prepare_batch<'a, 'b>(
         &'a self,
         txs: impl Iterator<Item = &'b Transaction>,
@@ -3140,6 +3143,42 @@ impl Bank {
             self.demote_program_write_locks(),
         );
         TransactionBatch::new(lock_results, self, Cow::Owned(hashed_txs))
+=======
+    /// Prepare a transaction batch from a list of legacy transactions. Used for tests only.
+    pub fn prepare_batch_for_tests(&self, txs: Vec<Transaction>) -> TransactionBatch {
+        let sanitized_txs = txs
+            .into_iter()
+            .map(SanitizedTransaction::from_transaction_for_tests)
+            .collect::<Vec<_>>();
+        let lock_results = self
+            .rc
+            .accounts
+            .lock_accounts(sanitized_txs.iter(), self.demote_program_write_locks());
+        TransactionBatch::new(lock_results, self, Cow::Owned(sanitized_txs))
+    }
+
+    /// Prepare a transaction batch from a list of versioned transactions from
+    /// an entry. Used for tests only.
+    pub fn prepare_entry_batch(&self, txs: Vec<VersionedTransaction>) -> Result<TransactionBatch> {
+        let sanitized_txs = txs
+            .into_iter()
+            .map(|tx| {
+                let message_hash = tx.message.hash();
+                SanitizedTransaction::try_create(tx, message_hash, None, |_| {
+                    Err(TransactionError::UnsupportedVersion)
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let lock_results = self
+            .rc
+            .accounts
+            .lock_accounts(sanitized_txs.iter(), self.demote_program_write_locks());
+        Ok(TransactionBatch::new(
+            lock_results,
+            self,
+            Cow::Owned(sanitized_txs),
+        ))
+>>>>>>> 140a5f633 (Simplify replay vote tracking by using packet metadata (#21112))
     }
 
     pub fn prepare_hashed_batch<'a, 'b>(
@@ -3985,8 +4024,12 @@ impl Bank {
         let rent_debits = self.collect_rent(executed, loaded_txs);
 
         let mut update_stakes_cache_time = Measure::start("update_stakes_cache_time");
+<<<<<<< HEAD
         let overwritten_vote_accounts =
             self.update_stakes_cache(hashed_txs.as_transactions_iter(), executed, loaded_txs);
+=======
+        self.update_stakes_cache(sanitized_txs, executed, loaded_txs);
+>>>>>>> 140a5f633 (Simplify replay vote tracking by using packet metadata (#21112))
         update_stakes_cache_time.stop();
 
         // once committed there is no way to unroll
@@ -4005,7 +4048,6 @@ impl Bank {
         TransactionResults {
             fee_collection_results,
             execution_results: executed.to_vec(),
-            overwritten_vote_accounts,
             rent_debits,
         }
     }
@@ -5190,6 +5232,42 @@ impl Bank {
         }
     }
 
+<<<<<<< HEAD
+=======
+    pub fn verify_transaction(
+        &self,
+        tx: VersionedTransaction,
+        skip_verification: bool,
+    ) -> Result<SanitizedTransaction> {
+        let sanitized_tx = {
+            let size =
+                bincode::serialized_size(&tx).map_err(|_| TransactionError::SanitizeFailure)?;
+            if size > PACKET_DATA_SIZE as u64 {
+                return Err(TransactionError::SanitizeFailure);
+            }
+            let message_hash = if !skip_verification {
+                tx.verify_and_hash_message()?
+            } else {
+                tx.message.hash()
+            };
+
+            SanitizedTransaction::try_create(tx, message_hash, None, |_| {
+                Err(TransactionError::UnsupportedVersion)
+            })
+        }?;
+
+        if self.verify_tx_signatures_len_enabled() && !sanitized_tx.verify_signatures_len() {
+            return Err(TransactionError::SanitizeFailure);
+        }
+
+        if !skip_verification {
+            sanitized_tx.verify_precompiles(&self.feature_set)?;
+        }
+
+        Ok(sanitized_tx)
+    }
+
+>>>>>>> 140a5f633 (Simplify replay vote tracking by using packet metadata (#21112))
     pub fn calculate_capitalization(&self, debug_verify: bool) -> u64 {
         let can_cached_slot_be_unflushed = true; // implied yes
         self.rc.accounts.calculate_capitalization(
@@ -5395,8 +5473,7 @@ impl Bank {
         txs: impl Iterator<Item = &'a Transaction>,
         res: &[TransactionExecutionResult],
         loaded_txs: &[TransactionLoadResult],
-    ) -> Vec<OverwrittenVoteAccount> {
-        let mut overwritten_vote_accounts = vec![];
+    ) {
         for (i, ((raccs, _load_nonce_rollback), tx)) in loaded_txs.iter().zip(txs).enumerate() {
             let (res, _res_nonce_rollback) = &res[i];
             if res.is_err() || raccs.is_err() {
@@ -5410,6 +5487,7 @@ impl Bank {
                 .zip(loaded_transaction.accounts.iter())
                 .filter(|(_i, (_pubkey, account))| (Stakes::is_stake(account)))
             {
+<<<<<<< HEAD
                 if Stakes::is_stake(account) {
                     if let Some(old_vote_account) = self.stakes.write().unwrap().store(
                         pubkey,
@@ -5425,10 +5503,15 @@ impl Bank {
                         });
                     }
                 }
+=======
+                self.stakes.write().unwrap().store(
+                    pubkey,
+                    account,
+                    self.stakes_remove_delegation_if_inactive_enabled(),
+                );
+>>>>>>> 140a5f633 (Simplify replay vote tracking by using packet metadata (#21112))
             }
         }
-
-        overwritten_vote_accounts
     }
 
     /// current stake delegations for this bank
