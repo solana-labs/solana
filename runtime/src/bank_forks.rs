@@ -16,7 +16,6 @@ use std::{
 };
 
 struct SetRootTimings {
-    root: i64,
     total_banks: i64,
     total_squash_cache_ms: i64,
     total_squash_accounts_ms: i64,
@@ -278,7 +277,6 @@ impl BankForks {
         drop_parent_banks_time.stop();
 
         SetRootTimings {
-            root: root as i64,
             total_banks: total_banks as i64,
             total_squash_cache_ms,
             total_squash_accounts_ms,
@@ -308,7 +306,7 @@ impl BankForks {
                 timing::duration_as_ms(&set_root_start.elapsed()) as usize,
                 i64
             ),
-            ("slot", set_root_metrics.root, i64),
+            ("slot", root, i64),
             ("total_banks", set_root_metrics.total_banks, i64),
             (
                 "total_squash_cache_ms",
