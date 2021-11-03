@@ -166,7 +166,7 @@ export function AccountHeader({
   const data = account?.details?.data;
   const isToken = data?.program === "spl-token" && data?.parsed.type === "mint";
 
-  if (isMetaplexNFT(data, mintInfo?.decimals)) {
+  if (isMetaplexNFT(data, mintInfo)) {
     return (
       <NFTHeader
         nftData={(data as TokenProgramData).nftData!}
