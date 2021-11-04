@@ -838,36 +838,6 @@ impl Shredder {
             .collect()
     }
 
-    fn fill_in_missing_shreds(
-        num_data: usize,
-        num_coding: usize,
-        first_index_in_fec_set: usize,
-        expected_index: usize,
-        index_found: usize,
-        present: &mut [bool],
-    ) -> Vec<Vec<u8>> {
-        let end_index = index_found.saturating_sub(1);
-        // The index of current shred must be within the range of shreds that are being
-        // recovered
-        if !(first_index_in_fec_set..first_index_in_fec_set + num_data + num_coding)
-            .contains(&end_index)
-        {
-            return vec![];
-        }
-
-        let missing_blocks: Vec<Vec<u8>> = (expected_index..index_found)
-            .map(|missing| {
-                present[missing.saturating_sub(first_index_in_fec_set)] = false;
-                if missing < first_index_in_fec_set + num_data {
-                    Shred::new_empty_data_shred().payload
-                } else {
-                    vec![0; SHRED_PAYLOAD_SIZE]
-                }
-            })
-            .collect();
-        missing_blocks
-    }
-
     pub fn try_recovery(
         shreds: Vec<Shred>,
         num_data: usize,
@@ -875,9 +845,10 @@ impl Shredder {
         first_index: usize,
         slot: Slot,
     ) -> std::result::Result<Vec<Shred>, reed_solomon_erasure::Error> {
+        use reed_solomon_erasure::Error::InvalidIndex;
         Self::verify_consistent_shred_payload_sizes("try_recovery()", &shreds)?;
-        let mut recovered_data = vec![];
         let fec_set_size = num_data + num_coding;
+<<<<<<< HEAD
 
         if num_coding > 0 && shreds.len() < fec_set_size {
             // Let's try recovering missing shreds using erasure
@@ -959,8 +930,53 @@ impl Shredder {
                         }
                     }
                 });
+=======
+        if num_coding == 0 || shreds.len() >= fec_set_size {
+            return Ok(Vec::default());
+>>>>>>> 11a53de0e (rewrites Shredder::try_recovery (#21082))
         }
-
+        // Mask to exclude data shreds already received from the return value.
+        let mut mask = vec![false; num_data];
+        let mut blocks = vec![None; fec_set_size];
+        for shred in shreds {
+            if (shred.index() as usize) < first_index {
+                return Err(InvalidIndex);
+            }
+            let shred_is_data = shred.is_data();
+            let offset = if shred_is_data { 0 } else { num_data };
+            let index = offset + shred.index() as usize - first_index;
+            let mut block = shred.payload;
+            if shred_is_data {
+                if index >= num_data {
+                    return Err(InvalidIndex);
+                }
+                mask[index] = true;
+                // SIZE_OF_CODING_SHRED_HEADERS bytes at the end of data shreds
+                // is never used and is not part of erasure coding.
+                block.resize(SHRED_PAYLOAD_SIZE - SIZE_OF_CODING_SHRED_HEADERS, 0u8);
+            } else {
+                if index >= fec_set_size {
+                    return Err(InvalidIndex);
+                }
+                // SIZE_OF_CODING_SHRED_HEADERS bytes at the begining of the
+                // coding shreds contains the header and is not part of erasure
+                // coding.
+                block.drain(..SIZE_OF_CODING_SHRED_HEADERS);
+            };
+            blocks[index] = Some(block);
+        }
+        Session::new(num_data, num_coding)?.decode_blocks(&mut blocks)?;
+        let data_shred_indices = first_index..first_index + num_data;
+        let recovered_data = mask
+            .into_iter()
+            .zip(blocks)
+            .filter(|(mask, _)| !mask)
+            .filter_map(|(_, block)| Shred::new_from_serialized_shred(block?).ok())
+            .filter(|shred| {
+                let index = shred.index() as usize;
+                shred.slot() == slot && data_shred_indices.contains(&index)
+            })
+            .collect();
         Ok(recovered_data)
     }
 
@@ -1660,13 +1676,13 @@ pub mod tests {
                 15,
                 slot,
             ),
-            Err(reed_solomon_erasure::Error::TooFewShardsPresent)
+            Err(reed_solomon_erasure::Error::InvalidIndex)
         );
 
         // Test8: Try recovery/reassembly with incorrect index. Hint: does not recover any shreds
         assert_matches!(
             Shredder::try_recovery(shred_info, num_data_shreds, num_coding_shreds, 35, slot),
-            Err(reed_solomon_erasure::Error::TooFewShardsPresent)
+            Err(reed_solomon_erasure::Error::InvalidIndex)
         );
     }
 
