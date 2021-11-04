@@ -374,6 +374,8 @@ where
         debug_do_not_add_builtins,
     );
 
+    info!("rent_collector: {:?}", bank.rent_collector());
+
     Ok(bank)
 }
 

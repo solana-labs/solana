@@ -6713,7 +6713,7 @@ impl AccountsDb {
                     );
                 }
 
-                if rent_collector.no_rent(&pubkey, &stored_account, false) || {
+                if !rent_collector.should_collect_rent(&pubkey, &stored_account, false) || {
                     let (_rent_due, exempt) = rent_collector.get_rent_due(&stored_account);
                     exempt
                 } {
@@ -6980,6 +6980,7 @@ impl AccountsDb {
                 .sum();
             index_time.stop();
 
+            info!("rent_collector: {:?}", rent_collector);
             let mut min_bin_size = usize::MAX;
             let mut max_bin_size = usize::MIN;
             let total_items = self

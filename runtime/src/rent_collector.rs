@@ -1,5 +1,4 @@
 //! calculate and collect rent from Accounts
-use log::*;
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     clock::Epoch,
@@ -38,11 +37,6 @@ impl RentCollector {
         slots_per_year: f64,
         rent: &Rent,
     ) -> Self {
-        info!(
-            "creating RentCollector, epoch: {}, slots_per_year: {}, rent: {:?}",
-            epoch, slots_per_year, rent
-        );
-
         Self {
             epoch,
             epoch_schedule: *epoch_schedule,
@@ -58,20 +52,21 @@ impl RentCollector {
         }
     }
 
-    /// true if it is easy to determine this account should not have rent collected from it
-    pub fn no_rent(
+    /// true if it is easy to determine this account should consider having rent collected from it
+    pub fn should_collect_rent(
         &self,
         address: &Pubkey,
         account: &impl ReadableAccount,
         rent_for_sysvars: bool,
     ) -> bool {
-        account.executable() // executable accounts must be rent-exempt balance
+        !(account.executable() // executable accounts must be rent-exempt balance
             || account.rent_epoch() > self.epoch
             || (!rent_for_sysvars && sysvar::check_id(account.owner()))
-            || *address == incinerator::id()
+            || *address == incinerator::id())
     }
 
-    /// true if it is easy to determine this account should not have rent collected from it
+    /// given an account that 'should_collect_rent'
+    /// returns (amount rent due, is_exempt_from_rent)
     pub fn get_rent_due(&self, account: &impl ReadableAccount) -> (u64, bool) {
         let slots_elapsed: u64 = (account.rent_epoch()..=self.epoch)
             .map(|epoch| self.epoch_schedule.get_slots_in_epoch(epoch + 1))
@@ -99,7 +94,7 @@ impl RentCollector {
         rent_for_sysvars: bool,
         filler_account_suffix: Option<&Pubkey>,
     ) -> u64 {
-        if self.no_rent(address, account, rent_for_sysvars)
+        if !self.should_collect_rent(address, account, rent_for_sysvars)
             || crate::accounts_db::AccountsDb::is_filler_account_helper(
                 address,
                 filler_account_suffix,
