@@ -3512,27 +3512,6 @@ impl Bank {
             .collect()
     }
 
-    fn filter_by_vote_transactions<'a>(
-        &self,
-        txs: impl Iterator<Item = &'a SanitizedTransaction>,
-        lock_results: Vec<TransactionCheckResult>,
-        error_counters: &mut ErrorCounters,
-    ) -> Vec<TransactionCheckResult> {
-        txs.zip(lock_results)
-            .map(|(tx, lock_res)| {
-                if lock_res.0.is_ok() {
-                    if is_simple_vote_transaction(tx) {
-                        return lock_res;
-                    }
-
-                    error_counters.not_allowed_during_cluster_maintenance += 1;
-                    return (Err(TransactionError::ClusterMaintenance), lock_res.1);
-                }
-                lock_res
-            })
-            .collect()
-    }
-
     pub fn check_hash_age(&self, hash: &Hash, max_age: usize) -> Option<bool> {
         self.blockhash_queue
             .read()
@@ -3554,19 +3533,6 @@ impl Bank {
             })
     }
 
-    // Determine if the bank is currently in an upgrade epoch, where only votes are permitted
-    fn upgrade_epoch(&self) -> bool {
-        match self.cluster_type() {
-            #[cfg(test)]
-            ClusterType::Development => self.epoch == 0xdead, // Value assumed by `test_upgrade_epoch()`
-            #[cfg(not(test))]
-            ClusterType::Development => false,
-            ClusterType::Devnet => false,
-            ClusterType::Testnet => false,
-            ClusterType::MainnetBeta => self.epoch == 61,
-        }
-    }
-
     pub fn check_transactions(
         &self,
         sanitized_txs: &[SanitizedTransaction],
@@ -3576,13 +3542,7 @@ impl Bank {
     ) -> Vec<TransactionCheckResult> {
         let age_results =
             self.check_age(sanitized_txs.iter(), lock_results, max_age, error_counters);
-        let cache_results = self.check_status_cache(sanitized_txs, age_results, error_counters);
-        if self.upgrade_epoch() {
-            // Reject all non-vote transactions
-            self.filter_by_vote_transactions(sanitized_txs.iter(), cache_results, error_counters)
-        } else {
-            cache_results
-        }
+        self.check_status_cache(sanitized_txs, age_results, error_counters)
     }
 
     pub fn collect_balances(&self, batch: &TransactionBatch) -> TransactionBalances {
@@ -12311,98 +12271,6 @@ pub(crate) mod tests {
             .sum();
         // consumed_budgets represents the count of alive accounts in the three slots 0,1,2
         assert_eq!(consumed_budgets, 11);
-    }
-
-    #[test]
-    fn test_upgrade_epoch() {
-        solana_logger::setup();
-        let GenesisConfigInfo {
-            mut genesis_config,
-            mint_keypair,
-            ..
-        } = create_genesis_config_with_leader(500, &solana_sdk::pubkey::new_rand(), 0);
-        genesis_config.fee_rate_governor = FeeRateGovernor::new(1, 0);
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-        // Jump to the test-only upgrade epoch -- see `Bank::upgrade_epoch()`
-        let bank = Bank::new_from_parent(
-            &bank,
-            &Pubkey::default(),
-            genesis_config
-                .epoch_schedule
-                .get_first_slot_in_epoch(0xdead),
-        );
-
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 500);
-
-        // Normal transfers are not allowed
-        assert_eq!(
-            bank.transfer(2, &mint_keypair, &mint_keypair.pubkey()),
-            Err(TransactionError::ClusterMaintenance)
-        );
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 500); // no transaction fee charged
-
-        let vote_pubkey = solana_sdk::pubkey::new_rand();
-        let authorized_voter = Keypair::new();
-
-        // VoteInstruction::Vote is allowed.  The transaction fails with a vote program instruction
-        // error because the vote account is not actually setup
-        let tx = Transaction::new_signed_with_payer(
-            &[vote_instruction::vote(
-                &vote_pubkey,
-                &authorized_voter.pubkey(),
-                Vote::new(vec![1], Hash::default()),
-            )],
-            Some(&mint_keypair.pubkey()),
-            &[&mint_keypair, &authorized_voter],
-            bank.last_blockhash(),
-        );
-        assert_eq!(
-            bank.process_transaction(&tx),
-            Err(TransactionError::InstructionError(
-                0,
-                InstructionError::InvalidAccountOwner
-            ))
-        );
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 498); // transaction fee charged
-
-        // VoteInstruction::VoteSwitch is allowed.  The transaction fails with a vote program
-        // instruction error because the vote account is not actually setup
-        let tx = Transaction::new_signed_with_payer(
-            &[vote_instruction::vote_switch(
-                &vote_pubkey,
-                &authorized_voter.pubkey(),
-                Vote::new(vec![1], Hash::default()),
-                Hash::default(),
-            )],
-            Some(&mint_keypair.pubkey()),
-            &[&mint_keypair, &authorized_voter],
-            bank.last_blockhash(),
-        );
-        assert_eq!(
-            bank.process_transaction(&tx),
-            Err(TransactionError::InstructionError(
-                0,
-                InstructionError::InvalidAccountOwner
-            ))
-        );
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 496); // transaction fee charged
-
-        // Other vote program instructions, like VoteInstruction::UpdateCommission are not allowed
-        let tx = Transaction::new_signed_with_payer(
-            &[vote_instruction::update_commission(
-                &vote_pubkey,
-                &authorized_voter.pubkey(),
-                123,
-            )],
-            Some(&mint_keypair.pubkey()),
-            &[&mint_keypair, &authorized_voter],
-            bank.last_blockhash(),
-        );
-        assert_eq!(
-            bank.process_transaction(&tx),
-            Err(TransactionError::ClusterMaintenance)
-        );
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 496); // no transaction fee charged
     }
 
     #[test]
