@@ -264,7 +264,7 @@ impl GenerateIndexTimings {
             ),
             ("index_flush_us", self.index_flush_us as i64, i64),
             (
-                "total_not_rent_exempt_with_duplicates",
+                "total_rent_paying_with_duplicates",
                 self.total_duplicates.saturating_sub(self.rent_exempt) as i64,
                 i64
             ),
