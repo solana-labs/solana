@@ -616,42 +616,48 @@ impl AccountsHash {
         });
         let mut overall_sum = 0;
         let mut hashes: Vec<Hash> = Vec::with_capacity(item_len);
+        let mut duplicates = Vec::with_capacity(len);
 
         while !first_items.is_empty() {
-            let mut loop_stop = { first_items.len() - 1 }; // we increment at the beginning of the loop
+            let loop_stop = { first_items.len() - 1 }; // we increment at the beginning of the loop
             let mut min_index = 0;
             let mut min_pubkey = first_items[min_index].0;
             let mut first_item_index = 0; // we will start iterating at item 1. +=1 is first instruction in loop
 
             while first_item_index < loop_stop {
                 first_item_index += 1;
-                let (key, _) = first_items[first_item_index];
-                let cmp = min_pubkey.cmp(&key);
+                let (key, _) = &first_items[first_item_index];
+                let cmp = min_pubkey.cmp(key);
                 match cmp {
                     std::cmp::Ordering::Less => {
                         continue; // we still have the min item
                     }
                     std::cmp::Ordering::Equal => {
-                        // we found an item that masks an earlier slot, so skip the earlier item
-                        let (exhausted, _) = Self::get_item(
-                            min_index,
-                            pubkey_bin,
-                            &mut first_items,
-                            pubkey_division,
-                            &mut indexes,
-                        );
-                        if exhausted {
-                            // this whole vector is exhausted, so we have to back our indices up since our search set has been reduced out from under us
-                            first_item_index -= 1;
-                            loop_stop -= 1;
-                        }
+                        // we found an item that masks an earlier slot, so remember the slot where we had dups
+                        duplicates.push(min_index);
                     }
-                    std::cmp::Ordering::Greater => (),
+                    std::cmp::Ordering::Greater => {
+                        // this is the new min pubkey
+                        min_pubkey = *key;
+                    }
                 }
-                // this is the new min pubkey
+                // this is the new index of the min entry
                 min_index = first_item_index;
-                min_pubkey = key;
             }
+            // skip past duplicate keys in earlier slots
+            duplicates.iter().rev().for_each(|i| {
+                let (exhausted, _) = Self::get_item(
+                    *i,
+                    pubkey_bin,
+                    &mut first_items,
+                    pubkey_division,
+                    &mut indexes,
+                );
+                if exhausted {
+                    min_index -= 1;
+                }
+            });
+            duplicates.clear();
 
             // get the min item, add lamports, get hash
             let (_, item) = Self::get_item(
@@ -661,7 +667,7 @@ impl AccountsHash {
                 pubkey_division,
                 &mut indexes,
             );
-            if !self.is_filler_account(&item.pubkey) && item.lamports != ZERO_RAW_LAMPORTS_SENTINEL
+            if item.lamports != ZERO_RAW_LAMPORTS_SENTINEL && !self.is_filler_account(&item.pubkey)
             {
                 overall_sum = Self::checked_cast_for_capitalization(
                     item.lamports as u128 + overall_sum as u128,
