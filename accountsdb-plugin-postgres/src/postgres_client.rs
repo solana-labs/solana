@@ -9,6 +9,7 @@ use {
     crossbeam_channel::{bounded, Receiver, RecvTimeoutError, Sender},
     log::*,
     postgres::{Client, NoTls, Statement},
+    postgres_types::ToSql,
     solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
         AccountsDbPluginError, ReplicaAccountInfo, ReplicaTransactionLogInfo, SlotStatus,
     },
@@ -23,7 +24,7 @@ use {
         thread::{self, sleep, Builder, JoinHandle},
         time::Duration,
     },
-    tokio_postgres::types::ToSql,
+    tokio_postgres::types,
 };
 
 /// The maximum asynchronous requests allowed in the channel to avoid excessive
@@ -68,6 +69,59 @@ pub struct DbAccountInfo {
     pub data: Vec<u8>,
     pub slot: i64,
     pub write_version: i64,
+}
+
+#[derive(Clone, ToSql)]
+pub struct DbCompiledInstruction {
+    pub program_id_index: u8,
+    pub accounts: Vec<u8>,
+    pub data: Vec<u8>,
+}
+
+#[derive(Clone, ToSql)]
+pub struct DbInnerInstructions {
+    pub index: u8,
+    pub instructions: CompiledInstruction,
+}
+
+#[derive(Clone, ToSql)]
+pub struct DbTransactionTokenBalance {
+    account_index: u8,
+    mint: String,
+    ui_token_amount: f64,
+    owner: String,
+}
+
+#[derive(Clone, ToSql)]
+pub struct DbRewards {
+    validator_point_value: f64,
+    unused: f64,
+}
+
+#[derive(Clone, ToSql)]
+pub struct TransactionStatusMeta {
+    status: String,
+    fee: i64,
+    pre_balances: Vec<i64>,
+    post_balances: Vec<i64>,
+    inner_instructions: Vec<DbInnerInstructions>,
+    log_messages: Vec<String>,
+    pre_token_balances: Vec<DbTransactionTokenBalance>,
+    post_token_balances: Vec<DbTransactionTokenBalance>,
+    rewards: DbRewards
+}
+
+pub struct DbTransactionMessageHeader {
+    num_required_signatures: u8,
+    num_readonly_signed_accounts: u8,
+    num_readonly_unsigned_accounts: u8,
+}
+
+pub struct DbTransactionMessage {
+    header: DbTransactionMessageHeader,
+    account_keys: Vec<Vec<u8>>,
+    recent_blockhash: Vec<u8>,
+    instructions: Vec<DbCompiledInstruction>,
 }
 
 pub(crate) fn abort() -> ! {
@@ -437,7 +491,7 @@ impl SimplePostgresClient {
         if self.pending_account_updates.len() == self.batch_size {
             let mut measure = Measure::start("accountsdb-plugin-postgres-prepare-values");
 
-            let mut values: Vec<&(dyn ToSql + Sync)> =
+            let mut values: Vec<&(dyn types::ToSql + Sync)> =
                 Vec::with_capacity(self.batch_size * ACCOUNT_COLUMN_COUNT);
             let updated_on = Utc::now().naive_utc();
             for j in 0..self.batch_size {

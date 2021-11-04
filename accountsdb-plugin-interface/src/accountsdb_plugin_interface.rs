@@ -3,8 +3,8 @@
 /// In addition, the dynamic library must export a "C" function _create_plugin which
 /// creates the implementation of the plugin.
 use {
-    solana_sdk::pubkey::Pubkey,
-    solana_transaction_status::{InnerInstructions, Reward, TransactionTokenBalance},
+    solana_sdk::transaction::SanitizedTransaction,
+    solana_transaction_status::TransactionStatusMeta,
     std::{any::Any, error, io},
     thiserror::Error,
 };
@@ -26,21 +26,11 @@ pub enum ReplicaAccountInfoVersions<'a> {
     V0_0_1(&'a ReplicaAccountInfo<'a>),
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct ReplicaTransactionLogInfo<'a> {
-    pub signature: &'a [u8],
-    pub status: Option<String>,
     pub is_vote: bool,
-    pub fee: u64,
-    pub pre_balances: &'a [u64],
-    pub post_balances: &'a [u64],
-    pub inner_instructions: Option<&'a [InnerInstructions]>,
-    pub log_messages: Option<&'a [String]>,
-    pub pre_token_balances: Option<&'a [TransactionTokenBalance]>,
-    pub post_token_balances: Option<&'a [TransactionTokenBalance]>,
-    pub rewards: Option<&'a [Reward]>,
-    pub writable_keys: &'a [&'a Pubkey],
-    pub readonly_keys: &'a [&'a Pubkey],
+    pub transaction: &'a SanitizedTransaction,
+    pub transaction_meta: &'a TransactionStatusMeta,
 }
 
 pub enum ReplicaTranscaionLogInfoVersions<'a> {

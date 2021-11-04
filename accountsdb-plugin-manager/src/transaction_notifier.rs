@@ -83,26 +83,13 @@ impl TransactionNotifierImpl {
     }
 
     fn build_replica_transaction_log_info<'a>(
-        signature: &'a Signature,
         transaction_meta: &'a TransactionStatusMeta,
         transaction: &'a SanitizedTransaction,
-        writable_keys: &'a [&'a Pubkey],
-        readonly_keys: &'a [&'a Pubkey],
     ) -> ReplicaTransactionLogInfo<'a> {
         ReplicaTransactionLogInfo {
-            signature: signature.as_ref(),
-            status: get_transaction_status(&transaction_meta.status),
             is_vote: bank::is_simple_vote_transaction(transaction),
-            fee: transaction_meta.fee,
-            pre_balances: &transaction_meta.pre_balances,
-            post_balances: &transaction_meta.post_balances,
-            inner_instructions: transaction_meta.inner_instructions.as_deref(),
-            log_messages: transaction_meta.log_messages.as_deref(),
-            pre_token_balances: transaction_meta.pre_token_balances.as_deref(),
-            post_token_balances: transaction_meta.post_token_balances.as_deref(),
-            rewards: transaction_meta.rewards.as_deref(),
-            writable_keys,
-            readonly_keys,
+            transaction,
+            transaction_meta
         }
     }
 
