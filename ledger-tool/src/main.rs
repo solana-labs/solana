@@ -205,33 +205,11 @@ fn output_slot(
         for entry in &entries {
             transactions += entry.transactions.len();
             hashes += entry.num_hashes;
-<<<<<<< HEAD
             for transaction in &entry.transactions {
                 for instruction in &transaction.message().instructions {
                     let program_id =
                         transaction.message().account_keys[instruction.program_id_index as usize];
                     *program_ids.entry(program_id).or_insert(0) += 1;
-=======
-            for transaction in entry.transactions {
-                let tx_signature = transaction.signatures[0];
-                let sanitize_result =
-                    SanitizedTransaction::try_create(transaction, Hash::default(), None, |_| {
-                        Err(TransactionError::UnsupportedVersion)
-                    });
-
-                match sanitize_result {
-                    Ok(transaction) => {
-                        for (program_id, _) in transaction.message().program_instructions_iter() {
-                            *program_ids.entry(*program_id).or_insert(0) += 1;
-                        }
-                    }
-                    Err(err) => {
-                        warn!(
-                            "Failed to analyze unsupported transaction {}: {:?}",
-                            tx_signature, err
-                        );
-                    }
->>>>>>> 140a5f633 (Simplify replay vote tracking by using packet metadata (#21112))
                 }
             }
         }
@@ -768,7 +746,6 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
     cost_model.initialize_cost_table(&blockstore.read_program_costs().unwrap());
     let mut cost_tracker = CostTracker::default();
 
-<<<<<<< HEAD
     for entry in &entries {
         transactions += entry.transactions.len();
         for transaction in &entry.transactions {
@@ -779,28 +756,6 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
                 println!(
                     "Slot: {}, CostModel rejected transaction {:?}, reason {:?}",
                     slot, transaction, result
-=======
-    for entry in entries {
-        num_transactions += entry.transactions.len();
-        entry
-            .transactions
-            .into_iter()
-            .filter_map(|transaction| {
-                SanitizedTransaction::try_create(transaction, Hash::default(), None, |_| {
-                    Err(TransactionError::UnsupportedVersion)
-                })
-                .map_err(|err| {
-                    warn!("Failed to compute cost of transaction: {:?}", err);
-                })
-                .ok()
-            })
-            .for_each(|transaction| {
-                num_programs += transaction.message().instructions().len();
-
-                let tx_cost = cost_model.calculate_cost(
-                    &transaction,
-                    true, // demote_program_write_locks
->>>>>>> 140a5f633 (Simplify replay vote tracking by using packet metadata (#21112))
                 );
             }
             for instruction in &transaction.message().instructions {
