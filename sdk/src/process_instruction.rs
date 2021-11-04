@@ -96,11 +96,3 @@ pub trait InvokeContext {
     /// Get the return data
     fn get_return_data(&self) -> (Pubkey, &[u8]);
 }
-
-/// Compute meter
-pub trait ComputeMeter {
-    /// Consume compute units
-    fn consume(&mut self, amount: u64) -> Result<(), InstructionError>;
-    /// Get the number of remaining compute units
-    fn get_remaining(&self) -> u64;
-}

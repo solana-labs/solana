@@ -72,6 +72,7 @@ use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
 use solana_program_runtime::{
     instruction_processor::{ExecuteDetailsTimings, Executor, Executors, InstructionProcessor},
     instruction_recorder::InstructionRecorder,
+    invoke_context::ComputeMeter,
     log_collector::LogCollector,
 };
 #[allow(deprecated)]
@@ -109,7 +110,7 @@ use solana_sdk::{
     nonce, nonce_account,
     packet::PACKET_DATA_SIZE,
     precompiles::get_precompiles,
-    process_instruction::{ComputeMeter, ProcessInstructionWithContext},
+    process_instruction::ProcessInstructionWithContext,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     secp256k1_program,

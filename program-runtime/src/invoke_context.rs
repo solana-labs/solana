@@ -16,12 +16,20 @@ use solana_sdk::{
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     keyed_account::{create_keyed_accounts_unified, KeyedAccount},
     message::Message,
-    process_instruction::{ComputeMeter, InvokeContext, ProcessInstructionWithContext},
+    process_instruction::{InvokeContext, ProcessInstructionWithContext},
     pubkey::Pubkey,
     rent::Rent,
     sysvar::Sysvar,
 };
 use std::{cell::RefCell, rc::Rc, sync::Arc};
+
+/// Compute meter
+pub trait ComputeMeter {
+    /// Consume compute units
+    fn consume(&mut self, amount: u64) -> Result<(), InstructionError>;
+    /// Get the number of remaining compute units
+    fn get_remaining(&self) -> u64;
+}
 
 pub struct ThisComputeMeter {
     remaining: u64,

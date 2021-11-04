@@ -1,7 +1,10 @@
 use crate::{alloc, BpfError};
 use alloc::Alloc;
 use solana_program_runtime::{
-    ic_msg, instruction_processor::InstructionProcessor, invoke_context::Logger, stable_log,
+    ic_msg,
+    instruction_processor::InstructionProcessor,
+    invoke_context::{ComputeMeter, Logger},
+    stable_log,
 };
 use solana_rbpf::{
     aligned_memory::AlignedMemory,
@@ -32,7 +35,7 @@ use solana_sdk::{
     message::Message,
     native_loader,
     precompiles::is_precompile,
-    process_instruction::{ComputeMeter, InvokeContext},
+    process_instruction::InvokeContext,
     program::MAX_RETURN_DATA,
     pubkey::{Pubkey, PubkeyError, MAX_SEEDS, MAX_SEED_LEN},
     rent::Rent,
