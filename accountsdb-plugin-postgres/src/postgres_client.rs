@@ -1,5 +1,7 @@
 #![allow(clippy::integer_arithmetic)]
 
+use solana_sdk::instruction::CompiledInstruction;
+
 /// A concurrent implementation for writing accounts into the PostgreSQL in parallel.
 use {
     crate::accountsdb_plugin_postgres::{
@@ -15,7 +17,10 @@ use {
     },
     solana_measure::measure::Measure,
     solana_metrics::*,
-    solana_sdk::timing::AtomicInterval,
+    solana_sdk::{
+        message::{MappedAddresses, MappedMessage, Message, MessageHeader, SanitizedMessage},
+        timing::AtomicInterval,
+    }
     std::{
         sync::{
             atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -124,6 +129,85 @@ pub struct DbTransactionMessage {
     account_keys: Vec<Vec<u8>>,
     recent_blockhash: Vec<u8>,
     instructions: Vec<DbCompiledInstruction>,
+}
+
+#[derive(Clone, Debug, ToSql)]
+pub struct DbAddressMapIndexes {
+    writable: Vec<u8>,
+    readonly: Vec<u8>,
+}
+
+#[derive(Clone, Debug, ToSql)]
+pub struct DbTransactionMessageV0 {
+    header: DbTransactionMessageHeader,
+    account_keys: Vec<Vec<u8>>,
+    recent_blockhash: Vec<u8>,
+    instructions: Vec<DbCompiledInstruction>,
+}
+
+#[derive(Clone, Debug, ToSql)]
+pub struct DbMappedAddresses {
+    writable: Vec<u8>,
+    readonly: Vec<u8>
+}
+
+#[derive(Clone, Debug, ToSql)]
+pub struct DbMappedMessage {
+    message: DbTransactionMessageV0,
+    mapped_addresses: DbMappedAddresses
+}
+
+impl From<MessageHeader> for DbTransactionMessageHeader {
+    fn from(header: &MessageHeader) -> Self {
+        Self {
+            num_required_signatures: header.num_required_signatures,
+            num_readonly_signed_accounts: header.num_readonly_signed_accounts,
+            num_readonly_unsigned_accounts: header.num_readonly_unsigned_accounts,
+        }
+    }
+}
+
+impl From<CompiledInstruction> for DbCompiledInstruction {
+    fn from(instrtuction: &CompiledInstruction) -> Self {
+        Self {
+            program_id_index: instrtuction.program_id_index,
+            accounts: instrtuction.accounts.clone(),
+            data: instrtuction.data.clone(),
+        }
+    }
+}
+
+impl From<Message> for DbTransactionMessage {
+    fn from(message: &MappedMessage) -> Self {
+        Self {
+            header: DbTransactionMessageHeader::from(message.header),
+            account_keys: message.account_keys.clone(),
+            recent_blockhash: message.recent_blockhash.as_ref().to_vec(),
+            instructions: DbCompiledInstruction::from(message.instructions),
+        }
+    }
+}
+
+
+impl From<Message> for DbMappedMessage {
+    fn from(message: &Message) -> Self {
+        Self {
+            message: DbTransactionMessageV0::from(message.message),
+            mapped_addresses: DbMappedAddresses::from(message.mapped_addresses),
+        }
+    }
+}
+
+
+
+pub struct DbTransaction {
+    signature: Vec<u8>,
+    is_vote: bool,
+    slot: i64,
+    message_type: i16,
+    legacy_message: Option<DbTransactionMessage>,
+    v0_mapped_message: Option<DbMappedMessage>,
+    signatures: Vec<Vec<u8>>,
 }
 
 pub(crate) fn abort() -> ! {
@@ -710,11 +794,7 @@ struct UpdateSlotRequest {
 }
 
 pub struct LogTransactionRequest {
-    signature: Vec<u8>,
-    result: Option<String>,
-    is_vote: bool,
-    log_messages: Option<Vec<String>>,
-    slot: u64,
+    transaction_info: DbTransaction
 }
 
 enum DbWorkItem {
@@ -996,20 +1076,42 @@ impl ParallelPostgresClient {
         Ok(())
     }
 
+
+    fn build_db_transaction(slot: u64, transaction_info: &ReplicaTransactionLogInfo) -> DbTransaction {
+        DbTransaction {
+            signature: transaction_info.signature.as_ref().to_vec(),
+            is_vote: transaction_info.is_vote,
+            slot: slot as i64,
+            message_type:  match transaction_info.transaction.message() {
+                SanitizedMessage::Legacy(_) => 0,
+                SanitizedMessage::V0(_) => 1,
+            },
+            legacy_message: match transaction_info.transaction.message() {
+                SanitizedMessage::Legacy(legacy_message) => Some(DbTransactionMessage::from(legacy_message)),
+                _ => None
+            },
+            v0_mapped_message: match transaction_info.transaction.message() {
+                SanitizedMessage::V0(mapped_message) => Some(DbTransactionMessage::from(legacy_message)),
+                _ => None
+            },
+
+            
+        }
+    }
+
+    fn build_transaction_request(slot: u64, transaction_info: &ReplicaTransactionLogInfo) -> LogTransactionRequest {
+
+        LogTransactionRequest {
+            transaction_info: Self::build_db_transaction
+        }
+    }
+
     pub fn log_transaction_info(
         &mut self,
         transaction_info: &ReplicaTransactionLogInfo,
         slot: u64,
     ) -> Result<(), AccountsDbPluginError> {
-        let wrk_item = DbWorkItem::LogTransaction(LogTransactionRequest {
-            signature: transaction_info.signature.to_vec(),
-            is_vote: transaction_info.is_vote,
-            result: transaction_info.status.clone(),
-            log_messages: transaction_info
-                .log_messages
-                .map(|messages| messages.to_vec()),
-            slot,
-        });
+        let wrk_item = DbWorkItem::LogTransaction(Self::build_transaction_request(slot, transaction_info));
 
         if let Err(err) = self.sender.send(wrk_item) {
             return Err(AccountsDbPluginError::SlotStatusUpdateError {

@@ -3,7 +3,8 @@
 /// In addition, the dynamic library must export a "C" function _create_plugin which
 /// creates the implementation of the plugin.
 use {
-    solana_sdk::transaction::SanitizedTransaction,
+    solana_sdk::{signature::Signature,
+        transaction::SanitizedTransaction},
     solana_transaction_status::TransactionStatusMeta,
     std::{any::Any, error, io},
     thiserror::Error,
@@ -28,6 +29,7 @@ pub enum ReplicaAccountInfoVersions<'a> {
 
 #[derive(Clone, Debug)]
 pub struct ReplicaTransactionLogInfo<'a> {
+    pub signature : &'a Signature,
     pub is_vote: bool,
     pub transaction: &'a SanitizedTransaction,
     pub transaction_meta: &'a TransactionStatusMeta,

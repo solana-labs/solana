@@ -83,10 +83,12 @@ impl TransactionNotifierImpl {
     }
 
     fn build_replica_transaction_log_info<'a>(
+        signature: &'a Signature,
         transaction_meta: &'a TransactionStatusMeta,
         transaction: &'a SanitizedTransaction,
     ) -> ReplicaTransactionLogInfo<'a> {
         ReplicaTransactionLogInfo {
+            signature,
             is_vote: bank::is_simple_vote_transaction(transaction),
             transaction,
             transaction_meta
@@ -111,11 +113,9 @@ impl TransactionNotifierImpl {
         }
 
         let transaction_log_info = Self::build_replica_transaction_log_info(
-            &signature,
+            signature,
             transaction_meta,
             &transaction,
-            writable_keys,
-            readonly_keys,
         );
         for plugin in plugin_manager.plugins.iter_mut() {
             match plugin.notify_transaction(
