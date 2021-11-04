@@ -292,6 +292,10 @@ mod tests {
         },
         std::{cell::RefCell, rc::Rc, str::FromStr},
     };
+<<<<<<< HEAD
+=======
+    use std::{cell::RefCell, str::FromStr};
+>>>>>>> 29ad08155 (Stop caching sysvars, instead load them ahead of time. (#21108))
 
     fn create_default_account() -> RefCell<AccountSharedData> {
         RefCell::new(AccountSharedData::default())
@@ -368,6 +372,7 @@ mod tests {
                 .zip(accounts.iter())
                 .map(|(meta, account)| KeyedAccount::new(&meta.pubkey, meta.is_signer, account))
                 .collect();
+<<<<<<< HEAD
 
             let mut invoke_context = MockInvokeContext::new(keyed_accounts);
             mock_set_sysvar(
@@ -377,6 +382,19 @@ mod tests {
             )
             .unwrap();
             super::process_instruction(&Pubkey::default(), &instruction.data, &mut invoke_context)
+=======
+            let processor_id = id();
+            keyed_accounts.insert(0, (false, false, &processor_id, &processor_account));
+            let mut invoke_context = MockInvokeContext::new(
+                &processor_id,
+                create_keyed_accounts_unified(&keyed_accounts),
+            );
+            let mut data = Vec::with_capacity(sysvar::clock::Clock::size_of());
+            bincode::serialize_into(&mut data, &sysvar::clock::Clock::default()).unwrap();
+            let sysvars = &[(sysvar::clock::id(), data)];
+            invoke_context.sysvars = sysvars;
+            super::process_instruction(1, &instruction.data, &mut invoke_context)
+>>>>>>> 29ad08155 (Stop caching sysvars, instead load them ahead of time. (#21108))
         }
     }
 
@@ -1036,6 +1054,7 @@ mod tests {
             KeyedAccount::new(&withdrawer, true, &withdrawer_account),
             KeyedAccount::new(&custodian, true, &custodian_account),
         ];
+<<<<<<< HEAD
 
         let mut invoke_context = MockInvokeContext::new(keyed_accounts);
         let clock = Clock::default();
@@ -1044,6 +1063,14 @@ mod tests {
         invoke_context
             .sysvars
             .push((sysvar::clock::id(), Some(Rc::new(data))));
+=======
+        let mut invoke_context =
+            MockInvokeContext::new(&id(), create_keyed_accounts_unified(&keyed_accounts));
+        let mut data = Vec::with_capacity(sysvar::clock::Clock::size_of());
+        bincode::serialize_into(&mut data, &sysvar::clock::Clock::default()).unwrap();
+        let sysvars = &[(sysvar::clock::id(), data)];
+        invoke_context.sysvars = sysvars;
+>>>>>>> 29ad08155 (Stop caching sysvars, instead load them ahead of time. (#21108))
 
         assert_eq!(
             super::process_instruction(

@@ -1184,6 +1184,8 @@ pub struct Bank {
     vote_only_bank: bool,
 
     pub cost_tracker: RwLock<CostTracker>,
+
+    sysvar_cache: RwLock<Vec<(Pubkey, Vec<u8>)>>,
 }
 
 impl Default for BlockhashQueue {
@@ -1260,6 +1262,121 @@ impl Bank {
             accounts_db_caching_enabled,
             shrink_ratio,
             false,
+<<<<<<< HEAD
+=======
+        )
+    }
+
+    fn default_with_accounts(accounts: Accounts) -> Self {
+        Self {
+            rc: BankRc::new(accounts, Slot::default()),
+            src: StatusCacheRc::default(),
+            blockhash_queue: RwLock::<BlockhashQueue>::default(),
+            ancestors: Ancestors::default(),
+            hash: RwLock::<Hash>::default(),
+            parent_hash: Hash::default(),
+            parent_slot: Slot::default(),
+            hard_forks: Arc::<RwLock<HardForks>>::default(),
+            transaction_count: AtomicU64::default(),
+            transaction_error_count: AtomicU64::default(),
+            transaction_entries_count: AtomicU64::default(),
+            transactions_per_entry_max: AtomicU64::default(),
+            tick_height: AtomicU64::default(),
+            signature_count: AtomicU64::default(),
+            capitalization: AtomicU64::default(),
+            max_tick_height: u64::default(),
+            hashes_per_tick: Option::<u64>::default(),
+            ticks_per_slot: u64::default(),
+            ns_per_slot: u128::default(),
+            genesis_creation_time: UnixTimestamp::default(),
+            slots_per_year: f64::default(),
+            unused: u64::default(),
+            slot: Slot::default(),
+            bank_id: BankId::default(),
+            epoch: Epoch::default(),
+            block_height: u64::default(),
+            collector_id: Pubkey::default(),
+            collector_fees: AtomicU64::default(),
+            fee_calculator: FeeCalculator::default(),
+            fee_rate_governor: FeeRateGovernor::default(),
+            collected_rent: AtomicU64::default(),
+            rent_collector: RentCollector::default(),
+            epoch_schedule: EpochSchedule::default(),
+            inflation: Arc::<RwLock<Inflation>>::default(),
+            stakes: RwLock::<Stakes>::default(),
+            epoch_stakes: HashMap::<Epoch, EpochStakes>::default(),
+            is_delta: AtomicBool::default(),
+            instruction_processor: InstructionProcessor::default(),
+            compute_budget: Option::<ComputeBudget>::default(),
+            feature_builtins: Arc::<Vec<(Builtin, Pubkey, ActivationType)>>::default(),
+            last_vote_sync: AtomicU64::default(),
+            rewards: RwLock::<Vec<(Pubkey, RewardInfo)>>::default(),
+            cluster_type: Option::<ClusterType>::default(),
+            lazy_rent_collection: AtomicBool::default(),
+            rewards_pool_pubkeys: Arc::<HashSet<Pubkey>>::default(),
+            cached_executors: RwLock::<CowCachedExecutors>::default(),
+            transaction_debug_keys: Option::<Arc<HashSet<Pubkey>>>::default(),
+            transaction_log_collector_config: Arc::<RwLock<TransactionLogCollectorConfig>>::default(
+            ),
+            transaction_log_collector: Arc::<RwLock<TransactionLogCollector>>::default(),
+            feature_set: Arc::<FeatureSet>::default(),
+            drop_callback: RwLock::<OptionalDropCallback>::default(),
+            freeze_started: AtomicBool::default(),
+            vote_only_bank: false,
+            cost_tracker: RwLock::<CostTracker>::default(),
+            sysvar_cache: RwLock::new(Vec::new()),
+        }
+    }
+
+    pub fn new_with_paths_for_tests(
+        genesis_config: &GenesisConfig,
+        paths: Vec<PathBuf>,
+        frozen_account_pubkeys: &[Pubkey],
+        debug_keys: Option<Arc<HashSet<Pubkey>>>,
+        additional_builtins: Option<&Builtins>,
+        account_indexes: AccountSecondaryIndexes,
+        accounts_db_caching_enabled: bool,
+        shrink_ratio: AccountShrinkThreshold,
+        debug_do_not_add_builtins: bool,
+    ) -> Self {
+        Self::new_with_paths(
+            genesis_config,
+            paths,
+            frozen_account_pubkeys,
+            debug_keys,
+            additional_builtins,
+            account_indexes,
+            accounts_db_caching_enabled,
+            shrink_ratio,
+            debug_do_not_add_builtins,
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            None,
+        )
+    }
+
+    pub fn new_with_paths_for_benches(
+        genesis_config: &GenesisConfig,
+        paths: Vec<PathBuf>,
+        frozen_account_pubkeys: &[Pubkey],
+        debug_keys: Option<Arc<HashSet<Pubkey>>>,
+        additional_builtins: Option<&Builtins>,
+        account_indexes: AccountSecondaryIndexes,
+        accounts_db_caching_enabled: bool,
+        shrink_ratio: AccountShrinkThreshold,
+        debug_do_not_add_builtins: bool,
+    ) -> Self {
+        Self::new_with_paths(
+            genesis_config,
+            paths,
+            frozen_account_pubkeys,
+            debug_keys,
+            additional_builtins,
+            account_indexes,
+            accounts_db_caching_enabled,
+            shrink_ratio,
+            debug_do_not_add_builtins,
+            Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
+>>>>>>> 29ad08155 (Stop caching sysvars, instead load them ahead of time. (#21108))
             None,
         )
     }
@@ -1316,6 +1433,7 @@ impl Bank {
         bank.update_rent();
         bank.update_epoch_schedule();
         bank.update_recent_blockhashes();
+        bank.fill_sysvar_cache();
         bank
     }
 
@@ -1456,6 +1574,7 @@ impl Bank {
             )),
             freeze_started: AtomicBool::new(false),
             cost_tracker: RwLock::new(CostTracker::default()),
+            sysvar_cache: RwLock::new(Vec::new()),
         };
 
         let mut ancestors = Vec::with_capacity(1 + new.parents().len());
@@ -1489,11 +1608,60 @@ impl Bank {
             new.update_epoch_stakes(leader_schedule_epoch);
         }
 
+<<<<<<< HEAD
         // Update sysvars before processing transactions
+=======
+        let optimize_epoch_boundary_updates = !disable_epoch_boundary_optimization
+            && new
+                .feature_set
+                .is_active(&feature_set::optimize_epoch_boundary_updates::id());
+
+        if optimize_epoch_boundary_updates {
+            if parent_epoch < new.epoch() {
+                let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+
+                // Add new entry to stakes.stake_history, set appropriate epoch and
+                //   update vote accounts with warmed up stakes before saving a
+                //   snapshot of stakes in epoch stakes
+                new.stakes
+                    .write()
+                    .unwrap()
+                    .activate_epoch(epoch, &thread_pool);
+
+                // Save a snapshot of stakes for use in consensus and stake weighted networking
+                let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
+                new.update_epoch_stakes(leader_schedule_epoch);
+
+                // After saving a snapshot of stakes, apply stake rewards and commission
+                new.update_rewards_with_thread_pool(parent_epoch, reward_calc_tracer, &thread_pool);
+            } else {
+                // Save a snapshot of stakes for use in consensus and stake weighted networking
+                let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
+                new.update_epoch_stakes(leader_schedule_epoch);
+            }
+
+            // Update sysvars before processing transactions
+            new.update_slot_hashes();
+            new.update_stake_history(Some(parent_epoch));
+            new.update_clock(Some(parent_epoch));
+            new.update_fees();
+            new.fill_sysvar_cache();
+
+            return new;
+        }
+
+        #[allow(deprecated)]
+        let cloned = new.stakes.read().unwrap().clone_with_epoch(epoch);
+        *new.stakes.write().unwrap() = cloned;
+
+        let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
+        new.update_epoch_stakes(leader_schedule_epoch);
+>>>>>>> 29ad08155 (Stop caching sysvars, instead load them ahead of time. (#21108))
         new.update_slot_hashes();
         new.update_stake_history(Some(parent_epoch));
         new.update_clock(Some(parent_epoch));
         new.update_fees();
+<<<<<<< HEAD
         if !new.fix_recent_blockhashes_sysvar_delay() {
             new.update_recent_blockhashes();
         }
@@ -1515,6 +1683,9 @@ impl Bank {
             .stats
             .submit(parent.slot());
 
+=======
+        new.fill_sysvar_cache();
+>>>>>>> 29ad08155 (Stop caching sysvars, instead load them ahead of time. (#21108))
         new
     }
 
@@ -1631,6 +1802,7 @@ impl Bank {
             freeze_started: AtomicBool::new(fields.hash != Hash::default()),
             vote_only_bank: false,
             cost_tracker: RwLock::new(CostTracker::default()),
+            sysvar_cache: RwLock::new(Vec::new()),
         };
         bank.finish_init(
             genesis_config,
@@ -1806,6 +1978,14 @@ impl Bank {
         }
 
         self.store_account_and_update_capitalization(pubkey, &new_account);
+
+        // Update the entry in the cache
+        let mut sysvar_cache = self.sysvar_cache.write().unwrap();
+        if let Some(position) = sysvar_cache.iter().position(|(id, _data)| id == pubkey) {
+            sysvar_cache[position].1 = new_account.data().to_vec();
+        } else {
+            sysvar_cache.push((*pubkey, new_account.data().to_vec()));
+        }
     }
 
     fn inherit_specially_retained_account_fields(
@@ -1941,6 +2121,17 @@ impl Bank {
                 self.inherit_specially_retained_account_fields(account),
             )
         });
+    }
+
+    fn fill_sysvar_cache(&mut self) {
+        let mut sysvar_cache = self.sysvar_cache.write().unwrap();
+        for id in sysvar::ALL_IDS.iter() {
+            if !sysvar_cache.iter().any(|(key, _data)| key == id) {
+                if let Some(account) = self.get_account_with_fixed_root(id) {
+                    sysvar_cache.push((*id, account.data().to_vec()));
+                }
+            }
+        }
     }
 
     pub fn get_slot_history(&self) -> SlotHistory {
@@ -3586,6 +3777,7 @@ impl Bank {
                             bpf_compute_budget.max_units,
                         )));
 
+<<<<<<< HEAD
                         process_result = self.message_processor.process_message(
                             tx.message(),
                             &loader_refcells,
@@ -3601,6 +3793,41 @@ impl Bank {
                             self.rc.accounts.clone(),
                             &self.ancestors,
                         );
+=======
+                        let (blockhash, lamports_per_signature) = {
+                            let blockhash_queue = self.blockhash_queue.read().unwrap();
+                            let blockhash = blockhash_queue.last_hash();
+                            (
+                                blockhash,
+                                blockhash_queue
+                                    .get_lamports_per_signature(&blockhash)
+                                    .unwrap_or(self.fee_rate_governor.lamports_per_signature),
+                            )
+                        };
+
+                        if let Some(legacy_message) = tx.message().legacy_message() {
+                            process_result = MessageProcessor::process_message(
+                                &self.instruction_processor,
+                                legacy_message,
+                                &loaded_transaction.program_indices,
+                                &account_refcells,
+                                &self.rent_collector,
+                                log_collector.clone(),
+                                executors.clone(),
+                                instruction_recorders.as_deref(),
+                                feature_set,
+                                compute_budget,
+                                compute_meter,
+                                &mut timings.details,
+                                &*self.sysvar_cache.read().unwrap(),
+                                blockhash,
+                                lamports_per_signature,
+                            );
+                        } else {
+                            // TODO: support versioned messages
+                            process_result = Err(TransactionError::UnsupportedVersion);
+                        }
+>>>>>>> 29ad08155 (Stop caching sysvars, instead load them ahead of time. (#21108))
 
                         transaction_log_messages.push(Self::collect_log_messages(log_collector));
                         inner_instructions.push(Self::compile_recorded_instructions(
