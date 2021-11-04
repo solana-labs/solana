@@ -24,10 +24,11 @@ use solana_ledger::{
     blockstore_processor::ProcessOptions,
     shred::Shred,
 };
+use solana_measure::measure::Measure;
 use solana_runtime::{
     accounts_db::AccountsDbConfig,
     accounts_index::AccountsIndexConfig,
-    bank::{Bank, RewardCalculationEvent},
+    bank::{self, Bank, RewardCalculationEvent},
     bank_forks::BankForks,
     cost_model::CostModel,
     cost_tracker::CostTracker,
@@ -1436,6 +1437,12 @@ fn main() {
                     .takes_value(false)
                     .help("Do not print account data when printing account contents."),
             )
+            .arg(
+                Arg::with_name("no_total_accounts_stats")
+                    .long("no-total-accounts-stats")
+                    .takes_value(false)
+                    .help("Do not print stats for the total accounts."),
+            )
             .arg(&max_genesis_archive_unpacked_size_arg)
         ).subcommand(
             SubCommand::with_name("capitalization")
@@ -2522,6 +2529,22 @@ fn main() {
                     }
                     println!("  - data_len: {}", data_len);
                 }
+            }
+
+            let print_total_accounts_stats = !arg_matches.is_present("no_total_accounts_stats");
+            if print_total_accounts_stats {
+                println!("Getting total accounts stats...");
+                let (total_accounts_stats, measure) = Measure::this(
+                    bank::get_total_accounts_stats,
+                    &bank,
+                    "getting total accounts stats",
+                );
+                info!("{}", measure);
+                let total_accounts_stats = total_accounts_stats.unwrap_or_else(|err| {
+                    eprintln!("Getting total accounts stats failed: {:?}", err);
+                    exit(1);
+                });
+                println!("{:#?}", total_accounts_stats);
             }
         }
         ("capitalization", Some(arg_matches)) => {
