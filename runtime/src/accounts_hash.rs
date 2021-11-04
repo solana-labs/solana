@@ -553,13 +553,14 @@ impl AccountsHash {
     fn get_item<'a, 'b>(
         min_index: usize,
         bin: usize,
-        first_items: &'a mut Vec<(Pubkey, usize)>,
+        first_items: &'a mut Vec<Pubkey>,
         pubkey_division: &'b [Vec<Vec<CalculateHashIntermediate>>],
         indexes: &'a mut Vec<usize>,
+        first_item_to_pubkey_division: &'a mut Vec<usize>,
     ) -> &'b CalculateHashIntermediate {
         let first_item = first_items[min_index];
-        let key = &first_item.0;
-        let division_index = first_item.1;
+        let key = &first_item;
+        let division_index = first_item_to_pubkey_division[min_index];
         let bin = &pubkey_division[division_index][bin];
         let mut index = indexes[division_index];
         index += 1;
@@ -571,13 +572,15 @@ impl AccountsHash {
             }
 
             // point to the next pubkey > key
-            first_items[min_index] = (bin[index].pubkey, division_index);
+            first_items[min_index] = bin[index].pubkey;
             indexes[division_index] = index;
             break;
         }
 
         if index >= bin.len() {
-            first_items.remove(min_index); // stop looking in this vector - we exhausted it
+            // stop looking in this vector - we exhausted it
+            first_items.remove(min_index);
+            first_item_to_pubkey_division.remove(min_index);
         }
 
         // this is the previous first item that was requested
@@ -601,14 +604,19 @@ impl AccountsHash {
         let mut item_len = 0;
         let mut indexes = vec![0; len];
         let mut first_items = Vec::with_capacity(len);
+        // map from index of an item in first_items[] to index of the corresponding item in pubkey_division[]
+        // this will change as items in pubkey_division[] are exhausted
+        let mut first_item_to_pubkey_division = Vec::with_capacity(len);
 
         // initialize 'first_items', which holds the current lowest item in each slot group
         pubkey_division.iter().enumerate().for_each(|(i, bins)| {
+            // check to make sure we can do bins[pubkey_bin]
             if bins.len() > pubkey_bin {
                 let sub = &bins[pubkey_bin];
                 if !sub.is_empty() {
                     item_len += bins[pubkey_bin].len(); // sum for metrics
-                    first_items.push((bins[pubkey_bin][0].pubkey, i));
+                    first_items.push(bins[pubkey_bin][0].pubkey);
+                    first_item_to_pubkey_division.push(i);
                 }
             }
         });
@@ -620,20 +628,21 @@ impl AccountsHash {
         while !first_items.is_empty() {
             let loop_stop = { first_items.len() - 1 }; // we increment at the beginning of the loop
             let mut min_index = 0;
-            let mut min_pubkey = first_items[min_index].0;
+            let mut min_pubkey = first_items[min_index];
             let mut first_item_index = 0; // we will start iterating at item 1. +=1 is first instruction in loop
 
             // this loop iterates over each slot group to find the minimum pubkey at the maximum slot
+            // it also identifies duplicate pubkey entries at lower slots and remembers those to skip them after
             while first_item_index < loop_stop {
                 first_item_index += 1;
-                let (key, _) = &first_items[first_item_index];
+                let key = &first_items[first_item_index];
                 let cmp = min_pubkey.cmp(key);
                 match cmp {
                     std::cmp::Ordering::Less => {
                         continue; // we still have the min item
                     }
                     std::cmp::Ordering::Equal => {
-                        // we found an item that masks an earlier slot, so remember the slot where we had dups
+                        // we found the same pubkey in a later slot, so remember the lower slot as a duplicate
                         duplicate_pubkey_indexes.push(min_index);
                     }
                     std::cmp::Ordering::Greater => {
@@ -651,7 +660,10 @@ impl AccountsHash {
                 &mut first_items,
                 pubkey_division,
                 &mut indexes,
+                &mut first_item_to_pubkey_division,
             );
+
+            // add lamports, get hash as long as the lamports are > 0
             if item.lamports != ZERO_RAW_LAMPORTS_SENTINEL && !self.is_filler_account(&item.pubkey)
             {
                 overall_sum = Self::checked_cast_for_capitalization(
@@ -670,6 +682,7 @@ impl AccountsHash {
                         &mut first_items,
                         pubkey_division,
                         &mut indexes,
+                        &mut first_item_to_pubkey_division,
                     );
                 });
                 duplicate_pubkey_indexes.clear();
