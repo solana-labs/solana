@@ -36,27 +36,16 @@ pub fn find_and_send_votes(
         execution_results, ..
     } = tx_results;
     if let Some(vote_sender) = vote_sender {
-<<<<<<< HEAD
-        for old_account in overwritten_vote_accounts {
-            assert!(execution_results[old_account.transaction_result_index]
-                .0
-                .is_ok());
-            let transaction = hashed_txs[old_account.transaction_index].transaction();
-            if let Some(parsed_vote) = vote_transaction::parse_vote_transaction(transaction) {
-                if parsed_vote.1.slots.last().is_some() {
-                    let _ = vote_sender.send(parsed_vote);
-=======
-        sanitized_txs.iter().zip(execution_results.iter()).for_each(
-            |(tx, (result, _nonce_rollback))| {
-                if tx.is_simple_vote_transaction() && result.is_ok() {
-                    if let Some(parsed_vote) =
-                        vote_transaction::parse_sanitized_vote_transaction(tx)
+        hashed_txs.iter().zip(execution_results.iter()).for_each(
+            |(hashed_tx, (result, _nonce_rollback))| {
+                let transaction = hashed_tx.transaction();
+                if hashed_tx.is_simple_vote_transaction() && result.is_ok() {
+                    if let Some(parsed_vote) = vote_transaction::parse_vote_transaction(transaction)
                     {
                         if parsed_vote.1.slots.last().is_some() {
                             let _ = vote_sender.send(parsed_vote);
                         }
                     }
->>>>>>> 140a5f633 (Simplify replay vote tracking by using packet metadata (#21112))
                 }
             },
         );

@@ -195,11 +195,7 @@ impl Stakes {
         account: &AccountSharedData,
         check_vote_init: bool,
         remove_delegation_on_inactive: bool,
-<<<<<<< HEAD
-    ) -> Option<ArcVoteAccount> {
-=======
     ) {
->>>>>>> 140a5f633 (Simplify replay vote tracking by using packet metadata (#21112))
         if solana_vote_program::check_id(account.owner()) {
             // unconditionally remove existing at first; there is no dependent calculated state for
             // votes, not like stakes (stake codepath maintains calculated stake value grouped by

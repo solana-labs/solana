@@ -534,7 +534,11 @@ impl EntrySlice for [Entry] {
                 tx.message().hash()
             };
 
-            Some(HashedTransaction::new(Cow::Borrowed(tx), message_hash))
+            Some(HashedTransaction::new(
+                Cow::Borrowed(tx),
+                message_hash,
+                None,
+            ))
         };
 
         PAR_THREAD_POOL.with(|thread_pool| {
