@@ -14893,19 +14893,13 @@ pub(crate) mod tests {
         let mut rent_debits = RentDebits::default();
 
         // No entry for 0 rewards
-        rent_debits.insert(&Pubkey::default(), 0, 0);
+        rent_debits.insert(&Pubkey::new_unique(), 0, 0);
         assert_eq!(rent_debits.0.len(), 0);
-
-        // Doesn't fit an `i64`, no entry. (we'll die elsewhere)
-        rent_debits.insert(&Pubkey::default(), u64::MAX, 0);
-        assert_eq!(rent_debits.0.len(), 0);
-
-        // Since we're casting from `u64` the `i64::checked_neg()` is infallible
 
         // Some that actually work
-        rent_debits.insert(&Pubkey::default(), 1, 0);
+        rent_debits.insert(&Pubkey::new_unique(), 1, 0);
         assert_eq!(rent_debits.0.len(), 1);
-        rent_debits.insert(&Pubkey::default(), i64::MAX as u64, 0);
+        rent_debits.insert(&Pubkey::new_unique(), i64::MAX as u64, 0);
         assert_eq!(rent_debits.0.len(), 2);
     }
 
