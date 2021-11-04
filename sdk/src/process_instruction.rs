@@ -121,10 +121,7 @@ pub trait InvokeContext {
         deserialize_us: u64,
     );
     /// Get sysvars
-    #[allow(clippy::type_complexity)]
-    fn get_sysvars(&self) -> &RefCell<Vec<(Pubkey, Option<Rc<Vec<u8>>>)>>;
-    /// Get sysvar data
-    fn get_sysvar_data(&self, id: &Pubkey) -> Option<Rc<Vec<u8>>>;
+    fn get_sysvars(&self) -> &[(Pubkey, Vec<u8>)];
     /// Get this invocation's compute budget
     fn get_compute_budget(&self) -> &ComputeBudget;
     /// Set this invocation's blockhash
@@ -175,15 +172,20 @@ pub fn get_sysvar<T: Sysvar>(
     invoke_context: &dyn InvokeContext,
     id: &Pubkey,
 ) -> Result<T, InstructionError> {
-    let sysvar_data = invoke_context.get_sysvar_data(id).ok_or_else(|| {
-        ic_msg!(invoke_context, "Unable to get sysvar {}", id);
-        InstructionError::UnsupportedSysvar
-    })?;
-
-    bincode::deserialize(&sysvar_data).map_err(|err| {
-        ic_msg!(invoke_context, "Unable to get sysvar {}: {:?}", id, err);
-        InstructionError::UnsupportedSysvar
-    })
+    invoke_context
+        .get_sysvars()
+        .iter()
+        .find_map(|(key, data)| {
+            if id == key {
+                bincode::deserialize(data).ok()
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| {
+            ic_msg!(invoke_context, "Unable to get sysvar {}", id);
+            InstructionError::UnsupportedSysvar
+        })
 }
 
 /// Compute meter
@@ -356,8 +358,7 @@ pub struct MockInvokeContext<'a> {
     pub compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     pub programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
     pub accounts: Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
-    #[allow(clippy::type_complexity)]
-    pub sysvars: RefCell<Vec<(Pubkey, Option<Rc<Vec<u8>>>)>>,
+    pub sysvars: &'a [(Pubkey, Vec<u8>)],
     pub disabled_features: HashSet<Pubkey>,
     pub blockhash: Hash,
     pub lamports_per_signature: u64,
@@ -376,7 +377,7 @@ impl<'a> MockInvokeContext<'a> {
             })),
             programs: vec![],
             accounts: vec![],
-            sysvars: RefCell::new(Vec::new()),
+            sysvars: &[],
             disabled_features: HashSet::default(),
             blockhash: Hash::default(),
             lamports_per_signature: 0,
@@ -490,15 +491,8 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
         _deserialize_us: u64,
     ) {
     }
-    #[allow(clippy::type_complexity)]
-    fn get_sysvars(&self) -> &RefCell<Vec<(Pubkey, Option<Rc<Vec<u8>>>)>> {
-        &self.sysvars
-    }
-    fn get_sysvar_data(&self, id: &Pubkey) -> Option<Rc<Vec<u8>>> {
+    fn get_sysvars(&self) -> &[(Pubkey, Vec<u8>)] {
         self.sysvars
-            .borrow()
-            .iter()
-            .find_map(|(key, sysvar)| if id == key { sysvar.clone() } else { None })
     }
     fn get_compute_budget(&self) -> &ComputeBudget {
         &self.compute_budget

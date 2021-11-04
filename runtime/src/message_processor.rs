@@ -1,6 +1,6 @@
 use crate::{
-    accounts::Accounts, ancestors::Ancestors, instruction_recorder::InstructionRecorder,
-    log_collector::LogCollector, rent_collector::RentCollector,
+    instruction_recorder::InstructionRecorder, log_collector::LogCollector,
+    rent_collector::RentCollector,
 };
 use log::*;
 use serde::{Deserialize, Serialize};
@@ -80,6 +80,7 @@ pub struct ThisInvokeContext<'a> {
     pre_accounts: Vec<PreAccount>,
     accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
     programs: &'a [(Pubkey, ProcessInstructionWithContext)],
+    sysvars: &'a [(Pubkey, Vec<u8>)],
     logger: Rc<RefCell<dyn Logger>>,
     compute_budget: ComputeBudget,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
@@ -87,10 +88,6 @@ pub struct ThisInvokeContext<'a> {
     instruction_recorders: Option<&'a [InstructionRecorder]>,
     feature_set: Arc<FeatureSet>,
     pub timings: ExecuteDetailsTimings,
-    account_db: Arc<Accounts>,
-    ancestors: Option<&'a Ancestors>,
-    #[allow(clippy::type_complexity)]
-    sysvars: RefCell<Vec<(Pubkey, Option<Rc<Vec<u8>>>)>>,
     blockhash: Hash,
     lamports_per_signature: u64,
     return_data: (Pubkey, Vec<u8>),
@@ -101,14 +98,13 @@ impl<'a> ThisInvokeContext<'a> {
         rent: Rent,
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         programs: &'a [(Pubkey, ProcessInstructionWithContext)],
+        sysvars: &'a [(Pubkey, Vec<u8>)],
         log_collector: Option<Rc<LogCollector>>,
         compute_budget: ComputeBudget,
         compute_meter: Rc<RefCell<dyn ComputeMeter>>,
         executors: Rc<RefCell<Executors>>,
         instruction_recorders: Option<&'a [InstructionRecorder]>,
         feature_set: Arc<FeatureSet>,
-        account_db: Arc<Accounts>,
-        ancestors: Option<&'a Ancestors>,
         blockhash: Hash,
         lamports_per_signature: u64,
     ) -> Self {
@@ -119,6 +115,7 @@ impl<'a> ThisInvokeContext<'a> {
             pre_accounts: Vec::new(),
             accounts,
             programs,
+            sysvars,
             logger: ThisLogger::new_ref(log_collector),
             compute_budget,
             compute_meter,
@@ -126,32 +123,29 @@ impl<'a> ThisInvokeContext<'a> {
             instruction_recorders,
             feature_set,
             timings: ExecuteDetailsTimings::default(),
-            account_db,
-            ancestors,
-            sysvars: RefCell::new(Vec::new()),
             blockhash,
             lamports_per_signature,
             return_data: (Pubkey::default(), Vec::new()),
         }
     }
 
-    pub fn new_mock_with_features(
+    pub fn new_mock_with_sysvars_and_features(
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         programs: &'a [(Pubkey, ProcessInstructionWithContext)],
+        sysvars: &'a [(Pubkey, Vec<u8>)],
         feature_set: Arc<FeatureSet>,
     ) -> Self {
         Self::new(
             Rent::default(),
             accounts,
             programs,
+            sysvars,
             None,
             ComputeBudget::default(),
             ThisComputeMeter::new_ref(std::i64::MAX as u64),
             Rc::new(RefCell::new(Executors::default())),
             None,
             feature_set,
-            Arc::new(Accounts::default_for_tests()),
-            None,
             Hash::default(),
             0,
         )
@@ -161,7 +155,12 @@ impl<'a> ThisInvokeContext<'a> {
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         programs: &'a [(Pubkey, ProcessInstructionWithContext)],
     ) -> Self {
-        Self::new_mock_with_features(accounts, programs, Arc::new(FeatureSet::all_enabled()))
+        Self::new_mock_with_sysvars_and_features(
+            accounts,
+            programs,
+            &[],
+            Arc::new(FeatureSet::all_enabled()),
+        )
     }
 }
 impl<'a> InvokeContext for ThisInvokeContext<'a> {
@@ -452,31 +451,8 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         self.timings.execute_us += execute_us;
         self.timings.deserialize_us += deserialize_us;
     }
-    #[allow(clippy::type_complexity)]
-    fn get_sysvars(&self) -> &RefCell<Vec<(Pubkey, Option<Rc<Vec<u8>>>)>> {
-        &self.sysvars
-    }
-    fn get_sysvar_data(&self, id: &Pubkey) -> Option<Rc<Vec<u8>>> {
-        if let Ok(mut sysvars) = self.sysvars.try_borrow_mut() {
-            // Try share from cache
-            let mut result = sysvars
-                .iter()
-                .find_map(|(key, sysvar)| if id == key { sysvar.clone() } else { None });
-            if result.is_none() {
-                if let Some(ancestors) = self.ancestors {
-                    // Load it
-                    result = self
-                        .account_db
-                        .load_with_fixed_root(ancestors, id)
-                        .map(|(account, _)| Rc::new(account.data().to_vec()));
-                    // Cache it
-                    sysvars.push((*id, result.clone()));
-                }
-            }
-            result
-        } else {
-            None
-        }
+    fn get_sysvars(&self) -> &[(Pubkey, Vec<u8>)] {
+        self.sysvars
     }
     fn get_compute_budget(&self) -> &ComputeBudget {
         &self.compute_budget
@@ -604,7 +580,6 @@ impl MessageProcessor {
     /// the call does not violate the bank's accounting rules.
     /// The accounts are committed back to the bank only if every instruction succeeds.
     #[allow(clippy::too_many_arguments)]
-    #[allow(clippy::type_complexity)]
     pub fn process_message(
         instruction_processor: &InstructionProcessor,
         message: &Message,
@@ -618,8 +593,7 @@ impl MessageProcessor {
         compute_budget: ComputeBudget,
         compute_meter: Rc<RefCell<dyn ComputeMeter>>,
         timings: &mut ExecuteDetailsTimings,
-        account_db: Arc<Accounts>,
-        ancestors: &Ancestors,
+        sysvars: &[(Pubkey, Vec<u8>)],
         blockhash: Hash,
         lamports_per_signature: u64,
     ) -> Result<(), TransactionError> {
@@ -627,14 +601,13 @@ impl MessageProcessor {
             rent_collector.rent,
             accounts,
             instruction_processor.programs(),
+            sysvars,
             log_collector,
             compute_budget,
             compute_meter,
             executors,
             instruction_recorders,
             feature_set,
-            account_db,
-            Some(ancestors),
             blockhash,
             lamports_per_signature,
         );
@@ -979,7 +952,6 @@ mod tests {
         let program_indices = vec![vec![2]];
 
         let executors = Rc::new(RefCell::new(Executors::default()));
-        let ancestors = Ancestors::default();
 
         let account_metas = vec![
             AccountMeta::new(accounts[0].0, true),
@@ -1007,8 +979,7 @@ mod tests {
             ComputeBudget::new(),
             ThisComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
-            Arc::new(Accounts::default_for_tests()),
-            &ancestors,
+            &[],
             Hash::default(),
             0,
         );
@@ -1038,8 +1009,7 @@ mod tests {
             ComputeBudget::new(),
             ThisComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
-            Arc::new(Accounts::default_for_tests()),
-            &ancestors,
+            &[],
             Hash::default(),
             0,
         );
@@ -1073,8 +1043,7 @@ mod tests {
             ComputeBudget::new(),
             ThisComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
-            Arc::new(Accounts::default_for_tests()),
-            &ancestors,
+            &[],
             Hash::default(),
             0,
         );
@@ -1188,7 +1157,6 @@ mod tests {
         let program_indices = vec![vec![2]];
 
         let executors = Rc::new(RefCell::new(Executors::default()));
-        let ancestors = Ancestors::default();
 
         let account_metas = vec![
             AccountMeta::new(accounts[0].0, true),
@@ -1218,8 +1186,7 @@ mod tests {
             ComputeBudget::new(),
             ThisComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
-            Arc::new(Accounts::default_for_tests()),
-            &ancestors,
+            &[],
             Hash::default(),
             0,
         );
@@ -1253,8 +1220,7 @@ mod tests {
             ComputeBudget::new(),
             ThisComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
-            Arc::new(Accounts::default_for_tests()),
-            &ancestors,
+            &[],
             Hash::default(),
             0,
         );
@@ -1272,7 +1238,6 @@ mod tests {
             )],
             Some(&accounts[0].0),
         );
-        let ancestors = Ancestors::default();
         let result = MessageProcessor::process_message(
             &instruction_processor,
             &message,
@@ -1286,8 +1251,7 @@ mod tests {
             ComputeBudget::new(),
             ThisComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
-            Arc::new(Accounts::default_for_tests()),
-            &ancestors,
+            &[],
             Hash::default(),
             0,
         );
@@ -1578,8 +1542,7 @@ mod tests {
             ComputeBudget::new(),
             ThisComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
-            Arc::new(Accounts::default_for_tests()),
-            &Ancestors::default(),
+            &[],
             Hash::default(),
             0,
         );

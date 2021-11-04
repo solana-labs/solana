@@ -1400,9 +1400,9 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_noop", 480),
             ("solana_bpf_rust_param_passing", 146),
             ("solana_bpf_rust_rand", 487),
-            ("solana_bpf_rust_sanity", 8406),
+            ("solana_bpf_rust_sanity", 8454),
             ("solana_bpf_rust_secp256k1_recover", 25216),
-            ("solana_bpf_rust_sha", 30704),
+            ("solana_bpf_rust_sha", 30692),
         ]);
     }
 
