@@ -925,6 +925,7 @@ impl Blockstore {
             .unwrap()
             .log_shred_write(just_inserted_data_shreds)
             .expect("Couldn't write shreds to WAL");
+        // TODO: insert the coding shreds into WAL here too ... right ?
 
         let mut start = Measure::start("Shred recovery");
         // Handle chaining for the members of the slot_meta_working_set that were inserted into,
@@ -2738,8 +2739,8 @@ impl Blockstore {
                                     slot,
                                     i,
                                     slot_meta.consumed,
-                                    slot_meta.completed_data_indexes,
                                     cache_indexes,
+                                    slot_meta.completed_data_indexes,
                                     start_index,
                                     end_index
                                 );

@@ -154,6 +154,11 @@ impl ShredWAL {
                     err
                 ))))
             })?;
+            debug!(
+                "Found {} shreds for slot {} in WAL files",
+                shreds.len(),
+                slot
+            );
             shred_map.insert(slot, shreds);
         }
         Ok(shred_map)

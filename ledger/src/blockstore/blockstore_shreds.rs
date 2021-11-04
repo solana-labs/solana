@@ -579,7 +579,7 @@ impl Blockstore {
                         if shred.is_data() {
                             Self::place_recovered_shred(
                                 &self.data_shred_cache,
-                                &shred_meta_index.data(),
+                                shred_meta_index.data(),
                                 &data_shred_file_index,
                                 shred,
                                 &mut full_insert_shreds,
@@ -587,7 +587,7 @@ impl Blockstore {
                         } else {
                             Self::place_recovered_shred(
                                 &self.code_shred_cache,
-                                &shred_meta_index.coding(),
+                                shred_meta_index.coding(),
                                 &code_shred_file_index,
                                 shred,
                                 &mut full_insert_shreds,
@@ -598,7 +598,7 @@ impl Blockstore {
                 None => {
                     // No metadata index so we know this entire slot needs a regular insert
                     full_insert_shreds.extend(shreds);
-                },
+                }
             }
         }
 
