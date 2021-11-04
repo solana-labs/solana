@@ -18,9 +18,9 @@ use {
     solana_measure::measure::Measure,
     solana_metrics::*,
     solana_sdk::{
-        message::{MappedAddresses, MappedMessage, Message, MessageHeader, SanitizedMessage},
+        message::{MappedAddresses, MappedMessage, Message, MessageHeader, SanitizedMessage, v0::{self, AddressMapIndexes}},
         timing::AtomicInterval,
-    }
+    },
     std::{
         sync::{
             atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -143,12 +143,13 @@ pub struct DbTransactionMessageV0 {
     account_keys: Vec<Vec<u8>>,
     recent_blockhash: Vec<u8>,
     instructions: Vec<DbCompiledInstruction>,
+    address_map_indexes: Vec<DbAddressMapIndexes>
 }
 
 #[derive(Clone, Debug, ToSql)]
 pub struct DbMappedAddresses {
-    writable: Vec<u8>,
-    readonly: Vec<u8>
+    writable: Vec<Vec<u8>>,
+    readonly: Vec<Vec<u8>>
 }
 
 #[derive(Clone, Debug, ToSql)]
@@ -157,48 +158,75 @@ pub struct DbMappedMessage {
     mapped_addresses: DbMappedAddresses
 }
 
-impl From<MessageHeader> for DbTransactionMessageHeader {
-    fn from(header: &MessageHeader) -> Self {
+impl From<&AddressMapIndexes> for DbAddressMapIndexes {
+    fn from(address_map_indexes: &AddressMapIndexes) -> Self {
         Self {
-            num_required_signatures: header.num_required_signatures,
-            num_readonly_signed_accounts: header.num_readonly_signed_accounts,
-            num_readonly_unsigned_accounts: header.num_readonly_unsigned_accounts,
+            writable: address_map_indexes.writable.clone(),
+            readonly: address_map_indexes.readonly.clone(),
         }
     }
 }
 
-impl From<CompiledInstruction> for DbCompiledInstruction {
+impl From<&MappedAddresses> for DbMappedAddresses {
+    fn from(mapped_addresses: &MappedAddresses) -> Self {
+        Self {
+            writable: mapped_addresses.writable.iter().map(|pubkey| pubkey.as_ref().to_vec()).collect(),
+            readonly: mapped_addresses.readonly.iter().map(|pubkey| pubkey.as_ref().to_vec()).collect(),
+        }
+    }
+}
+
+impl From<&MessageHeader> for DbTransactionMessageHeader {
+    fn from(header: &MessageHeader) -> Self {
+        Self {
+            num_required_signatures: header.num_required_signatures as i16,
+            num_readonly_signed_accounts: header.num_readonly_signed_accounts as i16,
+            num_readonly_unsigned_accounts: header.num_readonly_unsigned_accounts as i16,
+        }
+    }
+}
+
+impl From<&CompiledInstruction> for DbCompiledInstruction {
     fn from(instrtuction: &CompiledInstruction) -> Self {
         Self {
-            program_id_index: instrtuction.program_id_index,
+            program_id_index: instrtuction.program_id_index as i16,
             accounts: instrtuction.accounts.clone(),
             data: instrtuction.data.clone(),
         }
     }
 }
 
-impl From<Message> for DbTransactionMessage {
-    fn from(message: &MappedMessage) -> Self {
-        Self {
-            header: DbTransactionMessageHeader::from(message.header),
-            account_keys: message.account_keys.clone(),
-            recent_blockhash: message.recent_blockhash.as_ref().to_vec(),
-            instructions: DbCompiledInstruction::from(message.instructions),
-        }
-    }
-}
-
-
-impl From<Message> for DbMappedMessage {
+impl From<&Message> for DbTransactionMessage {
     fn from(message: &Message) -> Self {
         Self {
-            message: DbTransactionMessageV0::from(message.message),
-            mapped_addresses: DbMappedAddresses::from(message.mapped_addresses),
+            header: DbTransactionMessageHeader::from(&message.header),
+            account_keys: message.account_keys.iter().map(|key| key.as_ref().to_vec()).collect(),
+            recent_blockhash: message.recent_blockhash.as_ref().to_vec(),
+            instructions: message.instructions.iter().map(DbCompiledInstruction::from).collect(),
         }
     }
 }
 
+impl From<&v0::Message> for DbTransactionMessageV0 {
+    fn from(message: &v0::Message) -> Self {
+        Self {
+            header: DbTransactionMessageHeader::from(&message.header),
+            account_keys: message.account_keys.iter().map(|key| key.as_ref().to_vec()).collect(),
+            recent_blockhash: message.recent_blockhash.as_ref().to_vec(),
+            instructions: message.instructions.iter().map(DbCompiledInstruction::from).collect(),
+            address_map_indexes: message.address_map_indexes.iter().map(DbAddressMapIndexes::from).collect(),
+        }
+    }
+}
 
+impl From<&MappedMessage> for DbMappedMessage {
+    fn from(message: &MappedMessage) -> Self {
+        Self {
+            message: DbTransactionMessageV0::from(&message.message),
+            mapped_addresses: DbMappedAddresses::from(&message.mapped_addresses),
+        }
+    }
+}
 
 pub struct DbTransaction {
     signature: Vec<u8>,
@@ -207,6 +235,7 @@ pub struct DbTransaction {
     message_type: i16,
     legacy_message: Option<DbTransactionMessage>,
     v0_mapped_message: Option<DbMappedMessage>,
+    message_hash: Vec<u8>,
     signatures: Vec<Vec<u8>>,
 }
 
@@ -1076,7 +1105,6 @@ impl ParallelPostgresClient {
         Ok(())
     }
 
-
     fn build_db_transaction(slot: u64, transaction_info: &ReplicaTransactionLogInfo) -> DbTransaction {
         DbTransaction {
             signature: transaction_info.signature.as_ref().to_vec(),
@@ -1091,18 +1119,18 @@ impl ParallelPostgresClient {
                 _ => None
             },
             v0_mapped_message: match transaction_info.transaction.message() {
-                SanitizedMessage::V0(mapped_message) => Some(DbTransactionMessage::from(legacy_message)),
+                SanitizedMessage::V0(mapped_message) => Some(DbMappedMessage::from(mapped_message)),
                 _ => None
             },
-
-            
+            signatures: transaction_info.transaction.signatures().iter().map(|signature| signature.as_ref().to_vec()).collect(),
+            message_hash: transaction_info.transaction.message_hash().as_ref().to_vec(),
         }
     }
 
     fn build_transaction_request(slot: u64, transaction_info: &ReplicaTransactionLogInfo) -> LogTransactionRequest {
 
         LogTransactionRequest {
-            transaction_info: Self::build_db_transaction
+            transaction_info: Self::build_db_transaction(slot, transaction_info)
         }
     }
 
