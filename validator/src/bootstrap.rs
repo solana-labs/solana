@@ -1120,10 +1120,13 @@ mod with_incremental_snapshots {
         #[derive(Debug, Copy, Clone, PartialEq, Eq)]
         enum Strategy {
             Standard,
-            Fallback,
+            WithoutFullSnapshotArchiveIntervalFiltering,
         }
 
-        for strategy in [Strategy::Standard, Strategy::Fallback] {
+        for strategy in [
+            Strategy::Standard,
+            Strategy::WithoutFullSnapshotArchiveIntervalFiltering,
+        ] {
             let trusted_snapshot_hashes =
                 get_trusted_snapshot_hashes(cluster_info, validator_config);
 
@@ -1150,7 +1153,7 @@ mod with_incremental_snapshots {
                     &mut peer_snapshot_hashes,
                 );
 
-                // However, if at this point peer_snasphot_hashes is empty, then retry from the
+                // However, if at this point peer_snapshot_hashes is empty, then retry from the
                 // beginning with the "fallback" strategy and *do not* filter based on full
                 // snapshot archive interval.
                 if peer_snapshot_hashes.is_empty() {
@@ -1269,7 +1272,6 @@ mod with_incremental_snapshots {
                 continue;
             }
 
-            // Get the highest incremental snapshot hash for this peer.
             let mut highest_snapshot_hash =
                 get_highest_incremental_snapshot_hash_for_peer(cluster_info, &rpc_peer.id);
 
@@ -1282,7 +1284,6 @@ mod with_incremental_snapshots {
                 highest_snapshot_hash = snapshot_hash;
             }
 
-            // ...and add the highest snapshot hash to our return vector!
             if let Some(snapshot_hash) = highest_snapshot_hash {
                 peer_snapshot_hashes.push(PeerSnapshotHash {
                     rpc_contact_info: rpc_peer.clone(),
@@ -1870,7 +1871,7 @@ mod with_incremental_snapshots {
         }
 
         #[test]
-        fn test_retain_peer_snapshot_hashes_with_highest_incremental_snasphot_slot() {
+        fn test_retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot() {
             let contact_info = default_contact_info_for_tests();
             let peer_snapshot_hashes = vec![
                 PeerSnapshotHash::new(contact_info.clone(), (200_000, Hash::default()), None),
