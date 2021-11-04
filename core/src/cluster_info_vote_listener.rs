@@ -570,8 +570,10 @@ impl ClusterInfoVoteListener {
                         .add_new_optimistic_confirmed_slots(confirmed_slots.clone());
                 }
                 Err(e) => match e {
-                    Error::CrossbeamRecvTimeout(RecvTimeoutError::Disconnected)
-                    | Error::ReadyTimeout => (),
+                    Error::CrossbeamRecvTimeout(RecvTimeoutError::Disconnected) => {
+                        return Ok(());
+                    }
+                    Error::ReadyTimeout => (),
                     _ => {
                         error!("thread {:?} error {:?}", thread::current().name(), e);
                     }
