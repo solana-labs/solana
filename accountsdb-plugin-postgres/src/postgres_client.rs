@@ -18,7 +18,10 @@ use {
     solana_measure::measure::Measure,
     solana_metrics::*,
     solana_sdk::{
-        message::{MappedAddresses, MappedMessage, Message, MessageHeader, SanitizedMessage, v0::{self, AddressMapIndexes}},
+        message::{
+            v0::{self, AddressMapIndexes},
+            MappedAddresses, MappedMessage, Message, MessageHeader, SanitizedMessage,
+        },
         timing::AtomicInterval,
     },
     std::{
@@ -113,7 +116,7 @@ pub struct DbTransactionStatusMeta {
     log_messages: Vec<String>,
     pre_token_balances: Vec<DbTransactionTokenBalance>,
     post_token_balances: Vec<DbTransactionTokenBalance>,
-    rewards: DbRewards
+    rewards: DbRewards,
 }
 
 #[derive(Clone, Debug, ToSql)]
@@ -143,19 +146,19 @@ pub struct DbTransactionMessageV0 {
     account_keys: Vec<Vec<u8>>,
     recent_blockhash: Vec<u8>,
     instructions: Vec<DbCompiledInstruction>,
-    address_map_indexes: Vec<DbAddressMapIndexes>
+    address_map_indexes: Vec<DbAddressMapIndexes>,
 }
 
 #[derive(Clone, Debug, ToSql)]
 pub struct DbMappedAddresses {
     writable: Vec<Vec<u8>>,
-    readonly: Vec<Vec<u8>>
+    readonly: Vec<Vec<u8>>,
 }
 
 #[derive(Clone, Debug, ToSql)]
 pub struct DbMappedMessage {
     message: DbTransactionMessageV0,
-    mapped_addresses: DbMappedAddresses
+    mapped_addresses: DbMappedAddresses,
 }
 
 impl From<&AddressMapIndexes> for DbAddressMapIndexes {
@@ -170,8 +173,16 @@ impl From<&AddressMapIndexes> for DbAddressMapIndexes {
 impl From<&MappedAddresses> for DbMappedAddresses {
     fn from(mapped_addresses: &MappedAddresses) -> Self {
         Self {
-            writable: mapped_addresses.writable.iter().map(|pubkey| pubkey.as_ref().to_vec()).collect(),
-            readonly: mapped_addresses.readonly.iter().map(|pubkey| pubkey.as_ref().to_vec()).collect(),
+            writable: mapped_addresses
+                .writable
+                .iter()
+                .map(|pubkey| pubkey.as_ref().to_vec())
+                .collect(),
+            readonly: mapped_addresses
+                .readonly
+                .iter()
+                .map(|pubkey| pubkey.as_ref().to_vec())
+                .collect(),
         }
     }
 }
@@ -200,9 +211,17 @@ impl From<&Message> for DbTransactionMessage {
     fn from(message: &Message) -> Self {
         Self {
             header: DbTransactionMessageHeader::from(&message.header),
-            account_keys: message.account_keys.iter().map(|key| key.as_ref().to_vec()).collect(),
+            account_keys: message
+                .account_keys
+                .iter()
+                .map(|key| key.as_ref().to_vec())
+                .collect(),
             recent_blockhash: message.recent_blockhash.as_ref().to_vec(),
-            instructions: message.instructions.iter().map(DbCompiledInstruction::from).collect(),
+            instructions: message
+                .instructions
+                .iter()
+                .map(DbCompiledInstruction::from)
+                .collect(),
         }
     }
 }
@@ -211,10 +230,22 @@ impl From<&v0::Message> for DbTransactionMessageV0 {
     fn from(message: &v0::Message) -> Self {
         Self {
             header: DbTransactionMessageHeader::from(&message.header),
-            account_keys: message.account_keys.iter().map(|key| key.as_ref().to_vec()).collect(),
+            account_keys: message
+                .account_keys
+                .iter()
+                .map(|key| key.as_ref().to_vec())
+                .collect(),
             recent_blockhash: message.recent_blockhash.as_ref().to_vec(),
-            instructions: message.instructions.iter().map(DbCompiledInstruction::from).collect(),
-            address_map_indexes: message.address_map_indexes.iter().map(DbAddressMapIndexes::from).collect(),
+            instructions: message
+                .instructions
+                .iter()
+                .map(DbCompiledInstruction::from)
+                .collect(),
+            address_map_indexes: message
+                .address_map_indexes
+                .iter()
+                .map(DbAddressMapIndexes::from)
+                .collect(),
         }
     }
 }
@@ -823,7 +854,7 @@ struct UpdateSlotRequest {
 }
 
 pub struct LogTransactionRequest {
-    transaction_info: DbTransaction
+    transaction_info: DbTransaction,
 }
 
 enum DbWorkItem {
@@ -1105,32 +1136,48 @@ impl ParallelPostgresClient {
         Ok(())
     }
 
-    fn build_db_transaction(slot: u64, transaction_info: &ReplicaTransactionLogInfo) -> DbTransaction {
+    fn build_db_transaction(
+        slot: u64,
+        transaction_info: &ReplicaTransactionLogInfo,
+    ) -> DbTransaction {
         DbTransaction {
             signature: transaction_info.signature.as_ref().to_vec(),
             is_vote: transaction_info.is_vote,
             slot: slot as i64,
-            message_type:  match transaction_info.transaction.message() {
+            message_type: match transaction_info.transaction.message() {
                 SanitizedMessage::Legacy(_) => 0,
                 SanitizedMessage::V0(_) => 1,
             },
             legacy_message: match transaction_info.transaction.message() {
-                SanitizedMessage::Legacy(legacy_message) => Some(DbTransactionMessage::from(legacy_message)),
-                _ => None
+                SanitizedMessage::Legacy(legacy_message) => {
+                    Some(DbTransactionMessage::from(legacy_message))
+                }
+                _ => None,
             },
             v0_mapped_message: match transaction_info.transaction.message() {
                 SanitizedMessage::V0(mapped_message) => Some(DbMappedMessage::from(mapped_message)),
-                _ => None
+                _ => None,
             },
-            signatures: transaction_info.transaction.signatures().iter().map(|signature| signature.as_ref().to_vec()).collect(),
-            message_hash: transaction_info.transaction.message_hash().as_ref().to_vec(),
+            signatures: transaction_info
+                .transaction
+                .signatures()
+                .iter()
+                .map(|signature| signature.as_ref().to_vec())
+                .collect(),
+            message_hash: transaction_info
+                .transaction
+                .message_hash()
+                .as_ref()
+                .to_vec(),
         }
     }
 
-    fn build_transaction_request(slot: u64, transaction_info: &ReplicaTransactionLogInfo) -> LogTransactionRequest {
-
+    fn build_transaction_request(
+        slot: u64,
+        transaction_info: &ReplicaTransactionLogInfo,
+    ) -> LogTransactionRequest {
         LogTransactionRequest {
-            transaction_info: Self::build_db_transaction(slot, transaction_info)
+            transaction_info: Self::build_db_transaction(slot, transaction_info),
         }
     }
 
@@ -1139,7 +1186,8 @@ impl ParallelPostgresClient {
         transaction_info: &ReplicaTransactionLogInfo,
         slot: u64,
     ) -> Result<(), AccountsDbPluginError> {
-        let wrk_item = DbWorkItem::LogTransaction(Self::build_transaction_request(slot, transaction_info));
+        let wrk_item =
+            DbWorkItem::LogTransaction(Self::build_transaction_request(slot, transaction_info));
 
         if let Err(err) = self.sender.send(wrk_item) {
             return Err(AccountsDbPluginError::SlotStatusUpdateError {
