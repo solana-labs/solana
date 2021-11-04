@@ -5,23 +5,22 @@ use test::Bencher;
 use std::sync::Arc;
 
 use solana_perf::test_tx::test_tx;
-use solana_sdk::transaction::{SanitizedTransaction, TransactionError, VersionedTransaction, Result};
-
-use solana_entry::entry::{
-    self, VerifyRecyclers,
+use solana_sdk::transaction::{
+    Result, SanitizedTransaction, TransactionError, VersionedTransaction,
 };
+
+use solana_entry::entry::{self, VerifyRecyclers};
 
 use solana_sdk::hash::Hash;
 
 #[bench]
 fn bench_gpusigverify(bencher: &mut Bencher) {
-
     let entries = (0..128)
-    .map(|_| {
-        let transaction = test_tx();
-        entry::next_entry_mut(&mut Hash::default(), 0, vec![transaction])
-    })
-    .collect::<Vec<_>>();
+        .map(|_| {
+            let transaction = test_tx();
+            entry::next_entry_mut(&mut Hash::default(), 0, vec![transaction])
+        })
+        .collect::<Vec<_>>();
 
     let verify_transaction = {
         move |versioned_tx: VersionedTransaction,

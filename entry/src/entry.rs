@@ -839,8 +839,10 @@ mod tests {
         system_transaction,
     };
 
-    use solana_sdk::transaction::{SanitizedTransaction, TransactionError, VersionedTransaction, Result};
-    use solana_perf::test_tx::{test_tx, test_invalid_tx};
+    use solana_perf::test_tx::{test_invalid_tx, test_tx};
+    use solana_sdk::transaction::{
+        Result, SanitizedTransaction, TransactionError, VersionedTransaction,
+    };
 
     #[test]
     fn test_entry_verify() {
@@ -859,25 +861,31 @@ mod tests {
         verify: Arc<
             dyn Fn(VersionedTransaction, bool, bool) -> Result<SanitizedTransaction> + Send + Sync,
         >,
-    ) -> bool
-    {
+    ) -> bool {
         let verify_func = {
-            let verify=verify.clone();
+            let verify = verify.clone();
             move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
                 verify(versioned_tx, skip_verification, false)
             }
         };
 
         let cpu_verify_result = verify_transactions(entries.clone(), Arc::new(verify_func));
-        let mut gpu_verify_result = start_verify_transactions(entries, skip_verification, verify_recyclers, verify);
+        let mut gpu_verify_result =
+            start_verify_transactions(entries, skip_verification, verify_recyclers, verify);
 
         match cpu_verify_result {
             Ok(_) => {
-                assert!(gpu_verify_result.verification_status != EntryVerificationStatus::Failure && gpu_verify_result.finish_verify());
+                assert!(
+                    gpu_verify_result.verification_status != EntryVerificationStatus::Failure
+                        && gpu_verify_result.finish_verify()
+                );
                 return true;
             }
             _ => {
-                assert!(gpu_verify_result.verification_status == EntryVerificationStatus::Failure || !gpu_verify_result.finish_verify());
+                assert!(
+                    gpu_verify_result.verification_status == EntryVerificationStatus::Failure
+                        || !gpu_verify_result.finish_verify()
+                );
                 return false;
             }
         }
@@ -896,16 +904,16 @@ mod tests {
                     } else {
                         versioned_tx.message.hash()
                     };
-    
+
                     SanitizedTransaction::try_create(versioned_tx, message_hash, |_| {
                         Err(TransactionError::UnsupportedVersion)
                     })
                 }?;
-    
+
                 Ok(sanitized_tx)
             }
         };
-    
+
         let recycler = VerifyRecyclers::default();
 
         let transaction = test_invalid_tx();
@@ -915,8 +923,18 @@ mod tests {
         let transaction = test_tx();
         let entry1 = next_entry_mut(&mut Hash::default(), 0, vec![transaction]);
 
-        assert!(!test_verify_transactions(vec![entry0], false, recycler.clone(), Arc::new(verify_transaction.clone())));
-        assert!(test_verify_transactions(vec![entry1], false, recycler.clone(), Arc::new(verify_transaction.clone())));
+        assert!(!test_verify_transactions(
+            vec![entry0],
+            false,
+            recycler.clone(),
+            Arc::new(verify_transaction.clone())
+        ));
+        assert!(test_verify_transactions(
+            vec![entry1],
+            false,
+            recycler.clone(),
+            Arc::new(verify_transaction.clone())
+        ));
     }
 
     #[test]
