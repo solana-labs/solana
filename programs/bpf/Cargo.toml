@@ -35,6 +35,7 @@ solana-logger = { path = "../../logger", version = "=1.9.0" }
 solana-measure = { path = "../../measure", version = "=1.9.0" }
 solana_rbpf = "=0.2.14"
 solana-runtime = { path = "../../runtime", version = "=1.9.0" }
+solana-program-runtime = { path = "../../program-runtime", version = "=1.9.0" }
 solana-sdk = { path = "../../sdk", version = "=1.9.0" }
 solana-transaction-status = { path = "../../transaction-status", version = "=1.9.0" }
 solana-account-decoder = { path = "../../account-decoder", version = "=1.9.0" }

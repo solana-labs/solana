@@ -47,8 +47,6 @@ use crate::{
     cost_tracker::CostTracker,
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
     inline_spl_token_v2_0,
-    instruction_recorder::InstructionRecorder,
-    log_collector::LogCollector,
     message_processor::MessageProcessor,
     rent_collector::RentCollector,
     stake_weighted_timestamp::{
@@ -71,7 +69,11 @@ use rayon::{
 };
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
-use solana_program_runtime::{ExecuteDetailsTimings, Executors, InstructionProcessor};
+use solana_program_runtime::{
+    instruction_processor::{ExecuteDetailsTimings, Executors, InstructionProcessor},
+    instruction_recorder::InstructionRecorder,
+    log_collector::LogCollector,
+};
 #[allow(deprecated)]
 use solana_sdk::recent_blockhashes_account;
 use solana_sdk::{
@@ -3870,7 +3872,7 @@ impl Bank {
                                 legacy_message,
                                 &loaded_transaction.program_indices,
                                 &account_refcells,
-                                &self.rent_collector,
+                                self.rent_collector.rent,
                                 log_collector.clone(),
                                 executors.clone(),
                                 instruction_recorders.as_deref(),

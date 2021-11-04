@@ -4,15 +4,13 @@ use itertools::Itertools;
 use solana_sdk::{
     account::AccountSharedData,
     compute_budget::ComputeBudget,
-    feature_set::remove_native_loader,
     hash::Hash,
     instruction::{CompiledInstruction, Instruction, InstructionError},
-    keyed_account::{create_keyed_accounts_unified, KeyedAccount},
+    keyed_account::KeyedAccount,
     message::Message,
     pubkey::Pubkey,
-    sysvar::Sysvar,
 };
-use std::{cell::RefCell, collections::HashSet, fmt::Debug, rc::Rc, sync::Arc};
+use std::{cell::RefCell, fmt::Debug, rc::Rc, sync::Arc};
 
 /// Prototype of a native loader entry point
 ///
@@ -28,32 +26,6 @@ pub type LoaderEntrypoint = unsafe extern "C" fn(
 
 pub type ProcessInstructionWithContext =
     fn(usize, &[u8], &mut dyn InvokeContext) -> Result<(), InstructionError>;
-
-pub struct InvokeContextStackFrame<'a> {
-    pub number_of_program_accounts: usize,
-    pub keyed_accounts: Vec<KeyedAccount<'a>>,
-    pub keyed_accounts_range: std::ops::Range<usize>,
-}
-
-impl<'a> InvokeContextStackFrame<'a> {
-    pub fn new(number_of_program_accounts: usize, keyed_accounts: Vec<KeyedAccount<'a>>) -> Self {
-        let keyed_accounts_range = std::ops::Range {
-            start: 0,
-            end: keyed_accounts.len(),
-        };
-        Self {
-            number_of_program_accounts,
-            keyed_accounts,
-            keyed_accounts_range,
-        }
-    }
-
-    pub fn program_id(&self) -> Option<&Pubkey> {
-        self.keyed_accounts
-            .get(self.number_of_program_accounts.saturating_sub(1))
-            .map(|keyed_account| keyed_account.unsigned_key())
-    }
-}
 
 /// Invocation context passed to loaders
 pub trait InvokeContext {
@@ -166,26 +138,6 @@ macro_rules! ic_msg {
     ($invoke_context:expr, $fmt:expr, $($arg:tt)*) => {
         $crate::ic_logger_msg!($invoke_context.get_logger(), $fmt, $($arg)*)
     };
-}
-
-pub fn get_sysvar<T: Sysvar>(
-    invoke_context: &dyn InvokeContext,
-    id: &Pubkey,
-) -> Result<T, InstructionError> {
-    invoke_context
-        .get_sysvars()
-        .iter()
-        .find_map(|(key, data)| {
-            if id == key {
-                bincode::deserialize(data).ok()
-            } else {
-                None
-            }
-        })
-        .ok_or_else(|| {
-            ic_msg!(invoke_context, "Unable to get sysvar {}", id);
-            InstructionError::UnsupportedSysvar
-        })
 }
 
 /// Compute meter
@@ -317,203 +269,4 @@ pub trait Executor: Debug + Send + Sync {
         invoke_context: &mut dyn InvokeContext,
         use_jit: bool,
     ) -> Result<(), InstructionError>;
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct MockComputeMeter {
-    pub remaining: u64,
-}
-impl ComputeMeter for MockComputeMeter {
-    fn consume(&mut self, amount: u64) -> Result<(), InstructionError> {
-        let exceeded = self.remaining < amount;
-        self.remaining = self.remaining.saturating_sub(amount);
-        if exceeded {
-            return Err(InstructionError::ComputationalBudgetExceeded);
-        }
-        Ok(())
-    }
-    fn get_remaining(&self) -> u64 {
-        self.remaining
-    }
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct MockLogger {
-    pub log: Rc<RefCell<Vec<String>>>,
-}
-impl Logger for MockLogger {
-    fn log_enabled(&self) -> bool {
-        true
-    }
-    fn log(&self, message: &str) {
-        self.log.borrow_mut().push(message.to_string());
-    }
-}
-
-#[allow(deprecated)]
-pub struct MockInvokeContext<'a> {
-    pub invoke_stack: Vec<InvokeContextStackFrame<'a>>,
-    pub logger: MockLogger,
-    pub compute_budget: ComputeBudget,
-    pub compute_meter: Rc<RefCell<dyn ComputeMeter>>,
-    pub programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
-    pub accounts: Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
-    pub sysvars: &'a [(Pubkey, Vec<u8>)],
-    pub disabled_features: HashSet<Pubkey>,
-    pub blockhash: Hash,
-    pub lamports_per_signature: u64,
-    pub return_data: (Pubkey, Vec<u8>),
-}
-
-impl<'a> MockInvokeContext<'a> {
-    pub fn new(program_id: &Pubkey, keyed_accounts: Vec<KeyedAccount<'a>>) -> Self {
-        let compute_budget = ComputeBudget::default();
-        let mut invoke_context = MockInvokeContext {
-            invoke_stack: Vec::with_capacity(compute_budget.max_invoke_depth),
-            logger: MockLogger::default(),
-            compute_budget,
-            compute_meter: Rc::new(RefCell::new(MockComputeMeter {
-                remaining: std::i64::MAX as u64,
-            })),
-            programs: vec![],
-            accounts: vec![],
-            sysvars: &[],
-            disabled_features: HashSet::default(),
-            blockhash: Hash::default(),
-            lamports_per_signature: 0,
-            return_data: (Pubkey::default(), Vec::new()),
-        };
-        let number_of_program_accounts = keyed_accounts
-            .iter()
-            .position(|keyed_account| keyed_account.unsigned_key() == program_id)
-            .unwrap_or(0)
-            .saturating_add(1);
-        invoke_context
-            .invoke_stack
-            .push(InvokeContextStackFrame::new(
-                number_of_program_accounts,
-                keyed_accounts,
-            ));
-        invoke_context
-    }
-}
-
-impl<'a> InvokeContext for MockInvokeContext<'a> {
-    fn push(
-        &mut self,
-        _message: &Message,
-        _instruction: &CompiledInstruction,
-        _program_indices: &[usize],
-        _account_indices: Option<&[usize]>,
-    ) -> Result<(), InstructionError> {
-        self.invoke_stack.push(InvokeContextStackFrame::new(
-            0,
-            create_keyed_accounts_unified(&[]),
-        ));
-        Ok(())
-    }
-    fn pop(&mut self) {
-        self.invoke_stack.pop();
-    }
-    fn invoke_depth(&self) -> usize {
-        self.invoke_stack.len()
-    }
-    fn verify(
-        &mut self,
-        _message: &Message,
-        _instruction: &CompiledInstruction,
-        _program_indices: &[usize],
-    ) -> Result<(), InstructionError> {
-        Ok(())
-    }
-    fn verify_and_update(
-        &mut self,
-        _instruction: &CompiledInstruction,
-        _account_indices: &[usize],
-        _write_pivileges: &[bool],
-    ) -> Result<(), InstructionError> {
-        Ok(())
-    }
-    fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
-        self.invoke_stack
-            .last()
-            .and_then(|frame| frame.program_id())
-            .ok_or(InstructionError::CallDepth)
-    }
-    fn remove_first_keyed_account(&mut self) -> Result<(), InstructionError> {
-        if !self.is_feature_active(&remove_native_loader::id()) {
-            let stack_frame = &mut self
-                .invoke_stack
-                .last_mut()
-                .ok_or(InstructionError::CallDepth)?;
-            stack_frame.keyed_accounts_range.start =
-                stack_frame.keyed_accounts_range.start.saturating_add(1);
-        }
-        Ok(())
-    }
-    fn get_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError> {
-        self.invoke_stack
-            .last()
-            .map(|frame| &frame.keyed_accounts[frame.keyed_accounts_range.clone()])
-            .ok_or(InstructionError::CallDepth)
-    }
-    fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {
-        &self.programs
-    }
-    fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
-        Rc::new(RefCell::new(self.logger.clone()))
-    }
-    fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
-        self.compute_meter.clone()
-    }
-    fn add_executor(&self, _pubkey: &Pubkey, _executor: Arc<dyn Executor>) {}
-    fn get_executor(&self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
-        None
-    }
-    fn set_instruction_index(&mut self, _instruction_index: usize) {}
-    fn record_instruction(&self, _instruction: &Instruction) {}
-    fn is_feature_active(&self, feature_id: &Pubkey) -> bool {
-        !self.disabled_features.contains(feature_id)
-    }
-    fn get_account(&self, pubkey: &Pubkey) -> Option<(usize, Rc<RefCell<AccountSharedData>>)> {
-        for (index, (key, account)) in self.accounts.iter().enumerate().rev() {
-            if key == pubkey {
-                return Some((index, account.clone()));
-            }
-        }
-        None
-    }
-    fn update_timing(
-        &mut self,
-        _serialize_us: u64,
-        _create_vm_us: u64,
-        _execute_us: u64,
-        _deserialize_us: u64,
-    ) {
-    }
-    fn get_sysvars(&self) -> &[(Pubkey, Vec<u8>)] {
-        self.sysvars
-    }
-    fn get_compute_budget(&self) -> &ComputeBudget {
-        &self.compute_budget
-    }
-    fn set_blockhash(&mut self, hash: Hash) {
-        self.blockhash = hash;
-    }
-    fn get_blockhash(&self) -> &Hash {
-        &self.blockhash
-    }
-    fn set_lamports_per_signature(&mut self, lamports_per_signature: u64) {
-        self.lamports_per_signature = lamports_per_signature;
-    }
-    fn get_lamports_per_signature(&self) -> u64 {
-        self.lamports_per_signature
-    }
-    fn set_return_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError> {
-        self.return_data = (*self.get_caller()?, data);
-        Ok(())
-    }
-    fn get_return_data(&self) -> (Pubkey, &[u8]) {
-        (self.return_data.0, &self.return_data.1)
-    }
 }

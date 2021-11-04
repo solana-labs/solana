@@ -31,6 +31,7 @@ use solana_runtime::{
         upgrade_program,
     },
 };
+use solana_program_runtime::invoke_context::with_mock_invoke_context;
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
     account_utils::StateMut,
@@ -40,10 +41,9 @@ use solana_sdk::{
     compute_budget::{ComputeBudget, ComputeBudgetInstruction},
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
-    keyed_account::KeyedAccount,
     loader_instruction,
     message::{Message, SanitizedMessage},
-    process_instruction::{InvokeContext, MockInvokeContext},
+    process_instruction::InvokeContext,
     pubkey::Pubkey,
     signature::{keypair_from_seed, Keypair, Signer},
     system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
@@ -56,8 +56,8 @@ use solana_transaction_status::{
     TransactionStatusMeta, TransactionWithStatusMeta, UiTransactionEncoding,
 };
 use std::{
-    cell::RefCell, collections::HashMap, convert::TryFrom, env, fs::File, io::Read, path::PathBuf,
-    str::FromStr, sync::Arc,
+    collections::HashMap, convert::TryFrom, env, fs::File, io::Read, path::PathBuf, str::FromStr,
+    sync::Arc,
 };
 
 /// BPF program file extension
@@ -190,109 +190,103 @@ fn upgrade_bpf_program(
     );
 }
 
-fn run_program(
-    name: &str,
-    loader_id: &Pubkey,
-    program_id: &Pubkey,
-    parameter_accounts: Vec<KeyedAccount>,
-    instruction_data: &[u8],
-) -> Result<u64, InstructionError> {
+fn run_program(name: &str) -> u64 {
     let mut file = File::open(create_bpf_path(name)).unwrap();
     let mut data = vec![];
     file.read_to_end(&mut data).unwrap();
-
-    let mut invoke_context = MockInvokeContext::new(&program_id, parameter_accounts);
-    let (parameter_bytes, account_lengths) = serialize_parameters(
-        &loader_id,
-        program_id,
-        &invoke_context.get_keyed_accounts().unwrap()[1..],
-        &instruction_data,
-    )
-    .unwrap();
-    let compute_meter = invoke_context.get_compute_meter();
-    let mut instruction_meter = ThisInstructionMeter { compute_meter };
-
-    let config = Config {
-        enable_instruction_tracing: true,
-        ..Config::default()
-    };
-    let mut executable = <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
-        &data,
-        None,
-        config,
-        register_syscalls(&mut invoke_context).unwrap(),
-    )
-    .unwrap();
-    executable.jit_compile().unwrap();
-
-    let mut instruction_count = 0;
-    let mut tracer = None;
-    for i in 0..2 {
-        let mut parameter_bytes = parameter_bytes.clone();
-        {
-            invoke_context.set_return_data(Vec::new()).unwrap();
-
-            let mut vm = create_vm(
-                &loader_id,
-                executable.as_ref(),
-                parameter_bytes.as_slice_mut(),
-                &mut invoke_context,
-                &account_lengths,
-            )
-            .unwrap();
-            let result = if i == 0 {
-                vm.execute_program_interpreted(&mut instruction_meter)
-            } else {
-                vm.execute_program_jit(&mut instruction_meter)
-            };
-            assert_eq!(SUCCESS, result.unwrap());
-            if i == 1 {
-                assert_eq!(instruction_count, vm.get_total_instruction_count());
-            }
-            instruction_count = vm.get_total_instruction_count();
-            if config.enable_instruction_tracing {
-                if i == 1 {
-                    if !Tracer::compare(tracer.as_ref().unwrap(), vm.get_tracer()) {
-                        let analysis = Analysis::from_executable(executable.as_ref());
-                        let stdout = std::io::stdout();
-                        println!("TRACE (interpreted):");
-                        tracer
-                            .as_ref()
-                            .unwrap()
-                            .write(&mut stdout.lock(), &analysis)
-                            .unwrap();
-                        println!("TRACE (jit):");
-                        vm.get_tracer()
-                            .write(&mut stdout.lock(), &analysis)
-                            .unwrap();
-                        assert!(false);
-                    } else if log_enabled!(Trace) {
-                        let analysis = Analysis::from_executable(executable.as_ref());
-                        let mut trace_buffer = Vec::<u8>::new();
-                        tracer
-                            .as_ref()
-                            .unwrap()
-                            .write(&mut trace_buffer, &analysis)
-                            .unwrap();
-                        let trace_string = String::from_utf8(trace_buffer).unwrap();
-                        trace!("BPF Program Instruction Trace:\n{}", trace_string);
-                    }
-                }
-                tracer = Some(vm.get_tracer().clone());
-            }
-        }
-        let parameter_accounts = invoke_context.get_keyed_accounts().unwrap();
-        deserialize_parameters(
-            &loader_id,
-            parameter_accounts,
-            parameter_bytes.as_slice(),
-            &account_lengths,
-            true,
+    let loader_id = bpf_loader::id();
+    with_mock_invoke_context(loader_id, 0, |invoke_context| {
+        let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
+        let (parameter_bytes, account_lengths) = serialize_parameters(
+            &keyed_accounts[0].unsigned_key(),
+            &keyed_accounts[1].unsigned_key(),
+            &keyed_accounts[2..],
+            &[],
         )
         .unwrap();
-    }
 
-    Ok(instruction_count)
+        let compute_meter = invoke_context.get_compute_meter();
+        let mut instruction_meter = ThisInstructionMeter { compute_meter };
+        let config = Config {
+            enable_instruction_tracing: true,
+            ..Config::default()
+        };
+        let mut executable = <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
+            &data,
+            None,
+            config,
+            register_syscalls(invoke_context).unwrap(),
+        )
+        .unwrap();
+        executable.jit_compile().unwrap();
+
+        let mut instruction_count = 0;
+        let mut tracer = None;
+        for i in 0..2 {
+            invoke_context.set_return_data(Vec::new()).unwrap();
+            let mut parameter_bytes = parameter_bytes.clone();
+            {
+                let mut vm = create_vm(
+                    &loader_id,
+                    executable.as_ref(),
+                    parameter_bytes.as_slice_mut(),
+                    invoke_context,
+                    &account_lengths,
+                )
+                .unwrap();
+                let result = if i == 0 {
+                    vm.execute_program_interpreted(&mut instruction_meter)
+                } else {
+                    vm.execute_program_jit(&mut instruction_meter)
+                };
+                assert_eq!(SUCCESS, result.unwrap());
+                if i == 1 {
+                    assert_eq!(instruction_count, vm.get_total_instruction_count());
+                }
+                instruction_count = vm.get_total_instruction_count();
+                if config.enable_instruction_tracing {
+                    if i == 1 {
+                        if !Tracer::compare(tracer.as_ref().unwrap(), vm.get_tracer()) {
+                            let analysis = Analysis::from_executable(executable.as_ref());
+                            let stdout = std::io::stdout();
+                            println!("TRACE (interpreted):");
+                            tracer
+                                .as_ref()
+                                .unwrap()
+                                .write(&mut stdout.lock(), &analysis)
+                                .unwrap();
+                            println!("TRACE (jit):");
+                            vm.get_tracer()
+                                .write(&mut stdout.lock(), &analysis)
+                                .unwrap();
+                            assert!(false);
+                        } else if log_enabled!(Trace) {
+                            let analysis = Analysis::from_executable(executable.as_ref());
+                            let mut trace_buffer = Vec::<u8>::new();
+                            tracer
+                                .as_ref()
+                                .unwrap()
+                                .write(&mut trace_buffer, &analysis)
+                                .unwrap();
+                            let trace_string = String::from_utf8(trace_buffer).unwrap();
+                            trace!("BPF Program Instruction Trace:\n{}", trace_string);
+                        }
+                    }
+                    tracer = Some(vm.get_tracer().clone());
+                }
+            }
+            let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
+            deserialize_parameters(
+                &loader_id,
+                &keyed_accounts[2..],
+                parameter_bytes.as_slice(),
+                &account_lengths,
+                true,
+            )
+            .unwrap();
+        }
+        instruction_count
+    })
 }
 
 fn process_transaction_and_record_inner(
@@ -1377,8 +1371,8 @@ fn assert_instruction_count() {
             ("noop++", 5),
             ("relative_call", 26),
             ("return_data", 980),
-            ("sanity", 1246),
-            ("sanity++", 1250),
+            ("sanity", 1248),
+            ("sanity++", 1252),
             ("secp256k1_recover", 25383),
             ("sha", 1328),
             ("struct_pass", 108),
@@ -1390,17 +1384,17 @@ fn assert_instruction_count() {
         programs.extend_from_slice(&[
             ("solana_bpf_rust_128bit", 584),
             ("solana_bpf_rust_alloc", 7388),
-            ("solana_bpf_rust_custom_heap", 535),
+            ("solana_bpf_rust_custom_heap", 536),
             ("solana_bpf_rust_dep_crate", 47),
-            ("solana_bpf_rust_external_spend", 506),
+            ("solana_bpf_rust_external_spend", 507),
             ("solana_bpf_rust_iter", 824),
             ("solana_bpf_rust_many_args", 941),
-            ("solana_bpf_rust_mem", 3085),
+            ("solana_bpf_rust_mem", 3086),
             ("solana_bpf_rust_membuiltins", 3976),
-            ("solana_bpf_rust_noop", 480),
+            ("solana_bpf_rust_noop", 481),
             ("solana_bpf_rust_param_passing", 146),
-            ("solana_bpf_rust_rand", 487),
-            ("solana_bpf_rust_sanity", 8454),
+            ("solana_bpf_rust_rand", 488),
+            ("solana_bpf_rust_sanity", 8455),
             ("solana_bpf_rust_secp256k1_recover", 25216),
             ("solana_bpf_rust_sha", 30692),
         ]);
@@ -1409,17 +1403,7 @@ fn assert_instruction_count() {
     let mut passed = true;
     println!("\n  {:36} expected actual  diff", "BPF program");
     for program in programs.iter() {
-        let loader_id = bpf_loader::id();
-        let program_id = Pubkey::new_unique();
-        let key = Pubkey::new_unique();
-        let mut program_account = RefCell::new(AccountSharedData::new(0, 0, &loader_id));
-        let mut account = RefCell::new(AccountSharedData::default());
-        let parameter_accounts = vec![
-            KeyedAccount::new(&program_id, false, &mut program_account),
-            KeyedAccount::new(&key, false, &mut account),
-        ];
-        let count =
-            run_program(program.0, &loader_id, &program_id, parameter_accounts, &[]).unwrap();
+        let count = run_program(program.0);
         let diff: i64 = count as i64 - program.1 as i64;
         println!(
             "  {:36} {:8} {:6} {:+5} ({:+3.0}%)",

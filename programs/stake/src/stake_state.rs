@@ -1373,11 +1373,11 @@ fn do_create_account(
 mod tests {
     use super::*;
     use proptest::prelude::*;
+    use solana_program_runtime::invoke_context::ThisInvokeContext;
     use solana_sdk::{
         account::{AccountSharedData, WritableAccount},
         clock::UnixTimestamp,
         native_token,
-        process_instruction::MockInvokeContext,
         pubkey::Pubkey,
         system_program,
     };
@@ -5069,13 +5069,13 @@ mod tests {
 
     #[test]
     fn test_merge() {
+        let invoke_context = ThisInvokeContext::new_mock(&[], &[]);
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let source_stake_pubkey = solana_sdk::pubkey::new_rand();
         let authorized_pubkey = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
 
         let signers = vec![authorized_pubkey].into_iter().collect();
-        let invoke_context = MockInvokeContext::new(&Pubkey::default(), vec![]);
 
         for state in &[
             StakeState::Initialized(Meta::auto(&authorized_pubkey)),
@@ -5179,7 +5179,7 @@ mod tests {
 
     #[test]
     fn test_merge_self_fails() {
-        let invoke_context = MockInvokeContext::new(&Pubkey::default(), vec![]);
+        let invoke_context = ThisInvokeContext::new_mock(&[], &[]);
         let stake_address = Pubkey::new_unique();
         let authority_pubkey = Pubkey::new_unique();
         let signers = HashSet::from_iter(vec![authority_pubkey]);
@@ -5224,6 +5224,7 @@ mod tests {
 
     #[test]
     fn test_merge_incorrect_authorized_staker() {
+        let invoke_context = ThisInvokeContext::new_mock(&[], &[]);
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let source_stake_pubkey = solana_sdk::pubkey::new_rand();
         let authorized_pubkey = solana_sdk::pubkey::new_rand();
@@ -5232,7 +5233,6 @@ mod tests {
 
         let signers = vec![authorized_pubkey].into_iter().collect();
         let wrong_signers = vec![wrong_authorized_pubkey].into_iter().collect();
-        let invoke_context = MockInvokeContext::new(&Pubkey::default(), vec![]);
 
         for state in &[
             StakeState::Initialized(Meta::auto(&authorized_pubkey)),
@@ -5293,12 +5293,12 @@ mod tests {
 
     #[test]
     fn test_merge_invalid_account_data() {
+        let invoke_context = ThisInvokeContext::new_mock(&[], &[]);
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let source_stake_pubkey = solana_sdk::pubkey::new_rand();
         let authorized_pubkey = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
         let signers = vec![authorized_pubkey].into_iter().collect();
-        let invoke_context = MockInvokeContext::new(&Pubkey::default(), vec![]);
 
         for state in &[
             StakeState::Uninitialized,
@@ -5343,6 +5343,7 @@ mod tests {
 
     #[test]
     fn test_merge_fake_stake_source() {
+        let invoke_context = ThisInvokeContext::new_mock(&[], &[]);
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let source_stake_pubkey = solana_sdk::pubkey::new_rand();
         let authorized_pubkey = solana_sdk::pubkey::new_rand();
@@ -5368,7 +5369,6 @@ mod tests {
         .expect("source_stake_account");
         let source_stake_keyed_account =
             KeyedAccount::new(&source_stake_pubkey, true, &source_stake_account);
-        let invoke_context = MockInvokeContext::new(&Pubkey::default(), vec![]);
 
         assert_eq!(
             stake_keyed_account.merge(
@@ -5385,6 +5385,7 @@ mod tests {
 
     #[test]
     fn test_merge_active_stake() {
+        let invoke_context = ThisInvokeContext::new_mock(&[], &[]);
         let base_lamports = 4242424242;
         let stake_address = Pubkey::new_unique();
         let source_address = Pubkey::new_unique();
@@ -5438,7 +5439,6 @@ mod tests {
 
         let mut clock = Clock::default();
         let mut stake_history = StakeHistory::default();
-        let invoke_context = MockInvokeContext::new(&Pubkey::default(), vec![]);
 
         clock.epoch = 0;
         let mut effective = base_lamports;
@@ -6007,6 +6007,7 @@ mod tests {
 
     #[test]
     fn test_things_can_merge() {
+        let invoke_context = ThisInvokeContext::new_mock(&[], &[]);
         let good_stake = Stake {
             credits_observed: 4242,
             delegation: Delegation {
@@ -6016,7 +6017,6 @@ mod tests {
                 ..Delegation::default()
             },
         };
-        let invoke_context = MockInvokeContext::new(&Pubkey::default(), vec![]);
 
         let identical = good_stake;
         assert!(
@@ -6105,7 +6105,7 @@ mod tests {
 
     #[test]
     fn test_metas_can_merge_pre_v4() {
-        let invoke_context = MockInvokeContext::new(&Pubkey::default(), vec![]);
+        let invoke_context = ThisInvokeContext::new_mock(&[], &[]);
         // Identical Metas can merge
         assert!(MergeKind::metas_can_merge(
             &invoke_context,
@@ -6191,7 +6191,7 @@ mod tests {
 
     #[test]
     fn test_metas_can_merge_v4() {
-        let invoke_context = MockInvokeContext::new(&Pubkey::default(), vec![]);
+        let invoke_context = ThisInvokeContext::new_mock(&[], &[]);
         // Identical Metas can merge
         assert!(MergeKind::metas_can_merge(
             &invoke_context,
@@ -6337,6 +6337,7 @@ mod tests {
 
     #[test]
     fn test_merge_kind_get_if_mergeable() {
+        let invoke_context = ThisInvokeContext::new_mock(&[], &[]);
         let authority_pubkey = Pubkey::new_unique();
         let initial_lamports = 4242424242;
         let rent = Rent::default();
@@ -6357,7 +6358,6 @@ mod tests {
         let stake_keyed_account = KeyedAccount::new(&authority_pubkey, true, &stake_account);
         let mut clock = Clock::default();
         let mut stake_history = StakeHistory::default();
-        let invoke_context = MockInvokeContext::new(&Pubkey::default(), vec![]);
 
         // Uninitialized state fails
         assert_eq!(
@@ -6569,6 +6569,7 @@ mod tests {
 
     #[test]
     fn test_merge_kind_merge() {
+        let invoke_context = ThisInvokeContext::new_mock(&[], &[]);
         let lamports = 424242;
         let meta = Meta {
             rent_exempt_reserve: 42,
@@ -6584,7 +6585,6 @@ mod tests {
         let inactive = MergeKind::Inactive(Meta::default(), lamports);
         let activation_epoch = MergeKind::ActivationEpoch(meta, stake);
         let fully_active = MergeKind::FullyActive(meta, stake);
-        let invoke_context = MockInvokeContext::new(&Pubkey::default(), vec![]);
 
         assert_eq!(
             inactive
@@ -6647,6 +6647,7 @@ mod tests {
 
     #[test]
     fn test_active_stake_merge() {
+        let invoke_context = ThisInvokeContext::new_mock(&[], &[]);
         let delegation_a = 4_242_424_242u64;
         let delegation_b = 6_200_000_000u64;
         let credits_a = 124_521_000u64;
@@ -6669,8 +6670,6 @@ mod tests {
             },
             credits_observed: credits_a,
         };
-
-        let invoke_context = MockInvokeContext::new(&Pubkey::default(), vec![]);
 
         // activating stake merge, match credits observed
         let activation_epoch_a = MergeKind::ActivationEpoch(meta, stake_a);

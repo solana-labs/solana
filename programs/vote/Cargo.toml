@@ -23,6 +23,9 @@ solana-metrics = { path = "../../metrics", version = "=1.9.0" }
 solana-sdk = { path = "../../sdk", version = "=1.9.0" }
 thiserror = "1.0"
 
+[dev-dependencies]
+solana-program-runtime = { path = "../../program-runtime", version = "=1.9.0" }
+
 [build-dependencies]
 rustc_version = "0.4"
 

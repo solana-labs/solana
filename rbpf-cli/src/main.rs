@@ -5,6 +5,7 @@ use solana_bpf_loader_program::{
     create_vm, serialization::serialize_parameters, syscalls::register_syscalls, BpfError,
     ThisInstructionMeter,
 };
+use solana_program_runtime::invoke_context::{prepare_mock_invoke_context, ThisInvokeContext};
 use solana_rbpf::{
     assembler::assemble,
     static_analysis::Analysis,
@@ -12,32 +13,31 @@ use solana_rbpf::{
     vm::{Config, DynamicAnalysis, Executable},
 };
 use solana_sdk::{
-    account::AccountSharedData,
-    bpf_loader,
-    keyed_account::KeyedAccount,
-    process_instruction::{InvokeContext, MockInvokeContext},
-    pubkey::Pubkey,
+    account::AccountSharedData, bpf_loader, process_instruction::InvokeContext, pubkey::Pubkey,
 };
-use std::{cell::RefCell, fs::File, io::Read, io::Seek, io::SeekFrom, path::Path};
+use std::{fs::File, io::Read, io::Seek, io::SeekFrom, path::Path};
 use time::Instant;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Account {
+    key: Pubkey,
+    owner: Pubkey,
+    is_signer: bool,
+    is_writable: bool,
     lamports: u64,
     data: Vec<u8>,
-    owner: Pubkey,
 }
 #[derive(Serialize, Deserialize)]
 struct Input {
     accounts: Vec<Account>,
-    insndata: Vec<u8>,
+    instruction_data: Vec<u8>,
 }
 fn load_accounts(path: &Path) -> Result<Input> {
     let file = File::open(path).unwrap();
     let input: Input = serde_json::from_reader(file)?;
     println!("Program input:");
     println!("accounts {:?}", &input.accounts);
-    println!("insndata {:?}", &input.insndata);
+    println!("instruction_data {:?}", &input.instruction_data);
     println!("----------------------------------------");
     Ok(input)
 }
@@ -59,15 +59,21 @@ and the following fields are required
 {
     "accounts": [
         {
-            "lamports": 1000,
-            "data": [0, 0, 0, 3],
+            "key": [
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+            ],
             "owner": [
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-            ]
+            ],
+            "is_signer": false,
+            "is_writable": true,
+            "lamports": 1000,
+            "data": [0, 0, 0, 3]
         }
     ],
-    "insndata": []
+    "instruction_data": []
 }
 "##,
         )
@@ -149,34 +155,69 @@ native machine code before execting it in the virtual machine.",
         enable_instruction_tracing: matches.is_present("trace") || matches.is_present("profile"),
         ..Config::default()
     };
-    let mut accounts = Vec::new();
-    let mut account_refcells = Vec::new();
-    let default_account = RefCell::new(AccountSharedData::default());
-    let key = solana_sdk::pubkey::new_rand();
-    let (mut mem, account_lengths) = match matches.value_of("input").unwrap().parse::<usize>() {
-        Ok(allocate) => {
-            accounts.push(KeyedAccount::new(&key, false, &default_account));
-            (vec![0u8; allocate], vec![allocate])
+    let loader_id = bpf_loader::id();
+    let mut keyed_accounts = vec![
+        (
+            false,
+            false,
+            loader_id,
+            AccountSharedData::new_ref(0, 0, &solana_sdk::native_loader::id()),
+        ),
+        (
+            false,
+            false,
+            Pubkey::new_unique(),
+            AccountSharedData::new_ref(0, 0, &loader_id),
+        ),
+    ];
+    let instruction_data = match matches.value_of("input").unwrap().parse::<usize>() {
+        Ok(allocation_size) => {
+            keyed_accounts.push((
+                false,
+                true,
+                Pubkey::new_unique(),
+                AccountSharedData::new_ref(0, allocation_size, &Pubkey::new_unique()),
+            ));
+            vec![]
         }
         Err(_) => {
             let input = load_accounts(Path::new(matches.value_of("input").unwrap())).unwrap();
-            for acc in input.accounts {
-                let asd = AccountSharedData::new_ref(acc.lamports, acc.data.len(), &acc.owner);
-                asd.borrow_mut().set_data(acc.data);
-                account_refcells.push(asd);
+            for account in input.accounts {
+                let account_refcell = AccountSharedData::new_ref(
+                    account.lamports,
+                    account.data.len(),
+                    &account.owner,
+                );
+                account_refcell.borrow_mut().set_data(account.data);
+                keyed_accounts.push((
+                    account.is_signer,
+                    account.is_writable,
+                    account.key,
+                    account_refcell,
+                ));
             }
-            for acc in &account_refcells {
-                accounts.push(KeyedAccount::new(&key, false, acc));
-            }
-            let lid = bpf_loader::id();
-            let pid = Pubkey::new(&[0u8; 32]);
-            let (mut bytes, account_lengths) =
-                serialize_parameters(&lid, &pid, &accounts, &input.insndata).unwrap();
-            (Vec::from(bytes.as_slice_mut()), account_lengths)
+            input.instruction_data
         }
     };
-    let mut invoke_context = MockInvokeContext::new(&bpf_loader::id(), accounts);
-    let logger = invoke_context.logger.clone();
+    let program_indices = [0, 1];
+    let preparation = prepare_mock_invoke_context(&program_indices, &[], &keyed_accounts);
+    let mut invoke_context = ThisInvokeContext::new_mock(&preparation.accounts, &[]);
+    invoke_context
+        .push(
+            &preparation.message,
+            &preparation.message.instructions[0],
+            &program_indices,
+            Some(&preparation.account_indices),
+        )
+        .unwrap();
+    let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
+    let (mut parameter_bytes, account_lengths) = serialize_parameters(
+        keyed_accounts[0].unsigned_key(),
+        keyed_accounts[1].unsigned_key(),
+        &keyed_accounts[2..],
+        &instruction_data,
+    )
+    .unwrap();
     let compute_meter = invoke_context.get_compute_meter();
     let mut instruction_meter = ThisInstructionMeter { compute_meter };
 
@@ -231,11 +272,12 @@ native machine code before execting it in the virtual machine.",
     let mut vm = create_vm(
         &id,
         executable.as_ref(),
-        &mut mem,
+        parameter_bytes.as_slice_mut(),
         &mut invoke_context,
         &account_lengths,
     )
     .unwrap();
+    println!("Program output:");
     let start_time = Instant::now();
     let result = if matches.value_of("use").unwrap() == "interpreter" {
         vm.execute_program_interpreted(&mut instruction_meter)
@@ -243,13 +285,6 @@ native machine code before execting it in the virtual machine.",
         vm.execute_program_jit(&mut instruction_meter)
     };
     let duration = Instant::now() - start_time;
-    if logger.log.borrow().len() > 0 {
-        println!("Program output:");
-        for s in logger.log.borrow_mut().iter() {
-            println!("{}", s);
-        }
-        println!("----------------------------------------");
-    }
     println!("Result: {:?}", result);
     println!("Instruction Count: {}", vm.get_total_instruction_count());
     println!("Execution time: {} us", duration.whole_microseconds());

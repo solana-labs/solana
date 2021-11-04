@@ -1,6 +1,6 @@
 use crate::{alloc, BpfError};
 use alloc::Alloc;
-use solana_program_runtime::InstructionProcessor;
+use solana_program_runtime::instruction_processor::InstructionProcessor;
 use solana_rbpf::{
     aligned_memory::AlignedMemory,
     ebpf,
@@ -31,7 +31,7 @@ use solana_sdk::{
     message::Message,
     native_loader,
     precompiles::is_precompile,
-    process_instruction::{self, stable_log, ComputeMeter, InvokeContext, Logger},
+    process_instruction::{stable_log, ComputeMeter, InvokeContext, Logger},
     program::MAX_RETURN_DATA,
     pubkey::{Pubkey, PubkeyError, MAX_SEEDS, MAX_SEED_LEN},
     rent::Rent,
@@ -982,7 +982,7 @@ fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId>(
         .consume(invoke_context.get_compute_budget().sysvar_base_cost + size_of::<T>() as u64)?;
     let var = translate_type_mut::<T>(memory_mapping, var_addr, loader_id)?;
 
-    *var = process_instruction::get_sysvar::<T>(*invoke_context, id)
+    *var = solana_program_runtime::invoke_context::get_sysvar::<T>(*invoke_context, id)
         .map_err(SyscallError::InstructionError)?;
 
     Ok(SUCCESS)
@@ -2427,16 +2427,17 @@ impl<'a> SyscallObject<BpfError> for SyscallLogData<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use solana_program_runtime::{
+        invoke_context::{ThisComputeMeter, ThisInvokeContext, ThisLogger},
+        log_collector::LogCollector,
+    };
     use solana_rbpf::{
         ebpf::HOST_ALIGN, memory_region::MemoryRegion, user_error::UserError, vm::Config,
     };
     use solana_sdk::{
-        bpf_loader,
-        fee_calculator::FeeCalculator,
-        hash::hashv,
-        process_instruction::{MockComputeMeter, MockInvokeContext, MockLogger},
+        bpf_loader, feature_set::FeatureSet, fee_calculator::FeeCalculator, hash::hashv,
     };
-    use std::str::FromStr;
+    use std::{str::FromStr, sync::Arc};
 
     macro_rules! assert_access_violation {
         ($result:expr, $va:expr, $len:expr) => {
@@ -2762,10 +2763,7 @@ mod tests {
         )
         .unwrap();
 
-        let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
-            Rc::new(RefCell::new(MockComputeMeter {
-                remaining: string.len() as u64 - 1,
-            }));
+        let compute_meter = ThisComputeMeter::new_ref(string.len() as u64 - 1);
         let mut syscall_panic = SyscallPanic {
             compute_meter,
             loader_id: &bpf_loader::id(),
@@ -2787,10 +2785,7 @@ mod tests {
             result
         );
 
-        let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
-            Rc::new(RefCell::new(MockComputeMeter {
-                remaining: string.len() as u64,
-            }));
+        let compute_meter = ThisComputeMeter::new_ref(string.len() as u64);
         let mut syscall_panic = SyscallPanic {
             compute_meter,
             loader_id: &bpf_loader::id(),
@@ -2812,17 +2807,6 @@ mod tests {
     fn test_syscall_sol_log() {
         let string = "Gaggablaghblagh!";
         let addr = string.as_ptr() as *const _ as u64;
-
-        let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
-            Rc::new(RefCell::new(MockComputeMeter { remaining: 1000000 }));
-        let log = Rc::new(RefCell::new(vec![]));
-        let logger: Rc<RefCell<dyn Logger>> =
-            Rc::new(RefCell::new(MockLogger { log: log.clone() }));
-        let mut syscall_sol_log = SyscallLog {
-            compute_meter,
-            logger,
-            loader_id: &bpf_loader::id(),
-        };
         let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
             vec![
@@ -2838,21 +2822,39 @@ mod tests {
             &config,
         )
         .unwrap();
+        let log = Rc::new(LogCollector::default());
 
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
-        syscall_sol_log.call(
-            0x100000000,
-            string.len() as u64,
-            0,
-            0,
-            0,
-            &memory_mapping,
-            &mut result,
-        );
-        result.unwrap();
-        assert_eq!(log.borrow().len(), 1);
-        assert_eq!(log.borrow()[0], "Program log: Gaggablaghblagh!");
+        {
+            let mut syscall_sol_log = SyscallLog {
+                compute_meter: ThisComputeMeter::new_ref(string.len() as u64),
+                logger: ThisLogger::new_ref(Some(log.clone())),
+                loader_id: &bpf_loader::id(),
+            };
+            let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+            syscall_sol_log.call(
+                0x100000000,
+                string.len() as u64,
+                0,
+                0,
+                0,
+                &memory_mapping,
+                &mut result,
+            );
+            result.unwrap();
+        }
 
+        let log: Vec<String> = match Rc::try_unwrap(log) {
+            Ok(log) => log.into(),
+            Err(_) => panic!("Unwrap failed"),
+        };
+        assert_eq!(log.len(), 1);
+        assert_eq!(log[0], "Program log: Gaggablaghblagh!");
+
+        let mut syscall_sol_log = SyscallLog {
+            compute_meter: ThisComputeMeter::new_ref(string.len() as u64 * 3),
+            logger: ThisLogger::new_ref(None),
+            loader_id: &bpf_loader::id(),
+        };
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall_sol_log.call(
             0x100000001, // AccessViolation
@@ -2886,14 +2888,9 @@ mod tests {
             &mut result,
         );
 
-        let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
-            Rc::new(RefCell::new(MockComputeMeter {
-                remaining: (string.len() as u64 * 2) - 1,
-            }));
-        let logger: Rc<RefCell<dyn Logger>> = Rc::new(RefCell::new(MockLogger { log }));
         let mut syscall_sol_log = SyscallLog {
-            compute_meter,
-            logger,
+            compute_meter: ThisComputeMeter::new_ref((string.len() as u64 * 2) - 1),
+            logger: ThisLogger::new_ref(None),
             loader_id: &bpf_loader::id(),
         };
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
@@ -2927,45 +2924,33 @@ mod tests {
 
     #[test]
     fn test_syscall_sol_log_u64() {
-        let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
-            Rc::new(RefCell::new(MockComputeMeter {
-                remaining: std::u64::MAX,
-            }));
-        let log = Rc::new(RefCell::new(vec![]));
-        let logger: Rc<RefCell<dyn Logger>> =
-            Rc::new(RefCell::new(MockLogger { log: log.clone() }));
-        let mut syscall_sol_log_u64 = SyscallLogU64 {
-            cost: 0,
-            compute_meter,
-            logger,
+        let log = Rc::new(LogCollector::default());
+
+        {
+            let mut syscall_sol_log_u64 = SyscallLogU64 {
+                cost: 0,
+                compute_meter: ThisComputeMeter::new_ref(std::u64::MAX),
+                logger: ThisLogger::new_ref(Some(log.clone())),
+            };
+            let config = Config::default();
+            let memory_mapping = MemoryMapping::new::<UserError>(vec![], &config).unwrap();
+            let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+            syscall_sol_log_u64.call(1, 2, 3, 4, 5, &memory_mapping, &mut result);
+            result.unwrap();
+        }
+
+        let log: Vec<String> = match Rc::try_unwrap(log) {
+            Ok(log) => log.into(),
+            Err(_) => panic!("Unwrap failed"),
         };
-        let config = Config::default();
-        let memory_mapping = MemoryMapping::new::<UserError>(vec![], &config).unwrap();
-
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
-        syscall_sol_log_u64.call(1, 2, 3, 4, 5, &memory_mapping, &mut result);
-        result.unwrap();
-
-        assert_eq!(log.borrow().len(), 1);
-        assert_eq!(log.borrow()[0], "Program log: 0x1, 0x2, 0x3, 0x4, 0x5");
+        assert_eq!(log.len(), 1);
+        assert_eq!(log[0], "Program log: 0x1, 0x2, 0x3, 0x4, 0x5");
     }
 
     #[test]
     fn test_syscall_sol_pubkey() {
         let pubkey = Pubkey::from_str("MoqiU1vryuCGQSxFKA1SZ316JdLEFFhoAu6cKUNk7dN").unwrap();
         let addr = &pubkey.as_ref()[0] as *const _ as u64;
-
-        let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
-            Rc::new(RefCell::new(MockComputeMeter { remaining: 2 }));
-        let log = Rc::new(RefCell::new(vec![]));
-        let logger: Rc<RefCell<dyn Logger>> =
-            Rc::new(RefCell::new(MockLogger { log: log.clone() }));
-        let mut syscall_sol_pubkey = SyscallLogPubkey {
-            cost: 1,
-            compute_meter,
-            logger,
-            loader_id: &bpf_loader::id(),
-        };
         let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
             vec![
@@ -2981,15 +2966,36 @@ mod tests {
             &config,
         )
         .unwrap();
+        let log = Rc::new(LogCollector::default());
 
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
-        syscall_sol_pubkey.call(0x100000000, 0, 0, 0, 0, &memory_mapping, &mut result);
-        result.unwrap();
-        assert_eq!(log.borrow().len(), 1);
+        {
+            let mut syscall_sol_pubkey = SyscallLogPubkey {
+                cost: 1,
+                compute_meter: ThisComputeMeter::new_ref(1),
+                logger: ThisLogger::new_ref(Some(log.clone())),
+                loader_id: &bpf_loader::id(),
+            };
+            let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+            syscall_sol_pubkey.call(0x100000000, 0, 0, 0, 0, &memory_mapping, &mut result);
+            result.unwrap();
+        }
+
+        let log: Vec<String> = match Rc::try_unwrap(log) {
+            Ok(log) => log.into(),
+            Err(_) => panic!("Unwrap failed"),
+        };
+        assert_eq!(log.len(), 1);
         assert_eq!(
-            log.borrow()[0],
+            log[0],
             "Program log: MoqiU1vryuCGQSxFKA1SZ316JdLEFFhoAu6cKUNk7dN"
         );
+
+        let mut syscall_sol_pubkey = SyscallLogPubkey {
+            cost: 1,
+            compute_meter: ThisComputeMeter::new_ref(1),
+            logger: ThisLogger::new_ref(None),
+            loader_id: &bpf_loader::id(),
+        };
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall_sol_pubkey.call(
             0x100000001, // AccessViolation
@@ -3191,10 +3197,7 @@ mod tests {
             &config,
         )
         .unwrap();
-        let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
-            Rc::new(RefCell::new(MockComputeMeter {
-                remaining: (bytes1.len() + bytes2.len()) as u64,
-            }));
+        let compute_meter = ThisComputeMeter::new_ref((bytes1.len() + bytes2.len()) as u64);
         let mut syscall = SyscallSha256 {
             sha256_base_cost: 0,
             sha256_byte_cost: 2,
@@ -3281,11 +3284,15 @@ mod tests {
                 leader_schedule_epoch: 4,
                 unix_timestamp: 5,
             };
-            let mut invoke_context = MockInvokeContext::new(&Pubkey::default(), vec![]);
             let mut data = vec![];
             bincode::serialize_into(&mut data, &src_clock).unwrap();
-            let sysvars = &[(sysvar::clock::id(), data)];
-            invoke_context.sysvars = sysvars;
+            let sysvars = [(sysvar::clock::id(), data)];
+            let mut invoke_context = ThisInvokeContext::new_mock_with_sysvars_and_features(
+                &[],
+                &[],
+                &sysvars,
+                Arc::new(FeatureSet::all_enabled()),
+            );
 
             let mut syscall = SyscallGetClockSysvar {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -3325,11 +3332,15 @@ mod tests {
                 first_normal_epoch: 3,
                 first_normal_slot: 4,
             };
-            let mut invoke_context = MockInvokeContext::new(&Pubkey::default(), vec![]);
             let mut data = vec![];
             bincode::serialize_into(&mut data, &src_epochschedule).unwrap();
-            let sysvars = &[(sysvar::epoch_schedule::id(), data)];
-            invoke_context.sysvars = sysvars;
+            let sysvars = [(sysvar::epoch_schedule::id(), data)];
+            let mut invoke_context = ThisInvokeContext::new_mock_with_sysvars_and_features(
+                &[],
+                &[],
+                &sysvars,
+                Arc::new(FeatureSet::all_enabled()),
+            );
 
             let mut syscall = SyscallGetEpochScheduleSysvar {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -3376,11 +3387,15 @@ mod tests {
                     lamports_per_signature: 1,
                 },
             };
-            let mut invoke_context = MockInvokeContext::new(&Pubkey::default(), vec![]);
             let mut data = vec![];
             bincode::serialize_into(&mut data, &src_fees).unwrap();
-            let sysvars = &[(sysvar::fees::id(), data)];
-            invoke_context.sysvars = sysvars;
+            let sysvars = [(sysvar::fees::id(), data)];
+            let mut invoke_context = ThisInvokeContext::new_mock_with_sysvars_and_features(
+                &[],
+                &[],
+                &sysvars,
+                Arc::new(FeatureSet::all_enabled()),
+            );
 
             let mut syscall = SyscallGetFeesSysvar {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -3418,11 +3433,15 @@ mod tests {
                 exemption_threshold: 2.0,
                 burn_percent: 3,
             };
-            let mut invoke_context = MockInvokeContext::new(&Pubkey::default(), vec![]);
             let mut data = vec![];
             bincode::serialize_into(&mut data, &src_rent).unwrap();
-            let sysvars = &[(sysvar::rent::id(), data)];
-            invoke_context.sysvars = sysvars;
+            let sysvars = [(sysvar::rent::id(), data)];
+            let mut invoke_context = ThisInvokeContext::new_mock_with_sysvars_and_features(
+                &[],
+                &[],
+                &sysvars,
+                Arc::new(FeatureSet::all_enabled()),
+            );
 
             let mut syscall = SyscallGetRentSysvar {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -3530,11 +3549,9 @@ mod tests {
         program_id: &Pubkey,
         remaining: u64,
     ) -> Result<Pubkey, EbpfError<BpfError>> {
-        let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
-            Rc::new(RefCell::new(MockComputeMeter { remaining }));
         let mut syscall = SyscallCreateProgramAddress {
             cost: 1,
-            compute_meter: compute_meter.clone(),
+            compute_meter: ThisComputeMeter::new_ref(remaining),
             loader_id: &bpf_loader::id(),
         };
         let (address, _) = call_program_address_common(seeds, program_id, &mut syscall)?;
@@ -3546,11 +3563,9 @@ mod tests {
         program_id: &Pubkey,
         remaining: u64,
     ) -> Result<(Pubkey, u8), EbpfError<BpfError>> {
-        let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
-            Rc::new(RefCell::new(MockComputeMeter { remaining }));
         let mut syscall = SyscallTryFindProgramAddress {
             cost: 1,
-            compute_meter: compute_meter.clone(),
+            compute_meter: ThisComputeMeter::new_ref(remaining),
             loader_id: &bpf_loader::id(),
         };
         call_program_address_common(seeds, program_id, &mut syscall)

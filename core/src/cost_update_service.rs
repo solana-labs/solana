@@ -204,7 +204,7 @@ impl CostUpdateService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_program_runtime::ProgramTiming;
+    use solana_program_runtime::instruction_processor::ProgramTiming;
     use solana_sdk::pubkey::Pubkey;
 
     #[test]

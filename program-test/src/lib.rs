@@ -9,7 +9,7 @@ use {
     log::*,
     solana_banks_client::start_client,
     solana_banks_server::banks_server::start_local_server,
-    solana_program_runtime::InstructionProcessor,
+    solana_program_runtime::instruction_processor::InstructionProcessor,
     solana_runtime::{
         bank::{Bank, ExecuteTimings},
         bank_forks::BankForks,
@@ -33,7 +33,7 @@ use {
         message::Message,
         native_token::sol_to_lamports,
         poh_config::PohConfig,
-        process_instruction::{self, stable_log, InvokeContext, ProcessInstructionWithContext},
+        process_instruction::{stable_log, InvokeContext, ProcessInstructionWithContext},
         program_error::{ProgramError, ACCOUNT_BORROW_FAILED, UNSUPPORTED_SYSVAR},
         pubkey::Pubkey,
         rent::Rent,
@@ -215,7 +215,7 @@ fn get_sysvar<T: Default + Sysvar + Sized + serde::de::DeserializeOwned>(
         panic!("Exceeded compute budget");
     }
 
-    match process_instruction::get_sysvar::<T>(invoke_context, id) {
+    match solana_program_runtime::invoke_context::get_sysvar::<T>(invoke_context, id) {
         Ok(sysvar_data) => unsafe {
             *(var_addr as *mut _ as *mut T) = sysvar_data;
             SUCCESS
