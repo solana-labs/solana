@@ -6298,6 +6298,39 @@ impl Bank {
     }
 }
 
+/// Scan all the accounts for this bank and collect stats
+pub fn get_total_accounts_stats(bank: &Bank) -> ScanResult<TotalAccountsStats> {
+    bank.rc.accounts.accounts_db.scan_accounts(
+        &Ancestors::default(),
+        bank.bank_id(),
+        |total_accounts_stats: &mut TotalAccountsStats, item| {
+            if let Some((_pubkey, account, _slot)) = item {
+                total_accounts_stats.num_accounts += 1;
+                total_accounts_stats.data_len += account.data().len();
+
+                if account.executable() {
+                    total_accounts_stats.num_executable_accounts += 1;
+                    total_accounts_stats.executable_data_len += account.data().len();
+                }
+            }
+        },
+    )
+}
+
+/// Struct to collect stats when scanning all accounts in `get_total_accounts_stats()`
+#[derive(Debug, Default, Copy, Clone)]
+pub struct TotalAccountsStats {
+    /// Total number of accounts
+    pub num_accounts: usize,
+    /// Total data size of all accounts
+    pub data_len: usize,
+
+    /// Total number of executable accounts
+    pub num_executable_accounts: usize,
+    /// Total data size of executable accounts
+    pub executable_data_len: usize,
+}
+
 impl Drop for Bank {
     fn drop(&mut self) {
         if let Some(drop_callback) = self.drop_callback.read().unwrap().0.as_ref() {
