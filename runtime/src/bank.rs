@@ -6362,17 +6362,25 @@ impl Bank {
 
 /// Scan all the accounts for this bank and collect stats
 pub fn get_total_accounts_stats(bank: &Bank) -> ScanResult<TotalAccountsStats> {
+    let rent_collector = bank.rent_collector();
     bank.rc.accounts.accounts_db.scan_accounts(
         &Ancestors::default(),
         bank.bank_id(),
         |total_accounts_stats: &mut TotalAccountsStats, item| {
-            if let Some((_pubkey, account, _slot)) = item {
+            if let Some((pubkey, account, _slot)) = item {
                 total_accounts_stats.num_accounts += 1;
                 total_accounts_stats.data_len += account.data().len();
 
                 if account.executable() {
                     total_accounts_stats.num_executable_accounts += 1;
                     total_accounts_stats.executable_data_len += account.data().len();
+                }
+
+                if !rent_collector.should_collect_rent(pubkey, &account, false) || {
+                    let (_rent_due, exempt) = rent_collector.get_rent_due(&account);
+                    exempt
+                } {
+                    total_accounts_stats.num_rent_exempt_accounts += 1;
                 }
             }
         },
@@ -6391,6 +6399,9 @@ pub struct TotalAccountsStats {
     pub num_executable_accounts: usize,
     /// Total data size of executable accounts
     pub executable_data_len: usize,
+
+    /// Total number of rent exempt accounts
+    pub num_rent_exempt_accounts: usize,
 }
 
 impl Drop for Bank {

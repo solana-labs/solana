@@ -60,7 +60,6 @@ impl RentCollector {
         rent_for_sysvars: bool,
     ) -> bool {
         !(account.executable() // executable accounts must be rent-exempt balance
-            || account.rent_epoch() > self.epoch
             || (!rent_for_sysvars && sysvar::check_id(account.owner()))
             || *address == incinerator::id())
     }
@@ -95,6 +94,7 @@ impl RentCollector {
         filler_account_suffix: Option<&Pubkey>,
     ) -> u64 {
         if !self.should_collect_rent(address, account, rent_for_sysvars)
+            || account.rent_epoch() > self.epoch
             || crate::accounts_db::AccountsDb::is_filler_account_helper(
                 address,
                 filler_account_suffix,
