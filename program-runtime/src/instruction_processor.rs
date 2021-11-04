@@ -9,7 +9,7 @@ use solana_sdk::{
     instruction::{Instruction, InstructionError},
     keyed_account::keyed_account_at_index,
     message::Message,
-    process_instruction::{Executor, InvokeContext, ProcessInstructionWithContext},
+    process_instruction::{InvokeContext, ProcessInstructionWithContext},
     pubkey::Pubkey,
     rent::Rent,
     system_instruction::MAX_PERMITTED_DATA_LENGTH,
@@ -18,9 +18,22 @@ use solana_sdk::{
 use std::{
     cell::{Ref, RefCell, RefMut},
     collections::HashMap,
+    fmt::Debug,
     rc::Rc,
     sync::Arc,
 };
+
+/// Program executor
+pub trait Executor: Debug + Send + Sync {
+    /// Execute the program
+    fn execute(
+        &self,
+        first_instruction_account: usize,
+        instruction_data: &[u8],
+        invoke_context: &mut dyn InvokeContext,
+        use_jit: bool,
+    ) -> Result<(), InstructionError>;
+}
 
 #[derive(Default)]
 pub struct Executors {

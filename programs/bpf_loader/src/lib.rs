@@ -14,7 +14,7 @@ use crate::{
 };
 use log::{log_enabled, trace, Level::Trace};
 use solana_measure::measure::Measure;
-use solana_program_runtime::instruction_processor::InstructionProcessor;
+use solana_program_runtime::instruction_processor::{Executor, InstructionProcessor};
 use solana_rbpf::{
     aligned_memory::AlignedMemory,
     ebpf::HOST_ALIGN,
@@ -40,7 +40,7 @@ use solana_sdk::{
     keyed_account::{from_keyed_account, keyed_account_at_index, KeyedAccount},
     loader_instruction::LoaderInstruction,
     loader_upgradeable_instruction::UpgradeableLoaderInstruction,
-    process_instruction::{stable_log, ComputeMeter, Executor, InvokeContext, Logger},
+    process_instruction::{stable_log, ComputeMeter, InvokeContext, Logger},
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     rent::Rent,

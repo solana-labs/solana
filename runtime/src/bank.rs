@@ -70,7 +70,7 @@ use rayon::{
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
 use solana_program_runtime::{
-    instruction_processor::{ExecuteDetailsTimings, Executors, InstructionProcessor},
+    instruction_processor::{ExecuteDetailsTimings, Executor, Executors, InstructionProcessor},
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
 };
@@ -109,7 +109,7 @@ use solana_sdk::{
     nonce, nonce_account,
     packet::PACKET_DATA_SIZE,
     precompiles::get_precompiles,
-    process_instruction::{ComputeMeter, Executor, ProcessInstructionWithContext},
+    process_instruction::{ComputeMeter, ProcessInstructionWithContext},
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     secp256k1_program,

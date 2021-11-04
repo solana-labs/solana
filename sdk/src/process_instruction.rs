@@ -10,7 +10,7 @@ use solana_sdk::{
     message::Message,
     pubkey::Pubkey,
 };
-use std::{cell::RefCell, fmt::Debug, rc::Rc, sync::Arc};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 pub type ProcessInstructionWithContext =
     fn(usize, &[u8], &mut dyn InvokeContext) -> Result<(), InstructionError>;
@@ -245,16 +245,4 @@ pub mod stable_log {
     ) {
         ic_logger_msg!(logger, "Program {} failed: {}", program_id, err);
     }
-}
-
-/// Program executor
-pub trait Executor: Debug + Send + Sync {
-    /// Execute the program
-    fn execute(
-        &self,
-        first_instruction_account: usize,
-        instruction_data: &[u8],
-        invoke_context: &mut dyn InvokeContext,
-        use_jit: bool,
-    ) -> Result<(), InstructionError>;
 }

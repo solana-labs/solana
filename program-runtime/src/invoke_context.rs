@@ -1,5 +1,5 @@
 use crate::{
-    instruction_processor::{ExecuteDetailsTimings, Executors, PreAccount},
+    instruction_processor::{ExecuteDetailsTimings, Executor, Executors, PreAccount},
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
 };
@@ -16,9 +16,7 @@ use solana_sdk::{
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     keyed_account::{create_keyed_accounts_unified, KeyedAccount},
     message::Message,
-    process_instruction::{
-        ComputeMeter, Executor, InvokeContext, Logger, ProcessInstructionWithContext,
-    },
+    process_instruction::{ComputeMeter, InvokeContext, Logger, ProcessInstructionWithContext},
     pubkey::Pubkey,
     rent::Rent,
     sysvar::Sysvar,
