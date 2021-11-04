@@ -154,7 +154,7 @@ impl ShredWAL {
                     err
                 ))))
             })?;
-            debug!(
+            trace!(
                 "Found {} shreds for slot {} in WAL files",
                 shreds.len(),
                 slot
