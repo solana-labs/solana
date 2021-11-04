@@ -609,13 +609,6 @@ pub fn main() {
                       start from a local snapshot if present"),
         )
         .arg(
-            Arg::with_name("no_incremental_snapshot_fetch")
-                .long("no-incremental-snapshot-fetch")
-                .takes_value(false)
-                .help("Do not attempt to fetch incremental snapshots from the cluster, only fetch \
-                      full snapshots"),
-        )
-        .arg(
             Arg::with_name("no_genesis_fetch")
                 .long("no-genesis-fetch")
                 .takes_value(false)
@@ -1931,8 +1924,7 @@ pub fn main() {
             "max_genesis_archive_unpacked_size",
             u64
         ),
-        incremental_snapshot_fetch: matches.is_present("incremental_snapshots")
-            && !matches.is_present("no_incremental_snapshot_fetch"),
+        incremental_snapshot_fetch: matches.is_present("incremental_snapshots"),
     };
 
     let private_rpc = matches.is_present("private_rpc");
