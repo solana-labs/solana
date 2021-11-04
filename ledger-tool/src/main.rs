@@ -1425,8 +1425,8 @@ fn main() {
                     .help("Include sysvars too"),
             )
             .arg(
-                Arg::with_name("no_accounts_contents")
-                    .long("no-accounts-contents")
+                Arg::with_name("no_account_contents")
+                    .long("no-account-contents")
                     .takes_value(false)
                     .help("Do not print contents of each account, which is very slow with lots of accounts."),
             )
@@ -2505,8 +2505,8 @@ fn main() {
                 .map(|(pubkey, account, slot)| (pubkey, (account, slot)))
                 .collect();
 
-            let print_accounts_contents = !arg_matches.is_present("no_accounts_contents");
-            if print_accounts_contents {
+            let print_account_contents = !arg_matches.is_present("no_account_contents");
+            if print_account_contents {
                 println!("Getting accounts contents...");
                 let print_account_data = !arg_matches.is_present("no_account_data");
                 for (pubkey, (account, slot)) in accounts.into_iter() {
