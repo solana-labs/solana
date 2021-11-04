@@ -71,35 +71,35 @@ pub struct DbAccountInfo {
     pub write_version: i64,
 }
 
-#[derive(Clone, ToSql)]
+#[derive(Clone, Debug, ToSql)]
 pub struct DbCompiledInstruction {
-    pub program_id_index: u8,
+    pub program_id_index: i16,
     pub accounts: Vec<u8>,
     pub data: Vec<u8>,
 }
 
-#[derive(Clone, ToSql)]
+#[derive(Clone, Debug, ToSql)]
 pub struct DbInnerInstructions {
-    pub index: u8,
-    pub instructions: CompiledInstruction,
+    pub index: i16,
+    pub instructions: DbCompiledInstruction,
 }
 
-#[derive(Clone, ToSql)]
+#[derive(Clone, Debug, ToSql)]
 pub struct DbTransactionTokenBalance {
-    account_index: u8,
+    account_index: i16,
     mint: String,
     ui_token_amount: f64,
     owner: String,
 }
 
-#[derive(Clone, ToSql)]
+#[derive(Clone, Debug, ToSql)]
 pub struct DbRewards {
     validator_point_value: f64,
     unused: f64,
 }
 
-#[derive(Clone, ToSql)]
-pub struct TransactionStatusMeta {
+#[derive(Clone, Debug, ToSql)]
+pub struct DbTransactionStatusMeta {
     status: String,
     fee: i64,
     pre_balances: Vec<i64>,
@@ -111,12 +111,14 @@ pub struct TransactionStatusMeta {
     rewards: DbRewards
 }
 
+#[derive(Clone, Debug, ToSql)]
 pub struct DbTransactionMessageHeader {
-    num_required_signatures: u8,
-    num_readonly_signed_accounts: u8,
-    num_readonly_unsigned_accounts: u8,
+    num_required_signatures: i16,
+    num_readonly_signed_accounts: i16,
+    num_readonly_unsigned_accounts: i16,
 }
 
+#[derive(Clone, Debug, ToSql)]
 pub struct DbTransactionMessage {
     header: DbTransactionMessageHeader,
     account_keys: Vec<Vec<u8>>,
