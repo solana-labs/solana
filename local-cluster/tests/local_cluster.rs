@@ -2680,7 +2680,7 @@ fn test_duplicate_shreds_broadcast_leader() {
                     return;
                 }
 
-                let (labels, votes) = cluster_info.get_votes(&mut cursor);
+                let (labels, votes) = cluster_info.get_votes_with_labels(&mut cursor);
                 let mut parsed_vote_iter: Vec<_> = labels
                     .into_iter()
                     .zip(votes.into_iter())

@@ -5642,7 +5642,7 @@ pub mod tests {
         );
 
         let mut cursor = Cursor::default();
-        let (_, votes) = cluster_info.get_votes(&mut cursor);
+        let votes = cluster_info.get_votes(&mut cursor);
         assert_eq!(votes.len(), 1);
         let vote_tx = &votes[0];
         assert_eq!(vote_tx.message.recent_blockhash, bank0.last_blockhash());
@@ -5671,7 +5671,7 @@ pub mod tests {
             );
 
             // No new votes have been submitted to gossip
-            let (_, votes) = cluster_info.get_votes(&mut cursor);
+            let votes = cluster_info.get_votes(&mut cursor);
             assert!(votes.is_empty());
             // Tower's latest vote tx blockhash hasn't changed either
             assert_eq!(tower.last_vote_tx_blockhash(), bank0.last_blockhash());
@@ -5704,7 +5704,7 @@ pub mod tests {
             vote_info,
             false,
         );
-        let (_, votes) = cluster_info.get_votes(&mut cursor);
+        let votes = cluster_info.get_votes(&mut cursor);
         assert_eq!(votes.len(), 1);
         let vote_tx = &votes[0];
         assert_eq!(vote_tx.message.recent_blockhash, bank1.last_blockhash());
@@ -5727,7 +5727,7 @@ pub mod tests {
         );
 
         // No new votes have been submitted to gossip
-        let (_, votes) = cluster_info.get_votes(&mut cursor);
+        let votes = cluster_info.get_votes(&mut cursor);
         assert!(votes.is_empty());
         assert_eq!(tower.last_vote_tx_blockhash(), bank1.last_blockhash());
         assert_eq!(tower.last_voted_slot().unwrap(), 1);
@@ -5774,7 +5774,7 @@ pub mod tests {
         );
 
         assert!(last_vote_refresh_time.last_refresh_time > clone_refresh_time);
-        let (_, votes) = cluster_info.get_votes(&mut cursor);
+        let votes = cluster_info.get_votes(&mut cursor);
         assert_eq!(votes.len(), 1);
         let vote_tx = &votes[0];
         assert_eq!(
@@ -5830,7 +5830,7 @@ pub mod tests {
             &voting_sender,
         );
 
-        let (_, votes) = cluster_info.get_votes(&mut cursor);
+        let votes = cluster_info.get_votes(&mut cursor);
         assert!(votes.is_empty());
         assert_eq!(
             vote_tx.message.recent_blockhash,

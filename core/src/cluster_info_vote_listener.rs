@@ -16,7 +16,6 @@ use log::*;
 use solana_gossip::{
     cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
     crds::Cursor,
-    crds_value::CrdsValueLabel,
 };
 use solana_ledger::blockstore::Blockstore;
 use solana_metrics::inc_new_counter_debug;
@@ -336,10 +335,10 @@ impl ClusterInfoVoteListener {
     ) -> Result<()> {
         let mut cursor = Cursor::default();
         while !exit.load(Ordering::Relaxed) {
-            let (labels, votes) = cluster_info.get_votes(&mut cursor);
+            let votes = cluster_info.get_votes(&mut cursor);
             inc_new_counter_debug!("cluster_info_vote_listener-recv_count", votes.len());
             if !votes.is_empty() {
-                let (vote_txs, packets) = Self::verify_votes(votes, labels);
+                let (vote_txs, packets) = Self::verify_votes(votes);
                 verified_vote_transactions_sender.send(vote_txs)?;
                 verified_vote_label_packets_sender.send(packets)?;
             }
@@ -349,18 +348,15 @@ impl ClusterInfoVoteListener {
     }
 
     #[allow(clippy::type_complexity)]
-    fn verify_votes(
-        votes: Vec<Transaction>,
-        labels: Vec<CrdsValueLabel>,
-    ) -> (Vec<Transaction>, Vec<VerifiedVoteMetadata>) {
+    fn verify_votes(votes: Vec<Transaction>) -> (Vec<Transaction>, Vec<VerifiedVoteMetadata>) {
         let mut msgs = packet::to_packets_chunked(&votes, 1);
 
         // Votes should already be filtered by this point.
         let reject_non_vote = false;
         sigverify::ed25519_verify_cpu(&mut msgs, reject_non_vote);
 
-        let (vote_txs, vote_metadata) = izip!(labels.into_iter(), votes.into_iter(), msgs,)
-            .filter_map(|(_label, vote_tx, packet)| {
+        let (vote_txs, vote_metadata) = izip!(votes.into_iter(), msgs,)
+            .filter_map(|(vote_tx, packet)| {
                 let (vote, vote_account_key) = vote_transaction::parse_vote_transaction(&vote_tx)
                     .and_then(|(vote_account_key, vote, _)| {
                     if vote.slots.is_empty() {
@@ -858,6 +854,7 @@ impl ClusterInfoVoteListener {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use solana_gossip::crds_value::CrdsValueLabel;
     use solana_perf::packet;
     use solana_rpc::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank;
     use solana_runtime::{
@@ -1717,8 +1714,7 @@ mod tests {
     fn test_verify_votes_empty() {
         solana_logger::setup();
         let votes = vec![];
-        let labels = vec![];
-        let (vote_txs, packets) = ClusterInfoVoteListener::verify_votes(votes, labels);
+        let (vote_txs, packets) = ClusterInfoVoteListener::verify_votes(votes);
         assert!(vote_txs.is_empty());
         assert!(packets.is_empty());
     }
@@ -1749,8 +1745,7 @@ mod tests {
     fn run_test_verify_votes_1_pass(hash: Option<Hash>) {
         let vote_tx = test_vote_tx(hash);
         let votes = vec![vote_tx];
-        let labels = vec![CrdsValueLabel::Vote(0, solana_sdk::pubkey::new_rand())];
-        let (vote_txs, packets) = ClusterInfoVoteListener::verify_votes(votes, labels);
+        let (vote_txs, packets) = ClusterInfoVoteListener::verify_votes(votes);
         assert_eq!(vote_txs.len(), 1);
         verify_packets_len(&packets, 1);
     }
@@ -1766,9 +1761,7 @@ mod tests {
         let mut bad_vote = vote_tx.clone();
         bad_vote.signatures[0] = Signature::default();
         let votes = vec![vote_tx.clone(), bad_vote, vote_tx];
-        let label = CrdsValueLabel::Vote(0, solana_sdk::pubkey::new_rand());
-        let labels: Vec<_> = (0..votes.len()).map(|_| label.clone()).collect();
-        let (vote_txs, packets) = ClusterInfoVoteListener::verify_votes(votes, labels);
+        let (vote_txs, packets) = ClusterInfoVoteListener::verify_votes(votes);
         assert_eq!(vote_txs.len(), 2);
         verify_packets_len(&packets, 2);
     }
