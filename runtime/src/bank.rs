@@ -1009,9 +1009,6 @@ pub struct Bank {
     #[allow(clippy::rc_buffer)]
     feature_builtins: Arc<Vec<(Builtin, Pubkey, ActivationType)>>,
 
-    /// Last time when the cluster info vote listener has synced with this bank
-    pub last_vote_sync: AtomicU64,
-
     /// Protocol-level rewards that were distributed by this bank
     pub rewards: RwLock<Vec<(Pubkey, RewardInfo)>>,
 
@@ -1169,7 +1166,6 @@ impl Bank {
             instruction_processor: InstructionProcessor::default(),
             compute_budget: Option::<ComputeBudget>::default(),
             feature_builtins: Arc::<Vec<(Builtin, Pubkey, ActivationType)>>::default(),
-            last_vote_sync: AtomicU64::default(),
             rewards: RwLock::<Vec<(Pubkey, RewardInfo)>>::default(),
             cluster_type: Option::<ClusterType>::default(),
             lazy_rent_collection: AtomicBool::default(),
@@ -1420,7 +1416,6 @@ impl Bank {
             compute_budget: parent.compute_budget,
             feature_builtins: parent.feature_builtins.clone(),
             hard_forks: parent.hard_forks.clone(),
-            last_vote_sync: AtomicU64::new(parent.last_vote_sync.load(Relaxed)),
             rewards: RwLock::new(vec![]),
             cluster_type: parent.cluster_type,
             lazy_rent_collection: AtomicBool::new(parent.lazy_rent_collection.load(Relaxed)),
@@ -1617,7 +1612,6 @@ impl Bank {
             instruction_processor: new(),
             compute_budget: None,
             feature_builtins: new(),
-            last_vote_sync: new(),
             rewards: new(),
             cluster_type: Some(genesis_config.cluster_type),
             lazy_rent_collection: new(),
@@ -10855,19 +10849,6 @@ pub(crate) mod tests {
         let sysvar_recent_blockhash = recent_blockhashes[0].blockhash;
         let bank_last_blockhash = bank.last_blockhash();
         assert_eq!(sysvar_recent_blockhash, bank_last_blockhash);
-    }
-
-    #[test]
-    fn test_bank_inherit_last_vote_sync() {
-        let (genesis_config, _) = create_genesis_config(500);
-        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
-        let last_ts = bank0.last_vote_sync.load(Relaxed);
-        assert_eq!(last_ts, 0);
-        bank0.last_vote_sync.store(1, Relaxed);
-        let bank1 =
-            Bank::new_from_parent(&bank0, &Pubkey::default(), bank0.get_slots_in_epoch(0) - 1);
-        let last_ts = bank1.last_vote_sync.load(Relaxed);
-        assert_eq!(last_ts, 1);
     }
 
     #[test]
