@@ -4707,6 +4707,7 @@ dependencies = [
 name = "solana-compute-budget-program"
 version = "1.9.0"
 dependencies = [
+ "solana-program-runtime",
  "solana-sdk",
 ]
 
@@ -5440,7 +5441,9 @@ dependencies = [
 name = "solana-program-runtime"
 version = "1.9.0"
 dependencies = [
+ "base64 0.13.0",
  "bincode",
+ "itertools 0.10.1",
  "libc",
  "libloading",
  "log 0.4.14",
