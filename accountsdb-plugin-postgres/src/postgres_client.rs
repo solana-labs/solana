@@ -232,7 +232,7 @@ impl From<&CompiledInstruction> for DbCompiledInstruction {
     fn from(instrtuction: &CompiledInstruction) -> Self {
         Self {
             program_id_index: instrtuction.program_id_index as i16,
-            accounts: instrtuction.accounts.clone(),
+            accounts: instrtuction.accounts.iter().map(|account_idx| *account_idx as i16).collect(),
             data: instrtuction.data.clone(),
         }
     }
