@@ -34,7 +34,7 @@ fn bench_gpusigverify(bencher: &mut Bencher) {
                     versioned_tx.message.hash()
                 };
 
-                SanitizedTransaction::try_create(versioned_tx, message_hash, |_| {
+                SanitizedTransaction::try_create(versioned_tx, message_hash, None, |_| {
                     Err(TransactionError::UnsupportedVersion)
                 })
             }?;
@@ -54,5 +54,37 @@ fn bench_gpusigverify(bencher: &mut Bencher) {
         );
 
         let _ans = res.finish_verify();
+    })
+}
+
+#[bench]
+fn bench_cpusigverify(bencher: &mut Bencher) {
+    let entries = (0..128)
+        .map(|_| {
+            let transaction = test_tx();
+            entry::next_entry_mut(&mut Hash::default(), 0, vec![transaction])
+        })
+        .collect::<Vec<_>>();
+
+    let verify_transaction = {
+        move |versioned_tx: VersionedTransaction|
+              -> Result<SanitizedTransaction> {
+            let sanitized_tx = {
+                let message_hash = versioned_tx.verify_and_hash_message()?;
+
+                SanitizedTransaction::try_create(versioned_tx, message_hash, None, |_| {
+                    Err(TransactionError::UnsupportedVersion)
+                })
+            }?;
+
+            Ok(sanitized_tx)
+        }
+    };
+
+    bencher.iter(|| {
+        let _ans = entry::verify_transactions(
+            entries.clone(),
+            Arc::new(verify_transaction)
+        );
     })
 }
