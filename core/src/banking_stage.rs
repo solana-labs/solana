@@ -1,10 +1,7 @@
 //! The `banking_stage` processes Transaction messages. It is intended to be used
 //! to contruct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
-use crate::{
-    packet_hasher::PacketHasher,
-    qos_service::{QosService, QosServiceStats},
-};
+use crate::{packet_hasher::PacketHasher, qos_service::QosService};
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use itertools::Itertools;
 use lru::LruCache;
@@ -99,8 +96,6 @@ pub struct BankingStageStats {
     current_buffered_packet_batches_count: AtomicUsize,
     rebuffered_packets_count: AtomicUsize,
     consumed_buffered_packets_count: AtomicUsize,
-    cost_tracker_check_count: AtomicUsize,
-    cost_forced_retry_transactions_count: AtomicUsize,
 
     // Timing
     consume_buffered_packets_elapsed: AtomicU64,
@@ -111,9 +106,6 @@ pub struct BankingStageStats {
     packet_conversion_elapsed: AtomicU64,
     unprocessed_packet_conversion_elapsed: AtomicU64,
     transaction_processing_elapsed: AtomicU64,
-    cost_tracker_update_elapsed: AtomicU64,
-    cost_tracker_clone_elapsed: AtomicU64,
-    cost_tracker_check_elapsed: AtomicU64,
 }
 
 impl BankingStageStats {
@@ -184,17 +176,6 @@ impl BankingStageStats {
                     i64
                 ),
                 (
-                    "cost_tracker_check_count",
-                    self.cost_tracker_check_count.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "cost_forced_retry_transactions_count",
-                    self.cost_forced_retry_transactions_count
-                        .swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
                     "consume_buffered_packets_elapsed",
                     self.consume_buffered_packets_elapsed
                         .swap(0, Ordering::Relaxed) as i64,
@@ -238,21 +219,6 @@ impl BankingStageStats {
                     "transaction_processing_elapsed",
                     self.transaction_processing_elapsed
                         .swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "cost_tracker_update_elapsed",
-                    self.cost_tracker_update_elapsed.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "cost_tracker_clone_elapsed",
-                    self.cost_tracker_clone_elapsed.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "cost_tracker_check_elapsed",
-                    self.cost_tracker_check_elapsed.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
             );
@@ -326,6 +292,7 @@ impl BankingStage {
             PacketHasher::default(),
         )));
         let data_budget = Arc::new(DataBudget::default());
+        let qos_service = Arc::new(QosService::new(cost_model));
         // Many banks that process transactions in parallel.
         assert!(num_threads >= NUM_VOTE_PROCESSING_THREADS + MIN_THREADS_BANKING);
         let bank_thread_hdls: Vec<JoinHandle<()>> = (0..num_threads)
@@ -350,7 +317,7 @@ impl BankingStage {
                 let gossip_vote_sender = gossip_vote_sender.clone();
                 let duplicates = duplicates.clone();
                 let data_budget = data_budget.clone();
-                let cost_model = cost_model.clone();
+                let qos_service = qos_service.clone();
                 Builder::new()
                     .name("solana-banking-stage-tx".to_string())
                     .spawn(move || {
@@ -366,7 +333,7 @@ impl BankingStage {
                             gossip_vote_sender,
                             &duplicates,
                             &data_budget,
-                            cost_model,
+                            qos_service,
                         );
                     })
                     .unwrap()
@@ -440,7 +407,7 @@ impl BankingStage {
         test_fn: Option<impl Fn()>,
         banking_stage_stats: &BankingStageStats,
         recorder: &TransactionRecorder,
-        cost_model: &Arc<RwLock<CostModel>>,
+        qos_service: &Arc<QosService>,
     ) {
         let mut rebuffered_packets_len = 0;
         let mut new_tx_count = 0;
@@ -481,7 +448,7 @@ impl BankingStage {
                             transaction_status_sender.clone(),
                             gossip_vote_sender,
                             banking_stage_stats,
-                            cost_model,
+                            qos_service,
                         );
                     if processed < verified_txs_len
                         || !Bank::should_bank_still_be_processing_txs(
@@ -587,7 +554,7 @@ impl BankingStage {
         banking_stage_stats: &BankingStageStats,
         recorder: &TransactionRecorder,
         data_budget: &DataBudget,
-        cost_model: &Arc<RwLock<CostModel>>,
+        qos_service: &Arc<QosService>,
     ) -> BufferedPacketsDecision {
         let bank_start;
         let (
@@ -628,7 +595,7 @@ impl BankingStage {
                     None::<Box<dyn Fn()>>,
                     banking_stage_stats,
                     recorder,
-                    cost_model,
+                    qos_service,
                 );
             }
             BufferedPacketsDecision::Forward => {
@@ -707,7 +674,7 @@ impl BankingStage {
         gossip_vote_sender: ReplayVoteSender,
         duplicates: &Arc<Mutex<(LruCache<u64, ()>, PacketHasher)>>,
         data_budget: &DataBudget,
-        cost_model: Arc<RwLock<CostModel>>,
+        qos_service: Arc<QosService>,
     ) {
         let recorder = poh_recorder.lock().unwrap().recorder();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -728,7 +695,7 @@ impl BankingStage {
                     &banking_stage_stats,
                     &recorder,
                     data_budget,
-                    &cost_model,
+                    &qos_service,
                 );
                 if matches!(decision, BufferedPacketsDecision::Hold)
                     || matches!(decision, BufferedPacketsDecision::ForwardAndHold)
@@ -763,7 +730,7 @@ impl BankingStage {
                 &banking_stage_stats,
                 duplicates,
                 &recorder,
-                &cost_model,
+                &qos_service,
             ) {
                 Ok(()) | Err(RecvTimeoutError::Timeout) => (),
                 Err(RecvTimeoutError::Disconnected) => break,
@@ -961,22 +928,13 @@ impl BankingStage {
         chunk_offset: usize,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
-        cost_model: &Arc<RwLock<CostModel>>,
+        qos_service: &Arc<QosService>,
     ) -> (Result<usize, PohRecorderError>, Vec<usize>) {
-        let mut qos_service_stats = QosServiceStats::default();
-        let qos_service = QosService::new(cost_model.clone());
-        let tx_costs = qos_service.compute_transactions_costs(
-            txs.iter(),
-            bank.demote_program_write_locks(),
-            &mut qos_service_stats,
-        );
+        let tx_costs =
+            qos_service.compute_transactions_costs(txs.iter(), bank.demote_program_write_locks());
 
-        let transactions_status = qos_service.select_transactions_per_cost(
-            txs.iter(),
-            tx_costs.iter(),
-            bank,
-            &mut qos_service_stats,
-        );
+        let transactions_status =
+            qos_service.select_transactions_per_cost(txs.iter(), tx_costs.iter(), bank);
 
         // Only lock accounts for those transactions are selected for the block;
         // Once accounts are locked, other threads cannot encode transactions that will modify the
@@ -1009,8 +967,6 @@ impl BankingStage {
             txs.len(),
         );
 
-        qos_service_stats.report();
-
         (result, retryable_txs)
     }
 
@@ -1025,7 +981,7 @@ impl BankingStage {
         poh: &TransactionRecorder,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
-        cost_model: &Arc<RwLock<CostModel>>,
+        qos_service: &Arc<QosService>,
     ) -> (usize, Vec<usize>) {
         let mut chunk_start = 0;
         let mut unprocessed_txs = vec![];
@@ -1042,7 +998,7 @@ impl BankingStage {
                 chunk_start,
                 transaction_status_sender.clone(),
                 gossip_vote_sender,
-                cost_model,
+                qos_service,
             );
             trace!("process_transactions result: {:?}", result);
 
@@ -1192,7 +1148,7 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         banking_stage_stats: &BankingStageStats,
-        cost_model: &Arc<RwLock<CostModel>>,
+        qos_service: &Arc<QosService>,
     ) -> (usize, usize, Vec<usize>) {
         let mut packet_conversion_time = Measure::start("packet_conversion");
         let (transactions, transaction_to_packet_indexes) = Self::transactions_from_packets(
@@ -1214,7 +1170,7 @@ impl BankingStage {
             poh,
             transaction_status_sender,
             gossip_vote_sender,
-            cost_model,
+            qos_service,
         );
         process_tx_time.stop();
         let unprocessed_tx_count = unprocessed_tx_indexes.len();
@@ -1332,7 +1288,7 @@ impl BankingStage {
         banking_stage_stats: &BankingStageStats,
         duplicates: &Arc<Mutex<(LruCache<u64, ()>, PacketHasher)>>,
         recorder: &TransactionRecorder,
-        cost_model: &Arc<RwLock<CostModel>>,
+        qos_service: &Arc<QosService>,
     ) -> Result<(), RecvTimeoutError> {
         let mut recv_time = Measure::start("process_packets_recv");
         let mms = verified_receiver.recv_timeout(recv_timeout)?;
@@ -1390,7 +1346,7 @@ impl BankingStage {
                     transaction_status_sender.clone(),
                     gossip_vote_sender,
                     banking_stage_stats,
-                    cost_model,
+                    qos_service,
                 );
 
             new_tx_count += processed;
@@ -1603,7 +1559,6 @@ mod tests {
         poh_service::PohService,
     };
     use solana_rpc::transaction_status_service::TransactionStatusService;
-    use solana_runtime::cost_model::CostModel;
     use solana_sdk::{
         hash::Hash,
         instruction::InstructionError,
@@ -2268,7 +2223,7 @@ mod tests {
                 0,
                 None,
                 &gossip_vote_sender,
-                &Arc::new(RwLock::new(CostModel::default())),
+                &Arc::new(QosService::new(Arc::new(RwLock::new(CostModel::default())))),
             )
             .0
             .unwrap();
@@ -2310,7 +2265,7 @@ mod tests {
                     0,
                     None,
                     &gossip_vote_sender,
-                    &Arc::new(RwLock::new(CostModel::default())),
+                    &Arc::new(QosService::new(Arc::new(RwLock::new(CostModel::default())))),
                 )
                 .0,
                 Err(PohRecorderError::MaxHeightReached)
@@ -2398,7 +2353,7 @@ mod tests {
                 0,
                 None,
                 &gossip_vote_sender,
-                &Arc::new(RwLock::new(CostModel::default())),
+                &Arc::new(QosService::new(Arc::new(RwLock::new(CostModel::default())))),
             );
 
             poh_recorder
@@ -2507,7 +2462,7 @@ mod tests {
                     &recorder,
                     None,
                     &gossip_vote_sender,
-                    &Arc::new(RwLock::new(CostModel::default())),
+                    &Arc::new(QosService::new(Arc::new(RwLock::new(CostModel::default())))),
                 );
 
             assert_eq!(processed_transactions_count, 0,);
@@ -2600,7 +2555,7 @@ mod tests {
                     enable_cpi_and_log_storage: false,
                 }),
                 &gossip_vote_sender,
-                &Arc::new(RwLock::new(CostModel::default())),
+                &Arc::new(QosService::new(Arc::new(RwLock::new(CostModel::default())))),
             );
 
             transaction_status_service.join().unwrap();
@@ -2728,7 +2683,7 @@ mod tests {
                 None::<Box<dyn Fn()>>,
                 &BankingStageStats::default(),
                 &recorder,
-                &Arc::new(RwLock::new(CostModel::default())),
+                &Arc::new(QosService::new(Arc::new(RwLock::new(CostModel::default())))),
             );
             assert_eq!(buffered_packets[0].1.len(), num_conflicting_transactions);
             // When the poh recorder has a bank, should process all non conflicting buffered packets.
@@ -2745,7 +2700,7 @@ mod tests {
                     None::<Box<dyn Fn()>>,
                     &BankingStageStats::default(),
                     &recorder,
-                    &Arc::new(RwLock::new(CostModel::default())),
+                    &Arc::new(QosService::new(Arc::new(RwLock::new(CostModel::default())))),
                 );
                 if num_expected_unprocessed == 0 {
                     assert!(buffered_packets.is_empty())
@@ -2811,7 +2766,7 @@ mod tests {
                         test_fn,
                         &BankingStageStats::default(),
                         &recorder,
-                        &Arc::new(RwLock::new(CostModel::default())),
+                        &Arc::new(QosService::new(Arc::new(RwLock::new(CostModel::default())))),
                     );
 
                     // Check everything is correct. All indexes after `interrupted_iteration`

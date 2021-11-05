@@ -8,6 +8,7 @@ use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use solana_core::banking_stage::{BankingStage, BankingStageStats};
+use solana_core::qos_service::QosService;
 use solana_entry::entry::{next_hash, Entry};
 use solana_gossip::cluster_info::ClusterInfo;
 use solana_gossip::cluster_info::Node;
@@ -93,7 +94,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 None::<Box<dyn Fn()>>,
                 &BankingStageStats::default(),
                 &recorder,
-                &Arc::new(RwLock::new(CostModel::default())),
+                &Arc::new(QosService::new(Arc::new(RwLock::new(CostModel::default())))),
             );
         });
 
