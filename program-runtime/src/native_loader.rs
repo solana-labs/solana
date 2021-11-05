@@ -9,11 +9,11 @@ use serde::Serialize;
 use solana_sdk::{
     account::ReadableAccount,
     decode_error::DecodeError,
-    entrypoint_native::ProgramEntrypoint,
     instruction::InstructionError,
-    keyed_account::keyed_account_at_index,
+    keyed_account::{keyed_account_at_index, KeyedAccount},
     native_loader,
-    process_instruction::{InvokeContext, LoaderEntrypoint},
+    process_instruction::InvokeContext,
+    pubkey::Pubkey,
 };
 use std::{
     collections::HashMap,
@@ -23,6 +23,29 @@ use std::{
     sync::RwLock,
 };
 use thiserror::Error;
+
+/// Prototype of a native loader entry point
+///
+/// program_id: Program ID of the currently executing program
+/// keyed_accounts: Accounts passed as part of the instruction
+/// instruction_data: Instruction data
+/// invoke_context: Invocation context
+pub type LoaderEntrypoint = unsafe extern "C" fn(
+    program_id: &Pubkey,
+    instruction_data: &[u8],
+    invoke_context: &dyn InvokeContext,
+) -> Result<(), InstructionError>;
+
+// Prototype of a native program entry point
+///
+/// program_id: Program ID of the currently executing program
+/// keyed_accounts: Accounts passed as part of the instruction
+/// instruction_data: Instruction data
+pub type ProgramEntrypoint = unsafe extern "C" fn(
+    program_id: &Pubkey,
+    keyed_accounts: &[KeyedAccount],
+    instruction_data: &[u8],
+) -> Result<(), InstructionError>;
 
 #[derive(Error, Debug, Serialize, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum NativeLoaderError {
