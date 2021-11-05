@@ -20,7 +20,6 @@ pub mod deserialize_utils;
 pub mod ed25519_instruction;
 pub mod entrypoint;
 pub mod entrypoint_deprecated;
-pub mod entrypoint_native;
 pub mod epoch_info;
 pub mod exit;
 pub mod feature;
