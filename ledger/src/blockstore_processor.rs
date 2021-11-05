@@ -925,12 +925,17 @@ pub fn confirm_slot(
               verify_precompiles: bool|
               -> Result<SanitizedTransaction> {
             let result = bank.verify_transaction(versioned_tx, skip_verification);
-            if result.is_ok() && verify_precompiles && skip_verification {
-                let result = result.unwrap();
-                result.verify_precompiles(&bank.feature_set)?;
-                Ok(result)
-            } else {
-                result
+
+            match result {
+                Ok(val) => {
+                    if verify_precompiles && skip_verification {
+                        val.verify_precompiles(&bank.feature_set)?;
+                    }
+                    Ok(val)
+                }
+                Err(error) => {
+                    Err(error)
+                }
             }
         }
     };

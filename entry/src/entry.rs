@@ -454,8 +454,8 @@ pub fn start_verify_transactions(
                 }
             }
             let mut packets = vec![packets];
-            let tx_offset_recycler = verify_recyclers.tx_offset_recycler.clone();
-            let out_recycler = verify_recyclers.out_recycler.clone();
+            let tx_offset_recycler = verify_recyclers.tx_offset_recycler;
+            let out_recycler = verify_recyclers.out_recycler;
             let gpu_verify_thread = thread::spawn(move || {
                 let mut verify_time = Measure::start("sigverify");
                 // todo: what should reject_non_vote be?
@@ -465,23 +465,23 @@ pub fn start_verify_transactions(
                 (verified, verify_time.as_us())
             });
             let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
-            return EntrySigVerificationState {
+            EntrySigVerificationState {
                 verification_status: EntryVerificationStatus::Pending,
                 entries: Some(entries),
                 device_verification_data: DeviceSigVerificationData::Gpu(GpuSigVerificationData {
                     thread_h: Some(gpu_verify_thread),
                 }),
                 verify_duration_us: transaction_duration_us,
-            };
+            }
         }
         _ => {
             let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
-            return EntrySigVerificationState {
+            EntrySigVerificationState {
                 verification_status: EntryVerificationStatus::Failure,
                 entries: None,
                 device_verification_data: DeviceSigVerificationData::Cpu(),
                 verify_duration_us: transaction_duration_us,
-            };
+            }
         }
     }
 }
