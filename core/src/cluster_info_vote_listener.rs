@@ -21,7 +21,7 @@ use solana_ledger::blockstore::Blockstore;
 use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_debug;
 use solana_perf::packet::{self, Packets};
-use solana_poh::poh_recorder::{BankStart, PohRecorder};
+use solana_poh::poh_recorder::PohRecorder;
 use solana_rpc::{
     optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
     rpc_subscriptions::RpcSubscriptions,
@@ -246,23 +246,22 @@ impl VoteTracker {
 }
 
 struct BankVoteSenderState {
-    bank_start: BankStart,
+    bank: Arc<Bank>,
     previously_sent_to_bank_votes: HashSet<Signature>,
     bank_send_votes_stats: BankSendVotesStats,
 }
 
 impl BankVoteSenderState {
-    fn new(bank_start: BankStart) -> Self {
+    fn new(bank: Arc<Bank>) -> Self {
         Self {
-            bank_start,
+            bank,
             previously_sent_to_bank_votes: HashSet::new(),
             bank_send_votes_stats: BankSendVotesStats::default(),
         }
     }
 
     fn report_metrics(&self) {
-        self.bank_send_votes_stats
-            .report_metrics(self.bank_start.working_bank.slot());
+        self.bank_send_votes_stats.report_metrics(self.bank.slot());
     }
 }
 
@@ -448,6 +447,7 @@ impl ClusterInfoVoteListener {
                 .lock()
                 .unwrap()
                 .would_be_leader(3 * slot_hashes::MAX_ENTRIES as u64 * DEFAULT_TICKS_PER_SLOT);
+
             if let Err(e) = verified_vote_packets.receive_and_process_vote_packets(
                 &verified_vote_label_packets_receiver,
                 would_be_leader,
@@ -464,55 +464,69 @@ impl ClusterInfoVoteListener {
             if time_since_lock.elapsed().as_millis() > BANK_SEND_VOTES_LOOP_SLEEP_MS as u128 {
                 // Always set this to avoid taking the poh lock too often
                 time_since_lock = Instant::now();
-
-                if bank_vote_sender_state_option.is_none() {
-                    // We will take this lock at most once every `BANK_SEND_VOTES_LOOP_SLEEP_MS`
-                    if let Some(bank_start) = poh_recorder.lock().unwrap().bank_start() {
-                        bank_vote_sender_state_option = Some(BankVoteSenderState::new(bank_start));
-                    }
-                }
-
-                if let Some(bank_vote_sender_state) = bank_vote_sender_state_option.as_mut() {
-                    let BankVoteSenderState {
-                        ref bank_start,
-                        ref mut bank_send_votes_stats,
-                        ref mut previously_sent_to_bank_votes,
-                    } = bank_vote_sender_state;
-                    if Bank::should_bank_still_be_processing_txs(
-                        &bank_start.bank_creation_time,
-                        bank_start.working_bank.ns_per_slot,
-                    ) {
-                        // This logic may run multiple times for the same leader bank,
-                        // we just have to ensure that the same votes are not sent
-                        // to the bank multiple times, which is guaranteed by
-                        // `previously_sent_to_bank_votes`
-                        let gossip_votes_iterator = ValidatorGossipVotesIterator::new(
-                            bank_start.working_bank.clone(),
-                            &verified_vote_packets,
-                            previously_sent_to_bank_votes,
-                        );
-
-                        let mut filter_gossip_votes_timing = Measure::start("filter_gossip_votes");
-
-                        // Send entire batch at a time so that there is no partial processing of
-                        // a single validator's votes by two different banks. This might happen
-                        // if we sent each vote individually, for instance if we creaed two different
-                        // leader banks from the same common parent, one leader bank may process
-                        // only the later votes and ignore the earlier votes.
-                        for single_validator_votes in gossip_votes_iterator {
-                            bank_send_votes_stats.num_votes_sent += single_validator_votes.len();
-                            bank_send_votes_stats.num_batches_sent += 1;
-                            verified_packets_sender.send(single_validator_votes)?;
-                        }
-                        filter_gossip_votes_timing.stop();
-                        bank_send_votes_stats.total_elapsed += filter_gossip_votes_timing.as_us();
-                    } else {
-                        bank_vote_sender_state.report_metrics();
-                        bank_vote_sender_state_option = None;
-                    }
+                // We will take this lock at most once every `BANK_SEND_VOTES_LOOP_SLEEP_MS`
+                if let Some(current_working_bank) = poh_recorder.lock().unwrap().bank() {
+                    Self::check_for_leader_bank_and_send_votes(
+                        &mut bank_vote_sender_state_option,
+                        current_working_bank,
+                        verified_packets_sender,
+                        &verified_vote_packets,
+                    )?;
                 }
             }
         }
+    }
+
+    fn check_for_leader_bank_and_send_votes(
+        bank_vote_sender_state_option: &mut Option<BankVoteSenderState>,
+        current_working_bank: Arc<Bank>,
+        verified_packets_sender: &CrossbeamSender<Vec<Packets>>,
+        verified_vote_packets: &VerifiedVotePackets,
+    ) -> Result<()> {
+        // We will take this lock at most once every `BANK_SEND_VOTES_LOOP_SLEEP_MS`
+        if let Some(bank_vote_sender_state) = bank_vote_sender_state_option {
+            if bank_vote_sender_state.bank.slot() != current_working_bank.slot() {
+                bank_vote_sender_state.report_metrics();
+                *bank_vote_sender_state_option =
+                    Some(BankVoteSenderState::new(current_working_bank));
+            }
+        } else {
+            *bank_vote_sender_state_option = Some(BankVoteSenderState::new(current_working_bank));
+        }
+
+        let bank_vote_sender_state = bank_vote_sender_state_option.as_mut().unwrap();
+        let BankVoteSenderState {
+            ref bank,
+            ref mut bank_send_votes_stats,
+            ref mut previously_sent_to_bank_votes,
+        } = bank_vote_sender_state;
+
+        // This logic may run multiple times for the same leader bank,
+        // we just have to ensure that the same votes are not sent
+        // to the bank multiple times, which is guaranteed by
+        // `previously_sent_to_bank_votes`
+        let gossip_votes_iterator = ValidatorGossipVotesIterator::new(
+            bank.clone(),
+            verified_vote_packets,
+            previously_sent_to_bank_votes,
+        );
+
+        let mut filter_gossip_votes_timing = Measure::start("filter_gossip_votes");
+
+        // Send entire batch at a time so that there is no partial processing of
+        // a single validator's votes by two different banks. This might happen
+        // if we sent each vote individually, for instance if we creaed two different
+        // leader banks from the same common parent, one leader bank may process
+        // only the later votes and ignore the earlier votes.
+        for single_validator_votes in gossip_votes_iterator {
+            bank_send_votes_stats.num_votes_sent += single_validator_votes.len();
+            bank_send_votes_stats.num_batches_sent += 1;
+            verified_packets_sender.send(single_validator_votes)?;
+        }
+        filter_gossip_votes_timing.stop();
+        bank_send_votes_stats.total_elapsed += filter_gossip_votes_timing.as_us();
+
+        Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -931,15 +945,17 @@ mod tests {
     use solana_runtime::{
         bank::Bank,
         commitment::BlockCommitmentCache,
-        genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs},
+        genesis_utils::{self, create_genesis_config, GenesisConfigInfo, ValidatorVoteKeypairs},
         vote_sender_types::ReplayVoteSender,
     };
     use solana_sdk::{
         hash::Hash,
+        pubkey::Pubkey,
         signature::{Keypair, Signature, Signer},
     };
     use solana_vote_program::vote_state::Vote;
     use std::collections::BTreeSet;
+    use std::sync::Arc;
 
     #[test]
     fn test_max_vote_tx_fits() {
@@ -1856,5 +1872,80 @@ mod tests {
     fn test_bad_vote() {
         run_test_bad_vote(None);
         run_test_bad_vote(Some(Hash::default()));
+    }
+
+    #[test]
+    fn test_check_for_leader_bank_and_send_votes() {
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(1000);
+        let current_leader_bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let mut bank_vote_sender_state_option: Option<BankVoteSenderState> = None;
+        let verified_vote_packets = VerifiedVotePackets::default();
+        let (verified_packets_sender, _verified_packets_receiver) = unbounded();
+
+        // 1) If we hand over a `current_leader_bank`, vote sender state should be updated
+        ClusterInfoVoteListener::check_for_leader_bank_and_send_votes(
+            &mut bank_vote_sender_state_option,
+            current_leader_bank.clone(),
+            &verified_packets_sender,
+            &verified_vote_packets,
+        )
+        .unwrap();
+
+        assert_eq!(
+            bank_vote_sender_state_option.as_ref().unwrap().bank.slot(),
+            current_leader_bank.slot()
+        );
+        bank_vote_sender_state_option
+            .as_mut()
+            .unwrap()
+            .previously_sent_to_bank_votes
+            .insert(Signature::new_unique());
+
+        // 2) Handing over the same leader bank again should not update the state
+        ClusterInfoVoteListener::check_for_leader_bank_and_send_votes(
+            &mut bank_vote_sender_state_option,
+            current_leader_bank.clone(),
+            &verified_packets_sender,
+            &verified_vote_packets,
+        )
+        .unwrap();
+        // If we hand over a `current_leader_bank`, vote sender state should be updated
+        assert_eq!(
+            bank_vote_sender_state_option.as_ref().unwrap().bank.slot(),
+            current_leader_bank.slot()
+        );
+        assert_eq!(
+            bank_vote_sender_state_option
+                .as_ref()
+                .unwrap()
+                .previously_sent_to_bank_votes
+                .len(),
+            1
+        );
+
+        let current_leader_bank = Arc::new(Bank::new_from_parent(
+            &current_leader_bank,
+            &Pubkey::default(),
+            current_leader_bank.slot() + 1,
+        ));
+        ClusterInfoVoteListener::check_for_leader_bank_and_send_votes(
+            &mut bank_vote_sender_state_option,
+            current_leader_bank.clone(),
+            &verified_packets_sender,
+            &verified_vote_packets,
+        )
+        .unwrap();
+
+        // 3) If we hand over a new `current_leader_bank`, vote sender state should be updated
+        // to the new bank
+        assert_eq!(
+            bank_vote_sender_state_option.as_ref().unwrap().bank.slot(),
+            current_leader_bank.slot()
+        );
+        assert!(bank_vote_sender_state_option
+            .as_ref()
+            .unwrap()
+            .previously_sent_to_bank_votes
+            .is_empty());
     }
 }
