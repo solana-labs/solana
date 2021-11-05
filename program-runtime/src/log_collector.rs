@@ -17,14 +17,14 @@ pub struct LogCollector {
 impl LogCollector {
     pub fn log(&self, message: &str) {
         let mut inner = self.inner.borrow_mut();
-
-        if inner.bytes_written + message.len() >= LOG_MESSAGES_BYTES_LIMIT {
+        let bytes_written = inner.bytes_written.saturating_add(message.len());
+        if bytes_written >= LOG_MESSAGES_BYTES_LIMIT {
             if !inner.limit_warning {
                 inner.limit_warning = true;
                 inner.messages.push(String::from("Log truncated"));
             }
         } else {
-            inner.bytes_written += message.len();
+            inner.bytes_written = bytes_written;
             inner.messages.push(message.to_string());
         }
     }

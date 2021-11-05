@@ -58,14 +58,20 @@ pub struct ExecuteDetailsTimings {
 }
 impl ExecuteDetailsTimings {
     pub fn accumulate(&mut self, other: &ExecuteDetailsTimings) {
-        self.serialize_us += other.serialize_us;
-        self.create_vm_us += other.create_vm_us;
-        self.execute_us += other.execute_us;
-        self.deserialize_us += other.deserialize_us;
-        self.changed_account_count += other.changed_account_count;
-        self.total_account_count += other.total_account_count;
-        self.total_data_size += other.total_data_size;
-        self.data_size_changed += other.data_size_changed;
+        self.serialize_us = self.serialize_us.saturating_add(other.serialize_us);
+        self.create_vm_us = self.create_vm_us.saturating_add(other.create_vm_us);
+        self.execute_us = self.execute_us.saturating_add(other.execute_us);
+        self.deserialize_us = self.deserialize_us.saturating_add(other.deserialize_us);
+        self.changed_account_count = self
+            .changed_account_count
+            .saturating_add(other.changed_account_count);
+        self.total_account_count = self
+            .total_account_count
+            .saturating_add(other.total_account_count);
+        self.total_data_size = self.total_data_size.saturating_add(other.total_data_size);
+        self.data_size_changed = self
+            .data_size_changed
+            .saturating_add(other.data_size_changed);
         for (id, other) in &other.per_program_timings {
             let program_timing = self.per_program_timings.entry(*id).or_default();
             program_timing.accumulated_us = program_timing
@@ -209,8 +215,8 @@ impl PreAccount {
         }
 
         if outermost_call {
-            timings.total_account_count += 1;
-            timings.total_data_size += post.data().len();
+            timings.total_account_count = timings.total_account_count.saturating_add(1);
+            timings.total_data_size = timings.total_data_size.saturating_add(post.data().len());
             if owner_changed
                 || lamports_changed
                 || data_len_changed
@@ -218,8 +224,9 @@ impl PreAccount {
                 || rent_epoch_changed
                 || self.changed
             {
-                timings.changed_account_count += 1;
-                timings.data_size_changed += post.data().len();
+                timings.changed_account_count = timings.changed_account_count.saturating_add(1);
+                timings.data_size_changed =
+                    timings.data_size_changed.saturating_add(post.data().len());
             }
         }
 
