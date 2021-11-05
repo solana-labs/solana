@@ -25,25 +25,25 @@ CREATE TABLE slot (
 );
 
 -- Types for Transactions
-CREATE TYPE CompiledInstruction AS (
+CREATE TYPE "CompiledInstruction" AS (
     program_id_index SMALLINT,
     accounts SMALLINT[],
     data BYTEA
 );
 
-CREATE TYPE InnerInstructions AS (
+CREATE TYPE "InnerInstructions" AS (
     index SMALLINT,
-    instructions CompiledInstruction[]
+    instructions "CompiledInstruction"[]
 );
 
-CREATE TYPE TransactionTokenBalance AS (
+CREATE TYPE "TransactionTokenBalance" AS (
     account_index SMALLINT,
     mint VARCHAR(256),
     ui_token_amount DOUBLE PRECISION,
     owner VARCHAR(256)
 );
 
-CREATE TYPE Reward AS (
+CREATE TYPE "Reward" AS (
     pubkey VARCHAR(256),
     lamports BIGINT,
     post_balance BIGINT,
@@ -51,52 +51,52 @@ CREATE TYPE Reward AS (
     commission SMALLINT
 );
 
-CREATE TYPE TransactionStatusMeta AS (
+CREATE TYPE "TransactionStatusMeta" AS (
     status VARCHAR(256),
     fee BIGINT,
     pre_balances BIGINT[],
     post_balances BIGINT[],
-    inner_instructions InnerInstructions[],
+    inner_instructions "InnerInstructions"[],
     log_messages TEXT[],
-    pre_token_balances TransactionTokenBalance[],
-    post_token_balances TransactionTokenBalance[],
+    pre_token_balances "TransactionTokenBalance"[],
+    post_token_balances "TransactionTokenBalance"[],
     rewards Reward[]
 );
 
-CREATE TYPE TransactionMessageHeader AS (
+CREATE TYPE "TransactionMessageHeader" AS (
     num_required_signatures SMALLINT,
     num_readonly_signed_accounts SMALLINT,
     num_readonly_unsigned_accounts SMALLINT
 );
 
-CREATE TYPE TransactionMessage AS (
-    header TransactionMessageHeader,
+CREATE TYPE "TransactionMessage" AS (
+    header "TransactionMessageHeader",
     account_keys BYTEA[],
     recent_blockhash BYTEA,
-    instructions CompiledInstruction[]
+    instructions "CompiledInstruction"[]
 );
 
-CREATE TYPE AddressMapIndexes AS (
+CREATE TYPE "AddressMapIndexes" AS (
     writable SMALLINT[],
     readonly SMALLINT[]
 );
 
-CREATE TYPE TransactionMessageV0 AS (
-    header TransactionMessageHeader,
+CREATE TYPE "TransactionMessageV0" AS (
+    header "TransactionMessageHeader",
     account_keys BYTEA[],
     recent_blockhash BYTEA,
-    instructions CompiledInstruction[],
-    address_map_indexes AddressMapIndexes[]
+    instructions "CompiledInstruction"[],
+    address_map_indexes "AddressMapIndexes"[]
 );
 
-CREATE TYPE MappedAddresses AS (
+CREATE TYPE "MappedAddresses" AS (
     writable BYTEA[],
     readonly BYTEA[]
 );
 
-CREATE TYPE MappedMessage AS (
-    message TransactionMessageV0,
-    mapped_addresses MappedAddresses
+CREATE TYPE "MappedMessage" AS (
+    message "TransactionMessageV0",
+    mapped_addresses "MappedAddresses"
 );
 
 -- The table storing transaction logs
@@ -105,11 +105,11 @@ CREATE TABLE transaction (
     is_vote BOOL NOT NULL,
     slot BIGINT NOT NULL,
     message_type SMALLINT, -- 0: legacy, 1: v0 message
-    legacy_message TransactionMessage,
-    v0_mapped_message MappedMessage,
+    legacy_message "TransactionMessage",
+    v0_mapped_message "MappedMessage",
     signatures BYTEA[],
     message_hash BYTEA,
-    meta TransactionStatusMeta,
+    meta "TransactionStatusMeta",
     updated_on TIMESTAMP NOT NULL
 );
 

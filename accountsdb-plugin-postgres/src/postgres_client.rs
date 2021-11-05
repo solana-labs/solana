@@ -88,7 +88,7 @@ pub struct DbAccountInfo {
 #[postgres(name = "CompiledInstruction")]
 pub struct DbCompiledInstruction {
     pub program_id_index: i16,
-    pub accounts: Vec<u8>,
+    pub accounts: Vec<i16>,
     pub data: Vec<u8>,
 }
 
