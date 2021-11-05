@@ -1,11 +1,10 @@
 use crate::system_instruction_processor;
-use solana_program_runtime::stable_log;
+use solana_program_runtime::{
+    invoke_context::{InvokeContext, ProcessInstructionWithContext},
+    stable_log,
+};
 use solana_sdk::{
-    feature_set,
-    instruction::InstructionError,
-    process_instruction::{InvokeContext, ProcessInstructionWithContext},
-    pubkey::Pubkey,
-    stake, system_program,
+    feature_set, instruction::InstructionError, pubkey::Pubkey, stake, system_program,
 };
 use std::fmt;
 

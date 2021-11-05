@@ -1,4 +1,4 @@
-use solana_program_runtime::ic_msg;
+use solana_program_runtime::{ic_msg, invoke_context::InvokeContext};
 use solana_sdk::{
     account::{ReadableAccount, WritableAccount},
     account_utils::State as AccountUtilsState,
@@ -6,7 +6,6 @@ use solana_sdk::{
     instruction::{checked_add, InstructionError},
     keyed_account::KeyedAccount,
     nonce::{self, state::Versions, State},
-    process_instruction::InvokeContext,
     pubkey::Pubkey,
     system_instruction::{nonce_to_instruction_error, NonceError},
     sysvar::rent::Rent,

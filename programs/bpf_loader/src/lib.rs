@@ -17,7 +17,7 @@ use solana_measure::measure::Measure;
 use solana_program_runtime::{
     ic_logger_msg, ic_msg,
     instruction_processor::{Executor, InstructionProcessor},
-    invoke_context::{ComputeMeter, Logger},
+    invoke_context::{ComputeMeter, InvokeContext, Logger},
     stable_log,
 };
 use solana_rbpf::{
@@ -44,7 +44,6 @@ use solana_sdk::{
     keyed_account::{from_keyed_account, keyed_account_at_index, KeyedAccount},
     loader_instruction::LoaderInstruction,
     loader_upgradeable_instruction::UpgradeableLoaderInstruction,
-    process_instruction::InvokeContext,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     rent::Rent,

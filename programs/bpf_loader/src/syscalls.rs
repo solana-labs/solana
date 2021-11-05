@@ -3,7 +3,7 @@ use alloc::Alloc;
 use solana_program_runtime::{
     ic_msg,
     instruction_processor::InstructionProcessor,
-    invoke_context::{ComputeMeter, Logger},
+    invoke_context::{ComputeMeter, InvokeContext, Logger},
     stable_log,
 };
 use solana_rbpf::{
@@ -35,7 +35,6 @@ use solana_sdk::{
     message::Message,
     native_loader,
     precompiles::is_precompile,
-    process_instruction::InvokeContext,
     program::MAX_RETURN_DATA,
     pubkey::{Pubkey, PubkeyError, MAX_SEEDS, MAX_SEED_LEN},
     rent::Rent,

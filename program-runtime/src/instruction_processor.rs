@@ -1,4 +1,8 @@
-use crate::{ic_msg, native_loader::NativeLoader};
+use crate::{
+    ic_msg,
+    invoke_context::{InvokeContext, ProcessInstructionWithContext},
+    native_loader::NativeLoader,
+};
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
@@ -8,7 +12,6 @@ use solana_sdk::{
     instruction::{Instruction, InstructionError},
     keyed_account::keyed_account_at_index,
     message::Message,
-    process_instruction::{InvokeContext, ProcessInstructionWithContext},
     pubkey::Pubkey,
     rent::Rent,
     system_instruction::MAX_PERMITTED_DATA_LENGTH,

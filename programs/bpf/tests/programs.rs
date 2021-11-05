@@ -31,7 +31,7 @@ use solana_runtime::{
         upgrade_program,
     },
 };
-use solana_program_runtime::invoke_context::with_mock_invoke_context;
+use solana_program_runtime::invoke_context::{with_mock_invoke_context, InvokeContext};
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
     account_utils::StateMut,
@@ -43,7 +43,6 @@ use solana_sdk::{
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     loader_instruction,
     message::{Message, SanitizedMessage},
-    process_instruction::InvokeContext,
     pubkey::Pubkey,
     signature::{keypair_from_seed, Keypair, Signer},
     system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},

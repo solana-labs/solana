@@ -9,7 +9,11 @@ use {
     log::*,
     solana_banks_client::start_client,
     solana_banks_server::banks_server::start_local_server,
-    solana_program_runtime::{instruction_processor::InstructionProcessor, stable_log},
+    solana_program_runtime::{
+        instruction_processor::InstructionProcessor,
+        invoke_context::{InvokeContext, ProcessInstructionWithContext},
+        stable_log,
+    },
     solana_runtime::{
         bank::{Bank, ExecuteTimings},
         bank_forks::BankForks,
@@ -33,7 +37,6 @@ use {
         message::Message,
         native_token::sol_to_lamports,
         poh_config::PohConfig,
-        process_instruction::{InvokeContext, ProcessInstructionWithContext},
         program_error::{ProgramError, ACCOUNT_BORROW_FAILED, UNSUPPORTED_SYSVAR},
         pubkey::Pubkey,
         rent::Rent,
@@ -187,7 +190,7 @@ macro_rules! processor {
         Some(
             |first_instruction_account: usize,
              input: &[u8],
-             invoke_context: &mut dyn solana_sdk::process_instruction::InvokeContext| {
+             invoke_context: &mut dyn solana_program_runtime::invoke_context::InvokeContext| {
                 $crate::builtin_process_instruction(
                     $process_instruction,
                     first_instruction_account,

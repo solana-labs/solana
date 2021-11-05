@@ -1,4 +1,5 @@
 //! Native loader
+use crate::invoke_context::InvokeContext;
 #[cfg(unix)]
 use libloading::os::unix::*;
 #[cfg(windows)]
@@ -12,7 +13,6 @@ use solana_sdk::{
     instruction::InstructionError,
     keyed_account::{keyed_account_at_index, KeyedAccount},
     native_loader,
-    process_instruction::InvokeContext,
     pubkey::Pubkey,
 };
 use std::{
