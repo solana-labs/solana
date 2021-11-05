@@ -10,10 +10,7 @@ use {
     solana_rpc::transaction_notifier_interface::TransactionNotifierInterface,
     solana_runtime::bank,
     solana_sdk::{
-        clock::Slot,
-        pubkey::Pubkey,
-        signature::Signature,
-        transaction::SanitizedTransaction,
+        clock::Slot, pubkey::Pubkey, signature::Signature, transaction::SanitizedTransaction,
     },
     solana_transaction_status::TransactionStatusMeta,
     std::sync::{Arc, RwLock},

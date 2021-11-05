@@ -17,19 +17,18 @@ use {
     },
     solana_measure::measure::Measure,
     solana_metrics::*,
+    solana_runtime::bank::RewardType,
     solana_sdk::{
         message::{
             v0::{self, AddressMapIndexes},
             MappedAddresses, MappedMessage, Message, MessageHeader, SanitizedMessage,
         },
-        transaction::TransactionError,
         timing::AtomicInterval,
+        transaction::TransactionError,
     },
     solana_transaction_status::{
-        InnerInstructions, Reward,
-        TransactionStatusMeta, TransactionTokenBalance,
+        InnerInstructions, Reward, TransactionStatusMeta, TransactionTokenBalance,
     },
-    solana_runtime::bank::RewardType,
     std::{
         sync::{
             atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -284,19 +283,21 @@ impl From<&InnerInstructions> for DbInnerInstructions {
     fn from(instructions: &InnerInstructions) -> Self {
         Self {
             index: instructions.index as i16,
-            instructions: instructions.instructions.iter().map(DbCompiledInstruction::from).collect()
+            instructions: instructions
+                .instructions
+                .iter()
+                .map(DbCompiledInstruction::from)
+                .collect(),
         }
     }
 }
 
-fn get_reward_type(reward: &Option<RewardType>)  -> Option<String> {
-    reward.as_ref().map(|reward_type| {
-        match reward_type { 
-            RewardType::Fee => "fee".to_string(),
-            RewardType::Rent => "rent".to_string(),
-            RewardType::Staking => "staking".to_string(),
-            RewardType::Voting => "voting".to_string(),
-        }
+fn get_reward_type(reward: &Option<RewardType>) -> Option<String> {
+    reward.as_ref().map(|reward_type| match reward_type {
+        RewardType::Fee => "fee".to_string(),
+        RewardType::Rent => "rent".to_string(),
+        RewardType::Staking => "staking".to_string(),
+        RewardType::Voting => "voting".to_string(),
     })
 }
 
@@ -307,7 +308,10 @@ impl From<&Reward> for DbReward {
             lamports: reward.lamports as i64,
             post_balance: reward.post_balance as i64,
             reward_type: get_reward_type(&reward.reward_type),
-            commission: reward.commission.as_ref().map(|commission| *commission as i16),
+            commission: reward
+                .commission
+                .as_ref()
+                .map(|commission| *commission as i16),
         }
     }
 }
@@ -351,7 +355,7 @@ impl From<&TransactionTokenBalance> for DbTransactionTokenBalance {
             account_index: token_balance.account_index as i16,
             mint: token_balance.mint.clone(),
             ui_token_amount: token_balance.ui_token_amount.ui_amount.clone(),
-            owner: token_balance.owner.clone()
+            owner: token_balance.owner.clone(),
         }
     }
 }
@@ -361,13 +365,37 @@ impl From<&TransactionStatusMeta> for DbTransactionStatusMeta {
         Self {
             status: get_transaction_status(&meta.status),
             fee: meta.fee as i64,
-            pre_balances: meta.pre_balances.iter().map(|balance| *balance as i64).collect(),
-            post_balances: meta.post_balances.iter().map(|balance| *balance as i64).collect(),
-            inner_instructions: meta.inner_instructions.as_ref().map(|instructions| instructions.iter().map(DbInnerInstructions::from).collect()),
+            pre_balances: meta
+                .pre_balances
+                .iter()
+                .map(|balance| *balance as i64)
+                .collect(),
+            post_balances: meta
+                .post_balances
+                .iter()
+                .map(|balance| *balance as i64)
+                .collect(),
+            inner_instructions: meta
+                .inner_instructions
+                .as_ref()
+                .map(|instructions| instructions.iter().map(DbInnerInstructions::from).collect()),
             log_messages: meta.log_messages.clone(),
-            pre_token_balances: meta.pre_token_balances.as_ref().map(|balances| balances.iter().map(DbTransactionTokenBalance::from).collect()),
-            post_token_balances: meta.post_token_balances.as_ref().map(|balances| balances.iter().map(DbTransactionTokenBalance::from).collect()),
-            rewards: meta.rewards.as_ref().map(|rewards| rewards.iter().map(DbReward::from).collect()),
+            pre_token_balances: meta.pre_token_balances.as_ref().map(|balances| {
+                balances
+                    .iter()
+                    .map(DbTransactionTokenBalance::from)
+                    .collect()
+            }),
+            post_token_balances: meta.post_token_balances.as_ref().map(|balances| {
+                balances
+                    .iter()
+                    .map(DbTransactionTokenBalance::from)
+                    .collect()
+            }),
+            rewards: meta
+                .rewards
+                .as_ref()
+                .map(|rewards| rewards.iter().map(DbReward::from).collect()),
         }
     }
 }
@@ -1274,7 +1302,7 @@ impl ParallelPostgresClient {
                 .message_hash()
                 .as_ref()
                 .to_vec(),
-            meta: DbTransactionStatusMeta::from(transaction_info.transaction_meta)
+            meta: DbTransactionStatusMeta::from(transaction_info.transaction_meta),
         }
     }
 
