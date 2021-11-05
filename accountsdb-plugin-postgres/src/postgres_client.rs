@@ -647,7 +647,7 @@ impl SimplePostgresClient {
         client: &mut Client,
         config: &AccountsDbPluginPostgresConfig,
     ) -> Result<Statement, AccountsDbPluginError> {
-        let stmt = "INSERT INTO transaction AS txn (signature, is_vote, slot, logs, message_type, legacy_message, \
+        let stmt = "INSERT INTO transaction AS txn (signature, is_vote, slot, message_type, legacy_message, \
         v0_mapped_message, signatures, message_hash, meta, updated_on) \
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)";
 
