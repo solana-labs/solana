@@ -1425,10 +1425,16 @@ fn main() {
                     .help("Include sysvars too"),
             )
             .arg(
-                Arg::with_name("exclude_account_data")
-                    .long("exclude-account-data")
+                Arg::with_name("no_account_contents")
+                    .long("no-account-contents")
                     .takes_value(false)
-                    .help("Exclude account data (useful for large number of accounts)"),
+                    .help("Do not print contents of each account, which is very slow with lots of accounts."),
+            )
+            .arg(
+                Arg::with_name("no_account_data")
+                    .long("no-account-data")
+                    .takes_value(false)
+                    .help("Do not print account data when printing account contents."),
             )
             .arg(&max_genesis_archive_unpacked_size_arg)
         ).subcommand(
@@ -2471,54 +2477,50 @@ fn main() {
             };
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
             let include_sysvars = arg_matches.is_present("include_sysvars");
-            let exclude_account_data = arg_matches.is_present("exclude_account_data");
             let blockstore = open_blockstore(
                 &ledger_path,
                 AccessType::TryPrimaryThenSecondary,
                 wal_recovery_mode,
             );
-            match load_bank_forks(
+            let (bank_forks, ..) = load_bank_forks(
                 arg_matches,
                 &genesis_config,
                 &blockstore,
                 process_options,
                 snapshot_archive_path,
-            ) {
-                Ok((bank_forks, ..)) => {
-                    let slot = bank_forks.working_bank().slot();
-                    let bank = bank_forks.get(slot).unwrap_or_else(|| {
-                        eprintln!("Error: Slot {} is not available", slot);
-                        exit(1);
-                    });
+            )
+            .unwrap_or_else(|err| {
+                eprintln!("Failed to load ledger: {:?}", err);
+                exit(1);
+            });
 
-                    let accounts: BTreeMap<_, _> = bank
-                        .get_all_accounts_with_modified_slots()
-                        .unwrap()
-                        .into_iter()
-                        .filter(|(pubkey, _account, _slot)| {
-                            include_sysvars || !solana_sdk::sysvar::is_sysvar_id(pubkey)
-                        })
-                        .map(|(pubkey, account, slot)| (pubkey, (account, slot)))
-                        .collect();
+            let bank = bank_forks.working_bank();
+            let accounts: BTreeMap<_, _> = bank
+                .get_all_accounts_with_modified_slots()
+                .unwrap()
+                .into_iter()
+                .filter(|(pubkey, _account, _slot)| {
+                    include_sysvars || !solana_sdk::sysvar::is_sysvar_id(pubkey)
+                })
+                .map(|(pubkey, account, slot)| (pubkey, (account, slot)))
+                .collect();
 
-                    println!("---");
-                    for (pubkey, (account, slot)) in accounts.into_iter() {
-                        let data_len = account.data().len();
-                        println!("{}:", pubkey);
-                        println!("  - balance: {} SOL", lamports_to_sol(account.lamports()));
-                        println!("  - owner: '{}'", account.owner());
-                        println!("  - executable: {}", account.executable());
-                        println!("  - slot: {}", slot);
-                        println!("  - rent_epoch: {}", account.rent_epoch());
-                        if !exclude_account_data {
-                            println!("  - data: '{}'", bs58::encode(account.data()).into_string());
-                        }
-                        println!("  - data_len: {}", data_len);
+            let print_account_contents = !arg_matches.is_present("no_account_contents");
+            if print_account_contents {
+                println!("Getting accounts contents...");
+                let print_account_data = !arg_matches.is_present("no_account_data");
+                for (pubkey, (account, slot)) in accounts.into_iter() {
+                    let data_len = account.data().len();
+                    println!("{}:", pubkey);
+                    println!("  - balance: {} SOL", lamports_to_sol(account.lamports()));
+                    println!("  - owner: '{}'", account.owner());
+                    println!("  - executable: {}", account.executable());
+                    println!("  - slot: {}", slot);
+                    println!("  - rent_epoch: {}", account.rent_epoch());
+                    if print_account_data {
+                        println!("  - data: '{}'", bs58::encode(account.data()).into_string());
                     }
-                }
-                Err(err) => {
-                    eprintln!("Failed to load ledger: {:?}", err);
-                    exit(1);
+                    println!("  - data_len: {}", data_len);
                 }
             }
         }
