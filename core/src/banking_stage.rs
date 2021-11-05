@@ -1157,7 +1157,11 @@ impl BankingStage {
                     let message_bytes = Self::packet_message(p)?;
                     let message_hash = Message::hash_raw_message(message_bytes);
                     Some((
-                        HashedTransaction::new(Cow::Owned(tx), message_hash),
+                        HashedTransaction::new(
+                            Cow::Owned(tx),
+                            message_hash,
+                            Some(p.meta.is_simple_vote_tx),
+                        ),
                         tx_index,
                     ))
                 })

@@ -1,4 +1,4 @@
-use solana_sdk::{hash::Hash, transaction::Transaction};
+use solana_sdk::{hash::Hash, transaction::Transaction, vote};
 use std::borrow::Cow;
 
 /// Transaction and the hash of its message
@@ -6,36 +6,52 @@ use std::borrow::Cow;
 pub struct HashedTransaction<'a> {
     transaction: Cow<'a, Transaction>,
     pub message_hash: Hash,
+    is_simple_vote_tx: bool,
 }
 
 impl<'a> HashedTransaction<'a> {
-    pub fn new(transaction: Cow<'a, Transaction>, message_hash: Hash) -> Self {
+    pub fn new(
+        transaction: Cow<'a, Transaction>,
+        message_hash: Hash,
+        is_simple_vote_tx: Option<bool>,
+    ) -> Self {
+        let is_simple_vote_tx = is_simple_vote_tx.unwrap_or_else(|| {
+            let message = transaction.message();
+            message
+                .instructions
+                .get(0)
+                .and_then(|ix| message.account_keys.get(ix.program_id_index as usize))
+                == Some(&vote::program::id())
+        });
+
         Self {
             transaction,
             message_hash,
+            is_simple_vote_tx,
         }
     }
 
     pub fn transaction(&self) -> &Transaction {
         self.transaction.as_ref()
     }
+
+    /// Returns true if this transaction is a simple vote
+    pub fn is_simple_vote_transaction(&self) -> bool {
+        self.is_simple_vote_tx
+    }
 }
 
 impl<'a> From<Transaction> for HashedTransaction<'_> {
     fn from(transaction: Transaction) -> Self {
-        Self {
-            message_hash: transaction.message().hash(),
-            transaction: Cow::Owned(transaction),
-        }
+        let message_hash = transaction.message().hash();
+        Self::new(Cow::Owned(transaction), message_hash, None)
     }
 }
 
 impl<'a> From<&'a Transaction> for HashedTransaction<'a> {
     fn from(transaction: &'a Transaction) -> Self {
-        Self {
-            message_hash: transaction.message().hash(),
-            transaction: Cow::Borrowed(transaction),
-        }
+        let message_hash = transaction.message().hash();
+        Self::new(Cow::Borrowed(transaction), message_hash, None)
     }
 }
 
