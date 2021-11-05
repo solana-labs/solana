@@ -605,25 +605,28 @@ impl AccountsHash {
         let mut indexes = vec![0; len];
         let mut first_items = Vec::with_capacity(len);
 
+        // initialize 'first_items', which holds the current lowest item in each slot group
         pubkey_division.iter().enumerate().for_each(|(i, bins)| {
             if bins.len() > pubkey_bin {
                 let sub = &bins[pubkey_bin];
                 if !sub.is_empty() {
-                    item_len += bins[pubkey_bin].len();
+                    item_len += bins[pubkey_bin].len(); // sum for metrics
                     first_items.push((bins[pubkey_bin][0].pubkey, i));
                 }
             }
         });
         let mut overall_sum = 0;
         let mut hashes: Vec<Hash> = Vec::with_capacity(item_len);
-        let mut duplicates = Vec::with_capacity(len);
+        let mut duplicate_pubkey_indexes = Vec::with_capacity(len);
 
+        // this loop runs once per unique pubkey contained in any slot group
         while !first_items.is_empty() {
             let loop_stop = { first_items.len() - 1 }; // we increment at the beginning of the loop
             let mut min_index = 0;
             let mut min_pubkey = first_items[min_index].0;
             let mut first_item_index = 0; // we will start iterating at item 1. +=1 is first instruction in loop
 
+            // this loop iterates over each slot group to find the minimum pubkey at the maximum slot
             while first_item_index < loop_stop {
                 first_item_index += 1;
                 let (key, _) = &first_items[first_item_index];
@@ -634,7 +637,7 @@ impl AccountsHash {
                     }
                     std::cmp::Ordering::Equal => {
                         // we found an item that masks an earlier slot, so remember the slot where we had dups
-                        duplicates.push(min_index);
+                        duplicate_pubkey_indexes.push(min_index);
                     }
                     std::cmp::Ordering::Greater => {
                         // this is the new min pubkey
@@ -644,21 +647,6 @@ impl AccountsHash {
                 // this is the new index of the min entry
                 min_index = first_item_index;
             }
-            // skip past duplicate keys in earlier slots
-            duplicates.iter().rev().for_each(|i| {
-                let (exhausted, _) = Self::get_item(
-                    *i,
-                    pubkey_bin,
-                    &mut first_items,
-                    pubkey_division,
-                    &mut indexes,
-                );
-                if exhausted {
-                    min_index -= 1;
-                }
-            });
-            duplicates.clear();
-
             // get the min item, add lamports, get hash
             let (_, item) = Self::get_item(
                 min_index,
@@ -673,6 +661,24 @@ impl AccountsHash {
                     item.lamports as u128 + overall_sum as u128,
                 );
                 hashes.push(item.hash);
+            }
+            if !duplicate_pubkey_indexes.is_empty() {
+                // skip past duplicate keys in earlier slots
+                // reverse this list because get_item can remove first_items[*i] when *i is exhausted
+                //  and that would mess up subsequent *i values
+                duplicate_pubkey_indexes.iter().rev().for_each(|i| {
+                    let (exhausted, _) = Self::get_item(
+                        *i,
+                        pubkey_bin,
+                        &mut first_items,
+                        pubkey_division,
+                        &mut indexes,
+                    );
+                    if exhausted {
+                        min_index -= 1;
+                    }
+                });
+                duplicate_pubkey_indexes.clear();
             }
         }
         (hashes, overall_sum, item_len)
