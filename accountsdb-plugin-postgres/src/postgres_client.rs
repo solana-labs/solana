@@ -22,8 +22,14 @@ use {
             v0::{self, AddressMapIndexes},
             MappedAddresses, MappedMessage, Message, MessageHeader, SanitizedMessage,
         },
+        transaction::TransactionError,
         timing::AtomicInterval,
     },
+    solana_transaction_status::{
+        InnerInstructions, Reward,
+        TransactionStatusMeta, TransactionTokenBalance,
+    },
+    solana_runtime::bank::RewardType,
     std::{
         sync::{
             atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -89,34 +95,37 @@ pub struct DbCompiledInstruction {
 #[derive(Clone, Debug, ToSql)]
 pub struct DbInnerInstructions {
     pub index: i16,
-    pub instructions: DbCompiledInstruction,
+    pub instructions: Vec<DbCompiledInstruction>,
 }
 
 #[derive(Clone, Debug, ToSql)]
 pub struct DbTransactionTokenBalance {
     account_index: i16,
     mint: String,
-    ui_token_amount: f64,
+    ui_token_amount: Option<f64>,
     owner: String,
 }
 
 #[derive(Clone, Debug, ToSql)]
-pub struct DbRewards {
-    validator_point_value: f64,
-    unused: f64,
+pub struct DbReward {
+    pubkey: String,
+    lamports: i64,
+    post_balance: i64,
+    reward_type: Option<String>,
+    commission: Option<i16>,
 }
 
 #[derive(Clone, Debug, ToSql)]
 pub struct DbTransactionStatusMeta {
-    status: String,
+    status: Option<String>,
     fee: i64,
     pre_balances: Vec<i64>,
     post_balances: Vec<i64>,
-    inner_instructions: Vec<DbInnerInstructions>,
-    log_messages: Vec<String>,
-    pre_token_balances: Vec<DbTransactionTokenBalance>,
-    post_token_balances: Vec<DbTransactionTokenBalance>,
-    rewards: DbRewards,
+    inner_instructions: Option<Vec<DbInnerInstructions>>,
+    log_messages: Option<Vec<String>>,
+    pre_token_balances: Option<Vec<DbTransactionTokenBalance>>,
+    post_token_balances: Option<Vec<DbTransactionTokenBalance>>,
+    rewards: Option<Vec<DbReward>>,
 }
 
 #[derive(Clone, Debug, ToSql)]
@@ -159,6 +168,18 @@ pub struct DbMappedAddresses {
 pub struct DbMappedMessage {
     message: DbTransactionMessageV0,
     mapped_addresses: DbMappedAddresses,
+}
+
+pub struct DbTransaction {
+    signature: Vec<u8>,
+    is_vote: bool,
+    slot: i64,
+    message_type: i16,
+    legacy_message: Option<DbTransactionMessage>,
+    v0_mapped_message: Option<DbMappedMessage>,
+    message_hash: Vec<u8>,
+    meta: DbTransactionStatusMeta,
+    signatures: Vec<Vec<u8>>,
 }
 
 impl From<&AddressMapIndexes> for DbAddressMapIndexes {
@@ -259,15 +280,96 @@ impl From<&MappedMessage> for DbMappedMessage {
     }
 }
 
-pub struct DbTransaction {
-    signature: Vec<u8>,
-    is_vote: bool,
-    slot: i64,
-    message_type: i16,
-    legacy_message: Option<DbTransactionMessage>,
-    v0_mapped_message: Option<DbMappedMessage>,
-    message_hash: Vec<u8>,
-    signatures: Vec<Vec<u8>>,
+impl From<&InnerInstructions> for DbInnerInstructions {
+    fn from(instructions: &InnerInstructions) -> Self {
+        Self {
+            index: instructions.index as i16,
+            instructions: instructions.instructions.iter().map(DbCompiledInstruction::from).collect()
+        }
+    }
+}
+
+fn get_reward_type(reward: &Option<RewardType>)  -> Option<String> {
+    reward.as_ref().map(|reward_type| {
+        match reward_type { 
+            RewardType::Fee => "fee".to_string(),
+            RewardType::Rent => "rent".to_string(),
+            RewardType::Staking => "staking".to_string(),
+            RewardType::Voting => "voting".to_string(),
+        }
+    })
+}
+
+impl From<&Reward> for DbReward {
+    fn from(reward: &Reward) -> Self {
+        Self {
+            pubkey: reward.pubkey.clone(),
+            lamports: reward.lamports as i64,
+            post_balance: reward.post_balance as i64,
+            reward_type: get_reward_type(&reward.reward_type),
+            commission: reward.commission.as_ref().map(|commission| *commission as i16),
+        }
+    }
+}
+
+fn get_transaction_status(result: &Result<(), TransactionError>) -> Option<String> {
+    if result.is_ok() {
+        return None;
+    }
+
+    let err = match result.as_ref().err().unwrap() {
+        TransactionError::AccountInUse => "AccountInUse",
+        TransactionError::AccountLoadedTwice => "AccountLoadedTwice",
+        TransactionError::AccountNotFound => "AccountNotFound",
+        TransactionError::ProgramAccountNotFound => "ProgramAccountNotFound",
+        TransactionError::InsufficientFundsForFee => "InsufficientFundsForFee",
+        TransactionError::InvalidAccountForFee => "InvalidAccountForFee",
+        TransactionError::AlreadyProcessed => "AlreadyProcessed",
+        TransactionError::BlockhashNotFound => "BlockhashNotFound",
+        TransactionError::InstructionError(idx, error) => {
+            return Some(format!("InstructionError: idx ({}), error: {}", idx, error));
+        }
+        TransactionError::CallChainTooDeep => "CallChainTooDeep",
+        TransactionError::MissingSignatureForFee => "MissingSignatureForFee",
+        TransactionError::InvalidAccountIndex => "InvalidAccountIndex",
+        TransactionError::SignatureFailure => "SignatureFailure",
+        TransactionError::InvalidProgramForExecution => "InvalidProgramForExecution",
+        TransactionError::SanitizeFailure => "SanitizeFailure",
+        TransactionError::ClusterMaintenance => "ClusterMaintenance",
+        TransactionError::AccountBorrowOutstanding => "AccountBorrowOutstanding",
+        TransactionError::WouldExceedMaxBlockCostLimit => "WouldExceedMaxBlockCostLimit",
+        TransactionError::UnsupportedVersion => "UnsupportedVersion",
+        TransactionError::InvalidWritableAccount => "InvalidWritableAccount",
+    };
+
+    Some(err.to_string())
+}
+
+impl From<&TransactionTokenBalance> for DbTransactionTokenBalance {
+    fn from(token_balance: &TransactionTokenBalance) -> Self {
+        Self {
+            account_index: token_balance.account_index as i16,
+            mint: token_balance.mint.clone(),
+            ui_token_amount: token_balance.ui_token_amount.ui_amount.clone(),
+            owner: token_balance.owner.clone()
+        }
+    }
+}
+
+impl From<&TransactionStatusMeta> for DbTransactionStatusMeta {
+    fn from(meta: &TransactionStatusMeta) -> Self {
+        Self {
+            status: get_transaction_status(&meta.status),
+            fee: meta.fee as i64,
+            pre_balances: meta.pre_balances.iter().map(|balance| *balance as i64).collect(),
+            post_balances: meta.post_balances.iter().map(|balance| *balance as i64).collect(),
+            inner_instructions: meta.inner_instructions.as_ref().map(|instructions| instructions.iter().map(DbInnerInstructions::from).collect()),
+            log_messages: meta.log_messages.clone(),
+            pre_token_balances: meta.pre_token_balances.as_ref().map(|balances| balances.iter().map(DbTransactionTokenBalance::from).collect()),
+            post_token_balances: meta.post_token_balances.as_ref().map(|balances| balances.iter().map(DbTransactionTokenBalance::from).collect()),
+            rewards: meta.rewards.as_ref().map(|rewards| rewards.iter().map(DbReward::from).collect()),
+        }
+    }
 }
 
 pub(crate) fn abort() -> ! {
@@ -517,10 +619,9 @@ impl SimplePostgresClient {
         client: &mut Client,
         config: &AccountsDbPluginPostgresConfig,
     ) -> Result<Statement, AccountsDbPluginError> {
-        let stmt = "INSERT INTO transaction_log AS txn (signature, is_vote, result, logs, slot, updated_on) \
-        VALUES ($1, $2, $3, $4, $5, $6) \
-        ON CONFLICT (signature) DO UPDATE SET slot=excluded.slot, is_vote=excluded.is_vote, result=excluded.result, logs=excluded.logs, \
-        updated_on=excluded.updated_on WHERE txn.slot <= excluded.slot";
+        let stmt = "INSERT INTO transaction AS txn (signature, is_vote, slot, logs, message_type, legacy_message, \
+        v0_mapped_message, signatures, message_hash, meta, updated_on) \
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)";
 
         let stmt = client.prepare(stmt);
 
@@ -528,7 +629,7 @@ impl SimplePostgresClient {
             Err(err) => {
                 return Err(AccountsDbPluginError::Custom(Box::new(AccountsDbPluginPostgresError::DataSchemaError {
                     msg: format!(
-                        "Error in preparing for the accounts update PostgreSQL database: ({}) host: {:?} user: {:?} config: {:?}",
+                        "Error in preparing for the transaction update PostgreSQL database: ({}) host: {:?} user: {:?} config: {:?}",
                         err, config.host, config.user, config
                     ),
                 })));
@@ -815,16 +916,20 @@ impl PostgresClient for SimplePostgresClient {
         let statement = &client.update_transaction_log_stmt;
         let client = &mut client.client;
         let updated_on = Utc::now().naive_utc();
-        let slot = transaction_log_info.slot as i64;
 
+        let transaction_info = transaction_log_info.transaction_info;
         let result = client.query(
             statement,
             &[
-                &transaction_log_info.signature,
-                &transaction_log_info.is_vote,
-                &transaction_log_info.result,
-                &transaction_log_info.log_messages,
-                &slot,
+                &transaction_info.signature,
+                &transaction_info.is_vote,
+                &transaction_info.slot,
+                &transaction_info.message_type,
+                &transaction_info.legacy_message,
+                &transaction_info.v0_mapped_message,
+                &transaction_info.signatures,
+                &transaction_info.message_hash,
+                &transaction_info.meta,
                 &updated_on,
             ],
         );
@@ -1169,6 +1274,7 @@ impl ParallelPostgresClient {
                 .message_hash()
                 .as_ref()
                 .to_vec(),
+            meta: DbTransactionStatusMeta::from(transaction_info.transaction_meta)
         }
     }
 

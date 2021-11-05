@@ -4405,7 +4405,9 @@ dependencies = [
  "solana-logger 1.9.0",
  "solana-measure",
  "solana-metrics",
+ "solana-runtime",
  "solana-sdk",
+ "solana-transaction-status",
  "thiserror",
  "tokio-postgres",
 ]

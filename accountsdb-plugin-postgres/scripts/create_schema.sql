@@ -106,6 +106,7 @@ CREATE TABLE transaction (
     v0_mapped_message MappedMessage,
     signatures BYTEA[],
     message_hash BYTEA,
+    meta TransactionStatusMeta,
     updated_on TIMESTAMP NOT NULL
 );
 

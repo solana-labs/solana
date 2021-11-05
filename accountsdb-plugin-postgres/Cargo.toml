@@ -26,7 +26,9 @@ solana-accountsdb-plugin-interface = { path = "../accountsdb-plugin-interface", 
 solana-logger = { path = "../logger", version = "=1.9.0" }
 solana-measure = { path = "../measure", version = "=1.9.0" }
 solana-metrics = { path = "../metrics", version = "=1.9.0" }
+solana-runtime = { path = "../runtime", version = "=1.9.0" }
 solana-sdk = { path = "../sdk", version = "=1.9.0" }
+solana-transaction-status = { path = "../transaction-status", version = "=1.9.0" }
 thiserror = "1.0.30"
 tokio-postgres = "0.7.4"
 [package.metadata.docs.rs]

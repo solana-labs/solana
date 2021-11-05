@@ -13,44 +13,11 @@ use {
         clock::Slot,
         pubkey::Pubkey,
         signature::Signature,
-        transaction::{SanitizedTransaction, TransactionError},
+        transaction::SanitizedTransaction,
     },
     solana_transaction_status::TransactionStatusMeta,
     std::sync::{Arc, RwLock},
 };
-
-fn get_transaction_status(result: &Result<(), TransactionError>) -> Option<String> {
-    if result.is_ok() {
-        return None;
-    }
-
-    let err = match result.as_ref().err().unwrap() {
-        TransactionError::AccountInUse => "AccountInUse",
-        TransactionError::AccountLoadedTwice => "AccountLoadedTwice",
-        TransactionError::AccountNotFound => "AccountNotFound",
-        TransactionError::ProgramAccountNotFound => "ProgramAccountNotFound",
-        TransactionError::InsufficientFundsForFee => "InsufficientFundsForFee",
-        TransactionError::InvalidAccountForFee => "InvalidAccountForFee",
-        TransactionError::AlreadyProcessed => "AlreadyProcessed",
-        TransactionError::BlockhashNotFound => "BlockhashNotFound",
-        TransactionError::InstructionError(idx, error) => {
-            return Some(format!("InstructionError: idx ({}), error: {}", idx, error));
-        }
-        TransactionError::CallChainTooDeep => "CallChainTooDeep",
-        TransactionError::MissingSignatureForFee => "MissingSignatureForFee",
-        TransactionError::InvalidAccountIndex => "InvalidAccountIndex",
-        TransactionError::SignatureFailure => "SignatureFailure",
-        TransactionError::InvalidProgramForExecution => "InvalidProgramForExecution",
-        TransactionError::SanitizeFailure => "SanitizeFailure",
-        TransactionError::ClusterMaintenance => "ClusterMaintenance",
-        TransactionError::AccountBorrowOutstanding => "AccountBorrowOutstanding",
-        TransactionError::WouldExceedMaxBlockCostLimit => "WouldExceedMaxBlockCostLimit",
-        TransactionError::UnsupportedVersion => "UnsupportedVersion",
-        TransactionError::InvalidWritableAccount => "InvalidWritableAccount",
-    };
-
-    Some(err.to_string())
-}
 
 pub(crate) struct TransactionNotifierImpl {
     plugin_manager: Arc<RwLock<AccountsDbPluginManager>>,
