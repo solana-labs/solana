@@ -152,8 +152,8 @@ pub struct DbTransactionMessage {
 #[derive(Clone, Debug, ToSql)]
 #[postgres(name = "AddressMapIndexes")]
 pub struct DbAddressMapIndexes {
-    writable: Vec<u8>,
-    readonly: Vec<u8>,
+    writable: Vec<i16>,
+    readonly: Vec<i16>,
 }
 
 #[derive(Clone, Debug, ToSql)]
@@ -195,8 +195,8 @@ pub struct DbTransaction {
 impl From<&AddressMapIndexes> for DbAddressMapIndexes {
     fn from(address_map_indexes: &AddressMapIndexes) -> Self {
         Self {
-            writable: address_map_indexes.writable.clone(),
-            readonly: address_map_indexes.readonly.clone(),
+            writable: address_map_indexes.writable.iter().map(|address_idx| *address_idx as i16).collect(),
+            readonly: address_map_indexes.readonly.iter().map(|address_idx| *address_idx as i16).collect(),
         }
     }
 }

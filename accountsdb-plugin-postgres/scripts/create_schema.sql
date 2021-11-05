@@ -60,7 +60,7 @@ CREATE TYPE "TransactionStatusMeta" AS (
     log_messages TEXT[],
     pre_token_balances "TransactionTokenBalance"[],
     post_token_balances "TransactionTokenBalance"[],
-    rewards Reward[]
+    rewards "Reward"[]
 );
 
 CREATE TYPE "TransactionMessageHeader" AS (
