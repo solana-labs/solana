@@ -12,18 +12,6 @@ use solana_sdk::{
 };
 use std::{cell::RefCell, fmt::Debug, rc::Rc, sync::Arc};
 
-/// Prototype of a native loader entry point
-///
-/// program_id: Program ID of the currently executing program
-/// keyed_accounts: Accounts passed as part of the instruction
-/// instruction_data: Instruction data
-/// invoke_context: Invocation context
-pub type LoaderEntrypoint = unsafe extern "C" fn(
-    program_id: &Pubkey,
-    instruction_data: &[u8],
-    invoke_context: &dyn InvokeContext,
-) -> Result<(), InstructionError>;
-
 pub type ProcessInstructionWithContext =
     fn(usize, &[u8], &mut dyn InvokeContext) -> Result<(), InstructionError>;
 
