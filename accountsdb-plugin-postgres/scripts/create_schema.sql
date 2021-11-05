@@ -43,9 +43,12 @@ CREATE TYPE TransactionTokenBalance AS (
     owner VARCHAR(256)
 );
 
-CREATE TYPE Rewards AS (
-    validator_point_value DOUBLE PRECISION,
-    unused DOUBLE PRECISION
+CREATE TYPE Reward AS (
+    pubkey VARCHAR(256),
+    lamports BIGINT,
+    post_balance BIGINT,
+    reward_type VARCHAR(256),
+    commission SMALLINT
 );
 
 CREATE TYPE TransactionStatusMeta AS (
@@ -57,7 +60,7 @@ CREATE TYPE TransactionStatusMeta AS (
     log_messages TEXT[],
     pre_token_balances TransactionTokenBalance[],
     post_token_balances TransactionTokenBalance[],
-    rewards Rewards
+    rewards Reward[]
 );
 
 CREATE TYPE TransactionMessageHeader AS (

@@ -85,6 +85,7 @@ pub struct DbAccountInfo {
 }
 
 #[derive(Clone, Debug, ToSql)]
+#[postgres(name = "CompiledInstruction")]
 pub struct DbCompiledInstruction {
     pub program_id_index: i16,
     pub accounts: Vec<u8>,
@@ -92,12 +93,14 @@ pub struct DbCompiledInstruction {
 }
 
 #[derive(Clone, Debug, ToSql)]
+#[postgres(name = "InnerInstructions")]
 pub struct DbInnerInstructions {
     pub index: i16,
     pub instructions: Vec<DbCompiledInstruction>,
 }
 
 #[derive(Clone, Debug, ToSql)]
+#[postgres(name = "TransactionTokenBalance")]
 pub struct DbTransactionTokenBalance {
     account_index: i16,
     mint: String,
@@ -106,6 +109,7 @@ pub struct DbTransactionTokenBalance {
 }
 
 #[derive(Clone, Debug, ToSql)]
+#[postgres(name = "Reward")]
 pub struct DbReward {
     pubkey: String,
     lamports: i64,
@@ -115,6 +119,7 @@ pub struct DbReward {
 }
 
 #[derive(Clone, Debug, ToSql)]
+#[postgres(name = "TransactionStatusMeta")]
 pub struct DbTransactionStatusMeta {
     status: Option<String>,
     fee: i64,
@@ -128,6 +133,7 @@ pub struct DbTransactionStatusMeta {
 }
 
 #[derive(Clone, Debug, ToSql)]
+#[postgres(name = "TransactionMessageHeader")]
 pub struct DbTransactionMessageHeader {
     num_required_signatures: i16,
     num_readonly_signed_accounts: i16,
@@ -135,6 +141,7 @@ pub struct DbTransactionMessageHeader {
 }
 
 #[derive(Clone, Debug, ToSql)]
+#[postgres(name = "TransactionMessage")]
 pub struct DbTransactionMessage {
     header: DbTransactionMessageHeader,
     account_keys: Vec<Vec<u8>>,
@@ -143,12 +150,14 @@ pub struct DbTransactionMessage {
 }
 
 #[derive(Clone, Debug, ToSql)]
+#[postgres(name = "AddressMapIndexes")]
 pub struct DbAddressMapIndexes {
     writable: Vec<u8>,
     readonly: Vec<u8>,
 }
 
 #[derive(Clone, Debug, ToSql)]
+#[postgres(name = "TransactionMessageV0")]
 pub struct DbTransactionMessageV0 {
     header: DbTransactionMessageHeader,
     account_keys: Vec<Vec<u8>>,
@@ -158,12 +167,14 @@ pub struct DbTransactionMessageV0 {
 }
 
 #[derive(Clone, Debug, ToSql)]
+#[postgres(name = "MappedAddresses")]
 pub struct DbMappedAddresses {
     writable: Vec<Vec<u8>>,
     readonly: Vec<Vec<u8>>,
 }
 
 #[derive(Clone, Debug, ToSql)]
+#[postgres(name = "MappedMessage")]
 pub struct DbMappedMessage {
     message: DbTransactionMessageV0,
     mapped_addresses: DbMappedAddresses,
