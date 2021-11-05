@@ -24,7 +24,7 @@ use {
     rayon::prelude::*,
     serde::{de::DeserializeOwned, Deserialize, Serialize},
     solana_measure::measure::Measure,
-    solana_program_runtime::InstructionProcessor,
+    solana_program_runtime::instruction_processor::InstructionProcessor,
     solana_sdk::{
         clock::{Epoch, Slot, UnixTimestamp},
         epoch_schedule::EpochSchedule,
@@ -373,6 +373,8 @@ where
         additional_builtins,
         debug_do_not_add_builtins,
     );
+
+    info!("rent_collector: {:?}", bank.rent_collector());
 
     Ok(bank)
 }

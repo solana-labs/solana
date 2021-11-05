@@ -41,9 +41,10 @@
 //!
 //!
 
-use reed_solomon_erasure::galois_8::Field;
-use reed_solomon_erasure::ReedSolomon;
-use serde::{Deserialize, Serialize};
+use {
+    reed_solomon_erasure::{galois_8::Field, ReconstructShard, ReedSolomon},
+    serde::{Deserialize, Serialize},
+};
 
 //TODO(sakridge) pick these values
 /// Number of data shreds
@@ -113,14 +114,11 @@ impl Session {
     }
 
     /// Recover data + coding blocks into data blocks
-    /// # Arguments
-    /// * `data` - array of data blocks to recover into
-    /// * `coding` - array of coding blocks
-    /// * `erasures` - list of indices in data where blocks should be recovered
-    pub fn decode_blocks(&self, blocks: &mut [(&mut [u8], bool)]) -> Result<()> {
-        self.0.reconstruct_data(blocks)?;
-
-        Ok(())
+    pub fn decode_blocks<T>(&self, blocks: &mut [T]) -> Result<()>
+    where
+        T: ReconstructShard<Field>,
+    {
+        self.0.reconstruct_data(blocks)
     }
 }
 

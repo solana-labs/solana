@@ -14,7 +14,7 @@ use crate::{
 };
 use log::{log_enabled, trace, Level::Trace};
 use solana_measure::measure::Measure;
-use solana_program_runtime::InstructionProcessor;
+use solana_program_runtime::instruction_processor::InstructionProcessor;
 use solana_rbpf::{
     aligned_memory::AlignedMemory,
     ebpf::HOST_ALIGN,
@@ -1042,6 +1042,7 @@ impl Executor for BpfExecutor {
 mod tests {
     use super::*;
     use rand::Rng;
+    use solana_program_runtime::invoke_context::mock_process_instruction;
     use solana_rbpf::vm::SyscallRegistry;
     use solana_runtime::{bank::Bank, bank_client::BankClient};
     use solana_sdk::{
@@ -1053,13 +1054,9 @@ mod tests {
         clock::Clock,
         feature_set::FeatureSet,
         genesis_config::create_genesis_config,
-        instruction::Instruction,
-        instruction::{AccountMeta, InstructionError},
-        keyed_account::create_keyed_accounts_unified,
+        instruction::{AccountMeta, Instruction, InstructionError},
         message::Message,
-        native_loader,
         native_token::LAMPORTS_PER_SOL,
-        process_instruction::{MockComputeMeter, MockInvokeContext},
         pubkey::Pubkey,
         rent::Rent,
         signature::{Keypair, Signer},
@@ -1080,19 +1077,18 @@ mod tests {
         }
     }
 
-    type KeyedAccountTuple<'a> = (bool, bool, &'a Pubkey, &'a RefCell<AccountSharedData>);
     fn process_instruction(
-        owner: &Pubkey,
+        loader_id: &Pubkey,
+        program_indices: &[usize],
         instruction_data: &[u8],
-        keyed_accounts: &[(bool, bool, &Pubkey, &RefCell<AccountSharedData>)],
+        keyed_accounts: &[(bool, bool, Pubkey, Rc<RefCell<AccountSharedData>>)],
     ) -> Result<(), InstructionError> {
-        let processor_account = AccountSharedData::new_ref(0, 0, &native_loader::id());
-        let mut keyed_accounts = keyed_accounts.to_vec();
-        keyed_accounts.insert(0, (false, false, owner, &processor_account));
-        super::process_instruction(
-            1,
+        mock_process_instruction(
+            loader_id,
+            program_indices.to_vec(),
             instruction_data,
-            &mut MockInvokeContext::new(owner, create_keyed_accounts_unified(&keyed_accounts)),
+            keyed_accounts,
+            super::process_instruction,
         )
     }
 
@@ -1151,9 +1147,9 @@ mod tests {
     #[test]
     fn test_bpf_loader_write() {
         let loader_id = bpf_loader::id();
-        let program_key = solana_sdk::pubkey::new_rand();
+        let program_id = Pubkey::new_unique();
         let program_account = AccountSharedData::new_ref(1, 0, &loader_id);
-        let mut keyed_accounts: Vec<KeyedAccountTuple> = vec![];
+        let mut keyed_accounts = vec![];
         let instruction_data = bincode::serialize(&LoaderInstruction::Write {
             offset: 3,
             bytes: vec![1, 2, 3],
@@ -1163,22 +1159,22 @@ mod tests {
         // Case: No program account
         assert_eq!(
             Err(InstructionError::NotEnoughAccountKeys),
-            process_instruction(&loader_id, &instruction_data, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction_data, &keyed_accounts),
         );
 
         // Case: Not signed
-        keyed_accounts.push((false, false, &program_key, &program_account));
+        keyed_accounts.push((false, false, program_id, program_account));
         assert_eq!(
             Err(InstructionError::MissingRequiredSignature),
-            process_instruction(&loader_id, &instruction_data, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction_data, &keyed_accounts),
         );
 
         // Case: Write bytes to an offset
-        keyed_accounts[0] = (true, false, &program_key, &program_account);
+        keyed_accounts[0].0 = true;
         keyed_accounts[0].3.borrow_mut().set_data(vec![0; 6]);
         assert_eq!(
             Ok(()),
-            process_instruction(&loader_id, &instruction_data, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction_data, &keyed_accounts),
         );
         assert_eq!(&vec![0, 0, 0, 1, 2, 3], keyed_accounts[0].3.borrow().data());
 
@@ -1186,38 +1182,38 @@ mod tests {
         keyed_accounts[0].3.borrow_mut().set_data(vec![0; 5]);
         assert_eq!(
             Err(InstructionError::AccountDataTooSmall),
-            process_instruction(&bpf_loader::id(), &instruction_data, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction_data, &keyed_accounts),
         );
     }
 
     #[test]
     fn test_bpf_loader_finalize() {
         let loader_id = bpf_loader::id();
-        let program_key = solana_sdk::pubkey::new_rand();
+        let program_id = Pubkey::new_unique();
         let program_account =
             load_program_account_from_elf(&loader_id, "test_elfs/noop_aligned.so");
         program_account.borrow_mut().set_executable(false);
 
         // Case: No program account
         let instruction_data = bincode::serialize(&LoaderInstruction::Finalize).unwrap();
-        let mut keyed_accounts: Vec<KeyedAccountTuple> = vec![];
+        let mut keyed_accounts = vec![];
         assert_eq!(
             Err(InstructionError::NotEnoughAccountKeys),
-            process_instruction(&loader_id, &instruction_data, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction_data, &keyed_accounts),
         );
 
         // Case: Not signed
-        keyed_accounts.push((false, false, &program_key, &program_account));
+        keyed_accounts.push((false, false, program_id, program_account.clone()));
         assert_eq!(
             Err(InstructionError::MissingRequiredSignature),
-            process_instruction(&loader_id, &instruction_data, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction_data, &keyed_accounts),
         );
 
         // Case: Finalize
-        keyed_accounts[0] = (true, false, &program_key, &program_account);
+        keyed_accounts[0] = (true, false, program_id, program_account.clone());
         assert_eq!(
             Ok(()),
-            process_instruction(&loader_id, &instruction_data, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction_data, &keyed_accounts),
         );
         assert!(keyed_accounts[0].3.borrow().executable());
 
@@ -1227,125 +1223,136 @@ mod tests {
         program_account.borrow_mut().data_as_mut_slice()[0] = 0; // bad elf
         assert_eq!(
             Err(InstructionError::InvalidAccountData),
-            process_instruction(&loader_id, &instruction_data, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction_data, &keyed_accounts),
         );
     }
 
     #[test]
     fn test_bpf_loader_invoke_main() {
         let loader_id = bpf_loader::id();
-        let program_key = solana_sdk::pubkey::new_rand();
+        let program_id = Pubkey::new_unique();
         let program_account =
             load_program_account_from_elf(&loader_id, "test_elfs/noop_aligned.so");
 
         // Case: No program account
-        let mut keyed_accounts: Vec<KeyedAccountTuple> = vec![];
+        let mut keyed_accounts = vec![];
         assert_eq!(
             Err(InstructionError::NotEnoughAccountKeys),
-            process_instruction(&loader_id, &[], &keyed_accounts),
+            process_instruction(&loader_id, &[], &[], &keyed_accounts),
         );
 
         // Case: Only a program account
-        keyed_accounts.push((false, false, &program_key, &program_account));
+        keyed_accounts.push((false, false, program_id, program_account));
         assert_eq!(
             Ok(()),
-            process_instruction(&program_key, &[], &keyed_accounts),
+            process_instruction(&loader_id, &[0], &[], &keyed_accounts),
         );
 
         // Case: Account not a program
         keyed_accounts[0].3.borrow_mut().set_executable(false);
         assert_eq!(
-            Err(InstructionError::InvalidInstructionData),
-            process_instruction(&loader_id, &[], &keyed_accounts),
+            Err(InstructionError::IncorrectProgramId),
+            process_instruction(&loader_id, &[0], &[], &keyed_accounts),
         );
         keyed_accounts[0].3.borrow_mut().set_executable(true);
 
         // Case: With program and parameter account
         let parameter_account = AccountSharedData::new_ref(1, 0, &loader_id);
-        keyed_accounts.push((false, false, &program_key, &parameter_account));
+        keyed_accounts.push((false, false, program_id, parameter_account));
         assert_eq!(
             Ok(()),
-            process_instruction(&program_key, &[], &keyed_accounts),
+            process_instruction(&loader_id, &[0], &[], &keyed_accounts),
         );
 
         // Case: With duplicate accounts
-        let duplicate_key = solana_sdk::pubkey::new_rand();
+        let duplicate_key = Pubkey::new_unique();
         let parameter_account = AccountSharedData::new_ref(1, 0, &loader_id);
-        keyed_accounts[1] = (false, false, &duplicate_key, &parameter_account);
-        keyed_accounts.push((false, false, &duplicate_key, &parameter_account));
+        keyed_accounts[1] = (false, false, duplicate_key, parameter_account.clone());
+        keyed_accounts.push((false, false, duplicate_key, parameter_account));
         assert_eq!(
             Ok(()),
-            process_instruction(&program_key, &[], &keyed_accounts),
+            process_instruction(&loader_id, &[0], &[], &keyed_accounts),
         );
 
         // Case: limited budget
-        let processor_account = AccountSharedData::new_ref(0, 0, &native_loader::id());
-        let mut keyed_accounts = keyed_accounts.clone();
-        keyed_accounts.insert(0, (false, false, &program_key, &processor_account));
-        let mut invoke_context =
-            MockInvokeContext::new(&program_key, create_keyed_accounts_unified(&keyed_accounts));
-        invoke_context.compute_meter = Rc::new(RefCell::new(MockComputeMeter::default()));
         assert_eq!(
             Err(InstructionError::ProgramFailedToComplete),
-            super::process_instruction(1, &[], &mut invoke_context)
+            mock_process_instruction(
+                &loader_id,
+                vec![0],
+                &[],
+                &keyed_accounts,
+                |first_instruction_account: usize,
+                 instruction_data: &[u8],
+                 invoke_context: &mut dyn InvokeContext| {
+                    let compute_meter = invoke_context.get_compute_meter();
+                    let remaining = compute_meter.borrow_mut().get_remaining();
+                    compute_meter.borrow_mut().consume(remaining).unwrap();
+                    super::process_instruction(
+                        first_instruction_account,
+                        instruction_data,
+                        invoke_context,
+                    )
+                },
+            ),
         );
     }
 
     #[test]
     fn test_bpf_loader_serialize_unaligned() {
         let loader_id = bpf_loader_deprecated::id();
-        let program_key = solana_sdk::pubkey::new_rand();
+        let program_key = Pubkey::new_unique();
         let program_account =
             load_program_account_from_elf(&loader_id, "test_elfs/noop_unaligned.so");
 
         // Case: With program and parameter account
         let parameter_account = AccountSharedData::new_ref(1, 0, &loader_id);
-        let mut keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, false, &program_key, &program_account),
-            (false, false, &program_key, &parameter_account),
+        let mut keyed_accounts = vec![
+            (false, false, program_key, program_account),
+            (false, false, program_key, parameter_account),
         ];
         assert_eq!(
             Ok(()),
-            process_instruction(&program_key, &[], &keyed_accounts),
+            process_instruction(&loader_id, &[0], &[], &keyed_accounts),
         );
 
         // Case: With duplicate accounts
-        let duplicate_key = solana_sdk::pubkey::new_rand();
+        let duplicate_key = Pubkey::new_unique();
         let parameter_account = AccountSharedData::new_ref(1, 0, &loader_id);
-        keyed_accounts[1] = (false, false, &duplicate_key, &parameter_account);
-        keyed_accounts.push((false, false, &duplicate_key, &parameter_account));
+        keyed_accounts[1] = (false, false, duplicate_key, parameter_account.clone());
+        keyed_accounts.push((false, false, duplicate_key, parameter_account));
         assert_eq!(
             Ok(()),
-            process_instruction(&program_key, &[], &keyed_accounts),
+            process_instruction(&loader_id, &[0], &[], &keyed_accounts),
         );
     }
 
     #[test]
     fn test_bpf_loader_serialize_aligned() {
         let loader_id = bpf_loader::id();
-        let program_key = solana_sdk::pubkey::new_rand();
+        let program_key = Pubkey::new_unique();
         let program_account =
             load_program_account_from_elf(&loader_id, "test_elfs/noop_aligned.so");
 
         // Case: With program and parameter account
         let parameter_account = AccountSharedData::new_ref(1, 0, &loader_id);
-        let mut keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, false, &program_key, &program_account),
-            (false, false, &program_key, &parameter_account),
+        let mut keyed_accounts = vec![
+            (false, false, program_key, program_account),
+            (false, false, program_key, parameter_account),
         ];
         assert_eq!(
             Ok(()),
-            process_instruction(&program_key, &[], &keyed_accounts),
+            process_instruction(&loader_id, &[0], &[], &keyed_accounts),
         );
 
         // Case: With duplicate accounts
-        let duplicate_key = solana_sdk::pubkey::new_rand();
+        let duplicate_key = Pubkey::new_unique();
         let parameter_account = AccountSharedData::new_ref(1, 0, &loader_id);
-        keyed_accounts[1] = (false, false, &duplicate_key, &parameter_account);
-        keyed_accounts.push(keyed_accounts[1]);
+        keyed_accounts[1] = (false, false, duplicate_key, parameter_account.clone());
+        keyed_accounts.push((false, false, duplicate_key, parameter_account));
         assert_eq!(
             Ok(()),
-            process_instruction(&program_key, &[], &keyed_accounts),
+            process_instruction(&loader_id, &[0], &[], &keyed_accounts),
         );
     }
 
@@ -1368,13 +1375,13 @@ mod tests {
         );
 
         // Case: Success
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, false, &buffer_address, &buffer_account),
-            (false, false, &authority_address, &authority_account),
+        let keyed_accounts = vec![
+            (false, false, buffer_address, buffer_account.clone()),
+            (false, false, authority_address, authority_account),
         ];
         assert_eq!(
             Ok(()),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
         let state: UpgradeableLoaderState = buffer_account.borrow().state().unwrap();
         assert_eq!(
@@ -1387,7 +1394,7 @@ mod tests {
         // Case: Already initialized
         assert_eq!(
             Err(InstructionError::AccountAlreadyInitialized),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
         let state: UpgradeableLoaderState = buffer_account.borrow().state().unwrap();
         assert_eq!(
@@ -1414,13 +1421,13 @@ mod tests {
             bytes: vec![42; 9],
         })
         .unwrap();
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, false, &buffer_address, &buffer_account),
-            (true, false, &buffer_address, &buffer_account),
+        let keyed_accounts = vec![
+            (false, false, buffer_address, buffer_account.clone()),
+            (true, false, buffer_address, buffer_account.clone()),
         ];
         assert_eq!(
             Err(InstructionError::InvalidAccountData),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
 
         // Case: Write entire buffer
@@ -1437,7 +1444,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             Ok(()),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
         let state: UpgradeableLoaderState = buffer_account.borrow().state().unwrap();
         assert_eq!(
@@ -1469,13 +1476,13 @@ mod tests {
                 authority_address: Some(buffer_address),
             })
             .unwrap();
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, false, &buffer_address, &buffer_account),
-            (true, false, &buffer_address, &buffer_account),
+        let keyed_accounts = vec![
+            (false, false, buffer_address, buffer_account.clone()),
+            (true, false, buffer_address, buffer_account.clone()),
         ];
         assert_eq!(
             Ok(()),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
         let state: UpgradeableLoaderState = buffer_account.borrow().state().unwrap();
         assert_eq!(
@@ -1504,7 +1511,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             Err(InstructionError::AccountDataTooSmall),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
 
         // Case: overflow offset
@@ -1521,7 +1528,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             Err(InstructionError::AccountDataTooSmall),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
 
         // Case: Not signed
@@ -1536,13 +1543,13 @@ mod tests {
                 authority_address: Some(buffer_address),
             })
             .unwrap();
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, false, &buffer_address, &buffer_account),
-            (false, false, &buffer_address, &buffer_account),
+        let keyed_accounts = vec![
+            (false, false, buffer_address, buffer_account.clone()),
+            (false, false, buffer_address, buffer_account.clone()),
         ];
         assert_eq!(
             Err(InstructionError::MissingRequiredSignature),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
 
         // Case: wrong authority
@@ -1558,13 +1565,13 @@ mod tests {
                 authority_address: Some(buffer_address),
             })
             .unwrap();
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, false, &buffer_address, &buffer_account),
-            (true, false, &authority_address, &buffer_account),
+        let keyed_accounts = vec![
+            (false, false, buffer_address, buffer_account.clone()),
+            (true, false, authority_address, buffer_account.clone()),
         ];
         assert_eq!(
             Err(InstructionError::IncorrectAuthority),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
 
         // Case: None authority
@@ -1581,7 +1588,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             Err(InstructionError::Immutable),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
     }
 
@@ -1738,16 +1745,23 @@ mod tests {
 
         // Invoke deployed program
         {
-            let programdata_account = RefCell::new(post_programdata_account);
-            let program_account = RefCell::new(post_program_account);
-            let program_address = program_keypair.pubkey();
-            let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-                (false, false, &programdata_address, &programdata_account),
-                (false, false, &program_address, &program_account),
+            let keyed_accounts = vec![
+                (
+                    false,
+                    false,
+                    programdata_address,
+                    Rc::new(RefCell::new(post_programdata_account)),
+                ),
+                (
+                    false,
+                    false,
+                    program_keypair.pubkey(),
+                    Rc::new(RefCell::new(post_program_account)),
+                ),
             ];
             assert_eq!(
                 Ok(()),
-                process_instruction(&program_address, &[], &keyed_accounts),
+                process_instruction(&bpf_loader_upgradeable::id(), &[0, 1], &[], &keyed_accounts),
             );
         }
 
@@ -2289,12 +2303,12 @@ mod tests {
         file.read_to_end(&mut elf_new).unwrap();
         assert_ne!(elf_orig.len(), elf_new.len());
         let rent = Rent::default();
-        let rent_account = RefCell::new(create_account_for_test(&Rent::default()));
+        let rent_account = Rc::new(RefCell::new(create_account_for_test(&Rent::default())));
         let slot = 42;
-        let clock_account = RefCell::new(create_account_for_test(&Clock {
+        let clock_account = Rc::new(RefCell::new(create_account_for_test(&Clock {
             slot,
             ..Clock::default()
-        }));
+        })));
         let min_program_balance =
             1.max(rent.minimum_balance(UpgradeableLoaderState::program_len().unwrap()));
         let min_programdata_balance = 1.max(rent.minimum_balance(
@@ -2385,23 +2399,28 @@ mod tests {
             min_program_balance,
             min_programdata_balance,
         );
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, true, &programdata_address, &programdata_account),
-            (false, true, &program_address, &program_account),
-            (false, true, &buffer_address, &buffer_account),
-            (false, true, &spill_address, &spill_account),
-            (false, false, &rent_id, &rent_account),
-            (false, false, &clock_id, &clock_account),
+        let keyed_accounts = vec![
+            (
+                false,
+                true,
+                programdata_address,
+                programdata_account.clone(),
+            ),
+            (false, true, program_address, program_account),
+            (false, true, buffer_address, buffer_account.clone()),
+            (false, true, spill_address, spill_account.clone()),
+            (false, false, rent_id, rent_account.clone()),
+            (false, false, clock_id, clock_account.clone()),
             (
                 true,
                 false,
-                &upgrade_authority_address,
-                &upgrade_authority_account,
+                upgrade_authority_address,
+                upgrade_authority_account.clone(),
             ),
         ];
         assert_eq!(
             Ok(()),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
         assert_eq!(0, buffer_account.borrow().lamports());
         assert_eq!(
@@ -2444,23 +2463,23 @@ mod tests {
                 upgrade_authority_address: None,
             })
             .unwrap();
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, true, &programdata_address, &programdata_account),
-            (false, true, &program_address, &program_account),
-            (false, true, &buffer_address, &buffer_account),
-            (false, true, &spill_address, &spill_account),
-            (false, false, &rent_id, &rent_account),
-            (false, false, &clock_id, &clock_account),
+        let keyed_accounts = vec![
+            (false, true, programdata_address, programdata_account),
+            (false, true, program_address, program_account),
+            (false, true, buffer_address, buffer_account),
+            (false, true, spill_address, spill_account),
+            (false, false, rent_id, rent_account.clone()),
+            (false, false, clock_id, clock_account.clone()),
             (
                 true,
                 false,
-                &upgrade_authority_address,
-                &upgrade_authority_account,
+                upgrade_authority_address,
+                upgrade_authority_account.clone(),
             ),
         ];
         assert_eq!(
             Err(InstructionError::Immutable),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
 
         // Case: wrong authority
@@ -2475,23 +2494,23 @@ mod tests {
             min_programdata_balance,
         );
         let invalid_upgrade_authority_address = Pubkey::new_unique();
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, true, &programdata_address, &programdata_account),
-            (false, true, &program_address, &program_account),
-            (false, true, &buffer_address, &buffer_account),
-            (false, true, &spill_address, &spill_account),
-            (false, false, &rent_id, &rent_account),
-            (false, false, &clock_id, &clock_account),
+        let keyed_accounts = vec![
+            (false, true, programdata_address, programdata_account),
+            (false, true, program_address, program_account),
+            (false, true, buffer_address, buffer_account),
+            (false, true, spill_address, spill_account),
+            (false, false, rent_id, rent_account.clone()),
+            (false, false, clock_id, clock_account.clone()),
             (
                 true,
                 false,
-                &invalid_upgrade_authority_address,
-                &upgrade_authority_account,
+                invalid_upgrade_authority_address,
+                upgrade_authority_account.clone(),
             ),
         ];
         assert_eq!(
             Err(InstructionError::IncorrectAuthority),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
 
         // Case: authority did not sign
@@ -2505,23 +2524,23 @@ mod tests {
             min_program_balance,
             min_programdata_balance,
         );
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, true, &programdata_address, &programdata_account),
-            (false, true, &program_address, &program_account),
-            (false, true, &buffer_address, &buffer_account),
-            (false, true, &spill_address, &spill_account),
-            (false, false, &rent_id, &rent_account),
-            (false, false, &clock_id, &clock_account),
+        let keyed_accounts = vec![
+            (false, true, programdata_address, programdata_account),
+            (false, true, program_address, program_account),
+            (false, true, buffer_address, buffer_account),
+            (false, true, spill_address, spill_account),
+            (false, false, rent_id, rent_account.clone()),
+            (false, false, clock_id, clock_account.clone()),
             (
                 false,
                 false,
-                &upgrade_authority_address,
-                &upgrade_authority_account,
+                upgrade_authority_address,
+                upgrade_authority_account.clone(),
             ),
         ];
         assert_eq!(
             Err(InstructionError::MissingRequiredSignature),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
 
         // Case: Program account not executable
@@ -2536,23 +2555,23 @@ mod tests {
             min_programdata_balance,
         );
         program_account.borrow_mut().set_executable(false);
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, true, &programdata_address, &programdata_account),
-            (false, true, &program_address, &program_account),
-            (false, true, &buffer_address, &buffer_account),
-            (false, true, &spill_address, &spill_account),
-            (false, false, &rent_id, &rent_account),
-            (false, false, &clock_id, &clock_account),
+        let keyed_accounts = vec![
+            (false, true, programdata_address, programdata_account),
+            (false, true, program_address, program_account),
+            (false, true, buffer_address, buffer_account),
+            (false, true, spill_address, spill_account),
+            (false, false, rent_id, rent_account.clone()),
+            (false, false, clock_id, clock_account.clone()),
             (
                 true,
                 false,
-                &upgrade_authority_address,
-                &upgrade_authority_account,
+                upgrade_authority_address,
+                upgrade_authority_account.clone(),
             ),
         ];
         assert_eq!(
             Err(InstructionError::AccountNotExecutable),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
 
         // Case: Program account now owned by loader
@@ -2567,23 +2586,23 @@ mod tests {
             min_programdata_balance,
         );
         program_account.borrow_mut().set_owner(Pubkey::new_unique());
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, true, &programdata_address, &programdata_account),
-            (false, true, &program_address, &program_account),
-            (false, true, &buffer_address, &buffer_account),
-            (false, true, &spill_address, &spill_account),
-            (false, false, &rent_id, &rent_account),
-            (false, false, &clock_id, &clock_account),
+        let keyed_accounts = vec![
+            (false, true, programdata_address, programdata_account),
+            (false, true, program_address, program_account),
+            (false, true, buffer_address, buffer_account),
+            (false, true, spill_address, spill_account),
+            (false, false, rent_id, rent_account.clone()),
+            (false, false, clock_id, clock_account.clone()),
             (
                 true,
                 false,
-                &upgrade_authority_address,
-                &upgrade_authority_account,
+                upgrade_authority_address,
+                upgrade_authority_account.clone(),
             ),
         ];
         assert_eq!(
             Err(InstructionError::IncorrectProgramId),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
 
         // Case: Program account not writable
@@ -2597,23 +2616,23 @@ mod tests {
             min_program_balance,
             min_programdata_balance,
         );
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, true, &programdata_address, &programdata_account),
-            (false, false, &program_address, &program_account),
-            (false, true, &buffer_address, &buffer_account),
-            (false, true, &spill_address, &spill_account),
-            (false, false, &rent_id, &rent_account),
-            (false, false, &clock_id, &clock_account),
+        let keyed_accounts = vec![
+            (false, true, programdata_address, programdata_account),
+            (false, false, program_address, program_account),
+            (false, true, buffer_address, buffer_account),
+            (false, true, spill_address, spill_account),
+            (false, false, rent_id, rent_account.clone()),
+            (false, false, clock_id, clock_account.clone()),
             (
                 true,
                 false,
-                &upgrade_authority_address,
-                &upgrade_authority_account,
+                upgrade_authority_address,
+                upgrade_authority_account.clone(),
             ),
         ];
         assert_eq!(
             Err(InstructionError::InvalidArgument),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
 
         // Case: Program account not initialized
@@ -2631,23 +2650,23 @@ mod tests {
             .borrow_mut()
             .set_state(&UpgradeableLoaderState::Uninitialized)
             .unwrap();
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, true, &programdata_address, &programdata_account),
-            (false, true, &program_address, &program_account),
-            (false, true, &buffer_address, &buffer_account),
-            (false, true, &spill_address, &spill_account),
-            (false, false, &rent_id, &rent_account),
-            (false, false, &clock_id, &clock_account),
+        let keyed_accounts = vec![
+            (false, true, programdata_address, programdata_account),
+            (false, true, program_address, program_account),
+            (false, true, buffer_address, buffer_account),
+            (false, true, spill_address, spill_account),
+            (false, false, rent_id, rent_account.clone()),
+            (false, false, clock_id, clock_account.clone()),
             (
                 true,
                 false,
-                &upgrade_authority_address,
-                &upgrade_authority_account,
+                upgrade_authority_address,
+                upgrade_authority_account.clone(),
             ),
         ];
         assert_eq!(
             Err(InstructionError::InvalidAccountData),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
 
         // Case: Program ProgramData account mismatch
@@ -2662,28 +2681,28 @@ mod tests {
             min_programdata_balance,
         );
         let invalid_programdata_address = Pubkey::new_unique();
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
+        let keyed_accounts = vec![
             (
                 false,
                 true,
-                &invalid_programdata_address,
-                &programdata_account,
+                invalid_programdata_address,
+                programdata_account,
             ),
-            (false, true, &program_address, &program_account),
-            (false, true, &buffer_address, &buffer_account),
-            (false, true, &spill_address, &spill_account),
-            (false, false, &rent_id, &rent_account),
-            (false, false, &clock_id, &clock_account),
+            (false, true, program_address, program_account),
+            (false, true, buffer_address, buffer_account),
+            (false, true, spill_address, spill_account),
+            (false, false, rent_id, rent_account.clone()),
+            (false, false, clock_id, clock_account.clone()),
             (
                 true,
                 false,
-                &upgrade_authority_address,
-                &upgrade_authority_account,
+                upgrade_authority_address,
+                upgrade_authority_account.clone(),
             ),
         ];
         assert_eq!(
             Err(InstructionError::InvalidArgument),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
 
         // Case: Buffer account not initialized
@@ -2701,23 +2720,23 @@ mod tests {
             .borrow_mut()
             .set_state(&UpgradeableLoaderState::Uninitialized)
             .unwrap();
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, true, &programdata_address, &programdata_account),
-            (false, true, &program_address, &program_account),
-            (false, true, &buffer_address, &buffer_account),
-            (false, true, &spill_address, &spill_account),
-            (false, false, &rent_id, &rent_account),
-            (false, false, &clock_id, &clock_account),
+        let keyed_accounts = vec![
+            (false, true, programdata_address, programdata_account),
+            (false, true, program_address, program_account),
+            (false, true, buffer_address, buffer_account),
+            (false, true, spill_address, spill_account),
+            (false, false, rent_id, rent_account.clone()),
+            (false, false, clock_id, clock_account.clone()),
             (
                 true,
                 false,
-                &upgrade_authority_address,
-                &upgrade_authority_account,
+                upgrade_authority_address,
+                upgrade_authority_account.clone(),
             ),
         ];
         assert_eq!(
             Err(InstructionError::InvalidArgument),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
 
         // Case: Buffer account too big
@@ -2742,23 +2761,23 @@ mod tests {
                 authority_address: Some(upgrade_authority_address),
             })
             .unwrap();
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, true, &programdata_address, &programdata_account),
-            (false, true, &program_address, &program_account),
-            (false, true, &buffer_address, &buffer_account),
-            (false, true, &spill_address, &spill_account),
-            (false, false, &rent_id, &rent_account),
-            (false, false, &clock_id, &clock_account),
+        let keyed_accounts = vec![
+            (false, true, programdata_address, programdata_account),
+            (false, true, program_address, program_account),
+            (false, true, buffer_address, buffer_account),
+            (false, true, spill_address, spill_account),
+            (false, false, rent_id, rent_account.clone()),
+            (false, false, clock_id, clock_account.clone()),
             (
                 true,
                 false,
-                &upgrade_authority_address,
-                &upgrade_authority_account,
+                upgrade_authority_address,
+                upgrade_authority_account.clone(),
             ),
         ];
         assert_eq!(
             Err(InstructionError::AccountDataTooSmall),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
 
         // Test small buffer account
@@ -2779,23 +2798,23 @@ mod tests {
             })
             .unwrap();
         truncate_data(&mut buffer_account.borrow_mut(), 5);
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, true, &programdata_address, &programdata_account),
-            (false, true, &program_address, &program_account),
-            (false, true, &buffer_address, &buffer_account),
-            (false, true, &spill_address, &spill_account),
-            (false, false, &rent_id, &rent_account),
-            (false, false, &clock_id, &clock_account),
+        let keyed_accounts = vec![
+            (false, true, programdata_address, programdata_account),
+            (false, true, program_address, program_account),
+            (false, true, buffer_address, buffer_account),
+            (false, true, spill_address, spill_account),
+            (false, false, rent_id, rent_account.clone()),
+            (false, false, clock_id, clock_account.clone()),
             (
                 true,
                 false,
-                &upgrade_authority_address,
-                &upgrade_authority_account,
+                upgrade_authority_address,
+                upgrade_authority_account.clone(),
             ),
         ];
         assert_eq!(
             Err(InstructionError::InvalidAccountData),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
 
         // Case: Mismatched buffer and program authority
@@ -2809,23 +2828,23 @@ mod tests {
             min_program_balance,
             min_programdata_balance,
         );
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, true, &programdata_address, &programdata_account),
-            (false, true, &program_address, &program_account),
-            (false, true, &buffer_address, &buffer_account),
-            (false, true, &spill_address, &spill_account),
-            (false, false, &rent_id, &rent_account),
-            (false, false, &clock_id, &clock_account),
+        let keyed_accounts = vec![
+            (false, true, programdata_address, programdata_account),
+            (false, true, program_address, program_account),
+            (false, true, buffer_address, buffer_account),
+            (false, true, spill_address, spill_account),
+            (false, false, rent_id, rent_account.clone()),
+            (false, false, clock_id, clock_account.clone()),
             (
                 true,
                 false,
-                &upgrade_authority_address,
-                &upgrade_authority_account,
+                upgrade_authority_address,
+                upgrade_authority_account.clone(),
             ),
         ];
         assert_eq!(
             Err(InstructionError::IncorrectAuthority),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
 
         // Case: None buffer authority
@@ -2845,23 +2864,23 @@ mod tests {
                 authority_address: None,
             })
             .unwrap();
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, true, &programdata_address, &programdata_account),
-            (false, true, &program_address, &program_account),
-            (false, true, &buffer_address, &buffer_account),
-            (false, true, &spill_address, &spill_account),
-            (false, false, &rent_id, &rent_account),
-            (false, false, &clock_id, &clock_account),
+        let keyed_accounts = vec![
+            (false, true, programdata_address, programdata_account),
+            (false, true, program_address, program_account),
+            (false, true, buffer_address, buffer_account),
+            (false, true, spill_address, spill_account),
+            (false, false, rent_id, rent_account.clone()),
+            (false, false, clock_id, clock_account.clone()),
             (
                 true,
                 false,
-                &upgrade_authority_address,
-                &upgrade_authority_account,
+                upgrade_authority_address,
+                upgrade_authority_account.clone(),
             ),
         ];
         assert_eq!(
             Err(InstructionError::IncorrectAuthority),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
 
         // Case: None buffer and program authority
@@ -2888,23 +2907,23 @@ mod tests {
                 upgrade_authority_address: None,
             })
             .unwrap();
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, true, &programdata_address, &programdata_account),
-            (false, true, &program_address, &program_account),
-            (false, true, &buffer_address, &buffer_account),
-            (false, true, &spill_address, &spill_account),
-            (false, false, &rent_id, &rent_account),
-            (false, false, &clock_id, &clock_account),
+        let keyed_accounts = vec![
+            (false, true, programdata_address, programdata_account),
+            (false, true, program_address, program_account),
+            (false, true, buffer_address, buffer_account),
+            (false, true, spill_address, spill_account),
+            (false, false, rent_id, rent_account),
+            (false, false, clock_id, clock_account),
             (
                 true,
                 false,
-                &upgrade_authority_address,
-                &upgrade_authority_account,
+                upgrade_authority_address,
+                upgrade_authority_account,
             ),
         ];
         assert_eq!(
             Err(InstructionError::IncorrectAuthority),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
     }
 
@@ -2936,24 +2955,29 @@ mod tests {
                 upgrade_authority_address: Some(upgrade_authority_address),
             })
             .unwrap();
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, false, &programdata_address, &programdata_account),
+        let keyed_accounts = vec![
             (
-                true,
                 false,
-                &upgrade_authority_address,
-                &upgrade_authority_account,
+                false,
+                programdata_address,
+                programdata_account.clone(),
             ),
             (
                 true,
                 false,
-                &new_upgrade_authority_address,
-                &new_upgrade_authority_account,
+                upgrade_authority_address,
+                upgrade_authority_account.clone(),
+            ),
+            (
+                true,
+                false,
+                new_upgrade_authority_address,
+                new_upgrade_authority_account.clone(),
             ),
         ];
         assert_eq!(
             Ok(()),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
         let state: UpgradeableLoaderState = programdata_account.borrow().state().unwrap();
         assert_eq!(
@@ -2972,18 +2996,23 @@ mod tests {
                 upgrade_authority_address: Some(upgrade_authority_address),
             })
             .unwrap();
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, false, &programdata_address, &programdata_account),
+        let keyed_accounts = vec![
+            (
+                false,
+                false,
+                programdata_address,
+                programdata_account.clone(),
+            ),
             (
                 true,
                 false,
-                &upgrade_authority_address,
-                &upgrade_authority_account,
+                upgrade_authority_address,
+                upgrade_authority_account.clone(),
             ),
         ];
         assert_eq!(
             Ok(()),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
         let state: UpgradeableLoaderState = programdata_account.borrow().state().unwrap();
         assert_eq!(
@@ -3002,18 +3031,23 @@ mod tests {
                 upgrade_authority_address: Some(upgrade_authority_address),
             })
             .unwrap();
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, false, &programdata_address, &programdata_account),
+        let keyed_accounts = vec![
             (
                 false,
                 false,
-                &upgrade_authority_address,
-                &upgrade_authority_account,
+                programdata_address,
+                programdata_account.clone(),
+            ),
+            (
+                false,
+                false,
+                upgrade_authority_address,
+                upgrade_authority_account.clone(),
             ),
         ];
         assert_eq!(
             Err(InstructionError::MissingRequiredSignature),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
 
         // Case: wrong authority
@@ -3025,24 +3059,29 @@ mod tests {
             })
             .unwrap();
         let invalid_upgrade_authority_address = Pubkey::new_unique();
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, false, &programdata_address, &programdata_account),
+        let keyed_accounts = vec![
+            (
+                false,
+                false,
+                programdata_address,
+                programdata_account.clone(),
+            ),
             (
                 true,
                 false,
-                &invalid_upgrade_authority_address,
-                &upgrade_authority_account,
+                invalid_upgrade_authority_address,
+                upgrade_authority_account.clone(),
             ),
             (
                 false,
                 false,
-                &new_upgrade_authority_address,
-                &new_upgrade_authority_account,
+                new_upgrade_authority_address,
+                new_upgrade_authority_account,
             ),
         ];
         assert_eq!(
             Err(InstructionError::IncorrectAuthority),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
 
         // Case: No authority
@@ -3054,22 +3093,23 @@ mod tests {
             })
             .unwrap();
         let invalid_upgrade_authority_address = Pubkey::new_unique();
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, false, &programdata_address, &programdata_account),
+        let keyed_accounts = vec![
+            (
+                false,
+                false,
+                programdata_address,
+                programdata_account.clone(),
+            ),
             (
                 true,
                 false,
-                &invalid_upgrade_authority_address,
-                &upgrade_authority_account,
+                invalid_upgrade_authority_address,
+                upgrade_authority_account.clone(),
             ),
         ];
         assert_eq!(
             Err(InstructionError::Immutable),
-            process_instruction(
-                &loader_id,
-                &bincode::serialize(&UpgradeableLoaderInstruction::SetAuthority).unwrap(),
-                &keyed_accounts,
-            )
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
 
         // Case: Not a ProgramData account
@@ -3080,22 +3120,18 @@ mod tests {
             })
             .unwrap();
         let invalid_upgrade_authority_address = Pubkey::new_unique();
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, false, &programdata_address, &programdata_account),
+        let keyed_accounts = vec![
+            (false, false, programdata_address, programdata_account),
             (
                 true,
                 false,
-                &invalid_upgrade_authority_address,
-                &upgrade_authority_account,
+                invalid_upgrade_authority_address,
+                upgrade_authority_account,
             ),
         ];
         assert_eq!(
             Err(InstructionError::InvalidArgument),
-            process_instruction(
-                &loader_id,
-                &bincode::serialize(&UpgradeableLoaderInstruction::SetAuthority).unwrap(),
-                &keyed_accounts,
-            )
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
     }
 
@@ -3121,13 +3157,13 @@ mod tests {
                 authority_address: Some(authority_address),
             })
             .unwrap();
-        let mut keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, false, &buffer_address, &buffer_account),
-            (true, false, &authority_address, &authority_account),
+        let mut keyed_accounts = vec![
+            (false, false, buffer_address, buffer_account.clone()),
+            (true, false, authority_address, authority_account.clone()),
         ];
         assert_eq!(
             Err(InstructionError::IncorrectAuthority),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
         let state: UpgradeableLoaderState = buffer_account.borrow().state().unwrap();
         assert_eq!(
@@ -3144,10 +3180,10 @@ mod tests {
                 authority_address: Some(authority_address),
             })
             .unwrap();
-        keyed_accounts.push((false, false, &new_authority_address, &new_authority_account));
+        keyed_accounts.push((false, false, new_authority_address, new_authority_account));
         assert_eq!(
             Ok(()),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
         let state: UpgradeableLoaderState = buffer_account.borrow().state().unwrap();
         assert_eq!(
@@ -3164,10 +3200,10 @@ mod tests {
                 authority_address: Some(authority_address),
             })
             .unwrap();
-        keyed_accounts[1] = (false, false, &authority_address, &authority_account);
+        keyed_accounts[1] = (false, false, authority_address, authority_account.clone());
         assert_eq!(
             Err(InstructionError::MissingRequiredSignature),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
 
         // Case: wrong authority
@@ -3178,10 +3214,15 @@ mod tests {
             })
             .unwrap();
         let invalid_authority_address = Pubkey::new_unique();
-        keyed_accounts[1] = (true, false, &invalid_authority_address, &authority_account);
+        keyed_accounts[1] = (
+            true,
+            false,
+            invalid_authority_address,
+            authority_account.clone(),
+        );
         assert_eq!(
             Err(InstructionError::IncorrectAuthority),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
 
         // Case: No authority
@@ -3193,11 +3234,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             Err(InstructionError::Immutable),
-            process_instruction(
-                &loader_id,
-                &bincode::serialize(&UpgradeableLoaderInstruction::SetAuthority).unwrap(),
-                &keyed_accounts,
-            )
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
 
         // Case: Not a Buffer account
@@ -3210,11 +3247,7 @@ mod tests {
         keyed_accounts.pop();
         assert_eq!(
             Err(InstructionError::InvalidArgument),
-            process_instruction(
-                &loader_id,
-                &bincode::serialize(&UpgradeableLoaderInstruction::SetAuthority).unwrap(),
-                &keyed_accounts,
-            )
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
 
         // Case: Set to no authority
@@ -3224,10 +3257,10 @@ mod tests {
                 authority_address: Some(authority_address),
             })
             .unwrap();
-        keyed_accounts[1] = (true, false, &authority_address, &authority_account);
+        keyed_accounts[1] = (true, false, authority_address, authority_account);
         assert_eq!(
             Err(InstructionError::IncorrectAuthority),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
     }
 
@@ -3253,14 +3286,14 @@ mod tests {
                 authority_address: Some(authority_address),
             })
             .unwrap();
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, false, &buffer_address, &buffer_account),
-            (false, false, &recipient_address, &recipient_account),
-            (true, false, &authority_address, &authority_account),
+        let keyed_accounts = vec![
+            (false, false, buffer_address, buffer_account.clone()),
+            (false, false, recipient_address, recipient_account.clone()),
+            (true, false, authority_address, authority_account.clone()),
         ];
         assert_eq!(
             Ok(()),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
         assert_eq!(0, buffer_account.borrow().lamports());
         assert_eq!(2, recipient_account.borrow().lamports());
@@ -3275,19 +3308,19 @@ mod tests {
             })
             .unwrap();
         let incorrect_authority_address = Pubkey::new_unique();
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, false, &buffer_address, &buffer_account),
-            (false, false, &recipient_address, &recipient_account),
+        let keyed_accounts = vec![
+            (false, false, buffer_address, buffer_account),
+            (false, false, recipient_address, recipient_account),
             (
                 true,
                 false,
-                &incorrect_authority_address,
-                &authority_account,
+                incorrect_authority_address,
+                authority_account.clone(),
             ),
         ];
         assert_eq!(
             Err(InstructionError::IncorrectAuthority),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
 
         // Case: close an uninitialized account
@@ -3302,13 +3335,18 @@ mod tests {
             .set_state(&UpgradeableLoaderState::Uninitialized)
             .unwrap();
         let recipient_account = AccountSharedData::new_ref(1, 0, &Pubkey::new_unique());
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, false, &uninitialized_address, &uninitialized_account),
-            (false, false, &recipient_address, &recipient_account),
+        let keyed_accounts = vec![
+            (
+                false,
+                false,
+                uninitialized_address,
+                uninitialized_account.clone(),
+            ),
+            (false, false, recipient_address, recipient_account.clone()),
         ];
         assert_eq!(
             Ok(()),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
         assert_eq!(0, uninitialized_account.borrow().lamports());
         assert_eq!(2, recipient_account.borrow().lamports());
@@ -3343,15 +3381,20 @@ mod tests {
             })
             .unwrap();
         let recipient_account = AccountSharedData::new_ref(1, 0, &Pubkey::new_unique());
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, false, &programdata_address, &programdata_account),
-            (false, false, &recipient_address, &recipient_account),
-            (true, false, &authority_address, &authority_account),
-            (false, true, &program_address, &program_account),
+        let keyed_accounts = vec![
+            (
+                false,
+                false,
+                programdata_address,
+                programdata_account.clone(),
+            ),
+            (false, false, recipient_address, recipient_account.clone()),
+            (true, false, authority_address, authority_account),
+            (false, true, program_address, program_account.clone()),
         ];
         assert_eq!(
             Ok(()),
-            process_instruction(&loader_id, &instruction, &keyed_accounts),
+            process_instruction(&loader_id, &[], &instruction, &keyed_accounts),
         );
         assert_eq!(0, programdata_account.borrow().lamports());
         assert_eq!(2, recipient_account.borrow().lamports());
@@ -3359,13 +3402,13 @@ mod tests {
         assert_eq!(state, UpgradeableLoaderState::Uninitialized);
 
         // Try to invoke closed account
-        let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-            (false, false, &programdata_address, &programdata_account),
-            (false, false, &program_address, &program_account),
+        let keyed_accounts = vec![
+            (false, false, programdata_address, programdata_account),
+            (false, false, program_address, program_account),
         ];
         assert_eq!(
             Err(InstructionError::InvalidAccountData),
-            process_instruction(&program_address, &[], &keyed_accounts),
+            process_instruction(&program_address, &[0, 1], &[], &keyed_accounts),
         );
     }
 
@@ -3395,8 +3438,8 @@ mod tests {
     #[test]
     #[ignore]
     fn test_fuzz() {
-        let loader_id = solana_sdk::pubkey::new_rand();
-        let program_key = solana_sdk::pubkey::new_rand();
+        let loader_id = bpf_loader::id();
+        let program_id = Pubkey::new_unique();
 
         // Create program account
         let mut file = File::open("test_elfs/noop_aligned.so").expect("file open failed");
@@ -3416,12 +3459,12 @@ mod tests {
                 program_account.borrow_mut().set_executable(true);
 
                 let parameter_account = AccountSharedData::new_ref(1, 0, &loader_id);
-                let keyed_accounts: Vec<KeyedAccountTuple> = vec![
-                    (false, false, &program_key, &program_account),
-                    (false, false, &program_key, &parameter_account),
+                let keyed_accounts = vec![
+                    (false, false, program_id, program_account),
+                    (false, false, program_id, parameter_account),
                 ];
 
-                let _result = process_instruction(&bpf_loader::id(), &[], &keyed_accounts);
+                let _result = process_instruction(&loader_id, &[], &[], &keyed_accounts);
             },
         );
     }

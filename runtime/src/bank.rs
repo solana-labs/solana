@@ -47,8 +47,6 @@ use crate::{
     cost_tracker::CostTracker,
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
     inline_spl_token_v2_0,
-    instruction_recorder::InstructionRecorder,
-    log_collector::LogCollector,
     message_processor::MessageProcessor,
     rent_collector::RentCollector,
     stake_weighted_timestamp::{
@@ -71,7 +69,11 @@ use rayon::{
 };
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
-use solana_program_runtime::{ExecuteDetailsTimings, Executors, InstructionProcessor};
+use solana_program_runtime::{
+    instruction_processor::{ExecuteDetailsTimings, Executors, InstructionProcessor},
+    instruction_recorder::InstructionRecorder,
+    log_collector::LogCollector,
+};
 #[allow(deprecated)]
 use solana_sdk::recent_blockhashes_account;
 use solana_sdk::{
@@ -148,24 +150,52 @@ pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct RentDebit {
+    rent_collected: u64,
+    post_balance: u64,
+}
+
+impl RentDebit {
+    fn try_into_reward_info(self) -> Option<RewardInfo> {
+        let rent_debit = i64::try_from(self.rent_collected)
+            .ok()
+            .and_then(|r| r.checked_neg());
+        rent_debit.map(|rent_debit| RewardInfo {
+            reward_type: RewardType::Rent,
+            lamports: rent_debit,
+            post_balance: self.post_balance,
+            commission: None, // Not applicable
+        })
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct RentDebits(pub Vec<(Pubkey, RewardInfo)>);
+pub struct RentDebits(HashMap<Pubkey, RentDebit>);
 impl RentDebits {
-    pub fn push(&mut self, account: &Pubkey, rent: u64, post_balance: u64) {
-        if rent != 0 {
-            let rent_debit = i64::try_from(rent).ok().and_then(|r| r.checked_neg());
-            if let Some(rent_debit) = rent_debit {
-                let reward_info = RewardInfo {
-                    reward_type: RewardType::Rent,
-                    lamports: rent_debit,
+    fn get_account_rent_debit(&self, address: &Pubkey) -> u64 {
+        self.0
+            .get(address)
+            .map(|r| r.rent_collected)
+            .unwrap_or_default()
+    }
+
+    pub fn insert(&mut self, address: &Pubkey, rent_collected: u64, post_balance: u64) {
+        if rent_collected != 0 {
+            self.0.insert(
+                *address,
+                RentDebit {
+                    rent_collected,
                     post_balance,
-                    commission: None, // Not applicable
-                };
-                self.0.push((*account, reward_info));
-            } else {
-                warn!("out of range rent debit from {}: {}", account, rent);
-            }
+                },
+            );
         }
+    }
+
+    pub fn into_unordered_rewards_iter(self) -> impl Iterator<Item = (Pubkey, RewardInfo)> {
+        self.0
+            .into_iter()
+            .filter_map(|(address, rent_debit)| Some((address, rent_debit.try_into_reward_info()?)))
     }
 }
 
@@ -622,6 +652,7 @@ impl NonceRollbackFull {
         partial: NonceRollbackPartial,
         message: &SanitizedMessage,
         accounts: &[(Pubkey, AccountSharedData)],
+        rent_debits: &RentDebits,
     ) -> Result<Self> {
         let NonceRollbackPartial {
             nonce_address,
@@ -636,17 +667,21 @@ impl NonceRollbackFull {
             None
         });
         if let Some((fee_pubkey, fee_account)) = fee_payer {
+            let mut fee_account = fee_account.clone();
+            let fee_payer_rent_debit = rent_debits.get_account_rent_debit(fee_pubkey);
+            fee_account.set_lamports(fee_account.lamports().saturating_add(fee_payer_rent_debit));
+
             if *fee_pubkey == nonce_address {
                 Ok(Self {
                     nonce_address,
-                    nonce_account: fee_account.clone(),
+                    nonce_account: fee_account,
                     fee_account: None,
                 })
             } else {
                 Ok(Self {
                     nonce_address,
                     nonce_account,
-                    fee_account: Some(fee_account.clone()),
+                    fee_account: Some(fee_account),
                 })
             }
         } else {
@@ -1006,6 +1041,8 @@ pub struct Bank {
     vote_only_bank: bool,
 
     pub cost_tracker: RwLock<CostTracker>,
+
+    sysvar_cache: RwLock<Vec<(Pubkey, Vec<u8>)>>,
 }
 
 impl Default for BlockhashQueue {
@@ -1145,6 +1182,7 @@ impl Bank {
             freeze_started: AtomicBool::default(),
             vote_only_bank: false,
             cost_tracker: RwLock::<CostTracker>::default(),
+            sysvar_cache: RwLock::new(Vec::new()),
         }
     }
 
@@ -1254,6 +1292,7 @@ impl Bank {
         bank.update_rent();
         bank.update_epoch_schedule();
         bank.update_recent_blockhashes();
+        bank.fill_sysvar_cache();
         bank
     }
 
@@ -1402,6 +1441,7 @@ impl Bank {
             )),
             freeze_started: AtomicBool::new(false),
             cost_tracker: RwLock::new(CostTracker::default()),
+            sysvar_cache: RwLock::new(Vec::new()),
         };
 
         datapoint_info!(
@@ -1458,6 +1498,7 @@ impl Bank {
             new.update_stake_history(Some(parent_epoch));
             new.update_clock(Some(parent_epoch));
             new.update_fees();
+            new.fill_sysvar_cache();
 
             return new;
         }
@@ -1473,6 +1514,7 @@ impl Bank {
         new.update_stake_history(Some(parent_epoch));
         new.update_clock(Some(parent_epoch));
         new.update_fees();
+        new.fill_sysvar_cache();
         new
     }
 
@@ -1589,6 +1631,7 @@ impl Bank {
             freeze_started: AtomicBool::new(fields.hash != Hash::default()),
             vote_only_bank: false,
             cost_tracker: RwLock::new(CostTracker::default()),
+            sysvar_cache: RwLock::new(Vec::new()),
         };
         bank.finish_init(
             genesis_config,
@@ -1767,6 +1810,14 @@ impl Bank {
         }
 
         self.store_account_and_update_capitalization(pubkey, &new_account);
+
+        // Update the entry in the cache
+        let mut sysvar_cache = self.sysvar_cache.write().unwrap();
+        if let Some(position) = sysvar_cache.iter().position(|(id, _data)| id == pubkey) {
+            sysvar_cache[position].1 = new_account.data().to_vec();
+        } else {
+            sysvar_cache.push((*pubkey, new_account.data().to_vec()));
+        }
     }
 
     fn inherit_specially_retained_account_fields(
@@ -1902,6 +1953,17 @@ impl Bank {
                 self.inherit_specially_retained_account_fields(account),
             )
         });
+    }
+
+    fn fill_sysvar_cache(&mut self) {
+        let mut sysvar_cache = self.sysvar_cache.write().unwrap();
+        for id in sysvar::ALL_IDS.iter() {
+            if !sysvar_cache.iter().any(|(key, _data)| key == id) {
+                if let Some(account) = self.get_account_with_fixed_root(id) {
+                    sysvar_cache.push((*id, account.data().to_vec()));
+                }
+            }
+        }
     }
 
     pub fn get_slot_history(&self) -> SlotHistory {
@@ -3452,27 +3514,6 @@ impl Bank {
             .collect()
     }
 
-    fn filter_by_vote_transactions<'a>(
-        &self,
-        txs: impl Iterator<Item = &'a SanitizedTransaction>,
-        lock_results: Vec<TransactionCheckResult>,
-        error_counters: &mut ErrorCounters,
-    ) -> Vec<TransactionCheckResult> {
-        txs.zip(lock_results)
-            .map(|(tx, lock_res)| {
-                if lock_res.0.is_ok() {
-                    if is_simple_vote_transaction(tx) {
-                        return lock_res;
-                    }
-
-                    error_counters.not_allowed_during_cluster_maintenance += 1;
-                    return (Err(TransactionError::ClusterMaintenance), lock_res.1);
-                }
-                lock_res
-            })
-            .collect()
-    }
-
     pub fn check_hash_age(&self, hash: &Hash, max_age: usize) -> Option<bool> {
         self.blockhash_queue
             .read()
@@ -3494,19 +3535,6 @@ impl Bank {
             })
     }
 
-    // Determine if the bank is currently in an upgrade epoch, where only votes are permitted
-    fn upgrade_epoch(&self) -> bool {
-        match self.cluster_type() {
-            #[cfg(test)]
-            ClusterType::Development => self.epoch == 0xdead, // Value assumed by `test_upgrade_epoch()`
-            #[cfg(not(test))]
-            ClusterType::Development => false,
-            ClusterType::Devnet => false,
-            ClusterType::Testnet => false,
-            ClusterType::MainnetBeta => self.epoch == 61,
-        }
-    }
-
     pub fn check_transactions(
         &self,
         sanitized_txs: &[SanitizedTransaction],
@@ -3516,13 +3544,7 @@ impl Bank {
     ) -> Vec<TransactionCheckResult> {
         let age_results =
             self.check_age(sanitized_txs.iter(), lock_results, max_age, error_counters);
-        let cache_results = self.check_status_cache(sanitized_txs, age_results, error_counters);
-        if self.upgrade_epoch() {
-            // Reject all non-vote transactions
-            self.filter_by_vote_transactions(sanitized_txs.iter(), cache_results, error_counters)
-        } else {
-            cache_results
-        }
+        self.check_status_cache(sanitized_txs, age_results, error_counters)
     }
 
     pub fn collect_balances(&self, batch: &TransactionBatch) -> TransactionBalances {
@@ -3850,7 +3872,7 @@ impl Bank {
                                 legacy_message,
                                 &loaded_transaction.program_indices,
                                 &account_refcells,
-                                &self.rent_collector,
+                                self.rent_collector.rent,
                                 log_collector.clone(),
                                 executors.clone(),
                                 instruction_recorders.as_deref(),
@@ -3858,8 +3880,7 @@ impl Bank {
                                 compute_budget,
                                 compute_meter,
                                 &mut timings.details,
-                                self.rc.accounts.clone(),
-                                &self.ancestors,
+                                &*self.sysvar_cache.read().unwrap(),
                                 blockhash,
                                 lamports_per_signature,
                             );
@@ -4425,10 +4446,13 @@ impl Bank {
             // ensures we verify the whole on-chain state (= all accounts)
             // via the account delta hash slowly once per an epoch.
             self.store_account(&pubkey, &account);
-            rent_debits.push(&pubkey, rent, account.lamports());
+            rent_debits.insert(&pubkey, rent, account.lamports());
         }
         self.collected_rent.fetch_add(total_rent, Relaxed);
-        self.rewards.write().unwrap().append(&mut rent_debits.0);
+        self.rewards
+            .write()
+            .unwrap()
+            .extend(rent_debits.into_unordered_rewards_iter());
 
         self.rc.accounts.hold_range_in_memory(&subrange, false);
         account_count
@@ -6298,6 +6322,50 @@ impl Bank {
     }
 }
 
+/// Scan all the accounts for this bank and collect stats
+pub fn get_total_accounts_stats(bank: &Bank) -> ScanResult<TotalAccountsStats> {
+    let rent_collector = bank.rent_collector();
+    bank.rc.accounts.accounts_db.scan_accounts(
+        &Ancestors::default(),
+        bank.bank_id(),
+        |total_accounts_stats: &mut TotalAccountsStats, item| {
+            if let Some((pubkey, account, _slot)) = item {
+                total_accounts_stats.num_accounts += 1;
+                total_accounts_stats.data_len += account.data().len();
+
+                if account.executable() {
+                    total_accounts_stats.num_executable_accounts += 1;
+                    total_accounts_stats.executable_data_len += account.data().len();
+                }
+
+                if !rent_collector.should_collect_rent(pubkey, &account, false) || {
+                    let (_rent_due, exempt) = rent_collector.get_rent_due(&account);
+                    exempt
+                } {
+                    total_accounts_stats.num_rent_exempt_accounts += 1;
+                }
+            }
+        },
+    )
+}
+
+/// Struct to collect stats when scanning all accounts in `get_total_accounts_stats()`
+#[derive(Debug, Default, Copy, Clone)]
+pub struct TotalAccountsStats {
+    /// Total number of accounts
+    pub num_accounts: usize,
+    /// Total data size of all accounts
+    pub data_len: usize,
+
+    /// Total number of executable accounts
+    pub num_executable_accounts: usize,
+    /// Total data size of executable accounts
+    pub executable_data_len: usize,
+
+    /// Total number of rent exempt accounts
+    pub num_rent_exempt_accounts: usize,
+}
+
 impl Drop for Bank {
     fn drop(&mut self) {
         if let Some(drop_callback) = self.drop_callback.read().unwrap().0.as_ref() {
@@ -6406,77 +6474,140 @@ pub(crate) mod tests {
 
     #[test]
     fn test_nonce_rollback_info() {
+        let lamports_per_signature = 42;
+
         let nonce_authority = keypair_from_seed(&[0; 32]).unwrap();
         let nonce_address = nonce_authority.pubkey();
-        let lamports_per_signature = 42;
-        let state = nonce::state::Versions::new_current(nonce::State::Initialized(
-            nonce::state::Data::new(
-                Pubkey::default(),
-                Hash::new_unique(),
-                lamports_per_signature,
-            ),
-        ));
-        let nonce_account = AccountSharedData::new_data(43, &state, &system_program::id()).unwrap();
+        let from = keypair_from_seed(&[1; 32]).unwrap();
+        let from_address = from.pubkey();
+        let to_address = Pubkey::new_unique();
+
+        let nonce_account = AccountSharedData::new_data(
+            43,
+            &nonce::state::Versions::new_current(nonce::State::Initialized(
+                nonce::state::Data::new(
+                    Pubkey::default(),
+                    Hash::new_unique(),
+                    lamports_per_signature,
+                ),
+            )),
+            &system_program::id(),
+        )
+        .unwrap();
+        let from_account = AccountSharedData::new(44, 0, &Pubkey::default());
+        let to_account = AccountSharedData::new(45, 0, &Pubkey::default());
+        let recent_blockhashes_sysvar_account = AccountSharedData::new(4, 0, &Pubkey::default());
+
+        const TEST_RENT_DEBIT: u64 = 1;
+        let rent_collected_nonce_account = {
+            let mut account = nonce_account.clone();
+            account.set_lamports(nonce_account.lamports() - TEST_RENT_DEBIT);
+            account
+        };
+        let rent_collected_from_account = {
+            let mut account = from_account.clone();
+            account.set_lamports(from_account.lamports() - TEST_RENT_DEBIT);
+            account
+        };
+
+        let instructions = vec![
+            system_instruction::advance_nonce_account(&nonce_address, &nonce_authority.pubkey()),
+            system_instruction::transfer(&from_address, &to_address, 42),
+        ];
 
         // NonceRollbackPartial create + NonceRollbackInfo impl
-        let partial = NonceRollbackPartial::new(nonce_address, nonce_account.clone());
+        let partial =
+            NonceRollbackPartial::new(nonce_address, rent_collected_nonce_account.clone());
         assert_eq!(*partial.nonce_address(), nonce_address);
-        assert_eq!(*partial.nonce_account(), nonce_account);
+        assert_eq!(*partial.nonce_account(), rent_collected_nonce_account);
         assert_eq!(
             partial.lamports_per_signature(),
             Some(lamports_per_signature)
         );
         assert_eq!(partial.fee_account(), None);
 
-        let from = keypair_from_seed(&[1; 32]).unwrap();
-        let from_address = from.pubkey();
-        let to_address = Pubkey::new_unique();
-        let instructions = vec![
-            system_instruction::advance_nonce_account(&nonce_address, &nonce_authority.pubkey()),
-            system_instruction::transfer(&from_address, &to_address, 42),
-        ];
-        let message = new_sanitized_message(&instructions, Some(&from_address));
-
-        let from_account = AccountSharedData::new(44, 0, &Pubkey::default());
-        let to_account = AccountSharedData::new(45, 0, &Pubkey::default());
-        let recent_blockhashes_sysvar_account = AccountSharedData::new(4, 0, &Pubkey::default());
-        let accounts = [
-            (*message.get_account_key(0).unwrap(), from_account.clone()),
-            (*message.get_account_key(1).unwrap(), nonce_account.clone()),
-            (*message.get_account_key(2).unwrap(), to_account.clone()),
-            (
-                *message.get_account_key(3).unwrap(),
-                recent_blockhashes_sysvar_account.clone(),
-            ),
-        ];
+        // Add rent debits to ensure the rollback captures accounts without rent fees
+        let mut rent_debits = RentDebits::default();
+        rent_debits.insert(
+            &from_address,
+            TEST_RENT_DEBIT,
+            rent_collected_from_account.lamports(),
+        );
+        rent_debits.insert(
+            &nonce_address,
+            TEST_RENT_DEBIT,
+            rent_collected_nonce_account.lamports(),
+        );
 
         // NonceRollbackFull create + NonceRollbackInfo impl
-        let full = NonceRollbackFull::from_partial(partial.clone(), &message, &accounts).unwrap();
-        assert_eq!(*full.nonce_address(), nonce_address);
-        assert_eq!(*full.nonce_account(), nonce_account);
-        assert_eq!(full.lamports_per_signature(), Some(lamports_per_signature));
-        assert_eq!(full.fee_account(), Some(&from_account));
+        {
+            let message = new_sanitized_message(&instructions, Some(&from_address));
+            let accounts = [
+                (
+                    *message.get_account_key(0).unwrap(),
+                    rent_collected_from_account.clone(),
+                ),
+                (
+                    *message.get_account_key(1).unwrap(),
+                    rent_collected_nonce_account.clone(),
+                ),
+                (*message.get_account_key(2).unwrap(), to_account.clone()),
+                (
+                    *message.get_account_key(3).unwrap(),
+                    recent_blockhashes_sysvar_account.clone(),
+                ),
+            ];
 
-        let message = new_sanitized_message(&instructions, Some(&nonce_address));
-        let accounts = [
-            (*message.get_account_key(0).unwrap(), nonce_account),
-            (*message.get_account_key(1).unwrap(), from_account),
-            (*message.get_account_key(2).unwrap(), to_account),
-            (
-                *message.get_account_key(3).unwrap(),
-                recent_blockhashes_sysvar_account,
-            ),
-        ];
+            let full =
+                NonceRollbackFull::from_partial(partial.clone(), &message, &accounts, &rent_debits)
+                    .unwrap();
+            assert_eq!(*full.nonce_address(), nonce_address);
+            assert_eq!(*full.nonce_account(), rent_collected_nonce_account);
+            assert_eq!(full.lamports_per_signature(), Some(lamports_per_signature));
+            assert_eq!(
+                full.fee_account(),
+                Some(&from_account),
+                "rent debit should be refunded in captured fee account"
+            );
+        }
 
         // Nonce account is fee-payer
-        let full = NonceRollbackFull::from_partial(partial.clone(), &message, &accounts).unwrap();
-        assert_eq!(full.fee_account(), None);
+        {
+            let message = new_sanitized_message(&instructions, Some(&nonce_address));
+            let accounts = [
+                (
+                    *message.get_account_key(0).unwrap(),
+                    rent_collected_nonce_account,
+                ),
+                (
+                    *message.get_account_key(1).unwrap(),
+                    rent_collected_from_account,
+                ),
+                (*message.get_account_key(2).unwrap(), to_account),
+                (
+                    *message.get_account_key(3).unwrap(),
+                    recent_blockhashes_sysvar_account,
+                ),
+            ];
+
+            let full =
+                NonceRollbackFull::from_partial(partial.clone(), &message, &accounts, &rent_debits)
+                    .unwrap();
+            assert_eq!(*full.nonce_address(), nonce_address);
+            assert_eq!(*full.nonce_account(), nonce_account);
+            assert_eq!(full.lamports_per_signature(), Some(lamports_per_signature));
+            assert_eq!(full.fee_account(), None);
+        }
 
         // NonceRollbackFull create, fee-payer not in account_keys fails
-        assert_eq!(
-            NonceRollbackFull::from_partial(partial, &message, &[]).unwrap_err(),
-            TransactionError::AccountNotFound,
-        );
+        {
+            let message = new_sanitized_message(&instructions, Some(&nonce_address));
+            assert_eq!(
+                NonceRollbackFull::from_partial(partial, &message, &[], &RentDebits::default())
+                    .unwrap_err(),
+                TransactionError::AccountNotFound,
+            );
+        }
     }
 
     #[test]
@@ -12145,98 +12276,6 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_upgrade_epoch() {
-        solana_logger::setup();
-        let GenesisConfigInfo {
-            mut genesis_config,
-            mint_keypair,
-            ..
-        } = create_genesis_config_with_leader(500, &solana_sdk::pubkey::new_rand(), 0);
-        genesis_config.fee_rate_governor = FeeRateGovernor::new(1, 0);
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-        // Jump to the test-only upgrade epoch -- see `Bank::upgrade_epoch()`
-        let bank = Bank::new_from_parent(
-            &bank,
-            &Pubkey::default(),
-            genesis_config
-                .epoch_schedule
-                .get_first_slot_in_epoch(0xdead),
-        );
-
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 500);
-
-        // Normal transfers are not allowed
-        assert_eq!(
-            bank.transfer(2, &mint_keypair, &mint_keypair.pubkey()),
-            Err(TransactionError::ClusterMaintenance)
-        );
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 500); // no transaction fee charged
-
-        let vote_pubkey = solana_sdk::pubkey::new_rand();
-        let authorized_voter = Keypair::new();
-
-        // VoteInstruction::Vote is allowed.  The transaction fails with a vote program instruction
-        // error because the vote account is not actually setup
-        let tx = Transaction::new_signed_with_payer(
-            &[vote_instruction::vote(
-                &vote_pubkey,
-                &authorized_voter.pubkey(),
-                Vote::new(vec![1], Hash::default()),
-            )],
-            Some(&mint_keypair.pubkey()),
-            &[&mint_keypair, &authorized_voter],
-            bank.last_blockhash(),
-        );
-        assert_eq!(
-            bank.process_transaction(&tx),
-            Err(TransactionError::InstructionError(
-                0,
-                InstructionError::InvalidAccountOwner
-            ))
-        );
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 498); // transaction fee charged
-
-        // VoteInstruction::VoteSwitch is allowed.  The transaction fails with a vote program
-        // instruction error because the vote account is not actually setup
-        let tx = Transaction::new_signed_with_payer(
-            &[vote_instruction::vote_switch(
-                &vote_pubkey,
-                &authorized_voter.pubkey(),
-                Vote::new(vec![1], Hash::default()),
-                Hash::default(),
-            )],
-            Some(&mint_keypair.pubkey()),
-            &[&mint_keypair, &authorized_voter],
-            bank.last_blockhash(),
-        );
-        assert_eq!(
-            bank.process_transaction(&tx),
-            Err(TransactionError::InstructionError(
-                0,
-                InstructionError::InvalidAccountOwner
-            ))
-        );
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 496); // transaction fee charged
-
-        // Other vote program instructions, like VoteInstruction::UpdateCommission are not allowed
-        let tx = Transaction::new_signed_with_payer(
-            &[vote_instruction::update_commission(
-                &vote_pubkey,
-                &authorized_voter.pubkey(),
-                123,
-            )],
-            Some(&mint_keypair.pubkey()),
-            &[&mint_keypair, &authorized_voter],
-            bank.last_blockhash(),
-        );
-        assert_eq!(
-            bank.process_transaction(&tx),
-            Err(TransactionError::ClusterMaintenance)
-        );
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 496); // no transaction fee charged
-    }
-
-    #[test]
     fn test_add_builtin_no_overwrite() {
         let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
 
@@ -14856,19 +14895,13 @@ pub(crate) mod tests {
         let mut rent_debits = RentDebits::default();
 
         // No entry for 0 rewards
-        rent_debits.push(&Pubkey::default(), 0, 0);
+        rent_debits.insert(&Pubkey::new_unique(), 0, 0);
         assert_eq!(rent_debits.0.len(), 0);
-
-        // Doesn't fit an `i64`, no entry. (we'll die elsewhere)
-        rent_debits.push(&Pubkey::default(), u64::MAX, 0);
-        assert_eq!(rent_debits.0.len(), 0);
-
-        // Since we're casting from `u64` the `i64::checked_neg()` is infallible
 
         // Some that actually work
-        rent_debits.push(&Pubkey::default(), 1, 0);
+        rent_debits.insert(&Pubkey::new_unique(), 1, 0);
         assert_eq!(rent_debits.0.len(), 1);
-        rent_debits.push(&Pubkey::default(), i64::MAX as u64, 0);
+        rent_debits.insert(&Pubkey::new_unique(), i64::MAX as u64, 0);
         assert_eq!(rent_debits.0.len(), 2);
     }
 

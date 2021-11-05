@@ -254,15 +254,14 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use solana_program_runtime::invoke_context::ThisInvokeContext;
     use solana_sdk::{
         account::ReadableAccount,
         account_utils::State as AccountUtilsState,
         hash::{hash, Hash},
         keyed_account::KeyedAccount,
         nonce::{self, State},
-        nonce_account::create_account,
-        nonce_account::verify_nonce_account,
-        process_instruction::MockInvokeContext,
+        nonce_account::{create_account, verify_nonce_account},
         system_instruction::SystemError,
     };
 
@@ -283,11 +282,11 @@ mod test {
         )
     }
 
-    fn create_invoke_context_with_blockhash<'a>(seed: usize) -> MockInvokeContext<'a> {
-        let mut invoke_context = MockInvokeContext::new(&Pubkey::default(), vec![]);
+    fn create_invoke_context_with_blockhash<'a>(seed: usize) -> ThisInvokeContext<'a> {
+        let mut invoke_context = ThisInvokeContext::new_mock(&[], &[]);
         let (blockhash, lamports_per_signature) = create_test_blockhash(seed);
-        invoke_context.blockhash = blockhash;
-        invoke_context.lamports_per_signature = lamports_per_signature;
+        invoke_context.set_blockhash(blockhash);
+        invoke_context.set_lamports_per_signature(lamports_per_signature);
         invoke_context
     }
 
@@ -974,12 +973,11 @@ mod test {
         let min_lamports = rent.minimum_balance(State::size());
         with_test_keyed_account(min_lamports + 42, true, |nonce_account| {
             let mut signers = HashSet::new();
-            let invoke_context = MockInvokeContext::new(&Pubkey::default(), vec![]);
             signers.insert(*nonce_account.signer_key().unwrap());
             let result = nonce_account.authorize_nonce_account(
                 &Pubkey::default(),
                 &signers,
-                &invoke_context,
+                &ThisInvokeContext::new_mock(&[], &[]),
             );
             assert_eq!(result, Err(InstructionError::InvalidAccountData));
         })
