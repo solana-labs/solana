@@ -448,7 +448,7 @@ impl PubsubNotificationStats {
     fn maybe_submit(&mut self) {
         const SUBMIT_CADENCE: Duration = Duration::from_secs(2);
         let elapsed = self.since.as_ref().map(Instant::elapsed);
-        if elapsed.unwrap_or(Duration::MAX) < SUBMIT_CADENCE {
+        if elapsed.map(|e| e < SUBMIT_CADENCE).unwrap_or_default() {
             return;
         }
         datapoint_info!(
