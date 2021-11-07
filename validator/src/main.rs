@@ -1072,7 +1072,7 @@ pub fn main() {
                 .help("Add a hard fork at this slot"),
         )
         .arg(
-            Arg::with_name("trusted_validators")
+            Arg::with_name("known_validators")
                 .alias("trusted-validator")
                 .long("known-validator")
                 .validator(is_pubkey)
@@ -1374,10 +1374,10 @@ pub fn main() {
                 .help("Specify the configuration file for the AccountsDb plugin."),
         )
         .arg(
-            Arg::with_name("halt_on_trusted_validators_accounts_hash_mismatch")
+            Arg::with_name("halt_on_known_validators_accounts_hash_mismatch")
                 .alias("halt-on-trusted-validators-accounts-hash-mismatch")
                 .long("halt-on-known-validators-accounts-hash-mismatch")
-                .requires("trusted_validators")
+                .requires("known_validators")
                 .takes_value(false)
                 .help("Abort the validator if a bank hash mismatch is detected within known validator set"),
         )
@@ -1976,10 +1976,10 @@ pub fn main() {
         None
     };
 
-    let trusted_validators = validators_set(
+    let known_validators = validators_set(
         &identity_keypair.pubkey(),
         &matches,
-        "trusted_validators",
+        "known_validators",
         "--known-validator",
     );
     let repair_validators = validators_set(
@@ -2230,7 +2230,7 @@ pub fn main() {
         },
         voting_disabled: matches.is_present("no_voting") || restricted_repair_only_mode,
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
-        trusted_validators,
+        known_validators,
         repair_validators,
         gossip_validators,
         frozen_accounts: values_t!(matches, "frozen_accounts", Pubkey).unwrap_or_default(),
@@ -2458,8 +2458,8 @@ pub fn main() {
         validator_config.max_ledger_shreds = Some(limit_ledger_size);
     }
 
-    if matches.is_present("halt_on_trusted_validators_accounts_hash_mismatch") {
-        validator_config.halt_on_trusted_validators_accounts_hash_mismatch = true;
+    if matches.is_present("halt_on_known_validators_accounts_hash_mismatch") {
+        validator_config.halt_on_known_validators_accounts_hash_mismatch = true;
     }
 
     let public_rpc_addr = matches.value_of("public_rpc_addr").map(|addr| {
