@@ -103,7 +103,9 @@ impl RpcHealth {
                         warn!("health check: latest_account_hash_slot not available");
                     }
                     if latest_known_validator_account_hash_slot.is_none() {
-                        warn!("health check: latest_known_validator_account_hash_slot not available");
+                        warn!(
+                            "health check: latest_known_validator_account_hash_slot not available"
+                        );
                     }
                     RpcHealthStatus::Unknown
                 }

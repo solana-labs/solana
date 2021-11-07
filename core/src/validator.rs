@@ -131,8 +131,8 @@ pub struct ValidatorConfig {
     pub wait_for_supermajority: Option<Slot>,
     pub new_hard_forks: Option<Vec<Slot>>,
     pub known_validators: Option<HashSet<Pubkey>>, // None = trust all
-    pub repair_validators: Option<HashSet<Pubkey>>,  // None = repair from all
-    pub gossip_validators: Option<HashSet<Pubkey>>,  // None = gossip with all
+    pub repair_validators: Option<HashSet<Pubkey>>, // None = repair from all
+    pub gossip_validators: Option<HashSet<Pubkey>>, // None = gossip with all
     pub halt_on_known_validators_accounts_hash_mismatch: bool,
     pub accounts_hash_fault_injection_slots: u64, // 0 = no fault injection
     pub frozen_accounts: Vec<Pubkey>,
