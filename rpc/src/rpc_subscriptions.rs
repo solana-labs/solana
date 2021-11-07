@@ -431,40 +431,6 @@ fn initial_last_notified_slot(
     }
 }
 
-#[derive(Default)]
-struct PubsubNotificationStats {
-    since: Option<Instant>,
-    notification_entry_processing_count: u64,
-    notification_entry_processing_time_us: u64,
-}
-
-impl PubsubNotificationStats {
-    fn maybe_submit(&mut self) {
-        const SUBMIT_CADENCE: Duration = Duration::from_secs(2);
-        let elapsed = self.since.as_ref().map(Instant::elapsed);
-        if elapsed.unwrap_or(Duration::MAX) < SUBMIT_CADENCE {
-            return;
-        }
-        datapoint_info!(
-            "pubsub_notification_entries",
-            (
-                "notification_entry_processing_count",
-                self.notification_entry_processing_count,
-                i64
-            ),
-            (
-                "notification_entry_processing_time_us",
-                self.notification_entry_processing_time_us,
-                i64
-            ),
-        );
-        *self = Self {
-            since: Some(Instant::now()),
-            ..Self::default()
-        };
-    }
-}
-
 pub struct RpcSubscriptions {
     notification_sender: Sender<TimestampedNotificationEntry>,
     t_cleanup: Option<JoinHandle<()>>,
@@ -652,8 +618,6 @@ impl RpcSubscriptions {
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
     ) {
-        let mut stats = PubsubNotificationStats::default();
-
         loop {
             if exit.load(Ordering::Relaxed) {
                 break;
@@ -774,9 +738,14 @@ impl RpcSubscriptions {
                             }
                         }
                     }
-                    stats.notification_entry_processing_time_us +=
-                        queued_at.elapsed().as_micros() as u64;
-                    stats.notification_entry_processing_count += 1;
+                    datapoint_info!(
+                        "pubsub_notification_entries",
+                        (
+                            "notification_entry_processing_time_us",
+                            queued_at.elapsed().as_micros() as i64,
+                            i64
+                        )
+                    );
                 }
                 Err(RecvTimeoutError::Timeout) => {
                     // not a problem - try reading again
@@ -786,7 +755,6 @@ impl RpcSubscriptions {
                     break;
                 }
             }
-            stats.maybe_submit();
         }
     }
 
