@@ -5140,6 +5140,7 @@ dependencies = [
  "solana-entry",
  "solana-ledger",
  "solana-logger 1.9.0",
+ "solana-measure",
  "solana-runtime",
  "solana-sdk",
  "solana-stake-program",
