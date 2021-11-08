@@ -28,7 +28,7 @@ use solana_measure::measure::Measure;
 use solana_runtime::{
     accounts_db::AccountsDbConfig,
     accounts_index::AccountsIndexConfig,
-    bank::{self, Bank, RewardCalculationEvent},
+    bank::{Bank, RewardCalculationEvent, TotalAccountsStats},
     bank_forks::BankForks,
     cost_model::CostModel,
     cost_tracker::CostTracker,
@@ -2512,7 +2512,7 @@ fn main() {
             let print_account_contents = !arg_matches.is_present("no_account_contents");
             let print_account_data = !arg_matches.is_present("no_account_data");
             let rent_collector = bank.rent_collector();
-            let mut total_accounts_stats = bank::TotalAccountsStats::default();
+            let mut total_accounts_stats = TotalAccountsStats::default();
             let mut measure = Measure::start("processing accounts");
             for (pubkey, (account, slot)) in accounts.into_iter() {
                 let data_len = account.data().len();
