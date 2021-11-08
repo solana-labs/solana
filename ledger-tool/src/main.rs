@@ -1414,7 +1414,7 @@ fn main() {
             )
         ).subcommand(
             SubCommand::with_name("accounts")
-            .about("Print account contents after processing in the ledger")
+            .about("Print account stats and contents after processing the ledger")
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
             .arg(&halt_at_slot_arg)
@@ -1436,12 +1436,6 @@ fn main() {
                     .long("no-account-data")
                     .takes_value(false)
                     .help("Do not print account data when printing account contents."),
-            )
-            .arg(
-                Arg::with_name("no_total_accounts_stats")
-                    .long("no-total-accounts-stats")
-                    .takes_value(false)
-                    .help("Do not print stats for the total accounts."),
             )
             .arg(&max_genesis_archive_unpacked_size_arg)
         ).subcommand(
@@ -2502,6 +2496,7 @@ fn main() {
             });
 
             let bank = bank_forks.working_bank();
+            let mut measure = Measure::start("getting accounts");
             let accounts: BTreeMap<_, _> = bank
                 .get_all_accounts_with_modified_slots()
                 .unwrap()
@@ -2511,13 +2506,29 @@ fn main() {
                 })
                 .map(|(pubkey, account, slot)| (pubkey, (account, slot)))
                 .collect();
+            measure.stop();
+            info!("{}", measure);
 
             let print_account_contents = !arg_matches.is_present("no_account_contents");
-            if print_account_contents {
-                println!("Getting accounts contents...");
-                let print_account_data = !arg_matches.is_present("no_account_data");
-                for (pubkey, (account, slot)) in accounts.into_iter() {
-                    let data_len = account.data().len();
+            let print_account_data = !arg_matches.is_present("no_account_data");
+            let rent_collector = bank.rent_collector();
+            let mut total_accounts_stats = bank::TotalAccountsStats::default();
+            let mut measure = Measure::start("processing accounts");
+            for (pubkey, (account, slot)) in accounts.into_iter() {
+                let data_len = account.data().len();
+                total_accounts_stats.num_accounts += 1;
+                total_accounts_stats.data_len += data_len;
+                if account.executable() {
+                    total_accounts_stats.num_executable_accounts += 1;
+                    total_accounts_stats.executable_data_len += data_len;
+                }
+                if !rent_collector.should_collect_rent(&pubkey, &account, false)
+                    || rent_collector.get_rent_due(&account).1
+                {
+                    total_accounts_stats.num_rent_exempt_accounts += 1;
+                }
+
+                if print_account_contents {
                     println!("{}:", pubkey);
                     println!("  - balance: {} SOL", lamports_to_sol(account.lamports()));
                     println!("  - owner: '{}'", account.owner());
@@ -2530,22 +2541,10 @@ fn main() {
                     println!("  - data_len: {}", data_len);
                 }
             }
+            measure.stop();
+            info!("{}", measure);
 
-            let print_total_accounts_stats = !arg_matches.is_present("no_total_accounts_stats");
-            if print_total_accounts_stats {
-                println!("Getting total accounts stats...");
-                let (total_accounts_stats, measure) = Measure::this(
-                    bank::get_total_accounts_stats,
-                    &bank,
-                    "getting total accounts stats",
-                );
-                info!("{}", measure);
-                let total_accounts_stats = total_accounts_stats.unwrap_or_else(|err| {
-                    eprintln!("Getting total accounts stats failed: {:?}", err);
-                    exit(1);
-                });
-                println!("{:#?}", total_accounts_stats);
-            }
+            println!("{:#?}", total_accounts_stats);
         }
         ("capitalization", Some(arg_matches)) => {
             let dev_halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
