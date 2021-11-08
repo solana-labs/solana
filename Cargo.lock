@@ -4270,9 +4270,9 @@ dependencies = [
 
 [[package]]
 name = "soketto"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "083624472e8817d44d02c0e55df043737ff11f279af924abdf93845717c2b75c"
+checksum = "41d1c5305e39e09653383c2c7244f2f78b3bcae37cf50c64cb4789c9f5096ec2"
 dependencies = [
  "base64 0.13.0",
  "bytes 1.1.0",
