@@ -185,9 +185,9 @@ dependencies = [
 
 [[package]]
 name = "blake3"
-version = "1.1.0"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2607a74355ce2e252d0c483b2d8a348e1bba36036e786ccc2dcd777213c86ffd"
+checksum = "526c210b4520e416420759af363083471656e819a75e831b8d2c9d5a584f2413"
 dependencies = [
  "arrayref",
  "arrayvec 0.7.1",
@@ -2894,7 +2894,7 @@ dependencies = [
 name = "solana-bpf-rust-sha"
 version = "1.9.0"
 dependencies = [
- "blake3 1.1.0",
+ "blake3 1.2.0",
  "solana-program 1.9.0",
 ]
 
@@ -3277,7 +3277,7 @@ dependencies = [
  "base64 0.13.0",
  "bincode",
  "bitflags",
- "blake3 1.1.0",
+ "blake3 1.2.0",
  "borsh",
  "borsh-derive",
  "bs58 0.4.0",
@@ -3380,7 +3380,7 @@ version = "1.9.0"
 dependencies = [
  "arrayref",
  "bincode",
- "blake3 1.1.0",
+ "blake3 1.2.0",
  "bv",
  "byteorder 1.4.3",
  "bzip2",
