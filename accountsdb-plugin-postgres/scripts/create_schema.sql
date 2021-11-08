@@ -101,16 +101,17 @@ CREATE TYPE "MappedMessage" AS (
 
 -- The table storing transaction logs
 CREATE TABLE transaction (
-    signature BYTEA PRIMARY KEY,
-    is_vote BOOL NOT NULL,
     slot BIGINT NOT NULL,
+    signature BYTEA NOT NULL,
+    is_vote BOOL NOT NULL,
     message_type SMALLINT, -- 0: legacy, 1: v0 message
     legacy_message "TransactionMessage",
     v0_mapped_message "MappedMessage",
     signatures BYTEA[],
     message_hash BYTEA,
     meta "TransactionStatusMeta",
-    updated_on TIMESTAMP NOT NULL
+    updated_on TIMESTAMP NOT NULL,
+    CONSTRAINT transaction_pk PRIMARY KEY (slot, signature)
 );
 
 /**
