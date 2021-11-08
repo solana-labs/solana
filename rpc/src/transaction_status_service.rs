@@ -173,8 +173,6 @@ impl TransactionStatusService {
                                 .notify_transaction(
                                     slot,
                                     &transaction.signature(),
-                                    &tx_account_locks.writable,
-                                    &tx_account_locks.readonly,
                                     &transaction_status,
                                     &transaction,
                                 );

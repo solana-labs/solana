@@ -10,7 +10,7 @@ use {
     solana_rpc::transaction_notifier_interface::TransactionNotifierInterface,
     solana_runtime::bank,
     solana_sdk::{
-        clock::Slot, pubkey::Pubkey, signature::Signature, transaction::SanitizedTransaction,
+        clock::Slot, signature::Signature, transaction::SanitizedTransaction,
     },
     solana_transaction_status::TransactionStatusMeta,
     std::sync::{Arc, RwLock},
@@ -25,8 +25,6 @@ impl TransactionNotifierInterface for TransactionNotifierImpl {
         &self,
         slot: Slot,
         signature: &Signature,
-        writable_keys: &[&Pubkey],
-        readonly_keys: &[&Pubkey],
         status: &TransactionStatusMeta,
         transaction: &SanitizedTransaction,
     ) {
@@ -35,8 +33,6 @@ impl TransactionNotifierInterface for TransactionNotifierImpl {
             signature,
             status,
             transaction,
-            writable_keys,
-            readonly_keys,
         );
     }
 }
@@ -65,8 +61,6 @@ impl TransactionNotifierImpl {
         signature: &Signature,
         transaction_meta: &TransactionStatusMeta,
         transaction: &SanitizedTransaction,
-        writable_keys: &[&Pubkey],
-        readonly_keys: &[&Pubkey],
     ) {
         let mut measure =
             Measure::start("accountsdb-plugin-notify_plugins_of_transaction_log_info");
