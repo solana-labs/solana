@@ -556,7 +556,7 @@ impl AccountsHash {
         first_items: &'a mut Vec<(Pubkey, usize)>,
         pubkey_division: &'b [Vec<Vec<CalculateHashIntermediate>>],
         indexes: &'a mut Vec<usize>,
-    ) -> (bool, &'b CalculateHashIntermediate) {
+    ) -> &'b CalculateHashIntermediate {
         let first_item = first_items[min_index];
         let key = &first_item.0;
         let division_index = first_item.1;
@@ -576,15 +576,12 @@ impl AccountsHash {
             break;
         }
 
-        (
-            if index >= bin.len() {
-                first_items.remove(min_index); // stop looking in this vector - we exhausted it
-                true
-            } else {
-                false
-            }, // this is the last item with this pubkey
-            &bin[index - 1],
-        )
+        if index >= bin.len() {
+            first_items.remove(min_index); // stop looking in this vector - we exhausted it
+        }
+
+        // this is the previous first item that was requested
+        &bin[index - 1]
     }
 
     // go through: [..][pubkey_bin][..] and return hashes and lamport sum
@@ -648,7 +645,7 @@ impl AccountsHash {
                 min_index = first_item_index;
             }
             // get the min item, add lamports, get hash
-            let (_, item) = Self::get_item(
+            let item = Self::get_item(
                 min_index,
                 pubkey_bin,
                 &mut first_items,
@@ -667,16 +664,13 @@ impl AccountsHash {
                 // reverse this list because get_item can remove first_items[*i] when *i is exhausted
                 //  and that would mess up subsequent *i values
                 duplicate_pubkey_indexes.iter().rev().for_each(|i| {
-                    let (exhausted, _) = Self::get_item(
+                    Self::get_item(
                         *i,
                         pubkey_bin,
                         &mut first_items,
                         pubkey_division,
                         &mut indexes,
                     );
-                    if exhausted {
-                        min_index -= 1;
-                    }
                 });
                 duplicate_pubkey_indexes.clear();
             }
