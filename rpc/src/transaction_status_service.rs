@@ -172,7 +172,7 @@ impl TransactionStatusService {
                                 .unwrap()
                                 .notify_transaction(
                                     slot,
-                                    &transaction.signature(),
+                                    transaction.signature(),
                                     &transaction_status,
                                     &transaction,
                                 );

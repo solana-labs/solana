@@ -64,7 +64,7 @@ impl TransactionNotifierImpl {
         }
 
         let transaction_log_info =
-            Self::build_replica_transaction_log_info(signature, transaction_meta, &transaction);
+            Self::build_replica_transaction_log_info(signature, transaction_meta, transaction);
         for plugin in plugin_manager.plugins.iter_mut() {
             match plugin.notify_transaction(
                 ReplicaTranscaionLogInfoVersions::V0_0_1(&transaction_log_info),

@@ -377,7 +377,7 @@ impl From<&TransactionTokenBalance> for DbTransactionTokenBalance {
         Self {
             account_index: token_balance.account_index as i16,
             mint: token_balance.mint.clone(),
-            ui_token_amount: token_balance.ui_token_amount.ui_amount.clone(),
+            ui_token_amount: token_balance.ui_token_amount.ui_amount,
             owner: token_balance.owner.clone(),
         }
     }
@@ -1013,10 +1013,11 @@ pub struct LogTransactionRequest {
     transaction_info: DbTransaction,
 }
 
+#[warn(clippy::large_enum_variant)]
 enum DbWorkItem {
-    UpdateAccount(UpdateAccountRequest),
-    UpdateSlot(UpdateSlotRequest),
-    LogTransaction(LogTransactionRequest),
+    UpdateAccount(Box<UpdateAccountRequest>),
+    UpdateSlot(Box<UpdateSlotRequest>),
+    LogTransaction(Box<LogTransactionRequest>),
 }
 
 impl PostgresClientWorker {
@@ -1078,7 +1079,7 @@ impl PostgresClientWorker {
                         }
                     }
                     DbWorkItem::LogTransaction(transaction_log_info) => {
-                        self.client.log_transaction(transaction_log_info)?;
+                        self.client.log_transaction(*transaction_log_info)?;
                     }
                 },
                 Err(err) => match err {
@@ -1213,10 +1214,10 @@ impl ParallelPostgresClient {
             );
         }
         let mut measure = Measure::start("accountsdb-plugin-posgres-create-work-item");
-        let wrk_item = DbWorkItem::UpdateAccount(UpdateAccountRequest {
+        let wrk_item = DbWorkItem::UpdateAccount(Box::new(UpdateAccountRequest {
             account: DbAccountInfo::new(account, slot),
             is_startup,
-        });
+        }));
 
         measure.stop();
 
@@ -1256,11 +1257,11 @@ impl ParallelPostgresClient {
         parent: Option<u64>,
         status: SlotStatus,
     ) -> Result<(), AccountsDbPluginError> {
-        if let Err(err) = self.sender.send(DbWorkItem::UpdateSlot(UpdateSlotRequest {
+        if let Err(err) = self.sender.send(DbWorkItem::UpdateSlot(Box::new(UpdateSlotRequest {
             slot,
             parent,
             slot_status: status,
-        })) {
+        }))) {
             return Err(AccountsDbPluginError::SlotStatusUpdateError {
                 msg: format!("Failed to update the slot {:?}, error: {:?}", slot, err),
             });
@@ -1344,7 +1345,7 @@ impl ParallelPostgresClient {
         slot: u64,
     ) -> Result<(), AccountsDbPluginError> {
         let wrk_item =
-            DbWorkItem::LogTransaction(Self::build_transaction_request(slot, transaction_info));
+            DbWorkItem::LogTransaction(Box::new(Self::build_transaction_request(slot, transaction_info)));
 
         if let Err(err) = self.sender.send(wrk_item) {
             return Err(AccountsDbPluginError::SlotStatusUpdateError {
