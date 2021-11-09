@@ -152,7 +152,7 @@ impl TransactionStatusService {
                                 .collect(),
                         );
 
-                        let transaction_status = TransactionStatusMeta {
+                        let transaction_status_meta = TransactionStatusMeta {
                             status,
                             fee,
                             pre_balances,
@@ -173,7 +173,7 @@ impl TransactionStatusService {
                                 .notify_transaction(
                                     slot,
                                     transaction.signature(),
-                                    &transaction_status,
+                                    &transaction_status_meta,
                                     &transaction,
                                 );
                         }
@@ -190,7 +190,7 @@ impl TransactionStatusService {
                                     *transaction.signature(),
                                     tx_account_locks.writable,
                                     tx_account_locks.readonly,
-                                    transaction_status,
+                                    transaction_status_meta,
                                 )
                                 .expect("Expect database write to succeed: TransactionStatus");
                         }

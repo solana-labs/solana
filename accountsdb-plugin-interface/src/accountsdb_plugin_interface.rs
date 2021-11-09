@@ -27,15 +27,15 @@ pub enum ReplicaAccountInfoVersions<'a> {
 }
 
 #[derive(Clone, Debug)]
-pub struct ReplicaTransactionLogInfo<'a> {
+pub struct ReplicaTransactionInfo<'a> {
     pub signature: &'a Signature,
     pub is_vote: bool,
     pub transaction: &'a SanitizedTransaction,
-    pub transaction_meta: &'a TransactionStatusMeta,
+    pub transaction_status_meta: &'a TransactionStatusMeta,
 }
 
-pub enum ReplicaTranscaionLogInfoVersions<'a> {
-    V0_0_1(&'a ReplicaTransactionLogInfo<'a>),
+pub enum ReplicaTranscaionInfoVersions<'a> {
+    V0_0_1(&'a ReplicaTransactionInfo<'a>),
 }
 
 #[derive(Error, Debug)]
@@ -52,7 +52,7 @@ pub enum AccountsDbPluginError {
     #[error("Error updating slot status. Error message: ({msg})")]
     SlotStatusUpdateError { msg: String },
 
-    #[error("Error updating transaction log. Error message: ({msg})")]
+    #[error("Error updating transaction. Error message: ({msg})")]
     TransactionLogUpdateError { msg: String },
 
     #[error("Plugin-defined custom error. Error message: ({0})")]
@@ -114,10 +114,10 @@ pub trait AccountsDbPlugin: Any + Send + Sync + std::fmt::Debug {
         status: SlotStatus,
     ) -> Result<()>;
 
-    /// Called when an account is updated at a slot.
+    /// Called when a transaction is updated at a slot.
     fn notify_transaction(
         &mut self,
-        account: ReplicaTranscaionLogInfoVersions,
+        transaction: ReplicaTranscaionInfoVersions,
         slot: u64,
     ) -> Result<()>;
 }

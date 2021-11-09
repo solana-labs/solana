@@ -13,7 +13,7 @@ use {
     postgres::{Client, NoTls, Statement},
     postgres_types::ToSql,
     solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
-        AccountsDbPluginError, ReplicaAccountInfo, ReplicaTransactionLogInfo, SlotStatus,
+        AccountsDbPluginError, ReplicaAccountInfo, ReplicaTransactionInfo, SlotStatus,
     },
     solana_measure::measure::Measure,
     solana_metrics::*,
@@ -1257,11 +1257,14 @@ impl ParallelPostgresClient {
         parent: Option<u64>,
         status: SlotStatus,
     ) -> Result<(), AccountsDbPluginError> {
-        if let Err(err) = self.sender.send(DbWorkItem::UpdateSlot(Box::new(UpdateSlotRequest {
-            slot,
-            parent,
-            slot_status: status,
-        }))) {
+        if let Err(err) = self
+            .sender
+            .send(DbWorkItem::UpdateSlot(Box::new(UpdateSlotRequest {
+                slot,
+                parent,
+                slot_status: status,
+            })))
+        {
             return Err(AccountsDbPluginError::SlotStatusUpdateError {
                 msg: format!("Failed to update the slot {:?}, error: {:?}", slot, err),
             });
@@ -1293,10 +1296,7 @@ impl ParallelPostgresClient {
         Ok(())
     }
 
-    fn build_db_transaction(
-        slot: u64,
-        transaction_info: &ReplicaTransactionLogInfo,
-    ) -> DbTransaction {
+    fn build_db_transaction(slot: u64, transaction_info: &ReplicaTransactionInfo) -> DbTransaction {
         DbTransaction {
             signature: transaction_info.signature.as_ref().to_vec(),
             is_vote: transaction_info.is_vote,
@@ -1326,13 +1326,13 @@ impl ParallelPostgresClient {
                 .message_hash()
                 .as_ref()
                 .to_vec(),
-            meta: DbTransactionStatusMeta::from(transaction_info.transaction_meta),
+            meta: DbTransactionStatusMeta::from(transaction_info.transaction_status_meta),
         }
     }
 
     fn build_transaction_request(
         slot: u64,
-        transaction_info: &ReplicaTransactionLogInfo,
+        transaction_info: &ReplicaTransactionInfo,
     ) -> LogTransactionRequest {
         LogTransactionRequest {
             transaction_info: Self::build_db_transaction(slot, transaction_info),
@@ -1341,11 +1341,13 @@ impl ParallelPostgresClient {
 
     pub fn log_transaction_info(
         &mut self,
-        transaction_info: &ReplicaTransactionLogInfo,
+        transaction_info: &ReplicaTransactionInfo,
         slot: u64,
     ) -> Result<(), AccountsDbPluginError> {
-        let wrk_item =
-            DbWorkItem::LogTransaction(Box::new(Self::build_transaction_request(slot, transaction_info)));
+        let wrk_item = DbWorkItem::LogTransaction(Box::new(Self::build_transaction_request(
+            slot,
+            transaction_info,
+        )));
 
         if let Err(err) = self.sender.send(wrk_item) {
             return Err(AccountsDbPluginError::SlotStatusUpdateError {

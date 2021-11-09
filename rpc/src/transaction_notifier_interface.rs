@@ -9,7 +9,7 @@ pub trait TransactionNotifierInterface {
         &self,
         slot: Slot,
         signature: &Signature,
-        status: &TransactionStatusMeta,
+        transaction_status_meta: &TransactionStatusMeta,
         transaction: &SanitizedTransaction,
     );
 }

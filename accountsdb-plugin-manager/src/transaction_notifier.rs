@@ -3,7 +3,7 @@ use {
     crate::accountsdb_plugin_manager::AccountsDbPluginManager,
     log::*,
     solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
-        ReplicaTransactionLogInfo, ReplicaTranscaionLogInfoVersions,
+        ReplicaTransactionInfo, ReplicaTranscaionInfoVersions,
     },
     solana_measure::measure::Measure,
     solana_metrics::*,
@@ -23,10 +23,10 @@ impl TransactionNotifierInterface for TransactionNotifierImpl {
         &self,
         slot: Slot,
         signature: &Signature,
-        status: &TransactionStatusMeta,
+        transaction_status_meta: &TransactionStatusMeta,
         transaction: &SanitizedTransaction,
     ) {
-        self.notify_transaction_log_info(slot, signature, status, transaction);
+        self.notify_transaction_info(slot, signature, transaction_status_meta, transaction);
     }
 }
 
@@ -35,28 +35,27 @@ impl TransactionNotifierImpl {
         Self { plugin_manager }
     }
 
-    fn build_replica_transaction_log_info<'a>(
+    fn build_replica_transaction_info<'a>(
         signature: &'a Signature,
-        transaction_meta: &'a TransactionStatusMeta,
+        transaction_status_meta: &'a TransactionStatusMeta,
         transaction: &'a SanitizedTransaction,
-    ) -> ReplicaTransactionLogInfo<'a> {
-        ReplicaTransactionLogInfo {
+    ) -> ReplicaTransactionInfo<'a> {
+        ReplicaTransactionInfo {
             signature,
             is_vote: bank::is_simple_vote_transaction(transaction),
             transaction,
-            transaction_meta,
+            transaction_status_meta,
         }
     }
 
-    fn notify_transaction_log_info(
+    fn notify_transaction_info(
         &self,
         slot: Slot,
         signature: &Signature,
-        transaction_meta: &TransactionStatusMeta,
+        transaction_status_meta: &TransactionStatusMeta,
         transaction: &SanitizedTransaction,
     ) {
-        let mut measure =
-            Measure::start("accountsdb-plugin-notify_plugins_of_transaction_log_info");
+        let mut measure = Measure::start("accountsdb-plugin-notify_plugins_of_transaction_info");
         let mut plugin_manager = self.plugin_manager.write().unwrap();
 
         if plugin_manager.plugins.is_empty() {
@@ -64,10 +63,10 @@ impl TransactionNotifierImpl {
         }
 
         let transaction_log_info =
-            Self::build_replica_transaction_log_info(signature, transaction_meta, transaction);
+            Self::build_replica_transaction_info(signature, transaction_status_meta, transaction);
         for plugin in plugin_manager.plugins.iter_mut() {
             match plugin.notify_transaction(
-                ReplicaTranscaionLogInfoVersions::V0_0_1(&transaction_log_info),
+                ReplicaTranscaionInfoVersions::V0_0_1(&transaction_log_info),
                 slot,
             ) {
                 Err(err) => {
@@ -87,7 +86,7 @@ impl TransactionNotifierImpl {
         }
         measure.stop();
         inc_new_counter_debug!(
-            "accountsdb-plugin-notify_plugins_of_transaction_log_info-us",
+            "accountsdb-plugin-notify_plugins_of_transaction_info-us",
             measure.as_us() as usize,
             10000,
             10000

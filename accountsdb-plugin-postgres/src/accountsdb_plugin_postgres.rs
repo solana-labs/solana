@@ -12,7 +12,7 @@ use {
     serde_json,
     solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
         AccountsDbPlugin, AccountsDbPluginError, ReplicaAccountInfoVersions,
-        ReplicaTranscaionLogInfoVersions, Result, SlotStatus,
+        ReplicaTranscaionInfoVersions, Result, SlotStatus,
     },
     solana_metrics::*,
     std::{fs::File, io::Read},
@@ -286,7 +286,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
 
     fn notify_transaction(
         &mut self,
-        transaction_log_info: ReplicaTranscaionLogInfoVersions,
+        transaction_log_info: ReplicaTranscaionInfoVersions,
         slot: u64,
     ) -> Result<()> {
         if self.config.is_none()
@@ -309,7 +309,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                 )));
             }
             Some(client) => match transaction_log_info {
-                ReplicaTranscaionLogInfoVersions::V0_0_1(transaction_log_info) => {
+                ReplicaTranscaionInfoVersions::V0_0_1(transaction_log_info) => {
                     let result = client.log_transaction_info(transaction_log_info, slot);
 
                     if let Err(err) = result {
