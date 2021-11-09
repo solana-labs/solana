@@ -6244,7 +6244,7 @@ impl AccountsDb {
 
     /// sleep while accounts cache size has grown too large, up to a max wait
     fn maybe_stall_store_cached(&self, accounts: &[(&Pubkey, &AccountSharedData)]) {
-        const MAX_DELAY_US: u128 = 10_000;
+        const MAX_DELAY_US: u128 = 100_000;
         const CACHE_SIZE_TO_STALL: u64 = 10_000_000_000;
         const DELAY_US: u64 = 1_000;
         let start = Instant::now();
