@@ -42,7 +42,7 @@ pub enum AccountsDbPluginError {
     Custom(Box<dyn error::Error + Send + Sync>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum SlotStatus {
     Processed,
     Rooted,
