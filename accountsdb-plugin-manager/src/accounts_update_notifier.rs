@@ -58,10 +58,6 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
 
     fn notify_end_of_restore_from_snapshot(&self) {
         let mut plugin_manager = self.plugin_manager.write().unwrap();
-        if plugin_manager.plugins.is_empty() {
-            return;
-        }
-
         for plugin in plugin_manager.plugins.iter_mut() {
             let mut measure = Measure::start("accountsdb-plugin-end-of-restore-from-snapshot");
             match plugin.notify_end_of_startup() {
@@ -142,12 +138,9 @@ impl AccountsUpdateNotifierImpl {
         slot: Slot,
         is_startup: bool,
     ) {
-        let mut measure2 = Measure::start("accountsdb-plugin-notify_plugins_of_account_update");
         let mut plugin_manager = self.plugin_manager.write().unwrap();
+        let mut measure2 = Measure::start("accountsdb-plugin-notify_plugins_of_account_update");
 
-        if plugin_manager.plugins.is_empty() {
-            return;
-        }
         for plugin in plugin_manager.plugins.iter_mut() {
             let mut measure = Measure::start("accountsdb-plugin-update-account");
             match plugin.update_account(
@@ -181,21 +174,20 @@ impl AccountsUpdateNotifierImpl {
                 100000
             );
         }
-        measure2.stop();
-        inc_new_counter_debug!(
-            "accountsdb-plugin-notify_plugins_of_account_update-us",
-            measure2.as_us() as usize,
-            100000,
-            100000
-        );
+
+        if !plugin_manager.plugins.is_empty() {
+            measure2.stop();
+            inc_new_counter_debug!(
+                "accountsdb-plugin-notify_plugins_of_account_update-us",
+                measure2.as_us() as usize,
+                100000,
+                100000
+            );
+        }
     }
 
     pub fn notify_slot_status(&self, slot: Slot, parent: Option<Slot>, slot_status: SlotStatus) {
         let mut plugin_manager = self.plugin_manager.write().unwrap();
-        if plugin_manager.plugins.is_empty() {
-            return;
-        }
-
         for plugin in plugin_manager.plugins.iter_mut() {
             let mut measure = Measure::start("accountsdb-plugin-update-slot");
             match plugin.update_slot_status(slot, parent, slot_status) {
