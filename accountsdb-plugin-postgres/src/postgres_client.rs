@@ -353,7 +353,7 @@ fn get_transaction_status(result: &Result<(), TransactionError>) -> Option<Strin
         TransactionError::AlreadyProcessed => "AlreadyProcessed",
         TransactionError::BlockhashNotFound => "BlockhashNotFound",
         TransactionError::InstructionError(idx, error) => {
-            return Some(format!("InstructionError: idx ({}), error: {}", idx, error));
+            return Some(format!("InstructionError: idx ({}), error: ({})", idx, error));
         }
         TransactionError::CallChainTooDeep => "CallChainTooDeep",
         TransactionError::MissingSignatureForFee => "MissingSignatureForFee",
