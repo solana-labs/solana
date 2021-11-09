@@ -450,6 +450,8 @@ pub fn start_verify_transactions(
                             // this is not great and may lead to subtle/unexpected current or future bugs
                             // but zeroing everything out when these packets are only used for GPU
                             // sigverify may not be a great use of memory bandwidth either...
+                            // This also appears to leave the packet only populated with the data
+                            // for the last transaction in the Entry... this is intended?
                             Packet::populate_packet(
                                 &mut packets.packets[num_packets],
                                 None,
