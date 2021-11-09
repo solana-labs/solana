@@ -6320,51 +6320,48 @@ impl Bank {
         self.feature_set
             .is_active(&feature_set::rent_for_sysvars::id())
     }
-}
 
-/// Get all the accounts for this bank and calculate stats
-pub fn get_total_accounts_stats(bank: &Bank) -> ScanResult<TotalAccountsStats> {
-    // This implementation could have used scan_accounts() directly, but does not so that it could
-    // share `calculate_total_accounts_stats()` with ledger-tool (see subcommand "accounts").
-    let accounts = bank.get_all_accounts_with_modified_slots()?;
-    Ok(calculate_total_accounts_stats(
-        bank,
-        accounts
-            .iter()
-            .map(|(pubkey, account, _slot)| (pubkey, account)),
-    ))
-}
+    /// Get all the accounts for this bank and calculate stats
+    pub fn get_total_accounts_stats(&self) -> ScanResult<TotalAccountsStats> {
+        let accounts = self.get_all_accounts_with_modified_slots()?;
+        Ok(self.calculate_total_accounts_stats(
+            accounts
+                .iter()
+                .map(|(pubkey, account, _slot)| (pubkey, account)),
+        ))
+    }
 
-/// Given all the accounts for a bank, calculate stats
-pub fn calculate_total_accounts_stats<'a>(
-    bank: &Bank,
-    accounts: impl Iterator<Item = (&'a Pubkey, &'a AccountSharedData)>,
-) -> TotalAccountsStats {
-    let rent_collector = bank.rent_collector();
-    let mut total_accounts_stats = TotalAccountsStats::default();
-    accounts.for_each(|(pubkey, account)| {
-        let data_len = account.data().len();
-        total_accounts_stats.num_accounts += 1;
-        total_accounts_stats.data_len += data_len;
+    /// Given all the accounts for a bank, calculate stats
+    pub fn calculate_total_accounts_stats<'a>(
+        &self,
+        accounts: impl Iterator<Item = (&'a Pubkey, &'a AccountSharedData)>,
+    ) -> TotalAccountsStats {
+        let rent_collector = self.rent_collector();
+        let mut total_accounts_stats = TotalAccountsStats::default();
+        accounts.for_each(|(pubkey, account)| {
+            let data_len = account.data().len();
+            total_accounts_stats.num_accounts += 1;
+            total_accounts_stats.data_len += data_len;
 
-        if account.executable() {
-            total_accounts_stats.num_executable_accounts += 1;
-            total_accounts_stats.executable_data_len += data_len;
-        }
-
-        if !rent_collector.should_collect_rent(pubkey, account, false)
-            || rent_collector.get_rent_due(account).1
-        {
-            total_accounts_stats.num_rent_exempt_accounts += 1;
-        } else {
-            total_accounts_stats.num_rent_paying_accounts += 1;
-            if data_len == 0 {
-                total_accounts_stats.num_rent_paying_accounts_without_data += 1;
+            if account.executable() {
+                total_accounts_stats.num_executable_accounts += 1;
+                total_accounts_stats.executable_data_len += data_len;
             }
-        }
-    });
 
-    total_accounts_stats
+            if !rent_collector.should_collect_rent(pubkey, account, false)
+                || rent_collector.get_rent_due(account).1
+            {
+                total_accounts_stats.num_rent_exempt_accounts += 1;
+            } else {
+                total_accounts_stats.num_rent_paying_accounts += 1;
+                if data_len == 0 {
+                    total_accounts_stats.num_rent_paying_accounts_without_data += 1;
+                }
+            }
+        });
+
+        total_accounts_stats
+    }
 }
 
 /// Struct to collect stats when scanning all accounts in `get_total_accounts_stats()`

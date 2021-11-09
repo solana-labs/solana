@@ -28,7 +28,7 @@ use solana_measure::measure::Measure;
 use solana_runtime::{
     accounts_db::AccountsDbConfig,
     accounts_index::AccountsIndexConfig,
-    bank::{self, Bank, RewardCalculationEvent},
+    bank::{Bank, RewardCalculationEvent},
     bank_forks::BankForks,
     cost_model::CostModel,
     cost_tracker::CostTracker,
@@ -2510,8 +2510,7 @@ fn main() {
             info!("{}", measure);
 
             let mut measure = Measure::start("calculating total accounts stats");
-            let total_accounts_stats = bank::calculate_total_accounts_stats(
-                &bank,
+            let total_accounts_stats = bank.calculate_total_accounts_stats(
                 accounts
                     .iter()
                     .map(|(pubkey, (account, _slot))| (pubkey, account)),
