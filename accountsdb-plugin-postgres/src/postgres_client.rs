@@ -195,8 +195,16 @@ pub struct DbTransaction {
 impl From<&AddressMapIndexes> for DbAddressMapIndexes {
     fn from(address_map_indexes: &AddressMapIndexes) -> Self {
         Self {
-            writable: address_map_indexes.writable.iter().map(|address_idx| *address_idx as i16).collect(),
-            readonly: address_map_indexes.readonly.iter().map(|address_idx| *address_idx as i16).collect(),
+            writable: address_map_indexes
+                .writable
+                .iter()
+                .map(|address_idx| *address_idx as i16)
+                .collect(),
+            readonly: address_map_indexes
+                .readonly
+                .iter()
+                .map(|address_idx| *address_idx as i16)
+                .collect(),
         }
     }
 }
@@ -232,7 +240,11 @@ impl From<&CompiledInstruction> for DbCompiledInstruction {
     fn from(instrtuction: &CompiledInstruction) -> Self {
         Self {
             program_id_index: instrtuction.program_id_index as i16,
-            accounts: instrtuction.accounts.iter().map(|account_idx| *account_idx as i16).collect(),
+            accounts: instrtuction
+                .accounts
+                .iter()
+                .map(|account_idx| *account_idx as i16)
+                .collect(),
             data: instrtuction.data.clone(),
         }
     }

@@ -9,9 +9,7 @@ use {
     solana_metrics::*,
     solana_rpc::transaction_notifier_interface::TransactionNotifierInterface,
     solana_runtime::bank,
-    solana_sdk::{
-        clock::Slot, signature::Signature, transaction::SanitizedTransaction,
-    },
+    solana_sdk::{clock::Slot, signature::Signature, transaction::SanitizedTransaction},
     solana_transaction_status::TransactionStatusMeta,
     std::sync::{Arc, RwLock},
 };
@@ -28,12 +26,7 @@ impl TransactionNotifierInterface for TransactionNotifierImpl {
         status: &TransactionStatusMeta,
         transaction: &SanitizedTransaction,
     ) {
-        self.notify_transaction_log_info(
-            slot,
-            signature,
-            status,
-            transaction,
-        );
+        self.notify_transaction_log_info(slot, signature, status, transaction);
     }
 }
 
