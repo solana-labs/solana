@@ -589,38 +589,7 @@ impl PostgresClient for SimplePostgresClient {
         &mut self,
         transaction_log_info: LogTransactionRequest,
     ) -> Result<(), AccountsDbPluginError> {
-        let client = self.client.get_mut().unwrap();
-        let statement = &client.update_transaction_log_stmt;
-        let client = &mut client.client;
-        let updated_on = Utc::now().naive_utc();
-
-        let transaction_info = transaction_log_info.transaction_info;
-        let result = client.query(
-            statement,
-            &[
-                &transaction_info.signature,
-                &transaction_info.is_vote,
-                &transaction_info.slot,
-                &transaction_info.message_type,
-                &transaction_info.legacy_message,
-                &transaction_info.v0_mapped_message,
-                &transaction_info.signatures,
-                &transaction_info.message_hash,
-                &transaction_info.meta,
-                &updated_on,
-            ],
-        );
-
-        if let Err(err) = result {
-            let msg = format!(
-                "Failed to persist the update of transaction info to the PostgreSQL database. Error: {:?}",
-                err
-            );
-            error!("{}", msg);
-            return Err(AccountsDbPluginError::AccountsUpdateError { msg });
-        }
-
-        Ok(())
+        self.log_transaction_impl(transaction_log_info)
     }
 }
 
