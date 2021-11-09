@@ -250,6 +250,10 @@ impl<T: Clone + Default + Sized> PinnedVec<T> {
         self.check_ptr(old_ptr, old_capacity, "resize");
     }
 
+    pub unsafe fn set_len(&mut self, size: usize) {
+        self.x.set_len(size);
+    }
+
     pub fn shuffle<R: Rng>(&mut self, rng: &mut R) {
         self.x.shuffle(rng)
     }

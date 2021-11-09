@@ -437,22 +437,31 @@ pub fn start_verify_transactions(
                 entries.len(),
                 "entry-sig-verify",
             );
+            unsafe {
+                packets.packets.set_len(entries.len());
+            }
 
-            for (i, entry) in entries.iter().enumerate() {
+            let mut num_packets: usize = 0;
+            for (_i, entry) in entries.iter().enumerate() {
                 match entry {
                     EntryType::Transactions(transactions) => {
                         for hashed_tx in transactions {
                             Packet::populate_packet(
-                                &mut packets.packets[i],
+                                &mut packets.packets[num_packets],
                                 None,
                                 &hashed_tx.to_versioned_transaction(),
                             )
                             .unwrap();
                         }
+                        num_packets = num_packets + 1;
                     }
                     EntryType::Tick(_) => {}
                 }
             }
+            unsafe {
+                packets.packets.set_len(num_packets);
+            }
+            
             let mut packets = vec![packets];
             let tx_offset_recycler = verify_recyclers.tx_offset_recycler;
             let out_recycler = verify_recyclers.out_recycler;
