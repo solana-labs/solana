@@ -393,11 +393,13 @@ fn main() {
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
         faucet_port,
     ));
-    // JIT not supported on the BPF VM in Windows currently: https://github.com/solana-labs/rbpf/issues/217
-    #[cfg(target_family = "windows")]
-    let bpf_jit = false;
-    #[cfg(not(target_family = "windows"))]
+    // Currently JIT is supported on the BPF VM:
+    // x86_64: https://github.com/qmonnet/rbpf/issues/48
+    // Not Windows: https://github.com/solana-labs/rbpf/issues/217
+    #[cfg(all(target_arch = "x86_64", not(target_family = "windows")))]
     let bpf_jit = !matches.is_present("no_bpf_jit");
+    #[cfg(not(all(target_arch = "x86_64", not(target_family = "windows"))))]
+    let bpf_jit = false;
 
     let mut programs = vec![];
     if let Some(values) = matches.values_of("bpf_program") {

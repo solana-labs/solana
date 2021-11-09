@@ -2155,6 +2155,13 @@ pub fn main() {
     } else {
         None
     };
+    // Currently JIT is supported on the BPF VM:
+    // x86_64: https://github.com/qmonnet/rbpf/issues/48
+    // Not Windows: https://github.com/solana-labs/rbpf/issues/217
+    #[cfg(all(target_arch = "x86_64", not(target_family = "windows")))]
+    let bpf_jit = !matches.is_present("no_bpf_jit");
+    #[cfg(not(all(target_arch = "x86_64", not(target_family = "windows"))))]
+    let bpf_jit = false;
 
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
@@ -2241,7 +2248,7 @@ pub fn main() {
         poh_verify: !matches.is_present("skip_poh_verify"),
         debug_keys,
         contact_debug_interval,
-        bpf_jit: !matches.is_present("no_bpf_jit"),
+        bpf_jit,
         send_transaction_service_config: send_transaction_service::Config {
             retry_rate_ms: value_t_or_exit!(matches, "rpc_send_transaction_retry_ms", u64),
             leader_forward_count: value_t_or_exit!(

@@ -1997,6 +1997,14 @@ fn main() {
                 accounts_index_config.drives = Some(accounts_index_paths);
             }
 
+            // Currently JIT is supported on the BPF VM:
+            // x86_64: https://github.com/qmonnet/rbpf/issues/48
+            // Not Windows: https://github.com/solana-labs/rbpf/issues/217
+            #[cfg(all(target_arch = "x86_64", not(target_family = "windows")))]
+            let bpf_jit = !matches.is_present("no_bpf_jit");
+            #[cfg(not(all(target_arch = "x86_64", not(target_family = "windows"))))]
+            let bpf_jit = false;
+
             let filler_account_count = value_t!(arg_matches, "accounts_filler_count", usize).ok();
 
             let accounts_db_config = Some(AccountsDbConfig {
@@ -2010,7 +2018,7 @@ fn main() {
                 dev_halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                 new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                 poh_verify: !arg_matches.is_present("skip_poh_verify"),
-                bpf_jit: !matches.is_present("no_bpf_jit"),
+                bpf_jit,
                 accounts_db_caching_enabled: !arg_matches.is_present("no_accounts_db_caching"),
                 limit_load_slot_count_from_snapshot: value_t!(
                     arg_matches,
