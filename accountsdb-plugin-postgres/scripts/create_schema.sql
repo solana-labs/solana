@@ -38,21 +38,21 @@ CREATE TYPE "InnerInstructions" AS (
 
 CREATE TYPE "TransactionTokenBalance" AS (
     account_index SMALLINT,
-    mint VARCHAR(256),
+    mint VARCHAR(44),
     ui_token_amount DOUBLE PRECISION,
-    owner VARCHAR(256)
+    owner VARCHAR(44)
 );
 
 CREATE TYPE "Reward" AS (
-    pubkey VARCHAR(256),
+    pubkey VARCHAR(44),
     lamports BIGINT,
     post_balance BIGINT,
-    reward_type VARCHAR(256),
+    reward_type VARCHAR(32),
     commission SMALLINT
 );
 
 CREATE TYPE "TransactionStatusMeta" AS (
-    status VARCHAR(256),
+    status VARCHAR(32),
     fee BIGINT,
     pre_balances BIGINT[],
     post_balances BIGINT[],
@@ -99,7 +99,7 @@ CREATE TYPE "MappedMessage" AS (
     mapped_addresses "MappedAddresses"
 );
 
--- The table storing transaction logs
+-- The table storing transactions
 CREATE TABLE transaction (
     slot BIGINT NOT NULL,
     signature BYTEA NOT NULL,

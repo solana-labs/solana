@@ -1,7 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
 
-use solana_sdk::instruction::CompiledInstruction;
-
 /// A concurrent implementation for writing accounts into the PostgreSQL in parallel.
 use {
     crate::accountsdb_plugin_postgres::{
@@ -19,6 +17,7 @@ use {
     solana_metrics::*,
     solana_runtime::bank::RewardType,
     solana_sdk::{
+        instruction::CompiledInstruction,
         message::{
             v0::{self, AddressMapIndexes},
             MappedAddresses, MappedMessage, Message, MessageHeader, SanitizedMessage,
@@ -666,7 +665,7 @@ impl SimplePostgresClient {
         }
     }
 
-    fn build_transaction_log_upsert_statement(
+    fn build_transaction_info_upsert_statement(
         client: &mut Client,
         config: &AccountsDbPluginPostgresConfig,
     ) -> Result<Statement, AccountsDbPluginError> {
@@ -874,7 +873,7 @@ impl SimplePostgresClient {
         let update_slot_without_parent_stmt =
             Self::build_slot_upsert_statement_without_parent(&mut client, config)?;
         let update_transaction_log_stmt =
-            Self::build_transaction_log_upsert_statement(&mut client, config)?;
+            Self::build_transaction_info_upsert_statement(&mut client, config)?;
 
         let batch_size = config
             .batch_size
@@ -987,7 +986,7 @@ impl PostgresClient for SimplePostgresClient {
 
         if let Err(err) = result {
             let msg = format!(
-                "Failed to persist the update of transaction log to the PostgreSQL database. Error: {:?}",
+                "Failed to persist the update of transaction info to the PostgreSQL database. Error: {:?}",
                 err
             );
             error!("{}", msg);

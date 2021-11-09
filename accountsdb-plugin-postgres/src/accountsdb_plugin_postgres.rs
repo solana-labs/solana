@@ -286,7 +286,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
 
     fn notify_transaction(
         &mut self,
-        transaction_log_info: ReplicaTranscaionInfoVersions,
+        transaction_info: ReplicaTranscaionInfoVersions,
         slot: u64,
     ) -> Result<()> {
         if self.config.is_none()
@@ -308,13 +308,13 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                     },
                 )));
             }
-            Some(client) => match transaction_log_info {
-                ReplicaTranscaionInfoVersions::V0_0_1(transaction_log_info) => {
-                    let result = client.log_transaction_info(transaction_log_info, slot);
+            Some(client) => match transaction_info {
+                ReplicaTranscaionInfoVersions::V0_0_1(transaction_info) => {
+                    let result = client.log_transaction_info(transaction_info, slot);
 
                     if let Err(err) = result {
                         return Err(AccountsDbPluginError::SlotStatusUpdateError{
-                                msg: format!("Failed to persist the transaction log to the PostgreSQL database. Error: {:?}", err)
+                                msg: format!("Failed to persist the transaction info to the PostgreSQL database. Error: {:?}", err)
                             });
                     }
                 }
