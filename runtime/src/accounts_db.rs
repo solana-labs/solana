@@ -6490,6 +6490,31 @@ impl AccountsDb {
 
         let previous_slot_entry_was_cached = self.caching_enabled && is_cached_store;
 
+        if self.is_rooted_slot(slot) {
+            let mut count_rent_paying = 0;
+            for account in infos/accounts {
+                if account is rent_paying {
+                    // some code like this:
+                    let lock = self.accounts_index.get_account_maps_read_lock(&key);
+                    let x = lock.get(&key).unwrap();
+                    let sl = x.slot_list.read().unwrap();
+                    let mut found_in_earlier_slot = false;
+                    for (slot2, account_info2) in sl.iter() {
+                        if slot2 < slot && self.is_root(slot2) {
+                            // you are looking for entries fro rooted slots that are < 'slot'
+                            found_in_earlier_slot = true;
+                            break;
+                        }
+                    }
+                    if !found_in_earlier_slot {
+                        count_rent_paying += 1;
+                    }
+
+                }
+            }
+            // TODO log count_rent_paying here
+        }
+
         // If the cache was flushed, then because `update_index` occurs
         // after the account are stored by the above `store_accounts_to`
         // call and all the accounts are stored, all reads after this point
