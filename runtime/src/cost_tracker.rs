@@ -25,6 +25,7 @@ pub struct CostTracker {
     cost_by_writable_accounts: HashMap<Pubkey, u64>,
     block_cost: u64,
     transaction_count: u64,
+    payer_transactions_count: HashMap<Pubkey, u64>,
 }
 
 impl Default for CostTracker {
@@ -42,6 +43,7 @@ impl CostTracker {
             cost_by_writable_accounts: HashMap::with_capacity(WRITABLE_ACCOUNTS_PER_BLOCK),
             block_cost: 0,
             transaction_count: 0,
+            payer_transactions_count: HashMap::default(),
         }
     }
 
@@ -69,12 +71,18 @@ impl CostTracker {
 
     pub fn try_add(
         &mut self,
-        _transaction: &SanitizedTransaction,
+        transaction: &SanitizedTransaction,
         tx_cost: &TransactionCost,
     ) -> Result<u64, CostTrackerError> {
         let cost = tx_cost.sum() * tx_cost.cost_weight as u64;
         self.would_fit(&tx_cost.writable_accounts, &cost)?;
         self.add_transaction(&tx_cost.writable_accounts, &cost);
+        // counting number of TXs for the fee payer, it is used to calculate
+        // cost_weight for block producing prioritization.
+        *self
+            .payer_transactions_count
+            .entry(*transaction.message().fee_payer())
+            .or_insert(0) += 1;
         Ok(self.block_cost)
     }
 
@@ -85,6 +93,7 @@ impl CostTracker {
         }
 
         let (costliest_account, costliest_account_cost) = self.find_costliest_account();
+        let (largest_fee_payer, largest_fee_payer_txs_count) = self.find_largest_fee_payer();
 
         datapoint_info!(
             "cost_tracker_stats",
@@ -98,7 +107,22 @@ impl CostTracker {
             ),
             ("costliest_account", costliest_account.to_string(), String),
             ("costliest_account_cost", costliest_account_cost as i64, i64),
+            (
+                "fee_payer_count",
+                self.payer_transactions_count.len() as i64,
+                i64
+            ),
+            ("largest_fee_payer", largest_fee_payer.to_string(), String),
+            (
+                "largest_fee_payer_txs_count",
+                largest_fee_payer_txs_count as i64,
+                i64
+            ),
         );
+    }
+
+    pub fn get_fee_payer_transactions_count(&self, payer: &Pubkey) -> Option<&u64> {
+        self.payer_transactions_count.get(payer)
     }
 
     fn find_costliest_account(&self) -> (Pubkey, u64) {
@@ -112,6 +136,19 @@ impl CostTracker {
         }
 
         (costliest_account, costliest_account_cost)
+    }
+
+    fn find_largest_fee_payer(&self) -> (Pubkey, u64) {
+        let mut largest_fee_payer = Pubkey::default();
+        let mut largest_fee_payer_txs_count = 0;
+        for (key, count) in self.payer_transactions_count.iter() {
+            if *count > largest_fee_payer_txs_count {
+                largest_fee_payer = *key;
+                largest_fee_payer_txs_count = *count;
+            }
+        }
+
+        (largest_fee_payer, largest_fee_payer_txs_count)
     }
 
     fn would_fit(&self, keys: &[Pubkey], cost: &u64) -> Result<(), CostTrackerError> {
