@@ -393,11 +393,6 @@ fn main() {
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
         faucet_port,
     ));
-    // JIT not supported on the BPF VM in Windows currently: https://github.com/solana-labs/rbpf/issues/217
-    #[cfg(target_family = "windows")]
-    let bpf_jit = false;
-    #[cfg(not(target_family = "windows"))]
-    let bpf_jit = !matches.is_present("no_bpf_jit");
 
     let mut programs = vec![];
     if let Some(values) = matches.values_of("bpf_program") {
@@ -557,7 +552,7 @@ fn main() {
             faucet_addr,
             ..JsonRpcConfig::default()
         })
-        .bpf_jit(bpf_jit)
+        .bpf_jit(!matches.is_present("no_bpf_jit"))
         .rpc_port(rpc_port)
         .add_programs_with_path(&programs);
 
