@@ -446,6 +446,10 @@ pub fn start_verify_transactions(
                 match entry {
                     EntryType::Transactions(transactions) => {
                         for hashed_tx in transactions {
+                            // TODO: this seems to leave some fields in packets.packets[num_packets].meta uninitialized;
+                            // this is not great and may lead to subtle/unexpected current or future bugs
+                            // but zeroing everything out when these packets are only used for GPU
+                            // sigverify may not be a great use of memory bandwidth either...
                             Packet::populate_packet(
                                 &mut packets.packets[num_packets],
                                 None,
