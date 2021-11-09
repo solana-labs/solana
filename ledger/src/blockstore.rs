@@ -725,13 +725,7 @@ impl Blockstore {
             code_cf,
         );
 
-        if let Ok(mut result) = Shredder::try_recovery(
-            available_shreds,
-            erasure_meta.config.num_data(),
-            erasure_meta.config.num_coding(),
-            set_index as usize,
-            slot,
-        ) {
+        if let Ok(mut result) = Shredder::try_recovery(available_shreds) {
             Self::submit_metrics(
                 slot,
                 set_index,
