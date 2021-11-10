@@ -284,28 +284,22 @@ impl AccountsDbPluginPostgres {
         if accounts_selector.is_null() {
             AccountsSelector::default()
         } else {
-            let accounts = &accounts_selector["accounts"];
-            let accounts: Vec<String> = if accounts.is_array() {
-                accounts
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .map(|val| val.as_str().unwrap().to_string())
-                    .collect()
-            } else {
-                Vec::default()
-            };
-            let owners = &accounts_selector["owners"];
-            let owners: Vec<String> = if owners.is_array() {
-                owners
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .map(|val| val.as_str().unwrap().to_string())
-                    .collect()
-            } else {
-                Vec::default()
-            };
+            let accounts = accounts_selector["accounts"]
+                .as_array()
+                .map(|vals| {
+                    vals.iter()
+                        .map(|val| val.as_str().unwrap().to_string())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            let owners = accounts_selector["owners"]
+                .as_array()
+                .map(|vals| {
+                    vals.iter()
+                        .map(|val| val.as_str().unwrap().to_string())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
             AccountsSelector::new(&accounts, &owners)
         }
     }
