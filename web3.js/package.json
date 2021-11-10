@@ -112,7 +112,7 @@
     "cross-env": "7.0.3",
     "eslint": "^7.19.0",
     "eslint-config-prettier": "^8.0.0",
-    "eslint-plugin-import": "2.25.2",
+    "eslint-plugin-import": "2.25.3",
     "eslint-plugin-mocha": "^9.0.0",
     "eslint-plugin-prettier": "^4.0.0",
     "esm": "^3.2.25",
