@@ -1,5 +1,5 @@
 use solana_gossip::cluster_info::{
-    ClusterInfo, MAX_INCREMENTAL_SNAPSHOT_HASHES, MAX_SNAPSHOT_HASHES,
+    ClusterInfo, MAX_LEGACY_INCREMENTAL_SNAPSHOT_HASHES, MAX_SNAPSHOT_HASHES,
 };
 use solana_perf::thread::renice_this_thread;
 use solana_runtime::{
@@ -42,7 +42,7 @@ impl SnapshotPackagerService {
             snapshot_config.maximum_full_snapshot_archives_to_retain,
         );
         let max_incremental_snapshot_hashes = std::cmp::min(
-            MAX_INCREMENTAL_SNAPSHOT_HASHES,
+            MAX_LEGACY_INCREMENTAL_SNAPSHOT_HASHES,
             snapshot_config.maximum_incremental_snapshot_archives_to_retain,
         );
 
@@ -195,7 +195,7 @@ impl SnapshotGossipManager {
         // Check to see what changed in `push_incremental_snapshot_hashes()` and handle the new
         // error condition here.
         self.cluster_info
-            .push_incremental_snapshot_hashes(
+            .push_legacy_incremental_snapshot_hashes(
                 self.incremental_snapshot_hashes.base,
                 self.incremental_snapshot_hashes.hashes.clone(),
             )

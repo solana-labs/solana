@@ -3,7 +3,7 @@ use {
         contact_info::ContactInfo,
         crds::VersionedCrdsValue,
         crds_value::{
-            CrdsData, CrdsValue, CrdsValueLabel, IncrementalSnapshotHashes, LegacyVersion,
+            CrdsData, CrdsValue, CrdsValueLabel, LegacyIncrementalSnapshotHashes, LegacyVersion,
             LowestSlot, SnapshotHashes, Version,
         },
     },
@@ -58,9 +58,9 @@ impl_crds_entry!(LegacyVersion, CrdsData::LegacyVersion(version), version);
 impl_crds_entry!(LowestSlot, CrdsData::LowestSlot(_, slot), slot);
 impl_crds_entry!(Version, CrdsData::Version(version), version);
 impl_crds_entry!(
-    IncrementalSnapshotHashes,
-    CrdsData::IncrementalSnapshotHashes(incremental_snapshot_hashes),
-    incremental_snapshot_hashes
+    LegacyIncrementalSnapshotHashes,
+    CrdsData::LegacyIncrementalSnapshotHashes(legacy_incremental_snapshot_hashes),
+    legacy_incremental_snapshot_hashes
 );
 
 impl<'a, 'b> CrdsEntry<'a, 'b> for &'a SnapshotHashes {
@@ -127,8 +127,11 @@ mod tests {
                 CrdsData::SnapshotHashes(hash) => {
                     assert_eq!(crds.get::<&SnapshotHashes>(key), Some(hash))
                 }
-                CrdsData::IncrementalSnapshotHashes(hash) => {
-                    assert_eq!(crds.get::<&IncrementalSnapshotHashes>(key), Some(hash))
+                CrdsData::LegacyIncrementalSnapshotHashes(hash) => {
+                    assert_eq!(
+                        crds.get::<&LegacyIncrementalSnapshotHashes>(key),
+                        Some(hash)
+                    )
                 }
                 _ => (),
             }

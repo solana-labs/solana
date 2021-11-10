@@ -1224,7 +1224,7 @@ mod with_incremental_snapshots {
 
                 // Then get the Crds::IncrementalSnapshotHashes for each trusted validator and add
                 // them as the values in the trusted snapshot hashes HashMap.
-                if let Some(crds_value::IncrementalSnapshotHashes {base: full_snapshot_hash, hashes: incremental_snapshot_hashes, ..}) = cluster_info.get_incremental_snapshot_hashes_for_node(trusted_validator) {
+                if let Some(crds_value::LegacyIncrementalSnapshotHashes {base: full_snapshot_hash, hashes: incremental_snapshot_hashes, ..}) = cluster_info.get_legacy_incremental_snapshot_hashes_for_node(trusted_validator) {
                     if let Some(hashes) = trusted_snapshot_hashes.get_mut(&full_snapshot_hash) {
                         // Do not add this hash if there's already an incremental snapshot hash
                         // with the same slot, but with a _different_ hash.
@@ -1650,9 +1650,9 @@ mod with_incremental_snapshots {
         peer: &Pubkey,
     ) -> Option<SnapshotHash> {
         cluster_info
-            .get_incremental_snapshot_hashes_for_node(peer)
+            .get_legacy_incremental_snapshot_hashes_for_node(peer)
             .map(
-                |crds_value::IncrementalSnapshotHashes { base, hashes, .. }| {
+                |crds_value::LegacyIncrementalSnapshotHashes { base, hashes, .. }| {
                     let highest_incremental_snapshot_hash = hashes.into_iter().max();
                     SnapshotHash {
                         full: base,

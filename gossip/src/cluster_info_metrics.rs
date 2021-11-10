@@ -487,14 +487,14 @@ pub(crate) fn submit_gossip_stats(
         ("DuplicateShred", counts[9], i64),
         ("DuplicateShred-push", crds_stats.push.counts[9], i64),
         ("DuplicateShred-pull", crds_stats.pull.counts[9], i64),
-        ("IncrementalSnapshotHashes", counts[10], i64),
+        ("LegacyIncrementalSnapshotHashes", counts[10], i64),
         (
-            "IncrementalSnapshotHashes-push",
+            "LegacyIncrementalSnapshotHashes-push",
             crds_stats.push.counts[10],
             i64
         ),
         (
-            "IncrementalSnapshotHashes-pull",
+            "LegacyIncrementalSnapshotHashes-pull",
             crds_stats.pull.counts[10],
             i64
         ),
@@ -549,14 +549,14 @@ pub(crate) fn submit_gossip_stats(
         ("DuplicateShred", fails[9], i64),
         ("DuplicateShred-push", crds_stats.push.fails[9], i64),
         ("DuplicateShred-pull", crds_stats.pull.fails[9], i64),
-        ("IncrementalSnapshotHashes", fails[10], i64),
+        ("LegacyIncrementalSnapshotHashes", fails[10], i64),
         (
-            "IncrementalSnapshotHashes-push",
+            "LegacyIncrementalSnapshotHashes-push",
             crds_stats.push.fails[10],
             i64
         ),
         (
-            "IncrementalSnapshotHashes-pull",
+            "LegacyIncrementalSnapshotHashes-pull",
             crds_stats.pull.fails[10],
             i64
         ),
