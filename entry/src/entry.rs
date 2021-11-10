@@ -389,6 +389,8 @@ pub fn start_verify_transactions(
         dyn Fn(VersionedTransaction, bool, bool) -> Result<SanitizedTransaction> + Send + Sync,
     >,
 ) -> EntrySigVerificationState {
+    let check_start = Instant::now();
+
     let api = perf_libs::api();
 
     if api.is_none() || skip_verification {
@@ -398,7 +400,6 @@ pub fn start_verify_transactions(
             }
         };
 
-        let check_start = Instant::now();
         let entries = verify_transactions(entries, Arc::new(verify_func));
 
         let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
@@ -428,7 +429,6 @@ pub fn start_verify_transactions(
             verify(versioned_tx, true, true)
         }
     };
-    let check_start = Instant::now();
     let entries = verify_transactions(entries, Arc::new(verify_func));
     match entries {
         Ok(entries) => {
@@ -464,12 +464,10 @@ pub fn start_verify_transactions(
                 match entry {
                     EntryType::Transactions(transactions) => {
                         for hashed_tx in transactions {
-                            // TODO: this seems to leave some fields in packets.packets[num_packets].meta uninitialized;
-                            // this is not great and may lead to subtle/unexpected current or future bugs
-                            // but zeroing everything out when these packets are only used for GPU
-                            // sigverify may not be a great use of memory bandwidth either...
-                            // This also appears to leave the packet only populated with the data
-                            // for the last transaction in the Entry... this is intended?
+                            // TODO: this leaves some fields in packets.packets[curr_packet].meta uninitialized;
+                            // zeroing everything out when these packets are only used for GPU
+                            // sigverify is not a great use of memory bandwidth, but
+                            // this is not ideal and may lead to subtle/unexpected current or future bugs...
                             Packet::populate_packet(
                                 &mut packets.packets[curr_packet],
                                 None,
@@ -488,7 +486,7 @@ pub fn start_verify_transactions(
             let out_recycler = verify_recyclers.out_recycler;
             let gpu_verify_thread = thread::spawn(move || {
                 let mut verify_time = Measure::start("sigverify");
-                // todo: what should reject_non_vote be?
+                // TODO: what should reject_non_vote be?
                 sigverify::ed25519_verify(&mut packets, &tx_offset_recycler, &out_recycler, false);
                 let verified = packets[0].packets.iter().all(|p| !p.meta.discard);
                 verify_time.stop();
