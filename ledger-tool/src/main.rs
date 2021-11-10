@@ -28,7 +28,7 @@ use solana_measure::measure::Measure;
 use solana_runtime::{
     accounts_db::AccountsDbConfig,
     accounts_index::AccountsIndexConfig,
-    bank::{Bank, RewardCalculationEvent, TotalAccountsStats},
+    bank::{Bank, RewardCalculationEvent},
     bank_forks::BankForks,
     cost_model::CostModel,
     cost_tracker::CostTracker,
@@ -2509,26 +2509,21 @@ fn main() {
             measure.stop();
             info!("{}", measure);
 
-            let print_account_contents = !arg_matches.is_present("no_account_contents");
-            let print_account_data = !arg_matches.is_present("no_account_data");
-            let rent_collector = bank.rent_collector();
-            let mut total_accounts_stats = TotalAccountsStats::default();
-            let mut measure = Measure::start("processing accounts");
-            for (pubkey, (account, slot)) in accounts.into_iter() {
-                let data_len = account.data().len();
-                total_accounts_stats.num_accounts += 1;
-                total_accounts_stats.data_len += data_len;
-                if account.executable() {
-                    total_accounts_stats.num_executable_accounts += 1;
-                    total_accounts_stats.executable_data_len += data_len;
-                }
-                if !rent_collector.should_collect_rent(&pubkey, &account, false)
-                    || rent_collector.get_rent_due(&account).1
-                {
-                    total_accounts_stats.num_rent_exempt_accounts += 1;
-                }
+            let mut measure = Measure::start("calculating total accounts stats");
+            let total_accounts_stats = bank.calculate_total_accounts_stats(
+                accounts
+                    .iter()
+                    .map(|(pubkey, (account, _slot))| (pubkey, account)),
+            );
+            measure.stop();
+            info!("{}", measure);
 
-                if print_account_contents {
+            let print_account_contents = !arg_matches.is_present("no_account_contents");
+            if print_account_contents {
+                let print_account_data = !arg_matches.is_present("no_account_data");
+                let mut measure = Measure::start("printing account contents");
+                for (pubkey, (account, slot)) in accounts.into_iter() {
+                    let data_len = account.data().len();
                     println!("{}:", pubkey);
                     println!("  - balance: {} SOL", lamports_to_sol(account.lamports()));
                     println!("  - owner: '{}'", account.owner());
@@ -2540,9 +2535,9 @@ fn main() {
                     }
                     println!("  - data_len: {}", data_len);
                 }
+                measure.stop();
+                info!("{}", measure);
             }
-            measure.stop();
-            info!("{}", measure);
 
             println!("{:#?}", total_accounts_stats);
         }

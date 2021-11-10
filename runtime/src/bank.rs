@@ -6320,33 +6320,48 @@ impl Bank {
         self.feature_set
             .is_active(&feature_set::rent_for_sysvars::id())
     }
-}
 
-/// Scan all the accounts for this bank and collect stats
-pub fn get_total_accounts_stats(bank: &Bank) -> ScanResult<TotalAccountsStats> {
-    let rent_collector = bank.rent_collector();
-    bank.rc.accounts.accounts_db.scan_accounts(
-        &Ancestors::default(),
-        bank.bank_id(),
-        |total_accounts_stats: &mut TotalAccountsStats, item| {
-            if let Some((pubkey, account, _slot)) = item {
-                total_accounts_stats.num_accounts += 1;
-                total_accounts_stats.data_len += account.data().len();
+    /// Get all the accounts for this bank and calculate stats
+    pub fn get_total_accounts_stats(&self) -> ScanResult<TotalAccountsStats> {
+        let accounts = self.get_all_accounts_with_modified_slots()?;
+        Ok(self.calculate_total_accounts_stats(
+            accounts
+                .iter()
+                .map(|(pubkey, account, _slot)| (pubkey, account)),
+        ))
+    }
 
-                if account.executable() {
-                    total_accounts_stats.num_executable_accounts += 1;
-                    total_accounts_stats.executable_data_len += account.data().len();
-                }
+    /// Given all the accounts for a bank, calculate stats
+    pub fn calculate_total_accounts_stats<'a>(
+        &self,
+        accounts: impl Iterator<Item = (&'a Pubkey, &'a AccountSharedData)>,
+    ) -> TotalAccountsStats {
+        let rent_collector = self.rent_collector();
+        let mut total_accounts_stats = TotalAccountsStats::default();
+        accounts.for_each(|(pubkey, account)| {
+            let data_len = account.data().len();
+            total_accounts_stats.num_accounts += 1;
+            total_accounts_stats.data_len += data_len;
 
-                if !rent_collector.should_collect_rent(pubkey, &account, false) || {
-                    let (_rent_due, exempt) = rent_collector.get_rent_due(&account);
-                    exempt
-                } {
-                    total_accounts_stats.num_rent_exempt_accounts += 1;
+            if account.executable() {
+                total_accounts_stats.num_executable_accounts += 1;
+                total_accounts_stats.executable_data_len += data_len;
+            }
+
+            if !rent_collector.should_collect_rent(pubkey, account, false)
+                || rent_collector.get_rent_due(account).1
+            {
+                total_accounts_stats.num_rent_exempt_accounts += 1;
+            } else {
+                total_accounts_stats.num_rent_paying_accounts += 1;
+                if data_len == 0 {
+                    total_accounts_stats.num_rent_paying_accounts_without_data += 1;
                 }
             }
-        },
-    )
+        });
+
+        total_accounts_stats
+    }
 }
 
 /// Struct to collect stats when scanning all accounts in `get_total_accounts_stats()`
@@ -6364,6 +6379,10 @@ pub struct TotalAccountsStats {
 
     /// Total number of rent exempt accounts
     pub num_rent_exempt_accounts: usize,
+    /// Total number of rent paying accounts
+    pub num_rent_paying_accounts: usize,
+    /// Total number of rent paying accounts without data
+    pub num_rent_paying_accounts_without_data: usize,
 }
 
 impl Drop for Bank {
