@@ -9,10 +9,7 @@ use solana_program_runtime::{
 use solana_sdk::{
     account::{AccountSharedData, WritableAccount},
     compute_budget::ComputeBudget,
-    feature_set::{
-        neon_evm_compute_budget, prevent_calling_precompiles_as_programs, requestable_heap_size,
-        tx_wide_compute_cap, FeatureSet,
-    },
+    feature_set::{prevent_calling_precompiles_as_programs, FeatureSet},
     hash::Hash,
     message::Message,
     precompiles::is_precompile,
@@ -105,22 +102,6 @@ impl MessageProcessor {
                     );
                     break;
                 }
-            }
-
-            let mut compute_budget = compute_budget;
-            if !invoke_context.is_feature_active(&tx_wide_compute_cap::id())
-                && invoke_context.is_feature_active(&neon_evm_compute_budget::id())
-                && *program_id == crate::neon_evm_program::id()
-            {
-                // Bump the compute budget for neon_evm
-                compute_budget.max_units = compute_budget.max_units.max(500_000);
-            }
-            if !invoke_context.is_feature_active(&requestable_heap_size::id())
-                && invoke_context.is_feature_active(&neon_evm_compute_budget::id())
-                && *program_id == crate::neon_evm_program::id()
-            {
-                // Bump the compute budget for neon_evm
-                compute_budget.heap_size = Some(256 * 1024);
             }
 
             invoke_context.set_instruction_index(instruction_index);
