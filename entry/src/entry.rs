@@ -468,12 +468,21 @@ pub fn start_verify_transactions(
                             // zeroing everything out when these packets are only used for GPU
                             // sigverify is not a great use of memory bandwidth, but
                             // this is not ideal and may lead to subtle/unexpected current or future bugs...
-                            Packet::populate_packet(
+                            let res = Packet::populate_packet(
                                 &mut packets.packets[curr_packet],
                                 None,
                                 &hashed_tx.to_versioned_transaction(),
-                            )
-                            .unwrap();
+                            );
+                            if !res.is_ok() {
+                                let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
+                                return EntrySigVerificationState {
+                                    verification_status: EntryVerificationStatus::Failure,
+                                    entries: None,
+                                    device_verification_data: DeviceSigVerificationData::Cpu(),
+                                    verify_duration_us: transaction_duration_us,
+                                };
+                            }
+
                             curr_packet = curr_packet + 1;
                         }
                     }
