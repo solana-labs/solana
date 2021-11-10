@@ -432,16 +432,34 @@ pub fn start_verify_transactions(
     let entries = verify_transactions(entries, Arc::new(verify_func));
     match entries {
         Ok(entries) => {
+            let num_transactions: usize = entries.iter().map(|entry: &EntryType| -> usize {
+                match entry {
+                    EntryType::Transactions(transactions) => {
+                        transactions.len()
+                    }
+                    EntryType::Tick(_) => 0
+                }
+            }).sum();
+
+            if num_transactions == 0 {
+                let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
+                return EntrySigVerificationState {
+                    verification_status: EntryVerificationStatus::Success,
+                    entries: Some(entries),
+                    device_verification_data: DeviceSigVerificationData::Cpu(),
+                    verify_duration_us: transaction_duration_us,
+                };
+            }
             let mut packets = Packets::new_with_recycler(
                 verify_recyclers.packet_recycler,
-                entries.len(),
+                num_transactions,
                 "entry-sig-verify",
             );
             unsafe {
-                packets.packets.set_len(entries.len());
+                packets.packets.set_len(num_transactions);
             }
 
-            let mut num_packets: usize = 0;
+            let mut curr_packet: usize = 0;
             for (_i, entry) in entries.iter().enumerate() {
                 match entry {
                     EntryType::Transactions(transactions) => {
@@ -453,19 +471,16 @@ pub fn start_verify_transactions(
                             // This also appears to leave the packet only populated with the data
                             // for the last transaction in the Entry... this is intended?
                             Packet::populate_packet(
-                                &mut packets.packets[num_packets],
+                                &mut packets.packets[curr_packet],
                                 None,
                                 &hashed_tx.to_versioned_transaction(),
                             )
                             .unwrap();
+                            curr_packet = curr_packet + 1;
                         }
-                        num_packets = num_packets + 1;
                     }
                     EntryType::Tick(_) => {}
                 }
-            }
-            unsafe {
-                packets.packets.set_len(num_packets);
             }
             
             let mut packets = vec![packets];
