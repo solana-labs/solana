@@ -4401,6 +4401,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "solana-account-decoder",
  "solana-accountsdb-plugin-interface",
  "solana-logger 1.9.0",
  "solana-measure",

@@ -1,3 +1,5 @@
+/// Module responsible for handling persisting transaction data to the PostgreSQL
+/// database.
 use {
     crate::{
         accountsdb_plugin_postgres::{
@@ -373,7 +375,7 @@ impl From<&TransactionStatusMeta> for DbTransactionStatusMeta {
 }
 
 impl SimplePostgresClient {
-    pub fn build_transaction_info_upsert_statement(
+    pub(crate) fn build_transaction_info_upsert_statement(
         client: &mut Client,
         config: &AccountsDbPluginPostgresConfig,
     ) -> Result<Statement, AccountsDbPluginError> {
@@ -396,7 +398,7 @@ impl SimplePostgresClient {
         }
     }
 
-    pub fn log_transaction_impl(
+    pub(crate) fn log_transaction_impl(
         &mut self,
         transaction_log_info: LogTransactionRequest,
     ) -> Result<(), AccountsDbPluginError> {
@@ -495,5 +497,312 @@ impl ParallelPostgresClient {
             });
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use {
+        super::*, solana_account_decoder::parse_token::UiTokenAmount, solana_sdk::pubkey::Pubkey,
+    };
+
+    fn check_equality_compiled_instruction(
+        compiled_instruction: &CompiledInstruction,
+        db_compiled_instruction: &DbCompiledInstruction,
+    ) {
+        assert_eq!(
+            compiled_instruction.program_id_index,
+            db_compiled_instruction.program_id_index as u8
+        );
+        assert_eq!(
+            compiled_instruction.accounts.len(),
+            db_compiled_instruction.accounts.len()
+        );
+        assert_eq!(
+            compiled_instruction.data.len(),
+            db_compiled_instruction.data.len()
+        );
+
+        for i in 0..compiled_instruction.accounts.len() {
+            assert_eq!(
+                compiled_instruction.accounts[i],
+                db_compiled_instruction.accounts[i] as u8
+            )
+        }
+        for i in 0..compiled_instruction.data.len() {
+            assert_eq!(
+                compiled_instruction.data[i],
+                db_compiled_instruction.data[i] as u8
+            )
+        }
+    }
+
+    #[test]
+    fn test_transform_compiled_instruction() {
+        let compiled_instruction = CompiledInstruction {
+            program_id_index: 0,
+            accounts: vec![1, 2, 3],
+            data: vec![4, 5, 6],
+        };
+
+        let db_compiled_instruction = DbCompiledInstruction::from(&compiled_instruction);
+        check_equality_compiled_instruction(&compiled_instruction, &db_compiled_instruction);
+    }
+
+    #[test]
+    fn test_transform_inner_instructions() {
+        let inner_instructions = InnerInstructions {
+            index: 0,
+            instructions: vec![
+                CompiledInstruction {
+                    program_id_index: 0,
+                    accounts: vec![1, 2, 3],
+                    data: vec![4, 5, 6],
+                },
+                CompiledInstruction {
+                    program_id_index: 1,
+                    accounts: vec![12, 13, 14],
+                    data: vec![24, 25, 26],
+                },
+            ],
+        };
+
+        let db_inner_instructions = DbInnerInstructions::from(&inner_instructions);
+
+        assert_eq!(inner_instructions.index, db_inner_instructions.index as u8);
+        assert_eq!(
+            inner_instructions.instructions.len(),
+            db_inner_instructions.instructions.len()
+        );
+
+        for i in 0..inner_instructions.instructions.len() {
+            check_equality_compiled_instruction(
+                &inner_instructions.instructions[i],
+                &db_inner_instructions.instructions[i],
+            )
+        }
+    }
+
+    #[test]
+    fn test_transform_address_map_indexes() {
+        let address_map_indexes = AddressMapIndexes {
+            writable: vec![1, 2, 3],
+            readonly: vec![4, 5, 6],
+        };
+
+        let db_address_map_indexes = DbAddressMapIndexes::from(&address_map_indexes);
+
+        assert_eq!(
+            address_map_indexes.writable.len(),
+            db_address_map_indexes.writable.len()
+        );
+        assert_eq!(
+            address_map_indexes.readonly.len(),
+            db_address_map_indexes.readonly.len()
+        );
+
+        for i in 0..address_map_indexes.writable.len() {
+            assert_eq!(
+                address_map_indexes.writable[i],
+                db_address_map_indexes.writable[i] as u8
+            )
+        }
+        for i in 0..address_map_indexes.readonly.len() {
+            assert_eq!(
+                address_map_indexes.readonly[i],
+                db_address_map_indexes.readonly[i] as u8
+            )
+        }
+    }
+
+    fn check_reward_equality(reward: &Reward, db_reward: &DbReward) {
+        assert_eq!(reward.pubkey, db_reward.pubkey);
+        assert_eq!(reward.lamports, db_reward.lamports);
+        assert_eq!(reward.post_balance, db_reward.post_balance as u64);
+        assert_eq!(get_reward_type(&reward.reward_type), db_reward.reward_type);
+        assert_eq!(
+            reward.commission,
+            db_reward
+                .commission
+                .as_ref()
+                .map(|commission| *commission as u8)
+        );
+    }
+
+    #[test]
+    fn test_transform_reward() {
+        let reward = Reward {
+            pubkey: Pubkey::new_unique().to_string(),
+            lamports: 1234,
+            post_balance: 45678,
+            reward_type: Some(RewardType::Fee),
+            commission: Some(12),
+        };
+
+        let db_reward = DbReward::from(&reward);
+        check_reward_equality(&reward, &db_reward);
+    }
+
+    fn check_transaction_token_balance_equality(
+        transaction_token_balance: &TransactionTokenBalance,
+        db_transaction_token_balance: &DbTransactionTokenBalance,
+    ) {
+        assert_eq!(
+            transaction_token_balance.account_index,
+            db_transaction_token_balance.account_index as u8
+        );
+        assert_eq!(
+            transaction_token_balance.mint,
+            db_transaction_token_balance.mint
+        );
+        assert_eq!(
+            transaction_token_balance.ui_token_amount.ui_amount,
+            db_transaction_token_balance.ui_token_amount
+        );
+        assert_eq!(
+            transaction_token_balance.owner,
+            db_transaction_token_balance.owner
+        );
+    }
+
+    #[test]
+    fn test_transform_transaction_token_balance() {
+        let transaction_token_balance = TransactionTokenBalance {
+            account_index: 3,
+            mint: Pubkey::new_unique().to_string(),
+            ui_token_amount: UiTokenAmount {
+                ui_amount: Some(0.42),
+                decimals: 2,
+                amount: "42".to_string(),
+                ui_amount_string: "0.42".to_string(),
+            },
+            owner: Pubkey::new_unique().to_string(),
+        };
+
+        let db_transaction_token_balance =
+            DbTransactionTokenBalance::from(&transaction_token_balance);
+
+        check_transaction_token_balance_equality(
+            &transaction_token_balance,
+            &db_transaction_token_balance,
+        );
+    }
+
+    fn check_transaction_status_meta(
+        transaction_status_meta: &TransactionStatusMeta,
+        db_transaction_status_meta: &DbTransactionStatusMeta,
+    ) {
+        assert_eq!(
+            get_transaction_status(&transaction_status_meta.status),
+            db_transaction_status_meta.status
+        );
+        assert_eq!(
+            transaction_status_meta.fee,
+            db_transaction_status_meta.fee as u64
+        );
+        assert_eq!(
+            transaction_status_meta.pre_balances.len(),
+            db_transaction_status_meta.pre_balances.len()
+        );
+
+        for i in 0..transaction_status_meta.pre_balances.len() {
+            assert_eq!(
+                transaction_status_meta.pre_balances[i],
+                db_transaction_status_meta.pre_balances[i] as u64
+            );
+        }
+    }
+
+    #[test]
+    fn test_transform_transaction_status_meta() {
+        let transaction_status_meta = TransactionStatusMeta {
+            status: Ok(()),
+            fee: 23456,
+            pre_balances: vec![11, 22, 33],
+            post_balances: vec![44, 55, 66],
+            inner_instructions: Some(vec![InnerInstructions {
+                index: 0,
+                instructions: vec![
+                    CompiledInstruction {
+                        program_id_index: 0,
+                        accounts: vec![1, 2, 3],
+                        data: vec![4, 5, 6],
+                    },
+                    CompiledInstruction {
+                        program_id_index: 1,
+                        accounts: vec![12, 13, 14],
+                        data: vec![24, 25, 26],
+                    },
+                ],
+            }]),
+            log_messages: Some(vec!["message1".to_string(), "message2".to_string()]),
+            pre_token_balances: Some(vec![
+                TransactionTokenBalance {
+                    account_index: 3,
+                    mint: Pubkey::new_unique().to_string(),
+                    ui_token_amount: UiTokenAmount {
+                        ui_amount: Some(0.42),
+                        decimals: 2,
+                        amount: "42".to_string(),
+                        ui_amount_string: "0.42".to_string(),
+                    },
+                    owner: Pubkey::new_unique().to_string(),
+                },
+                TransactionTokenBalance {
+                    account_index: 2,
+                    mint: Pubkey::new_unique().to_string(),
+                    ui_token_amount: UiTokenAmount {
+                        ui_amount: Some(0.38),
+                        decimals: 2,
+                        amount: "38".to_string(),
+                        ui_amount_string: "0.38".to_string(),
+                    },
+                    owner: Pubkey::new_unique().to_string(),
+                },
+            ]),
+            post_token_balances: Some(vec![
+                TransactionTokenBalance {
+                    account_index: 3,
+                    mint: Pubkey::new_unique().to_string(),
+                    ui_token_amount: UiTokenAmount {
+                        ui_amount: Some(0.82),
+                        decimals: 2,
+                        amount: "82".to_string(),
+                        ui_amount_string: "0.82".to_string(),
+                    },
+                    owner: Pubkey::new_unique().to_string(),
+                },
+                TransactionTokenBalance {
+                    account_index: 2,
+                    mint: Pubkey::new_unique().to_string(),
+                    ui_token_amount: UiTokenAmount {
+                        ui_amount: Some(0.48),
+                        decimals: 2,
+                        amount: "48".to_string(),
+                        ui_amount_string: "0.48".to_string(),
+                    },
+                    owner: Pubkey::new_unique().to_string(),
+                },
+            ]),
+            rewards: Some(vec![
+                Reward {
+                    pubkey: Pubkey::new_unique().to_string(),
+                    lamports: 1234,
+                    post_balance: 45678,
+                    reward_type: Some(RewardType::Fee),
+                    commission: Some(12),
+                },
+                Reward {
+                    pubkey: Pubkey::new_unique().to_string(),
+                    lamports: 234,
+                    post_balance: 324,
+                    reward_type: Some(RewardType::Staking),
+                    commission: Some(11),
+                },
+            ]),
+        };
+
+        let db_transaction_status_meta = DbTransactionStatusMeta::from(&transaction_status_meta);
+        check_transaction_status_meta(&transaction_status_meta, &db_transaction_status_meta);
     }
 }
