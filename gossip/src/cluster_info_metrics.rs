@@ -498,6 +498,17 @@ pub(crate) fn submit_gossip_stats(
             crds_stats.pull.counts[10],
             i64
         ),
+        ("IncrementalSnapshotHashes", counts[11], i64),
+        (
+            "IncrementalSnapshotHashes-push",
+            crds_stats.push.counts[11],
+            i64
+        ),
+        (
+            "IncrementalSnapshotHashes-pull",
+            crds_stats.pull.counts[11],
+            i64
+        ),
         ("all", counts.iter().sum::<usize>(), i64),
         (
             "all-push",
@@ -558,6 +569,17 @@ pub(crate) fn submit_gossip_stats(
         (
             "LegacyIncrementalSnapshotHashes-pull",
             crds_stats.pull.fails[10],
+            i64
+        ),
+        ("IncrementalSnapshotHashes", fails[11], i64),
+        (
+            "IncrementalSnapshotHashes-push",
+            crds_stats.push.fails[11],
+            i64
+        ),
+        (
+            "IncrementalSnapshotHashes-pull",
+            crds_stats.pull.fails[11],
             i64
         ),
         ("all", fails.iter().sum::<usize>(), i64),

@@ -23,7 +23,7 @@ use {
         crds_gossip_error::CrdsGossipError,
         crds_gossip_pull::{CrdsFilter, ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
         crds_value::{
-            self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex,
+            self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, IncrementalSnapshotHashes,
             LegacyIncrementalSnapshotHashes, LowestSlot, NodeInstance, SnapshotHashes, Version,
             Vote, MAX_WALLCLOCK,
         },
@@ -120,6 +120,10 @@ pub const MAX_SNAPSHOT_HASHES: usize = 16;
 /// such that the serialized size of the push/pull message stays below
 /// PACKET_DATA_SIZE.
 pub const MAX_LEGACY_INCREMENTAL_SNAPSHOT_HASHES: usize = 25;
+/// Maximum number of hashes in IncrementalSnapshotHashes a node publishes
+/// such that the serialized size of the push/pull message stays below
+/// PACKET_DATA_SIZE.
+pub const MAX_INCREMENTAL_SNAPSHOT_HASHES: usize = 25;
 /// Maximum number of origin nodes that a PruneData may contain, such that the
 /// serialized size of the PruneMessage stays below PACKET_DATA_SIZE.
 const MAX_PRUNE_DATA_NODES: usize = 32;
@@ -146,6 +150,7 @@ pub enum ClusterInfoError {
     BadContactInfo,
     BadGossipAddress,
     TooManyLegacyIncrementalSnapshotHashes,
+    TooManyIncrementalSnapshotHashes,
 }
 
 pub struct ClusterInfo {
@@ -260,7 +265,7 @@ pub fn make_accounts_hashes_message(
 pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "4VqzaZbxQkeTgo916HVoLtaWoM8bbGaQZy6Qgw7K9kLf")]
+#[frozen_abi(digest = "5ZKug7zctUhhnLv4FUR3PjC7mZEGeaLUcLp4Bux7RmPJ")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Protocol {
@@ -377,7 +382,9 @@ fn retain_staked(values: &mut Vec<CrdsValue>, stakes: &HashMap<Pubkey, u64>) {
             // Unstaked nodes can still help repair.
             CrdsData::EpochSlots(_, _) => true,
             // Unstaked nodes can still serve snapshots.
-            CrdsData::SnapshotHashes(_) | CrdsData::LegacyIncrementalSnapshotHashes(_) => true,
+            CrdsData::SnapshotHashes(_)
+            | CrdsData::LegacyIncrementalSnapshotHashes(_)
+            | CrdsData::IncrementalSnapshotHashes(_) => true,
             // Otherwise unstaked voting nodes will show up with no version in
             // the various dashboards.
             CrdsData::Version(_) => true,
@@ -977,6 +984,26 @@ impl ClusterInfo {
         Ok(())
     }
 
+    pub fn push_incremental_snapshot_hashes(
+        &self,
+        base: (u64, Slot, Hash),
+        hashes: Vec<(Slot, Hash)>,
+    ) -> Result<(), ClusterInfoError> {
+        if hashes.len() > MAX_INCREMENTAL_SNAPSHOT_HASHES {
+            return Err(ClusterInfoError::TooManyIncrementalSnapshotHashes);
+        }
+
+        let message = CrdsData::IncrementalSnapshotHashes(IncrementalSnapshotHashes {
+            from: self.id(),
+            base,
+            hashes,
+            wallclock: timestamp(),
+        });
+        self.push_message(CrdsValue::new_signed(message, &self.keypair()));
+
+        Ok(())
+    }
+
     pub fn push_vote_at_index(&self, vote: Transaction, vote_index: u8) {
         assert!((vote_index as usize) < MAX_LOCKOUT_HISTORY);
         let self_pubkey = self.id();
@@ -1152,6 +1179,18 @@ impl ClusterInfo {
             .read()
             .unwrap()
             .get::<&LegacyIncrementalSnapshotHashes>(*pubkey)
+            .cloned()
+    }
+
+    pub fn get_incremental_snapshot_hashes_for_node(
+        &self,
+        pubkey: &Pubkey,
+    ) -> Option<IncrementalSnapshotHashes> {
+        self.gossip
+            .crds
+            .read()
+            .unwrap()
+            .get::<&IncrementalSnapshotHashes>(*pubkey)
             .cloned()
     }
 
@@ -3277,6 +3316,42 @@ mod tests {
         };
         let crds_value = CrdsValue::new_signed(
             CrdsData::LegacyIncrementalSnapshotHashes(legacy_incremental_snapshot_hashes),
+            &Keypair::new(),
+        );
+        let response = Protocol::PullResponse(Pubkey::new_unique(), vec![crds_value]);
+        let socket = new_rand_socket_addr(&mut rng);
+        assert!(Packet::from_data(Some(&socket), response).is_ok());
+    }
+
+    #[test]
+    fn test_max_incremental_snapshot_hashes_with_push_messages() {
+        let mut rng = rand::thread_rng();
+        let incremental_snapshot_hashes = IncrementalSnapshotHashes {
+            from: Pubkey::new_unique(),
+            base: (u64::default(), Slot::default(), Hash::default()),
+            hashes: vec![(Slot::default(), Hash::default()); MAX_INCREMENTAL_SNAPSHOT_HASHES],
+            wallclock: timestamp(),
+        };
+        let crds_value = CrdsValue::new_signed(
+            CrdsData::IncrementalSnapshotHashes(incremental_snapshot_hashes),
+            &Keypair::new(),
+        );
+        let message = Protocol::PushMessage(Pubkey::new_unique(), vec![crds_value]);
+        let socket = new_rand_socket_addr(&mut rng);
+        assert!(Packet::from_data(Some(&socket), message).is_ok());
+    }
+
+    #[test]
+    fn test_max_incremental_snapshot_hashes_with_pull_responses() {
+        let mut rng = rand::thread_rng();
+        let incremental_snapshot_hashes = IncrementalSnapshotHashes {
+            from: Pubkey::new_unique(),
+            base: (u64::default(), Slot::default(), Hash::default()),
+            hashes: vec![(Slot::default(), Hash::default()); MAX_INCREMENTAL_SNAPSHOT_HASHES],
+            wallclock: timestamp(),
+        };
+        let crds_value = CrdsValue::new_signed(
+            CrdsData::IncrementalSnapshotHashes(incremental_snapshot_hashes),
             &Keypair::new(),
         );
         let response = Protocol::PullResponse(Pubkey::new_unique(), vec![crds_value]);
