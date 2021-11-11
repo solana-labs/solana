@@ -373,6 +373,18 @@ impl FeatureSet {
             inactive: HashSet::new(),
         }
     }
+
+    /// Activate a feature
+    pub fn activate(&mut self, feature_id: &Pubkey, slot: u64) {
+        self.inactive.remove(feature_id);
+        self.active.insert(*feature_id, slot);
+    }
+
+    /// Deactivate a feature
+    pub fn deactivate(&mut self, feature_id: &Pubkey) {
+        self.active.remove(feature_id);
+        self.inactive.insert(*feature_id);
+    }
 }
 
 #[cfg(test)]
@@ -432,5 +444,17 @@ mod test {
                 .cloned()
                 .collect()
         );
+    }
+
+    #[test]
+    fn test_feature_set_activate_deactivate() {
+        let mut feature_set = FeatureSet::default();
+
+        let feature = Pubkey::new_unique();
+        assert!(!feature_set.is_active(&feature));
+        feature_set.activate(&feature, 0);
+        assert!(feature_set.is_active(&feature));
+        feature_set.deactivate(&feature);
+        assert!(!feature_set.is_active(&feature));
     }
 }

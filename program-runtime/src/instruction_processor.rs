@@ -362,38 +362,35 @@ impl InstructionProcessor {
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
-        if let Ok(root_account) = keyed_account_at_index(keyed_accounts, 0) {
-            let root_id = root_account.unsigned_key();
-            let owner_id = &root_account.owner()?;
-            if solana_sdk::native_loader::check_id(owner_id) {
-                for (id, process_instruction) in &self.programs {
-                    if id == root_id {
-                        // Call the builtin program
-                        return process_instruction(
-                            1, // root_id to be skipped
-                            instruction_data,
-                            invoke_context,
-                        );
-                    }
-                }
-                if !invoke_context.is_feature_active(&remove_native_loader::id()) {
-                    // Call the program via the native loader
-                    return self.native_loader.process_instruction(
-                        0,
+        let root_account = keyed_account_at_index(keyed_accounts, 0)?;
+        let root_id = root_account.unsigned_key();
+        let owner_id = &root_account.owner()?;
+        if solana_sdk::native_loader::check_id(owner_id) {
+            for (id, process_instruction) in &self.programs {
+                if id == root_id {
+                    // Call the builtin program
+                    return process_instruction(
+                        1, // root_id to be skipped
                         instruction_data,
                         invoke_context,
                     );
                 }
-            } else {
-                for (id, process_instruction) in &self.programs {
-                    if id == owner_id {
-                        // Call the program via a builtin loader
-                        return process_instruction(
-                            0, // no root_id was provided
-                            instruction_data,
-                            invoke_context,
-                        );
-                    }
+            }
+            if !invoke_context.is_feature_active(&remove_native_loader::id()) {
+                // Call the program via the native loader
+                return self
+                    .native_loader
+                    .process_instruction(0, instruction_data, invoke_context);
+            }
+        } else {
+            for (id, process_instruction) in &self.programs {
+                if id == owner_id {
+                    // Call the program via a builtin loader
+                    return process_instruction(
+                        0, // no root_id was provided
+                        instruction_data,
+                        invoke_context,
+                    );
                 }
             }
         }
