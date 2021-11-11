@@ -1,4 +1,4 @@
-import * as web3 from '@solana/web3.js';
+const web3 = require("@solana/web3.js");
 
 (async () => {
   // Connect to cluster
