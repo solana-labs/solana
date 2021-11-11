@@ -374,6 +374,40 @@ impl From<&TransactionStatusMeta> for DbTransactionStatusMeta {
     }
 }
 
+fn build_db_transaction(slot: u64, transaction_info: &ReplicaTransactionInfo) -> DbTransaction {
+    DbTransaction {
+        signature: transaction_info.signature.as_ref().to_vec(),
+        is_vote: transaction_info.is_vote,
+        slot: slot as i64,
+        message_type: match transaction_info.transaction.message() {
+            SanitizedMessage::Legacy(_) => 0,
+            SanitizedMessage::V0(_) => 1,
+        },
+        legacy_message: match transaction_info.transaction.message() {
+            SanitizedMessage::Legacy(legacy_message) => {
+                Some(DbTransactionMessage::from(legacy_message))
+            }
+            _ => None,
+        },
+        v0_mapped_message: match transaction_info.transaction.message() {
+            SanitizedMessage::V0(mapped_message) => Some(DbMappedMessage::from(mapped_message)),
+            _ => None,
+        },
+        signatures: transaction_info
+            .transaction
+            .signatures()
+            .iter()
+            .map(|signature| signature.as_ref().to_vec())
+            .collect(),
+        message_hash: transaction_info
+            .transaction
+            .message_hash()
+            .as_ref()
+            .to_vec(),
+        meta: DbTransactionStatusMeta::from(transaction_info.transaction_status_meta),
+    }
+}
+
 impl SimplePostgresClient {
     pub(crate) fn build_transaction_info_upsert_statement(
         client: &mut Client,
@@ -438,46 +472,12 @@ impl SimplePostgresClient {
 }
 
 impl ParallelPostgresClient {
-    fn build_db_transaction(slot: u64, transaction_info: &ReplicaTransactionInfo) -> DbTransaction {
-        DbTransaction {
-            signature: transaction_info.signature.as_ref().to_vec(),
-            is_vote: transaction_info.is_vote,
-            slot: slot as i64,
-            message_type: match transaction_info.transaction.message() {
-                SanitizedMessage::Legacy(_) => 0,
-                SanitizedMessage::V0(_) => 1,
-            },
-            legacy_message: match transaction_info.transaction.message() {
-                SanitizedMessage::Legacy(legacy_message) => {
-                    Some(DbTransactionMessage::from(legacy_message))
-                }
-                _ => None,
-            },
-            v0_mapped_message: match transaction_info.transaction.message() {
-                SanitizedMessage::V0(mapped_message) => Some(DbMappedMessage::from(mapped_message)),
-                _ => None,
-            },
-            signatures: transaction_info
-                .transaction
-                .signatures()
-                .iter()
-                .map(|signature| signature.as_ref().to_vec())
-                .collect(),
-            message_hash: transaction_info
-                .transaction
-                .message_hash()
-                .as_ref()
-                .to_vec(),
-            meta: DbTransactionStatusMeta::from(transaction_info.transaction_status_meta),
-        }
-    }
-
     fn build_transaction_request(
         slot: u64,
         transaction_info: &ReplicaTransactionInfo,
     ) -> LogTransactionRequest {
         LogTransactionRequest {
-            transaction_info: Self::build_db_transaction(slot, transaction_info),
+            transaction_info: build_db_transaction(slot, transaction_info),
         }
     }
 
@@ -503,10 +503,20 @@ impl ParallelPostgresClient {
 #[cfg(test)]
 pub(crate) mod tests {
     use {
-        super::*, solana_account_decoder::parse_token::UiTokenAmount, solana_sdk::pubkey::Pubkey,
+        super::*,
+        solana_account_decoder::parse_token::UiTokenAmount,
+        solana_sdk::{
+            hash::Hash,
+            message::VersionedMessage,
+            pubkey::Pubkey,
+            sanitize::Sanitize,
+            signature::{Keypair, Signature, Signer},
+            system_transaction,
+            transaction::{SanitizedTransaction, Transaction, VersionedTransaction},
+        },
     };
 
-    fn check_equality_compiled_instruction(
+    fn check_compiled_instruction_equality(
         compiled_instruction: &CompiledInstruction,
         db_compiled_instruction: &DbCompiledInstruction,
     ) {
@@ -546,7 +556,25 @@ pub(crate) mod tests {
         };
 
         let db_compiled_instruction = DbCompiledInstruction::from(&compiled_instruction);
-        check_equality_compiled_instruction(&compiled_instruction, &db_compiled_instruction);
+        check_compiled_instruction_equality(&compiled_instruction, &db_compiled_instruction);
+    }
+
+    fn check_inner_instructions_equality(
+        inner_instructions: &InnerInstructions,
+        db_inner_instructions: &DbInnerInstructions,
+    ) {
+        assert_eq!(inner_instructions.index, db_inner_instructions.index as u8);
+        assert_eq!(
+            inner_instructions.instructions.len(),
+            db_inner_instructions.instructions.len()
+        );
+
+        for i in 0..inner_instructions.instructions.len() {
+            check_compiled_instruction_equality(
+                &inner_instructions.instructions[i],
+                &db_inner_instructions.instructions[i],
+            )
+        }
     }
 
     #[test]
@@ -568,30 +596,13 @@ pub(crate) mod tests {
         };
 
         let db_inner_instructions = DbInnerInstructions::from(&inner_instructions);
-
-        assert_eq!(inner_instructions.index, db_inner_instructions.index as u8);
-        assert_eq!(
-            inner_instructions.instructions.len(),
-            db_inner_instructions.instructions.len()
-        );
-
-        for i in 0..inner_instructions.instructions.len() {
-            check_equality_compiled_instruction(
-                &inner_instructions.instructions[i],
-                &db_inner_instructions.instructions[i],
-            )
-        }
+        check_inner_instructions_equality(&inner_instructions, &db_inner_instructions);
     }
 
-    #[test]
-    fn test_transform_address_map_indexes() {
-        let address_map_indexes = AddressMapIndexes {
-            writable: vec![1, 2, 3],
-            readonly: vec![4, 5, 6],
-        };
-
-        let db_address_map_indexes = DbAddressMapIndexes::from(&address_map_indexes);
-
+    fn check_address_map_indexes_equality(
+        address_map_indexes: &AddressMapIndexes,
+        db_address_map_indexes: &DbAddressMapIndexes,
+    ) {
         assert_eq!(
             address_map_indexes.writable.len(),
             db_address_map_indexes.writable.len()
@@ -613,6 +624,17 @@ pub(crate) mod tests {
                 db_address_map_indexes.readonly[i] as u8
             )
         }
+    }
+
+    #[test]
+    fn test_transform_address_map_indexes() {
+        let address_map_indexes = AddressMapIndexes {
+            writable: vec![1, 2, 3],
+            readonly: vec![4, 5, 6],
+        };
+
+        let db_address_map_indexes = DbAddressMapIndexes::from(&address_map_indexes);
+        check_address_map_indexes_equality(&address_map_indexes, &db_address_map_indexes);
     }
 
     fn check_reward_equality(reward: &Reward, db_reward: &DbReward) {
@@ -688,6 +710,29 @@ pub(crate) mod tests {
         );
     }
 
+    fn check_token_balances(
+        token_balances: &Option<Vec<TransactionTokenBalance>>,
+        db_token_balances: &Option<Vec<DbTransactionTokenBalance>>,
+    ) {
+        assert_eq!(
+            token_balances
+                .as_ref()
+                .map(|token_balances| token_balances.len()),
+            db_token_balances
+                .as_ref()
+                .map(|token_balances| token_balances.len()),
+        );
+
+        if token_balances.is_some() {
+            for i in 0..token_balances.as_ref().unwrap().len() {
+                check_transaction_token_balance_equality(
+                    &token_balances.as_ref().unwrap()[i],
+                    &db_token_balances.as_ref().unwrap()[i],
+                );
+            }
+        }
+    }
+
     fn check_transaction_status_meta(
         transaction_status_meta: &TransactionStatusMeta,
         db_transaction_status_meta: &DbTransactionStatusMeta,
@@ -711,11 +756,97 @@ pub(crate) mod tests {
                 db_transaction_status_meta.pre_balances[i] as u64
             );
         }
+        assert_eq!(
+            transaction_status_meta.post_balances.len(),
+            db_transaction_status_meta.post_balances.len()
+        );
+        for i in 0..transaction_status_meta.post_balances.len() {
+            assert_eq!(
+                transaction_status_meta.post_balances[i],
+                db_transaction_status_meta.post_balances[i] as u64
+            );
+        }
+        assert_eq!(
+            transaction_status_meta
+                .inner_instructions
+                .as_ref()
+                .map(|inner_instructions| inner_instructions.len()),
+            db_transaction_status_meta
+                .inner_instructions
+                .as_ref()
+                .map(|inner_instructions| inner_instructions.len()),
+        );
+
+        if transaction_status_meta.inner_instructions.is_some() {
+            for i in 0..transaction_status_meta
+                .inner_instructions
+                .as_ref()
+                .unwrap()
+                .len()
+            {
+                check_inner_instructions_equality(
+                    &transaction_status_meta.inner_instructions.as_ref().unwrap()[i],
+                    &db_transaction_status_meta
+                        .inner_instructions
+                        .as_ref()
+                        .unwrap()[i],
+                );
+            }
+        }
+
+        assert_eq!(
+            transaction_status_meta
+                .log_messages
+                .as_ref()
+                .map(|log_messages| log_messages.len()),
+            db_transaction_status_meta
+                .log_messages
+                .as_ref()
+                .map(|log_messages| log_messages.len()),
+        );
+
+        if transaction_status_meta.log_messages.is_some() {
+            for i in 0..transaction_status_meta.log_messages.as_ref().unwrap().len() {
+                assert_eq!(
+                    &transaction_status_meta.log_messages.as_ref().unwrap()[i],
+                    &db_transaction_status_meta.log_messages.as_ref().unwrap()[i]
+                );
+            }
+        }
+
+        check_token_balances(
+            &transaction_status_meta.pre_token_balances,
+            &db_transaction_status_meta.pre_token_balances,
+        );
+
+        check_token_balances(
+            &transaction_status_meta.post_token_balances,
+            &db_transaction_status_meta.post_token_balances,
+        );
+
+        assert_eq!(
+            transaction_status_meta
+                .rewards
+                .as_ref()
+                .map(|rewards| rewards.len()),
+            db_transaction_status_meta
+                .rewards
+                .as_ref()
+                .map(|rewards| rewards.len()),
+        );
+
+        if transaction_status_meta.rewards.is_some() {
+            for i in 0..transaction_status_meta.rewards.as_ref().unwrap().len() {
+                check_reward_equality(
+                    &transaction_status_meta.rewards.as_ref().unwrap()[i],
+                    &db_transaction_status_meta.rewards.as_ref().unwrap()[i],
+                );
+            }
+        }
     }
 
-    #[test]
-    fn test_transform_transaction_status_meta() {
-        let transaction_status_meta = TransactionStatusMeta {
+    fn build_transaction_status_meta() -> TransactionStatusMeta {
+        TransactionStatusMeta {
             status: Ok(()),
             fee: 23456,
             pre_balances: vec![11, 22, 33],
@@ -800,9 +931,334 @@ pub(crate) mod tests {
                     commission: Some(11),
                 },
             ]),
-        };
+        }
+    }
 
+    #[test]
+    fn test_transform_transaction_status_meta() {
+        let transaction_status_meta = build_transaction_status_meta();
         let db_transaction_status_meta = DbTransactionStatusMeta::from(&transaction_status_meta);
         check_transaction_status_meta(&transaction_status_meta, &db_transaction_status_meta);
+    }
+
+    fn check_message_header_equality(
+        message_header: &MessageHeader,
+        db_message_header: &DbTransactionMessageHeader,
+    ) {
+        assert_eq!(
+            message_header.num_readonly_signed_accounts,
+            db_message_header.num_readonly_signed_accounts as u8
+        );
+        assert_eq!(
+            message_header.num_readonly_unsigned_accounts,
+            db_message_header.num_readonly_unsigned_accounts as u8
+        );
+        assert_eq!(
+            message_header.num_required_signatures,
+            db_message_header.num_required_signatures as u8
+        );
+    }
+
+    #[test]
+    fn test_transform_transaction_message_header() {
+        let message_header = MessageHeader {
+            num_readonly_signed_accounts: 1,
+            num_readonly_unsigned_accounts: 2,
+            num_required_signatures: 3,
+        };
+
+        let db_message_header = DbTransactionMessageHeader::from(&message_header);
+        check_message_header_equality(&message_header, &db_message_header)
+    }
+
+    fn check_transaction_message_equality(message: &Message, db_message: &DbTransactionMessage) {
+        check_message_header_equality(&message.header, &db_message.header);
+        assert_eq!(message.account_keys.len(), db_message.account_keys.len());
+        for i in 0..message.account_keys.len() {
+            assert_eq!(message.account_keys[i].as_ref(), db_message.account_keys[i]);
+        }
+        assert_eq!(message.instructions.len(), db_message.instructions.len());
+        for i in 0..message.instructions.len() {
+            check_compiled_instruction_equality(
+                &message.instructions[i],
+                &db_message.instructions[i],
+            );
+        }
+    }
+
+    fn build_message() -> Message {
+        Message {
+            header: MessageHeader {
+                num_readonly_signed_accounts: 11,
+                num_readonly_unsigned_accounts: 12,
+                num_required_signatures: 13,
+            },
+            account_keys: vec![Pubkey::new_unique(), Pubkey::new_unique()],
+            recent_blockhash: Hash::new_unique(),
+            instructions: vec![
+                CompiledInstruction {
+                    program_id_index: 0,
+                    accounts: vec![1, 2, 3],
+                    data: vec![4, 5, 6],
+                },
+                CompiledInstruction {
+                    program_id_index: 3,
+                    accounts: vec![11, 12, 13],
+                    data: vec![14, 15, 16],
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn test_transform_transaction_message() {
+        let message = build_message();
+
+        let db_message = DbTransactionMessage::from(&message);
+        check_transaction_message_equality(&message, &db_message);
+    }
+
+    fn check_transaction_messagev0_equality(
+        message: &v0::Message,
+        db_message: &DbTransactionMessageV0,
+    ) {
+        check_message_header_equality(&message.header, &db_message.header);
+        assert_eq!(message.account_keys.len(), db_message.account_keys.len());
+        for i in 0..message.account_keys.len() {
+            assert_eq!(message.account_keys[i].as_ref(), db_message.account_keys[i]);
+        }
+        assert_eq!(message.instructions.len(), db_message.instructions.len());
+        for i in 0..message.instructions.len() {
+            check_compiled_instruction_equality(
+                &message.instructions[i],
+                &db_message.instructions[i],
+            );
+        }
+        assert_eq!(
+            message.address_map_indexes.len(),
+            db_message.address_map_indexes.len()
+        );
+        for i in 0..message.address_map_indexes.len() {
+            check_address_map_indexes_equality(
+                &message.address_map_indexes[i],
+                &db_message.address_map_indexes[i],
+            );
+        }
+    }
+
+    fn build_transaction_messagev0() -> v0::Message {
+        v0::Message {
+            header: MessageHeader {
+                num_readonly_signed_accounts: 2,
+                num_readonly_unsigned_accounts: 2,
+                num_required_signatures: 3,
+            },
+            account_keys: vec![
+                Pubkey::new_unique(),
+                Pubkey::new_unique(),
+                Pubkey::new_unique(),
+                Pubkey::new_unique(),
+                Pubkey::new_unique(),
+            ],
+            recent_blockhash: Hash::new_unique(),
+            instructions: vec![
+                CompiledInstruction {
+                    program_id_index: 1,
+                    accounts: vec![1, 2, 3],
+                    data: vec![4, 5, 6],
+                },
+                CompiledInstruction {
+                    program_id_index: 2,
+                    accounts: vec![0, 1, 2],
+                    data: vec![14, 15, 16],
+                },
+            ],
+            address_map_indexes: vec![
+                AddressMapIndexes {
+                    writable: vec![0],
+                    readonly: vec![1, 2],
+                },
+                AddressMapIndexes {
+                    writable: vec![1],
+                    readonly: vec![0, 2],
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn test_transform_transaction_messagev0() {
+        let message = build_transaction_messagev0();
+
+        let db_message = DbTransactionMessageV0::from(&message);
+        check_transaction_messagev0_equality(&message, &db_message);
+    }
+
+    fn check_mapped_addresses(
+        mapped_addresses: &MappedAddresses,
+        db_mapped_addresses: &DbMappedAddresses,
+    ) {
+        assert_eq!(
+            mapped_addresses.writable.len(),
+            db_mapped_addresses.writable.len()
+        );
+        for i in 0..mapped_addresses.writable.len() {
+            assert_eq!(
+                mapped_addresses.writable[i].as_ref(),
+                db_mapped_addresses.writable[i]
+            );
+        }
+
+        assert_eq!(
+            mapped_addresses.readonly.len(),
+            db_mapped_addresses.readonly.len()
+        );
+        for i in 0..mapped_addresses.readonly.len() {
+            assert_eq!(
+                mapped_addresses.readonly[i].as_ref(),
+                db_mapped_addresses.readonly[i]
+            );
+        }
+    }
+
+    fn check_mapped_message_equality(message: &MappedMessage, db_message: &DbMappedMessage) {
+        check_transaction_messagev0_equality(&message.message, &db_message.message);
+        check_mapped_addresses(&message.mapped_addresses, &db_message.mapped_addresses);
+    }
+
+    #[test]
+    fn test_transform_mapped_message() {
+        let message = MappedMessage {
+            message: build_transaction_messagev0(),
+            mapped_addresses: MappedAddresses {
+                writable: vec![Pubkey::new_unique(), Pubkey::new_unique()],
+                readonly: vec![Pubkey::new_unique(), Pubkey::new_unique()],
+            },
+        };
+
+        let db_message = DbMappedMessage::from(&message);
+        check_mapped_message_equality(&message, &db_message);
+    }
+
+    fn check_transaction(
+        slot: u64,
+        transaction: &ReplicaTransactionInfo,
+        db_transaction: &DbTransaction,
+    ) {
+        assert_eq!(transaction.signature.as_ref(), db_transaction.signature);
+        assert_eq!(transaction.is_vote, db_transaction.is_vote);
+        assert_eq!(slot, db_transaction.slot as u64);
+        match transaction.transaction.message() {
+            SanitizedMessage::Legacy(message) => {
+                assert_eq!(db_transaction.message_type, 0);
+                check_transaction_message_equality(
+                    &message,
+                    &db_transaction.legacy_message.as_ref().unwrap(),
+                );
+            }
+            SanitizedMessage::V0(message) => {
+                assert_eq!(db_transaction.message_type, 1);
+                check_mapped_message_equality(
+                    &message,
+                    &db_transaction.v0_mapped_message.as_ref().unwrap(),
+                );
+            }
+        }
+
+        assert_eq!(
+            transaction.transaction.signatures().len(),
+            db_transaction.signatures.len()
+        );
+
+        for i in 0..transaction.transaction.signatures().len() {
+            assert_eq!(
+                transaction.transaction.signatures()[i].as_ref(),
+                db_transaction.signatures[i]
+            );
+        }
+
+        assert_eq!(
+            transaction.transaction.message_hash().as_ref(),
+            db_transaction.message_hash
+        );
+
+        check_transaction_status_meta(&transaction.transaction_status_meta, &db_transaction.meta);
+    }
+
+    fn build_test_transaction_legacy() -> Transaction {
+        let keypair1 = Keypair::new();
+        let pubkey1 = keypair1.pubkey();
+        let zero = Hash::default();
+        system_transaction::transfer(&keypair1, &pubkey1, 42, zero)
+    }
+
+    #[test]
+    fn test_build_db_transaction_legacy() {
+        let signature = Signature::new(&[1u8; 64]);
+
+        let message_hash = Hash::new_unique();
+        let transaction = build_test_transaction_legacy();
+
+        let transaction = VersionedTransaction::from(transaction);
+
+        let transaction =
+            SanitizedTransaction::try_create(transaction, message_hash, Some(true), |_| {
+                Err(TransactionError::UnsupportedVersion)
+            })
+            .unwrap();
+
+        let transaction_status_meta = build_transaction_status_meta();
+        let transaction_info = ReplicaTransactionInfo {
+            signature: &signature,
+            is_vote: false,
+            transaction: &transaction,
+            transaction_status_meta: &transaction_status_meta,
+        };
+
+        let slot = 54;
+        let db_transaction = build_db_transaction(slot, &transaction_info);
+        check_transaction(slot, &transaction_info, &db_transaction);
+    }
+
+    fn build_test_transaction_v0() -> VersionedTransaction {
+        VersionedTransaction {
+            signatures: vec![
+                Signature::new(&[1u8; 64]),
+                Signature::new(&[2u8; 64]),
+                Signature::new(&[3u8; 64]),
+            ],
+            message: VersionedMessage::V0(build_transaction_messagev0()),
+        }
+    }
+
+    #[test]
+    fn test_build_db_transaction_v0() {
+        let signature = Signature::new(&[1u8; 64]);
+
+        let message_hash = Hash::new_unique();
+        let transaction = build_test_transaction_v0();
+
+        transaction.sanitize().unwrap();
+
+        let transaction =
+            SanitizedTransaction::try_create(transaction, message_hash, Some(true), |_message| {
+                Ok(MappedAddresses {
+                    writable: vec![Pubkey::new_unique(), Pubkey::new_unique()],
+                    readonly: vec![Pubkey::new_unique(), Pubkey::new_unique()],
+                })
+            })
+            .unwrap();
+
+        let transaction_status_meta = build_transaction_status_meta();
+        let transaction_info = ReplicaTransactionInfo {
+            signature: &signature,
+            is_vote: false,
+            transaction: &transaction,
+            transaction_status_meta: &transaction_status_meta,
+        };
+
+        let slot = 54;
+        let db_transaction = build_db_transaction(slot, &transaction_info);
+        check_transaction(slot, &transaction_info, &db_transaction);
     }
 }
