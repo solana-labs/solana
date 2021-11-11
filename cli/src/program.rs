@@ -2041,9 +2041,7 @@ fn complete_partial_program_init(
             elf_pubkey,
             account_data_len as u64,
         ));
-        if account.owner != *loader_id {
-            instructions.push(system_instruction::assign(elf_pubkey, loader_id));
-        }
+        instructions.push(system_instruction::assign(elf_pubkey, loader_id));
         if account.lamports < minimum_balance {
             let balance = minimum_balance - account.lamports;
             instructions.push(system_instruction::transfer(
