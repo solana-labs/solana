@@ -11,6 +11,7 @@ use solana_bpf_loader_program::{
     ThisInstructionMeter,
 };
 use solana_measure::measure::Measure;
+use solana_program_runtime::invoke_context::{with_mock_invoke_context, InvokeContext};
 use solana_rbpf::vm::{Config, Executable, InstructionMeter, SyscallRegistry};
 use solana_runtime::{
     bank::Bank,
@@ -18,7 +19,6 @@ use solana_runtime::{
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
     loader_utils::load_program,
 };
-use solana_program_runtime::invoke_context::{with_mock_invoke_context, InvokeContext};
 use solana_sdk::{
     bpf_loader,
     client::SyncClient,

@@ -5,7 +5,7 @@ use {
         blockstore::Blockstore,
         blockstore_processor::{TransactionStatusBatch, TransactionStatusMessage},
     },
-    solana_runtime::bank::{Bank, InnerInstructionsList, TransactionLogMessages},
+    solana_runtime::bank::{Bank, InnerInstructionsList, NonceInfo, TransactionLogMessages},
     solana_transaction_status::{
         extract_and_fmt_memos, InnerInstructions, Reward, TransactionStatusMeta,
     },
@@ -83,7 +83,7 @@ impl TransactionStatusService {
                 };
                 for (
                     transaction,
-                    (status, nonce_rollback),
+                    (status, nonce),
                     pre_balances,
                     post_balances,
                     pre_token_balances,
@@ -103,8 +103,8 @@ impl TransactionStatusService {
                     rent_debits,
                 ) {
                     if Bank::can_commit(&status) {
-                        let lamports_per_signature = nonce_rollback
-                            .map(|nonce_rollback| nonce_rollback.lamports_per_signature())
+                        let lamports_per_signature = nonce
+                            .map(|nonce| nonce.lamports_per_signature())
                             .unwrap_or_else(|| {
                                 bank.get_lamports_per_signature_for_blockhash(
                                     transaction.message().recent_blockhash(),
