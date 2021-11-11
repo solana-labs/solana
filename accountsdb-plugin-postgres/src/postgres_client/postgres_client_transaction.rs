@@ -1252,7 +1252,7 @@ pub(crate) mod tests {
         let transaction_status_meta = build_transaction_status_meta();
         let transaction_info = ReplicaTransactionInfo {
             signature: &signature,
-            is_vote: false,
+            is_vote: true,
             transaction: &transaction,
             transaction_status_meta: &transaction_status_meta,
         };
