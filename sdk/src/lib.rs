@@ -49,6 +49,22 @@ pub mod timing;
 pub mod transaction;
 pub mod transport;
 
+/// Convenience macro to define a static public key
+///
+/// Input: a single literal base58 string representation of a Pubkey
+///
+/// # Example
+///
+/// ```
+/// use std::str::FromStr;
+/// use solana_program::{pubkey, pubkey::Pubkey};
+///
+/// static ID: Pubkey = pubkey!("My11111111111111111111111111111111111111111");
+///
+/// let my_id = Pubkey::from_str("My11111111111111111111111111111111111111111").unwrap();
+/// assert_eq!(ID, my_id);
+/// ```
+pub use solana_sdk_macro::pubkey;
 /// Same as `declare_id` except report that this id has been deprecated
 pub use solana_sdk_macro::declare_deprecated_id;
 /// Convenience macro to declare a static public key and functions to interact with it
