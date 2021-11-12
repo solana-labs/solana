@@ -77,8 +77,8 @@ impl QosService {
         txs_costs
     }
 
-    // Given a list of txs and their cost, this function returns a corresponding
-    // list of Results indicate if tx is selected to be included in current block,
+    // Given a list of transactions and their costs, this function returns a corresponding
+    // list of Results that indicate if a transaction is selected to be included in the current block,
     pub fn select_transactions_per_cost<'a>(
         &self,
         transactions: impl Iterator<Item = &'a SanitizedTransaction>,
