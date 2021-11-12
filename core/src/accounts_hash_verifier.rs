@@ -1,4 +1,4 @@
-// Service to verify accounts hashes with other trusted validator nodes.
+// Service to verify accounts hashes with other known validator nodes.
 //
 // Each interval, publish the snapshat hash which is the full accounts state
 // hash on gossip. Monitor gossip for messages from validators in the `--known-validator`s
@@ -33,8 +33,8 @@ impl AccountsHashVerifier {
         pending_snapshot_package: Option<PendingSnapshotPackage>,
         exit: &Arc<AtomicBool>,
         cluster_info: &Arc<ClusterInfo>,
-        trusted_validators: Option<HashSet<Pubkey>>,
-        halt_on_trusted_validators_accounts_hash_mismatch: bool,
+        known_validators: Option<HashSet<Pubkey>>,
+        halt_on_known_validators_accounts_hash_mismatch: bool,
         fault_injection_rate_slots: u64,
         snapshot_interval_slots: u64,
     ) -> Self {
@@ -62,9 +62,15 @@ impl AccountsHashVerifier {
                             Self::process_accounts_package_pre(
                                 accounts_package,
                                 &cluster_info,
+<<<<<<< HEAD
                                 &trusted_validators,
                                 halt_on_trusted_validators_accounts_hash_mismatch,
                                 &pending_snapshot_package,
+=======
+                                known_validators.as_ref(),
+                                halt_on_known_validators_accounts_hash_mismatch,
+                                pending_snapshot_package.as_ref(),
+>>>>>>> b0ca33546 (Rename "trusted" to "known" in `validators/` (#21197))
                                 &mut hashes,
                                 &exit,
                                 fault_injection_rate_slots,
@@ -87,9 +93,15 @@ impl AccountsHashVerifier {
     fn process_accounts_package_pre(
         accounts_package: AccountsPackagePre,
         cluster_info: &ClusterInfo,
+<<<<<<< HEAD
         trusted_validators: &Option<HashSet<Pubkey>>,
         halt_on_trusted_validator_accounts_hash_mismatch: bool,
         pending_snapshot_package: &Option<PendingSnapshotPackage>,
+=======
+        known_validators: Option<&HashSet<Pubkey>>,
+        halt_on_known_validator_accounts_hash_mismatch: bool,
+        pending_snapshot_package: Option<&PendingSnapshotPackage>,
+>>>>>>> b0ca33546 (Rename "trusted" to "known" in `validators/` (#21197))
         hashes: &mut Vec<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
         fault_injection_rate_slots: u64,
@@ -103,9 +115,14 @@ impl AccountsHashVerifier {
         Self::process_accounts_package(
             accounts_package,
             cluster_info,
+<<<<<<< HEAD
             trusted_validators,
             halt_on_trusted_validator_accounts_hash_mismatch,
             pending_snapshot_package,
+=======
+            known_validators,
+            halt_on_known_validator_accounts_hash_mismatch,
+>>>>>>> b0ca33546 (Rename "trusted" to "known" in `validators/` (#21197))
             hashes,
             exit,
             fault_injection_rate_slots,
@@ -116,9 +133,14 @@ impl AccountsHashVerifier {
     fn process_accounts_package(
         accounts_package: AccountsPackage,
         cluster_info: &ClusterInfo,
+<<<<<<< HEAD
         trusted_validators: &Option<HashSet<Pubkey>>,
         halt_on_trusted_validator_accounts_hash_mismatch: bool,
         pending_snapshot_package: &Option<PendingSnapshotPackage>,
+=======
+        known_validators: Option<&HashSet<Pubkey>>,
+        halt_on_known_validator_accounts_hash_mismatch: bool,
+>>>>>>> b0ca33546 (Rename "trusted" to "known" in `validators/` (#21197))
         hashes: &mut Vec<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
         fault_injection_rate_slots: u64,
@@ -143,12 +165,12 @@ impl AccountsHashVerifier {
             hashes.remove(0);
         }
 
-        if halt_on_trusted_validator_accounts_hash_mismatch {
+        if halt_on_known_validator_accounts_hash_mismatch {
             let mut slot_to_hash = HashMap::new();
             for (slot, hash) in hashes.iter() {
                 slot_to_hash.insert(*slot, *hash);
             }
-            if Self::should_halt(cluster_info, trusted_validators, &mut slot_to_hash) {
+            if Self::should_halt(cluster_info, known_validators, &mut slot_to_hash) {
                 exit.store(true, Ordering::Relaxed);
             }
         }
@@ -164,20 +186,30 @@ impl AccountsHashVerifier {
 
     fn should_halt(
         cluster_info: &ClusterInfo,
+<<<<<<< HEAD
         trusted_validators: &Option<HashSet<Pubkey>>,
+=======
+        known_validators: Option<&HashSet<Pubkey>>,
+>>>>>>> b0ca33546 (Rename "trusted" to "known" in `validators/` (#21197))
         slot_to_hash: &mut HashMap<Slot, Hash>,
     ) -> bool {
         let mut verified_count = 0;
         let mut highest_slot = 0;
+<<<<<<< HEAD
         if let Some(trusted_validators) = trusted_validators.as_ref() {
             for trusted_validator in trusted_validators {
                 let is_conflicting = cluster_info.get_accounts_hash_for_node(trusted_validator, |accounts_hashes|
+=======
+        if let Some(known_validators) = known_validators {
+            for known_validator in known_validators {
+                let is_conflicting = cluster_info.get_accounts_hash_for_node(known_validator, |accounts_hashes|
+>>>>>>> b0ca33546 (Rename "trusted" to "known" in `validators/` (#21197))
                 {
                     accounts_hashes.iter().any(|(slot, hash)| {
                         if let Some(reference_hash) = slot_to_hash.get(slot) {
                             if *hash != *reference_hash {
-                                error!("Trusted validator {} produced conflicting hashes for slot: {} ({} != {})",
-                                    trusted_validator,
+                                error!("Known validator {} produced conflicting hashes for slot: {} ({} != {})",
+                                    known_validator,
                                     slot,
                                     hash,
                                     reference_hash,
@@ -241,11 +273,15 @@ mod tests {
         let cluster_info = new_test_cluster_info(contact_info);
         let cluster_info = Arc::new(cluster_info);
 
-        let mut trusted_validators = HashSet::new();
+        let mut known_validators = HashSet::new();
         let mut slot_to_hash = HashMap::new();
         assert!(!AccountsHashVerifier::should_halt(
             &cluster_info,
+<<<<<<< HEAD
             &Some(trusted_validators.clone()),
+=======
+            Some(&known_validators),
+>>>>>>> b0ca33546 (Rename "trusted" to "known" in `validators/` (#21197))
             &mut slot_to_hash,
         ));
 
@@ -258,10 +294,14 @@ mod tests {
             cluster_info.flush_push_queue();
         }
         slot_to_hash.insert(0, hash2);
-        trusted_validators.insert(validator1.pubkey());
+        known_validators.insert(validator1.pubkey());
         assert!(AccountsHashVerifier::should_halt(
             &cluster_info,
+<<<<<<< HEAD
             &Some(trusted_validators),
+=======
+            Some(&known_validators),
+>>>>>>> b0ca33546 (Rename "trusted" to "known" in `validators/` (#21197))
             &mut slot_to_hash,
         ));
     }
@@ -277,7 +317,7 @@ mod tests {
         let cluster_info = new_test_cluster_info(contact_info);
         let cluster_info = Arc::new(cluster_info);
 
-        let trusted_validators = HashSet::new();
+        let known_validators = HashSet::new();
         let exit = Arc::new(AtomicBool::new(false));
         let mut hashes = vec![];
         for i in 0..MAX_SNAPSHOT_HASHES + 1 {
@@ -297,7 +337,11 @@ mod tests {
             AccountsHashVerifier::process_accounts_package(
                 accounts_package,
                 &cluster_info,
+<<<<<<< HEAD
                 &Some(trusted_validators.clone()),
+=======
+                Some(&known_validators),
+>>>>>>> b0ca33546 (Rename "trusted" to "known" in `validators/` (#21197))
                 false,
                 &None,
                 &mut hashes,

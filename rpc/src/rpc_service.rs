@@ -277,7 +277,7 @@ impl JsonRpcService {
         genesis_hash: Hash,
         ledger_path: &Path,
         validator_exit: Arc<RwLock<Exit>>,
-        trusted_validators: Option<HashSet<Pubkey>>,
+        known_validators: Option<HashSet<Pubkey>>,
         override_health_check: Arc<AtomicBool>,
         optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
         send_transaction_service_config: send_transaction_service::Config,
@@ -291,7 +291,7 @@ impl JsonRpcService {
 
         let health = Arc::new(RpcHealth::new(
             cluster_info.clone(),
-            trusted_validators,
+            known_validators,
             config.health_check_slot_distance,
             override_health_check,
         ));
@@ -697,7 +697,7 @@ mod tests {
     }
 
     #[test]
-    fn test_health_check_with_no_trusted_validators() {
+    fn test_health_check_with_no_known_validators() {
         let rm = RpcRequestMiddleware::new(
             PathBuf::from("/"),
             None,
@@ -708,7 +708,7 @@ mod tests {
     }
 
     #[test]
-    fn test_health_check_with_trusted_validators() {
+    fn test_health_check_with_known_validators() {
         let cluster_info = Arc::new(ClusterInfo::new(
             ContactInfo::default(),
             Arc::new(Keypair::new()),
@@ -716,7 +716,7 @@ mod tests {
         ));
         let health_check_slot_distance = 123;
         let override_health_check = Arc::new(AtomicBool::new(false));
-        let trusted_validators = vec![
+        let known_validators = vec![
             solana_sdk::pubkey::new_rand(),
             solana_sdk::pubkey::new_rand(),
             solana_sdk::pubkey::new_rand(),
@@ -724,17 +724,17 @@ mod tests {
 
         let health = Arc::new(RpcHealth::new(
             cluster_info.clone(),
-            Some(trusted_validators.clone().into_iter().collect()),
+            Some(known_validators.clone().into_iter().collect()),
             health_check_slot_distance,
             override_health_check.clone(),
         ));
 
         let rm = RpcRequestMiddleware::new(PathBuf::from("/"), None, create_bank_forks(), health);
 
-        // No account hashes for this node or any trusted validators
+        // No account hashes for this node or any known validators
         assert_eq!(rm.health_check(), "unknown");
 
-        // No account hashes for any trusted validators
+        // No account hashes for any known validators
         cluster_info.push_accounts_hashes(vec![(1000, Hash::default()), (900, Hash::default())]);
         cluster_info.flush_push_queue();
         assert_eq!(rm.health_check(), "unknown");
@@ -744,15 +744,20 @@ mod tests {
         assert_eq!(rm.health_check(), "ok");
         override_health_check.store(false, Ordering::Relaxed);
 
-        // This node is ahead of the trusted validators
+        // This node is ahead of the known validators
         cluster_info
             .gossip
             .write()
             .unwrap()
             .crds
             .insert(
+<<<<<<< HEAD
                 CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
                     trusted_validators[0],
+=======
+                CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHashes::new(
+                    known_validators[0],
+>>>>>>> b0ca33546 (Rename "trusted" to "known" in `validators/` (#21197))
                     vec![
                         (1, Hash::default()),
                         (1001, Hash::default()),
@@ -765,15 +770,20 @@ mod tests {
             .unwrap();
         assert_eq!(rm.health_check(), "ok");
 
-        // Node is slightly behind the trusted validators
+        // Node is slightly behind the known validators
         cluster_info
             .gossip
             .write()
             .unwrap()
             .crds
             .insert(
+<<<<<<< HEAD
                 CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
                     trusted_validators[1],
+=======
+                CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHashes::new(
+                    known_validators[1],
+>>>>>>> b0ca33546 (Rename "trusted" to "known" in `validators/` (#21197))
                     vec![(1000 + health_check_slot_distance - 1, Hash::default())],
                 ))),
                 1,
@@ -782,15 +792,20 @@ mod tests {
             .unwrap();
         assert_eq!(rm.health_check(), "ok");
 
-        // Node is far behind the trusted validators
+        // Node is far behind the known validators
         cluster_info
             .gossip
             .write()
             .unwrap()
             .crds
             .insert(
+<<<<<<< HEAD
                 CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
                     trusted_validators[2],
+=======
+                CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHashes::new(
+                    known_validators[2],
+>>>>>>> b0ca33546 (Rename "trusted" to "known" in `validators/` (#21197))
                     vec![(1000 + health_check_slot_distance, Hash::default())],
                 ))),
                 1,
