@@ -3543,7 +3543,7 @@ impl Bank {
     ) -> Option<(Pubkey, AccountSharedData)> {
         tx.get_durable_nonce()
             .and_then(|nonce_pubkey| {
-                self.get_account(nonce_pubkey)
+                self.get_account_with_fixed_root(nonce_pubkey)
                     .map(|acc| (*nonce_pubkey, acc))
             })
             .filter(|(_pubkey, nonce_account)| {
