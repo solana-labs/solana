@@ -932,6 +932,26 @@ impl Accounts {
             .collect()
     }
 
+    #[allow(clippy::needless_collect)]
+    pub fn lock_accounts_with_results<'a>(
+        &self,
+        txs: impl Iterator<Item = &'a SanitizedTransaction>,
+        results: impl Iterator<Item = &'a Result<()>>,
+        demote_program_write_locks: bool,
+    ) -> Vec<Result<()>> {
+        let keys: Vec<_> = txs
+            .map(|tx| tx.get_account_locks(demote_program_write_locks))
+            .collect();
+        let account_locks = &mut self.account_locks.lock().unwrap();
+        keys.into_iter()
+            .zip(results)
+            .map(|(keys, result)| match result {
+                Ok(()) => self.lock_account(account_locks, keys.writable, keys.readonly),
+                Err(e) => Err(e.clone()),
+            })
+            .collect()
+    }
+
     /// Once accounts are unlocked, new transactions that modify that state can enter the pipeline
     #[allow(clippy::needless_collect)]
     pub fn unlock_accounts<'a>(

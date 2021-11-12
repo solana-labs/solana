@@ -230,7 +230,7 @@ impl ExecuteTimings {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "5Br3PNyyX1L7XoS4jYLt5JTeMXowLSsu7v9LhokC8vnq")]
+#[frozen_abi(digest = "7bCDimGo11ajw6ZHViBBu8KPfoDZBcwSnumWCU8MMuwr")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>;
 
@@ -3357,6 +3357,22 @@ impl Bank {
         TransactionBatch::new(lock_results, self, Cow::Borrowed(txs))
     }
 
+    /// Prepare a locked transaction batch from a list of sanitized transactions, and their cost
+    /// limited packing status
+    pub fn prepare_sanitized_batch_with_results<'a, 'b>(
+        &'a self,
+        transactions: &'b [SanitizedTransaction],
+        transaction_results: impl Iterator<Item = &'b Result<()>>,
+    ) -> TransactionBatch<'a, 'b> {
+        // this lock_results could be: Ok, AccountInUse, WouldExceedBlockMaxLimit or WouldExceedAccountMaxLimit
+        let lock_results = self.rc.accounts.lock_accounts_with_results(
+            transactions.iter(),
+            transaction_results,
+            self.demote_program_write_locks(),
+        );
+        TransactionBatch::new(lock_results, self, Cow::Borrowed(transactions))
+    }
+
     /// Prepare a transaction batch without locking accounts for transaction simulation.
     pub(crate) fn prepare_simulation_batch<'a>(
         &'a self,
@@ -3772,6 +3788,8 @@ impl Bank {
                     error_counters.account_in_use += 1;
                     Some(index)
                 }
+                Err(TransactionError::WouldExceedMaxBlockCostLimit)
+                | Err(TransactionError::WouldExceedMaxAccountCostLimit) => Some(index),
                 Err(_) => None,
                 Ok(_) => None,
             })
@@ -6413,7 +6431,7 @@ pub fn goto_end_of_slot(bank: &mut Bank) {
     }
 }
 
-fn is_simple_vote_transaction(transaction: &SanitizedTransaction) -> bool {
+pub fn is_simple_vote_transaction(transaction: &SanitizedTransaction) -> bool {
     if transaction.message().instructions().len() == 1 {
         let (program_pubkey, instruction) = transaction
             .message()
