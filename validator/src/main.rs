@@ -345,9 +345,9 @@ fn hash_validator(hash: String) -> Result<(), String> {
         .map_err(|e| format!("{:?}", e))
 }
 
-fn is_trusted_validator(id: &Pubkey, trusted_validators: &Option<HashSet<Pubkey>>) -> bool {
-    if let Some(trusted_validators) = trusted_validators {
-        trusted_validators.contains(id)
+fn is_known_validator(id: &Pubkey, known_validators: &Option<HashSet<Pubkey>>) -> bool {
+    if let Some(known_validators) = known_validators {
+        known_validators.contains(id)
     } else {
         false
     }
@@ -355,12 +355,12 @@ fn is_trusted_validator(id: &Pubkey, trusted_validators: &Option<HashSet<Pubkey>
 
 fn get_trusted_snapshot_hashes(
     cluster_info: &ClusterInfo,
-    trusted_validators: &Option<HashSet<Pubkey>>,
+    known_validators: &Option<HashSet<Pubkey>>,
 ) -> Option<HashSet<(Slot, Hash)>> {
-    if let Some(trusted_validators) = trusted_validators {
+    if let Some(known_validators) = known_validators {
         let mut trusted_snapshot_hashes = HashSet::new();
-        for trusted_validator in trusted_validators {
-            cluster_info.get_snapshot_hash_for_node(trusted_validator, |snapshot_hashes| {
+        for known_validator in known_validators {
+            cluster_info.get_snapshot_hash_for_node(known_validator, |snapshot_hashes| {
                 for snapshot_hash in snapshot_hashes {
                     trusted_snapshot_hashes.insert(*snapshot_hash);
                 }
@@ -468,9 +468,7 @@ fn get_rpc_node(
         let rpc_peers_blacklisted = rpc_peers_total - rpc_peers.len();
         let rpc_peers_trusted = rpc_peers
             .iter()
-            .filter(|rpc_peer| {
-                is_trusted_validator(&rpc_peer.id, &validator_config.trusted_validators)
-            })
+            .filter(|rpc_peer| is_known_validator(&rpc_peer.id, &validator_config.known_validators))
             .count();
 
         info!(
@@ -500,13 +498,13 @@ fn get_rpc_node(
             rpc_peers
         } else {
             let trusted_snapshot_hashes =
-                get_trusted_snapshot_hashes(cluster_info, &validator_config.trusted_validators);
+                get_trusted_snapshot_hashes(cluster_info, &validator_config.known_validators);
 
             let mut eligible_rpc_peers = vec![];
 
             for rpc_peer in rpc_peers.iter() {
                 if no_untrusted_rpc
-                    && !is_trusted_validator(&rpc_peer.id, &validator_config.trusted_validators)
+                    && !is_known_validator(&rpc_peer.id, &validator_config.known_validators)
                 {
                     continue;
                 }
@@ -945,9 +943,9 @@ fn rpc_bootstrap(
                                        && download_progress.percentage_done <= 2_f32
                                        && download_progress.estimated_remaining_time > 60_f32
                                        && download_abort_count < maximum_snapshot_download_abort {
-                                        if let Some(ref trusted_validators) = validator_config.trusted_validators {
-                                            if trusted_validators.contains(&rpc_contact_info.id)
-                                               && trusted_validators.len() == 1
+                                        if let Some(ref known_validators) = validator_config.known_validators {
+                                            if known_validators.contains(&rpc_contact_info.id)
+                                               && known_validators.len() == 1
                                                && bootstrap_config.no_untrusted_rpc {
                                                 warn!("The snapshot download is too slow, throughput: {} < min speed {} bytes/sec, but will NOT abort \
                                                       and try a different node as it is the only known validator and the --only-known-rpc flag \
@@ -1009,8 +1007,8 @@ fn rpc_bootstrap(
         }
         warn!("{}", result.unwrap_err());
 
-        if let Some(ref trusted_validators) = validator_config.trusted_validators {
-            if trusted_validators.contains(&rpc_contact_info.id) {
+        if let Some(ref known_validators) = validator_config.known_validators {
+            if known_validators.contains(&rpc_contact_info.id) {
                 continue; // Never blacklist a trusted node
             }
         }

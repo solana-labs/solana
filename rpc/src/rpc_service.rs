@@ -751,13 +751,8 @@ mod tests {
             .unwrap()
             .crds
             .insert(
-<<<<<<< HEAD
                 CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
-                    trusted_validators[0],
-=======
-                CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHashes::new(
                     known_validators[0],
->>>>>>> b0ca33546 (Rename "trusted" to "known" in `validators/` (#21197))
                     vec![
                         (1, Hash::default()),
                         (1001, Hash::default()),
@@ -777,13 +772,8 @@ mod tests {
             .unwrap()
             .crds
             .insert(
-<<<<<<< HEAD
                 CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
-                    trusted_validators[1],
-=======
-                CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHashes::new(
                     known_validators[1],
->>>>>>> b0ca33546 (Rename "trusted" to "known" in `validators/` (#21197))
                     vec![(1000 + health_check_slot_distance - 1, Hash::default())],
                 ))),
                 1,
@@ -799,13 +789,8 @@ mod tests {
             .unwrap()
             .crds
             .insert(
-<<<<<<< HEAD
                 CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
-                    trusted_validators[2],
-=======
-                CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHashes::new(
                     known_validators[2],
->>>>>>> b0ca33546 (Rename "trusted" to "known" in `validators/` (#21197))
                     vec![(1000 + health_check_slot_distance, Hash::default())],
                 ))),
                 1,

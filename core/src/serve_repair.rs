@@ -1054,13 +1054,8 @@ mod tests {
                     RepairType::Shred(0, 0),
                     &mut LruCache::new(100),
                     &mut RepairStats::default(),
-<<<<<<< HEAD
-                    &trusted_validators,
-                    &mut OutstandingRepairs::default(),
-=======
                     &known_validators,
-                    &mut OutstandingShredRepairs::default(),
->>>>>>> b0ca33546 (Rename "trusted" to "known" in `validators/` (#21197))
+                    &mut OutstandingRepairs::default(),
                 )
                 .is_err());
         }
@@ -1076,13 +1071,8 @@ mod tests {
                 RepairType::Shred(0, 0),
                 &mut LruCache::new(100),
                 &mut RepairStats::default(),
-<<<<<<< HEAD
-                &trusted_validators,
-                &mut OutstandingRepairs::default(),
-=======
                 &known_validators,
-                &mut OutstandingShredRepairs::default(),
->>>>>>> b0ca33546 (Rename "trusted" to "known" in `validators/` (#21197))
+                &mut OutstandingRepairs::default(),
             )
             .is_ok());
 
