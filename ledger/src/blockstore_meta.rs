@@ -53,9 +53,10 @@ pub struct ErasureMeta {
     pub set_index: u64,
     /// Deprecated field.
     #[serde(rename = "first_coding_index")]
-    __unused: u64,
+    __unused_first_coding_index: u64,
     /// Size of shards in this erasure set
-    pub size: usize,
+    #[serde(rename = "size")]
+    __unused_size: usize,
     /// Erasure configuration for this erasure set
     pub config: ErasureConfig,
 }
@@ -242,14 +243,6 @@ impl ErasureMeta {
             StillNeed(num_needed)
         }
     }
-
-    pub fn set_size(&mut self, size: usize) {
-        self.size = size;
-    }
-
-    pub fn size(&self) -> usize {
-        self.size
-    }
 }
 
 impl DuplicateSlotProof {
@@ -294,10 +287,9 @@ mod test {
         let set_index = 0;
         let erasure_config = ErasureConfig::default();
 
-        let mut e_meta = ErasureMeta::new(set_index, erasure_config);
+        let e_meta = ErasureMeta::new(set_index, erasure_config);
         let mut rng = thread_rng();
         let mut index = Index::new(0);
-        e_meta.size = 1;
 
         let data_indexes = 0..erasure_config.num_data() as u64;
         let coding_indexes = 0..erasure_config.num_coding() as u64;
