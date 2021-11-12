@@ -202,6 +202,11 @@ pub struct AccountsHash {
 }
 
 impl AccountsHash {
+    /// true if it is possible that there are filler accounts present
+    pub fn filler_accounts_enabled(&self) -> bool {
+        self.filler_account_suffix.is_some()
+    }
+
     pub fn calculate_hash(hashes: Vec<Vec<Hash>>) -> (Hash, usize) {
         let cumulative_offsets = CumulativeOffsets::from_raw(&hashes);
 
@@ -623,6 +628,7 @@ impl AccountsHash {
         let mut overall_sum = 0;
         let mut hashes: Vec<Hash> = Vec::with_capacity(item_len);
         let mut duplicate_pubkey_indexes = Vec::with_capacity(len);
+        let filler_accounts_enabled = self.filler_accounts_enabled();
 
         // this loop runs once per unique pubkey contained in any slot group
         while !first_items.is_empty() {
@@ -664,7 +670,8 @@ impl AccountsHash {
             );
 
             // add lamports, get hash as long as the lamports are > 0
-            if item.lamports != ZERO_RAW_LAMPORTS_SENTINEL && !self.is_filler_account(&item.pubkey)
+            if item.lamports != ZERO_RAW_LAMPORTS_SENTINEL
+                && (!filler_accounts_enabled || !self.is_filler_account(&item.pubkey))
             {
                 overall_sum = Self::checked_cast_for_capitalization(
                     item.lamports as u128 + overall_sum as u128,
