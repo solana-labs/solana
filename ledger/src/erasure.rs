@@ -46,25 +46,10 @@ use {
     serde::{Deserialize, Serialize},
 };
 
-//TODO(sakridge) pick these values
-/// Number of data shreds
-pub const NUM_DATA: usize = 8;
-/// Number of coding shreds; also the maximum number that can go missing.
-pub const NUM_CODING: usize = 8;
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ErasureConfig {
     num_data: usize,
     num_coding: usize,
-}
-
-impl Default for ErasureConfig {
-    fn default() -> ErasureConfig {
-        ErasureConfig {
-            num_data: NUM_DATA,
-            num_coding: NUM_CODING,
-        }
-    }
 }
 
 impl ErasureConfig {
@@ -119,12 +104,6 @@ impl Session {
         T: ReconstructShard<Field>,
     {
         self.0.reconstruct_data(blocks)
-    }
-}
-
-impl Default for Session {
-    fn default() -> Session {
-        Session::new(NUM_DATA, NUM_CODING).unwrap()
     }
 }
 
