@@ -1158,15 +1158,15 @@ pub(crate) mod tests {
             SanitizedMessage::Legacy(message) => {
                 assert_eq!(db_transaction.message_type, 0);
                 check_transaction_message_equality(
-                    &message,
-                    &db_transaction.legacy_message.as_ref().unwrap(),
+                    message,
+                    db_transaction.legacy_message.as_ref().unwrap(),
                 );
             }
             SanitizedMessage::V0(message) => {
                 assert_eq!(db_transaction.message_type, 1);
                 check_mapped_message_equality(
-                    &message,
-                    &db_transaction.v0_mapped_message.as_ref().unwrap(),
+                    message,
+                    db_transaction.v0_mapped_message.as_ref().unwrap(),
                 );
             }
         }
@@ -1188,7 +1188,7 @@ pub(crate) mod tests {
             db_transaction.message_hash
         );
 
-        check_transaction_status_meta(&transaction.transaction_status_meta, &db_transaction.meta);
+        check_transaction_status_meta(transaction.transaction_status_meta, &db_transaction.meta);
     }
 
     fn build_test_transaction_legacy() -> Transaction {
