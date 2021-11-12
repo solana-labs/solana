@@ -1,6 +1,6 @@
-//! quality of servic for block producer.
-//! Provides logics and functions to allow Leader to prioritize
-//! how transactions being included in blocks, and optimize blocks.
+//! Quality of service for block producer.
+//! Provides logic and functions to allow a Leader to prioritize
+//! how transactions are included in blocks, and optimize those blocks.
 //!
 use {
     solana_measure::measure::Measure,
