@@ -125,7 +125,7 @@ impl BucketMapHolderStats {
         }
     }
 
-    fn calc_percent(&self, ms: u64, elapsed_ms: u64) -> f32 {
+    fn calc_percent(ms: u64, elapsed_ms: u64) -> f32 {
         if elapsed_ms == 0 {
             0.0
         } else {
@@ -183,7 +183,7 @@ impl BucketMapHolderStats {
             ("count", self.count.load(Ordering::Relaxed), i64),
             (
                 "bg_waiting_percent",
-                self.calc_percent(
+                Self::calc_percent(
                     self.bg_waiting_us.swap(0, Ordering::Relaxed) / US_PER_MS,
                     thread_time_elapsed_ms
                 ),
@@ -191,7 +191,7 @@ impl BucketMapHolderStats {
             ),
             (
                 "bg_throttling_wait_percent",
-                self.calc_percent(
+                Self::calc_percent(
                     self.bg_throttling_wait_us.swap(0, Ordering::Relaxed) / US_PER_MS,
                     thread_time_elapsed_ms
                 ),

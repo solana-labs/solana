@@ -1,3 +1,4 @@
+use solana_sdk::timing::AtomicInterval;
 use std::{
     collections::HashMap,
     io::BufRead,
@@ -6,13 +7,15 @@ use std::{
         Arc,
     },
     thread::{self, sleep, Builder, JoinHandle},
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 #[cfg(target_os = "linux")]
 use std::{fs::File, io::BufReader, path::Path};
 
-const SAMPLE_INTERVAL: Duration = Duration::from_secs(60);
+const MS_PER_S: u64 = 1_000;
+const SAMPLE_INTERVAL_UDP_MS: u64 = 60 * MS_PER_S;
+const SAMPLE_INTERVAL_MEM_MS: u64 = MS_PER_S;
 const SLEEP_INTERVAL: Duration = Duration::from_millis(500);
 
 #[cfg(target_os = "linux")]
@@ -173,19 +176,66 @@ impl SystemMonitorService {
         );
     }
 
+    fn calc_percent(numerator: u64, denom: u64) -> f32 {
+        if denom == 0 {
+            0.0
+        } else {
+            (numerator as f32 / denom as f32) * 100.0
+        }
+    }
+
+    fn report_mem_stats() {
+        if let Ok(info) = sys_info::mem_info() {
+            datapoint_info!(
+                "memory-stats",
+                ("total", info.total, i64),
+                ("swap_total", info.swap_total, i64),
+                (
+                    "free_percent",
+                    Self::calc_percent(info.free, info.total),
+                    f64
+                ),
+                ("used_bytes", info.total.saturating_sub(info.avail), i64),
+                (
+                    "avail_percent",
+                    Self::calc_percent(info.avail, info.total),
+                    f64
+                ),
+                (
+                    "buffers_percent",
+                    Self::calc_percent(info.buffers, info.total),
+                    f64
+                ),
+                (
+                    "cached_percent",
+                    Self::calc_percent(info.cached, info.total),
+                    f64
+                ),
+                (
+                    "swap_free_percent",
+                    Self::calc_percent(info.swap_free, info.swap_total),
+                    f64
+                ),
+            )
+        }
+    }
+
     pub fn run(exit: Arc<AtomicBool>) {
         let mut udp_stats = None;
 
-        let mut now = Instant::now();
+        let udp_timer = AtomicInterval::default();
+        let mem_timer = AtomicInterval::default();
         loop {
             if exit.load(Ordering::Relaxed) {
                 break;
             }
 
-            if now.elapsed() >= SAMPLE_INTERVAL {
-                now = Instant::now();
-
+            if udp_timer.should_update(SAMPLE_INTERVAL_UDP_MS) {
                 SystemMonitorService::process_udp_stats(&mut udp_stats);
+            }
+
+            if mem_timer.should_update(SAMPLE_INTERVAL_MEM_MS) {
+                SystemMonitorService::report_mem_stats();
             }
 
             sleep(SLEEP_INTERVAL);
