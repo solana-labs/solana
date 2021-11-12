@@ -52,4 +52,24 @@ impl AccountsDbPluginManager {
             drop(lib);
         }
     }
+
+    /// Check if there is any plugin interested in account data
+    pub fn is_account_data_interested(&self) -> bool {
+        for plugin in &self.plugins {
+            if plugin.is_account_data_interested() {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Check if there is any plugin interested in transaction data
+    pub fn is_transaction_data_interested(&self) -> bool {
+        for plugin in &self.plugins {
+            if plugin.is_transaction_data_interested() {
+                return true;
+            }
+        }
+        false
+    }
 }

@@ -28,6 +28,8 @@ use {
     },
 };
 
+const MAX_TRANSACTION_STATUS_LEN: usize = 256;
+
 #[derive(Clone, Debug, ToSql)]
 #[postgres(name = "CompiledInstruction")]
 pub struct DbCompiledInstruction {
@@ -320,6 +322,10 @@ fn get_transaction_status(result: &Result<(), TransactionError>) -> Option<Strin
         TransactionError::InvalidWritableAccount => "InvalidWritableAccount",
     };
 
+    // make sure not to store more characters than the DB limit
+    if err.len() > MAX_TRANSACTION_STATUS_LEN {
+        return Some(err.to_string().split_off(MAX_TRANSACTION_STATUS_LEN));
+    }
     Some(err.to_string())
 }
 

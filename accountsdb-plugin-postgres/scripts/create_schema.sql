@@ -52,7 +52,7 @@ CREATE TYPE "Reward" AS (
 );
 
 CREATE TYPE "TransactionStatusMeta" AS (
-    status VARCHAR(32),
+    status VARCHAR(256),
     fee BIGINT,
     pre_balances BIGINT[],
     post_balances BIGINT[],

@@ -413,6 +413,24 @@ impl Validator {
 
         let accounts_package_channel = channel();
 
+        let accounts_update_notifier = if accountsdb_plugin_service.is_some() {
+            accountsdb_plugin_service
+                .as_ref()
+                .unwrap()
+                .get_accounts_update_notifier()
+        } else {
+            None
+        };
+
+        let transaction_notifier = if accountsdb_plugin_service.is_some() {
+            accountsdb_plugin_service
+                .as_ref()
+                .unwrap()
+                .get_transaction_notifier()
+        } else {
+            None
+        };
+
         let (
             genesis_config,
             bank_forks,
@@ -443,12 +461,8 @@ impl Validator {
             &start_progress,
             config.no_poh_speed_test,
             accounts_package_channel.0.clone(),
-            accountsdb_plugin_service
-                .as_ref()
-                .map(|plugin_service| plugin_service.get_accounts_update_notifier()),
-            accountsdb_plugin_service
-                .as_ref()
-                .map(|plugin_service| plugin_service.get_transaction_notifier()),
+            accounts_update_notifier,
+            transaction_notifier,
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;
