@@ -45,7 +45,7 @@ use {
 pub struct RpcBootstrapConfig {
     pub no_genesis_fetch: bool,
     pub no_snapshot_fetch: bool,
-    pub no_untrusted_rpc: bool,
+    pub only_known_rpc: bool,
     pub max_genesis_archive_unpacked_size: u64,
     pub no_check_vote_account: bool,
     pub incremental_snapshot_fetch: bool,
@@ -571,7 +571,7 @@ mod without_incremental_snapshots {
                                         if let Some(ref known_validators) = validator_config.known_validators {
                                             if known_validators.contains(&rpc_contact_info.id)
                                                && known_validators.len() == 1
-                                               && bootstrap_config.no_untrusted_rpc {
+                                               && bootstrap_config.only_known_rpc {
                                                 warn!("The snapshot download is too slow, throughput: {} < min speed {} bytes/sec, but will NOT abort \
                                                       and try a different node as it is the only known validator and the --only-known-rpc flag \
                                                       is set. \
@@ -690,7 +690,7 @@ mod without_incremental_snapshots {
                 let mut eligible_rpc_peers = vec![];
 
                 for rpc_peer in rpc_peers.iter() {
-                    if bootstrap_config.no_untrusted_rpc
+                    if bootstrap_config.only_known_rpc
                         && !is_known_validator(&rpc_peer.id, &validator_config.known_validators)
                     {
                         continue;
@@ -1261,7 +1261,7 @@ mod with_incremental_snapshots {
     ) -> Vec<PeerSnapshotHash> {
         let mut peer_snapshot_hashes = Vec::new();
         for rpc_peer in rpc_peers {
-            if bootstrap_config.no_untrusted_rpc
+            if bootstrap_config.only_known_rpc
                 && !is_known_validator(&rpc_peer.id, &validator_config.known_validators)
             {
                 // We were told to ignore unknown peers
@@ -1556,7 +1556,7 @@ mod with_incremental_snapshots {
                     if let Some(ref known_validators) = validator_config.known_validators {
                         if known_validators.contains(&rpc_contact_info.id)
                             && known_validators.len() == 1
-                            && bootstrap_config.no_untrusted_rpc
+                            && bootstrap_config.only_known_rpc
                         {
                             warn!("The snapshot download is too slow, throughput: {} < min speed {} bytes/sec, but will NOT abort \
                                       and try a different node as it is the only known validator and the --only-known-rpc flag \
