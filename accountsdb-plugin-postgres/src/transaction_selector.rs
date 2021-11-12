@@ -49,6 +49,7 @@ impl TransactionSelector {
         }
     }
 
+    /// Check if a transaction is of interest.
     pub fn is_transaction_selected(
         &self,
         is_vote: bool,
@@ -63,5 +64,10 @@ impl TransactionSelector {
             }
         }
         false
+    }
+
+    /// Check if any transaction is of interested at all
+    pub fn is_interested_in_any_transaction(&self) -> bool {
+        self.select_all_transactions || self.select_all_vote_transactions || !self.mentions.is_empty()
     }
 }

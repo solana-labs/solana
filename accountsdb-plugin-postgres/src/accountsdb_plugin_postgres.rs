@@ -5,6 +5,7 @@ use {
     crate::{
         accounts_selector::AccountsSelector,
         postgres_client::{ParallelPostgresClient, PostgresClientBuilder},
+        transaction_selector::TransactionSelector,
     },
     bs58,
     log::*,
@@ -23,6 +24,7 @@ use {
 pub struct AccountsDbPluginPostgres {
     client: Option<ParallelPostgresClient>,
     accounts_selector: Option<AccountsSelector>,
+    transaction_selector: Option<TransactionSelector>,
     config: Option<AccountsDbPluginPostgresConfig>,
 }
 
@@ -41,7 +43,6 @@ pub struct AccountsDbPluginPostgresConfig {
     pub threads: Option<usize>,
     pub batch_size: Option<usize>,
     pub panic_on_db_errors: Option<bool>,
-    pub store_transaction_logs: Option<bool>,
 }
 
 #[derive(Error, Debug)]
@@ -55,8 +56,6 @@ pub enum AccountsDbPluginPostgresError {
     #[error("Error preparing data store schema. Error message: ({msg})")]
     ConfigurationError { msg: String },
 }
-
-const DEFAULT_STORE_TRANSACTION_LOGS: bool = false;
 
 impl AccountsDbPlugin for AccountsDbPluginPostgres {
     fn name(&self) -> &'static str {
@@ -94,7 +93,20 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
     /// from restoring a snapshot. The default is '10'.
     /// * "panic_on_db_errors", optional, contols if to panic when there are errors replicating data to the
     /// PostgreSQL database. The default is 'false'.
-    /// * "store_transaction_logs", optional, controls if to store transaction logs, false by default.
+    /// * "transaction_selector", optional, controls if and what transaction to store. If this field is missing
+    /// None of the transction is stored.
+    /// "transaction_selector" : {
+    ///     "mentions" : \["pubkey-1", "pubkey-2", ..., "pubkey-n"\],
+    /// }
+    /// The `mentions` field support wildcard to select all transaction or all 'vote' transactions:
+    /// For example, to select all transactions:
+    /// "transaction_selector" : {
+    ///     "mentions" : \["*"\],
+    /// }
+    /// To select all vote transactions:
+    /// "transaction_selector" : {
+    ///     "mentions" : \["all_votes"\],
+    /// }
     /// # Examples
     ///
     /// {
@@ -120,6 +132,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
 
         let result: serde_json::Value = serde_json::from_str(&contents).unwrap();
         self.accounts_selector = Some(Self::create_accounts_selector_from_config(&result));
+        self.transaction_selector = Some(Self::create_transaction_selector_from_config(&result));
 
         let result: serde_json::Result<AccountsDbPluginPostgresConfig> =
             serde_json::from_str(&contents);
@@ -289,17 +302,6 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
         transaction_info: ReplicaTranscaionInfoVersions,
         slot: u64,
     ) -> Result<()> {
-        if self.config.is_none()
-            || !self
-                .config
-                .as_ref()
-                .unwrap()
-                .store_transaction_logs
-                .unwrap_or(DEFAULT_STORE_TRANSACTION_LOGS)
-        {
-            return Ok(());
-        }
-
         match &mut self.client {
             None => {
                 return Err(AccountsDbPluginError::Custom(Box::new(
@@ -310,6 +312,17 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
             }
             Some(client) => match transaction_info {
                 ReplicaTranscaionInfoVersions::V0_0_1(transaction_info) => {
+                    if let Some(transaction_selector) = &self.transaction_selector {
+                        if !transaction_selector.is_transaction_selected(
+                            transaction_info.is_vote,
+                            transaction_info.transaction.message().account_keys_iter(),
+                        ) {
+                            return Ok(());
+                        }
+                    } else {
+                        return Ok(());
+                    }
+
                     let result = client.log_transaction_info(transaction_info, slot);
 
                     if let Err(err) = result {
@@ -322,6 +335,21 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
         }
 
         Ok(())
+    }
+
+    /// Check if the plugin is interested in account data
+    fn is_account_data_interested(&self) -> bool {
+        self.accounts_selector
+            .as_ref()
+            .map_or_else(|| false, |selector| selector.is_interested_in_any_account())
+    }
+
+    /// Check if the plugin is interested in transaction data
+    fn is_transaction_data_interested(&self) -> bool {
+        self.transaction_selector.as_ref().map_or_else(
+            || false,
+            |selector| selector.is_interested_in_any_transaction(),
+        )
     }
 }
 
@@ -355,6 +383,27 @@ impl AccountsDbPluginPostgres {
                 Vec::default()
             };
             AccountsSelector::new(&accounts, &owners)
+        }
+    }
+
+    fn create_transaction_selector_from_config(config: &serde_json::Value) -> TransactionSelector {
+        let transaction_selector = &config["transaction_selector"];
+
+        if transaction_selector.is_null() {
+            TransactionSelector::default()
+        } else {
+            let accounts = &transaction_selector["mentions"];
+            let accounts: Vec<String> = if accounts.is_array() {
+                accounts
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|val| val.as_str().unwrap().to_string())
+                    .collect()
+            } else {
+                Vec::default()
+            };
+            TransactionSelector::new(&accounts)
         }
     }
 
