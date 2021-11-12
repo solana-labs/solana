@@ -237,6 +237,10 @@ pub mod reject_deployment_of_unresolved_syscalls {
     solana_sdk::declare_id!("DqniU3MfvdpU3yhmNF1RKeaM5TZQELZuyFGosASRVUoy");
 }
 
+pub mod nonce_must_be_writable {
+    solana_sdk::declare_id!("BiCU7M5w8ZCMykVSyhZ7Q3m2SWoR2qrEQ86ERcDX77ME");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -291,6 +295,7 @@ lazy_static! {
         (disable_fee_calculator::id(), "deprecate fee calculator"),
         (add_compute_budget_program::id(), "Add compute_budget_program"),
         (reject_deployment_of_unresolved_syscalls::id(), "Reject deployment of programs with unresolved syscall symbols"),
+        (nonce_must_be_writable::id(), "nonce must be writable"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
