@@ -1598,15 +1598,15 @@ fn test_consistency_halt() {
     let mut validator_snapshot_test_config =
         setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
 
-    let mut trusted_validators = HashSet::new();
-    trusted_validators.insert(cluster_nodes[0].id);
+    let mut known_validators = HashSet::new();
+    known_validators.insert(cluster_nodes[0].id);
 
     validator_snapshot_test_config
         .validator_config
-        .trusted_validators = Some(trusted_validators);
+        .known_validators = Some(known_validators);
     validator_snapshot_test_config
         .validator_config
-        .halt_on_trusted_validators_accounts_hash_mismatch = true;
+        .halt_on_known_validators_accounts_hash_mismatch = true;
 
     warn!("adding a validator");
     cluster.add_validator(
@@ -2420,11 +2420,11 @@ fn test_snapshots_blockstore_floor() {
         SocketAddrSpace::Unspecified,
     )
     .unwrap();
-    let mut trusted_validators = HashSet::new();
-    trusted_validators.insert(cluster_nodes[0].id);
+    let mut known_validators = HashSet::new();
+    known_validators.insert(cluster_nodes[0].id);
     validator_snapshot_test_config
         .validator_config
-        .trusted_validators = Some(trusted_validators);
+        .known_validators = Some(known_validators);
 
     cluster.add_validator(
         &validator_snapshot_test_config.validator_config,

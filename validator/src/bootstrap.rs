@@ -195,9 +195,9 @@ fn verify_reachable_ports(
     )
 }
 
-fn is_trusted_validator(id: &Pubkey, trusted_validators: &Option<HashSet<Pubkey>>) -> bool {
-    if let Some(trusted_validators) = trusted_validators {
-        trusted_validators.contains(id)
+fn is_known_validator(id: &Pubkey, known_validators: &Option<HashSet<Pubkey>>) -> bool {
+    if let Some(known_validators) = known_validators {
+        known_validators.contains(id)
     } else {
         false
     }
@@ -286,7 +286,7 @@ fn get_rpc_peers(
     let rpc_peers_blacklisted = rpc_peers_total - rpc_peers.len();
     let rpc_peers_trusted = rpc_peers
         .iter()
-        .filter(|rpc_peer| is_trusted_validator(&rpc_peer.id, &validator_config.trusted_validators))
+        .filter(|rpc_peer| is_known_validator(&rpc_peer.id, &validator_config.known_validators))
         .count();
 
     info!(
@@ -568,9 +568,9 @@ mod without_incremental_snapshots {
                                        && download_progress.percentage_done <= 2_f32
                                        && download_progress.estimated_remaining_time > 60_f32
                                        && download_abort_count < maximum_snapshot_download_abort {
-                                        if let Some(ref trusted_validators) = validator_config.trusted_validators {
-                                            if trusted_validators.contains(&rpc_contact_info.id)
-                                               && trusted_validators.len() == 1
+                                        if let Some(ref known_validators) = validator_config.known_validators {
+                                            if known_validators.contains(&rpc_contact_info.id)
+                                               && known_validators.len() == 1
                                                && bootstrap_config.no_untrusted_rpc {
                                                 warn!("The snapshot download is too slow, throughput: {} < min speed {} bytes/sec, but will NOT abort \
                                                       and try a different node as it is the only known validator and the --only-known-rpc flag \
@@ -632,8 +632,8 @@ mod without_incremental_snapshots {
             }
             warn!("{}", result.unwrap_err());
 
-            if let Some(ref trusted_validators) = validator_config.trusted_validators {
-                if trusted_validators.contains(&rpc_contact_info.id) {
+            if let Some(ref known_validators) = validator_config.known_validators {
+                if known_validators.contains(&rpc_contact_info.id) {
                     continue; // Never blacklist a trusted node
                 }
             }
@@ -685,13 +685,13 @@ mod without_incremental_snapshots {
                 rpc_peers
             } else {
                 let trusted_snapshot_hashes =
-                    get_trusted_snapshot_hashes(cluster_info, &validator_config.trusted_validators);
+                    get_trusted_snapshot_hashes(cluster_info, &validator_config.known_validators);
 
                 let mut eligible_rpc_peers = vec![];
 
                 for rpc_peer in rpc_peers.iter() {
                     if bootstrap_config.no_untrusted_rpc
-                        && !is_trusted_validator(&rpc_peer.id, &validator_config.trusted_validators)
+                        && !is_known_validator(&rpc_peer.id, &validator_config.known_validators)
                     {
                         continue;
                     }
@@ -772,12 +772,12 @@ mod without_incremental_snapshots {
 
     fn get_trusted_snapshot_hashes(
         cluster_info: &ClusterInfo,
-        trusted_validators: &Option<HashSet<Pubkey>>,
+        known_validators: &Option<HashSet<Pubkey>>,
     ) -> Option<HashSet<(Slot, Hash)>> {
-        if let Some(trusted_validators) = trusted_validators {
+        if let Some(known_validators) = known_validators {
             let mut trusted_snapshot_hashes = HashSet::new();
-            for trusted_validator in trusted_validators {
-                cluster_info.get_snapshot_hash_for_node(trusted_validator, |snapshot_hashes| {
+            for known_validator in known_validators {
+                cluster_info.get_snapshot_hash_for_node(known_validator, |snapshot_hashes| {
                     for snapshot_hash in snapshot_hashes {
                         trusted_snapshot_hashes.insert(*snapshot_hash);
                     }
@@ -972,8 +972,8 @@ mod with_incremental_snapshots {
             }
             warn!("{}", result.unwrap_err());
 
-            if let Some(ref trusted_validators) = validator_config.trusted_validators {
-                if trusted_validators.contains(&rpc_contact_info.id) {
+            if let Some(ref known_validators) = validator_config.known_validators {
+                if known_validators.contains(&rpc_contact_info.id) {
                     continue; // Never blacklist a trusted node
                 }
             }
@@ -1191,50 +1191,50 @@ mod with_incremental_snapshots {
         cluster_info: &ClusterInfo,
         validator_config: &ValidatorConfig,
     ) -> HashMap<(Slot, Hash), HashSet<(Slot, Hash)>> {
-        if validator_config.trusted_validators.is_none() {
-            trace!("no trusted validators, so no trusted snapshot hashes");
+        if validator_config.known_validators.is_none() {
+            trace!("no known validators, so no trusted snapshot hashes");
             return HashMap::new();
         }
-        let trusted_validators = validator_config.trusted_validators.as_ref().unwrap();
+        let known_validators = validator_config.known_validators.as_ref().unwrap();
 
         let mut trusted_snapshot_hashes: HashMap<(Slot, Hash), HashSet<(Slot, Hash)>> =
             HashMap::new();
-        trusted_validators
+        known_validators
             .iter()
-            .for_each(|trusted_validator| {
-                // First get the Crds::SnapshotHashes for each trusted validator and add them as
+            .for_each(|known_validator| {
+                // First get the Crds::SnapshotHashes for each known validator and add them as
                 // the keys in the trusted snapshot hashes HashMap.
                 let mut full_snapshot_hashes = Vec::new();
-                cluster_info.get_snapshot_hash_for_node(trusted_validator, |snapshot_hashes| {
+                cluster_info.get_snapshot_hash_for_node(known_validator, |snapshot_hashes| {
                     full_snapshot_hashes = snapshot_hashes.clone();
                 });
                 full_snapshot_hashes.into_iter().for_each(|full_snapshot_hash| {
                     // Do not add this hash if there's already a full snapshot hash with the same
                     // slot but with a _different_ hash.
-                    // NOTE: There's no good reason for trusted validators to produce snapshots at
+                    // NOTE: There's no good reason for known validators to produce snapshots at
                     // the same slot with different hashes, so this should not happen.
                     if !trusted_snapshot_hashes.keys().any(|trusted_snapshot_hash| {
                         trusted_snapshot_hash.0 == full_snapshot_hash.0 && trusted_snapshot_hash.1 != full_snapshot_hash.1
                     }) {
                         trusted_snapshot_hashes.insert(full_snapshot_hash, HashSet::new());
                     } else {
-                        info!("Ignoring full snapshot hash from trusted validator {} with a slot we've already seen (slot: {}), but a different hash.", trusted_validator, full_snapshot_hash.0);
+                        info!("Ignoring full snapshot hash from known validator {} with a slot we've already seen (slot: {}), but a different hash.", known_validator, full_snapshot_hash.0);
                     }
                 });
 
-                // Then get the Crds::IncrementalSnapshotHashes for each trusted validator and add
+                // Then get the Crds::IncrementalSnapshotHashes for each known validator and add
                 // them as the values in the trusted snapshot hashes HashMap.
-                if let Some(crds_value::IncrementalSnapshotHashes {base: full_snapshot_hash, hashes: incremental_snapshot_hashes, ..}) = cluster_info.get_incremental_snapshot_hashes_for_node(trusted_validator) {
+                if let Some(crds_value::IncrementalSnapshotHashes {base: full_snapshot_hash, hashes: incremental_snapshot_hashes, ..}) = cluster_info.get_incremental_snapshot_hashes_for_node(known_validator) {
                     if let Some(hashes) = trusted_snapshot_hashes.get_mut(&full_snapshot_hash) {
                         // Do not add this hash if there's already an incremental snapshot hash
                         // with the same slot, but with a _different_ hash.
-                        // NOTE: There's no good reason for trusted validators to produce snapshots
+                        // NOTE: There's no good reason for known validators to produce snapshots
                         // at the same slot with different hashes, so this should not happen.
                         for incremental_snapshot_hash in incremental_snapshot_hashes {
                             if !hashes.iter().any(|(slot, hash)| slot == &incremental_snapshot_hash.0 && hash != &incremental_snapshot_hash.1) {
                                 hashes.insert(incremental_snapshot_hash);
                             } else {
-                                info!("Ignoring incremental snapshot hash from trusted validator {} with a slot we've already seen (slot: {}), but a different hash.", trusted_validator, incremental_snapshot_hash.0);
+                                info!("Ignoring incremental snapshot hash from known validator {} with a slot we've already seen (slot: {}), but a different hash.", known_validator, incremental_snapshot_hash.0);
                             }
                         }
                     } else {
@@ -1245,7 +1245,7 @@ mod with_incremental_snapshots {
                         // ever fails, there is a programmer bug.
                         assert!(trusted_snapshot_hashes.keys().any(|(slot, hash)| slot == &full_snapshot_hash.0 && hash != &full_snapshot_hash.1),
                             "There must exist a full snapshot hash already in trusted snapshot hashes with the same slot but a different hash");
-                        info!("Ignoring incremental snapshot hashes from trusted validator {} with a base slot we've already seen (base slot: {}), but a different base hash.", trusted_validator, full_snapshot_hash.0);
+                        info!("Ignoring incremental snapshot hashes from known validator {} with a base slot we've already seen (base slot: {}), but a different base hash.", known_validator, full_snapshot_hash.0);
                     }
                 }
             });
@@ -1266,7 +1266,7 @@ mod with_incremental_snapshots {
         let mut peer_snapshot_hashes = Vec::new();
         for rpc_peer in rpc_peers {
             if bootstrap_config.no_untrusted_rpc
-                && !is_trusted_validator(&rpc_peer.id, &validator_config.trusted_validators)
+                && !is_known_validator(&rpc_peer.id, &validator_config.known_validators)
             {
                 // We were told to ignore untrusted peers
                 continue;
@@ -1557,9 +1557,9 @@ mod with_incremental_snapshots {
                     && download_progress.estimated_remaining_time > 60_f32
                     && *download_abort_count < maximum_snapshot_download_abort
                 {
-                    if let Some(ref trusted_validators) = validator_config.trusted_validators {
-                        if trusted_validators.contains(&rpc_contact_info.id)
-                            && trusted_validators.len() == 1
+                    if let Some(ref known_validators) = validator_config.known_validators {
+                        if known_validators.contains(&rpc_contact_info.id)
+                            && known_validators.len() == 1
                             && bootstrap_config.no_untrusted_rpc
                         {
                             warn!("The snapshot download is too slow, throughput: {} < min speed {} bytes/sec, but will NOT abort \
