@@ -1,7 +1,12 @@
-use crate::erasure::ErasureConfig;
-use serde::{Deserialize, Serialize};
-use solana_sdk::{clock::Slot, hash::Hash};
-use std::{collections::BTreeSet, ops::RangeBounds};
+use {
+    crate::erasure::ErasureConfig,
+    serde::{Deserialize, Serialize},
+    solana_sdk::{clock::Slot, hash::Hash},
+    std::{
+        collections::BTreeSet,
+        ops::{Range, RangeBounds},
+    },
+};
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 // The Meta column family
@@ -50,7 +55,7 @@ pub struct ShredIndex {
 /// Erasure coding information
 pub struct ErasureMeta {
     /// Which erasure set in the slot this is
-    pub set_index: u64,
+    set_index: u64,
     /// Deprecated field.
     #[serde(rename = "first_coding_index")]
     __unused_first_coding_index: u64,
@@ -58,7 +63,7 @@ pub struct ErasureMeta {
     #[serde(rename = "size")]
     __unused_size: usize,
     /// Erasure configuration for this erasure set
-    pub config: ErasureConfig,
+    config: ErasureConfig,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -213,7 +218,7 @@ impl SlotMeta {
 }
 
 impl ErasureMeta {
-    pub fn new(set_index: u64, config: ErasureConfig) -> ErasureMeta {
+    pub(crate) fn new(set_index: u64, config: ErasureConfig) -> ErasureMeta {
         ErasureMeta {
             set_index,
             config,
@@ -222,14 +227,27 @@ impl ErasureMeta {
         }
     }
 
-    pub fn status(&self, index: &Index) -> ErasureMetaStatus {
+    pub(crate) fn config(&self) -> ErasureConfig {
+        self.config
+    }
+
+    pub(crate) fn data_shreds_indices(&self) -> Range<u64> {
+        let num_data = self.config.num_data() as u64;
+        self.set_index..self.set_index + num_data
+    }
+
+    pub(crate) fn coding_shreds_indices(&self) -> Range<u64> {
+        let num_coding = self.config.num_coding() as u64;
+        self.set_index..self.set_index + num_coding
+    }
+
+    pub(crate) fn status(&self, index: &Index) -> ErasureMetaStatus {
         use ErasureMetaStatus::*;
 
-        let coding_indices = self.set_index..self.set_index + self.config.num_coding() as u64;
-        let num_coding = index.coding().present_in_bounds(coding_indices);
-        let num_data = index
-            .data()
-            .present_in_bounds(self.set_index..self.set_index + self.config.num_data() as u64);
+        let num_coding = index
+            .coding()
+            .present_in_bounds(self.coding_shreds_indices());
+        let num_data = index.data().present_in_bounds(self.data_shreds_indices());
 
         let (data_missing, num_needed) = (
             self.config.num_data().saturating_sub(num_data),
