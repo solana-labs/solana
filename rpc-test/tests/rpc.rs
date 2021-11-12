@@ -346,6 +346,9 @@ fn test_rpc_subscriptions() {
             .value;
         sleep(Duration::from_millis(100));
     }
+    if mint_balance != expected_mint_balance {
+        error!("mint-check timeout. mint_balance {:?}", mint_balance);
+    }
 
     // Wait for all signature subscriptions
     let deadline = Instant::now() + Duration::from_secs(15);
