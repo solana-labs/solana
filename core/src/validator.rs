@@ -431,6 +431,8 @@ impl Validator {
             None
         };
 
+        info!("AccountsDb plugin: accounts_update_notifier: {} transaction_notifier: {}",
+            accounts_update_notifier.is_some(), transaction_notifier.is_some());
         let (
             genesis_config,
             bank_forks,
