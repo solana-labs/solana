@@ -1043,9 +1043,6 @@ pub struct Bank {
     pub cost_tracker: RwLock<CostTracker>,
 
     sysvar_cache: RwLock<Vec<(Pubkey, Vec<u8>)>>,
-
-    /// AccountsDbPlugin accounts update notifier
-    accounts_update_notifier: Option<AccountsUpdateNotifier>,
 }
 
 impl Default for BlockhashQueue {
@@ -1186,7 +1183,6 @@ impl Bank {
             vote_only_bank: false,
             cost_tracker: RwLock::<CostTracker>::default(),
             sysvar_cache: RwLock::new(Vec::new()),
-            accounts_update_notifier: None,
         }
     }
 
@@ -1297,7 +1293,6 @@ impl Bank {
         bank.update_epoch_schedule();
         bank.update_recent_blockhashes();
         bank.fill_sysvar_cache();
-        bank.accounts_update_notifier = accounts_update_notifier;
         bank
     }
 
@@ -1447,7 +1442,6 @@ impl Bank {
             freeze_started: AtomicBool::new(false),
             cost_tracker: RwLock::new(CostTracker::default()),
             sysvar_cache: RwLock::new(Vec::new()),
-            accounts_update_notifier: parent.accounts_update_notifier.clone(),
         };
 
         datapoint_info!(
@@ -1575,7 +1569,6 @@ impl Bank {
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
         debug_do_not_add_builtins: bool,
-        accounts_update_notifier: Option<AccountsUpdateNotifier>,
     ) -> Self {
         fn new<T: Default>() -> T {
             T::default()
@@ -1639,7 +1632,6 @@ impl Bank {
             vote_only_bank: false,
             cost_tracker: RwLock::new(CostTracker::default()),
             sysvar_cache: RwLock::new(Vec::new()),
-            accounts_update_notifier,
         };
         bank.finish_init(
             genesis_config,
@@ -3980,8 +3972,7 @@ impl Bank {
             }
 
             if Self::can_commit(r) // Skip log collection for unprocessed transactions
-                && (transaction_log_collector_config.filter != TransactionLogCollectorFilter::None
-                    || self.accounts_update_notifier.is_some())
+                && (transaction_log_collector_config.filter != TransactionLogCollectorFilter::None)
             {
                 let mut transaction_log_collector = self.transaction_log_collector.write().unwrap();
                 let transaction_log_index = transaction_log_collector.logs.len();

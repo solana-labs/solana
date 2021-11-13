@@ -372,7 +372,6 @@ where
         debug_keys,
         additional_builtins,
         debug_do_not_add_builtins,
-        accounts_update_notifier,
     );
 
     info!("rent_collector: {:?}", bank.rent_collector());
