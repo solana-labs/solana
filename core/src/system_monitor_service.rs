@@ -1,3 +1,18 @@
+<<<<<<< HEAD
+=======
+use solana_sdk::timing::AtomicInterval;
+use std::{
+    collections::HashMap,
+    io::BufRead,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread::{self, sleep, Builder, JoinHandle},
+    time::Duration,
+};
+
+>>>>>>> f8dcb2f38 (report mem stats (#21258))
 #[cfg(target_os = "linux")]
 use std::{fs::File, io::BufReader, path::Path};
 use {
@@ -15,7 +30,11 @@ use {
 };
 
 const MS_PER_S: u64 = 1_000;
+<<<<<<< HEAD
 const SAMPLE_INTERVAL_UDP_MS: u64 = 2 * MS_PER_S;
+=======
+const SAMPLE_INTERVAL_UDP_MS: u64 = 60 * MS_PER_S;
+>>>>>>> f8dcb2f38 (report mem stats (#21258))
 const SAMPLE_INTERVAL_MEM_MS: u64 = MS_PER_S;
 const SLEEP_INTERVAL: Duration = Duration::from_millis(500);
 
@@ -187,22 +206,32 @@ impl SystemMonitorService {
 
     fn report_mem_stats() {
         if let Ok(info) = sys_info::mem_info() {
+<<<<<<< HEAD
             // stats are returned in kb.
             const KB: u64 = 1_024;
             datapoint_info!(
                 "memory-stats",
                 ("total", info.total * KB, i64),
+=======
+            datapoint_info!(
+                "memory-stats",
+                ("total", info.total, i64),
+>>>>>>> f8dcb2f38 (report mem stats (#21258))
                 ("swap_total", info.swap_total, i64),
                 (
                     "free_percent",
                     Self::calc_percent(info.free, info.total),
                     f64
                 ),
+<<<<<<< HEAD
                 (
                     "used_bytes",
                     info.total.saturating_sub(info.avail) * KB,
                     i64
                 ),
+=======
+                ("used_bytes", info.total.saturating_sub(info.avail), i64),
+>>>>>>> f8dcb2f38 (report mem stats (#21258))
                 (
                     "avail_percent",
                     Self::calc_percent(info.avail, info.total),
@@ -227,7 +256,11 @@ impl SystemMonitorService {
         }
     }
 
+<<<<<<< HEAD
     pub fn run(exit: Arc<AtomicBool>, report_os_network_stats: bool) {
+=======
+    pub fn run(exit: Arc<AtomicBool>) {
+>>>>>>> f8dcb2f38 (report mem stats (#21258))
         let mut udp_stats = None;
 
         let udp_timer = AtomicInterval::default();
@@ -237,7 +270,11 @@ impl SystemMonitorService {
                 break;
             }
 
+<<<<<<< HEAD
             if report_os_network_stats && udp_timer.should_update(SAMPLE_INTERVAL_UDP_MS) {
+=======
+            if udp_timer.should_update(SAMPLE_INTERVAL_UDP_MS) {
+>>>>>>> f8dcb2f38 (report mem stats (#21258))
                 SystemMonitorService::process_udp_stats(&mut udp_stats);
             }
 

@@ -188,6 +188,7 @@ impl BucketMapHolderStats {
 
         // sum of elapsed time in each thread
         let mut thread_time_elapsed_ms = elapsed_ms * storage.threads as u64;
+<<<<<<< HEAD
         if disk.is_some() {
             datapoint_info!(
                 if startup || was_startup {
@@ -209,6 +210,34 @@ impl BucketMapHolderStats {
                         thread_time_elapsed_ms
                     ),
                     f64
+=======
+        datapoint_info!(
+            if startup || was_startup {
+                thread_time_elapsed_ms *= 2; // more threads are allocated during startup
+                "accounts_index_startup"
+            } else {
+                "accounts_index"
+            },
+            (
+                "count_in_mem",
+                self.count_in_mem.load(Ordering::Relaxed),
+                i64
+            ),
+            ("count", self.count.load(Ordering::Relaxed), i64),
+            (
+                "bg_waiting_percent",
+                Self::calc_percent(
+                    self.bg_waiting_us.swap(0, Ordering::Relaxed) / US_PER_MS,
+                    thread_time_elapsed_ms
+                ),
+                f64
+            ),
+            (
+                "bg_throttling_wait_percent",
+                Self::calc_percent(
+                    self.bg_throttling_wait_us.swap(0, Ordering::Relaxed) / US_PER_MS,
+                    thread_time_elapsed_ms
+>>>>>>> f8dcb2f38 (report mem stats (#21258))
                 ),
                 (
                     "bg_throttling_wait_percent",
