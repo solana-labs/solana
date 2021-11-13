@@ -203,8 +203,10 @@ impl Stakes {
             let old = self.vote_accounts.remove(pubkey);
             // when account is removed (lamports == 0 or data uninitialized), don't read so that
             // given `pubkey` can be used for any owner in the future, while not affecting Stakes.
+            let vote_init_check_disabled = !check_vote_init;
             if account.lamports() != 0
-                && !(check_vote_init && VoteState::is_uninitialized_no_deser(account.data()))
+                && (vote_init_check_disabled
+                    || VoteState::is_correct_size_and_initialized(account.data()))
             {
                 let stake = old.as_ref().map_or_else(
                     || self.calculate_stake(pubkey, self.epoch, Some(&self.stake_history)),
