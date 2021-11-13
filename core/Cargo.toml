@@ -58,6 +58,7 @@ solana-vote-program = { path = "../programs/vote", version = "=1.9.0" }
 tempfile = "3.2.0"
 thiserror = "1.0"
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.9.0" }
+sys-info = "0.9.1"
 tokio = { version = "1", features = ["full"] }
 trees = "0.4.2"
 
