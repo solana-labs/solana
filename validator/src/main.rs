@@ -1092,7 +1092,7 @@ pub fn main() {
                 .help("Log when transactions are processed which reference a given key."),
         )
         .arg(
-            Arg::with_name("no_untrusted_rpc")
+            Arg::with_name("only_known_rpc")
                 .alias("no-untrusted-rpc")
                 .long("only-known-rpc")
                 .takes_value(false)
@@ -1938,7 +1938,7 @@ pub fn main() {
         no_genesis_fetch: matches.is_present("no_genesis_fetch"),
         no_snapshot_fetch: matches.is_present("no_snapshot_fetch"),
         no_check_vote_account: matches.is_present("no_check_vote_account"),
-        no_untrusted_rpc: matches.is_present("no_untrusted_rpc"),
+        only_known_rpc: matches.is_present("only_known_rpc"),
         max_genesis_archive_unpacked_size: value_t_or_exit!(
             matches,
             "max_genesis_archive_unpacked_size",

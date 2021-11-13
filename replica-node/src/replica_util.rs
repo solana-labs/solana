@@ -102,14 +102,14 @@ fn get_rpc_peer_node(
             .collect::<Vec<_>>();
         let rpc_peers_total = rpc_peers.len();
 
-        let rpc_peers_trusted = rpc_peers
+        let rpc_known_peers = rpc_peers
             .iter()
             .filter(|rpc_peer| &rpc_peer.id == peer_pubkey)
             .count();
 
         info!(
-            "Total {} RPC nodes found. {} trusted",
-            rpc_peers_total, rpc_peers_trusted
+            "Total {} RPC nodes found. {} known",
+            rpc_peers_total, rpc_known_peers
         );
 
         let mut highest_snapshot_info: Option<(Slot, Hash)> =
