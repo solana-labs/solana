@@ -414,7 +414,7 @@ fn get_rpc_node(
     validator_config: &ValidatorConfig,
     blacklisted_rpc_nodes: &mut HashSet<Pubkey>,
     snapshot_not_required: bool,
-    no_untrusted_rpc: bool,
+    only_known_rpc: bool,
     snapshot_output_dir: &Path,
 ) -> Option<(ContactInfo, Option<(Slot, Hash)>)> {
     let mut blacklist_timeout = Instant::now();
@@ -503,7 +503,7 @@ fn get_rpc_node(
             let mut eligible_rpc_peers = vec![];
 
             for rpc_peer in rpc_peers.iter() {
-                if no_untrusted_rpc
+                if only_known_rpc
                     && !is_known_validator(&rpc_peer.id, &validator_config.known_validators)
                 {
                     continue;
@@ -744,7 +744,7 @@ fn verify_reachable_ports(
 struct RpcBootstrapConfig {
     no_genesis_fetch: bool,
     no_snapshot_fetch: bool,
-    no_untrusted_rpc: bool,
+    only_known_rpc: bool,
     max_genesis_archive_unpacked_size: u64,
     no_check_vote_account: bool,
 }
@@ -754,7 +754,7 @@ impl Default for RpcBootstrapConfig {
         Self {
             no_genesis_fetch: true,
             no_snapshot_fetch: true,
-            no_untrusted_rpc: true,
+            only_known_rpc: true,
             max_genesis_archive_unpacked_size: MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
             no_check_vote_account: true,
         }
@@ -826,7 +826,7 @@ fn rpc_bootstrap(
             validator_config,
             &mut blacklisted_rpc_nodes,
             bootstrap_config.no_snapshot_fetch,
-            bootstrap_config.no_untrusted_rpc,
+            bootstrap_config.only_known_rpc,
             snapshot_output_dir,
         );
         if rpc_node_details.is_none() {
@@ -946,7 +946,7 @@ fn rpc_bootstrap(
                                         if let Some(ref known_validators) = validator_config.known_validators {
                                             if known_validators.contains(&rpc_contact_info.id)
                                                && known_validators.len() == 1
-                                               && bootstrap_config.no_untrusted_rpc {
+                                               && bootstrap_config.only_known_rpc {
                                                 warn!("The snapshot download is too slow, throughput: {} < min speed {} bytes/sec, but will NOT abort \
                                                       and try a different node as it is the only known validator and the --only-known-rpc flag \
                                                       is set. \
