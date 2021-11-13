@@ -339,16 +339,19 @@ fn test_rpc_subscriptions() {
     // Track mint balance to know when transactions have completed
     let now = Instant::now();
     let expected_mint_balance = mint_balance - transactions.len() as u64;
-    while mint_balance != expected_mint_balance && now.elapsed() < Duration::from_secs(5) {
+    while mint_balance != expected_mint_balance && now.elapsed() < Duration::from_secs(15) {
         mint_balance = rpc_client
             .get_balance_with_commitment(&alice.pubkey(), CommitmentConfig::processed())
             .unwrap()
             .value;
         sleep(Duration::from_millis(100));
     }
+    if mint_balance != expected_mint_balance {
+        error!("mint-check timeout. mint_balance {:?}", mint_balance);
+    }
 
     // Wait for all signature subscriptions
-    let deadline = Instant::now() + Duration::from_secs(7);
+    let deadline = Instant::now() + Duration::from_secs(15);
     while !signature_set.is_empty() {
         let timeout = deadline.saturating_duration_since(Instant::now());
         match status_receiver.recv_timeout(timeout) {
