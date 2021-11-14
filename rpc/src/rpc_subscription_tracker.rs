@@ -77,8 +77,8 @@ impl SubscriptionParams {
             SubscriptionParams::Logs(params) => Some(params.commitment),
             SubscriptionParams::Program(params) => Some(params.commitment),
             SubscriptionParams::Signature(params) => Some(params.commitment),
+            SubscriptionParams::Block(params) => Some(params.commitment),
             SubscriptionParams::Slot
-            | SubscriptionParams::Block(_)
             | SubscriptionParams::SlotsUpdates
             | SubscriptionParams::Root
             | SubscriptionParams::Vote => None,
