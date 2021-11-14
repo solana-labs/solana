@@ -1,5 +1,5 @@
-use solana_client::rpc_config::RpcSlotTransactionsParams;
-use solana_client::rpc_response::RpcSlotTransactionsUpdate;
+use solana_client::rpc_config::RpcBlockSubscribeParams;
+use solana_client::rpc_response::RpcBlockUpdate;
 use {
     crate::rpc_subscriptions::{NotificationEntry, RpcNotification, TimestampedNotificationEntry},
     dashmap::{mapref::entry::Entry as DashEntry, DashMap},
@@ -46,12 +46,12 @@ impl From<SubscriptionId> for u64 {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SubscriptionParams {
     Account(AccountSubscriptionParams),
+    Block(RpcBlockSubscribeParams),
     Logs(LogsSubscriptionParams),
     Program(ProgramSubscriptionParams),
     Signature(SignatureSubscriptionParams),
     Slot,
     SlotsUpdates,
-    SlotTransactions(RpcSlotTransactionsParams),
     Root,
     Vote,
 }
@@ -65,7 +65,7 @@ impl SubscriptionParams {
             SubscriptionParams::Signature(_) => "signatureNotification",
             SubscriptionParams::Slot => "slotNotification",
             SubscriptionParams::SlotsUpdates => "slotsUpdatesNotification",
-            SubscriptionParams::SlotTransactions(_) => "SlotTransactions",
+            SubscriptionParams::Block(_) => "blockNotification",
             SubscriptionParams::Root => "rootNotification",
             SubscriptionParams::Vote => "voteNotification",
         }
@@ -78,7 +78,7 @@ impl SubscriptionParams {
             SubscriptionParams::Program(params) => Some(params.commitment),
             SubscriptionParams::Signature(params) => Some(params.commitment),
             SubscriptionParams::Slot
-            | SubscriptionParams::SlotTransactions(_)
+            | SubscriptionParams::Block(_)
             | SubscriptionParams::SlotsUpdates
             | SubscriptionParams::Root
             | SubscriptionParams::Vote => None,
@@ -93,7 +93,7 @@ impl SubscriptionParams {
             SubscriptionParams::Signature(params) => &params.commitment,
             SubscriptionParams::Slot
             | SubscriptionParams::SlotsUpdates
-            | SubscriptionParams::SlotTransactions(_)
+            | SubscriptionParams::Block(_)
             | SubscriptionParams::Root
             | SubscriptionParams::Vote => return false,
         };
@@ -108,7 +108,7 @@ impl SubscriptionParams {
             SubscriptionParams::Signature(params) => &params.commitment,
             SubscriptionParams::Slot
             | SubscriptionParams::SlotsUpdates
-            | SubscriptionParams::SlotTransactions(_)
+            | SubscriptionParams::Block(_)
             | SubscriptionParams::Root
             | SubscriptionParams::Vote => return false,
         };
@@ -163,9 +163,6 @@ pub struct SignatureSubscriptionParams {
     pub commitment: CommitmentConfig,
     pub enable_received_notification: bool,
 }
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct SlotTransactionsParams {}
 
 #[derive(Clone)]
 pub struct SubscriptionControl(Arc<SubscriptionControlInner>);

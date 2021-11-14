@@ -142,7 +142,7 @@ fn count_final(params: &SubscriptionParams) {
         SubscriptionParams::Vote => {
             inc_new_counter_info!("rpc-pubsub-final-votes", 1);
         }
-        SubscriptionParams::SlotTransactions(_) => {
+        SubscriptionParams::Block(_) => {
             inc_new_counter_info!("rpc-pubsub-final-slot-txs", 1);
         }
     }
