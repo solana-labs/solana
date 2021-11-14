@@ -317,6 +317,7 @@ fn get_transaction_status(result: &Result<(), TransactionError>) -> Option<Strin
         TransactionError::SanitizeFailure => "SanitizeFailure",
         TransactionError::ClusterMaintenance => "ClusterMaintenance",
         TransactionError::AccountBorrowOutstanding => "AccountBorrowOutstanding",
+        TransactionError::WouldExceedMaxAccountCostLimit => "WouldExceedMaxAccountCostLimit",
         TransactionError::WouldExceedMaxBlockCostLimit => "WouldExceedMaxBlockCostLimit",
         TransactionError::UnsupportedVersion => "UnsupportedVersion",
         TransactionError::InvalidWritableAccount => "InvalidWritableAccount",
