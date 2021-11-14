@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use std::{
     alloc::Layout,
     cell::RefCell,
-    mem::{align_of, size_of},
+    mem::size_of,
     ptr::null_mut,
     rc::Rc,
     // Hide Result from bindgen gets confused about generics in non-generic type declarations
@@ -252,6 +252,9 @@ unsafe impl std::alloc::GlobalAlloc for BumpAllocator {
 /// Maximum number of bytes a program may add to an account during a single realloc
 pub const MAX_PERMITTED_DATA_INCREASE: usize = 1_024 * 10;
 
+// Parameters passed to the entrypoint input buffer are aligned on 8-byte boundaries
+pub const PARAMETER_ALIGNMENT: usize = 8;
+
 /// Deserialize the input arguments
 ///
 /// The integer arithmetic in this method is safe when called on a buffer that was
@@ -309,7 +312,7 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
                 from_raw_parts_mut(input.add(offset), data_len)
             }));
             offset += data_len + MAX_PERMITTED_DATA_INCREASE;
-            offset += (offset as *const u8).align_offset(align_of::<u128>()); // padding
+            offset += (offset as *const u8).align_offset(PARAMETER_ALIGNMENT); // padding
 
             #[allow(clippy::cast_ptr_alignment)]
             let rent_epoch = *(input.add(offset) as *const u64);
