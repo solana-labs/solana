@@ -1,5 +1,6 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
+use solana_transaction_status::ConfirmedBlock;
 use {
     crate::{
         optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
@@ -95,6 +96,7 @@ pub enum NotificationEntry {
     Bank(CommitmentSlots),
     Gossip(Slot),
     SignaturesReceived((Slot, Vec<Signature>)),
+    Block(ConfirmedBlock),
     Subscribed(SubscriptionParams, SubscriptionId),
     Unsubscribed(SubscriptionParams, SubscriptionId),
 }
@@ -115,6 +117,7 @@ impl std::fmt::Debug for NotificationEntry {
                 write!(f, "SignaturesReceived({:?})", slot_signatures)
             }
             NotificationEntry::Gossip(slot) => write!(f, "Gossip({:?})", slot),
+            NotificationEntry::Block(block) => write!(f, "Block({:?})", block.blockhash),
             NotificationEntry::Subscribed(params, id) => {
                 write!(f, "Subscribed({:?}, {:?})", params, id)
             }
@@ -596,6 +599,8 @@ impl RpcSubscriptions {
         self.enqueue_notification(NotificationEntry::Gossip(slot));
     }
 
+    pub fn notify_block(&self, block: ConfirmedBlock) {}
+
     pub fn notify_slot_update(&self, slot_update: SlotUpdate) {
         self.enqueue_notification(NotificationEntry::SlotUpdate(slot_update));
     }
@@ -671,6 +676,9 @@ impl RpcSubscriptions {
                         }
                         NotificationEntry::Unsubscribed(params, id) => {
                             subscriptions.unsubscribe(params, id);
+                        }
+                        NotificationEntry::Block(_block) => {
+                            // TODO (LB)
                         }
                         NotificationEntry::Slot(slot_info) => {
                             if let Some(sub) = subscriptions
