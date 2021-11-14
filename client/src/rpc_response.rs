@@ -426,7 +426,7 @@ pub struct RpcInflationReward {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct RpcSlotTransactionsUpdate {}
+pub struct RpcBlockUpdate {}
 
 impl From<ConfirmedTransactionStatusWithSignature> for RpcConfirmedTransactionStatusWithSignature {
     fn from(value: ConfirmedTransactionStatusWithSignature) -> Self {

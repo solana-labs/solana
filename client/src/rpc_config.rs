@@ -184,7 +184,7 @@ pub struct RpcSignatureSubscribeConfig {
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
-pub struct RpcSlotTransactionsParams {}
+pub struct RpcBlockSubscribeParams {}
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
