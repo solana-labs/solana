@@ -182,6 +182,10 @@ pub struct RpcSignatureSubscribeConfig {
     pub enable_received_notification: Option<bool>,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcSlotTransactionsParams {}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcSignaturesForAddressConfig {
