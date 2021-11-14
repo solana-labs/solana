@@ -1,3 +1,5 @@
+use solana_client::rpc_config::RpcSlotTransactionsParams;
+use solana_client::rpc_response::RpcSlotTransactionsUpdate;
 use {
     crate::rpc_subscriptions::{NotificationEntry, RpcNotification, TimestampedNotificationEntry},
     dashmap::{mapref::entry::Entry as DashEntry, DashMap},
@@ -49,6 +51,7 @@ pub enum SubscriptionParams {
     Signature(SignatureSubscriptionParams),
     Slot,
     SlotsUpdates,
+    SlotTransactions(RpcSlotTransactionsParams),
     Root,
     Vote,
 }
@@ -62,6 +65,7 @@ impl SubscriptionParams {
             SubscriptionParams::Signature(_) => "signatureNotification",
             SubscriptionParams::Slot => "slotNotification",
             SubscriptionParams::SlotsUpdates => "slotsUpdatesNotification",
+            SubscriptionParams::SlotTransactions(_) => "SlotTransactions",
             SubscriptionParams::Root => "rootNotification",
             SubscriptionParams::Vote => "voteNotification",
         }
@@ -74,6 +78,7 @@ impl SubscriptionParams {
             SubscriptionParams::Program(params) => Some(params.commitment),
             SubscriptionParams::Signature(params) => Some(params.commitment),
             SubscriptionParams::Slot
+            | SubscriptionParams::SlotTransactions(_)
             | SubscriptionParams::SlotsUpdates
             | SubscriptionParams::Root
             | SubscriptionParams::Vote => None,
@@ -88,6 +93,7 @@ impl SubscriptionParams {
             SubscriptionParams::Signature(params) => &params.commitment,
             SubscriptionParams::Slot
             | SubscriptionParams::SlotsUpdates
+            | SubscriptionParams::SlotTransactions(_)
             | SubscriptionParams::Root
             | SubscriptionParams::Vote => return false,
         };
@@ -102,6 +108,7 @@ impl SubscriptionParams {
             SubscriptionParams::Signature(params) => &params.commitment,
             SubscriptionParams::Slot
             | SubscriptionParams::SlotsUpdates
+            | SubscriptionParams::SlotTransactions(_)
             | SubscriptionParams::Root
             | SubscriptionParams::Vote => return false,
         };
@@ -156,6 +163,9 @@ pub struct SignatureSubscriptionParams {
     pub commitment: CommitmentConfig,
     pub enable_received_notification: bool,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SlotTransactionsParams {}
 
 #[derive(Clone)]
 pub struct SubscriptionControl(Arc<SubscriptionControlInner>);

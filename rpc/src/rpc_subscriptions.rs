@@ -422,6 +422,7 @@ fn initial_last_notified_slot(
         | SubscriptionParams::Signature(_)
         | SubscriptionParams::Slot
         | SubscriptionParams::SlotsUpdates
+        | SubscriptionParams::SlotTransactions(_)
         | SubscriptionParams::Root
         | SubscriptionParams::Vote => 0,
     }
