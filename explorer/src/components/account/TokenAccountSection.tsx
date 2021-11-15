@@ -108,8 +108,12 @@ function FungibleTokenMintAccountCard({
   const coinInfo = useCoinGecko(tokenInfo?.extensions?.coingeckoId);
 
   let tokenPriceInfo;
+  let tokenPriceDecimals = 2;
   if (coinInfo?.status === CoingeckoStatus.Success) {
     tokenPriceInfo = coinInfo.coinInfo;
+    if (tokenPriceInfo && tokenPriceInfo.price < 1) {
+      tokenPriceDecimals = 6;
+    }
   }
 
   return (
@@ -130,7 +134,7 @@ function FungibleTokenMintAccountCard({
                   </span>
                 </h4>
                 <h1 className="mb-0">
-                  ${tokenPriceInfo.price.toFixed(2)}{" "}
+                  ${tokenPriceInfo.price.toFixed(tokenPriceDecimals)}{" "}
                   {tokenPriceInfo.price_change_percentage_24h > 0 && (
                     <small className="change-positive">
                       &uarr;{" "}
