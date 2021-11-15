@@ -69,7 +69,7 @@ jsonrpc-derive = "18.0.0"
 jsonrpc-pubsub = "18.0.0"
 matches = "0.1.9"
 reqwest = { version = "0.11.6", default-features = false, features = ["blocking", "rustls-tls", "json"] }
-serde_json = "1.0.69"
+serde_json = "1.0.70"
 serial_test = "0.5.1"
 solana-program-runtime = { path = "../program-runtime", version = "=1.9.0" }
 solana-stake-program = { path = "../programs/stake", version = "=1.9.0" }

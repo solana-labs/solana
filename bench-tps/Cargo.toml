@@ -12,7 +12,7 @@ publish = false
 clap = "2.33.1"
 log = "0.4.14"
 rayon = "1.5.1"
-serde_json = "1.0.69"
+serde_json = "1.0.70"
 serde_yaml = "0.8.21"
 solana-core = { path = "../core", version = "=1.9.0" }
 solana-genesis = { path = "../genesis", version = "=1.9.0" }
