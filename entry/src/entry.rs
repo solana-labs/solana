@@ -23,6 +23,7 @@ use solana_perf::{
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::hash::Hash;
 use solana_sdk::timing;
+use solana_sdk::packet::Meta;
 use solana_sdk::transaction::{Result, SanitizedTransaction, Transaction, VersionedTransaction};
 use std::cell::RefCell;
 use std::ffi::OsStr;
@@ -464,10 +465,8 @@ pub fn start_verify_transactions(
                 match entry {
                     EntryType::Transactions(transactions) => {
                         for hashed_tx in transactions {
-                            // TODO: this leaves some fields in packets.packets[curr_packet].meta uninitialized;
-                            // zeroing everything out when these packets are only used for GPU
-                            // sigverify is not a great use of memory bandwidth, but
-                            // this is not ideal and may lead to subtle/unexpected current or future bugs...
+                            packets.packets[curr_packet].meta = Meta::default();
+                            
                             let res = Packet::populate_packet(
                                 &mut packets.packets[curr_packet],
                                 None,
@@ -914,8 +913,8 @@ mod tests {
             Ok(_) => {
                 assert!(
                     gpu_verify_result.verification_status != EntryVerificationStatus::Failure
-                        && gpu_verify_result.finish_verify()
                 );
+                assert!(gpu_verify_result.finish_verify());
                 return true;
             }
             _ => {
