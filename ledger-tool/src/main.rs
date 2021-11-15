@@ -15,6 +15,7 @@ use solana_clap_utils::{
         is_parsable, is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
     },
 };
+use solana_core::system_monitor_service::SystemMonitorService;
 use solana_entry::entry::Entry;
 use solana_ledger::{
     ancestor_iterator::AncestorIterator,
@@ -68,7 +69,11 @@ use std::{
     path::{Path, PathBuf},
     process::{exit, Command, Stdio},
     str::FromStr,
-    sync::{mpsc::channel, Arc, RwLock},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::channel,
+        Arc, RwLock,
+    },
 };
 
 mod bigtable;
@@ -1976,6 +1981,9 @@ fn main() {
                 accounts_index_config.bins = Some(bins);
             }
 
+            let exit_signal = Arc::new(AtomicBool::new(false));
+            let system_monitor_service = SystemMonitorService::new(Arc::clone(&exit_signal));
+
             if let Some(limit) = value_t!(arg_matches, "accounts_index_memory_limit_mb", usize).ok()
             {
                 accounts_index_config.index_limit_mb = Some(limit);
@@ -2051,6 +2059,8 @@ fn main() {
                 let working_bank = bank_forks.working_bank();
                 working_bank.print_accounts_stats();
             }
+            exit_signal.store(true, Ordering::Relaxed);
+            system_monitor_service.join().unwrap();
             println!("Ok");
         }
         ("graph", Some(arg_matches)) => {
