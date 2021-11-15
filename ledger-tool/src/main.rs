@@ -885,6 +885,12 @@ fn main() {
         .validator(is_parsable::<usize>)
         .takes_value(true)
         .help("How much memory the accounts index can consume. If this is exceeded, some account index entries will be stored on disk. If missing, the entire index is stored in memory.");
+    let accountsdb_skip_shrink = Arg::with_name("accounts_db_skip_shrink")
+        .long("accounts-db-skip-shrink")
+        .help(
+            "Enables faster starting of ledger-tool by skipping shrink. \
+                      This option is for use during testing.",
+        );
     let accounts_filler_count = Arg::with_name("accounts_filler_count")
         .long("accounts-filler-count")
         .value_name("COUNT")
@@ -1229,6 +1235,7 @@ fn main() {
             .arg(&limit_load_slot_count_from_snapshot_arg)
             .arg(&accounts_index_bins)
             .arg(&accounts_index_limit)
+            .arg(&accountsdb_skip_shrink)
             .arg(&accounts_filler_count)
             .arg(&verify_index_arg)
             .arg(&hard_forks_arg)
@@ -2031,6 +2038,7 @@ fn main() {
                 allow_dead_slots: arg_matches.is_present("allow_dead_slots"),
                 accounts_db_test_hash_calculation: arg_matches
                     .is_present("accounts_db_test_hash_calculation"),
+                accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
                 ..ProcessOptions::default()
             };
             let print_accounts_stats = arg_matches.is_present("print_accounts_stats");
