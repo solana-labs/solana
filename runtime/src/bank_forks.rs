@@ -49,13 +49,16 @@ pub struct SnapshotConfig {
 }
 
 struct SetRootTimings {
-    total_banks: i64,
+    total_parent_banks: i64,
     total_squash_cache_ms: i64,
     total_squash_accounts_ms: i64,
     total_snapshot_ms: i64,
     tx_count: i64,
     prune_non_rooted_ms: i64,
     drop_parent_banks_ms: i64,
+    prune_slots_ms: i64,
+    prune_remove_ms: i64,
+    dropped_banks_len: i64,
 }
 
 pub struct BankForks {
@@ -216,7 +219,7 @@ impl BankForks {
         root: Slot,
         accounts_background_request_sender: &AbsRequestSender,
         highest_confirmed_root: Option<Slot>,
-    ) -> SetRootTimings {
+    ) -> (Vec<Arc<Bank>>, SetRootTimings) {
         let old_epoch = self.root_bank().epoch();
         self.root = root;
         let root_bank = self
@@ -250,7 +253,7 @@ impl BankForks {
         let mut banks = vec![root_bank];
         let parents = root_bank.parents();
         banks.extend(parents.iter());
-        let total_banks = banks.len();
+        let total_parent_banks = banks.len();
         let mut total_squash_accounts_ms = 0;
         let mut total_squash_cache_ms = 0;
         let mut total_snapshot_ms = 0;
@@ -298,22 +301,30 @@ impl BankForks {
         }
         let new_tx_count = root_bank.transaction_count();
         let mut prune_time = Measure::start("set_root::prune");
-        self.prune_non_rooted(root, highest_confirmed_root);
+        let (removed_banks, prune_slots_ms, prune_remove_ms) =
+            self.prune_non_rooted(root, highest_confirmed_root);
         prune_time.stop();
+        let dropped_banks_len = removed_banks.len();
 
         let mut drop_parent_banks_time = Measure::start("set_root::drop_banks");
         drop(parents);
         drop_parent_banks_time.stop();
 
-        SetRootTimings {
-            total_banks: total_banks as i64,
-            total_squash_cache_ms,
-            total_squash_accounts_ms,
-            total_snapshot_ms,
-            tx_count: (new_tx_count - root_tx_count) as i64,
-            prune_non_rooted_ms: prune_time.as_ms() as i64,
-            drop_parent_banks_ms: drop_parent_banks_time.as_ms() as i64,
-        }
+        (
+            removed_banks,
+            SetRootTimings {
+                total_parent_banks: total_parent_banks as i64,
+                total_squash_cache_ms,
+                total_squash_accounts_ms,
+                total_snapshot_ms,
+                tx_count: (new_tx_count - root_tx_count) as i64,
+                prune_non_rooted_ms: prune_time.as_ms() as i64,
+                drop_parent_banks_ms: drop_parent_banks_time.as_ms() as i64,
+                prune_slots_ms: prune_slots_ms as i64,
+                prune_remove_ms: prune_remove_ms as i64,
+                dropped_banks_len: dropped_banks_len as i64,
+            },
+        )
     }
 
     pub fn set_root(
@@ -321,9 +332,9 @@ impl BankForks {
         root: Slot,
         accounts_background_request_sender: &AbsRequestSender,
         highest_confirmed_root: Option<Slot>,
-    ) {
+    ) -> Vec<Arc<Bank>> {
         let set_root_start = Instant::now();
-        let set_root_metrics = self.do_set_root_return_metrics(
+        let (removed_banks, set_root_metrics) = self.do_set_root_return_metrics(
             root,
             accounts_background_request_sender,
             highest_confirmed_root,
@@ -336,7 +347,12 @@ impl BankForks {
                 i64
             ),
             ("slot", root, i64),
-            ("total_banks", set_root_metrics.total_banks, i64),
+            (
+                "total_parent_banks",
+                set_root_metrics.total_parent_banks,
+                i64
+            ),
+            ("total_banks", self.banks.len(), i64),
             (
                 "total_squash_cache_ms",
                 set_root_metrics.total_squash_cache_ms,
@@ -359,7 +375,11 @@ impl BankForks {
                 set_root_metrics.drop_parent_banks_ms,
                 i64
             ),
+            ("prune_slots_ms", set_root_metrics.prune_slots_ms, i64),
+            ("prune_remove_ms", set_root_metrics.prune_remove_ms, i64),
+            ("dropped_banks_len", set_root_metrics.dropped_banks_len, i64),
         );
+        removed_banks
     }
 
     pub fn root(&self) -> Slot {
@@ -416,7 +436,16 @@ impl BankForks {
     /// i.e. the cluster-confirmed root.  This commitment is stronger than the local node's root.
     /// So (A) and (B) are kept to facilitate RPC at different commitment levels.  Everything below
     /// the highest confirmed root can be pruned.
-    fn prune_non_rooted(&mut self, root: Slot, highest_confirmed_root: Option<Slot>) {
+    fn prune_non_rooted(
+        &mut self,
+        root: Slot,
+        highest_confirmed_root: Option<Slot>,
+    ) -> (Vec<Arc<Bank>>, u64, u64) {
+        // Clippy doesn't like separating the two collects below,
+        // but we want to collect timing separately, and the 2nd requires
+        // a unique borrow to self which is already borrowed by self.banks
+        #![allow(clippy::needless_collect)]
+        let mut prune_slots_time = Measure::start("prune_slots");
         let highest_confirmed_root = highest_confirmed_root.unwrap_or(root);
         let prune_slots: Vec<_> = self
             .banks
@@ -431,13 +460,20 @@ impl BankForks {
                 !keep
             })
             .collect();
-        for slot in prune_slots {
-            self.remove(slot);
-        }
-        datapoint_debug!(
-            "bank_forks_purge_non_root",
-            ("num_banks_retained", self.banks.len(), i64),
-        );
+        prune_slots_time.stop();
+
+        let mut prune_remove_time = Measure::start("prune_slots");
+        let removed_banks = prune_slots
+            .into_iter()
+            .filter_map(|slot| self.remove(slot))
+            .collect();
+        prune_remove_time.stop();
+
+        (
+            removed_banks,
+            prune_slots_time.as_ms(),
+            prune_remove_time.as_ms(),
+        )
     }
 
     pub fn set_snapshot_config(&mut self, snapshot_config: Option<SnapshotConfig>) {
