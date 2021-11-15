@@ -508,7 +508,9 @@ pub fn uses_durable_nonce(tx: &Transaction) -> Option<&CompiledInstruction> {
                 Some(program_id) => system_program::check_id(program_id),
                 _ => false,
             }
-        } && matches!(limited_deserialize(&maybe_ix.data), Ok(SystemInstruction::AdvanceNonceAccount))
+        }
+        && matches!(maybe_ix.accounts.get(0), Some(nonce_idx) if message.is_writable(*nonce_idx as usize, false))
+        && matches!(limited_deserialize(&maybe_ix.data), Ok(SystemInstruction::AdvanceNonceAccount))
         )
 }
 
@@ -532,7 +534,7 @@ mod tests {
         hash::hash,
         instruction::AccountMeta,
         signature::{Keypair, Presigner, Signer},
-        system_instruction,
+        system_instruction, sysvar,
     };
     use bincode::{deserialize, serialize, serialized_size};
     use std::mem::size_of;
@@ -990,6 +992,32 @@ mod tests {
         ];
         let message = Message::new(&instructions, Some(&from_pubkey));
         let tx = Transaction::new(&[&from_keypair, &nonce_keypair], message, Hash::default());
+        assert!(uses_durable_nonce(&tx).is_none());
+    }
+
+    #[test]
+    fn tx_uses_ro_nonce_account() {
+        let from_keypair = Keypair::new();
+        let from_pubkey = from_keypair.pubkey();
+        let nonce_keypair = Keypair::new();
+        let nonce_pubkey = nonce_keypair.pubkey();
+        let account_metas = vec![
+            AccountMeta::new_readonly(nonce_pubkey, false),
+            #[allow(deprecated)]
+            AccountMeta::new_readonly(sysvar::recent_blockhashes::id(), false),
+            AccountMeta::new_readonly(nonce_pubkey, true),
+        ];
+        let nonce_instruction = Instruction::new_with_bincode(
+            system_program::id(),
+            &system_instruction::SystemInstruction::AdvanceNonceAccount,
+            account_metas,
+        );
+        let tx = Transaction::new_signed_with_payer(
+            &[nonce_instruction],
+            Some(&from_pubkey),
+            &[&from_keypair, &nonce_keypair],
+            Hash::default(),
+        );
         assert!(uses_durable_nonce(&tx).is_none());
     }
 
