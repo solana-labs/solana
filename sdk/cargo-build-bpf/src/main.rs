@@ -20,20 +20,23 @@ use {
     tar::Archive,
 };
 
-struct Config {
+struct Config<'a> {
+    cargo_args: Option<Vec<&'a str>>,
     bpf_out_dir: Option<PathBuf>,
     bpf_sdk: PathBuf,
     dump: bool,
     features: Vec<String>,
+    generate_child_script_on_failure: bool,
     no_default_features: bool,
     offline: bool,
     verbose: bool,
     workspace: bool,
 }
 
-impl Default for Config {
+impl Default for Config<'_> {
     fn default() -> Self {
         Self {
+            cargo_args: None,
             bpf_sdk: env::current_exe()
                 .expect("Unable to get current executable")
                 .parent()
@@ -44,6 +47,7 @@ impl Default for Config {
             bpf_out_dir: None,
             dump: false,
             features: vec![],
+            generate_child_script_on_failure: false,
             no_default_features: false,
             offline: false,
             verbose: false,
@@ -52,7 +56,7 @@ impl Default for Config {
     }
 }
 
-fn spawn<I, S>(program: &Path, args: I) -> String
+fn spawn<I, S>(program: &Path, args: I, generate_child_script_on_failure: bool) -> String
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
@@ -75,6 +79,29 @@ where
 
     let output = child.wait_with_output().expect("failed to wait on child");
     if !output.status.success() {
+        if !generate_child_script_on_failure {
+            exit(1);
+        }
+        eprintln!("cargo-build-bpf exited on command execution failure");
+        let script_name = format!(
+            "cargo-build-bpf-child-script-{}.sh",
+            program.file_name().unwrap().to_str().unwrap(),
+        );
+        let file = File::create(&script_name).unwrap();
+        let mut out = BufWriter::new(file);
+        for (key, value) in env::vars() {
+            writeln!(out, "{}=\"{}\" \\", key, value).unwrap();
+        }
+        write!(out, "{}", program.display()).unwrap();
+        for arg in args.iter() {
+            write!(out, " {}", arg.as_ref().to_str().unwrap_or("?")).unwrap();
+        }
+        writeln!(out).unwrap();
+        out.flush().unwrap();
+        eprintln!(
+            "To rerun the failed command for debugging use {}",
+            script_name,
+        );
         exit(1);
     }
     output
@@ -266,32 +293,17 @@ fn postprocess_dump(program_dump: &Path) {
 // Check whether the built .so file contains undefined symbols that are
 // not known to the runtime and warn about them if any.
 fn check_undefined_symbols(config: &Config, program: &Path) {
-    let syscalls: HashSet<String> = [
-        "abort",
-        "sol_panic_",
-        "sol_log_",
-        "sol_log_64_",
-        "sol_log_compute_units_",
-        "sol_log_pubkey",
-        "sol_create_program_address",
-        "sol_try_find_program_address",
-        "sol_sha256",
-        "sol_keccak256",
-        "sol_get_clock_sysvar",
-        "sol_get_epoch_schedule_sysvar",
-        "sol_get_fees_sysvar",
-        "sol_get_rent_sysvar",
-        "sol_memcpy_",
-        "sol_memmove_",
-        "sol_memcmp_",
-        "sol_memset_",
-        "sol_invoke_signed_c",
-        "sol_invoke_signed_rust",
-        "sol_alloc_free_",
-    ]
-    .iter()
-    .map(|&symbol| symbol.to_owned())
-    .collect();
+    let syscalls_txt = config.bpf_sdk.join("syscalls.txt");
+    let file = match File::open(syscalls_txt) {
+        Ok(x) => x,
+        _ => return,
+    };
+    let mut syscalls = HashSet::new();
+    for line_result in BufReader::new(file).lines() {
+        let line = line_result.unwrap();
+        let line = line.trim_end();
+        syscalls.insert(line.to_string());
+    }
     let entry =
         Regex::new(r"^ *[0-9]+: [0-9a-f]{16} +[0-9a-f]+ +NOTYPE +GLOBAL +DEFAULT +UND +(.+)")
             .unwrap();
@@ -304,7 +316,11 @@ fn check_undefined_symbols(config: &Config, program: &Path) {
         .join("llvm-readelf");
     let mut readelf_args = vec!["--dyn-symbols"];
     readelf_args.push(program.to_str().unwrap());
-    let output = spawn(&readelf, &readelf_args);
+    let output = spawn(
+        &readelf,
+        &readelf_args,
+        config.generate_child_script_on_failure,
+    );
     if config.verbose {
         println!("{}", output);
     }
@@ -337,7 +353,14 @@ fn link_bpf_toolchain(config: &Config) {
         .join("rust");
     let rustup = PathBuf::from("rustup");
     let rustup_args = vec!["toolchain", "list", "-v"];
-    let rustup_output = spawn(&rustup, &rustup_args);
+    let rustup_output = spawn(
+        &rustup,
+        &rustup_args,
+        config.generate_child_script_on_failure,
+    );
+    if config.verbose {
+        println!("{}", rustup_output);
+    }
     let mut do_link = true;
     for line in rustup_output.lines() {
         if line.starts_with("bpf") {
@@ -346,7 +369,14 @@ fn link_bpf_toolchain(config: &Config) {
             let path = it.next();
             if path.unwrap() != toolchain_path.to_str().unwrap() {
                 let rustup_args = vec!["toolchain", "uninstall", "bpf"];
-                spawn(&rustup, &rustup_args);
+                let output = spawn(
+                    &rustup,
+                    &rustup_args,
+                    config.generate_child_script_on_failure,
+                );
+                if config.verbose {
+                    println!("{}", output);
+                }
             } else {
                 do_link = false;
             }
@@ -355,7 +385,14 @@ fn link_bpf_toolchain(config: &Config) {
     }
     if do_link {
         let rustup_args = vec!["toolchain", "link", "bpf", toolchain_path.to_str().unwrap()];
-        spawn(&rustup, &rustup_args);
+        let output = spawn(
+            &rustup,
+            &rustup_args,
+            config.generate_child_script_on_failure,
+        );
+        if config.verbose {
+            println!("{}", output);
+        }
     }
 }
 
@@ -520,7 +557,19 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     if config.verbose {
         cargo_build_args.push("--verbose");
     }
-    spawn(&cargo_build, &cargo_build_args);
+    if let Some(args) = &config.cargo_args {
+        for arg in args {
+            cargo_build_args.push(arg);
+        }
+    }
+    let output = spawn(
+        &cargo_build,
+        &cargo_build_args,
+        config.generate_child_script_on_failure,
+    );
+    if config.verbose {
+        println!("{}", output);
+    }
 
     if let Some(program_name) = program_name {
         let program_unstripped_so = target_build_directory.join(&format!("{}.so", program_name));
@@ -559,17 +608,25 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
         }
 
         if file_older_or_missing(&program_unstripped_so, &program_so) {
-            spawn(
+            let output = spawn(
                 &config.bpf_sdk.join("scripts").join("strip.sh"),
                 &[&program_unstripped_so, &program_so],
+                config.generate_child_script_on_failure,
             );
+            if config.verbose {
+                println!("{}", output);
+            }
         }
 
         if config.dump && file_older_or_missing(&program_unstripped_so, &program_dump) {
-            spawn(
+            let output = spawn(
                 &config.bpf_sdk.join("scripts").join("dump.sh"),
                 &[&program_unstripped_so, &program_dump],
+                config.generate_child_script_on_failure,
             );
+            if config.verbose {
+                println!("{}", output);
+            }
             postprocess_dump(&program_dump);
         }
 
@@ -601,7 +658,7 @@ fn build_bpf(config: Config, manifest_path: Option<PathBuf>) {
 
     if let Some(root_package) = metadata.root_package() {
         if !config.workspace {
-            build_bpf_package(&config, &metadata.target_directory, root_package);
+            build_bpf_package(&config, metadata.target_directory.as_ref(), root_package);
             return;
         }
     }
@@ -622,7 +679,7 @@ fn build_bpf(config: Config, manifest_path: Option<PathBuf>) {
         .collect::<Vec<_>>();
 
     for package in all_bpf_packages {
-        build_bpf_package(&config, &metadata.target_directory, package);
+        build_bpf_package(&config, metadata.target_directory.as_ref(), package);
     }
 }
 
@@ -684,6 +741,12 @@ fn main() {
                 .help("Space-separated list of features to activate"),
         )
         .arg(
+            Arg::with_name("generate_child_script_on_failure")
+                .long("generate-child-script-on-failure")
+                .takes_value(false)
+                .help("Generate a shell script to rerun a failed subcommand"),
+        )
+        .arg(
             Arg::with_name("manifest_path")
                 .long("manifest-path")
                 .value_name("PATH")
@@ -722,6 +785,9 @@ fn main() {
     let bpf_out_dir = value_t!(matches, "bpf_out_dir", PathBuf).ok();
 
     let config = Config {
+        cargo_args: matches
+            .values_of("cargo_args")
+            .map(|vals| vals.collect::<Vec<_>>()),
         bpf_sdk: fs::canonicalize(&bpf_sdk).unwrap_or_else(|err| {
             eprintln!(
                 "BPF SDK path does not exist: {}: {}",
@@ -743,6 +809,7 @@ fn main() {
         features: values_t!(matches, "features", String)
             .ok()
             .unwrap_or_else(Vec::new),
+        generate_child_script_on_failure: matches.is_present("generate_child_script_on_failure"),
         no_default_features: matches.is_present("no_default_features"),
         offline: matches.is_present("offline"),
         verbose: matches.is_present("verbose"),
