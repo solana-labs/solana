@@ -63,38 +63,6 @@ fn id_to_tokens(
     });
 }
 
-<<<<<<< HEAD
-=======
-fn deprecated_id_to_tokens(
-    id: &proc_macro2::TokenStream,
-    pubkey_type: proc_macro2::TokenStream,
-    tokens: &mut proc_macro2::TokenStream,
-) {
-    tokens.extend(quote! {
-        /// The static program ID
-        pub static ID: #pubkey_type = #id;
-
-        /// Confirms that a given pubkey is equivalent to the program ID
-        #[deprecated()]
-        pub fn check_id(id: &#pubkey_type) -> bool {
-            id == &ID
-        }
-
-        /// Returns the program ID
-        #[deprecated()]
-        pub fn id() -> #pubkey_type {
-            ID
-        }
-
-        #[cfg(test)]
-        #[test]
-            fn test_id() {
-            #[allow(deprecated)]
-            assert!(check_id(&id()));
-        }
-    });
-}
-
 struct SdkPubkey(proc_macro2::TokenStream);
 
 impl Parse for SdkPubkey {
@@ -125,7 +93,6 @@ impl ToTokens for ProgramSdkPubkey {
     }
 }
 
->>>>>>> d8a392c20 (add new macro: `pubkey!` (#21245))
 struct Id(proc_macro2::TokenStream);
 
 impl Parse for Id {
