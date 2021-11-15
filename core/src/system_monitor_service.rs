@@ -186,16 +186,22 @@ impl SystemMonitorService {
 
     fn report_mem_stats() {
         if let Ok(info) = sys_info::mem_info() {
+            // stats are returned in kb.
+            const KB: u64 = 1_024;
             datapoint_info!(
                 "memory-stats",
-                ("total", info.total, i64),
+                ("total", info.total * KB, i64),
                 ("swap_total", info.swap_total, i64),
                 (
                     "free_percent",
                     Self::calc_percent(info.free, info.total),
                     f64
                 ),
-                ("used_bytes", info.total.saturating_sub(info.avail), i64),
+                (
+                    "used_bytes",
+                    info.total.saturating_sub(info.avail) * KB,
+                    i64
+                ),
                 (
                     "avail_percent",
                     Self::calc_percent(info.avail, info.total),
