@@ -354,7 +354,7 @@ where
         shrink_ratio,
         verify_index,
         accounts_db_config,
-        accounts_update_notifier.clone(),
+        accounts_update_notifier,
     )?;
     accounts_db.freeze_accounts(
         &Ancestors::from(&bank_fields.ancestors),

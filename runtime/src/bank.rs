@@ -1259,7 +1259,7 @@ impl Bank {
             accounts_db_caching_enabled,
             shrink_ratio,
             accounts_db_config,
-            accounts_update_notifier.clone(),
+            accounts_update_notifier,
         );
         let mut bank = Self::default_with_accounts(accounts);
         bank.ancestors = Ancestors::from(vec![bank.slot()]);
@@ -3972,7 +3972,7 @@ impl Bank {
             }
 
             if Self::can_commit(r) // Skip log collection for unprocessed transactions
-                && (transaction_log_collector_config.filter != TransactionLogCollectorFilter::None)
+                && transaction_log_collector_config.filter != TransactionLogCollectorFilter::None
             {
                 let mut transaction_log_collector = self.transaction_log_collector.write().unwrap();
                 let transaction_log_index = transaction_log_collector.logs.len();
@@ -4007,13 +4007,12 @@ impl Bank {
 
                 if store {
                     if let Some(log_messages) = transaction_log_messages.get(i).cloned().flatten() {
-                        let transaction_log_info = TransactionLogInfo {
+                        transaction_log_collector.logs.push(TransactionLogInfo {
                             signature: *tx.signature(),
                             result: r.clone(),
                             is_vote,
                             log_messages,
-                        };
-                        transaction_log_collector.logs.push(transaction_log_info);
+                        });
                     }
                 }
             }
