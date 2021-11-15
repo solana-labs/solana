@@ -122,6 +122,7 @@ mod tests {
                 archive_format: ArchiveFormat::TarBzip2,
                 snapshot_version,
                 maximum_snapshots_to_retain: DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+                packager_thread_niceness_adj: 0,
             };
             bank_forks.set_snapshot_config(Some(snapshot_config.clone()));
             SnapshotTestConfig {
@@ -459,6 +460,7 @@ mod tests {
             &exit,
             &cluster_info,
             DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+            0,
         );
 
         let thread_pool = accounts_db::make_min_priority_thread_pool();

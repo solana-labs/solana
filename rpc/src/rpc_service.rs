@@ -21,6 +21,7 @@ use {
         leader_schedule_cache::LeaderScheduleCache,
     },
     solana_metrics::inc_new_counter_info,
+    solana_perf::thread::renice_this_thread,
     solana_poh::poh_recorder::PohRecorder,
     solana_runtime::{
         bank_forks::{BankForks, SnapshotConfig},
@@ -288,6 +289,7 @@ impl JsonRpcService {
         info!("rpc bound to {:?}", rpc_addr);
         info!("rpc configuration: {:?}", config);
         let rpc_threads = 1.max(config.rpc_threads);
+        let rpc_niceness_adj = config.rpc_niceness_adj;
 
         let health = Arc::new(RpcHealth::new(
             cluster_info.clone(),
@@ -311,6 +313,7 @@ impl JsonRpcService {
         let runtime = Arc::new(
             tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(rpc_threads)
+                .on_thread_start(move || renice_this_thread(rpc_niceness_adj).unwrap())
                 .thread_name("sol-rpc-el")
                 .enable_all()
                 .build()
@@ -394,6 +397,8 @@ impl JsonRpcService {
         let thread_hdl = Builder::new()
             .name("solana-jsonrpc".to_string())
             .spawn(move || {
+                renice_this_thread(rpc_niceness_adj).unwrap();
+
                 let mut io = MetaIoHandler::default();
 
                 io.extend_with(rpc_minimal::MinimalImpl.to_delegate());
@@ -600,6 +605,7 @@ mod tests {
                 archive_format: ArchiveFormat::TarBzip2,
                 snapshot_version: SnapshotVersion::default(),
                 maximum_snapshots_to_retain: DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+                packager_thread_niceness_adj: 0,
             }),
             bank_forks,
             RpcHealth::stub(),

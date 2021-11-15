@@ -10,8 +10,8 @@ use {
     solana_clap_utils::{
         input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
         input_validators::{
-            is_keypair, is_keypair_or_ask_keyword, is_parsable, is_pubkey, is_pubkey_or_keypair,
-            is_slot, is_valid_percentage,
+            is_keypair, is_keypair_or_ask_keyword, is_niceness_adjustment_valid, is_parsable,
+            is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
         },
         keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
@@ -1381,6 +1381,16 @@ pub fn main() {
                 .help("The maximum number of snapshots to hold on to when purging older snapshots.")
         )
         .arg(
+            Arg::with_name("snapshot_packager_niceness_adj")
+                .long("snapshot-packager-niceness-adjustment")
+                .value_name("ADJUSTMENT")
+                .takes_value(true)
+                .validator(is_niceness_adjustment_valid)
+                .default_value("0")
+                .help("Add this value to niceness of snapshot packager thread. Negative value \
+                      increases priority, positive value decreases priority.")
+        )
+        .arg(
             Arg::with_name("minimal_snapshot_download_speed")
                 .long("minimal-snapshot-download-speed")
                 .value_name("MINIMAL_SNAPSHOT_DOWNLOAD_SPEED")
@@ -1618,6 +1628,16 @@ pub fn main() {
                 .takes_value(true)
                 .default_value(&default_rpc_threads)
                 .help("Number of threads to use for servicing RPC requests"),
+        )
+        .arg(
+            Arg::with_name("rpc_niceness_adj")
+                .long("rpc-niceness-adjustment")
+                .value_name("ADJUSTMENT")
+                .takes_value(true)
+                .validator(is_niceness_adjustment_valid)
+                .default_value("0")
+                .help("Add this value to niceness of RPC threads. Negative value \
+                      increases priority, positive value decreases priority.")
         )
         .arg(
             Arg::with_name("rpc_bigtable_timeout")
@@ -2412,6 +2432,7 @@ pub fn main() {
                 u64
             ),
             rpc_threads: value_t_or_exit!(matches, "rpc_threads", usize),
+            rpc_niceness_adj: value_t_or_exit!(matches, "rpc_niceness_adj", i8),
             rpc_bigtable_timeout: value_t!(matches, "rpc_bigtable_timeout", u64)
                 .ok()
                 .map(Duration::from_secs),
@@ -2567,6 +2588,8 @@ pub fn main() {
     let maximum_local_snapshot_age = value_t_or_exit!(matches, "maximum_local_snapshot_age", u64);
     let maximum_snapshots_to_retain =
         value_t_or_exit!(matches, "maximum_snapshots_to_retain", usize);
+    let snapshot_packager_niceness_adj =
+        value_t_or_exit!(matches, "snapshot_packager_niceness_adj", i8);
     let minimal_snapshot_download_speed =
         value_t_or_exit!(matches, "minimal_snapshot_download_speed", f32);
     let maximum_snapshot_download_abort =
@@ -2617,6 +2640,7 @@ pub fn main() {
         archive_format,
         snapshot_version,
         maximum_snapshots_to_retain,
+        packager_thread_niceness_adj: snapshot_packager_niceness_adj,
     });
 
     validator_config.accounts_hash_interval_slots =
