@@ -453,7 +453,7 @@ impl Validator {
 
         if !config.no_os_network_stats_reporting {
             verify_udp_stats_access().unwrap_or_else(|err| {
-                error!("Failed to access UDP stats: {}", err);
+                error!("Failed to access UDP stats: {}. Bypass check with --no-os-network-stats-reporting.", err);
                 abort();
             });
         }
