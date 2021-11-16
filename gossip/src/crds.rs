@@ -547,7 +547,7 @@ impl Crds {
         &mut self,
         cap: usize, // Capacity hint for number of unique pubkeys.
         // Set of pubkeys to never drop.
-        // e.g. trusted validators, self pubkey, ...
+        // e.g. known validators, self pubkey, ...
         keep: &[Pubkey],
         stakes: &HashMap<Pubkey, u64>,
         now: u64,

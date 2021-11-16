@@ -8,8 +8,8 @@ use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
     compute_budget::ComputeBudget,
     feature_set::{
-        demote_program_write_locks, do_support_realloc, remove_native_loader, tx_wide_compute_cap,
-        FeatureSet,
+        demote_program_write_locks, do_support_realloc, neon_evm_compute_budget,
+        remove_native_loader, requestable_heap_size, tx_wide_compute_cap, FeatureSet,
     },
     hash::Hash,
     ic_logger_msg, ic_msg,
@@ -103,6 +103,7 @@ pub struct ThisInvokeContext<'a> {
     sysvars: &'a [(Pubkey, Vec<u8>)],
     logger: Rc<RefCell<dyn Logger>>,
     compute_budget: ComputeBudget,
+    current_compute_budget: ComputeBudget,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     executors: Rc<RefCell<Executors>>,
     instruction_recorders: Option<&'a [InstructionRecorder]>,
@@ -137,6 +138,7 @@ impl<'a> ThisInvokeContext<'a> {
             programs,
             sysvars,
             logger: ThisLogger::new_ref(log_collector),
+            current_compute_budget: compute_budget,
             compute_budget,
             compute_meter,
             executors,
@@ -195,7 +197,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             return Err(InstructionError::CallDepth);
         }
 
-        if let Some(index_of_program_id) = program_indices.last() {
+        let program_id = if let Some(index_of_program_id) = program_indices.last() {
             let program_id = &self.accounts[*index_of_program_id].0;
             let contains = self
                 .invoke_stack
@@ -210,11 +212,32 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                 // Reentrancy not allowed unless caller is calling itself
                 return Err(InstructionError::ReentrancyNotAllowed);
             }
-        }
+            *program_id
+        } else {
+            return Err(InstructionError::UnsupportedProgramId);
+        };
 
         if self.invoke_stack.is_empty() {
+            let mut compute_budget = self.compute_budget;
+            if !self.is_feature_active(&tx_wide_compute_cap::id())
+                && self.is_feature_active(&neon_evm_compute_budget::id())
+                && program_id == crate::neon_evm_program::id()
+            {
+                // Bump the compute budget for neon_evm
+                compute_budget.max_units = compute_budget.max_units.max(500_000);
+            }
+            if !self.is_feature_active(&requestable_heap_size::id())
+                && self.is_feature_active(&neon_evm_compute_budget::id())
+                && program_id == crate::neon_evm_program::id()
+            {
+                // Bump the compute budget for neon_evm
+                compute_budget.heap_size = Some(256_usize.saturating_mul(1024));
+            }
+            self.current_compute_budget = compute_budget;
+
             if !self.feature_set.is_active(&tx_wide_compute_cap::id()) {
-                self.compute_meter = ThisComputeMeter::new_ref(self.compute_budget.max_units);
+                self.compute_meter =
+                    ThisComputeMeter::new_ref(self.current_compute_budget.max_units);
             }
 
             self.pre_accounts = Vec::with_capacity(instruction.accounts.len());
@@ -300,8 +323,9 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                     .try_borrow_mut()
                     .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
             }
+            let pre_account = &self.pre_accounts[unique_index];
             let account = self.accounts[account_index].1.borrow();
-            self.pre_accounts[unique_index]
+            pre_account
                 .verify(
                     program_id,
                     message.is_writable(account_index, demote_program_write_locks),
@@ -315,13 +339,17 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                     ic_logger_msg!(
                         self.logger,
                         "failed to verify account {}: {}",
-                        self.pre_accounts[unique_index].key(),
+                        pre_account.key(),
                         err
                     );
                     err
                 })?;
-            pre_sum += u128::from(self.pre_accounts[unique_index].lamports());
-            post_sum += u128::from(account.lamports());
+            pre_sum = pre_sum
+                .checked_add(u128::from(pre_account.lamports()))
+                .ok_or(InstructionError::UnbalancedInstruction)?;
+            post_sum = post_sum
+                .checked_add(u128::from(account.lamports()))
+                .ok_or(InstructionError::UnbalancedInstruction)?;
             Ok(())
         };
         instruction.visit_each_account(&mut work)?;
@@ -383,8 +411,12 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                                 ic_logger_msg!(logger, "failed to verify account {}: {}", key, err);
                                 err
                             })?;
-                        pre_sum += u128::from(pre_account.lamports());
-                        post_sum += u128::from(account.lamports());
+                        pre_sum = pre_sum
+                            .checked_add(u128::from(pre_account.lamports()))
+                            .ok_or(InstructionError::UnbalancedInstruction)?;
+                        post_sum = post_sum
+                            .checked_add(u128::from(account.lamports()))
+                            .ok_or(InstructionError::UnbalancedInstruction)?;
                         if is_writable && !pre_account.executable() {
                             pre_account.update(&account);
                         }
@@ -466,16 +498,16 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         execute_us: u64,
         deserialize_us: u64,
     ) {
-        self.timings.serialize_us += serialize_us;
-        self.timings.create_vm_us += create_vm_us;
-        self.timings.execute_us += execute_us;
-        self.timings.deserialize_us += deserialize_us;
+        self.timings.serialize_us = self.timings.serialize_us.saturating_add(serialize_us);
+        self.timings.create_vm_us = self.timings.create_vm_us.saturating_add(create_vm_us);
+        self.timings.execute_us = self.timings.execute_us.saturating_add(execute_us);
+        self.timings.deserialize_us = self.timings.deserialize_us.saturating_add(deserialize_us);
     }
     fn get_sysvars(&self) -> &[(Pubkey, Vec<u8>)] {
         self.sysvars
     }
     fn get_compute_budget(&self) -> &ComputeBudget {
-        &self.compute_budget
+        &self.current_compute_budget
     }
     fn set_blockhash(&mut self, hash: Hash) {
         self.blockhash = hash;
@@ -664,6 +696,7 @@ mod tests {
         ModifyReadonly,
     }
 
+    #[allow(clippy::integer_arithmetic)]
     fn mock_process_instruction(
         first_instruction_account: usize,
         data: &[u8],
@@ -1076,5 +1109,78 @@ mod tests {
             );
             invoke_context.pop();
         }
+    }
+
+    #[test]
+    fn test_invoke_context_compute_budget() {
+        let accounts = vec![
+            (
+                solana_sdk::pubkey::new_rand(),
+                Rc::new(RefCell::new(AccountSharedData::default())),
+            ),
+            (
+                crate::neon_evm_program::id(),
+                Rc::new(RefCell::new(AccountSharedData::default())),
+            ),
+        ];
+
+        let noop_message = Message::new(
+            &[Instruction::new_with_bincode(
+                accounts[0].0,
+                &MockInstruction::NoopSuccess,
+                vec![AccountMeta::new_readonly(accounts[0].0, false)],
+            )],
+            None,
+        );
+        let neon_message = Message::new(
+            &[Instruction::new_with_bincode(
+                crate::neon_evm_program::id(),
+                &MockInstruction::NoopSuccess,
+                vec![AccountMeta::new_readonly(accounts[0].0, false)],
+            )],
+            None,
+        );
+
+        let mut feature_set = FeatureSet::all_enabled();
+        feature_set.deactivate(&tx_wide_compute_cap::id());
+        feature_set.deactivate(&requestable_heap_size::id());
+        let mut invoke_context = ThisInvokeContext::new_mock_with_sysvars_and_features(
+            &accounts,
+            &[],
+            &[],
+            Arc::new(feature_set),
+        );
+
+        invoke_context
+            .push(&noop_message, &noop_message.instructions[0], &[0], None)
+            .unwrap();
+        assert_eq!(
+            *invoke_context.get_compute_budget(),
+            ComputeBudget::default()
+        );
+        invoke_context.pop();
+
+        invoke_context
+            .push(&neon_message, &neon_message.instructions[0], &[1], None)
+            .unwrap();
+        let expected_compute_budget = ComputeBudget {
+            max_units: 500_000,
+            heap_size: Some(256_usize.saturating_mul(1024)),
+            ..ComputeBudget::default()
+        };
+        assert_eq!(
+            *invoke_context.get_compute_budget(),
+            expected_compute_budget
+        );
+        invoke_context.pop();
+
+        invoke_context
+            .push(&noop_message, &noop_message.instructions[0], &[0], None)
+            .unwrap();
+        assert_eq!(
+            *invoke_context.get_compute_budget(),
+            ComputeBudget::default()
+        );
+        invoke_context.pop();
     }
 }

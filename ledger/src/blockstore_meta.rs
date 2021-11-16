@@ -1,7 +1,12 @@
-use crate::erasure::ErasureConfig;
-use serde::{Deserialize, Serialize};
-use solana_sdk::{clock::Slot, hash::Hash};
-use std::{collections::BTreeSet, ops::RangeBounds};
+use {
+    crate::erasure::ErasureConfig,
+    serde::{Deserialize, Serialize},
+    solana_sdk::{clock::Slot, hash::Hash},
+    std::{
+        collections::BTreeSet,
+        ops::{Range, RangeBounds},
+    },
+};
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 // The Meta column family
@@ -46,18 +51,19 @@ pub struct ShredIndex {
     index: BTreeSet<u64>,
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq)]
 /// Erasure coding information
 pub struct ErasureMeta {
     /// Which erasure set in the slot this is
-    pub set_index: u64,
+    set_index: u64,
     /// Deprecated field.
     #[serde(rename = "first_coding_index")]
-    __unused: u64,
+    __unused_first_coding_index: u64,
     /// Size of shards in this erasure set
-    pub size: usize,
+    #[serde(rename = "size")]
+    __unused_size: usize,
     /// Erasure configuration for this erasure set
-    pub config: ErasureConfig,
+    config: ErasureConfig,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -220,22 +226,36 @@ impl SlotMeta {
 }
 
 impl ErasureMeta {
-    pub fn new(set_index: u64, config: ErasureConfig) -> ErasureMeta {
+    pub(crate) fn new(set_index: u64, config: ErasureConfig) -> ErasureMeta {
         ErasureMeta {
             set_index,
             config,
-            ..Self::default()
+            __unused_first_coding_index: 0,
+            __unused_size: 0,
         }
     }
 
-    pub fn status(&self, index: &Index) -> ErasureMetaStatus {
+    pub(crate) fn config(&self) -> ErasureConfig {
+        self.config
+    }
+
+    pub(crate) fn data_shreds_indices(&self) -> Range<u64> {
+        let num_data = self.config.num_data() as u64;
+        self.set_index..self.set_index + num_data
+    }
+
+    pub(crate) fn coding_shreds_indices(&self) -> Range<u64> {
+        let num_coding = self.config.num_coding() as u64;
+        self.set_index..self.set_index + num_coding
+    }
+
+    pub(crate) fn status(&self, index: &Index) -> ErasureMetaStatus {
         use ErasureMetaStatus::*;
 
-        let coding_indices = self.set_index..self.set_index + self.config.num_coding() as u64;
-        let num_coding = index.coding().present_in_bounds(coding_indices);
-        let num_data = index
-            .data()
-            .present_in_bounds(self.set_index..self.set_index + self.config.num_data() as u64);
+        let num_coding = index
+            .coding()
+            .present_in_bounds(self.coding_shreds_indices());
+        let num_data = index.data().present_in_bounds(self.data_shreds_indices());
 
         let (data_missing, num_needed) = (
             self.config.num_data().saturating_sub(num_data),
@@ -249,14 +269,6 @@ impl ErasureMeta {
         } else {
             StillNeed(num_needed)
         }
-    }
-
-    pub fn set_size(&mut self, size: usize) {
-        self.size = size;
-    }
-
-    pub fn size(&self) -> usize {
-        self.size
     }
 }
 
@@ -300,12 +312,11 @@ mod test {
         use ErasureMetaStatus::*;
 
         let set_index = 0;
-        let erasure_config = ErasureConfig::default();
+        let erasure_config = ErasureConfig::new(8, 16);
 
-        let mut e_meta = ErasureMeta::new(set_index, erasure_config);
+        let e_meta = ErasureMeta::new(set_index, erasure_config);
         let mut rng = thread_rng();
         let mut index = Index::new(0);
-        e_meta.size = 1;
 
         let data_indexes = 0..erasure_config.num_data() as u64;
         let coding_indexes = 0..erasure_config.num_coding() as u64;

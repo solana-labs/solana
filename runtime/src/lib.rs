@@ -34,7 +34,6 @@ pub mod in_mem_accounts_index;
 pub mod inline_spl_token_v2_0;
 pub mod loader_utils;
 pub mod message_processor;
-pub mod neon_evm_program;
 pub mod non_circulating_supply;
 mod nonce_keyed_account;
 mod pubkey_bins;
