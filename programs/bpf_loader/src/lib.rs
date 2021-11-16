@@ -33,7 +33,8 @@ use solana_sdk::{
     entrypoint::{HEAP_LENGTH, SUCCESS},
     feature_set::{
         add_missing_program_error_mappings, close_upgradeable_program_accounts, fix_write_privs,
-        reduce_required_deploy_balance, requestable_heap_size, upgradeable_close_instruction,
+        reduce_required_deploy_balance, reject_deployment_of_unresolved_syscalls,
+        requestable_heap_size, upgradeable_close_instruction,
     },
     ic_logger_msg, ic_msg,
     instruction::{AccountMeta, InstructionError},
@@ -76,6 +77,7 @@ pub fn create_executor(
     program_data_offset: usize,
     invoke_context: &mut dyn InvokeContext,
     use_jit: bool,
+    reject_unresolved_syscalls: bool,
 ) -> Result<Arc<BpfExecutor>, InstructionError> {
     let syscall_registry = syscalls::register_syscalls(invoke_context).map_err(|e| {
         ic_msg!(invoke_context, "Failed to register syscalls: {}", e);
@@ -86,6 +88,8 @@ pub fn create_executor(
         max_call_depth: bpf_compute_budget.max_call_depth,
         stack_frame_size: bpf_compute_budget.stack_frame_size,
         enable_instruction_tracing: log_enabled!(Trace),
+        reject_unresolved_syscalls: reject_unresolved_syscalls
+            && invoke_context.is_feature_active(&reject_deployment_of_unresolved_syscalls::id()),
         ..Config::default()
     };
     let mut executable = {
@@ -243,7 +247,8 @@ fn process_instruction_common(
         let executor = match invoke_context.get_executor(program_id) {
             Some(executor) => executor,
             None => {
-                let executor = create_executor(0, program_data_offset, invoke_context, use_jit)?;
+                let executor =
+                    create_executor(0, program_data_offset, invoke_context, use_jit, false)?;
                 invoke_context.add_executor(program_id, executor.clone());
                 executor
             }
@@ -437,7 +442,7 @@ fn process_loader_upgradeable_instruction(
             )?;
 
             // Load and verify the program bits
-            let executor = create_executor(3, buffer_data_offset, invoke_context, use_jit)?;
+            let executor = create_executor(3, buffer_data_offset, invoke_context, use_jit, true)?;
             invoke_context.add_executor(&new_program_id, executor);
 
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
@@ -569,7 +574,7 @@ fn process_loader_upgradeable_instruction(
             }
 
             // Load and verify the program bits
-            let executor = create_executor(2, buffer_data_offset, invoke_context, use_jit)?;
+            let executor = create_executor(2, buffer_data_offset, invoke_context, use_jit, true)?;
             invoke_context.add_executor(&new_program_id, executor);
 
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
@@ -838,7 +843,7 @@ fn process_loader_instruction(
                 return Err(InstructionError::MissingRequiredSignature);
             }
 
-            let executor = create_executor(0, 0, invoke_context, use_jit)?;
+            let executor = create_executor(0, 0, invoke_context, use_jit, true)?;
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let program = keyed_account_at_index(keyed_accounts, 0)?;
             invoke_context.add_executor(program.unsigned_key(), executor);
