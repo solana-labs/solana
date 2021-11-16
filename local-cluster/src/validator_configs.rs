@@ -46,6 +46,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         bpf_jit: config.bpf_jit,
         send_transaction_service_config: config.send_transaction_service_config.clone(),
         no_poh_speed_test: config.no_poh_speed_test,
+        no_os_network_stats_reporting: config.no_os_network_stats_reporting,
         poh_pinned_cpu_core: config.poh_pinned_cpu_core,
         account_indexes: config.account_indexes.clone(),
         accounts_db_caching_enabled: config.accounts_db_caching_enabled,

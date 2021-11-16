@@ -151,6 +151,7 @@ pub struct ValidatorConfig {
     pub bpf_jit: bool,
     pub send_transaction_service_config: send_transaction_service::Config,
     pub no_poh_speed_test: bool,
+    pub no_os_network_stats_reporting: bool,
     pub poh_pinned_cpu_core: usize,
     pub poh_hashes_per_batch: u64,
     pub account_indexes: AccountSecondaryIndexes,
@@ -211,6 +212,7 @@ impl Default for ValidatorConfig {
             bpf_jit: false,
             send_transaction_service_config: send_transaction_service::Config::default(),
             no_poh_speed_test: true,
+            no_os_network_stats_reporting: true,
             poh_pinned_cpu_core: poh_service::DEFAULT_PINNED_CPU_CORE,
             poh_hashes_per_batch: poh_service::DEFAULT_HASHES_PER_BATCH,
             account_indexes: AccountSecondaryIndexes::default(),
@@ -449,11 +451,16 @@ impl Validator {
 
         *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;
 
-        verify_udp_stats_access().unwrap_or_else(|err| {
-            error!("Failed to access UDP stats: {}", err);
-            abort();
-        });
-        let system_monitor_service = Some(SystemMonitorService::new(Arc::clone(&exit)));
+        if !config.no_os_network_stats_reporting {
+            verify_udp_stats_access().unwrap_or_else(|err| {
+                error!("Failed to access UDP stats: {}. Bypass check with --no-os-network-stats-reporting.", err);
+                abort();
+            });
+        }
+        let system_monitor_service = Some(SystemMonitorService::new(
+            Arc::clone(&exit),
+            !config.no_os_network_stats_reporting,
+        ));
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let bank = bank_forks.working_bank();
