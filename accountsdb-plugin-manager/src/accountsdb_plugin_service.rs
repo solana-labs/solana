@@ -78,8 +78,7 @@ impl AccountsDbPluginService {
 
         let plugin_manager = Arc::new(RwLock::new(plugin_manager));
 
-        let accounts_update_notifier: Option<AccountsUpdateNotifier> = if to_notify_account_data
-        {
+        let accounts_update_notifier: Option<AccountsUpdateNotifier> = if to_notify_account_data {
             let accounts_update_notifier = AccountsUpdateNotifierImpl::new(plugin_manager.clone());
             Some(Arc::new(RwLock::new(accounts_update_notifier)))
         } else {
