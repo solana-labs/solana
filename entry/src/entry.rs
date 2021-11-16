@@ -915,14 +915,14 @@ mod tests {
             Ok(_) => {
                 assert!(gpu_verify_result.verification_status != EntryVerificationStatus::Failure);
                 assert!(gpu_verify_result.finish_verify());
-                return true;
+                true
             }
             _ => {
                 assert!(
                     gpu_verify_result.verification_status == EntryVerificationStatus::Failure
                         || !gpu_verify_result.finish_verify()
                 );
-                return false;
+                false
             }
         }
     }
@@ -963,13 +963,13 @@ mod tests {
             vec![entry0],
             false,
             recycler.clone(),
-            Arc::new(verify_transaction.clone())
+            Arc::new(verify_transaction)
         ));
         assert!(test_verify_transactions(
             vec![entry1],
             false,
-            recycler.clone(),
-            Arc::new(verify_transaction.clone())
+            recycler,
+            Arc::new(verify_transaction)
         ));
     }
 
