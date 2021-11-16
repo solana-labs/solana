@@ -23,8 +23,15 @@ futures = "0.3.8"
 futures-util = "0.3.5"
 itertools = "0.9.0"
 lazy_static = "1.4.0"
+<<<<<<< HEAD
 libc = "0.2.81"
 log = { version = "0.4.11" }
+=======
+libc = "0.2.107"
+log = { version = "0.4.14" }
+num-derive = "0.3"
+num-traits = "0.2"
+>>>>>>> 57057f8d3 (uses enum for shred type)
 num_cpus = "1.13.0"
 prost = "0.8.0"
 rand = "0.7.0"

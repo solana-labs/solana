@@ -18,7 +18,12 @@ use {
     solana_client::rpc_response::SlotUpdate,
     solana_gossip::cluster_info::{ClusterInfo, DATA_PLANE_FANOUT},
     solana_ledger::{
+<<<<<<< HEAD
         blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache, shred::Shred,
+=======
+        shred::{Shred, ShredType},
+        {blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache},
+>>>>>>> 57057f8d3 (uses enum for shred type)
     },
     solana_measure::measure::Measure,
     solana_perf::packet::PacketBatch,
@@ -137,14 +142,14 @@ impl RetransmitStats {
     }
 }
 
-// Map of shred (slot, index, is_data) => list of hash values seen for that key.
-type ShredFilter = LruCache<(Slot, u32, bool), Vec<u64>>;
+// Map of shred (slot, index, type) => list of hash values seen for that key.
+type ShredFilter = LruCache<(Slot, u32, ShredType), Vec<u64>>;
 
 type ShredFilterAndHasher = (ShredFilter, PacketHasher);
 
 // Returns true if shred is already received and should skip retransmit.
 fn should_skip_retransmit(shred: &Shred, shreds_received: &Mutex<ShredFilterAndHasher>) -> bool {
-    let key = (shred.slot(), shred.index(), shred.is_data());
+    let key = (shred.slot(), shred.index(), shred.shred_type());
     let mut shreds_received = shreds_received.lock().unwrap();
     let (cache, hasher) = shreds_received.deref_mut();
     match cache.get_mut(&key) {
