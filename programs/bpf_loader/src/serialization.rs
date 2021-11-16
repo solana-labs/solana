@@ -3,7 +3,7 @@ use solana_rbpf::{aligned_memory::AlignedMemory, ebpf::HOST_ALIGN};
 use solana_sdk::{
     account::{ReadableAccount, WritableAccount},
     bpf_loader_deprecated,
-    entrypoint::MAX_PERMITTED_DATA_INCREASE,
+    entrypoint::{MAX_PERMITTED_DATA_INCREASE, PARAMETER_ALIGNMENT},
     instruction::InstructionError,
     keyed_account::KeyedAccount,
     pubkey::Pubkey,
@@ -242,7 +242,7 @@ pub fn serialize_parameters_aligned(
                 .map_err(|_| InstructionError::InvalidArgument)?;
             v.resize(
                 MAX_PERMITTED_DATA_INCREASE
-                    + (v.write_index() as *const u8).align_offset(align_of::<u128>()),
+                    + (v.write_index() as *const u8).align_offset(PARAMETER_ALIGNMENT),
                 0,
             )
             .map_err(|_| InstructionError::InvalidArgument)?;
