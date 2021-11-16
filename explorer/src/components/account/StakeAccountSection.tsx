@@ -296,5 +296,11 @@ function isFullyInactivated(
     return false;
   }
 
-  return stake.delegation.stake.toString() === activation.inactive.toString();
+  const delegatedStake = stake.delegation.stake.toNumber();
+  const inactiveStake = activation.inactive;
+
+  return (
+    !stake.delegation.deactivationEpoch.eq(MAX_EPOCH) &&
+    delegatedStake === inactiveStake
+  );
 }
