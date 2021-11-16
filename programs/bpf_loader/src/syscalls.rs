@@ -154,7 +154,7 @@ pub fn register_syscalls(
         b"sol_get_epoch_schedule_sysvar",
         SyscallGetEpochScheduleSysvar::call,
     )?;
-    if invoke_context.is_feature_active(&disable_fees_sysvar::id()) {
+    if !invoke_context.is_feature_active(&disable_fees_sysvar::id()) {
         syscall_registry
             .register_syscall_by_name(b"sol_get_fees_sysvar", SyscallGetFeesSysvar::call)?;
     }
