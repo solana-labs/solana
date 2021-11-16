@@ -250,6 +250,13 @@ impl<T: Clone + Default + Sized> PinnedVec<T> {
         self.check_ptr(old_ptr, old_capacity, "resize");
     }
 
+    /// // SAFETY:
+    /// // 1. `old_len..0` is empty so no elements need to be initialized.
+    /// // 2. `0 <= capacity` always holds whatever `capacity` is.
+    /// unsafe {
+    ///     vec.set_len(0);
+    /// }
+    /// ```
     pub unsafe fn set_len(&mut self, size: usize) {
         self.x.set_len(size);
     }

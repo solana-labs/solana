@@ -22,8 +22,8 @@ use solana_perf::{
 };
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::hash::Hash;
-use solana_sdk::timing;
 use solana_sdk::packet::Meta;
+use solana_sdk::timing;
 use solana_sdk::transaction::{Result, SanitizedTransaction, Transaction, VersionedTransaction};
 use std::cell::RefCell;
 use std::ffi::OsStr;
@@ -433,14 +433,15 @@ pub fn start_verify_transactions(
     let entries = verify_transactions(entries, Arc::new(verify_func));
     match entries {
         Ok(entries) => {
-            let num_transactions: usize = entries.iter().map(|entry: &EntryType| -> usize {
-                match entry {
-                    EntryType::Transactions(transactions) => {
-                        transactions.len()
+            let num_transactions: usize = entries
+                .iter()
+                .map(|entry: &EntryType| -> usize {
+                    match entry {
+                        EntryType::Transactions(transactions) => transactions.len(),
+                        EntryType::Tick(_) => 0,
                     }
-                    EntryType::Tick(_) => 0
-                }
-            }).sum();
+                })
+                .sum();
 
             if num_transactions == 0 {
                 let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
@@ -466,14 +467,15 @@ pub fn start_verify_transactions(
                     EntryType::Transactions(transactions) => {
                         for hashed_tx in transactions {
                             packets.packets[curr_packet].meta = Meta::default();
-                            
+
                             let res = Packet::populate_packet(
                                 &mut packets.packets[curr_packet],
                                 None,
                                 &hashed_tx.to_versioned_transaction(),
                             );
-                            if !res.is_ok() {
-                                let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
+                            if res.is_err() {
+                                let transaction_duration_us =
+                                    timing::duration_as_us(&check_start.elapsed());
                                 return EntrySigVerificationState {
                                     verification_status: EntryVerificationStatus::Failure,
                                     entries: None,
@@ -482,13 +484,13 @@ pub fn start_verify_transactions(
                                 };
                             }
 
-                            curr_packet = curr_packet + 1;
+                            curr_packet += 1;
                         }
                     }
                     EntryType::Tick(_) => {}
                 }
             }
-            
+
             let mut packets = vec![packets];
             let tx_offset_recycler = verify_recyclers.tx_offset_recycler;
             let out_recycler = verify_recyclers.out_recycler;
@@ -911,9 +913,7 @@ mod tests {
 
         match cpu_verify_result {
             Ok(_) => {
-                assert!(
-                    gpu_verify_result.verification_status != EntryVerificationStatus::Failure
-                );
+                assert!(gpu_verify_result.verification_status != EntryVerificationStatus::Failure);
                 assert!(gpu_verify_result.finish_verify());
                 return true;
             }

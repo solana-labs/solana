@@ -67,8 +67,7 @@ fn bench_cpusigverify(bencher: &mut Bencher) {
         .collect::<Vec<_>>();
 
     let verify_transaction = {
-        move |versioned_tx: VersionedTransaction|
-              -> Result<SanitizedTransaction> {
+        move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
             let sanitized_tx = {
                 let message_hash = versioned_tx.verify_and_hash_message()?;
 
@@ -82,9 +81,6 @@ fn bench_cpusigverify(bencher: &mut Bencher) {
     };
 
     bencher.iter(|| {
-        let _ans = entry::verify_transactions(
-            entries.clone(),
-            Arc::new(verify_transaction)
-        );
+        let _ans = entry::verify_transactions(entries.clone(), Arc::new(verify_transaction));
     })
 }

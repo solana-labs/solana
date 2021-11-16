@@ -933,9 +933,7 @@ pub fn confirm_slot(
                     }
                     Ok(val)
                 }
-                Err(error) => {
-                    Err(error)
-                }
+                Err(error) => Err(error),
             }
         }
     };
