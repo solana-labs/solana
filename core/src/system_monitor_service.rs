@@ -98,12 +98,12 @@ pub fn verify_udp_stats_access() -> Result<(), String> {
 }
 
 impl SystemMonitorService {
-    pub fn new(exit: Arc<AtomicBool>) -> Self {
+    pub fn new(exit: Arc<AtomicBool>, report_os_network_stats: bool) -> Self {
         info!("Starting SystemMonitorService");
         let thread_hdl = Builder::new()
             .name("system-monitor".to_string())
             .spawn(move || {
-                Self::run(exit);
+                Self::run(exit, report_os_network_stats);
             })
             .unwrap();
 
@@ -226,7 +226,7 @@ impl SystemMonitorService {
         }
     }
 
-    pub fn run(exit: Arc<AtomicBool>) {
+    pub fn run(exit: Arc<AtomicBool>, report_os_network_stats: bool) {
         let mut udp_stats = None;
 
         let udp_timer = AtomicInterval::default();
@@ -236,7 +236,7 @@ impl SystemMonitorService {
                 break;
             }
 
-            if udp_timer.should_update(SAMPLE_INTERVAL_UDP_MS) {
+            if report_os_network_stats && udp_timer.should_update(SAMPLE_INTERVAL_UDP_MS) {
                 SystemMonitorService::process_udp_stats(&mut udp_stats);
             }
 
