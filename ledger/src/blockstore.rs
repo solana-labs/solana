@@ -958,10 +958,10 @@ impl Blockstore {
         start.stop();
         metrics.write_batch_elapsed += start.as_us();
 
-        for s in &newly_completed_slots {
-            let block = self.get_complete_block(*s, true);
-            println!("block={:?}", block);
-        }
+        // for s in &newly_completed_slots {
+        //     let block = self.get_complete_block(*s, true);
+        //     info!("block={:?}", block);
+        // }
 
         send_signals(
             &self.new_shreds_signals,
