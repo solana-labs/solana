@@ -52,4 +52,14 @@ impl AccountsDbPluginManager {
             drop(lib);
         }
     }
+
+    /// Check if there is any plugin interested in account data
+    pub fn to_notify_account_data(&self) -> bool {
+        for plugin in &self.plugins {
+            if plugin.to_notify_account_data() {
+                return true;
+            }
+        }
+        false
+    }
 }
