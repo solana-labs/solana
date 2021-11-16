@@ -36,6 +36,7 @@ use {
         native_loader,
         precompiles::is_precompile,
         program::MAX_RETURN_DATA,
+        program_stubs::is_nonoverlapping,
         pubkey::{Pubkey, PubkeyError, MAX_SEEDS, MAX_SEED_LEN},
         rent::Rent,
         secp256k1_recover::{
@@ -1260,11 +1261,6 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallKeccak256<'a, 'b> {
     }
 }
 
-fn check_overlapping(src_addr: u64, dst_addr: u64, n: u64) -> bool {
-    (src_addr <= dst_addr && src_addr + n > dst_addr)
-        || (dst_addr <= src_addr && dst_addr + n > src_addr)
-}
-
 /// memcpy
 pub struct SyscallMemcpy<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
@@ -1280,7 +1276,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcpy<'a, 'b> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        if check_overlapping(src_addr, dst_addr, n) {
+        if !is_nonoverlapping(src_addr, dst_addr, n) {
             *result = Err(SyscallError::CopyOverlapping.into());
             return;
         }
@@ -3714,17 +3710,6 @@ mod tests {
             result.unwrap();
             assert_eq!(got_rent, src_rent);
         }
-    }
-
-    #[test]
-    fn test_overlapping() {
-        assert!(!check_overlapping(10, 7, 3));
-        assert!(check_overlapping(10, 8, 3));
-        assert!(check_overlapping(10, 9, 3));
-        assert!(check_overlapping(10, 10, 3));
-        assert!(check_overlapping(10, 11, 3));
-        assert!(check_overlapping(10, 12, 3));
-        assert!(!check_overlapping(10, 13, 3));
     }
 
     fn call_program_address_common(
