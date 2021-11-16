@@ -89,7 +89,7 @@ fn check_shreds(
         // TODO: Should also allow two coding shreds with different indices but
         // same fec-set-index and mismatching erasure-config.
         Err(Error::ShredIndexMismatch)
-    } else if shred1.common_header.shred_type != shred2.common_header.shred_type {
+    } else if shred1.shred_type() != shred2.shred_type() {
         Err(Error::ShredTypeMismatch)
     } else if shred1.payload == shred2.payload {
         Err(Error::InvalidDuplicateShreds)
@@ -119,11 +119,7 @@ pub fn from_duplicate_slot_proof(
     let shred1 = Shred::new_from_serialized_shred(proof.shred1.clone())?;
     let shred2 = Shred::new_from_serialized_shred(proof.shred2.clone())?;
     check_shreds(leader_schedule, &shred1, &shred2)?;
-    let (slot, shred_index, shred_type) = (
-        shred1.slot(),
-        shred1.index(),
-        shred1.common_header.shred_type,
-    );
+    let (slot, shred_index, shred_type) = (shred1.slot(), shred1.index(), shred1.shred_type());
     let data = bincode::serialize(proof)?;
     let chunk_size = if DUPLICATE_SHRED_HEADER_SIZE < max_size {
         max_size - DUPLICATE_SHRED_HEADER_SIZE
@@ -161,8 +157,7 @@ pub(crate) fn from_shred(
     }
     let other_shred = Shred::new_from_serialized_shred(other_payload.clone())?;
     check_shreds(leader_schedule, &shred, &other_shred)?;
-    let (slot, shred_index, shred_type) =
-        (shred.slot(), shred.index(), shred.common_header.shred_type);
+    let (slot, shred_index, shred_type) = (shred.slot(), shred.index(), shred.shred_type());
     let proof = DuplicateSlotProof {
         shred1: shred.payload,
         shred2: other_payload,
@@ -262,9 +257,7 @@ pub fn into_shreds(
         Err(Error::SlotMismatch)
     } else if shred1.index() != shred_index || shred2.index() != shred_index {
         Err(Error::ShredIndexMismatch)
-    } else if shred1.common_header.shred_type != shred_type
-        || shred2.common_header.shred_type != shred_type
-    {
+    } else if shred1.shred_type() != shred_type || shred2.shred_type() != shred_type {
         Err(Error::ShredTypeMismatch)
     } else if shred1.payload == shred2.payload {
         Err(Error::InvalidDuplicateShreds)
@@ -301,7 +294,7 @@ pub(crate) mod tests {
             wallclock: u64::MAX,
             slot: Slot::MAX,
             shred_index: u32::MAX,
-            shred_type: ShredType(u8::MAX),
+            shred_type: ShredType::Data,
             num_chunks: u8::MAX,
             chunk_index: u8::MAX,
             chunk: Vec::default(),

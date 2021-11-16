@@ -13,7 +13,7 @@ use {
         erasure::ErasureConfig,
         leader_schedule_cache::LeaderScheduleCache,
         next_slots_iterator::NextSlotsIterator,
-        shred::{Result as ShredResult, Shred, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK},
+        shred::{Result as ShredResult, Shred, ShredType, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK},
     },
     bincode::deserialize,
     log::*,
@@ -803,52 +803,55 @@ impl Blockstore {
         let mut newly_completed_data_sets: Vec<CompletedDataSetInfo> = vec![];
         let mut inserted_indices = Vec::new();
         for (i, (shred, is_repaired)) in shreds.into_iter().zip(is_repaired).enumerate() {
-            if shred.is_data() {
-                let shred_source = if is_repaired {
-                    ShredSource::Repaired
-                } else {
-                    ShredSource::Turbine
-                };
-                match self.check_insert_data_shred(
-                    shred,
-                    &mut erasure_metas,
-                    &mut index_working_set,
-                    &mut slot_meta_working_set,
-                    &mut write_batch,
-                    &mut just_inserted_data_shreds,
-                    &mut index_meta_time,
-                    is_trusted,
-                    handle_duplicate,
-                    leader_schedule,
-                    shred_source,
-                ) {
-                    Err(InsertDataShredError::Exists) => metrics.num_data_shreds_exists += 1,
-                    Err(InsertDataShredError::InvalidShred) => metrics.num_data_shreds_invalid += 1,
-                    Err(InsertDataShredError::BlockstoreError(err)) => {
-                        metrics.num_data_shreds_blockstore_error += 1;
-                        error!("blockstore error: {}", err);
-                    }
-                    Ok(completed_data_sets) => {
-                        newly_completed_data_sets.extend(completed_data_sets);
-                        inserted_indices.push(i);
-                        metrics.num_inserted += 1;
-                    }
-                };
-            } else if shred.is_code() {
-                self.check_cache_coding_shred(
-                    shred,
-                    &mut erasure_metas,
-                    &mut index_working_set,
-                    &mut just_inserted_coding_shreds,
-                    &mut index_meta_time,
-                    handle_duplicate,
-                    is_trusted,
-                    is_repaired,
-                    metrics,
-                );
-            } else {
-                panic!("There should be no other case");
-            }
+            match shred.shred_type() {
+                ShredType::Data => {
+                    let shred_source = if is_repaired {
+                        ShredSource::Repaired
+                    } else {
+                        ShredSource::Turbine
+                    };
+                    match self.check_insert_data_shred(
+                        shred,
+                        &mut erasure_metas,
+                        &mut index_working_set,
+                        &mut slot_meta_working_set,
+                        &mut write_batch,
+                        &mut just_inserted_data_shreds,
+                        &mut index_meta_time,
+                        is_trusted,
+                        handle_duplicate,
+                        leader_schedule,
+                        shred_source,
+                    ) {
+                        Err(InsertDataShredError::Exists) => metrics.num_data_shreds_exists += 1,
+                        Err(InsertDataShredError::InvalidShred) => {
+                            metrics.num_data_shreds_invalid += 1
+                        }
+                        Err(InsertDataShredError::BlockstoreError(err)) => {
+                            metrics.num_data_shreds_blockstore_error += 1;
+                            error!("blockstore error: {}", err);
+                        }
+                        Ok(completed_data_sets) => {
+                            newly_completed_data_sets.extend(completed_data_sets);
+                            inserted_indices.push(i);
+                            metrics.num_inserted += 1;
+                        }
+                    };
+                }
+                ShredType::Code => {
+                    self.check_cache_coding_shred(
+                        shred,
+                        &mut erasure_metas,
+                        &mut index_working_set,
+                        &mut just_inserted_coding_shreds,
+                        &mut index_meta_time,
+                        handle_duplicate,
+                        is_trusted,
+                        is_repaired,
+                        metrics,
+                    );
+                }
+            };
         }
         start.stop();
 
@@ -3031,6 +3034,7 @@ impl Blockstore {
         slot: u64,
         index: u32,
         new_shred_raw: &[u8],
+        // TODO: change arg type to ShredType.
         is_data: bool,
     ) -> Option<Vec<u8>> {
         let res = if is_data {
