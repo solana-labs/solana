@@ -250,13 +250,25 @@ impl<T: Clone + Default + Sized> PinnedVec<T> {
         self.check_ptr(old_ptr, old_capacity, "resize");
     }
 
-    /// // SAFETY:
-    /// // 1. `old_len..0` is empty so no elements need to be initialized.
-    /// // 2. `0 <= capacity` always holds whatever `capacity` is.
-    /// unsafe {
-    ///     vec.set_len(0);
-    /// }
-    /// ```
+    /// Forces the length of the vector to `new_len`.
+    ///
+    /// This is a low-level operation that maintains none of the normal
+    /// invariants of the type. Normally changing the length of a vector
+    /// is done using one of the safe operations instead, such as
+    /// [`truncate`], [`resize`], [`extend`], or [`clear`].
+    ///
+    /// [`truncate`]: Vec::truncate
+    /// [`resize`]: Vec::resize
+    /// [`extend`]: Extend::extend
+    /// [`clear`]: Vec::clear
+    ///
+    /// # Safety
+    ///
+    /// - `new_len` must be less than or equal to [`capacity()`].
+    /// - The elements at `old_len..new_len` must be initialized.
+    ///
+    /// [`capacity()`]: Vec::capacity
+    ///
     pub unsafe fn set_len(&mut self, size: usize) {
         self.x.set_len(size);
     }
