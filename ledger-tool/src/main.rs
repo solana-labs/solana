@@ -1833,6 +1833,47 @@ fn main() {
             }
         }
         ("verify", Some(arg_matches)) => {
+<<<<<<< HEAD
+=======
+            let mut accounts_index_config = AccountsIndexConfig::default();
+            if let Some(bins) = value_t!(arg_matches, "accounts_index_bins", usize).ok() {
+                accounts_index_config.bins = Some(bins);
+            }
+
+            let exit_signal = Arc::new(AtomicBool::new(false));
+            let system_monitor_service = SystemMonitorService::new(Arc::clone(&exit_signal), false);
+
+            if let Some(limit) = value_t!(arg_matches, "accounts_index_memory_limit_mb", usize).ok()
+            {
+                accounts_index_config.index_limit_mb = Some(limit);
+            }
+
+            {
+                let mut accounts_index_paths: Vec<PathBuf> =
+                    if arg_matches.is_present("accounts_index_path") {
+                        values_t_or_exit!(arg_matches, "accounts_index_path", String)
+                            .into_iter()
+                            .map(PathBuf::from)
+                            .collect()
+                    } else {
+                        vec![]
+                    };
+                if accounts_index_paths.is_empty() {
+                    accounts_index_paths = vec![ledger_path.join("accounts_index")];
+                }
+                accounts_index_config.drives = Some(accounts_index_paths);
+            }
+
+            let filler_account_count = value_t!(arg_matches, "accounts_filler_count", usize).ok();
+
+            let accounts_db_config = Some(AccountsDbConfig {
+                index: Some(accounts_index_config),
+                accounts_hash_cache_path: Some(ledger_path.clone()),
+                filler_account_count,
+                ..AccountsDbConfig::default()
+            });
+
+>>>>>>> d5de0c8e1 (add --no-os-network-stats-reporting option (#21296))
             let process_options = ProcessOptions {
                 dev_halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                 new_hard_forks: hardforks_of(arg_matches, "hard_forks"),

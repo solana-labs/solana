@@ -95,12 +95,12 @@ pub fn verify_udp_stats_access() -> Result<(), String> {
 }
 
 impl SystemMonitorService {
-    pub fn new(exit: Arc<AtomicBool>) -> Self {
+    pub fn new(exit: Arc<AtomicBool>, report_os_network_stats: bool) -> Self {
         info!("Starting SystemMonitorService");
         let thread_hdl = Builder::new()
             .name("system-monitor".to_string())
             .spawn(move || {
-                Self::run(exit);
+                Self::run(exit, report_os_network_stats);
             })
             .unwrap();
 
@@ -173,7 +173,61 @@ impl SystemMonitorService {
         );
     }
 
+<<<<<<< HEAD
     pub fn run(exit: Arc<AtomicBool>) {
+=======
+    fn calc_percent(numerator: u64, denom: u64) -> f32 {
+        if denom == 0 {
+            0.0
+        } else {
+            (numerator as f32 / denom as f32) * 100.0
+        }
+    }
+
+    fn report_mem_stats() {
+        if let Ok(info) = sys_info::mem_info() {
+            // stats are returned in kb.
+            const KB: u64 = 1_024;
+            datapoint_info!(
+                "memory-stats",
+                ("total", info.total * KB, i64),
+                ("swap_total", info.swap_total, i64),
+                (
+                    "free_percent",
+                    Self::calc_percent(info.free, info.total),
+                    f64
+                ),
+                (
+                    "used_bytes",
+                    info.total.saturating_sub(info.avail) * KB,
+                    i64
+                ),
+                (
+                    "avail_percent",
+                    Self::calc_percent(info.avail, info.total),
+                    f64
+                ),
+                (
+                    "buffers_percent",
+                    Self::calc_percent(info.buffers, info.total),
+                    f64
+                ),
+                (
+                    "cached_percent",
+                    Self::calc_percent(info.cached, info.total),
+                    f64
+                ),
+                (
+                    "swap_free_percent",
+                    Self::calc_percent(info.swap_free, info.swap_total),
+                    f64
+                ),
+            )
+        }
+    }
+
+    pub fn run(exit: Arc<AtomicBool>, report_os_network_stats: bool) {
+>>>>>>> d5de0c8e1 (add --no-os-network-stats-reporting option (#21296))
         let mut udp_stats = None;
 
         let mut now = Instant::now();
@@ -182,8 +236,14 @@ impl SystemMonitorService {
                 break;
             }
 
+<<<<<<< HEAD
             if now.elapsed() >= SAMPLE_INTERVAL {
                 now = Instant::now();
+=======
+            if report_os_network_stats && udp_timer.should_update(SAMPLE_INTERVAL_UDP_MS) {
+                SystemMonitorService::process_udp_stats(&mut udp_stats);
+            }
+>>>>>>> d5de0c8e1 (add --no-os-network-stats-reporting option (#21296))
 
                 SystemMonitorService::process_udp_stats(&mut udp_stats);
             }
