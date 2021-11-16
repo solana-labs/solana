@@ -1423,29 +1423,17 @@ pub fn main() {
                 .help("Skip the check for PoH speed."),
         )
         .arg(
-<<<<<<< HEAD
             Arg::with_name("accounts_hash_interval_slots")
                 .long("accounts-hash-slots")
                 .value_name("ACCOUNTS_HASH_INTERVAL_SLOTS")
-=======
-            Arg::with_name("no_os_network_limits_test")
-                .hidden(true)
-                .long("no-os-network-limits-test")
-                .help("Skip checks for OS network limits.")
+                .takes_value(true)
+                .default_value("100")
+                .help("Number of slots between generating accounts hash."),
         )
         .arg(
             Arg::with_name("no_os_network_stats_reporting")
                 .long("no-os-network-stats-reporting")
                 .help("Disable reporting of OS network statistics.")
-        )
-        .arg(
-            Arg::with_name("accounts-hash-interval-slots")
-                .long("accounts-hash-interval-slots")
-                .value_name("NUMBER")
->>>>>>> d5de0c8e1 (add --no-os-network-stats-reporting option (#21296))
-                .takes_value(true)
-                .default_value("100")
-                .help("Number of slots between generating accounts hash."),
         )
         .arg(
             Arg::with_name("snapshot_version")
