@@ -2411,8 +2411,6 @@ impl ReplayStage {
             accounts_background_request_sender,
             highest_confirmed_root,
         );
-<<<<<<< HEAD
-=======
         let mut dropped_banks_time = Measure::start("handle_new_root::drop_banks");
         drop(removed_banks);
         dropped_banks_time.stop();
@@ -2422,9 +2420,6 @@ impl ReplayStage {
                 ("elapsed_ms", dropped_banks_time.as_ms(), i64)
             );
         }
-        // Dropping the bank_forks write lock and reacquiring as a read lock is
-        // safe because updates to bank_forks are only made by a single thread.
->>>>>>> 398af132a (More set_root metrics (#21286))
         let r_bank_forks = bank_forks.read().unwrap();
         let new_root_bank = &r_bank_forks[new_root];
         if !*has_new_vote_been_rooted {
