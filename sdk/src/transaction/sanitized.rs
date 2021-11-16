@@ -180,7 +180,7 @@ impl SanitizedTransaction {
             .and_then(|ix| {
                 ix.accounts.get(0).and_then(|idx| {
                     let idx = *idx as usize;
-                    if nonce_must_be_writable && !self.message.is_writable(idx, false) {
+                    if nonce_must_be_writable && !self.message.is_writable(idx, true) {
                         None
                     } else {
                         self.message.get_account_key(idx)

@@ -502,16 +502,23 @@ pub fn uses_durable_nonce(tx: &Transaction) -> Option<&CompiledInstruction> {
     message
         .instructions
         .get(NONCED_TX_MARKER_IX_INDEX as usize)
-        .filter(|maybe_ix| {
-            let prog_id_idx = maybe_ix.program_id_index as usize;
-            match message.account_keys.get(prog_id_idx) {
-                Some(program_id) => system_program::check_id(program_id),
-                _ => false,
-            }
-        }
-        && matches!(maybe_ix.accounts.get(0), Some(nonce_idx) if message.is_writable(*nonce_idx as usize, false))
-        && matches!(limited_deserialize(&maybe_ix.data), Ok(SystemInstruction::AdvanceNonceAccount))
-        )
+        .filter(|instruction| {
+            // Is system program
+            matches!(
+                message.account_keys.get(instruction.program_id_index as usize),
+                Some(program_id) if system_program::check_id(program_id)
+            )
+            // Is a nonce advance instruction
+            && matches!(
+                limited_deserialize(&instruction.data),
+                Ok(SystemInstruction::AdvanceNonceAccount)
+            )
+            // Nonce account is writable
+            && matches!(
+                instruction.accounts.get(0),
+                Some(index) if message.is_writable(*index as usize, true)
+            )
+        })
 }
 
 #[deprecated]

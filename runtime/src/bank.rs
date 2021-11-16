@@ -11463,7 +11463,7 @@ pub(crate) mod tests {
             &[&custodian_keypair, &nonce_keypair],
             nonce_hash,
         );
-        // Caught by the system program becaus the tx hash is valid
+        // Caught by the system program because the tx hash is valid
         assert_eq!(
             bank.process_transaction(&tx),
             Err(TransactionError::InstructionError(
