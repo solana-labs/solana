@@ -2406,11 +2406,20 @@ impl ReplayStage {
         has_new_vote_been_rooted: &mut bool,
         voted_signatures: &mut Vec<Signature>,
     ) {
-        bank_forks.write().unwrap().set_root(
+        let removed_banks = bank_forks.write().unwrap().set_root(
             new_root,
             accounts_background_request_sender,
             highest_confirmed_root,
         );
+        let mut dropped_banks_time = Measure::start("handle_new_root::drop_banks");
+        drop(removed_banks);
+        dropped_banks_time.stop();
+        if dropped_banks_time.as_ms() > 10 {
+            datapoint_info!(
+                "handle_new_root-dropped_banks",
+                ("elapsed_ms", dropped_banks_time.as_ms(), i64)
+            );
+        }
         let r_bank_forks = bank_forks.read().unwrap();
         let new_root_bank = &r_bank_forks[new_root];
         if !*has_new_vote_been_rooted {
