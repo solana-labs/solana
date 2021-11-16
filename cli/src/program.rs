@@ -9,7 +9,7 @@ use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
 use solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig};
-use solana_bpf_loader_program::{bpf_verifier, BpfError, ThisInstructionMeter};
+use solana_bpf_loader_program::{syscalls::register_syscalls, BpfError, ThisInstructionMeter};
 use solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*};
 use solana_cli_output::{
     CliProgram, CliProgramAccountType, CliProgramAuthority, CliProgramBuffer, CliProgramId,
@@ -24,7 +24,10 @@ use solana_client::{
     rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
     tpu_client::{TpuClient, TpuClientConfig},
 };
-use solana_rbpf::vm::{Config, Executable};
+use solana_rbpf::{
+    verifier,
+    vm::{Config, Executable},
+};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     account::Account,
@@ -37,6 +40,7 @@ use solana_sdk::{
     message::Message,
     native_token::Sol,
     packet::PACKET_DATA_SIZE,
+    process_instruction::MockInvokeContext,
     pubkey::Pubkey,
     signature::{keypair_from_seed, read_keypair_file, Keypair, Signature, Signer},
     system_instruction::{self, SystemError},
@@ -1983,12 +1987,17 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     let mut program_data = Vec::new();
     file.read_to_end(&mut program_data)
         .map_err(|err| format!("Unable to read program file: {}", err))?;
+    let mut invoke_context = MockInvokeContext::new(vec![]);
 
     // Verify the program
     <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
         &program_data,
-        Some(|x| bpf_verifier::check(x)),
-        Config::default(),
+        Some(verifier::check),
+        Config {
+            reject_unresolved_syscalls: true,
+            ..Config::default()
+        },
+        register_syscalls(&mut invoke_context).unwrap(),
     )
     .map_err(|err| format!("ELF error: {}", err))?;
 
