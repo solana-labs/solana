@@ -276,6 +276,15 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
         }
         Ok(())
     }
+
+    /// Check if the plugin is interested in account data
+    /// Default is true -- if the plugin is not interested in
+    /// account data, please return false.
+    fn to_notify_account_data(&self) -> bool {
+        self.accounts_selector
+            .as_ref()
+            .map_or_else(|| false, |selector| selector.is_enabled())
+    }
 }
 
 impl AccountsDbPluginPostgres {
