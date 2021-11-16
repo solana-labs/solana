@@ -1057,6 +1057,8 @@ mod with_incremental_snapshots {
                     None => newer_cluster_snapshot_timeout = Some(Instant::now()),
                     Some(newer_cluster_snapshot_timeout) => {
                         if newer_cluster_snapshot_timeout.elapsed().as_secs() > 180 {
+                            // bprumo TODO: Redo this warning text now that
+                            // --no-incremental-snapshot-fetch has been removed
                             warn!(
                                 "Giving up, did not get newer snapshots from the cluster. \
                               If this persists, it may be that there are no nodes with \
@@ -1105,6 +1107,11 @@ mod with_incremental_snapshots {
     /// 1. have a full snapshot slot that is a multiple of our full snapshot interval
     /// 2. have the highest full snapshot slot
     /// 3. have the highest incremental snapshot slot
+    //
+    // bprumo TODO: impl this:
+    // 1. Get all the snapshots from peers
+    // 2. Get the snapshots with the highest slot, whether that is full+incr or just full
+    // 3. Prioritize the snapshots with a full snapshot slot that matches our existing full snapshot slot (and hash) so that we can skip downloading the full snapshot.
     fn get_peer_snapshot_hashes(
         cluster_info: &ClusterInfo,
         validator_config: &ValidatorConfig,
