@@ -10,8 +10,7 @@ use {
     solana_banks_client::start_client,
     solana_banks_server::banks_server::start_local_server,
     solana_program_runtime::{
-        instruction_processor::InstructionProcessor,
-        invoke_context::{InvokeContext, ProcessInstructionWithContext},
+        instruction_processor::InstructionProcessor, invoke_context::ProcessInstructionWithContext,
         stable_log,
     },
     solana_runtime::{
@@ -69,6 +68,7 @@ use {
 
 // Export types so test clients can limit their solana crate dependencies
 pub use solana_banks_client::BanksClient;
+pub use solana_program_runtime::invoke_context::InvokeContext;
 
 // Export tokio for test clients
 pub use tokio;
@@ -190,7 +190,7 @@ macro_rules! processor {
         Some(
             |first_instruction_account: usize,
              input: &[u8],
-             invoke_context: &mut dyn solana_program_runtime::invoke_context::InvokeContext| {
+             invoke_context: &mut dyn solana_program_test::InvokeContext| {
                 $crate::builtin_process_instruction(
                     $process_instruction,
                     first_instruction_account,
