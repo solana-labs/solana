@@ -24,8 +24,8 @@ use crate::{
     accounts_hash::{AccountsHash, CalculateHashIntermediate, HashStats, PreviousPass},
     accounts_index::{
         AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexConfig,
-        AccountsIndexRootsStats, IndexKey, IndexValue, IsCached, RefCount, ScanResult, SlotList,
-        SlotSlice, ZeroLamport, ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS,
+        AccountsIndexRootsStats, IndexKey, IndexValue, IsCached, RefCount, ScanConfig, ScanResult,
+        SlotList, SlotSlice, ZeroLamport, ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS,
         ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
     },
     accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -3059,6 +3059,7 @@ impl AccountsDb {
         ancestors: &Ancestors,
         bank_id: BankId,
         scan_func: F,
+        config: ScanConfig,
     ) -> ScanResult<A>
     where
         F: Fn(&mut A, Option<(&Pubkey, AccountSharedData, Slot)>),
@@ -3067,14 +3068,18 @@ impl AccountsDb {
         let mut collector = A::default();
 
         // This can error out if the slots being scanned over are aborted
-        self.accounts_index
-            .scan_accounts(ancestors, bank_id, |pubkey, (account_info, slot)| {
+        self.accounts_index.scan_accounts(
+            ancestors,
+            bank_id,
+            |pubkey, (account_info, slot)| {
                 let account_slot = self
                     .get_account_accessor(slot, pubkey, account_info.store_id, account_info.offset)
                     .get_loaded_account()
                     .map(|loaded_account| (pubkey, loaded_account.take_account(), slot));
                 scan_func(&mut collector, account_slot)
-            })?;
+            },
+            config,
+        )?;
 
         Ok(collector)
     }
@@ -3084,7 +3089,7 @@ impl AccountsDb {
         metric_name: &'static str,
         ancestors: &Ancestors,
         scan_func: F,
-        collect_all_unsorted: bool,
+        config: ScanConfig,
     ) -> A
     where
         F: Fn(&mut A, (&Pubkey, LoadedAccount, Slot)),
@@ -3102,7 +3107,7 @@ impl AccountsDb {
                     scan_func(&mut collector, (pubkey, loaded_account, slot));
                 }
             },
-            collect_all_unsorted,
+            config,
         );
         collector
     }
@@ -3112,7 +3117,7 @@ impl AccountsDb {
         metric_name: &'static str,
         ancestors: &Ancestors,
         range: R,
-        collect_all_unsorted: bool,
+        config: ScanConfig,
         scan_func: F,
     ) -> A
     where
@@ -3125,7 +3130,7 @@ impl AccountsDb {
             metric_name,
             ancestors,
             range,
-            collect_all_unsorted,
+            config,
             |pubkey, (account_info, slot)| {
                 // unlike other scan fns, this is called from Bank::collect_rent_eagerly(),
                 // which is on-consensus processing in the banking/replaying stage.
@@ -3153,6 +3158,7 @@ impl AccountsDb {
         bank_id: BankId,
         index_key: IndexKey,
         scan_func: F,
+        config: ScanConfig,
     ) -> ScanResult<(A, bool)>
     where
         F: Fn(&mut A, Option<(&Pubkey, AccountSharedData, Slot)>),
@@ -3166,7 +3172,7 @@ impl AccountsDb {
         if !self.account_indexes.include_key(key) {
             // the requested key was not indexed in the secondary index, so do a normal scan
             let used_index = false;
-            let scan_result = self.scan_accounts(ancestors, bank_id, scan_func)?;
+            let scan_result = self.scan_accounts(ancestors, bank_id, scan_func, config)?;
             return Ok((scan_result, used_index));
         }
 
@@ -3182,6 +3188,7 @@ impl AccountsDb {
                     .map(|loaded_account| (pubkey, loaded_account.take_account(), slot));
                 scan_func(&mut collector, account_slot)
             },
+            config,
         )?;
         let used_index = true;
         Ok((collector, used_index))
@@ -8035,8 +8042,6 @@ pub mod tests {
         );
     }
 
-    const COLLECT_ALL_UNSORTED_FALSE: bool = false;
-
     #[test]
     fn test_accountsdb_latest_ancestor() {
         solana_logger::setup();
@@ -8067,7 +8072,7 @@ pub mod tests {
             |accounts: &mut Vec<AccountSharedData>, option| {
                 accounts.push(option.1.take_account());
             },
-            COLLECT_ALL_UNSORTED_FALSE,
+            ScanConfig::default(),
         );
         assert_eq!(accounts, vec![account1]);
     }
@@ -8970,9 +8975,15 @@ pub mod tests {
         let bank_id = 0;
         accounts
             .accounts_index
-            .index_scan_accounts(&Ancestors::default(), bank_id, index_key, |key, _| {
-                found_accounts.insert(*key);
-            })
+            .index_scan_accounts(
+                &Ancestors::default(),
+                bank_id,
+                index_key,
+                |key, _| {
+                    found_accounts.insert(*key);
+                },
+                ScanConfig::default(),
+            )
             .unwrap();
         assert_eq!(found_accounts.len(), 2);
         assert!(found_accounts.contains(&pubkey1));
@@ -8992,6 +9003,7 @@ pub mod tests {
                     |collection: &mut HashSet<Pubkey>, account| {
                         collection.insert(*account.unwrap().0);
                     },
+                    ScanConfig::default(),
                 )
                 .unwrap();
             assert!(!found_accounts.1);
@@ -9010,6 +9022,7 @@ pub mod tests {
                     |collection: &mut HashSet<Pubkey>, account| {
                         collection.insert(*account.unwrap().0);
                     },
+                    ScanConfig::default(),
                 )
                 .unwrap();
             assert!(found_accounts.1);
@@ -9043,6 +9056,7 @@ pub mod tests {
                 bank_id,
                 IndexKey::SplTokenMint(mint_key),
                 |key, _| found_accounts.push(*key),
+                ScanConfig::default(),
             )
             .unwrap();
         assert_eq!(found_accounts, vec![pubkey2]);
@@ -9598,7 +9612,7 @@ pub mod tests {
             |accounts: &mut Vec<AccountSharedData>, option| {
                 accounts.push(option.1.take_account());
             },
-            COLLECT_ALL_UNSORTED_FALSE,
+            ScanConfig::default(),
         );
         assert_eq!(accounts, vec![account0]);
 
@@ -9609,7 +9623,7 @@ pub mod tests {
             |accounts: &mut Vec<AccountSharedData>, option| {
                 accounts.push(option.1.take_account());
             },
-            COLLECT_ALL_UNSORTED_FALSE,
+            ScanConfig::default(),
         );
         assert_eq!(accounts.len(), 2);
     }
@@ -11783,6 +11797,7 @@ pub mod tests {
                             }
                         }
                     },
+                    ScanConfig::default(),
                 )
                 .unwrap();
             })
