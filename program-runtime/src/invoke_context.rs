@@ -1,4 +1,5 @@
 use crate::{
+    ic_logger_msg, ic_msg,
     instruction_processor::{ExecuteDetailsTimings, Executor, Executors, PreAccount},
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
@@ -12,11 +13,10 @@ use solana_sdk::{
         remove_native_loader, requestable_heap_size, tx_wide_compute_cap, FeatureSet,
     },
     hash::Hash,
-    ic_logger_msg, ic_msg,
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     keyed_account::{create_keyed_accounts_unified, KeyedAccount},
     message::Message,
-    process_instruction::{ComputeMeter, InvokeContext, Logger, ProcessInstructionWithContext},
+    process_instruction::{ComputeMeter, InvokeContext, ProcessInstructionWithContext},
     pubkey::Pubkey,
     rent::Rent,
     sysvar::Sysvar,
@@ -45,6 +45,17 @@ impl ThisComputeMeter {
     }
 }
 
+/// Log messages
+pub trait Logger {
+    fn log_enabled(&self) -> bool;
+
+    /// Log a message.
+    ///
+    /// Unless explicitly stated, log messages are not considered stable and may change in the
+    /// future as necessary
+    fn log(&self, message: &str);
+}
+
 pub struct ThisLogger {
     log_collector: Option<Rc<LogCollector>>,
 }
@@ -63,6 +74,36 @@ impl ThisLogger {
     pub fn new_ref(log_collector: Option<Rc<LogCollector>>) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self { log_collector }))
     }
+}
+
+/// Convenience macro to log a message with an `Rc<RefCell<dyn Logger>>`
+#[macro_export]
+macro_rules! ic_logger_msg {
+    ($logger:expr, $message:expr) => {
+        if let Ok(logger) = $logger.try_borrow_mut() {
+            if logger.log_enabled() {
+                logger.log($message);
+            }
+        }
+    };
+    ($logger:expr, $fmt:expr, $($arg:tt)*) => {
+        if let Ok(logger) = $logger.try_borrow_mut() {
+            if logger.log_enabled() {
+                logger.log(&format!($fmt, $($arg)*));
+            }
+        }
+    };
+}
+
+/// Convenience macro to log a message with an `InvokeContext`
+#[macro_export]
+macro_rules! ic_msg {
+    ($invoke_context:expr, $message:expr) => {
+        $crate::ic_logger_msg!($invoke_context.get_logger(), $message)
+    };
+    ($invoke_context:expr, $fmt:expr, $($arg:tt)*) => {
+        $crate::ic_logger_msg!($invoke_context.get_logger(), $fmt, $($arg)*)
+    };
 }
 
 pub struct InvokeContextStackFrame<'a> {

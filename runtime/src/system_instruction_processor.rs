@@ -1,9 +1,10 @@
 use crate::nonce_keyed_account::NonceKeyedAccount;
 use log::*;
+use solana_program_runtime::ic_msg;
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::StateMut,
-    feature_set, ic_msg,
+    feature_set,
     instruction::InstructionError,
     keyed_account::{from_keyed_account, get_signers, keyed_account_at_index, KeyedAccount},
     nonce,

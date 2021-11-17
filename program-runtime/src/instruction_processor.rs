@@ -1,11 +1,10 @@
-use crate::native_loader::NativeLoader;
+use crate::{ic_msg, native_loader::NativeLoader};
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     feature_set::{demote_program_write_locks, do_support_realloc, remove_native_loader},
-    ic_msg,
     instruction::{Instruction, InstructionError},
     keyed_account::keyed_account_at_index,
     message::Message,

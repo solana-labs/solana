@@ -9,7 +9,7 @@ use {
     log::*,
     solana_banks_client::start_client,
     solana_banks_server::banks_server::start_local_server,
-    solana_program_runtime::instruction_processor::InstructionProcessor,
+    solana_program_runtime::{instruction_processor::InstructionProcessor, stable_log},
     solana_runtime::{
         bank::{Bank, ExecuteTimings},
         bank_forks::BankForks,
@@ -33,7 +33,7 @@ use {
         message::Message,
         native_token::sol_to_lamports,
         poh_config::PohConfig,
-        process_instruction::{stable_log, InvokeContext, ProcessInstructionWithContext},
+        process_instruction::{InvokeContext, ProcessInstructionWithContext},
         program_error::{ProgramError, ACCOUNT_BORROW_FAILED, UNSUPPORTED_SYSVAR},
         pubkey::Pubkey,
         rent::Rent,
