@@ -164,7 +164,7 @@ impl AccountsDbPluginService {
     }
 
     pub fn join(self) -> thread::Result<()> {
-        if let Some(slot_status_observer) = self.slot_status_observer {
+        if let Some(mut slot_status_observer) = self.slot_status_observer {
             slot_status_observer.join()?;
         }
         self.plugin_manager.write().unwrap().unload();
