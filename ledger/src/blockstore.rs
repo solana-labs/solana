@@ -651,17 +651,12 @@ impl Blockstore {
         index: &'a mut Index,
         slot: Slot,
         erasure_meta: &'a ErasureMeta,
-        prev_inserted_codes: &'a mut HashMap<(Slot, /*shred index:*/ u64), Shred>,
+        prev_inserted_codes: &'a HashMap<(Slot, /*shred index:*/ u64), Shred>,
         code_cf: &'a LedgerColumn<cf::ShredCode>,
     ) -> impl Iterator<Item = Shred> + 'a {
         erasure_meta.coding_shreds_indices().filter_map(move |i| {
-            if let Some(shred) = prev_inserted_codes.remove(&(slot, i)) {
-                // Remove from the index so it doesn't get committed. We know
-                // this is safe to do because everything in
-                // `prev_inserted_codes` does not yet exist in blockstore
-                // (guaranteed by `check_cache_coding_shred`)
-                index.coding_mut().set_present(i, false);
-                return Some(shred);
+            if let Some(shred) = prev_inserted_codes.get(&(slot, i)) {
+                return Some(shred.clone());
             }
             if !index.coding().is_present(i) {
                 return None;
@@ -680,7 +675,7 @@ impl Blockstore {
         index: &mut Index,
         erasure_meta: &ErasureMeta,
         prev_inserted_datas: &mut HashMap<(Slot, /*shred index:*/ u64), Shred>,
-        prev_inserted_codes: &mut HashMap<(Slot, /*shred index:*/ u64), Shred>,
+        prev_inserted_codes: &HashMap<(Slot, /*shred index:*/ u64), Shred>,
         recovered_data_shreds: &mut Vec<Shred>,
         data_cf: &LedgerColumn<cf::ShredData>,
         code_cf: &LedgerColumn<cf::ShredCode>,
@@ -731,7 +726,7 @@ impl Blockstore {
         erasure_metas: &HashMap<(Slot, /*fec set index:*/ u64), ErasureMeta>,
         index_working_set: &mut HashMap<u64, IndexMetaWorkingSetEntry>,
         prev_inserted_datas: &mut HashMap<(Slot, /*shred index:*/ u64), Shred>,
-        prev_inserted_codes: &mut HashMap<(Slot, /*shred index:*/ u64), Shred>,
+        prev_inserted_codes: &HashMap<(Slot, /*shred index:*/ u64), Shred>,
     ) -> Vec<Shred> {
         let data_cf = db.column::<cf::ShredData>();
         let code_cf = db.column::<cf::ShredCode>();
@@ -757,16 +752,6 @@ impl Blockstore {
                     );
                 }
                 ErasureMetaStatus::DataFull => {
-                    for i in erasure_meta.coding_shreds_indices() {
-                        // Remove saved coding shreds. We don't need these for future recovery.
-                        if prev_inserted_codes.remove(&(slot, i)).is_some() {
-                            // Remove from the index so it doesn't get committed. We know
-                            // this is safe to do because everything in
-                            // `prev_inserted_codes` does not yet exist in blockstore
-                            // (guaranteed by `check_cache_coding_shred`)
-                            index.coding_mut().set_present(i, false);
-                        }
-                    }
                     Self::submit_metrics(slot, erasure_meta, false, "complete".into(), 0);
                 }
                 ErasureMetaStatus::StillNeed(needed) => {
@@ -875,7 +860,7 @@ impl Blockstore {
                 &erasure_metas,
                 &mut index_working_set,
                 &mut just_inserted_data_shreds,
-                &mut just_inserted_coding_shreds,
+                &just_inserted_coding_shreds,
             );
 
             metrics.num_recovered += recovered_data_shreds.len();

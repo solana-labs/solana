@@ -161,7 +161,7 @@ impl SanitizedTransaction {
     }
 
     /// If the transaction uses a durable nonce, return the pubkey of the nonce account
-    pub fn get_durable_nonce(&self) -> Option<&Pubkey> {
+    pub fn get_durable_nonce(&self, nonce_must_be_writable: bool) -> Option<&Pubkey> {
         self.message
             .instructions()
             .get(NONCED_TX_MARKER_IX_INDEX as usize)
@@ -180,7 +180,11 @@ impl SanitizedTransaction {
             .and_then(|ix| {
                 ix.accounts.get(0).and_then(|idx| {
                     let idx = *idx as usize;
-                    self.message.get_account_key(idx)
+                    if nonce_must_be_writable && !self.message.is_writable(idx, true) {
+                        None
+                    } else {
+                        self.message.get_account_key(idx)
+                    }
                 })
             })
     }

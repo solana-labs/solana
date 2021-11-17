@@ -994,16 +994,14 @@ mod with_incremental_snapshots {
     /// Get an RPC peer node to download from.
     ///
     /// This function finds the highest compatible snapshots from the cluster, then picks one peer
-    /// at random to use (return).  The chosen snapshots are:
-    /// 1. have a full snapshot slot that is a multiple of our full snapshot interval
-    /// 2. have the highest full snapshot slot
-    /// 3. have the highest incremental snapshot slot
+    /// at random to use (return).
     ///
-    /// NOTE: If the node has configured a full snapshot interval that is non-standard, it is
-    /// possible that there are no compatible snapshot hashes available.  At that time, a node may
-    /// (1) try again, (2) change its full snapshot interval back to a standard/default value, or
-    /// (3) disable downloading an incremental snapshot and instead download the highest full
-    /// snapshot hash, regardless of compatibility.
+    /// NOTE: If the node has configured a full snapshot interval that is not common and/or
+    /// different from its known validators, then it is possible that there are no compatible
+    /// snapshot hashes available.  At that time, a node may (1) try again, (2) change its full
+    /// snapshot interval back to a standard/default value, or (3) disable downloading an
+    /// incremental snapshot and instead download the highest full snapshot hash, regardless of
+    /// compatibility.
     fn get_rpc_node(
         cluster_info: &ClusterInfo,
         cluster_entrypoints: &[ContactInfo],
@@ -1057,14 +1055,7 @@ mod with_incremental_snapshots {
                     None => newer_cluster_snapshot_timeout = Some(Instant::now()),
                     Some(newer_cluster_snapshot_timeout) => {
                         if newer_cluster_snapshot_timeout.elapsed().as_secs() > 180 {
-                            warn!(
-                                "Giving up, did not get newer snapshots from the cluster. \
-                              If this persists, it may be that there are no nodes with \
-                              the same full snapshot interval. Try using the default \
-                              value (i.e. do not set --full-snapshot-interval-slots). \
-                              Alternatively, disable fetching incremental snapshots, just \
-                              fetch full snapshots, by setting --no-incremental-snapshot-fetch."
-                            );
+                            warn!("Giving up, did not get newer snapshots from the cluster.");
                             return None;
                         }
                     }
@@ -1102,75 +1093,33 @@ mod with_incremental_snapshots {
     /// Get peer snapshot hashes
     ///
     /// The result is a vector of peers with snapshot hashes that:
-    /// 1. have a full snapshot slot that is a multiple of our full snapshot interval
+    /// 1. match a snapshot hash from the known validators
     /// 2. have the highest full snapshot slot
     /// 3. have the highest incremental snapshot slot
+    ///
+    /// NOTE: If the node's full snapshot interval is different from its known validators, it may
+    /// be more likely to download full snapshots more often than necessary.
     fn get_peer_snapshot_hashes(
         cluster_info: &ClusterInfo,
         validator_config: &ValidatorConfig,
         bootstrap_config: &RpcBootstrapConfig,
         rpc_peers: &[ContactInfo],
     ) -> Vec<PeerSnapshotHash> {
-        // Which strategy to use for getting the peer snapshot hashes?  The standard way is what's
-        // described in the function's documentation.  However, if there are no known peers that
-        // have enabled incremental snapshots, it may be possible that there are no snapshot hashes
-        // with a slot that is a multiple of our full snapshot archive interval.  If that happens,
-        // we retry with the "fallback" strategy that *does not* filter based on full snapshot
-        // archive interval.
-        #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-        enum Strategy {
-            Standard,
-            WithoutFullSnapshotArchiveIntervalFiltering,
-        }
+        let known_snapshot_hashes = get_known_snapshot_hashes(cluster_info, validator_config);
 
-        for strategy in [
-            Strategy::Standard,
-            Strategy::WithoutFullSnapshotArchiveIntervalFiltering,
-        ] {
-            let known_snapshot_hashes = get_known_snapshot_hashes(cluster_info, validator_config);
+        let mut peer_snapshot_hashes = get_eligible_peer_snapshot_hashes(
+            cluster_info,
+            validator_config,
+            bootstrap_config,
+            rpc_peers,
+        );
+        retain_known_peer_snapshot_hashes(&known_snapshot_hashes, &mut peer_snapshot_hashes);
+        retain_peer_snapshot_hashes_with_highest_full_snapshot_slot(&mut peer_snapshot_hashes);
+        retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(
+            &mut peer_snapshot_hashes,
+        );
 
-            let mut peer_snapshot_hashes = get_known_peer_snapshot_hashes(
-                cluster_info,
-                validator_config,
-                bootstrap_config,
-                rpc_peers,
-            );
-            retain_known_peer_snapshot_hashes(&known_snapshot_hashes, &mut peer_snapshot_hashes);
-
-            if strategy == Strategy::Standard {
-                // The standard strategy is to retain only the peer snapshot hashes with a multiple
-                // of our full snapshot archive interval
-                retain_peer_snapshot_hashes_with_a_multiple_of_full_snapshot_archive_interval(
-                    validator_config
-                        .snapshot_config
-                        .as_ref()
-                        .unwrap()
-                        .full_snapshot_archive_interval_slots,
-                    &mut peer_snapshot_hashes,
-                );
-
-                // However, if at this point peer_snapshot_hashes is empty, then retry from the
-                // beginning with the "fallback" strategy and *do not* filter based on full
-                // snapshot archive interval.
-                if peer_snapshot_hashes.is_empty() {
-                    info!(
-                        "No peer snapshot hashes found with a slot that is a multiple of our \
-                          full snapshot archive interval. Retrying, but without filtering based \
-                          on full snapshot archive interval."
-                    );
-                    continue;
-                }
-            }
-
-            retain_peer_snapshot_hashes_with_highest_full_snapshot_slot(&mut peer_snapshot_hashes);
-            retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(
-                &mut peer_snapshot_hashes,
-            );
-
-            return peer_snapshot_hashes;
-        }
-
-        unreachable!("for-loop above is guaranteed to return");
+        peer_snapshot_hashes
     }
 
     /// Get the snapshot hashes from known peers.
@@ -1250,10 +1199,10 @@ mod with_incremental_snapshots {
         known_snapshot_hashes
     }
 
-    /// Get known snapshot hashes from all the eligible peers.  This fn will get only one
+    /// Get snapshot hashes from all the eligible peers.  This fn will get only one
     /// snapshot hash per peer (the one with the highest slot).  This may be just a full snapshot
     /// hash, or a combo full (i.e. base) snapshot hash and incremental snapshot hash.
-    fn get_known_peer_snapshot_hashes(
+    fn get_eligible_peer_snapshot_hashes(
         cluster_info: &ClusterInfo,
         validator_config: &ValidatorConfig,
         bootstrap_config: &RpcBootstrapConfig,
@@ -1315,22 +1264,6 @@ mod with_incremental_snapshots {
 
         trace!(
             "retain known peer snapshot hashes: {:?}",
-            &peer_snapshot_hashes
-        );
-    }
-
-    /// Retain the peer snapshot hashes with a full snapshot slot that is a multiple of the full
-    /// snapshot archive interval
-    fn retain_peer_snapshot_hashes_with_a_multiple_of_full_snapshot_archive_interval(
-        full_snapshot_archive_interval: Slot,
-        peer_snapshot_hashes: &mut Vec<PeerSnapshotHash>,
-    ) {
-        peer_snapshot_hashes.retain(|peer_snapshot_hash| {
-            peer_snapshot_hash.snapshot_hash.full.0 % full_snapshot_archive_interval == 0
-        });
-
-        trace!(
-            "retain peer snapshot hashes with a multiple of full snapshot archive interval: {:?}",
             &peer_snapshot_hashes
         );
     }
@@ -1774,35 +1707,6 @@ mod with_incremental_snapshots {
             ];
             let mut actual = peer_snapshot_hashes;
             retain_known_peer_snapshot_hashes(&known_snapshot_hashes, &mut actual);
-            assert_eq!(expected, actual);
-        }
-
-        #[test]
-        fn test_retain_peer_snapshot_hashes_with_a_multiple_of_full_snapshot_interval() {
-            let full_snapshot_archive_interval = 100_000;
-            let contact_info = default_contact_info_for_tests();
-            let per_snapshot_hashes = vec![
-                // good full snapshot hash slots
-                PeerSnapshotHash::new(contact_info.clone(), (100_000, Hash::default()), None),
-                PeerSnapshotHash::new(contact_info.clone(), (200_000, Hash::default()), None),
-                PeerSnapshotHash::new(contact_info.clone(), (300_000, Hash::default()), None),
-                // bad full snapshot hash slots
-                PeerSnapshotHash::new(contact_info.clone(), (999, Hash::default()), None),
-                PeerSnapshotHash::new(contact_info.clone(), (100_777, Hash::default()), None),
-                PeerSnapshotHash::new(contact_info.clone(), (101_000, Hash::default()), None),
-                PeerSnapshotHash::new(contact_info.clone(), (999_000, Hash::default()), None),
-            ];
-
-            let expected = vec![
-                PeerSnapshotHash::new(contact_info.clone(), (100_000, Hash::default()), None),
-                PeerSnapshotHash::new(contact_info.clone(), (200_000, Hash::default()), None),
-                PeerSnapshotHash::new(contact_info, (300_000, Hash::default()), None),
-            ];
-            let mut actual = per_snapshot_hashes;
-            retain_peer_snapshot_hashes_with_a_multiple_of_full_snapshot_archive_interval(
-                full_snapshot_archive_interval,
-                &mut actual,
-            );
             assert_eq!(expected, actual);
         }
 

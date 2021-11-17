@@ -1,7 +1,8 @@
 use solana_sdk::{
     account::{ReadableAccount, WritableAccount},
     account_utils::State as AccountUtilsState,
-    feature_set, ic_msg,
+    feature_set::{self, nonce_must_be_writable},
+    ic_msg,
     instruction::{checked_add, InstructionError},
     keyed_account::KeyedAccount,
     nonce::{self, state::Versions, State},
@@ -48,6 +49,16 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
     ) -> Result<(), InstructionError> {
         let merge_nonce_error_into_system_error = invoke_context
             .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
+
+        if invoke_context.is_feature_active(&nonce_must_be_writable::id()) && !self.is_writable() {
+            ic_msg!(
+                invoke_context,
+                "Advance nonce account: Account {} must be writeable",
+                self.unsigned_key()
+            );
+            return Err(InstructionError::InvalidArgument);
+        }
+
         let state = AccountUtilsState::<Versions>::state(self)?.convert_to_current();
         match state {
             State::Initialized(data) => {
@@ -102,6 +113,16 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
     ) -> Result<(), InstructionError> {
         let merge_nonce_error_into_system_error = invoke_context
             .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
+
+        if invoke_context.is_feature_active(&nonce_must_be_writable::id()) && !self.is_writable() {
+            ic_msg!(
+                invoke_context,
+                "Withdraw nonce account: Account {} must be writeable",
+                self.unsigned_key()
+            );
+            return Err(InstructionError::InvalidArgument);
+        }
+
         let signer = match AccountUtilsState::<Versions>::state(self)?.convert_to_current() {
             State::Uninitialized => {
                 if lamports > self.lamports()? {
@@ -178,6 +199,16 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
     ) -> Result<(), InstructionError> {
         let merge_nonce_error_into_system_error = invoke_context
             .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
+
+        if invoke_context.is_feature_active(&nonce_must_be_writable::id()) && !self.is_writable() {
+            ic_msg!(
+                invoke_context,
+                "Initialize nonce account: Account {} must be writeable",
+                self.unsigned_key()
+            );
+            return Err(InstructionError::InvalidArgument);
+        }
+
         match AccountUtilsState::<Versions>::state(self)?.convert_to_current() {
             State::Uninitialized => {
                 let min_balance = rent.minimum_balance(self.data_len()?);
@@ -219,6 +250,16 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
     ) -> Result<(), InstructionError> {
         let merge_nonce_error_into_system_error = invoke_context
             .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
+
+        if invoke_context.is_feature_active(&nonce_must_be_writable::id()) && !self.is_writable() {
+            ic_msg!(
+                invoke_context,
+                "Authorize nonce account: Account {} must be writeable",
+                self.unsigned_key()
+            );
+            return Err(InstructionError::InvalidArgument);
+        }
+
         match AccountUtilsState::<Versions>::state(self)?.convert_to_current() {
             State::Initialized(data) => {
                 if !signers.contains(&data.authority) {
