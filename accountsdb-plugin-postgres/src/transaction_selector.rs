@@ -8,6 +8,7 @@ pub(crate) struct TransactionSelector {
     pub select_all_vote_transactions: bool,
 }
 
+#[allow(dead_code)]
 impl TransactionSelector {
     pub fn default() -> Self {
         Self {
@@ -55,7 +56,7 @@ impl TransactionSelector {
         is_vote: bool,
         accounts: Box<dyn Iterator<Item = &Pubkey> + '_>,
     ) -> bool {
-        if !self.is_interested_in_any_transaction() {
+        if !self.is_enabled() {
             return false;
         }
 
@@ -71,7 +72,7 @@ impl TransactionSelector {
     }
 
     /// Check if any transaction is of interested at all
-    pub fn is_interested_in_any_transaction(&self) -> bool {
+    pub fn is_enabled(&self) -> bool {
         self.select_all_transactions
             || self.select_all_vote_transactions
             || !self.mentions.is_empty()
@@ -89,7 +90,7 @@ pub(crate) mod tests {
 
         let selector = TransactionSelector::new(&[pubkey1.to_string()]);
 
-        assert!(selector.is_interested_in_any_transaction());
+        assert!(selector.is_enabled());
 
         let accounts = [pubkey1];
 
@@ -109,7 +110,7 @@ pub(crate) mod tests {
 
         let selector = TransactionSelector::new(&["*".to_string()]);
 
-        assert!(selector.is_interested_in_any_transaction());
+        assert!(selector.is_enabled());
 
         let accounts = [pubkey1];
 
@@ -129,7 +130,7 @@ pub(crate) mod tests {
 
         let selector = TransactionSelector::new(&["all".to_string()]);
 
-        assert!(selector.is_interested_in_any_transaction());
+        assert!(selector.is_enabled());
 
         let accounts = [pubkey1];
 
@@ -149,7 +150,7 @@ pub(crate) mod tests {
 
         let selector = TransactionSelector::new(&["all_votes".to_string()]);
 
-        assert!(selector.is_interested_in_any_transaction());
+        assert!(selector.is_enabled());
 
         let accounts = [pubkey1];
 
@@ -169,7 +170,7 @@ pub(crate) mod tests {
 
         let selector = TransactionSelector::new(&[]);
 
-        assert!(!selector.is_interested_in_any_transaction());
+        assert!(!selector.is_enabled());
 
         let accounts = [pubkey1];
 
