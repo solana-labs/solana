@@ -412,7 +412,19 @@ pub fn start_verify_transactions(
 
     let api = perf_libs::api();
 
-    if api.is_none() || skip_verification {
+    let num_transactions: usize = entries
+        .iter()
+        .map(|entry: &Entry| -> usize { entry.transactions.len() })
+        .sum();
+
+    // Use the CPU if we have too few transactions for GPU sigverify to be worth it.
+    // Based on the CPU-to-GPU crossover point of 64 in sigverify::ed25519_verify also
+    // taking into account the fact that we have some additional processing
+    // we need to do before we can call sigverify::ed25519_verify
+    // TODO: make this dynamic, perhaps based on similar future heuristics
+    // to what might be used in sigverify::ed25519_verify when a dynamic crossover
+    // is introduced for that function (see TODO in sigverify::ed25519_verify)
+    if api.is_none() || skip_verification || num_transactions < 128 {
         let verify_func = {
             move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
                 verify(versioned_tx, skip_verification, false)
@@ -479,36 +491,40 @@ pub fn start_verify_transactions(
                 packets.packets.set_len(num_transactions);
             }
 
-            let unsafe_packets = UnsafeSlice::new(&mut packets.packets[0..num_transactions]);
+            {
+                let unsafe_packets = UnsafeSlice::new(&mut packets.packets[0..num_transactions]);
 
-            let curr_packet = AtomicUsize::new(0);
+                let curr_packet = AtomicUsize::new(0);
 
-            let res = entries.par_iter().all(|entry| match entry {
-                EntryType::Transactions(transactions) => transactions.par_iter().all(|hashed_tx| {
-                    let idx = curr_packet.fetch_add(1, Ordering::SeqCst);
+                let res = entries.par_iter().all(|entry| match entry {
+                    EntryType::Transactions(transactions) => {
+                        transactions.par_iter().all(|hashed_tx| {
+                            let idx = curr_packet.fetch_add(1, Ordering::SeqCst);
 
-                    unsafe {
-                        (*unsafe_packets.slice[idx].get()).meta = Meta::default();
+                            unsafe {
+                                (*unsafe_packets.slice[idx].get()).meta = Meta::default();
 
-                        let res = Packet::populate_packet(
-                            &mut (*unsafe_packets.slice[idx].get()),
-                            None,
-                            &hashed_tx.to_versioned_transaction(),
-                        );
-                        res.is_ok()
+                                let res = Packet::populate_packet(
+                                    &mut (*unsafe_packets.slice[idx].get()),
+                                    None,
+                                    &hashed_tx.to_versioned_transaction(),
+                                );
+                                res.is_ok()
+                            }
+                        })
                     }
-                }),
-                EntryType::Tick(_) => true,
-            });
+                    EntryType::Tick(_) => true,
+                });
 
-            if !res {
-                let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
-                return EntrySigVerificationState {
-                    verification_status: EntryVerificationStatus::Failure,
-                    entries: None,
-                    device_verification_data: DeviceSigVerificationData::Cpu(),
-                    verify_duration_us: transaction_duration_us,
-                };
+                if !res {
+                    let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
+                    return EntrySigVerificationState {
+                        verification_status: EntryVerificationStatus::Failure,
+                        entries: None,
+                        device_verification_data: DeviceSigVerificationData::Cpu(),
+                        verify_duration_us: transaction_duration_us,
+                    };
+                }
             }
 
             let mut packets = vec![packets];
@@ -972,19 +988,19 @@ mod tests {
 
         let recycler = VerifyRecyclers::default();
 
-        let entries_invalid = (0..128)
-        .map(|_| {
-            let transaction = test_invalid_tx();
-            next_entry_mut(&mut Hash::default(), 0, vec![transaction])
-        })
-        .collect::<Vec<_>>();
+        let entries_invalid = (0..256)
+            .map(|_| {
+                let transaction = test_invalid_tx();
+                next_entry_mut(&mut Hash::default(), 0, vec![transaction])
+            })
+            .collect::<Vec<_>>();
 
-        let entries_valid = (0..128)
-        .map(|_| {
-            let transaction = test_tx();
-            next_entry_mut(&mut Hash::default(), 0, vec![transaction])
-        })
-        .collect::<Vec<_>>();
+        let entries_valid = (0..256)
+            .map(|_| {
+                let transaction = test_tx();
+                next_entry_mut(&mut Hash::default(), 0, vec![transaction])
+            })
+            .collect::<Vec<_>>();
 
         assert!(!test_verify_transactions(
             entries_invalid,
