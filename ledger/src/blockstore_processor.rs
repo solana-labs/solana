@@ -976,7 +976,6 @@ pub fn confirm_slot(
         return Err(BlockError::InvalidEntryHash.into());
     }
 
-    // todo: is this correct?
     let transaction_duration_us = check_result.verify_duration_us;
 
     if let Some(mut verifier) = verifier {
