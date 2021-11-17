@@ -787,7 +787,7 @@ impl Accounts {
         index_key: &IndexKey,
         filter: F,
         config: &ScanConfig,
-        byte_limit: Option<usize>,
+        byte_limit_for_scan: Option<usize>,
     ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         let sum = AtomicUsize::default();
         let config = ScanConfig {
@@ -804,14 +804,14 @@ impl Accounts {
                     Self::load_while_filtering(collector, some_account_tuple, |account| {
                         let use_account = filter(account);
                         if use_account {
-                            if let Some(byte_limit) = byte_limit.as_ref() {
+                            if let Some(byte_limit_for_scan) = byte_limit_for_scan.as_ref() {
                                 let added = account.data().len()
                                     + std::mem::size_of::<AccountSharedData>()
                                     + std::mem::size_of::<Pubkey>();
                                 if sum
                                     .fetch_add(added, Ordering::Relaxed)
                                     .saturating_add(added)
-                                    > *byte_limit
+                                    > *byte_limit_for_scan
                                 {
                                     // total size of results exceeds size limit, so abort scan
                                     config.abort();
