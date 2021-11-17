@@ -28,7 +28,7 @@ use solana_ledger::{
 use solana_measure::measure::Measure;
 use solana_runtime::{
     accounts_db::AccountsDbConfig,
-    accounts_index::AccountsIndexConfig,
+    accounts_index::{AccountsIndexConfig, ScanConfig},
     bank::{Bank, RewardCalculationEvent},
     bank_forks::BankForks,
     cost_model::CostModel,
@@ -2251,7 +2251,7 @@ fn main() {
 
                     if remove_stake_accounts {
                         for (address, mut account) in bank
-                            .get_program_accounts(&stake::program::id())
+                            .get_program_accounts(&stake::program::id(), ScanConfig::default())
                             .unwrap()
                             .into_iter()
                         {
@@ -2275,7 +2275,7 @@ fn main() {
 
                     if !vote_accounts_to_destake.is_empty() {
                         for (address, mut account) in bank
-                            .get_program_accounts(&stake::program::id())
+                            .get_program_accounts(&stake::program::id(), ScanConfig::default())
                             .unwrap()
                             .into_iter()
                         {
@@ -2313,7 +2313,7 @@ fn main() {
 
                         // Delete existing vote accounts
                         for (address, mut account) in bank
-                            .get_program_accounts(&solana_vote_program::id())
+                            .get_program_accounts(&solana_vote_program::id(), ScanConfig::default())
                             .unwrap()
                             .into_iter()
                         {
