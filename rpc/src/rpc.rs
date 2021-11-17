@@ -4268,7 +4268,7 @@ pub fn create_test_transactions_and_populate_blockstore(
 
     // Check that process_entries successfully writes can_commit transactions statuses, and
     // that they are matched properly by get_rooted_block
-    let _result = solana_ledger::blockstore_processor::process_entries(
+    let _result = solana_ledger::blockstore_processor::process_entries_for_tests(
         &bank,
         entries,
         true,
