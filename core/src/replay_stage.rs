@@ -326,6 +326,7 @@ impl ReplayStage {
         cluster_slots_update_sender: ClusterSlotsUpdateSender,
         cost_update_sender: Sender<CostUpdate>,
         voting_sender: Sender<VoteOp>,
+        drop_bank_sender: Sender<Vec<Arc<Bank>>>,
     ) -> Self {
         let ReplayStageConfig {
             vote_account,
@@ -644,6 +645,7 @@ impl ReplayStage {
                             &mut replay_timing,
                             &voting_sender,
                             &mut epoch_slots_frozen_slots,
+                            &drop_bank_sender,
                         );
                     };
                     voting_time.stop();
@@ -1615,6 +1617,7 @@ impl ReplayStage {
         replay_timing: &mut ReplayTiming,
         voting_sender: &Sender<VoteOp>,
         epoch_slots_frozen_slots: &mut EpochSlotsFrozenSlots,
+        bank_drop_sender: &Sender<Vec<Arc<Bank>>>,
     ) {
         if bank.is_empty() {
             inc_new_counter_info!("replay_stage-voted_empty_bank", 1);
@@ -1665,6 +1668,7 @@ impl ReplayStage {
                 has_new_vote_been_rooted,
                 vote_signatures,
                 epoch_slots_frozen_slots,
+                bank_drop_sender,
             );
             rpc_subscriptions.notify_roots(rooted_slots);
             if let Some(sender) = bank_notification_sender {
@@ -2723,21 +2727,17 @@ impl ReplayStage {
         has_new_vote_been_rooted: &mut bool,
         voted_signatures: &mut Vec<Signature>,
         epoch_slots_frozen_slots: &mut EpochSlotsFrozenSlots,
+        bank_drop_sender: &Sender<Vec<Arc<Bank>>>,
     ) {
         let removed_banks = bank_forks.write().unwrap().set_root(
             new_root,
             accounts_background_request_sender,
             highest_confirmed_root,
         );
-        let mut dropped_banks_time = Measure::start("handle_new_root::drop_banks");
-        drop(removed_banks);
-        dropped_banks_time.stop();
-        if dropped_banks_time.as_ms() > 10 {
-            datapoint_info!(
-                "handle_new_root-dropped_banks",
-                ("elapsed_ms", dropped_banks_time.as_ms(), i64)
-            );
-        }
+        bank_drop_sender
+            .send(removed_banks)
+            .unwrap_or_else(|err| warn!("bank drop failed: {:?}", err));
+
         // Dropping the bank_forks write lock and reacquiring as a read lock is
         // safe because updates to bank_forks are only made by a single thread.
         let r_bank_forks = bank_forks.read().unwrap();
@@ -3209,6 +3209,7 @@ pub mod tests {
             .into_iter()
             .map(|slot| (slot, Hash::default()))
             .collect();
+        let (bank_drop_sender, _bank_drop_receiver) = channel();
         ReplayStage::handle_new_root(
             root,
             &bank_forks,
@@ -3222,6 +3223,7 @@ pub mod tests {
             &mut true,
             &mut Vec::new(),
             &mut epoch_slots_frozen_slots,
+            &bank_drop_sender,
         );
         assert_eq!(bank_forks.read().unwrap().root(), root);
         assert_eq!(progress.len(), 1);
@@ -3288,6 +3290,7 @@ pub mod tests {
         for i in 0..=root {
             progress.insert(i, ForkProgress::new(Hash::default(), None, None, 0, 0));
         }
+        let (bank_drop_sender, _bank_drop_receiver) = channel();
         ReplayStage::handle_new_root(
             root,
             &bank_forks,
@@ -3301,6 +3304,7 @@ pub mod tests {
             &mut true,
             &mut Vec::new(),
             &mut EpochSlotsFrozenSlots::default(),
+            &bank_drop_sender,
         );
         assert_eq!(bank_forks.read().unwrap().root(), root);
         assert!(bank_forks.read().unwrap().get(confirmed_root).is_some());

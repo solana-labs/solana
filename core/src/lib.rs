@@ -21,6 +21,7 @@ pub mod commitment_service;
 pub mod completed_data_sets_service;
 pub mod consensus;
 pub mod cost_update_service;
+pub mod drop_bank_service;
 pub mod duplicate_repair_status;
 pub mod fetch_stage;
 pub mod fork_choice;
