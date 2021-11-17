@@ -165,9 +165,13 @@ pub fn get_closest_completion(
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use solana_ledger::get_tmp_ledger_path;
+    use solana_ledger::{
+        blockstore::{Blockstore, MAX_TURBINE_PROPAGATION_IN_MS},
+        get_tmp_ledger_path,
+    };
     use solana_sdk::hash::Hash;
-    use trees::tr;
+    use std::{thread::sleep, time::Duration};
+    use trees::{tr, Tree, TreeWalk};
 
     #[test]
     fn test_get_unknown_last_index() {
@@ -204,6 +208,85 @@ pub mod test {
             10,
         );
         assert_eq!(repairs, []);
+
+        let forks = tr(0) / (tr(1) / (tr(2) / (tr(4))) / (tr(3) / (tr(5))));
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        add_tree_with_missing_shreds(
+            &blockstore,
+            forks.clone(),
+            false,
+            true,
+            100,
+            Hash::default(),
+        );
+        let heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_tree(forks);
+        sleep(Duration::from_millis(MAX_TURBINE_PROPAGATION_IN_MS));
+        let mut slot_meta_cache = HashMap::default();
+        let mut processed_slots = HashSet::default();
+        let repairs = get_closest_completion(
+            &heaviest_subtree_fork_choice,
+            &blockstore,
+            &mut slot_meta_cache,
+            &mut processed_slots,
+            2,
+        );
+        assert_eq!(
+            repairs,
+            [ShredRepairType::Shred(0, 3), ShredRepairType::Shred(1, 3)]
+        );
+    }
+
+    fn add_tree_with_missing_shreds(
+        blockstore: &Blockstore,
+        forks: Tree<Slot>,
+        is_orphan: bool,
+        is_slot_complete: bool,
+        num_ticks: u64,
+        starting_hash: Hash,
+    ) {
+        let mut walk = TreeWalk::from(forks);
+        let mut blockhashes = HashMap::new();
+        while let Some(visit) = walk.get() {
+            let slot = *visit.node().data();
+            if blockstore.meta(slot).unwrap().is_some()
+                && blockstore.orphan(slot).unwrap().is_none()
+            {
+                // If slot exists in blockstore and is not an orphan, then skip it
+                walk.forward();
+                continue;
+            }
+            let parent = walk.get_parent().map(|n| *n.data());
+            if parent.is_some() || !is_orphan {
+                let parent_hash = parent
+                    // parent won't exist for first node in a tree where
+                    // `is_orphan == true`
+                    .and_then(|parent| blockhashes.get(&parent))
+                    .unwrap_or(&starting_hash);
+                let entries = solana_entry::entry::create_ticks(
+                    num_ticks * (std::cmp::max(1, slot - parent.unwrap_or(slot))),
+                    0,
+                    *parent_hash,
+                );
+                blockhashes.insert(slot, entries.last().unwrap().hash);
+
+                let mut shreds = solana_ledger::blockstore::entries_to_test_shreds(
+                    entries.clone(),
+                    slot,
+                    parent.unwrap_or(slot),
+                    is_slot_complete,
+                    0,
+                );
+
+                // remove next to last shred
+                let shred = shreds.pop().unwrap();
+                shreds.pop().unwrap();
+                shreds.push(shred);
+
+                blockstore.insert_shreds(shreds, None, false).unwrap();
+            }
+            walk.forward();
+        }
     }
 
     fn setup_forks() -> (Blockstore, HeaviestSubtreeForkChoice) {
