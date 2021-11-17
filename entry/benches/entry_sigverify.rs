@@ -15,7 +15,7 @@ use solana_sdk::hash::Hash;
 
 #[bench]
 fn bench_gpusigverify(bencher: &mut Bencher) {
-    let entries = (0..1024)
+    let entries = (0..131072)
         .map(|_| {
             let transaction = test_tx();
             entry::next_entry_mut(&mut Hash::default(), 0, vec![transaction])
@@ -59,7 +59,7 @@ fn bench_gpusigverify(bencher: &mut Bencher) {
 
 #[bench]
 fn bench_cpusigverify(bencher: &mut Bencher) {
-    let entries = (0..1024)
+    let entries = (0..131072)
         .map(|_| {
             let transaction = test_tx();
             entry::next_entry_mut(&mut Hash::default(), 0, vec![transaction])
