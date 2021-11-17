@@ -4391,7 +4391,7 @@ impl AccountsDb {
 
     fn bulk_assign_write_version(&self, count: usize) -> StoredMetaWriteVersion {
         self.write_version
-            .fetch_add(count as StoredMetaWriteVersion, Ordering::Relaxed)
+            .fetch_add(count as StoredMetaWriteVersion, Ordering::AcqRel)
     }
 
     fn write_accounts_to_storage<F: FnMut(Slot, usize) -> Arc<AccountStorageEntry>>(
@@ -9193,8 +9193,8 @@ pub mod tests {
         let daccounts = reconstruct_accounts_db_via_serialization(&accounts, latest_slot);
 
         assert_eq!(
-            daccounts.write_version.load(Ordering::Relaxed),
-            accounts.write_version.load(Ordering::Relaxed)
+            daccounts.write_version.load(Ordering::Acquire),
+            accounts.write_version.load(Ordering::Acquire)
         );
 
         // Get the hash for the latest slot, which should be the only hash in the
