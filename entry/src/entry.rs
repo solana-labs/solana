@@ -26,7 +26,9 @@ use solana_sdk::packet::Meta;
 use solana_sdk::timing;
 use solana_sdk::transaction::{Result, SanitizedTransaction, Transaction, VersionedTransaction};
 use std::cell::RefCell;
+use std::cell::UnsafeCell;
 use std::ffi::OsStr;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Once;
 use std::sync::{Arc, Mutex};
@@ -44,6 +46,22 @@ pub type EntrySender = Sender<Vec<Entry>>;
 pub type EntryReceiver = Receiver<Vec<Entry>>;
 
 static mut API: Option<Container<Api>> = None;
+
+#[derive(Copy, Clone)]
+pub struct UnsafeSlice<'a, T> {
+    slice: &'a [UnsafeCell<T>],
+}
+unsafe impl<'a, T: Send + Sync> Send for UnsafeSlice<'a, T> {}
+unsafe impl<'a, T: Send + Sync> Sync for UnsafeSlice<'a, T> {}
+
+impl<'a, T> UnsafeSlice<'a, T> {
+    pub fn new(slice: &'a mut [T]) -> Self {
+        let ptr = slice as *mut [T] as *const [UnsafeCell<T>];
+        Self {
+            slice: unsafe { &*ptr },
+        }
+    }
+}
 
 pub fn init_poh() {
     init(OsStr::new("libpoh-simd.so"));
@@ -461,34 +479,36 @@ pub fn start_verify_transactions(
                 packets.packets.set_len(num_transactions);
             }
 
-            let mut curr_packet: usize = 0;
-            for (_i, entry) in entries.iter().enumerate() {
-                match entry {
-                    EntryType::Transactions(transactions) => {
-                        for hashed_tx in transactions {
-                            packets.packets[curr_packet].meta = Meta::default();
+            let unsafe_packets = UnsafeSlice::new(&mut packets.packets[0..num_transactions]);
 
-                            let res = Packet::populate_packet(
-                                &mut packets.packets[curr_packet],
-                                None,
-                                &hashed_tx.to_versioned_transaction(),
-                            );
-                            if res.is_err() {
-                                let transaction_duration_us =
-                                    timing::duration_as_us(&check_start.elapsed());
-                                return EntrySigVerificationState {
-                                    verification_status: EntryVerificationStatus::Failure,
-                                    entries: None,
-                                    device_verification_data: DeviceSigVerificationData::Cpu(),
-                                    verify_duration_us: transaction_duration_us,
-                                };
-                            }
+            let curr_packet = AtomicUsize::new(0);
 
-                            curr_packet += 1;
-                        }
+            let res = entries.par_iter().all(|entry| match entry {
+                EntryType::Transactions(transactions) => transactions.par_iter().all(|hashed_tx| {
+                    let idx = curr_packet.fetch_add(1, Ordering::SeqCst);
+
+                    unsafe {
+                        (*unsafe_packets.slice[idx].get()).meta = Meta::default();
+
+                        let res = Packet::populate_packet(
+                            &mut (*unsafe_packets.slice[idx].get()),
+                            None,
+                            &hashed_tx.to_versioned_transaction(),
+                        );
+                        res.is_ok()
                     }
-                    EntryType::Tick(_) => {}
-                }
+                }),
+                EntryType::Tick(_) => true,
+            });
+
+            if !res {
+                let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
+                return EntrySigVerificationState {
+                    verification_status: EntryVerificationStatus::Failure,
+                    entries: None,
+                    device_verification_data: DeviceSigVerificationData::Cpu(),
+                    verify_duration_us: transaction_duration_us,
+                };
             }
 
             let mut packets = vec![packets];
