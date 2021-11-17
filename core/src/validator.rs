@@ -414,14 +414,12 @@ impl Validator {
 
         let accounts_package_channel = channel();
 
-        let accounts_update_notifier = if accountsdb_plugin_service.is_some() {
+        let accounts_update_notifier =
             accountsdb_plugin_service
                 .as_ref()
-                .unwrap()
-                .get_accounts_update_notifier()
-        } else {
-            None
-        };
+                .and_then(|accountsdb_plugin_service| {
+                    accountsdb_plugin_service.get_accounts_update_notifier()
+                });
         info!(
             "AccountsDb plugin: accounts_update_notifier: {}",
             accounts_update_notifier.is_some()
