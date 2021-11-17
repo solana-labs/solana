@@ -11,7 +11,7 @@ use solana_bpf_loader_program::{
     ThisInstructionMeter,
 };
 use solana_measure::measure::Measure;
-use solana_rbpf::vm::{Config, Executable, InstructionMeter, SyscallRegistry};
+use solana_rbpf::vm::{Config, Executable, InstructionMeter};
 use solana_runtime::{
     bank::Bank,
     bank_client::BankClient,
@@ -79,7 +79,6 @@ fn bench_program_create_executable(bencher: &mut Bencher) {
             &elf,
             None,
             Config::default(),
-            SyscallRegistry::default(),
         )
         .unwrap();
     });
@@ -98,13 +97,10 @@ fn bench_program_alu(bencher: &mut Bencher) {
     let mut invoke_context = MockInvokeContext::new(vec![]);
 
     let elf = load_elf("bench_alu").unwrap();
-    let mut executable = <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
-        &elf,
-        None,
-        Config::default(),
-        register_syscalls(&mut invoke_context).unwrap(),
-    )
-    .unwrap();
+    let mut executable =
+        <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(&elf, None, Config::default())
+            .unwrap();
+    executable.set_syscall_registry(register_syscalls(&mut invoke_context).unwrap());
     executable.jit_compile().unwrap();
     let compute_meter = invoke_context.get_compute_meter();
     let mut instruction_meter = ThisInstructionMeter { compute_meter };
@@ -229,13 +225,10 @@ fn bench_create_vm(bencher: &mut Bencher) {
     .unwrap();
 
     let elf = load_elf("noop").unwrap();
-    let mut executable = <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
-        &elf,
-        None,
-        Config::default(),
-        register_syscalls(&mut invoke_context).unwrap(),
-    )
-    .unwrap();
+    let mut executable =
+        <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(&elf, None, Config::default())
+            .unwrap();
+    executable.set_syscall_registry(register_syscalls(&mut invoke_context).unwrap());
 
     bencher.iter(|| {
         let _ = create_vm(
@@ -280,13 +273,10 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     .unwrap();
 
     let elf = load_elf("tuner").unwrap();
-    let executable = <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
-        &elf,
-        None,
-        Config::default(),
-        register_syscalls(&mut invoke_context).unwrap(),
-    )
-    .unwrap();
+    let mut executable =
+        <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(&elf, None, Config::default())
+            .unwrap();
+    executable.set_syscall_registry(register_syscalls(&mut invoke_context).unwrap());
     let compute_meter = invoke_context.get_compute_meter();
     let mut instruction_meter = ThisInstructionMeter { compute_meter };
     let mut vm = create_vm(
