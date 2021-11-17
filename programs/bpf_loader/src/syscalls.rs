@@ -1,6 +1,11 @@
 use crate::{alloc, BpfError};
 use alloc::Alloc;
-use solana_program_runtime::instruction_processor::InstructionProcessor;
+use solana_program_runtime::{
+    ic_msg,
+    instruction_processor::InstructionProcessor,
+    invoke_context::{ComputeMeter, InvokeContext, Logger},
+    stable_log,
+};
 use solana_rbpf::{
     aligned_memory::AlignedMemory,
     ebpf,
@@ -25,13 +30,11 @@ use solana_sdk::{
         secp256k1_recover_syscall_enabled, sol_log_data_syscall_enabled,
     },
     hash::{Hasher, HASH_BYTES},
-    ic_msg,
     instruction::{AccountMeta, Instruction, InstructionError},
     keccak,
     message::Message,
     native_loader,
     precompiles::is_precompile,
-    process_instruction::{stable_log, ComputeMeter, InvokeContext, Logger},
     program::MAX_RETURN_DATA,
     pubkey::{Pubkey, PubkeyError, MAX_SEEDS, MAX_SEED_LEN},
     rent::Rent,

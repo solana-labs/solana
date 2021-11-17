@@ -10,7 +10,9 @@ documentation = "https://docs.rs/solana-program-runtime"
 edition = "2018"
 
 [dependencies]
+base64 = "0.13"
 bincode = "1.3.3"
+itertools =  "0.10.1"
 libc = "0.2.101"
 libloading = "0.7.0"
 log = "0.4.14"

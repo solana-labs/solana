@@ -1,12 +1,11 @@
 use {
     crate::{config, stake_state::StakeAccount},
     log::*,
-    solana_program_runtime::invoke_context::get_sysvar,
+    solana_program_runtime::invoke_context::{get_sysvar, InvokeContext},
     solana_sdk::{
         feature_set,
         instruction::InstructionError,
         keyed_account::{from_keyed_account, get_signers, keyed_account_at_index},
-        process_instruction::InvokeContext,
         program_utils::limited_deserialize,
         stake::{
             instruction::StakeInstruction,

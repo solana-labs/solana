@@ -3,7 +3,7 @@ use solana_measure::measure::Measure;
 use solana_program_runtime::{
     instruction_processor::{ExecuteDetailsTimings, Executors, InstructionProcessor},
     instruction_recorder::InstructionRecorder,
-    invoke_context::ThisInvokeContext,
+    invoke_context::{ComputeMeter, InvokeContext, ThisInvokeContext},
     log_collector::LogCollector,
 };
 use solana_sdk::{
@@ -13,7 +13,6 @@ use solana_sdk::{
     hash::Hash,
     message::Message,
     precompiles::is_precompile,
-    process_instruction::{ComputeMeter, InvokeContext},
     pubkey::Pubkey,
     rent::Rent,
     sysvar::instructions,

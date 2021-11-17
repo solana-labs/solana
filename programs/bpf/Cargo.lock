@@ -2795,6 +2795,7 @@ name = "solana-bpf-rust-mem"
 version = "1.9.0"
 dependencies = [
  "solana-program 1.9.0",
+ "solana-program-runtime",
  "solana-program-test",
  "solana-sdk",
 ]
@@ -2879,6 +2880,7 @@ name = "solana-bpf-rust-sanity"
 version = "1.9.0"
 dependencies = [
  "solana-program 1.9.0",
+ "solana-program-runtime",
  "solana-program-test",
  "solana-sdk",
 ]
@@ -2917,6 +2919,7 @@ name = "solana-bpf-rust-sysvar"
 version = "1.9.0"
 dependencies = [
  "solana-program 1.9.0",
+ "solana-program-runtime",
  "solana-program-test",
  "solana-sdk",
 ]
@@ -3036,6 +3039,7 @@ dependencies = [
 name = "solana-compute-budget-program"
 version = "1.9.0"
 dependencies = [
+ "solana-program-runtime",
  "solana-sdk",
 ]
 
@@ -3047,6 +3051,7 @@ dependencies = [
  "chrono",
  "serde",
  "serde_derive",
+ "solana-program-runtime",
  "solana-sdk",
 ]
 
@@ -3310,7 +3315,9 @@ dependencies = [
 name = "solana-program-runtime"
 version = "1.9.0"
 dependencies = [
+ "base64 0.13.0",
  "bincode",
+ "itertools 0.10.1",
  "libc",
  "libloading",
  "log",
@@ -3578,6 +3585,7 @@ dependencies = [
  "solana-frozen-abi-macro 1.9.0",
  "solana-logger 1.9.0",
  "solana-metrics",
+ "solana-program-runtime",
  "solana-sdk",
  "thiserror",
 ]

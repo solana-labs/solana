@@ -2,12 +2,12 @@
 
 use crate::ConfigKeys;
 use bincode::deserialize;
+use solana_program_runtime::{ic_msg, invoke_context::InvokeContext};
 use solana_sdk::{
     account::{ReadableAccount, WritableAccount},
-    feature_set, ic_msg,
+    feature_set,
     instruction::InstructionError,
     keyed_account::keyed_account_at_index,
-    process_instruction::InvokeContext,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
 };

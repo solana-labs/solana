@@ -4,15 +4,14 @@
 //! * own mining pools
 
 use {
+    solana_program_runtime::{ic_msg, invoke_context::InvokeContext},
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::{State, StateMut},
         clock::{Clock, Epoch},
         feature_set::stake_merge_with_unmatched_credits_observed,
-        ic_msg,
         instruction::{checked_add, InstructionError},
         keyed_account::KeyedAccount,
-        process_instruction::InvokeContext,
         pubkey::Pubkey,
         rent::{Rent, ACCOUNT_STORAGE_OVERHEAD},
         stake::{

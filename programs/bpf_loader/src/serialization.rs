@@ -316,13 +316,14 @@ pub fn deserialize_parameters_aligned(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_program_runtime::invoke_context::{prepare_mock_invoke_context, ThisInvokeContext};
+    use solana_program_runtime::invoke_context::{
+        prepare_mock_invoke_context, InvokeContext, ThisInvokeContext,
+    };
     use solana_sdk::{
         account::{Account, AccountSharedData},
         account_info::AccountInfo,
         bpf_loader,
         entrypoint::deserialize,
-        process_instruction::InvokeContext,
     };
     use std::{
         cell::RefCell,
