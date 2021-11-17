@@ -215,7 +215,7 @@ impl<'a> TypeContext<'a> for Context {
     where
         Self: std::marker::Sized,
     {
-        let ancestors = HashMap::from(&serializable_bank.bank.ancestors);
+        let ancestors = HashMap::from(&*serializable_bank.bank.ancestors);
         let fields = serializable_bank.bank.get_fields_to_serialize(&ancestors);
         (
             SerializableVersionedBank::from(fields),

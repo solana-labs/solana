@@ -1712,7 +1712,7 @@ impl ClusterInfo {
                             let root_bank = bank_forks.read().unwrap().root_bank();
                             (
                                 root_bank.staked_nodes(),
-                                Some(root_bank.feature_set.clone()),
+                                Some((*root_bank.feature_set).clone()),
                             )
                         }
                         None => (HashMap::new(), None),
@@ -2504,7 +2504,7 @@ impl ClusterInfo {
             None => (None, HashMap::default()),
             Some(bank_forks) => {
                 let bank = bank_forks.read().unwrap().root_bank();
-                let feature_set = bank.feature_set.clone();
+                let feature_set = (*bank.feature_set).clone();
                 (Some(feature_set), bank.staked_nodes())
             }
         };
