@@ -267,7 +267,7 @@ fn bench_concurrent_scan_write(bencher: &mut Bencher) {
                     &Ancestors::default(),
                     0,
                     AccountSharedData::default().owner(),
-                    ScanConfig::default(),
+                    &ScanConfig::default(),
                 )
                 .unwrap(),
         );

@@ -28,7 +28,7 @@ pub fn calculate_non_circulating_supply(bank: &Arc<Bank>) -> ScanResult<NonCircu
     let withdraw_authority_list = withdraw_authority();
 
     let clock = bank.clock();
-    let config = ScanConfig::default();
+    let config = &ScanConfig::default();
     let stake_accounts = if bank
         .rc
         .accounts

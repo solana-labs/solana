@@ -1840,14 +1840,14 @@ impl JsonRpcRequestProcessor {
                         // accounts.
                         account.owner() == program_id && filter_closure(account)
                     },
-                    ScanConfig::default(),
+                    &ScanConfig::default(),
                 )
                 .map_err(|e| RpcCustomError::ScanError {
                     message: e.to_string(),
                 })?)
         } else {
             Ok(bank
-                .get_filtered_program_accounts(program_id, filter_closure, ScanConfig::default())
+                .get_filtered_program_accounts(program_id, filter_closure, &ScanConfig::default())
                 .map_err(|e| RpcCustomError::ScanError {
                     message: e.to_string(),
                 })?)
@@ -1901,7 +1901,7 @@ impl JsonRpcRequestProcessor {
                                 }
                             })
                     },
-                    ScanConfig::default(),
+                    &ScanConfig::default(),
                 )
                 .map_err(|e| RpcCustomError::ScanError {
                     message: e.to_string(),
@@ -1957,7 +1957,7 @@ impl JsonRpcRequestProcessor {
                                 }
                             })
                     },
-                    ScanConfig::default(),
+                    &ScanConfig::default(),
                 )
                 .map_err(|e| RpcCustomError::ScanError {
                     message: e.to_string(),
