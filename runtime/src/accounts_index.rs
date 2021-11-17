@@ -45,6 +45,7 @@ pub const ACCOUNTS_INDEX_CONFIG_FOR_TESTING: AccountsIndexConfig = AccountsIndex
     drives: None,
     index_limit_mb: Some(1),
     ages_to_stay_in_cache: None,
+    scan_results_limit_bytes: None,
 };
 pub const ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS: AccountsIndexConfig = AccountsIndexConfig {
     bins: Some(BINS_FOR_BENCHMARKS),
@@ -52,6 +53,7 @@ pub const ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS: AccountsIndexConfig = AccountsIn
     drives: None,
     index_limit_mb: None,
     ages_to_stay_in_cache: None,
+    scan_results_limit_bytes: None,
 };
 pub type ScanResult<T> = Result<T, ScanError>;
 pub type SlotList<T> = Vec<(Slot, T)>;
@@ -62,11 +64,11 @@ pub type AccountMap<V> = Arc<InMemAccountsIndex<V>>;
 #[derive(Debug, Default)]
 pub struct ScanConfig {
     /// checked by the scan. When true, abort scan.
-    abort: Option<Arc<AtomicBool>>,
+    pub abort: Option<Arc<AtomicBool>>,
 
     /// true to allow return of all matching items and allow them to be unsorted.
     /// This is more efficient.
-    collect_all_unsorted: bool,
+    pub collect_all_unsorted: bool,
 }
 
 impl ScanConfig {
@@ -74,6 +76,12 @@ impl ScanConfig {
         Self {
             collect_all_unsorted,
             ..ScanConfig::default()
+        }
+    }
+
+    pub fn abort(&self) {
+        if let Some(abort) = self.abort.as_ref() {
+            abort.store(true, Ordering::Relaxed)
         }
     }
 
@@ -104,6 +112,8 @@ pub trait IndexValue:
 pub enum ScanError {
     #[error("Node detected it replayed bad version of slot {slot:?} with id {bank_id:?}, thus the scan on said slot was aborted")]
     SlotRemoved { slot: Slot, bank_id: BankId },
+    #[error("scan aborted: {0}")]
+    Aborted(String),
 }
 
 enum ScanTypes<R: RangeBounds<Pubkey>> {
@@ -138,6 +148,7 @@ pub struct AccountsIndexConfig {
     pub drives: Option<Vec<PathBuf>>,
     pub index_limit_mb: Option<usize>,
     pub ages_to_stay_in_cache: Option<Age>,
+    pub scan_results_limit_bytes: Option<usize>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -802,6 +813,9 @@ pub struct AccountsIndex<T: IndexValue> {
     pub removed_bank_ids: Mutex<HashSet<BankId>>,
 
     storage: AccountsIndexStorage<T>,
+
+    /// when a scan's accumulated data exceeds this limit, abort the scan
+    pub scan_results_limit_bytes: Option<usize>,
 }
 
 impl<T: IndexValue> AccountsIndex<T> {
@@ -810,6 +824,9 @@ impl<T: IndexValue> AccountsIndex<T> {
     }
 
     pub fn new(config: Option<AccountsIndexConfig>) -> Self {
+        let scan_results_limit_bytes = config
+            .as_ref()
+            .and_then(|config| config.scan_results_limit_bytes);
         let (account_maps, bin_calculator, storage) = Self::allocate_accounts_index(config);
         Self {
             account_maps,
@@ -827,6 +844,7 @@ impl<T: IndexValue> AccountsIndex<T> {
             ongoing_scan_roots: RwLock::<BTreeMap<Slot, u64>>::default(),
             removed_bank_ids: Mutex::<HashSet<BankId>>::default(),
             storage,
+            scan_results_limit_bytes,
         }
     }
 

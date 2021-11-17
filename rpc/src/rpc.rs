@@ -1841,11 +1841,13 @@ impl JsonRpcRequestProcessor {
                         account.owner() == program_id && filter_closure(account)
                     },
                     &ScanConfig::default(),
+                    bank.byte_limit_for_scans(),
                 )
                 .map_err(|e| RpcCustomError::ScanError {
                     message: e.to_string(),
                 })?)
         } else {
+            // this path does not need to provide a mb limit because we only want to support secondary indexes
             Ok(bank
                 .get_filtered_program_accounts(program_id, filter_closure, &ScanConfig::default())
                 .map_err(|e| RpcCustomError::ScanError {
@@ -1902,6 +1904,7 @@ impl JsonRpcRequestProcessor {
                             })
                     },
                     &ScanConfig::default(),
+                    bank.byte_limit_for_scans(),
                 )
                 .map_err(|e| RpcCustomError::ScanError {
                     message: e.to_string(),
@@ -1958,6 +1961,7 @@ impl JsonRpcRequestProcessor {
                             })
                     },
                     &ScanConfig::default(),
+                    bank.byte_limit_for_scans(),
                 )
                 .map_err(|e| RpcCustomError::ScanError {
                     message: e.to_string(),

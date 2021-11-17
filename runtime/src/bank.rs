@@ -1520,6 +1520,14 @@ impl Bank {
         new
     }
 
+    pub fn byte_limit_for_scans(&self) -> Option<usize> {
+        self.rc
+            .accounts
+            .accounts_db
+            .accounts_index
+            .scan_results_limit_bytes
+    }
+
     /// Returns all ancestors excluding self.slot.
     pub(crate) fn proper_ancestors(&self) -> impl Iterator<Item = Slot> + '_ {
         self.ancestors
@@ -5281,6 +5289,7 @@ impl Bank {
         index_key: &IndexKey,
         filter: F,
         config: &ScanConfig,
+        byte_limit: Option<usize>,
     ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         self.rc.accounts.load_by_index_key_with_filter(
             &self.ancestors,
@@ -5288,6 +5297,7 @@ impl Bank {
             index_key,
             filter,
             config,
+            byte_limit,
         )
     }
 
@@ -10565,6 +10575,7 @@ pub(crate) mod tests {
                 &IndexKey::ProgramId(program_id),
                 |_| true,
                 &ScanConfig::default(),
+                None,
             )
             .unwrap();
         assert_eq!(indexed_accounts.len(), 1);
@@ -10582,6 +10593,7 @@ pub(crate) mod tests {
                 &IndexKey::ProgramId(program_id),
                 |_| true,
                 &ScanConfig::default(),
+                None,
             )
             .unwrap();
         assert_eq!(indexed_accounts.len(), 1);
@@ -10591,6 +10603,7 @@ pub(crate) mod tests {
                 &IndexKey::ProgramId(another_program_id),
                 |_| true,
                 &ScanConfig::default(),
+                None,
             )
             .unwrap();
         assert_eq!(indexed_accounts.len(), 1);
@@ -10602,6 +10615,7 @@ pub(crate) mod tests {
                 &IndexKey::ProgramId(program_id),
                 |account| account.owner() == &program_id,
                 &ScanConfig::default(),
+                None,
             )
             .unwrap();
         assert!(indexed_accounts.is_empty());
@@ -10610,6 +10624,7 @@ pub(crate) mod tests {
                 &IndexKey::ProgramId(another_program_id),
                 |account| account.owner() == &another_program_id,
                 &ScanConfig::default(),
+                None,
             )
             .unwrap();
         assert_eq!(indexed_accounts.len(), 1);

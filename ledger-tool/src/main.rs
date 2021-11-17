@@ -2313,7 +2313,10 @@ fn main() {
 
                         // Delete existing vote accounts
                         for (address, mut account) in bank
-                            .get_program_accounts(&solana_vote_program::id(), &ScanConfig::default())
+                            .get_program_accounts(
+                                &solana_vote_program::id(),
+                                &ScanConfig::default(),
+                            )
                             .unwrap()
                             .into_iter()
                         {

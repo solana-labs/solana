@@ -4,7 +4,7 @@ use crate::{
         LoadHint, LoadedAccount, ScanStorageResult, ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS,
         ACCOUNTS_DB_CONFIG_FOR_TESTING,
     },
-    accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult},
+    accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanError, ScanResult},
     accounts_update_notifier_interface::AccountsUpdateNotifier,
     ancestors::Ancestors,
     bank::{
@@ -42,6 +42,7 @@ use std::{
     collections::{hash_map, BinaryHeap, HashMap, HashSet},
     ops::RangeBounds,
     path::PathBuf,
+    sync::atomic::{AtomicUsize, Ordering},
     sync::{Arc, Mutex},
 };
 
@@ -786,20 +787,50 @@ impl Accounts {
         index_key: &IndexKey,
         filter: F,
         config: &ScanConfig,
+        byte_limit: Option<usize>,
     ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
-        self.accounts_db
+        let sum = AtomicUsize::default();
+        let config = ScanConfig {
+            abort: Some(config.abort.as_ref().map(Arc::clone).unwrap_or_default()),
+            collect_all_unsorted: config.collect_all_unsorted,
+        };
+        let result = self
+            .accounts_db
             .index_scan_accounts(
                 ancestors,
                 bank_id,
                 *index_key,
                 |collector: &mut Vec<(Pubkey, AccountSharedData)>, some_account_tuple| {
                     Self::load_while_filtering(collector, some_account_tuple, |account| {
-                        filter(account)
-                    })
+                        let use_account = filter(account);
+                        if use_account {
+                            if let Some(byte_limit) = byte_limit.as_ref() {
+                                let added = account.data().len()
+                                    + std::mem::size_of::<AccountSharedData>()
+                                    + std::mem::size_of::<Pubkey>();
+                                if sum
+                                    .fetch_add(added, Ordering::Relaxed)
+                                    .saturating_add(added)
+                                    > *byte_limit
+                                {
+                                    // total size of results exceeds size limit, so abort scan
+                                    config.abort();
+                                }
+                            }
+                        }
+                        use_account
+                    });
                 },
-                config,
+                &config,
             )
-            .map(|result| result.0)
+            .map(|result| result.0);
+        if config.is_aborted() {
+            ScanResult::Err(ScanError::Aborted(
+                "The accumulated scan results exceeded the limit".to_string(),
+            ))
+        } else {
+            result
+        }
     }
 
     pub fn account_indexes_include_key(&self, key: &Pubkey) -> bool {
