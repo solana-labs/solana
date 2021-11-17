@@ -1498,6 +1498,14 @@ pub fn main() {
                       This option is for use during testing."),
         )
         .arg(
+            Arg::with_name("accounts_db_cache_limit_mb")
+                .long("accounts-db-cache-limit-mb")
+                .value_name("MEGABYTES")
+                .validator(is_parsable::<u64>)
+                .takes_value(true)
+                .help("How large the write cache for account data can become. If this is exceeded, the cache is flushed more aggressively."),
+        )
+        .arg(
             Arg::with_name("accounts_index_scan_results_limit_mb")
                 .long("accounts-index-scan-results-limit-mb")
                 .value_name("MEGABYTES")
@@ -2125,6 +2133,9 @@ pub fn main() {
         index: Some(accounts_index_config),
         accounts_hash_cache_path: Some(ledger_path.clone()),
         filler_account_count,
+        write_cache_limit_bytes: value_t!(matches, "accounts_db_cache_limit_mb", u64)
+            .ok()
+            .map(|mb| mb * MB as u64),
         ..AccountsDbConfig::default()
     };
 

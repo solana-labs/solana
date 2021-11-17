@@ -129,12 +129,14 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     accounts_hash_cache_path: None,
     filler_account_count: None,
     hash_calc_num_passes: None,
+    write_cache_limit_bytes: None,
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
     accounts_hash_cache_path: None,
     filler_account_count: None,
     hash_calc_num_passes: None,
+    write_cache_limit_bytes: None,
 };
 
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
@@ -151,6 +153,7 @@ pub struct AccountsDbConfig {
     pub accounts_hash_cache_path: Option<PathBuf>,
     pub filler_account_count: Option<usize>,
     pub hash_calc_num_passes: Option<usize>,
+    pub write_cache_limit_bytes: Option<u64>,
 }
 
 struct FoundStoredAccount<'a> {
@@ -960,6 +963,8 @@ pub struct AccountsDb {
 
     pub accounts_cache: AccountsCache,
 
+    write_cache_limit_bytes: Option<u64>,
+
     sender_bg_hasher: Option<Sender<CachedAccount>>,
     pub read_only_accounts_cache: ReadOnlyAccountsCache,
 
@@ -1554,6 +1559,7 @@ impl AccountsDb {
             next_id: AtomicUsize::new(0),
             shrink_candidate_slots_v1: Mutex::new(Vec::new()),
             shrink_candidate_slots: Mutex::new(HashMap::new()),
+            write_cache_limit_bytes: None,
             write_version: AtomicU64::new(0),
             paths: vec![],
             accounts_hash_cache_path,
@@ -1649,6 +1655,9 @@ impl AccountsDb {
             accounts_update_notifier,
             filler_account_count,
             filler_account_suffix,
+            write_cache_limit_bytes: accounts_db_config
+                .as_ref()
+                .and_then(|x| x.write_cache_limit_bytes),
             ..Self::default_with_accounts_index(
                 accounts_index,
                 accounts_hash_cache_path,
@@ -4489,6 +4498,14 @@ impl AccountsDb {
         self.flush_slot_cache(slot, None::<&mut fn(&_, &_) -> bool>);
     }
 
+    /// true if write cache is too big or has too many slots
+    fn should_aggressively_flush_cache(&self) -> bool {
+        self.write_cache_limit_bytes
+            .map(|write_cache_limit_bytes| self.accounts_cache.size() >= write_cache_limit_bytes)
+            .unwrap_or_default()
+            || self.accounts_cache.num_slots() > MAX_CACHE_SLOTS
+    }
+
     // `force_flush` flushes all the cached roots `<= requested_flush_root`. It also then
     // flushes:
     // 1) Any remaining roots if there are > MAX_CACHE_SLOTS remaining slots in the cache,
@@ -4498,7 +4515,7 @@ impl AccountsDb {
         #[cfg(not(test))]
         assert!(requested_flush_root.is_some());
 
-        if !force_flush && self.accounts_cache.num_slots() <= MAX_CACHE_SLOTS {
+        if !force_flush && !self.should_aggressively_flush_cache() {
             return;
         }
 
@@ -4524,7 +4541,7 @@ impl AccountsDb {
 
         // If there are > MAX_CACHE_SLOTS, then flush the excess ones to storage
         let (total_new_excess_roots, num_excess_roots_flushed) =
-            if self.accounts_cache.num_slots() > MAX_CACHE_SLOTS {
+            if self.should_aggressively_flush_cache() {
                 // Start by flushing the roots
                 //
                 // Cannot do any cleaning on roots past `requested_flush_root` because future
@@ -4534,26 +4551,34 @@ impl AccountsDb {
             } else {
                 (0, 0)
             };
-        let old_slots = self.accounts_cache.find_older_frozen_slots(MAX_CACHE_SLOTS);
-        let excess_slot_count = old_slots.len();
+
+        let mut excess_slot_count = 0;
         let mut unflushable_unrooted_slot_count = 0;
         let max_flushed_root = self.accounts_cache.fetch_max_flush_root();
-        let old_slot_flush_stats: Vec<_> = old_slots
-            .into_iter()
-            .filter_map(|old_slot| {
-                // Don't flush slots that are known to be unrooted
-                if old_slot > max_flushed_root {
-                    Some(self.flush_slot_cache(old_slot, None::<&mut fn(&_, &_) -> bool>))
-                } else {
-                    unflushable_unrooted_slot_count += 1;
-                    None
-                }
-            })
-            .collect();
-        info!(
-            "req_flush_root: {:?} old_slot_flushes: {:?}",
-            requested_flush_root, old_slot_flush_stats
-        );
+        if self.should_aggressively_flush_cache() {
+            let old_slots = self.accounts_cache.find_older_frozen_slots();
+            excess_slot_count = old_slots.len();
+            let old_slot_flush_stats: Vec<_> = old_slots
+                .into_iter()
+                .filter_map(|old_slot| {
+                    // Don't flush slots that are known to be unrooted
+                    if old_slot > max_flushed_root {
+                        if self.should_aggressively_flush_cache() {
+                            Some(self.flush_slot_cache(old_slot, None::<&mut fn(&_, &_) -> bool>))
+                        } else {
+                            None
+                        }
+                    } else {
+                        unflushable_unrooted_slot_count += 1;
+                        None
+                    }
+                })
+                .collect();
+            info!(
+                "req_flush_root: {:?} old_slot_flushes: {:?}",
+                requested_flush_root, old_slot_flush_stats
+            );
+        }
 
         datapoint_info!(
             "accounts_db-flush_accounts_cache",
@@ -4582,7 +4607,7 @@ impl AccountsDb {
         let num_slots_remaining = self.accounts_cache.num_slots();
         if force_flush && num_slots_remaining >= FLUSH_CACHE_RANDOM_THRESHOLD {
             // Don't flush slots that are known to be unrooted
-            let mut frozen_slots = self.accounts_cache.find_older_frozen_slots(0);
+            let mut frozen_slots = self.accounts_cache.find_older_frozen_slots();
             frozen_slots.retain(|s| *s > max_flushed_root);
             // Remove a random index 0 <= i < `frozen_slots.len()`
             let rand_slot = frozen_slots.choose(&mut thread_rng());
