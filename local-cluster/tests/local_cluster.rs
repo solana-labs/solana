@@ -50,7 +50,7 @@ use {
     solana_sdk::{
         account::AccountSharedData,
         client::{AsyncClient, SyncClient},
-        clock::{self, Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES},
+        clock::{self, Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE},
         commitment_config::CommitmentConfig,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         genesis_config::ClusterType,
@@ -1110,12 +1110,8 @@ fn test_fork_choice_refresh_old_votes() {
     let ticks_per_slot = 8;
     let on_before_partition_resolved =
         |cluster: &mut LocalCluster, context: &mut PartitionContext| {
-            // Equal to ms_per_slot * MAX_RECENT_BLOCKHASHES, rounded up
-            let sleep_time_ms =
-                ((ticks_per_slot * DEFAULT_MS_PER_SLOT * MAX_RECENT_BLOCKHASHES as u64)
-                    + DEFAULT_TICKS_PER_SLOT
-                    - 1)
-                    / DEFAULT_TICKS_PER_SLOT;
+            // Equal to ms_per_slot * MAX_PROCESSING_AGE, rounded up
+            let sleep_time_ms = ms_for_n_slots(MAX_PROCESSING_AGE as u64, ticks_per_slot);
             info!("Wait for blockhashes to expire, {} ms", sleep_time_ms);
 
             // Wait for blockhashes to expire
@@ -3986,14 +3982,16 @@ fn test_votes_land_in_fork_during_long_partition() {
     let on_partition_resolved = |cluster: &mut LocalCluster, context: &mut PartitionContext| {
         let lighter_validator_ledger_path = cluster.ledger_path(&context.lighter_validator_key);
         let start = Instant::now();
+        let max_wait = ms_for_n_slots(MAX_PROCESSING_AGE as u64, DEFAULT_TICKS_PER_SLOT);
         // Wait for the lighter node to switch over and root the `context.heavier_fork_slot`
         loop {
             assert!(
-                // 20 secs should be much shorter than the 150 blocks (~60s) if the cluster were
-                // relying on replay vote refreshing to refresh the vote on blockhash
-                // expiration for the vote transaction.
-                !(start.elapsed() > Duration::from_secs(20)),
-                "Went too long without a root"
+                // Should finish faster than if the cluster were relying on replay vote
+                // refreshing to refresh the vote on blockhash expiration for the vote
+                // transaction.
+                !(start.elapsed() > Duration::from_millis(max_wait)),
+                "Went too long {} ms without a root",
+                max_wait,
             );
             let lighter_validator_blockstore = open_blockstore(&lighter_validator_ledger_path);
             if lighter_validator_blockstore.is_root(context.heavier_fork_slot) {
@@ -4290,4 +4288,11 @@ fn setup_snapshot_validator_config(
         snapshot_interval_slots,
         num_account_paths,
     )
+}
+
+/// Computes the numbr of milliseconds `num_blocks` blocks will take given
+/// each slot contains `ticks_per_slot`
+fn ms_for_n_slots(num_blocks: u64, ticks_per_slot: u64) -> u64 {
+    ((ticks_per_slot * DEFAULT_MS_PER_SLOT * num_blocks) + DEFAULT_TICKS_PER_SLOT - 1)
+        / DEFAULT_TICKS_PER_SLOT
 }
