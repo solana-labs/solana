@@ -25,9 +25,10 @@ use {
         epoch_schedule::EpochSchedule,
         feature_set::{
             blake3_syscall_enabled, demote_program_write_locks, disable_fees_sysvar,
-            do_support_realloc, libsecp256k1_0_5_upgrade_enabled,
-            prevent_calling_precompiles_as_programs, return_data_syscall_enabled,
-            secp256k1_recover_syscall_enabled, sol_log_data_syscall_enabled,
+            do_support_realloc, fixed_memcpy_nonoverlapping_check,
+            libsecp256k1_0_5_upgrade_enabled, prevent_calling_precompiles_as_programs,
+            return_data_syscall_enabled, secp256k1_recover_syscall_enabled,
+            sol_log_data_syscall_enabled,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{AccountMeta, Instruction, InstructionError},
@@ -1261,6 +1262,13 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallKeccak256<'a, 'b> {
     }
 }
 
+/// This function is incorrect due to arithmetic overflow and only exists for
+/// backwards compatibility. Instead use program_stubs::is_nonoverlapping.
+fn check_overlapping_do_not_use(src_addr: u64, dst_addr: u64, n: u64) -> bool {
+    (src_addr <= dst_addr && src_addr + n > dst_addr)
+        || (dst_addr <= src_addr && dst_addr + n > src_addr)
+}
+
 /// memcpy
 pub struct SyscallMemcpy<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
@@ -1276,9 +1284,22 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcpy<'a, 'b> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        if !is_nonoverlapping(src_addr, dst_addr, n) {
-            *result = Err(SyscallError::CopyOverlapping.into());
-            return;
+        let use_fixed_nonoverlapping_check = self
+            .invoke_context
+            .borrow()
+            .feature_set
+            .is_active(&fixed_memcpy_nonoverlapping_check::id());
+
+        if use_fixed_nonoverlapping_check {
+            if !is_nonoverlapping(src_addr, dst_addr, n) {
+                *result = Err(SyscallError::CopyOverlapping.into());
+                return;
+            }
+        } else {
+            if check_overlapping_do_not_use(src_addr, dst_addr, n) {
+                *result = Err(SyscallError::CopyOverlapping.into());
+                return;
+            }
         }
 
         let invoke_context = question_mark!(
@@ -3710,6 +3731,17 @@ mod tests {
             result.unwrap();
             assert_eq!(got_rent, src_rent);
         }
+    }
+
+    #[test]
+    fn test_overlapping() {
+        assert!(!check_overlapping_do_not_use(10, 7, 3));
+        assert!(check_overlapping_do_not_use(10, 8, 3));
+        assert!(check_overlapping_do_not_use(10, 9, 3));
+        assert!(check_overlapping_do_not_use(10, 10, 3));
+        assert!(check_overlapping_do_not_use(10, 11, 3));
+        assert!(check_overlapping_do_not_use(10, 12, 3));
+        assert!(!check_overlapping_do_not_use(10, 13, 3));
     }
 
     fn call_program_address_common(
