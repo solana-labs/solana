@@ -185,14 +185,21 @@ native machine code before execting it in the virtual machine.",
     file.seek(SeekFrom::Start(0)).unwrap();
     let mut contents = Vec::new();
     file.read_to_end(&mut contents).unwrap();
+    let syscall_registry = register_syscalls(&mut invoke_context).unwrap();
     let mut executable = if magic == [0x7f, 0x45, 0x4c, 0x46] {
-        <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(&contents, None, config)
-            .map_err(|err| format!("Executable constructor failed: {:?}", err))
+        <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
+            &contents,
+            None,
+            config,
+            syscall_registry,
+        )
+        .map_err(|err| format!("Executable constructor failed: {:?}", err))
     } else {
         assemble::<BpfError, ThisInstructionMeter>(
             std::str::from_utf8(contents.as_slice()).unwrap(),
             None,
             config,
+            syscall_registry,
         )
     }
     .unwrap();
@@ -201,7 +208,6 @@ native machine code before execting it in the virtual machine.",
         let (_, elf_bytes) = executable.get_text_bytes().unwrap();
         check(elf_bytes).unwrap();
     }
-    executable.set_syscall_registry(register_syscalls(&mut invoke_context).unwrap());
     executable.jit_compile().unwrap();
     let analysis = Analysis::from_executable(executable.as_ref());
 
