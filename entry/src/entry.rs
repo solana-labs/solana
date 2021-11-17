@@ -972,21 +972,28 @@ mod tests {
 
         let recycler = VerifyRecyclers::default();
 
-        let transaction = test_invalid_tx();
+        let entries_invalid = (0..128)
+        .map(|_| {
+            let transaction = test_invalid_tx();
+            next_entry_mut(&mut Hash::default(), 0, vec![transaction])
+        })
+        .collect::<Vec<_>>();
 
-        let entry0 = next_entry_mut(&mut Hash::default(), 0, vec![transaction]);
-
-        let transaction = test_tx();
-        let entry1 = next_entry_mut(&mut Hash::default(), 0, vec![transaction]);
+        let entries_valid = (0..128)
+        .map(|_| {
+            let transaction = test_tx();
+            next_entry_mut(&mut Hash::default(), 0, vec![transaction])
+        })
+        .collect::<Vec<_>>();
 
         assert!(!test_verify_transactions(
-            vec![entry0],
+            entries_invalid,
             false,
             recycler.clone(),
             Arc::new(verify_transaction)
         ));
         assert!(test_verify_transactions(
-            vec![entry1],
+            entries_valid,
             false,
             recycler,
             Arc::new(verify_transaction)
