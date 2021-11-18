@@ -47,8 +47,16 @@ pub type EntryReceiver = Receiver<Vec<Entry>>;
 
 static mut API: Option<Container<Api>> = None;
 
+// Used to wrap the memory behind a vector in such a way
+// as to allow for unrestricted concurrent mutable access to the memory
+// while promising to the compiler that the access will be
+// thread-safe.
+// WARNING: should not be used more than necessary.
+// Safety: it is completely up to the developer to ensure
+// that all access is thread-safe.
+// Based on https://stackoverflow.com/a/65182786
 #[derive(Copy, Clone)]
-pub struct UnsafeSlice<'a, T> {
+struct UnsafeSlice<'a, T> {
     slice: &'a [UnsafeCell<T>],
 }
 unsafe impl<'a, T: Send + Sync> Send for UnsafeSlice<'a, T> {}
