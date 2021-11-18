@@ -7992,7 +7992,7 @@ pub mod tests {
             num_coding += 1;
             // Test that by-slot and individual shred lookup yield same set
             assert!(blockstore
-                .get_data_shred(shred.common_header.slot, shred.common_header.index.into())
+                .get_coding_shred(shred.common_header.slot, shred.common_header.index.into())
                 .unwrap()
                 .is_some());
             // Test that the data index has current shred accounted for
