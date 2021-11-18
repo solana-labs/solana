@@ -443,7 +443,7 @@ pub fn start_verify_transactions(
                 verify(
                     versioned_tx,
                     EntryVerificationOptions {
-                        skip_verification: skip_verification,
+                        skip_verification,
                         verify_precompiles: false,
                     },
                 )
@@ -969,7 +969,7 @@ mod tests {
                 verify(
                     versioned_tx,
                     EntryVerificationOptions {
-                        skip_verification: skip_verification,
+                        skip_verification,
                         verify_precompiles: false,
                     },
                 )
