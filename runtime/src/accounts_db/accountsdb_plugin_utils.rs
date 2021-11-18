@@ -202,15 +202,6 @@ pub mod tests {
                 .push((slot, account.clone_account()));
         }
 
-        /// Notified when a slot is optimistically confirmed
-        fn notify_slot_confirmed(&self, _slot: Slot, _parent: Option<Slot>) {}
-
-        /// Notified when a slot is marked frozen.
-        fn notify_slot_processed(&self, _slot: Slot, _parent: Option<Slot>) {}
-
-        /// Notified when a slot is rooted.
-        fn notify_slot_rooted(&self, _slot: Slot, _parent: Option<Slot>) {}
-
         fn notify_end_of_restore_from_snapshot(&self) {
             self.is_startup_done.store(true, Ordering::Relaxed);
         }

@@ -24,11 +24,11 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         fixed_leader_schedule: config.fixed_leader_schedule.clone(),
         wait_for_supermajority: config.wait_for_supermajority,
         new_hard_forks: config.new_hard_forks.clone(),
-        trusted_validators: config.trusted_validators.clone(),
+        known_validators: config.known_validators.clone(),
         repair_validators: config.repair_validators.clone(),
         gossip_validators: config.gossip_validators.clone(),
-        halt_on_trusted_validators_accounts_hash_mismatch: config
-            .halt_on_trusted_validators_accounts_hash_mismatch,
+        halt_on_known_validators_accounts_hash_mismatch: config
+            .halt_on_known_validators_accounts_hash_mismatch,
         accounts_hash_fault_injection_slots: config.accounts_hash_fault_injection_slots,
         frozen_accounts: config.frozen_accounts.clone(),
         no_rocksdb_compaction: config.no_rocksdb_compaction,
@@ -46,6 +46,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         bpf_jit: config.bpf_jit,
         send_transaction_service_config: config.send_transaction_service_config.clone(),
         no_poh_speed_test: config.no_poh_speed_test,
+        no_os_network_stats_reporting: config.no_os_network_stats_reporting,
         poh_pinned_cpu_core: config.poh_pinned_cpu_core,
         account_indexes: config.account_indexes.clone(),
         accounts_db_caching_enabled: config.accounts_db_caching_enabled,

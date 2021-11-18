@@ -39,7 +39,7 @@ use {
     solana_perf::packet::PACKET_DATA_SIZE,
     solana_runtime::{
         accounts::AccountAddressFilter,
-        accounts_index::{AccountIndex, AccountSecondaryIndexes, IndexKey},
+        accounts_index::{AccountIndex, AccountSecondaryIndexes, IndexKey, ScanConfig},
         bank::{Bank, TransactionSimulationResult},
         bank_forks::BankForks,
         commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
@@ -56,7 +56,7 @@ use {
         epoch_info::EpochInfo,
         epoch_schedule::EpochSchedule,
         exit::Exit,
-        feature_set,
+        feature_set::{self, nonce_must_be_writable},
         fee_calculator::FeeCalculator,
         hash::Hash,
         message::{Message, SanitizedMessage},
@@ -1830,20 +1830,24 @@ impl JsonRpcRequestProcessor {
                 });
             }
             Ok(bank
-                .get_filtered_indexed_accounts(&IndexKey::ProgramId(*program_id), |account| {
-                    // The program-id account index checks for Account owner on inclusion. However, due
-                    // to the current AccountsDb implementation, an account may remain in storage as a
-                    // zero-lamport AccountSharedData::Default() after being wiped and reinitialized in later
-                    // updates. We include the redundant filters here to avoid returning these
-                    // accounts.
-                    account.owner() == program_id && filter_closure(account)
-                })
+                .get_filtered_indexed_accounts(
+                    &IndexKey::ProgramId(*program_id),
+                    |account| {
+                        // The program-id account index checks for Account owner on inclusion. However, due
+                        // to the current AccountsDb implementation, an account may remain in storage as a
+                        // zero-lamport AccountSharedData::Default() after being wiped and reinitialized in later
+                        // updates. We include the redundant filters here to avoid returning these
+                        // accounts.
+                        account.owner() == program_id && filter_closure(account)
+                    },
+                    ScanConfig::default(),
+                )
                 .map_err(|e| RpcCustomError::ScanError {
                     message: e.to_string(),
                 })?)
         } else {
             Ok(bank
-                .get_filtered_program_accounts(program_id, filter_closure)
+                .get_filtered_program_accounts(program_id, filter_closure, ScanConfig::default())
                 .map_err(|e| RpcCustomError::ScanError {
                     message: e.to_string(),
                 })?)
@@ -1884,13 +1888,21 @@ impl JsonRpcRequestProcessor {
                 });
             }
             Ok(bank
-                .get_filtered_indexed_accounts(&IndexKey::SplTokenOwner(*owner_key), |account| {
-                    account.owner() == &spl_token_id_v2_0()
-                        && filters.iter().all(|filter_type| match filter_type {
-                            RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
-                            RpcFilterType::Memcmp(compare) => compare.bytes_match(account.data()),
-                        })
-                })
+                .get_filtered_indexed_accounts(
+                    &IndexKey::SplTokenOwner(*owner_key),
+                    |account| {
+                        account.owner() == &spl_token_id_v2_0()
+                            && filters.iter().all(|filter_type| match filter_type {
+                                RpcFilterType::DataSize(size) => {
+                                    account.data().len() as u64 == *size
+                                }
+                                RpcFilterType::Memcmp(compare) => {
+                                    compare.bytes_match(account.data())
+                                }
+                            })
+                    },
+                    ScanConfig::default(),
+                )
                 .map_err(|e| RpcCustomError::ScanError {
                     message: e.to_string(),
                 })?)
@@ -1932,13 +1944,21 @@ impl JsonRpcRequestProcessor {
                 });
             }
             Ok(bank
-                .get_filtered_indexed_accounts(&IndexKey::SplTokenMint(*mint_key), |account| {
-                    account.owner() == &spl_token_id_v2_0()
-                        && filters.iter().all(|filter_type| match filter_type {
-                            RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
-                            RpcFilterType::Memcmp(compare) => compare.bytes_match(account.data()),
-                        })
-                })
+                .get_filtered_indexed_accounts(
+                    &IndexKey::SplTokenMint(*mint_key),
+                    |account| {
+                        account.owner() == &spl_token_id_v2_0()
+                            && filters.iter().all(|filter_type| match filter_type {
+                                RpcFilterType::DataSize(size) => {
+                                    account.data().len() as u64 == *size
+                                }
+                                RpcFilterType::Memcmp(compare) => {
+                                    compare.bytes_match(account.data())
+                                }
+                            })
+                    },
+                    ScanConfig::default(),
+                )
                 .map_err(|e| RpcCustomError::ScanError {
                     message: e.to_string(),
                 })?)
@@ -2296,7 +2316,7 @@ fn _send_transaction(
     Ok(signature.to_string())
 }
 
-// Minimal RPC interface that trusted validators are expected to provide
+// Minimal RPC interface that known validators are expected to provide
 pub mod rpc_minimal {
     use super::*;
     #[rpc]
@@ -3396,7 +3416,11 @@ pub mod rpc_full {
                 .unwrap_or(0);
 
             let durable_nonce_info = transaction
-                .get_durable_nonce()
+                .get_durable_nonce(
+                    preflight_bank
+                        .feature_set
+                        .is_active(&nonce_must_be_writable::id()),
+                )
                 .map(|&pubkey| (pubkey, *transaction.message().recent_blockhash()));
             if durable_nonce_info.is_some() {
                 // While it uses a defined constant, this last_valid_block_height value is chosen arbitrarily.
@@ -4244,7 +4268,7 @@ pub fn create_test_transactions_and_populate_blockstore(
 
     // Check that process_entries successfully writes can_commit transactions statuses, and
     // that they are matched properly by get_rooted_block
-    let _result = solana_ledger::blockstore_processor::process_entries(
+    let _result = solana_ledger::blockstore_processor::process_entries_for_tests(
         &bank,
         entries,
         true,

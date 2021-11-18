@@ -15,6 +15,7 @@ use solana_clap_utils::{
         is_parsable, is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
     },
 };
+use solana_core::system_monitor_service::SystemMonitorService;
 use solana_entry::entry::Entry;
 use solana_ledger::{
     ancestor_iterator::AncestorIterator,
@@ -27,8 +28,8 @@ use solana_ledger::{
 use solana_measure::measure::Measure;
 use solana_runtime::{
     accounts_db::AccountsDbConfig,
-    accounts_index::AccountsIndexConfig,
-    bank::{Bank, RewardCalculationEvent, TotalAccountsStats},
+    accounts_index::{AccountsIndexConfig, ScanConfig},
+    bank::{Bank, RewardCalculationEvent},
     bank_forks::BankForks,
     cost_model::CostModel,
     cost_tracker::CostTracker,
@@ -68,7 +69,11 @@ use std::{
     path::{Path, PathBuf},
     process::{exit, Command, Stdio},
     str::FromStr,
-    sync::{mpsc::channel, Arc, RwLock},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::channel,
+        Arc, RwLock,
+    },
 };
 
 mod bigtable;
@@ -880,6 +885,12 @@ fn main() {
         .validator(is_parsable::<usize>)
         .takes_value(true)
         .help("How much memory the accounts index can consume. If this is exceeded, some account index entries will be stored on disk. If missing, the entire index is stored in memory.");
+    let accountsdb_skip_shrink = Arg::with_name("accounts_db_skip_shrink")
+        .long("accounts-db-skip-shrink")
+        .help(
+            "Enables faster starting of ledger-tool by skipping shrink. \
+                      This option is for use during testing.",
+        );
     let accounts_filler_count = Arg::with_name("accounts_filler_count")
         .long("accounts-filler-count")
         .value_name("COUNT")
@@ -1224,6 +1235,7 @@ fn main() {
             .arg(&limit_load_slot_count_from_snapshot_arg)
             .arg(&accounts_index_bins)
             .arg(&accounts_index_limit)
+            .arg(&accountsdb_skip_shrink)
             .arg(&accounts_filler_count)
             .arg(&verify_index_arg)
             .arg(&hard_forks_arg)
@@ -1976,6 +1988,9 @@ fn main() {
                 accounts_index_config.bins = Some(bins);
             }
 
+            let exit_signal = Arc::new(AtomicBool::new(false));
+            let system_monitor_service = SystemMonitorService::new(Arc::clone(&exit_signal), false);
+
             if let Some(limit) = value_t!(arg_matches, "accounts_index_memory_limit_mb", usize).ok()
             {
                 accounts_index_config.index_limit_mb = Some(limit);
@@ -2023,6 +2038,7 @@ fn main() {
                 allow_dead_slots: arg_matches.is_present("allow_dead_slots"),
                 accounts_db_test_hash_calculation: arg_matches
                     .is_present("accounts_db_test_hash_calculation"),
+                accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
                 ..ProcessOptions::default()
             };
             let print_accounts_stats = arg_matches.is_present("print_accounts_stats");
@@ -2051,6 +2067,8 @@ fn main() {
                 let working_bank = bank_forks.working_bank();
                 working_bank.print_accounts_stats();
             }
+            exit_signal.store(true, Ordering::Relaxed);
+            system_monitor_service.join().unwrap();
             println!("Ok");
         }
         ("graph", Some(arg_matches)) => {
@@ -2233,7 +2251,7 @@ fn main() {
 
                     if remove_stake_accounts {
                         for (address, mut account) in bank
-                            .get_program_accounts(&stake::program::id())
+                            .get_program_accounts(&stake::program::id(), ScanConfig::default())
                             .unwrap()
                             .into_iter()
                         {
@@ -2257,7 +2275,7 @@ fn main() {
 
                     if !vote_accounts_to_destake.is_empty() {
                         for (address, mut account) in bank
-                            .get_program_accounts(&stake::program::id())
+                            .get_program_accounts(&stake::program::id(), ScanConfig::default())
                             .unwrap()
                             .into_iter()
                         {
@@ -2295,7 +2313,7 @@ fn main() {
 
                         // Delete existing vote accounts
                         for (address, mut account) in bank
-                            .get_program_accounts(&solana_vote_program::id())
+                            .get_program_accounts(&solana_vote_program::id(), ScanConfig::default())
                             .unwrap()
                             .into_iter()
                         {
@@ -2509,26 +2527,21 @@ fn main() {
             measure.stop();
             info!("{}", measure);
 
-            let print_account_contents = !arg_matches.is_present("no_account_contents");
-            let print_account_data = !arg_matches.is_present("no_account_data");
-            let rent_collector = bank.rent_collector();
-            let mut total_accounts_stats = TotalAccountsStats::default();
-            let mut measure = Measure::start("processing accounts");
-            for (pubkey, (account, slot)) in accounts.into_iter() {
-                let data_len = account.data().len();
-                total_accounts_stats.num_accounts += 1;
-                total_accounts_stats.data_len += data_len;
-                if account.executable() {
-                    total_accounts_stats.num_executable_accounts += 1;
-                    total_accounts_stats.executable_data_len += data_len;
-                }
-                if !rent_collector.should_collect_rent(&pubkey, &account, false)
-                    || rent_collector.get_rent_due(&account).1
-                {
-                    total_accounts_stats.num_rent_exempt_accounts += 1;
-                }
+            let mut measure = Measure::start("calculating total accounts stats");
+            let total_accounts_stats = bank.calculate_total_accounts_stats(
+                accounts
+                    .iter()
+                    .map(|(pubkey, (account, _slot))| (pubkey, account)),
+            );
+            measure.stop();
+            info!("{}", measure);
 
-                if print_account_contents {
+            let print_account_contents = !arg_matches.is_present("no_account_contents");
+            if print_account_contents {
+                let print_account_data = !arg_matches.is_present("no_account_data");
+                let mut measure = Measure::start("printing account contents");
+                for (pubkey, (account, slot)) in accounts.into_iter() {
+                    let data_len = account.data().len();
                     println!("{}:", pubkey);
                     println!("  - balance: {} SOL", lamports_to_sol(account.lamports()));
                     println!("  - owner: '{}'", account.owner());
@@ -2540,9 +2553,9 @@ fn main() {
                     }
                     println!("  - data_len: {}", data_len);
                 }
+                measure.stop();
+                info!("{}", measure);
             }
-            measure.stop();
-            info!("{}", measure);
 
             println!("{:#?}", total_accounts_stats);
         }

@@ -2724,11 +2724,20 @@ impl ReplayStage {
         voted_signatures: &mut Vec<Signature>,
         epoch_slots_frozen_slots: &mut EpochSlotsFrozenSlots,
     ) {
-        bank_forks.write().unwrap().set_root(
+        let removed_banks = bank_forks.write().unwrap().set_root(
             new_root,
             accounts_background_request_sender,
             highest_confirmed_root,
         );
+        let mut dropped_banks_time = Measure::start("handle_new_root::drop_banks");
+        drop(removed_banks);
+        dropped_banks_time.stop();
+        if dropped_banks_time.as_ms() > 10 {
+            datapoint_info!(
+                "handle_new_root-dropped_banks",
+                ("elapsed_ms", dropped_banks_time.as_ms(), i64)
+            );
+        }
         // Dropping the bank_forks write lock and reacquiring as a read lock is
         // safe because updates to bank_forks are only made by a single thread.
         let r_bank_forks = bank_forks.read().unwrap();

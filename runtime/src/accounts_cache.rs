@@ -17,13 +17,23 @@ use std::{
 
 pub type SlotCache = Arc<SlotCacheInner>;
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct SlotCacheInner {
     cache: DashMap<Pubkey, CachedAccount>,
     same_account_writes: AtomicU64,
     same_account_writes_size: AtomicU64,
     unique_account_writes_size: AtomicU64,
+    size: AtomicU64,
+    total_size: Arc<AtomicU64>,
     is_frozen: AtomicBool,
+}
+
+impl Drop for SlotCacheInner {
+    fn drop(&mut self) {
+        // broader cache no longer holds our size in memory
+        self.total_size
+            .fetch_sub(self.size.load(Ordering::Relaxed), Ordering::Relaxed);
+    }
 }
 
 impl SlotCacheInner {
@@ -44,7 +54,8 @@ impl SlotCacheInner {
                 "unique_account_writes_size",
                 self.unique_account_writes_size.load(Ordering::Relaxed),
                 i64
-            )
+            ),
+            ("size", self.size.load(Ordering::Relaxed), i64)
         );
     }
 
@@ -59,21 +70,36 @@ impl SlotCacheInner {
         hash: Option<impl Borrow<Hash>>,
         slot: Slot,
     ) -> CachedAccount {
-        if self.cache.contains_key(pubkey) {
-            self.same_account_writes.fetch_add(1, Ordering::Relaxed);
-            self.same_account_writes_size
-                .fetch_add(account.data().len() as u64, Ordering::Relaxed);
-        } else {
-            self.unique_account_writes_size
-                .fetch_add(account.data().len() as u64, Ordering::Relaxed);
-        }
+        let data_len = account.data().len() as u64;
         let item = Arc::new(CachedAccountInner {
             account,
             hash: RwLock::new(hash.map(|h| *h.borrow())),
             slot,
             pubkey: *pubkey,
         });
-        self.cache.insert(*pubkey, item.clone());
+        if let Some(old) = self.cache.insert(*pubkey, item.clone()) {
+            self.same_account_writes.fetch_add(1, Ordering::Relaxed);
+            self.same_account_writes_size
+                .fetch_add(data_len, Ordering::Relaxed);
+
+            let old_len = old.account.data().len() as u64;
+            let grow = old_len.saturating_sub(data_len);
+            if grow > 0 {
+                self.size.fetch_add(grow, Ordering::Relaxed);
+                self.total_size.fetch_add(grow, Ordering::Relaxed);
+            } else {
+                let shrink = data_len.saturating_sub(old_len);
+                if shrink > 0 {
+                    self.size.fetch_add(shrink, Ordering::Relaxed);
+                    self.total_size.fetch_sub(shrink, Ordering::Relaxed);
+                }
+            }
+        } else {
+            self.size.fetch_add(data_len, Ordering::Relaxed);
+            self.total_size.fetch_add(data_len, Ordering::Relaxed);
+            self.unique_account_writes_size
+                .fetch_add(data_len, Ordering::Relaxed);
+        }
         item
     }
 
@@ -146,12 +172,23 @@ pub struct AccountsCache {
     // could have triggered a flush of this slot already
     maybe_unflushed_roots: RwLock<BTreeSet<Slot>>,
     max_flushed_root: AtomicU64,
+    total_size: Arc<AtomicU64>,
 }
 
 impl AccountsCache {
-    pub fn report_size(&self) {
-        let total_unique_writes_size: u64 = self
-            .cache
+    pub fn new_inner(&self) -> SlotCache {
+        Arc::new(SlotCacheInner {
+            cache: DashMap::default(),
+            same_account_writes: AtomicU64::default(),
+            same_account_writes_size: AtomicU64::default(),
+            unique_account_writes_size: AtomicU64::default(),
+            size: AtomicU64::default(),
+            total_size: Arc::clone(&self.total_size),
+            is_frozen: AtomicBool::default(),
+        })
+    }
+    fn unique_account_writes_size(&self) -> u64 {
+        self.cache
             .iter()
             .map(|item| {
                 let slot_cache = item.value();
@@ -159,7 +196,12 @@ impl AccountsCache {
                     .unique_account_writes_size
                     .load(Ordering::Relaxed)
             })
-            .sum();
+            .sum()
+    }
+    pub fn size(&self) -> u64 {
+        self.total_size.load(Ordering::Relaxed)
+    }
+    pub fn report_size(&self) {
         datapoint_info!(
             "accounts_cache_size",
             (
@@ -168,7 +210,12 @@ impl AccountsCache {
                 i64
             ),
             ("num_slots", self.cache.len(), i64),
-            ("total_unique_writes_size", total_unique_writes_size, i64),
+            (
+                "total_unique_writes_size",
+                self.unique_account_writes_size(),
+                i64
+            ),
+            ("total_size", self.size(), i64),
         );
     }
 
@@ -187,7 +234,7 @@ impl AccountsCache {
             self
                 .cache
                 .entry(slot)
-                .or_insert(Arc::new(SlotCacheInner::default()))
+                .or_insert(self.new_inner())
                 .clone());
 
         slot_cache.insert(pubkey, account, hash, slot)

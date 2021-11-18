@@ -162,8 +162,8 @@ recognized this block as finalized
   - It does not count votes on descendants of a block, only direct votes on that block.
   - This confirmation level also upholds "optimistic confirmation" guarantees in
     release 1.3 and onwards.
-- `"processed"` - the node will query its most recent block.  Note that the block
-may not be complete.
+- `"processed"` - the node will query its most recent block. Note that the block
+may still be skipped by the cluster.
 
 For processing many dependent transactions in series, it's recommended to use
 `"confirmed"` commitment, which balances speed with rollback safety.

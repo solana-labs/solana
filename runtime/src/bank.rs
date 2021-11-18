@@ -39,7 +39,7 @@ use crate::{
         AccountShrinkThreshold, AccountsDbConfig, ErrorCounters, SnapshotStorages,
         ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
     },
-    accounts_index::{AccountSecondaryIndexes, IndexKey, ScanResult},
+    accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult},
     accounts_update_notifier_interface::AccountsUpdateNotifier,
     ancestors::{Ancestors, AncestorsForSerialization},
     blockhash_queue::BlockhashQueue,
@@ -70,8 +70,9 @@ use rayon::{
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
 use solana_program_runtime::{
-    instruction_processor::{ExecuteDetailsTimings, Executors, InstructionProcessor},
+    instruction_processor::{ExecuteDetailsTimings, Executor, Executors, InstructionProcessor},
     instruction_recorder::InstructionRecorder,
+    invoke_context::{ComputeMeter, ProcessInstructionWithContext},
     log_collector::LogCollector,
 };
 #[allow(deprecated)]
@@ -92,7 +93,9 @@ use solana_sdk::{
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
     feature,
-    feature_set::{self, disable_fee_calculator, tx_wide_compute_cap, FeatureSet},
+    feature_set::{
+        self, disable_fee_calculator, nonce_must_be_writable, tx_wide_compute_cap, FeatureSet,
+    },
     fee_calculator::{FeeCalculator, FeeRateGovernor},
     genesis_config::{ClusterType, GenesisConfig},
     hard_forks::HardForks,
@@ -107,7 +110,6 @@ use solana_sdk::{
     nonce, nonce_account,
     packet::PACKET_DATA_SIZE,
     precompiles::get_precompiles,
-    process_instruction::{ComputeMeter, Executor, ProcessInstructionWithContext},
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     secp256k1_program,
@@ -230,7 +232,7 @@ impl ExecuteTimings {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "5Br3PNyyX1L7XoS4jYLt5JTeMXowLSsu7v9LhokC8vnq")]
+#[frozen_abi(digest = "7bCDimGo11ajw6ZHViBBu8KPfoDZBcwSnumWCU8MMuwr")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>;
 
@@ -3357,6 +3359,22 @@ impl Bank {
         TransactionBatch::new(lock_results, self, Cow::Borrowed(txs))
     }
 
+    /// Prepare a locked transaction batch from a list of sanitized transactions, and their cost
+    /// limited packing status
+    pub fn prepare_sanitized_batch_with_results<'a, 'b>(
+        &'a self,
+        transactions: &'b [SanitizedTransaction],
+        transaction_results: impl Iterator<Item = &'b Result<()>>,
+    ) -> TransactionBatch<'a, 'b> {
+        // this lock_results could be: Ok, AccountInUse, WouldExceedBlockMaxLimit or WouldExceedAccountMaxLimit
+        let lock_results = self.rc.accounts.lock_accounts_with_results(
+            transactions.iter(),
+            transaction_results,
+            self.demote_program_write_locks(),
+        );
+        TransactionBatch::new(lock_results, self, Cow::Borrowed(transactions))
+    }
+
     /// Prepare a transaction batch without locking accounts for transaction simulation.
     pub(crate) fn prepare_simulation_batch<'a>(
         &'a self,
@@ -3525,9 +3543,9 @@ impl Bank {
         &self,
         tx: &SanitizedTransaction,
     ) -> Option<(Pubkey, AccountSharedData)> {
-        tx.get_durable_nonce()
+        tx.get_durable_nonce(self.feature_set.is_active(&nonce_must_be_writable::id()))
             .and_then(|nonce_pubkey| {
-                self.get_account(nonce_pubkey)
+                self.get_account_with_fixed_root(nonce_pubkey)
                     .map(|acc| (*nonce_pubkey, acc))
             })
             .filter(|(_pubkey, nonce_account)| {
@@ -3772,6 +3790,8 @@ impl Bank {
                     error_counters.account_in_use += 1;
                     Some(index)
                 }
+                Err(TransactionError::WouldExceedMaxBlockCostLimit)
+                | Err(TransactionError::WouldExceedMaxAccountCostLimit) => Some(index),
                 Err(_) => None,
                 Ok(_) => None,
             })
@@ -5234,22 +5254,25 @@ impl Bank {
     pub fn get_program_accounts(
         &self,
         program_id: &Pubkey,
+        config: ScanConfig,
     ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         self.rc
             .accounts
-            .load_by_program(&self.ancestors, self.bank_id, program_id)
+            .load_by_program(&self.ancestors, self.bank_id, program_id, config)
     }
 
     pub fn get_filtered_program_accounts<F: Fn(&AccountSharedData) -> bool>(
         &self,
         program_id: &Pubkey,
         filter: F,
+        config: ScanConfig,
     ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         self.rc.accounts.load_by_program_with_filter(
             &self.ancestors,
             self.bank_id,
             program_id,
             filter,
+            config,
         )
     }
 
@@ -5257,12 +5280,14 @@ impl Bank {
         &self,
         index_key: &IndexKey,
         filter: F,
+        config: ScanConfig,
     ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         self.rc.accounts.load_by_index_key_with_filter(
             &self.ancestors,
             self.bank_id,
             index_key,
             filter,
+            config,
         )
     }
 
@@ -6320,33 +6345,48 @@ impl Bank {
         self.feature_set
             .is_active(&feature_set::rent_for_sysvars::id())
     }
-}
 
-/// Scan all the accounts for this bank and collect stats
-pub fn get_total_accounts_stats(bank: &Bank) -> ScanResult<TotalAccountsStats> {
-    let rent_collector = bank.rent_collector();
-    bank.rc.accounts.accounts_db.scan_accounts(
-        &Ancestors::default(),
-        bank.bank_id(),
-        |total_accounts_stats: &mut TotalAccountsStats, item| {
-            if let Some((pubkey, account, _slot)) = item {
-                total_accounts_stats.num_accounts += 1;
-                total_accounts_stats.data_len += account.data().len();
+    /// Get all the accounts for this bank and calculate stats
+    pub fn get_total_accounts_stats(&self) -> ScanResult<TotalAccountsStats> {
+        let accounts = self.get_all_accounts_with_modified_slots()?;
+        Ok(self.calculate_total_accounts_stats(
+            accounts
+                .iter()
+                .map(|(pubkey, account, _slot)| (pubkey, account)),
+        ))
+    }
 
-                if account.executable() {
-                    total_accounts_stats.num_executable_accounts += 1;
-                    total_accounts_stats.executable_data_len += account.data().len();
-                }
+    /// Given all the accounts for a bank, calculate stats
+    pub fn calculate_total_accounts_stats<'a>(
+        &self,
+        accounts: impl Iterator<Item = (&'a Pubkey, &'a AccountSharedData)>,
+    ) -> TotalAccountsStats {
+        let rent_collector = self.rent_collector();
+        let mut total_accounts_stats = TotalAccountsStats::default();
+        accounts.for_each(|(pubkey, account)| {
+            let data_len = account.data().len();
+            total_accounts_stats.num_accounts += 1;
+            total_accounts_stats.data_len += data_len;
 
-                if !rent_collector.should_collect_rent(pubkey, &account, false) || {
-                    let (_rent_due, exempt) = rent_collector.get_rent_due(&account);
-                    exempt
-                } {
-                    total_accounts_stats.num_rent_exempt_accounts += 1;
+            if account.executable() {
+                total_accounts_stats.num_executable_accounts += 1;
+                total_accounts_stats.executable_data_len += data_len;
+            }
+
+            if !rent_collector.should_collect_rent(pubkey, account, false)
+                || rent_collector.get_rent_due(account).1
+            {
+                total_accounts_stats.num_rent_exempt_accounts += 1;
+            } else {
+                total_accounts_stats.num_rent_paying_accounts += 1;
+                if data_len == 0 {
+                    total_accounts_stats.num_rent_paying_accounts_without_data += 1;
                 }
             }
-        },
-    )
+        });
+
+        total_accounts_stats
+    }
 }
 
 /// Struct to collect stats when scanning all accounts in `get_total_accounts_stats()`
@@ -6364,6 +6404,10 @@ pub struct TotalAccountsStats {
 
     /// Total number of rent exempt accounts
     pub num_rent_exempt_accounts: usize,
+    /// Total number of rent paying accounts
+    pub num_rent_paying_accounts: usize,
+    /// Total number of rent paying accounts without data
+    pub num_rent_paying_accounts_without_data: usize,
 }
 
 impl Drop for Bank {
@@ -6394,7 +6438,7 @@ pub fn goto_end_of_slot(bank: &mut Bank) {
     }
 }
 
-fn is_simple_vote_transaction(transaction: &SanitizedTransaction) -> bool {
+pub fn is_simple_vote_transaction(transaction: &SanitizedTransaction) -> bool {
     if transaction.message().instructions().len() == 1 {
         let (program_pubkey, instruction) = transaction
             .message()
@@ -6430,6 +6474,7 @@ pub(crate) mod tests {
         status_cache::MAX_CACHE_ENTRIES,
     };
     use crossbeam_channel::{bounded, unbounded};
+    use solana_program_runtime::invoke_context::InvokeContext;
     #[allow(deprecated)]
     use solana_sdk::sysvar::fees::Fees;
     use solana_sdk::{
@@ -6445,7 +6490,6 @@ pub(crate) mod tests {
         message::{Message, MessageHeader},
         nonce,
         poh_config::PohConfig,
-        process_instruction::InvokeContext,
         rent::Rent,
         signature::{keypair_from_seed, Keypair, Signer},
         stake::{
@@ -10456,11 +10500,15 @@ pub(crate) mod tests {
         let bank1 = Arc::new(new_from_parent(&bank0));
         bank1.squash();
         assert_eq!(
-            bank0.get_program_accounts(&program_id).unwrap(),
+            bank0
+                .get_program_accounts(&program_id, ScanConfig::default(),)
+                .unwrap(),
             vec![(pubkey0, account0.clone())]
         );
         assert_eq!(
-            bank1.get_program_accounts(&program_id).unwrap(),
+            bank1
+                .get_program_accounts(&program_id, ScanConfig::default(),)
+                .unwrap(),
             vec![(pubkey0, account0)]
         );
         assert_eq!(
@@ -10479,8 +10527,20 @@ pub(crate) mod tests {
 
         let bank3 = Arc::new(new_from_parent(&bank2));
         bank3.squash();
-        assert_eq!(bank1.get_program_accounts(&program_id).unwrap().len(), 2);
-        assert_eq!(bank3.get_program_accounts(&program_id).unwrap().len(), 2);
+        assert_eq!(
+            bank1
+                .get_program_accounts(&program_id, ScanConfig::default(),)
+                .unwrap()
+                .len(),
+            2
+        );
+        assert_eq!(
+            bank3
+                .get_program_accounts(&program_id, ScanConfig::default(),)
+                .unwrap()
+                .len(),
+            2
+        );
     }
 
     #[test]
@@ -10501,7 +10561,11 @@ pub(crate) mod tests {
         bank.store_account(&address, &account);
 
         let indexed_accounts = bank
-            .get_filtered_indexed_accounts(&IndexKey::ProgramId(program_id), |_| true)
+            .get_filtered_indexed_accounts(
+                &IndexKey::ProgramId(program_id),
+                |_| true,
+                ScanConfig::default(),
+            )
             .unwrap();
         assert_eq!(indexed_accounts.len(), 1);
         assert_eq!(indexed_accounts[0], (address, account));
@@ -10514,27 +10578,39 @@ pub(crate) mod tests {
         let bank = Arc::new(new_from_parent(&bank));
         bank.store_account(&address, &new_account);
         let indexed_accounts = bank
-            .get_filtered_indexed_accounts(&IndexKey::ProgramId(program_id), |_| true)
+            .get_filtered_indexed_accounts(
+                &IndexKey::ProgramId(program_id),
+                |_| true,
+                ScanConfig::default(),
+            )
             .unwrap();
         assert_eq!(indexed_accounts.len(), 1);
         assert_eq!(indexed_accounts[0], (address, new_account.clone()));
         let indexed_accounts = bank
-            .get_filtered_indexed_accounts(&IndexKey::ProgramId(another_program_id), |_| true)
+            .get_filtered_indexed_accounts(
+                &IndexKey::ProgramId(another_program_id),
+                |_| true,
+                ScanConfig::default(),
+            )
             .unwrap();
         assert_eq!(indexed_accounts.len(), 1);
         assert_eq!(indexed_accounts[0], (address, new_account.clone()));
 
         // Post-processing filter
         let indexed_accounts = bank
-            .get_filtered_indexed_accounts(&IndexKey::ProgramId(program_id), |account| {
-                account.owner() == &program_id
-            })
+            .get_filtered_indexed_accounts(
+                &IndexKey::ProgramId(program_id),
+                |account| account.owner() == &program_id,
+                ScanConfig::default(),
+            )
             .unwrap();
         assert!(indexed_accounts.is_empty());
         let indexed_accounts = bank
-            .get_filtered_indexed_accounts(&IndexKey::ProgramId(another_program_id), |account| {
-                account.owner() == &another_program_id
-            })
+            .get_filtered_indexed_accounts(
+                &IndexKey::ProgramId(another_program_id),
+                |account| account.owner() == &another_program_id,
+                ScanConfig::default(),
+            )
             .unwrap();
         assert_eq!(indexed_accounts.len(), 1);
         assert_eq!(indexed_accounts[0], (address, new_account));
@@ -11394,6 +11470,58 @@ pub(crate) mod tests {
 
         assert_ne!(stored_nonce_hash, nonce_hash);
         assert_ne!(stored_fee_calculator, fee_calculator);
+    }
+
+    #[test]
+    fn test_check_ro_durable_nonce_fails() {
+        let (mut bank, _mint_keypair, custodian_keypair, nonce_keypair) =
+            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000, None).unwrap();
+        Arc::get_mut(&mut bank)
+            .unwrap()
+            .activate_feature(&feature_set::nonce_must_be_writable::id());
+        let custodian_pubkey = custodian_keypair.pubkey();
+        let nonce_pubkey = nonce_keypair.pubkey();
+
+        let nonce_hash = get_nonce_account(&bank, &nonce_pubkey).unwrap();
+        let account_metas = vec![
+            AccountMeta::new_readonly(nonce_pubkey, false),
+            #[allow(deprecated)]
+            AccountMeta::new_readonly(sysvar::recent_blockhashes::id(), false),
+            AccountMeta::new_readonly(nonce_pubkey, true),
+        ];
+        let nonce_instruction = Instruction::new_with_bincode(
+            system_program::id(),
+            &system_instruction::SystemInstruction::AdvanceNonceAccount,
+            account_metas,
+        );
+        let tx = Transaction::new_signed_with_payer(
+            &[nonce_instruction],
+            Some(&custodian_pubkey),
+            &[&custodian_keypair, &nonce_keypair],
+            nonce_hash,
+        );
+        // Caught by the system program because the tx hash is valid
+        assert_eq!(
+            bank.process_transaction(&tx),
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::InvalidArgument
+            ))
+        );
+        // Kick nonce hash off the blockhash_queue
+        for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
+            goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+            bank = Arc::new(new_from_parent(&bank));
+        }
+        // Caught by the runtime because it is a nonce transaction
+        assert_eq!(
+            bank.process_transaction(&tx),
+            Err(TransactionError::BlockhashNotFound)
+        );
+        assert_eq!(
+            bank.check_tx_durable_nonce(&SanitizedTransaction::from_transaction_for_tests(tx)),
+            None
+        );
     }
 
     #[test]
@@ -13115,13 +13243,25 @@ pub(crate) mod tests {
 
         let bank2 =
             Bank::new_from_parent(&bank1, &Pubkey::default(), bank1.first_slot_in_next_epoch());
-        assert_eq!(bank2.get_program_accounts(&sysvar::id()).unwrap().len(), 8);
+        assert_eq!(
+            bank2
+                .get_program_accounts(&sysvar::id(), ScanConfig::default(),)
+                .unwrap()
+                .len(),
+            8
+        );
 
         // force rent collection for sysvars
         bank2.collect_rent_in_partition((0, 0, 1)); // all range
 
         // no sysvar should be deleted due to rent
-        assert_eq!(bank2.get_program_accounts(&sysvar::id()).unwrap().len(), 8);
+        assert_eq!(
+            bank2
+                .get_program_accounts(&sysvar::id(), ScanConfig::default(),)
+                .unwrap()
+                .len(),
+            8
+        );
     }
 
     // this test can be removed after rent_for_sysvars activation on mainnet-beta
@@ -13154,7 +13294,9 @@ pub(crate) mod tests {
         );
 
         {
-            let sysvars = bank1.get_program_accounts(&sysvar::id()).unwrap();
+            let sysvars = bank1
+                .get_program_accounts(&sysvar::id(), ScanConfig::default())
+                .unwrap();
             assert_eq!(sysvars.len(), 8);
             assert!(sysvars
                 .iter()
@@ -13189,7 +13331,9 @@ pub(crate) mod tests {
         );
 
         {
-            let sysvars = bank2.get_program_accounts(&sysvar::id()).unwrap();
+            let sysvars = bank2
+                .get_program_accounts(&sysvar::id(), ScanConfig::default())
+                .unwrap();
             assert_eq!(sysvars.len(), 8);
             assert!(sysvars
                 .iter()
@@ -13266,7 +13410,9 @@ pub(crate) mod tests {
             &feature::create_account(&Feature { activated_at: None }, feature_balance),
         );
         {
-            let sysvars = bank1.get_program_accounts(&sysvar::id()).unwrap();
+            let sysvars = bank1
+                .get_program_accounts(&sysvar::id(), ScanConfig::default())
+                .unwrap();
             assert_eq!(sysvars.len(), 9);
             assert!(sysvars
                 .iter()
@@ -13301,7 +13447,9 @@ pub(crate) mod tests {
             },
         );
         {
-            let sysvars = bank2.get_program_accounts(&sysvar::id()).unwrap();
+            let sysvars = bank2
+                .get_program_accounts(&sysvar::id(), ScanConfig::default())
+                .unwrap();
             assert_eq!(sysvars.len(), 9);
             assert!(sysvars
                 .iter()
@@ -13670,7 +13818,8 @@ pub(crate) mod tests {
                             bank_to_scan_receiver.recv_timeout(Duration::from_millis(10))
                         {
                             info!("scanning program accounts for slot {}", bank_to_scan.slot());
-                            let accounts_result = bank_to_scan.get_program_accounts(&program_id);
+                            let accounts_result = bank_to_scan
+                                .get_program_accounts(&program_id, ScanConfig::default());
                             let _ = scan_finished_sender.send(bank_to_scan.bank_id());
                             num_banks_scanned.fetch_add(1, Relaxed);
                             match (&acceptable_scan_results, accounts_result.is_err()) {

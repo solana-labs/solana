@@ -2,7 +2,7 @@ use {
     crate::{
         accounts_update_notifier::AccountsUpdateNotifierImpl,
         accountsdb_plugin_manager::AccountsDbPluginManager,
-        slot_status_observer::SlotStatusObserver,
+        slot_status_notifier::SlotStatusNotifierImpl, slot_status_observer::SlotStatusObserver,
     },
     crossbeam_channel::Receiver,
     log::*,
@@ -42,9 +42,9 @@ pub enum AccountsdbPluginServiceError {
 
 /// The service managing the AccountsDb plugin workflow.
 pub struct AccountsDbPluginService {
-    slot_status_observer: SlotStatusObserver,
+    slot_status_observer: Option<SlotStatusObserver>,
     plugin_manager: Arc<RwLock<AccountsDbPluginManager>>,
-    accounts_update_notifier: AccountsUpdateNotifier,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
 }
 
 impl AccountsDbPluginService {
@@ -74,13 +74,27 @@ impl AccountsDbPluginService {
         for accountsdb_plugin_config_file in accountsdb_plugin_config_files {
             Self::load_plugin(&mut plugin_manager, accountsdb_plugin_config_file)?;
         }
+        let to_notify_account_data = plugin_manager.to_notify_account_data();
 
         let plugin_manager = Arc::new(RwLock::new(plugin_manager));
-        let accounts_update_notifier = Arc::new(RwLock::new(AccountsUpdateNotifierImpl::new(
-            plugin_manager.clone(),
-        )));
-        let slot_status_observer =
-            SlotStatusObserver::new(confirmed_bank_receiver, accounts_update_notifier.clone());
+
+        let accounts_update_notifier: Option<AccountsUpdateNotifier> = if to_notify_account_data {
+            let accounts_update_notifier = AccountsUpdateNotifierImpl::new(plugin_manager.clone());
+            Some(Arc::new(RwLock::new(accounts_update_notifier)))
+        } else {
+            None
+        };
+
+        let slot_status_observer = if to_notify_account_data {
+            let slot_status_notifier = SlotStatusNotifierImpl::new(plugin_manager.clone());
+            let slot_status_notifier = Arc::new(RwLock::new(slot_status_notifier));
+            Some(SlotStatusObserver::new(
+                confirmed_bank_receiver,
+                slot_status_notifier,
+            ))
+        } else {
+            None
+        };
 
         info!("Started AccountsDbPluginService");
         Ok(AccountsDbPluginService {
@@ -145,12 +159,14 @@ impl AccountsDbPluginService {
         Ok(())
     }
 
-    pub fn get_accounts_update_notifier(&self) -> AccountsUpdateNotifier {
+    pub fn get_accounts_update_notifier(&self) -> Option<AccountsUpdateNotifier> {
         self.accounts_update_notifier.clone()
     }
 
-    pub fn join(mut self) -> thread::Result<()> {
-        self.slot_status_observer.join()?;
+    pub fn join(self) -> thread::Result<()> {
+        if let Some(mut slot_status_observer) = self.slot_status_observer {
+            slot_status_observer.join()?;
+        }
         self.plugin_manager.write().unwrap().unload();
         Ok(())
     }

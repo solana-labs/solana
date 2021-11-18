@@ -31,7 +31,7 @@ use solana_runtime::{
         upgrade_program,
     },
 };
-use solana_program_runtime::invoke_context::with_mock_invoke_context;
+use solana_program_runtime::invoke_context::{with_mock_invoke_context, InvokeContext};
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
     account_utils::StateMut,
@@ -43,7 +43,6 @@ use solana_sdk::{
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     loader_instruction,
     message::{Message, SanitizedMessage},
-    process_instruction::InvokeContext,
     pubkey::Pubkey,
     signature::{keypair_from_seed, Keypair, Signer},
     system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
@@ -1371,8 +1370,8 @@ fn assert_instruction_count() {
             ("noop++", 5),
             ("relative_call", 26),
             ("return_data", 980),
-            ("sanity", 1248),
-            ("sanity++", 1252),
+            ("sanity", 1255),
+            ("sanity++", 1260),
             ("secp256k1_recover", 25383),
             ("sha", 1328),
             ("struct_pass", 108),

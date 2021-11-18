@@ -1,15 +1,17 @@
-use crate::native_loader::NativeLoader;
+use crate::{
+    ic_msg,
+    invoke_context::{InvokeContext, ProcessInstructionWithContext},
+    native_loader::NativeLoader,
+};
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     feature_set::{demote_program_write_locks, do_support_realloc, remove_native_loader},
-    ic_msg,
     instruction::{Instruction, InstructionError},
     keyed_account::keyed_account_at_index,
     message::Message,
-    process_instruction::{Executor, InvokeContext, ProcessInstructionWithContext},
     pubkey::Pubkey,
     rent::Rent,
     system_instruction::MAX_PERMITTED_DATA_LENGTH,
@@ -18,9 +20,22 @@ use solana_sdk::{
 use std::{
     cell::{Ref, RefCell, RefMut},
     collections::HashMap,
+    fmt::Debug,
     rc::Rc,
     sync::Arc,
 };
+
+/// Program executor
+pub trait Executor: Debug + Send + Sync {
+    /// Execute the program
+    fn execute(
+        &self,
+        first_instruction_account: usize,
+        instruction_data: &[u8],
+        invoke_context: &mut dyn InvokeContext,
+        use_jit: bool,
+    ) -> Result<(), InstructionError>;
+}
 
 #[derive(Default)]
 pub struct Executors {
@@ -362,38 +377,35 @@ impl InstructionProcessor {
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
-        if let Ok(root_account) = keyed_account_at_index(keyed_accounts, 0) {
-            let root_id = root_account.unsigned_key();
-            let owner_id = &root_account.owner()?;
-            if solana_sdk::native_loader::check_id(owner_id) {
-                for (id, process_instruction) in &self.programs {
-                    if id == root_id {
-                        // Call the builtin program
-                        return process_instruction(
-                            1, // root_id to be skipped
-                            instruction_data,
-                            invoke_context,
-                        );
-                    }
-                }
-                if !invoke_context.is_feature_active(&remove_native_loader::id()) {
-                    // Call the program via the native loader
-                    return self.native_loader.process_instruction(
-                        0,
+        let root_account = keyed_account_at_index(keyed_accounts, 0)?;
+        let root_id = root_account.unsigned_key();
+        let owner_id = &root_account.owner()?;
+        if solana_sdk::native_loader::check_id(owner_id) {
+            for (id, process_instruction) in &self.programs {
+                if id == root_id {
+                    // Call the builtin program
+                    return process_instruction(
+                        1, // root_id to be skipped
                         instruction_data,
                         invoke_context,
                     );
                 }
-            } else {
-                for (id, process_instruction) in &self.programs {
-                    if id == owner_id {
-                        // Call the program via a builtin loader
-                        return process_instruction(
-                            0, // no root_id was provided
-                            instruction_data,
-                            invoke_context,
-                        );
-                    }
+            }
+            if !invoke_context.is_feature_active(&remove_native_loader::id()) {
+                // Call the program via the native loader
+                return self
+                    .native_loader
+                    .process_instruction(0, instruction_data, invoke_context);
+            }
+        } else {
+            for (id, process_instruction) in &self.programs {
+                if id == owner_id {
+                    // Call the program via a builtin loader
+                    return process_instruction(
+                        0, // no root_id was provided
+                        instruction_data,
+                        invoke_context,
+                    );
                 }
             }
         }

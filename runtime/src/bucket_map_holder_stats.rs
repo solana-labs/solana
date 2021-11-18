@@ -1,6 +1,6 @@
 use crate::accounts_index::IndexValue;
 use crate::bucket_map_holder::BucketMapHolder;
-use solana_sdk::timing::{timestamp, AtomicInterval};
+use solana_sdk::timing::AtomicInterval;
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 
@@ -38,7 +38,6 @@ pub struct BucketMapHolderStats {
     pub active_threads: AtomicU64,
     pub get_range_us: AtomicU64,
     last_age: AtomicU8,
-    last_age_time: AtomicU64,
     pub flush_scan_update_us: AtomicU64,
     pub flush_remove_us: AtomicU64,
     pub flush_grow_us: AtomicU64,
@@ -82,12 +81,6 @@ impl BucketMapHolderStats {
         }
     }
 
-    pub fn get_elapsed_ms_and_reset(&self) -> u64 {
-        let now = timestamp();
-        let last = self.last_age_time.swap(now, Ordering::Relaxed);
-        now.saturating_sub(last) // could saturate to 0. That is ok.
-    }
-
     fn ms_per_age<T: IndexValue>(&self, storage: &BucketMapHolder<T>, elapsed_ms: u64) -> u64 {
         if !storage.get_startup() {
             let age_now = storage.current_age();
@@ -125,7 +118,7 @@ impl BucketMapHolderStats {
         }
     }
 
-    fn calc_percent(&self, ms: u64, elapsed_ms: u64) -> f32 {
+    fn calc_percent(ms: u64, elapsed_ms: u64) -> f32 {
         if elapsed_ms == 0 {
             0.0
         } else {
@@ -134,11 +127,14 @@ impl BucketMapHolderStats {
     }
 
     pub fn report_stats<T: IndexValue>(&self, storage: &BucketMapHolder<T>) {
-        if !self.last_time.should_update(STATS_INTERVAL_MS) {
+        let elapsed_ms = self.last_time.elapsed_ms();
+        if elapsed_ms < STATS_INTERVAL_MS {
             return;
         }
 
-        let elapsed_ms = self.get_elapsed_ms_and_reset();
+        if !self.last_time.should_update(STATS_INTERVAL_MS) {
+            return;
+        }
 
         let ms_per_age = self.ms_per_age(storage, elapsed_ms);
 
@@ -183,7 +179,7 @@ impl BucketMapHolderStats {
             ("count", self.count.load(Ordering::Relaxed), i64),
             (
                 "bg_waiting_percent",
-                self.calc_percent(
+                Self::calc_percent(
                     self.bg_waiting_us.swap(0, Ordering::Relaxed) / US_PER_MS,
                     thread_time_elapsed_ms
                 ),
@@ -191,7 +187,7 @@ impl BucketMapHolderStats {
             ),
             (
                 "bg_throttling_wait_percent",
-                self.calc_percent(
+                Self::calc_percent(
                     self.bg_throttling_wait_us.swap(0, Ordering::Relaxed) / US_PER_MS,
                     thread_time_elapsed_ms
                 ),

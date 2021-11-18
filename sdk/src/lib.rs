@@ -35,7 +35,6 @@ pub mod nonce_account;
 pub mod packet;
 pub mod poh_config;
 pub mod precompiles;
-pub mod process_instruction;
 pub mod program_utils;
 pub mod pubkey;
 pub mod recent_blockhashes_account;
@@ -73,6 +72,22 @@ pub use solana_sdk_macro::declare_deprecated_id;
 /// assert_eq!(id(), my_id);
 /// ```
 pub use solana_sdk_macro::declare_id;
+/// Convenience macro to define a static public key
+///
+/// Input: a single literal base58 string representation of a Pubkey
+///
+/// # Example
+///
+/// ```
+/// use std::str::FromStr;
+/// use solana_program::{pubkey, pubkey::Pubkey};
+///
+/// static ID: Pubkey = pubkey!("My11111111111111111111111111111111111111111");
+///
+/// let my_id = Pubkey::from_str("My11111111111111111111111111111111111111111").unwrap();
+/// assert_eq!(ID, my_id);
+/// ```
+pub use solana_sdk_macro::pubkey;
 pub use solana_sdk_macro::pubkeys;
 #[rustversion::since(1.46.0)]
 pub use solana_sdk_macro::respan;

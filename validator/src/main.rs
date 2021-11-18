@@ -959,6 +959,11 @@ pub fn main() {
                 .help("Skip checks for OS network limits.")
         )
         .arg(
+            Arg::with_name("no_os_network_stats_reporting")
+                .long("no-os-network-stats-reporting")
+                .help("Disable reporting of OS network statistics.")
+        )
+        .arg(
             Arg::with_name("accounts-hash-interval-slots")
                 .long("accounts-hash-interval-slots")
                 .value_name("NUMBER")
@@ -1072,7 +1077,7 @@ pub fn main() {
                 .help("Add a hard fork at this slot"),
         )
         .arg(
-            Arg::with_name("trusted_validators")
+            Arg::with_name("known_validators")
                 .alias("trusted-validator")
                 .long("known-validator")
                 .validator(is_pubkey)
@@ -1092,7 +1097,7 @@ pub fn main() {
                 .help("Log when transactions are processed which reference a given key."),
         )
         .arg(
-            Arg::with_name("no_untrusted_rpc")
+            Arg::with_name("only_known_rpc")
                 .alias("no-untrusted-rpc")
                 .long("only-known-rpc")
                 .takes_value(false)
@@ -1374,10 +1379,10 @@ pub fn main() {
                 .help("Specify the configuration file for the AccountsDb plugin."),
         )
         .arg(
-            Arg::with_name("halt_on_trusted_validators_accounts_hash_mismatch")
+            Arg::with_name("halt_on_known_validators_accounts_hash_mismatch")
                 .alias("halt-on-trusted-validators-accounts-hash-mismatch")
                 .long("halt-on-known-validators-accounts-hash-mismatch")
-                .requires("trusted_validators")
+                .requires("known_validators")
                 .takes_value(false)
                 .help("Abort the validator if a bank hash mismatch is detected within known validator set"),
         )
@@ -1938,7 +1943,7 @@ pub fn main() {
         no_genesis_fetch: matches.is_present("no_genesis_fetch"),
         no_snapshot_fetch: matches.is_present("no_snapshot_fetch"),
         no_check_vote_account: matches.is_present("no_check_vote_account"),
-        no_untrusted_rpc: matches.is_present("no_untrusted_rpc"),
+        only_known_rpc: matches.is_present("only_known_rpc"),
         max_genesis_archive_unpacked_size: value_t_or_exit!(
             matches,
             "max_genesis_archive_unpacked_size",
@@ -1976,10 +1981,10 @@ pub fn main() {
         None
     };
 
-    let trusted_validators = validators_set(
+    let known_validators = validators_set(
         &identity_keypair.pubkey(),
         &matches,
-        "trusted_validators",
+        "known_validators",
         "--known-validator",
     );
     let repair_validators = validators_set(
@@ -2230,7 +2235,7 @@ pub fn main() {
         },
         voting_disabled: matches.is_present("no_voting") || restricted_repair_only_mode,
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
-        trusted_validators,
+        known_validators,
         repair_validators,
         gossip_validators,
         frozen_accounts: values_t!(matches, "frozen_accounts", Pubkey).unwrap_or_default(),
@@ -2262,6 +2267,7 @@ pub fn main() {
             ),
         },
         no_poh_speed_test: matches.is_present("no_poh_speed_test"),
+        no_os_network_stats_reporting: matches.is_present("no_os_network_stats_reporting"),
         poh_pinned_cpu_core: value_of(&matches, "poh_pinned_cpu_core")
             .unwrap_or(poh_service::DEFAULT_PINNED_CPU_CORE),
         poh_hashes_per_batch: value_of(&matches, "poh_hashes_per_batch")
@@ -2458,8 +2464,8 @@ pub fn main() {
         validator_config.max_ledger_shreds = Some(limit_ledger_size);
     }
 
-    if matches.is_present("halt_on_trusted_validators_accounts_hash_mismatch") {
-        validator_config.halt_on_trusted_validators_accounts_hash_mismatch = true;
+    if matches.is_present("halt_on_known_validators_accounts_hash_mismatch") {
+        validator_config.halt_on_known_validators_accounts_hash_mismatch = true;
     }
 
     let public_rpc_addr = matches.value_of("public_rpc_addr").map(|addr| {

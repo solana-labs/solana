@@ -4,7 +4,7 @@ use crate::{
         LoadHint, LoadedAccount, ScanStorageResult, ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS,
         ACCOUNTS_DB_CONFIG_FOR_TESTING,
     },
-    accounts_index::{AccountSecondaryIndexes, IndexKey, ScanResult},
+    accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult},
     accounts_update_notifier_interface::AccountsUpdateNotifier,
     ancestors::Ancestors,
     bank::{
@@ -667,6 +667,7 @@ impl Accounts {
                     collector.push(Reverse((account.lamports(), *pubkey)));
                 }
             },
+            ScanConfig::default(),
         )?;
         Ok(account_balances
             .into_sorted_vec()
@@ -744,6 +745,7 @@ impl Accounts {
         ancestors: &Ancestors,
         bank_id: BankId,
         program_id: &Pubkey,
+        config: ScanConfig,
     ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         self.accounts_db.scan_accounts(
             ancestors,
@@ -753,6 +755,7 @@ impl Accounts {
                     account.owner() == program_id
                 })
             },
+            config,
         )
     }
 
@@ -762,6 +765,7 @@ impl Accounts {
         bank_id: BankId,
         program_id: &Pubkey,
         filter: F,
+        config: ScanConfig,
     ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         self.accounts_db.scan_accounts(
             ancestors,
@@ -771,6 +775,7 @@ impl Accounts {
                     account.owner() == program_id && filter(account)
                 })
             },
+            config,
         )
     }
 
@@ -780,6 +785,7 @@ impl Accounts {
         bank_id: BankId,
         index_key: &IndexKey,
         filter: F,
+        config: ScanConfig,
     ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         self.accounts_db
             .index_scan_accounts(
@@ -791,6 +797,7 @@ impl Accounts {
                         filter(account)
                     })
                 },
+                config,
             )
             .map(|result| result.0)
     }
@@ -814,6 +821,7 @@ impl Accounts {
                     collector.push((*pubkey, account, slot))
                 }
             },
+            ScanConfig::default(),
         )
     }
 
@@ -835,7 +843,7 @@ impl Accounts {
             "load_to_collect_rent_eagerly_scan_elapsed",
             ancestors,
             range,
-            true,
+            ScanConfig::new(true),
             |collector: &mut Vec<(Pubkey, AccountSharedData)>, option| {
                 Self::load_while_filtering(collector, option, |_| true)
             },
@@ -929,6 +937,26 @@ impl Accounts {
         let account_locks = &mut self.account_locks.lock().unwrap();
         keys.into_iter()
             .map(|keys| self.lock_account(account_locks, keys.writable, keys.readonly))
+            .collect()
+    }
+
+    #[allow(clippy::needless_collect)]
+    pub fn lock_accounts_with_results<'a>(
+        &self,
+        txs: impl Iterator<Item = &'a SanitizedTransaction>,
+        results: impl Iterator<Item = &'a Result<()>>,
+        demote_program_write_locks: bool,
+    ) -> Vec<Result<()>> {
+        let keys: Vec<_> = txs
+            .map(|tx| tx.get_account_locks(demote_program_write_locks))
+            .collect();
+        let account_locks = &mut self.account_locks.lock().unwrap();
+        keys.into_iter()
+            .zip(results)
+            .map(|(keys, result)| match result {
+                Ok(()) => self.lock_account(account_locks, keys.writable, keys.readonly),
+                Err(e) => Err(e.clone()),
+            })
             .collect()
     }
 

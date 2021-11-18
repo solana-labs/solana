@@ -48,6 +48,11 @@ impl AccountsSelector {
     pub fn is_account_selected(&self, account: &[u8], owner: &[u8]) -> bool {
         self.select_all_accounts || self.accounts.contains(account) || self.owners.contains(owner)
     }
+
+    /// Check if any account is of interested at all
+    pub fn is_enabled(&self) -> bool {
+        self.select_all_accounts || !self.accounts.is_empty() || !self.owners.is_empty()
+    }
 }
 
 #[cfg(test)]

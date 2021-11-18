@@ -18,14 +18,13 @@ use solana_runtime::{
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
     loader_utils::load_program,
 };
-use solana_program_runtime::invoke_context::with_mock_invoke_context;
+use solana_program_runtime::invoke_context::{with_mock_invoke_context, InvokeContext};
 use solana_sdk::{
     bpf_loader,
     client::SyncClient,
     entrypoint::SUCCESS,
     instruction::{AccountMeta, Instruction},
     message::Message,
-    process_instruction::InvokeContext,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
