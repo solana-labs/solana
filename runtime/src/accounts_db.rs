@@ -79,6 +79,7 @@ use std::{
 };
 use tempfile::TempDir;
 
+#[cfg(test)]
 use std::{thread::sleep, time::Duration};
 
 const PAGE_SIZE: u64 = 4 * 1024;
@@ -6249,31 +6250,7 @@ impl AccountsDb {
         }
     }
 
-    /// sleep while accounts cache size has grown too large, up to a max wait
-    fn maybe_stall_store_cached(&self, accounts: &[(&Pubkey, &AccountSharedData)]) {
-        const MAX_DELAY_US: u128 = 10_000;
-        const CACHE_SIZE_TO_STALL: u64 = 10_000_000_000;
-        const DELAY_US: u64 = 1_000;
-        let start = Instant::now();
-        let mut waited = false;
-        while self.accounts_cache.size() > CACHE_SIZE_TO_STALL {
-            waited = true;
-            sleep(Duration::from_micros(DELAY_US));
-            if start.elapsed().as_micros() > MAX_DELAY_US {
-                break;
-            }
-        }
-        if waited {
-            datapoint_info!(
-                "accounts_db_store_cached_stall",
-                ("num_accounts", accounts.len(), i64),
-                ("delay_us", start.elapsed().as_micros(), i64),
-            );
-        }
-    }
-
     pub fn store_cached(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
-        self.maybe_stall_store_cached(accounts);
         self.store(slot, accounts, self.caching_enabled);
     }
 
