@@ -218,8 +218,8 @@ fn run_check_duplicate(
             if let Some(existing_shred_payload) = blockstore.is_shred_duplicate(
                 shred_slot,
                 shred.index(),
-                &shred.payload,
-                shred.is_data(),
+                shred.payload.clone(),
+                shred.shred_type(),
             ) {
                 cluster_info.push_duplicate_shred(&shred, &existing_shred_payload)?;
                 blockstore.store_duplicate_slot(
