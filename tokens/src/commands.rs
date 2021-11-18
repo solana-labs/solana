@@ -12,7 +12,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use pickledb::PickleDb;
 use serde::{Deserialize, Serialize};
 use solana_account_decoder::parse_token::{
-    pubkey_from_spl_token_v2_0, real_number_string, spl_token_v2_0_pubkey,
+    pubkey_from_spl_token, real_number_string, spl_token_pubkey,
 };
 use solana_client::{
     client_error::{ClientError, Result as ClientResult},
@@ -35,8 +35,8 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use solana_transaction_status::TransactionStatus;
-use spl_associated_token_account_v1_0::get_associated_token_address;
-use spl_token_v2_0::solana_program::program_error::ProgramError;
+use spl_associated_token_account::get_associated_token_address;
+use spl_token::solana_program::program_error::ProgramError;
 use std::{
     cmp::{self},
     io,
@@ -309,12 +309,11 @@ fn build_messages(
             let wallet_address = allocation.recipient.parse().unwrap();
             let associated_token_address = get_associated_token_address(
                 &wallet_address,
-                &spl_token_v2_0_pubkey(&spl_token_args.mint),
+                &spl_token_pubkey(&spl_token_args.mint),
             );
             let do_create_associated_token_account = client
-                .get_multiple_accounts(&[pubkey_from_spl_token_v2_0(&associated_token_address)])?
-                [0]
-            .is_none();
+                .get_multiple_accounts(&[pubkey_from_spl_token(&associated_token_address)])?[0]
+                .is_none();
             if do_create_associated_token_account {
                 *created_accounts += 1;
             }

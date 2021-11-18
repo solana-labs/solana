@@ -14,7 +14,7 @@ use {
     crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
     rayon::prelude::*,
     serde::Serialize,
-    solana_account_decoder::{parse_token::spl_token_id_v2_0, UiAccount, UiAccountEncoding},
+    solana_account_decoder::{parse_token::spl_token_id, UiAccount, UiAccountEncoding},
     solana_client::{
         rpc_filter::RpcFilterType,
         rpc_response::{
@@ -301,9 +301,7 @@ fn filter_account_result(
     // If last_modified_slot < last_notified_slot this means that we last notified for a fork
     // and should notify that the account state has been reverted.
     let results: Box<dyn Iterator<Item = UiAccount>> = if last_modified_slot != last_notified_slot {
-        if account.owner() == &spl_token_id_v2_0()
-            && params.encoding == UiAccountEncoding::JsonParsed
-        {
+        if account.owner() == &spl_token_id() && params.encoding == UiAccountEncoding::JsonParsed {
             Box::new(iter::once(get_parsed_token_account(
                 bank,
                 &params.pubkey,
@@ -354,8 +352,7 @@ fn filter_program_results(
             RpcFilterType::Memcmp(compare) => compare.bytes_match(account.data()),
         })
     });
-    let accounts: Box<dyn Iterator<Item = RpcKeyedAccount>> = if params.pubkey
-        == spl_token_id_v2_0()
+    let accounts: Box<dyn Iterator<Item = RpcKeyedAccount>> = if params.pubkey == spl_token_id()
         && params.encoding == UiAccountEncoding::JsonParsed
         && !accounts_is_empty
     {
