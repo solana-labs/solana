@@ -3670,8 +3670,6 @@ export class Connection {
     const preflightCommitment =
       (options && options.preflightCommitment) || this.commitment;
 
-    const maxRetries = options && options.maxRetries;
-
     if (options && options.maxRetries) {
       config.maxRetries = maxRetries;
     }
