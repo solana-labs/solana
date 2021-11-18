@@ -300,6 +300,12 @@ impl<'a> EntrySigVerificationState {
             }
         }
     }
+    pub fn status(&self) -> EntryVerificationStatus {
+        self.verification_status
+    }
+    pub fn verify_duration(&self) -> u64 {
+        self.verify_duration_us
+    }
 }
 
 #[derive(Default, Clone)]

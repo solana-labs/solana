@@ -945,11 +945,13 @@ pub fn confirm_slot(
         Arc::new(verify_transaction),
     );
 
-    let entries = check_result.entries();
-    if entries.is_none() {
+    if check_result.status() == EntryVerificationStatus::Failure {
         warn!("Ledger proof of history failed at slot: {}", slot);
         return Err(BlockError::InvalidEntryHash.into());
     }
+
+    let entries = check_result.entries();
+    assert!(entries.is_some());
 
     let mut replay_elapsed = Measure::start("replay_elapsed");
     let mut execute_timings = ExecuteTimings::default();
@@ -976,7 +978,7 @@ pub fn confirm_slot(
         return Err(BlockError::InvalidEntryHash.into());
     }
 
-    let transaction_duration_us = check_result.verify_duration_us;
+    let transaction_duration_us = check_result.verify_duration();
 
     if let Some(mut verifier) = verifier {
         let verified = verifier.finish_verify();
