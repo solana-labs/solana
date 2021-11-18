@@ -945,6 +945,12 @@ pub fn confirm_slot(
         Arc::new(verify_transaction),
     );
 
+    // If the CPU Entry signature verification path is used
+    // (for example, when no GPU acceleration API is in use)
+    // we will have our verification results immediately,
+    // so check if the verification has failed, and if so
+    // return early. Otherwise, the result will still be pending
+    // as the signature verification is running on the GPU
     if check_result.status() == EntryVerificationStatus::Failure {
         warn!("Ledger proof of history failed at slot: {}", slot);
         return Err(BlockError::InvalidEntryHash.into());
@@ -973,6 +979,12 @@ pub fn confirm_slot(
 
     timing.execute_timings.accumulate(&execute_timings);
 
+    // If running signature verification on the GPU, wait for that
+    // computation to finish, and check the result. If we did the
+    // signature verification on the CPU, this just returns the
+    // already-computed result produced in start_verify_transactions.
+    // Either way, check the result of the signature verification, and return
+    // early if that has failed.
     if !check_result.finish_verify() {
         warn!("Ledger proof of history failed at slot: {}", slot);
         return Err(BlockError::InvalidEntryHash.into());
