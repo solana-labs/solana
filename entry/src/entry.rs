@@ -442,7 +442,7 @@ pub fn start_verify_transactions(
     // TODO: make this dynamic, perhaps based on similar future heuristics
     // to what might be used in sigverify::ed25519_verify when a dynamic crossover
     // is introduced for that function (see TODO in sigverify::ed25519_verify)
-    if api.is_none() || skip_verification || num_transactions < 2048 {
+    if api.is_none() || skip_verification || num_transactions < 512 {
         let verify_func = {
             move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
                 verify(
