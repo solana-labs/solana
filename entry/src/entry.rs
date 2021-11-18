@@ -958,13 +958,21 @@ mod tests {
         skip_verification: bool,
         verify_recyclers: VerifyRecyclers,
         verify: Arc<
-            dyn Fn(VersionedTransaction, bool, bool) -> Result<SanitizedTransaction> + Send + Sync,
+            dyn Fn(VersionedTransaction, EntryVerificationOptions) -> Result<SanitizedTransaction>
+                + Send
+                + Sync,
         >,
     ) -> bool {
         let verify_func = {
             let verify = verify.clone();
             move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
-                verify(versioned_tx, skip_verification, false)
+                verify(
+                    versioned_tx,
+                    EntryVerificationOptions {
+                        skip_verification: skip_verification,
+                        verify_precompiles: false,
+                    },
+                )
             }
         };
 
@@ -992,11 +1000,10 @@ mod tests {
     fn test_entry_gpu_verify() {
         let verify_transaction = {
             move |versioned_tx: VersionedTransaction,
-                  skip_verification: bool,
-                  _verify_precompiles: bool|
+                  verification_options: EntryVerificationOptions|
                   -> Result<SanitizedTransaction> {
                 let sanitized_tx = {
-                    let message_hash = if !skip_verification {
+                    let message_hash = if !verification_options.skip_verification {
                         versioned_tx.verify_and_hash_message()?
                     } else {
                         versioned_tx.message.hash()

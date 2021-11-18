@@ -24,11 +24,10 @@ fn bench_gpusigverify(bencher: &mut Bencher) {
 
     let verify_transaction = {
         move |versioned_tx: VersionedTransaction,
-              skip_verification: bool,
-              _verify_precompiles: bool|
+              verification_options: entry::EntryVerificationOptions|
               -> Result<SanitizedTransaction> {
             let sanitized_tx = {
-                let message_hash = if !skip_verification {
+                let message_hash = if !verification_options.skip_verification {
                     versioned_tx.verify_and_hash_message()?
                 } else {
                     versioned_tx.message.hash()
