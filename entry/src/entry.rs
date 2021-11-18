@@ -439,13 +439,10 @@ pub fn start_verify_transactions(
         .sum();
 
     // Use the CPU if we have too few transactions for GPU sigverify to be worth it.
-    // Based on the CPU-to-GPU crossover point of 64 in sigverify::ed25519_verify also
-    // taking into account the fact that we have some additional processing
-    // we need to do before we can call sigverify::ed25519_verify
     // TODO: make this dynamic, perhaps based on similar future heuristics
     // to what might be used in sigverify::ed25519_verify when a dynamic crossover
     // is introduced for that function (see TODO in sigverify::ed25519_verify)
-    if api.is_none() || skip_verification || num_transactions < 128 {
+    if api.is_none() || skip_verification || num_transactions < 2048 {
         let verify_func = {
             move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
                 verify(
