@@ -146,6 +146,11 @@ pub enum EntryType {
     Tick(Hash),
 }
 
+pub struct EntryVerificationOptions {
+    pub skip_verification: bool,
+    pub verify_precompiles: bool,
+}
+
 impl Entry {
     /// Creates the next Entry `num_hashes` after `start_hash`.
     pub fn new(prev_hash: &Hash, mut num_hashes: u64, transactions: Vec<Transaction>) -> Self {
@@ -411,7 +416,9 @@ pub fn start_verify_transactions(
     skip_verification: bool,
     verify_recyclers: VerifyRecyclers,
     verify: Arc<
-        dyn Fn(VersionedTransaction, bool, bool) -> Result<SanitizedTransaction> + Send + Sync,
+        dyn Fn(VersionedTransaction, EntryVerificationOptions) -> Result<SanitizedTransaction>
+            + Send
+            + Sync,
     >,
 ) -> EntrySigVerificationState {
     let check_start = Instant::now();
@@ -433,7 +440,13 @@ pub fn start_verify_transactions(
     if api.is_none() || skip_verification || num_transactions < 128 {
         let verify_func = {
             move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
-                verify(versioned_tx, skip_verification, false)
+                verify(
+                    versioned_tx,
+                    EntryVerificationOptions {
+                        skip_verification: skip_verification,
+                        verify_precompiles: false,
+                    },
+                )
             }
         };
 
@@ -463,7 +476,13 @@ pub fn start_verify_transactions(
 
     let verify_func = {
         move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
-            verify(versioned_tx, true, true)
+            verify(
+                versioned_tx,
+                EntryVerificationOptions {
+                    skip_verification: true,
+                    verify_precompiles: true,
+                },
+            )
         }
     };
     let entries = verify_transactions(entries, Arc::new(verify_func));

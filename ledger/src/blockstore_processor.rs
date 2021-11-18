@@ -921,14 +921,16 @@ pub fn confirm_slot(
     let verify_transaction = {
         let bank = bank.clone();
         move |versioned_tx: VersionedTransaction,
-              skip_verification: bool,
-              verify_precompiles: bool|
+              verification_options: entry::EntryVerificationOptions|
               -> Result<SanitizedTransaction> {
-            let result = bank.verify_transaction(versioned_tx, skip_verification);
+            let result =
+                bank.verify_transaction(versioned_tx, verification_options.skip_verification);
 
             match result {
                 Ok(val) => {
-                    if verify_precompiles && skip_verification {
+                    if verification_options.verify_precompiles
+                        && verification_options.skip_verification
+                    {
                         val.verify_precompiles(&bank.feature_set)?;
                     }
                     Ok(val)
