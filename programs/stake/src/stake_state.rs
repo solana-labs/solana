@@ -2545,7 +2545,7 @@ mod tests {
             Err(InstructionError::InvalidAccountData)
         );
 
-        // initalize the stake
+        // initialize the stake
         let custodian = solana_sdk::pubkey::new_rand();
         stake_keyed_account
             .initialize(
