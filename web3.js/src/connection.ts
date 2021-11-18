@@ -3672,7 +3672,7 @@ export class Connection {
 
     const maxRetries = options && options.maxRetries;
 
-    if (!isNaN(maxRetries)) {
+    if (options && options.maxRetries) {
       config.maxRetries = maxRetries;
     }
     if (skipPreflight) {
