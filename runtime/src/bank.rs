@@ -5888,6 +5888,15 @@ impl Bank {
     }
 }
 
+macro_rules! time {
+    ($drop:expr) => {{
+        let mut measure = Measure::start("timer");
+        $drop;
+        measure.stop();
+        measure.as_ms()
+    }};
+}
+
 impl Drop for Bank {
     fn drop(&mut self) {
         if let Some(drop_callback) = self.drop_callback.read().unwrap().0.as_ref() {
@@ -5900,6 +5909,201 @@ impl Drop for Bank {
             self.rc
                 .accounts
                 .purge_slot(self.slot(), self.bank_id(), false);
+        }
+
+        unsafe {
+            let rc_elapsed = time!(ManuallyDrop::drop(&mut self.rc));
+
+            let src_elapsed = time!(ManuallyDrop::drop(&mut self.src));
+
+            let blockhash_queue_elapsed = time!(ManuallyDrop::drop(&mut self.blockhash_queue));
+
+            let ancestors_elapsed = time!(ManuallyDrop::drop(&mut self.ancestors));
+
+            let hash_elapsed = time!(ManuallyDrop::drop(&mut self.hash));
+
+            let parent_hash_elapsed = time!(ManuallyDrop::drop(&mut self.parent_hash));
+
+            let hard_forks_elapsed = time!(ManuallyDrop::drop(&mut self.hard_forks));
+
+            let transaction_count_elapsed = time!(ManuallyDrop::drop(&mut self.transaction_count));
+
+            let transaction_error_count_elapsed =
+                time!(ManuallyDrop::drop(&mut self.transaction_error_count));
+
+            let transaction_entries_count_elapsed =
+                time!(ManuallyDrop::drop(&mut self.transaction_entries_count));
+
+            let transactions_per_entry_max_elapsed =
+                time!(ManuallyDrop::drop(&mut self.transactions_per_entry_max));
+
+            let tick_height_elapsed = time!(ManuallyDrop::drop(&mut self.tick_height));
+
+            let signature_count_elapsed = time!(ManuallyDrop::drop(&mut self.signature_count));
+
+            let capitalization_elapsed = time!(ManuallyDrop::drop(&mut self.capitalization));
+
+            let max_tick_height_elapsed = time!(ManuallyDrop::drop(&mut self.max_tick_height));
+
+            let hashes_per_tick_elapsed = time!(ManuallyDrop::drop(&mut self.hashes_per_tick));
+
+            let genesis_creation_time_elapsed =
+                time!(ManuallyDrop::drop(&mut self.genesis_creation_time));
+
+            let slots_per_year_elapsed = time!(ManuallyDrop::drop(&mut self.slots_per_year));
+
+            let unused_elapsed = time!(ManuallyDrop::drop(&mut self.unused));
+
+            let bank_id_elapsed = time!(ManuallyDrop::drop(&mut self.bank_id));
+
+            let epoch_elapsed = time!(ManuallyDrop::drop(&mut self.epoch));
+
+            let collector_id_elapsed = time!(ManuallyDrop::drop(&mut self.collector_id));
+
+            let collector_fees_elapsed = time!(ManuallyDrop::drop(&mut self.collector_fees));
+
+            let fee_calculator_elapsed = time!(ManuallyDrop::drop(&mut self.fee_calculator));
+
+            let fee_rate_governor_elapsed = time!(ManuallyDrop::drop(&mut self.fee_rate_governor));
+
+            let collected_rent_elapsed = time!(ManuallyDrop::drop(&mut self.collected_rent));
+
+            let rent_collector_elapsed = time!(ManuallyDrop::drop(&mut self.rent_collector));
+
+            let epoch_schedule_elapsed = time!(ManuallyDrop::drop(&mut self.epoch_schedule));
+
+            let inflation_elapsed = time!(ManuallyDrop::drop(&mut self.inflation));
+
+            let stakes_elapsed = time!(ManuallyDrop::drop(&mut self.stakes));
+
+            let epoch_stakes_elapsed = time!(ManuallyDrop::drop(&mut self.epoch_stakes));
+
+            let is_delta_elapsed = time!(ManuallyDrop::drop(&mut self.is_delta));
+
+            let message_processor_elapsed = time!(ManuallyDrop::drop(&mut self.message_processor));
+
+            let bpf_compute_budget_elapsed =
+                time!(ManuallyDrop::drop(&mut self.bpf_compute_budget));
+
+            let feature_builtins_elapsed = time!(ManuallyDrop::drop(&mut self.feature_builtins));
+
+            let rewards_elapsed = time!(ManuallyDrop::drop(&mut self.rewards));
+
+            let cluster_type_elapsed = time!(ManuallyDrop::drop(&mut self.cluster_type));
+
+            let lazy_rent_collection_elapsed =
+                time!(ManuallyDrop::drop(&mut self.lazy_rent_collection));
+
+            let rewards_pool_pubkeys_elapsed =
+                time!(ManuallyDrop::drop(&mut self.rewards_pool_pubkeys));
+
+            let cached_executors_elapsed = time!(ManuallyDrop::drop(&mut self.cached_executors));
+
+            let transaction_debug_keys_elapsed =
+                time!(ManuallyDrop::drop(&mut self.transaction_debug_keys));
+
+            let transaction_log_collector_config_elapsed = time!(ManuallyDrop::drop(
+                &mut self.transaction_log_collector_config
+            ));
+
+            let transaction_log_collector_elapsed =
+                time!(ManuallyDrop::drop(&mut self.transaction_log_collector));
+
+            let feature_set_elapsed = time!(ManuallyDrop::drop(&mut self.feature_set));
+
+            let drop_callback_elapsed = time!(ManuallyDrop::drop(&mut self.drop_callback));
+
+            let freeze_started_elapsed = time!(ManuallyDrop::drop(&mut self.freeze_started));
+
+            datapoint_info!(
+                "bank_drop_timings",
+                ("rc_elapsed", rc_elapsed, i64),
+                ("src_elapsed", src_elapsed, i64),
+                ("blockhash_queue_elapsed", blockhash_queue_elapsed, i64),
+                ("ancestors_elapsed", ancestors_elapsed, i64),
+                ("hash_elapsed", hash_elapsed, i64),
+                ("parent_hash_elapsed", parent_hash_elapsed, i64),
+                ("hard_forks_elapsed", hard_forks_elapsed, i64),
+                ("transaction_count_elapsed", transaction_count_elapsed, i64),
+                (
+                    "transaction_error_count_elapsed",
+                    transaction_error_count_elapsed,
+                    i64
+                ),
+                (
+                    "transaction_entries_count_elapsed",
+                    transaction_entries_count_elapsed,
+                    i64
+                ),
+                (
+                    "transactions_per_entry_max_elapsed",
+                    transactions_per_entry_max_elapsed,
+                    i64
+                ),
+                ("tick_height_elapsed", tick_height_elapsed, i64),
+                ("signature_count_elapsed", signature_count_elapsed, i64),
+                ("capitalization_elapsed", capitalization_elapsed, i64),
+                ("max_tick_height_elapsed", max_tick_height_elapsed, i64),
+                ("hashes_per_tick_elapsed", hashes_per_tick_elapsed, i64),
+                (
+                    "genesis_creation_time_elapsed",
+                    genesis_creation_time_elapsed,
+                    i64
+                ),
+                ("slots_per_year_elapsed", slots_per_year_elapsed, i64),
+                ("unused_elapsed", unused_elapsed, i64),
+                ("bank_id_elapsed", bank_id_elapsed, i64),
+                ("epoch_elapsed", epoch_elapsed, i64),
+                ("collector_id_elapsed", collector_id_elapsed, i64),
+                ("collector_fees_elapsed", collector_fees_elapsed, i64),
+                ("fee_calculator_elapsed", fee_calculator_elapsed, i64),
+                ("fee_rate_governor_elapsed", fee_rate_governor_elapsed, i64),
+                ("collected_rent_elapsed", collected_rent_elapsed, i64),
+                ("rent_collector_elapsed", rent_collector_elapsed, i64),
+                ("epoch_schedule_elapsed", epoch_schedule_elapsed, i64),
+                ("inflation_elapsed", inflation_elapsed, i64),
+                ("stakes_elapsed", stakes_elapsed, i64),
+                ("epoch_stakes_elapsed", epoch_stakes_elapsed, i64),
+                ("is_delta_elapsed", is_delta_elapsed, i64),
+                ("message_processor_elapsed", message_processor_elapsed, i64),
+                (
+                    "bpf_compute_budget_elapsed",
+                    bpf_compute_budget_elapsed,
+                    i64
+                ),
+                ("feature_builtins_elapsed", feature_builtins_elapsed, i64),
+                ("rewards_elapsed", rewards_elapsed, i64),
+                ("cluster_type_elapsed", cluster_type_elapsed, i64),
+                (
+                    "lazy_rent_collection_elapsed",
+                    lazy_rent_collection_elapsed,
+                    i64
+                ),
+                (
+                    "rewards_pool_pubkeys_elapsed",
+                    rewards_pool_pubkeys_elapsed,
+                    i64
+                ),
+                ("cached_executors_elapsed", cached_executors_elapsed, i64),
+                (
+                    "transaction_debug_keys_elapsed",
+                    transaction_debug_keys_elapsed,
+                    i64
+                ),
+                (
+                    "transaction_log_collector_config_elapsed",
+                    transaction_log_collector_config_elapsed,
+                    i64
+                ),
+                (
+                    "transaction_log_collector_elapsed",
+                    transaction_log_collector_elapsed,
+                    i64
+                ),
+                ("feature_set_elapsed", feature_set_elapsed, i64),
+                ("drop_callback_elapsed", drop_callback_elapsed, i64),
+                ("freeze_started_elapsed", freeze_started_elapsed, i64),
+            );
         }
     }
 }
