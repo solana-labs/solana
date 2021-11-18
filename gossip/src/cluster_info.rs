@@ -1092,7 +1092,27 @@ impl ClusterInfo {
     }
 
     /// Returns votes inserted since the given cursor.
-    pub fn get_votes(&self, cursor: &mut Cursor) -> (Vec<CrdsValueLabel>, Vec<Transaction>) {
+    pub fn get_votes(&self, cursor: &mut Cursor) -> Vec<Transaction> {
+        let txs: Vec<Transaction> = self
+            .time_gossip_read_lock("get_votes", &self.stats.get_votes)
+            .get_votes(cursor)
+            .map(|vote| {
+                let transaction = match &vote.value.data {
+                    CrdsData::Vote(_, vote) => vote.transaction().clone(),
+                    _ => panic!("this should not happen!"),
+                };
+                transaction
+            })
+            .collect();
+        inc_new_counter_info!("cluster_info-get_votes-count", txs.len());
+        txs
+    }
+
+    /// Returns votes and the associated labels inserted since the given cursor.
+    pub fn get_votes_with_labels(
+        &self,
+        cursor: &mut Cursor,
+    ) -> (Vec<CrdsValueLabel>, Vec<Transaction>) {
         let (labels, txs): (_, Vec<_>) = self
             .time_gossip_read_lock("get_votes", &self.stats.get_votes)
             .get_votes(cursor)
@@ -3558,7 +3578,7 @@ mod tests {
         );
         cluster_info.push_vote(&unrefresh_tower, unrefresh_tx.clone());
         let mut cursor = Cursor::default();
-        let (_, votes) = cluster_info.get_votes(&mut cursor);
+        let votes = cluster_info.get_votes(&mut cursor);
         assert_eq!(votes, vec![unrefresh_tx.clone()]);
 
         // Now construct vote for the slot to be refreshed later
@@ -3578,9 +3598,9 @@ mod tests {
         // Trying to refresh vote when it doesn't yet exist in gossip
         // shouldn't add the vote
         cluster_info.refresh_vote(refresh_tx.clone(), refresh_slot);
-        let (_, votes) = cluster_info.get_votes(&mut cursor);
+        let votes = cluster_info.get_votes(&mut cursor);
         assert_eq!(votes, vec![]);
-        let (_, votes) = cluster_info.get_votes(&mut Cursor::default());
+        let votes = cluster_info.get_votes(&mut Cursor::default());
         assert_eq!(votes.len(), 1);
         assert!(votes.contains(&unrefresh_tx));
 
@@ -3588,7 +3608,7 @@ mod tests {
         cluster_info.push_vote(&refresh_tower, refresh_tx.clone());
 
         // Should be two votes in gossip
-        let (_, votes) = cluster_info.get_votes(&mut Cursor::default());
+        let votes = cluster_info.get_votes(&mut Cursor::default());
         assert_eq!(votes.len(), 2);
         assert!(votes.contains(&unrefresh_tx));
         assert!(votes.contains(&refresh_tx));
@@ -3612,12 +3632,12 @@ mod tests {
             cluster_info.refresh_vote(latest_refresh_tx.clone(), refresh_slot);
         }
         // The diff since `max_ts` should only be the latest refreshed vote
-        let (_, votes) = cluster_info.get_votes(&mut cursor);
+        let votes = cluster_info.get_votes(&mut cursor);
         assert_eq!(votes.len(), 1);
         assert_eq!(votes[0], latest_refresh_tx);
 
         // Should still be two votes in gossip
-        let (_, votes) = cluster_info.get_votes(&mut Cursor::default());
+        let votes = cluster_info.get_votes(&mut Cursor::default());
         assert_eq!(votes.len(), 2);
         assert!(votes.contains(&unrefresh_tx));
         assert!(votes.contains(&latest_refresh_tx));
@@ -3636,7 +3656,7 @@ mod tests {
 
         // make sure empty crds is handled correctly
         let mut cursor = Cursor::default();
-        let (_, votes) = cluster_info.get_votes(&mut cursor);
+        let votes = cluster_info.get_votes(&mut cursor);
         assert_eq!(votes, vec![]);
 
         // add a vote
@@ -3656,7 +3676,7 @@ mod tests {
         let tower = vec![7]; // Last slot in the vote.
         cluster_info.push_vote(&tower, tx.clone());
 
-        let (labels, votes) = cluster_info.get_votes(&mut cursor);
+        let (labels, votes) = cluster_info.get_votes_with_labels(&mut cursor);
         assert_eq!(votes, vec![tx]);
         assert_eq!(labels.len(), 1);
         match labels[0] {
@@ -3667,7 +3687,7 @@ mod tests {
             _ => panic!("Bad match"),
         }
         // make sure timestamp filter works
-        let (_, votes) = cluster_info.get_votes(&mut cursor);
+        let votes = cluster_info.get_votes(&mut cursor);
         assert_eq!(votes, vec![]);
     }
 
@@ -3687,7 +3707,7 @@ mod tests {
     #[test]
     fn test_push_votes_with_tower() {
         let get_vote_slots = |cluster_info: &ClusterInfo| -> Vec<Slot> {
-            let (labels, _) = cluster_info.get_votes(&mut Cursor::default());
+            let (labels, _) = cluster_info.get_votes_with_labels(&mut Cursor::default());
             let gossip_crds = cluster_info.gossip.crds.read().unwrap();
             let mut vote_slots = HashSet::new();
             for label in labels {

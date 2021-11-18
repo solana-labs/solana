@@ -50,7 +50,7 @@ use {
     solana_sdk::{
         account::AccountSharedData,
         client::{AsyncClient, SyncClient},
-        clock::{self, Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES},
+        clock::{self, Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE},
         commitment_config::CommitmentConfig,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         genesis_config::ClusterType,
@@ -1110,12 +1110,8 @@ fn test_fork_choice_refresh_old_votes() {
     let ticks_per_slot = 8;
     let on_before_partition_resolved =
         |cluster: &mut LocalCluster, context: &mut PartitionContext| {
-            // Equal to ms_per_slot * MAX_RECENT_BLOCKHASHES, rounded up
-            let sleep_time_ms =
-                ((ticks_per_slot * DEFAULT_MS_PER_SLOT * MAX_RECENT_BLOCKHASHES as u64)
-                    + DEFAULT_TICKS_PER_SLOT
-                    - 1)
-                    / DEFAULT_TICKS_PER_SLOT;
+            // Equal to ms_per_slot * MAX_PROCESSING_AGE, rounded up
+            let sleep_time_ms = ms_for_n_slots(MAX_PROCESSING_AGE as u64, ticks_per_slot);
             info!("Wait for blockhashes to expire, {} ms", sleep_time_ms);
 
             // Wait for blockhashes to expire
@@ -2680,7 +2676,7 @@ fn test_duplicate_shreds_broadcast_leader() {
                     return;
                 }
 
-                let (labels, votes) = cluster_info.get_votes(&mut cursor);
+                let (labels, votes) = cluster_info.get_votes_with_labels(&mut cursor);
                 let mut parsed_vote_iter: Vec<_> = labels
                     .into_iter()
                     .zip(votes.into_iter())
@@ -3920,6 +3916,107 @@ fn run_test_load_program_accounts_partition(scan_commitment: CommitmentConfig) {
     );
 }
 
+#[test]
+#[serial]
+fn test_votes_land_in_fork_during_long_partition() {
+    let total_stake = 100;
+    // Make `lighter_stake` insufficient for switching threshold
+    let lighter_stake = (SWITCH_FORK_THRESHOLD as f64 * total_stake as f64) as u64;
+    let heavier_stake = lighter_stake + 1;
+    let failures_stake = total_stake - lighter_stake - heavier_stake;
+
+    // Give lighter stake 30 consecutive slots before
+    // the heavier stake gets a single slot
+    let partitions: &[&[(usize, usize)]] = &[
+        &[(heavier_stake as usize, 1)],
+        &[(lighter_stake as usize, 30)],
+    ];
+
+    #[derive(Default)]
+    struct PartitionContext {
+        heaviest_validator_key: Pubkey,
+        lighter_validator_key: Pubkey,
+        heavier_fork_slot: Slot,
+    }
+
+    let on_partition_start = |_cluster: &mut LocalCluster,
+                              validator_keys: &[Pubkey],
+                              _dead_validator_infos: Vec<ClusterValidatorInfo>,
+                              context: &mut PartitionContext| {
+        // validator_keys[0] is the validator that will be killed, i.e. the validator with
+        // stake == `failures_stake`
+        context.heaviest_validator_key = validator_keys[1];
+        context.lighter_validator_key = validator_keys[2];
+    };
+
+    let on_before_partition_resolved =
+        |cluster: &mut LocalCluster, context: &mut PartitionContext| {
+            let lighter_validator_ledger_path = cluster.ledger_path(&context.lighter_validator_key);
+            let heavier_validator_ledger_path =
+                cluster.ledger_path(&context.heaviest_validator_key);
+
+            // Wait for each node to have created and voted on its own partition
+            loop {
+                let (heavier_validator_latest_vote_slot, _) = last_vote_in_tower(
+                    &heavier_validator_ledger_path,
+                    &context.heaviest_validator_key,
+                )
+                .unwrap();
+                info!(
+                    "Checking heavier validator's last vote {} is on a separate fork",
+                    heavier_validator_latest_vote_slot
+                );
+                let lighter_validator_blockstore = open_blockstore(&lighter_validator_ledger_path);
+                if lighter_validator_blockstore
+                    .meta(heavier_validator_latest_vote_slot)
+                    .unwrap()
+                    .is_none()
+                {
+                    context.heavier_fork_slot = heavier_validator_latest_vote_slot;
+                    return;
+                }
+                sleep(Duration::from_millis(100));
+            }
+        };
+
+    let on_partition_resolved = |cluster: &mut LocalCluster, context: &mut PartitionContext| {
+        let lighter_validator_ledger_path = cluster.ledger_path(&context.lighter_validator_key);
+        let start = Instant::now();
+        let max_wait = ms_for_n_slots(MAX_PROCESSING_AGE as u64, DEFAULT_TICKS_PER_SLOT);
+        // Wait for the lighter node to switch over and root the `context.heavier_fork_slot`
+        loop {
+            assert!(
+                // Should finish faster than if the cluster were relying on replay vote
+                // refreshing to refresh the vote on blockhash expiration for the vote
+                // transaction.
+                !(start.elapsed() > Duration::from_millis(max_wait)),
+                "Went too long {} ms without a root",
+                max_wait,
+            );
+            let lighter_validator_blockstore = open_blockstore(&lighter_validator_ledger_path);
+            if lighter_validator_blockstore.is_root(context.heavier_fork_slot) {
+                info!(
+                    "Partition resolved, new root made in {}ms",
+                    start.elapsed().as_millis()
+                );
+                return;
+            }
+            sleep(Duration::from_millis(100));
+        }
+    };
+
+    run_kill_partition_switch_threshold(
+        &[&[(failures_stake as usize, 0)]],
+        partitions,
+        None,
+        None,
+        PartitionContext::default(),
+        on_partition_start,
+        on_before_partition_resolved,
+        on_partition_resolved,
+    );
+}
+
 fn setup_transfer_scan_threads(
     num_starting_accounts: usize,
     exit: Arc<AtomicBool>,
@@ -4191,4 +4288,11 @@ fn setup_snapshot_validator_config(
         snapshot_interval_slots,
         num_account_paths,
     )
+}
+
+/// Computes the numbr of milliseconds `num_blocks` blocks will take given
+/// each slot contains `ticks_per_slot`
+fn ms_for_n_slots(num_blocks: u64, ticks_per_slot: u64) -> u64 {
+    ((ticks_per_slot * DEFAULT_MS_PER_SLOT * num_blocks) + DEFAULT_TICKS_PER_SLOT - 1)
+        / DEFAULT_TICKS_PER_SLOT
 }
