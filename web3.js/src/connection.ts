@@ -3671,7 +3671,7 @@ export class Connection {
       (options && options.preflightCommitment) || this.commitment;
 
     if (options && options.maxRetries) {
-      config.maxRetries = maxRetries;
+      config.maxRetries = options.maxRetries;
     }
     if (skipPreflight) {
       config.skipPreflight = skipPreflight;
@@ -3679,7 +3679,6 @@ export class Connection {
     if (preflightCommitment) {
       config.preflightCommitment = preflightCommitment;
     }
-
     const args = [encodedTransaction, config];
     const unsafeRes = await this._rpcRequest('sendTransaction', args);
     const res = create(unsafeRes, SendTransactionRpcResult);
