@@ -47,7 +47,7 @@ pub type EntryReceiver = Receiver<Vec<Entry>>;
 
 static mut API: Option<Container<Api>> = None;
 
-// Used to wrap the memory behind a vector in such a way
+// Used to wrap the memory behind a slice in such a way
 // as to allow for unrestricted concurrent mutable access to the memory
 // while promising to the compiler that the access will be
 // thread-safe.
