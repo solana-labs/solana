@@ -1717,7 +1717,7 @@ impl AccountsDb {
         AccountStorageEntry::new(
             path,
             slot,
-            self.next_id.fetch_add(1, Ordering::Relaxed),
+            self.next_id.fetch_add(1, Ordering::AcqRel),
             size,
         )
     }
@@ -3729,7 +3729,7 @@ impl AccountsDb {
                     let ret = recycle_stores.remove_entry(i);
                     drop(recycle_stores);
                     let old_id = ret.append_vec_id();
-                    ret.recycle(slot, self.next_id.fetch_add(1, Ordering::Relaxed));
+                    ret.recycle(slot, self.next_id.fetch_add(1, Ordering::AcqRel));
                     debug!(
                         "recycling store: {} {:?} old_id: {}",
                         ret.append_vec_id(),
