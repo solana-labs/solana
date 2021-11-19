@@ -35,6 +35,13 @@ impl Default for State {
 }
 
 impl State {
+    pub fn new_initialized(
+        authority: &Pubkey,
+        blockhash: &Hash,
+        lamports_per_signature: u64,
+    ) -> Self {
+        Self::Initialized(Data::new(*authority, *blockhash, lamports_per_signature))
+    }
     pub fn size() -> usize {
         let data = Versions::new_current(State::Initialized(Data::default()));
         bincode::serialized_size(&data).unwrap() as usize

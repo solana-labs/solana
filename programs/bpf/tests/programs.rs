@@ -18,12 +18,13 @@ use solana_bpf_rust_invoke::instructions::*;
 use solana_bpf_rust_realloc::instructions::*;
 use solana_bpf_rust_realloc_invoke::instructions::*;
 use solana_cli_output::display::println_transaction;
+use solana_program_runtime::invoke_context::{with_mock_invoke_context, InvokeContext};
 use solana_rbpf::{
     static_analysis::Analysis,
     vm::{Config, Executable, Tracer},
 };
 use solana_runtime::{
-    bank::{Bank, ExecuteTimings, TransactionBalancesSet, TransactionResults},
+    bank::{Bank, ExecuteTimings, NonceInfo, TransactionBalancesSet, TransactionResults},
     bank_client::BankClient,
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
     loader_utils::{
@@ -31,7 +32,6 @@ use solana_runtime::{
         upgrade_program,
     },
 };
-use solana_program_runtime::invoke_context::{with_mock_invoke_context, InvokeContext};
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
     account_utils::StateMut,
@@ -355,7 +355,7 @@ fn execute_transactions(bank: &Bank, txs: Vec<Transaction>) -> Vec<ConfirmedTran
     .map(
         |(
             tx,
-            (execute_result, nonce_rollback),
+            (execute_result, nonce),
             inner_instructions,
             pre_balances,
             post_balances,
@@ -363,8 +363,8 @@ fn execute_transactions(bank: &Bank, txs: Vec<Transaction>) -> Vec<ConfirmedTran
             post_token_balances,
             log_messages,
         )| {
-            let lamports_per_signature = nonce_rollback
-                .map(|nonce_rollback| nonce_rollback.lamports_per_signature())
+            let lamports_per_signature = nonce
+                .map(|nonce| nonce.lamports_per_signature())
                 .unwrap_or_else(|| {
                     bank.get_lamports_per_signature_for_blockhash(&tx.message().recent_blockhash)
                 })
