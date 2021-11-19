@@ -700,7 +700,7 @@ impl AccountStorageEntry {
         self.accounts.reset();
         *count_and_status = (0, AccountStorageStatus::Available);
         self.slot.store(slot, Ordering::Release);
-        self.id.store(id, Ordering::Relaxed);
+        self.id.store(id, Ordering::Release);
         self.approx_store_count.store(0, Ordering::Relaxed);
         self.alive_bytes.store(0, Ordering::Release);
     }
@@ -738,7 +738,7 @@ impl AccountStorageEntry {
     }
 
     pub fn append_vec_id(&self) -> AppendVecId {
-        self.id.load(Ordering::Relaxed)
+        self.id.load(Ordering::Acquire)
     }
 
     pub fn flush(&self) -> Result<(), IoError> {
@@ -5415,7 +5415,7 @@ impl AccountsDb {
                 if let Some(storages) = storages.get(slot) {
                     storages.iter().for_each(|store| {
                         self.dirty_stores
-                            .insert((slot, store.id.load(Ordering::Relaxed)), store.clone());
+                            .insert((slot, store.append_vec_id()), store.clone());
                     });
                 }
             }
