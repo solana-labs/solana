@@ -500,18 +500,26 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             Entry::Vacant(vacant) => {
                 // not in cache, look on disk
                 let disk_entry = self.load_account_entry_from_disk(vacant.key());
-                self.stats().insert_or_delete_mem(true, self.bin);
                 if let Some(disk_entry) = disk_entry {
                     // on disk, so insert into cache, then return cache value so caller will merge
+                    self.stats().insert_or_delete_mem(true, self.bin);
                     let result = Some(Self::insert_returner(&disk_entry, vacant.key(), new_entry));
                     assert!(disk_entry.dirty());
                     vacant.insert(disk_entry);
                     result
                 } else {
                     // not on disk, so insert new thing and we're done
-                    let new_entry: AccountMapEntry<T> = new_entry.into();
-                    assert!(new_entry.dirty());
-                    vacant.insert(new_entry);
+                    if let Some(disk) = self.bucket.as_ref() {
+                        // insert directly to disk
+                        let v = vec![new_entry.into()];
+                        disk.insert(&pubkey, (&v, 1));
+                    }
+                    else {
+                        self.stats().insert_or_delete_mem(true, self.bin);
+                        let new_entry: AccountMapEntry<T> = new_entry.into();
+                        assert!(new_entry.dirty());
+                        vacant.insert(new_entry);
+                    }
                     None // returns None if item was created new
                 }
             }
