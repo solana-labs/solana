@@ -155,8 +155,16 @@ pub enum EntryType {
 }
 
 pub struct EntryVerificationOptions {
+    // If true only hash the transactions
+    // and do no other verification, unless
+    // force_verify_precompiles is also true
+    // in which case, also verify precompiles
+    // and do no other verification
     pub skip_verification: bool,
-    pub verify_precompiles: bool,
+    // Force verifying the precompiles
+    // regardless of whether we have skipped
+    // the other verification
+    pub force_verify_precompiles: bool,
 }
 
 impl Entry {
@@ -449,7 +457,7 @@ pub fn start_verify_transactions(
                     versioned_tx,
                     EntryVerificationOptions {
                         skip_verification,
-                        verify_precompiles: false,
+                        force_verify_precompiles: false,
                     },
                 )
             }
@@ -485,7 +493,7 @@ pub fn start_verify_transactions(
                 versioned_tx,
                 EntryVerificationOptions {
                     skip_verification: true,
-                    verify_precompiles: true,
+                    force_verify_precompiles: true,
                 },
             )
         }
@@ -975,7 +983,7 @@ mod tests {
                     versioned_tx,
                     EntryVerificationOptions {
                         skip_verification,
-                        verify_precompiles: false,
+                        force_verify_precompiles: false,
                     },
                 )
             }

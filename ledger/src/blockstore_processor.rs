@@ -928,7 +928,12 @@ pub fn confirm_slot(
 
             match result {
                 Ok(val) => {
-                    if verification_options.verify_precompiles
+                    // If force_verify_precompiles is true then
+                    // we must do verify_precompiles here if we skipped
+                    // the other verification. Otherwise, if we did not
+                    // skip the other verification, we will have already
+                    // verified the precompiles
+                    if verification_options.force_verify_precompiles
                         && verification_options.skip_verification
                     {
                         val.verify_precompiles(&bank.feature_set)?;
