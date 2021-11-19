@@ -333,7 +333,7 @@ impl Blockstore {
             .data_shred_slot_cache(slot)
             .expect("slot was chosen for flush but is not in data shred cache");
 
-        let num_shreds_to_flush = Self::flush_shreds_for_slot_to_fs(
+        let flush_info = Self::flush_shreds_for_slot_to_fs(
             ShredType::Data,
             slot,
             slot_cache,
@@ -350,7 +350,7 @@ impl Blockstore {
             .code_shred_slot_cache(slot)
             .expect("slot was chosen for flush but is not in code shred cache");
 
-        let num_shreds_to_flush = Self::flush_shreds_for_slot_to_fs(
+        let flush_info = Self::flush_shreds_for_slot_to_fs(
             ShredType::Code,
             slot,
             slot_cache,
