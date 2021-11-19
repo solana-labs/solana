@@ -128,7 +128,7 @@ impl<T: Clone + Copy> BucketApi<T> {
 
     pub fn update<F>(&self, key: &Pubkey, updatefn: F)
     where
-        F: Fn(Option<(&[T], RefCount)>) -> Option<(Vec<T>, RefCount)>,
+        F: FnMut(Option<(&[T], RefCount)>) -> Option<(Vec<T>, RefCount)>,
     {
         let mut bucket = self.get_write_bucket();
         bucket.as_mut().unwrap().update(key, updatefn)
