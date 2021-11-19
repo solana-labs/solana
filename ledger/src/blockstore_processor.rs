@@ -992,20 +992,23 @@ pub fn confirm_slot(
     // already-computed result produced in start_verify_transactions.
     // Either way, check the result of the signature verification, and return
     // early if that has failed.
-    if !check_result.finish_verify() {
-        warn!("Ledger proof of history failed at slot: {}", slot);
-        return Err(BlockError::InvalidEntryHash.into());
-    }
+    let transaction_check_result = check_result.finish_verify();
 
-    let transaction_duration_us = check_result.verify_duration();
-
-    if let Some(mut verifier) = verifier {
-        let verified = verifier.finish_verify();
-        timing.poh_verify_elapsed += verifier.poh_duration_us();
-        timing.transaction_verify_elapsed += transaction_duration_us;
-        if !verified {
-            warn!("Ledger proof of history failed at slot: {}", bank.slot());
-            return Err(BlockError::InvalidEntryHash.into());
+    match verifier {
+        Some(mut verifier) => {
+            let verified = verifier.finish_verify() && transaction_check_result;
+            timing.poh_verify_elapsed += verifier.poh_duration_us();
+            timing.transaction_verify_elapsed += check_result.verify_duration();
+            if !verified {
+                warn!("Ledger proof of history failed at slot: {}", bank.slot());
+                return Err(BlockError::InvalidEntryHash.into());
+            }
+        }
+        _ => {
+            if !transaction_check_result {
+                warn!("Ledger proof of history failed at slot: {}", bank.slot());
+                return Err(BlockError::InvalidEntryHash.into());
+            }
         }
     }
 
