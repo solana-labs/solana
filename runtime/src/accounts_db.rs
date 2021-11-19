@@ -702,7 +702,7 @@ impl AccountStorageEntry {
         self.slot.store(slot, Ordering::Release);
         self.id.store(id, Ordering::Relaxed);
         self.approx_store_count.store(0, Ordering::Relaxed);
-        self.alive_bytes.store(0, Ordering::Relaxed);
+        self.alive_bytes.store(0, Ordering::Release);
     }
 
     pub fn status(&self) -> AccountStorageStatus {
@@ -10810,7 +10810,7 @@ pub mod tests {
             store1_id,
             store_file_size,
         ));
-        store1.alive_bytes.store(0, Ordering::Relaxed);
+        store1.alive_bytes.store(0, Ordering::Release);
 
         candidates
             .entry(common_slot_id)
@@ -10829,7 +10829,7 @@ pub mod tests {
         let store2_alive_bytes = (PAGE_SIZE - 1) as usize;
         store2
             .alive_bytes
-            .store(store2_alive_bytes, Ordering::Relaxed);
+            .store(store2_alive_bytes, Ordering::Release);
         candidates
             .entry(common_slot_id)
             .or_default()
@@ -10847,7 +10847,7 @@ pub mod tests {
         let store3_alive_bytes = (PAGE_SIZE + 1) as usize;
         entry3
             .alive_bytes
-            .store(store3_alive_bytes, Ordering::Relaxed);
+            .store(store3_alive_bytes, Ordering::Release);
 
         candidates
             .entry(common_slot_id)
@@ -10886,7 +10886,7 @@ pub mod tests {
             store1_id,
             store_file_size,
         ));
-        store1.alive_bytes.store(0, Ordering::Relaxed);
+        store1.alive_bytes.store(0, Ordering::Release);
 
         candidates
             .entry(common_slot_id)
@@ -10905,7 +10905,7 @@ pub mod tests {
         let store2_alive_bytes = (PAGE_SIZE - 1) as usize;
         store2
             .alive_bytes
-            .store(store2_alive_bytes, Ordering::Relaxed);
+            .store(store2_alive_bytes, Ordering::Release);
         candidates
             .entry(common_slot_id)
             .or_default()
@@ -10923,7 +10923,7 @@ pub mod tests {
         let store3_alive_bytes = (PAGE_SIZE + 1) as usize;
         entry3
             .alive_bytes
-            .store(store3_alive_bytes, Ordering::Relaxed);
+            .store(store3_alive_bytes, Ordering::Release);
 
         candidates
             .entry(common_slot_id)
@@ -10964,7 +10964,7 @@ pub mod tests {
         let store1_alive_bytes = (PAGE_SIZE - 1) as usize;
         store1
             .alive_bytes
-            .store(store1_alive_bytes, Ordering::Relaxed);
+            .store(store1_alive_bytes, Ordering::Release);
 
         candidates
             .entry(slot1)
@@ -10984,7 +10984,7 @@ pub mod tests {
         let store2_alive_bytes = (PAGE_SIZE + 1) as usize;
         store2
             .alive_bytes
-            .store(store2_alive_bytes, Ordering::Relaxed);
+            .store(store2_alive_bytes, Ordering::Release);
 
         candidates
             .entry(slot2)
@@ -11927,7 +11927,7 @@ pub mod tests {
         let accounts = storage0.all_accounts();
 
         for account in accounts {
-            let before_size = storage0.alive_bytes.load(Ordering::Relaxed);
+            let before_size = storage0.alive_bytes.load(Ordering::Acquire);
             let account_info = accounts_db
                 .accounts_index
                 .get_account_read_entry(&account.meta.pubkey)
@@ -11943,7 +11943,7 @@ pub mod tests {
             assert_eq!(account_info.0, slot);
             let reclaims = vec![account_info];
             accounts_db.remove_dead_accounts(&reclaims, None, None, true);
-            let after_size = storage0.alive_bytes.load(Ordering::Relaxed);
+            let after_size = storage0.alive_bytes.load(Ordering::Acquire);
             assert_eq!(before_size, after_size + account.stored_size);
         }
     }
@@ -13150,12 +13150,12 @@ pub mod tests {
                 panic!("Expect the default to be TotalSpace")
             }
         }
-        entry.alive_bytes.store(3000, Ordering::Relaxed);
+        entry.alive_bytes.store(3000, Ordering::Release);
         assert!(accounts.is_candidate_for_shrink(&entry));
-        entry.alive_bytes.store(5000, Ordering::Relaxed);
+        entry.alive_bytes.store(5000, Ordering::Release);
         assert!(!accounts.is_candidate_for_shrink(&entry));
         accounts.shrink_ratio = AccountShrinkThreshold::TotalSpace { shrink_ratio: 0.3 };
-        entry.alive_bytes.store(3000, Ordering::Relaxed);
+        entry.alive_bytes.store(3000, Ordering::Release);
         assert!(accounts.is_candidate_for_shrink(&entry));
         accounts.shrink_ratio = AccountShrinkThreshold::IndividalStore { shrink_ratio: 0.3 };
         assert!(!accounts.is_candidate_for_shrink(&entry));
@@ -13249,7 +13249,7 @@ pub mod tests {
         // fake out the store count to avoid the assert
         for slot_stores in accounts.storage.0.iter() {
             for (_id, store) in slot_stores.value().read().unwrap().iter() {
-                store.alive_bytes.store(0, Ordering::SeqCst);
+                store.alive_bytes.store(0, Ordering::Release);
             }
         }
 
@@ -13268,7 +13268,7 @@ pub mod tests {
             for (id, store) in slot_stores.value().read().unwrap().iter() {
                 assert_eq!(id, &0);
                 assert_eq!(store.count_and_status.read().unwrap().0, 3);
-                assert_eq!(store.alive_bytes.load(Ordering::SeqCst), 2);
+                assert_eq!(store.alive_bytes.load(Ordering::Acquire), 2);
             }
         }
     }
