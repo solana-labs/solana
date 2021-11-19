@@ -15391,4 +15391,18 @@ pub(crate) mod tests {
         .unwrap();
         assert_eq!(Bank::calculate_fee(&message, 1), 11);
     }
+
+    #[test]
+    fn test_an_empty_transaction_without_program() {
+        let (genesis_config, mint_keypair) = create_genesis_config(1);
+        let bank = Bank::new_for_tests(&genesis_config);
+
+        let destination = solana_sdk::pubkey::new_rand();
+        let mut ix = system_instruction::transfer(&mint_keypair.pubkey(), &destination, 0);
+        ix.program_id = native_loader::id(); // Empty executable account chain
+
+        let message = Message::new(&[ix], Some(&mint_keypair.pubkey()));
+        let tx = Transaction::new(&[&mint_keypair], message, genesis_config.hash());
+        bank.process_transaction(&tx).unwrap();
+    }
 }
