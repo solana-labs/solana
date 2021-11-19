@@ -2560,6 +2560,7 @@ fn test_fail_entry_verification_leader() {
     let (cluster, _) = test_faulty_node(
         BroadcastStageType::FailEntryVerification,
         vec![leader_stake, validator_stake1, validator_stake2],
+        None,
     );
     cluster.check_for_new_roots(
         16,
@@ -2574,10 +2575,24 @@ fn test_fail_entry_verification_leader() {
 #[allow(unused_attributes)]
 fn test_fake_shreds_broadcast_leader() {
     let node_stakes = vec![300, 100];
-    let (cluster, _) = test_faulty_node(BroadcastStageType::BroadcastFakeShreds, node_stakes);
+    let (cluster, _) = test_faulty_node(BroadcastStageType::BroadcastFakeShreds, node_stakes, None);
     cluster.check_for_new_roots(
         16,
         "test_fake_shreds_broadcast_leader",
+        SocketAddrSpace::Unspecified,
+    );
+}
+
+#[test]
+#[serial]
+#[ignore]
+#[allow(unused_attributes)]
+fn test_incomplete_broadcast() {
+    let node_stakes = vec![100, 1000, 1000];
+    let (cluster, _) = test_faulty_node(BroadcastStageType::Incomplete, node_stakes, Some(vec![1]));
+    cluster.check_for_new_roots(
+        16,
+        "test_incomplete_broadcast",
         SocketAddrSpace::Unspecified,
     );
 }
@@ -2642,6 +2657,7 @@ fn test_duplicate_shreds_broadcast_leader() {
             stake_partition: partition_node_stake,
         }),
         node_stakes,
+        None,
     );
 
     // This is why it's important our node was last in `node_stakes`
@@ -2784,22 +2800,45 @@ fn test_duplicate_shreds_broadcast_leader() {
 fn test_faulty_node(
     faulty_node_type: BroadcastStageType,
     node_stakes: Vec<u64>,
+    fixed_leader_schedule: Option<Vec<usize>>,
 ) -> (LocalCluster, Vec<Arc<Keypair>>) {
     solana_logger::setup_with_default("solana_local_cluster=info");
     let num_nodes = node_stakes.len();
 
+    let (fixed_leader_schedule, mut validator_keys) = {
+        if let Some(fixed_leader_schedule) = fixed_leader_schedule {
+            let (fixed_leader_schedule, validator_keys) =
+                create_custom_leader_schedule(&fixed_leader_schedule);
+            let fixed_leader_schedule = FixedSchedule {
+                start_epoch: 0,
+                leader_schedule: Arc::new(fixed_leader_schedule),
+            };
+            (Some(fixed_leader_schedule), validator_keys)
+        } else {
+            (None, Vec::with_capacity(num_nodes))
+        }
+    };
+
+    validator_keys.resize_with(num_nodes, || (Arc::new(Keypair::new())));
+    let validator_keys: Vec<(Arc<Keypair>, bool)> = validator_keys
+        .into_iter()
+        .zip(iter::repeat_with(|| true))
+        .collect();
+
     let error_validator_config = ValidatorConfig {
         broadcast_stage_type: faulty_node_type,
+        fixed_leader_schedule: fixed_leader_schedule.clone(),
         ..ValidatorConfig::default()
     };
     let mut validator_configs = Vec::with_capacity(num_nodes);
 
     // First validator is the bootstrap leader with the malicious broadcast logic.
     validator_configs.push(error_validator_config);
-    validator_configs.resize_with(num_nodes, ValidatorConfig::default);
 
-    let mut validator_keys = Vec::with_capacity(num_nodes);
-    validator_keys.resize_with(num_nodes, || (Arc::new(Keypair::new()), true));
+    validator_configs.resize_with(num_nodes, || ValidatorConfig {
+        fixed_leader_schedule: fixed_leader_schedule.clone(),
+        ..ValidatorConfig::default()
+    });
 
     assert_eq!(node_stakes.len(), num_nodes);
     assert_eq!(validator_keys.len(), num_nodes);

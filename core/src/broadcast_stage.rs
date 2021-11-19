@@ -6,6 +6,7 @@ use {
         broadcast_fake_shreds_run::BroadcastFakeShredsRun,
         broadcast_metrics::*,
         fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastRun,
+        incomplete_broadcast_run::IncompleteBroadcastRun,
         standard_broadcast_run::StandardBroadcastRun,
     },
     crate::{
@@ -50,6 +51,7 @@ mod broadcast_fake_shreds_run;
 pub mod broadcast_metrics;
 pub(crate) mod broadcast_utils;
 mod fail_entry_verification_broadcast_run;
+mod incomplete_broadcast_run;
 mod standard_broadcast_run;
 
 const CLUSTER_NODES_CACHE_NUM_EPOCH_CAP: usize = 8;
@@ -72,6 +74,7 @@ pub enum BroadcastStageType {
     FailEntryVerification,
     BroadcastFakeShreds,
     BroadcastDuplicates(BroadcastDuplicatesConfig),
+    Incomplete,
 }
 
 impl BroadcastStageType {
@@ -130,6 +133,17 @@ impl BroadcastStageType {
                 blockstore,
                 bank_forks,
                 BroadcastDuplicatesRun::new(shred_version, config.clone()),
+            ),
+
+            BroadcastStageType::Incomplete => BroadcastStage::new(
+                sock,
+                cluster_info,
+                receiver,
+                retransmit_slots_receiver,
+                exit_sender,
+                blockstore,
+                bank_forks,
+                IncompleteBroadcastRun::new(shred_version),
             ),
         }
     }
