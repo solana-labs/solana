@@ -293,7 +293,7 @@ pub struct EntrySigVerificationState {
     verification_status: EntryVerificationStatus,
     entries: Option<Vec<EntryType>>,
     device_verification_data: DeviceSigVerificationData,
-    pub verify_duration_us: u64,
+    verify_duration_us: u64,
 }
 
 impl<'a> EntrySigVerificationState {
@@ -1025,14 +1025,14 @@ mod tests {
 
         let recycler = VerifyRecyclers::default();
 
-        let entries_invalid = (0..256)
+        let entries_invalid = (0..1024)
             .map(|_| {
                 let transaction = test_invalid_tx();
                 next_entry_mut(&mut Hash::default(), 0, vec![transaction])
             })
             .collect::<Vec<_>>();
 
-        let entries_valid = (0..256)
+        let entries_valid = (0..1024)
             .map(|_| {
                 let transaction = test_tx();
                 next_entry_mut(&mut Hash::default(), 0, vec![transaction])
