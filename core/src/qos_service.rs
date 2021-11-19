@@ -308,9 +308,10 @@ mod tests {
     #[test]
     fn test_async_report_metrics() {
         solana_logger::setup();
+        //solana_logger::setup_with_default("solana=info");
 
         // make a vec of txs
-        let txs_count = 2048usize;
+        let txs_count = 128usize;
         let keypair = Keypair::new();
         let transfer_tx = SanitizedTransaction::from_transaction_for_tests(
             system_transaction::transfer(&keypair, &keypair.pubkey(), 1, Hash::default()),
@@ -327,16 +328,50 @@ mod tests {
         let qos_service_1 = qos_service.clone();
         let qos_service_2 = qos_service.clone();
 
-        let th_1 = thread::spawn(move || {
-            qos_service_1.compute_transaction_costs(txs_1.iter(), false);
-        });
+        let th_1 = Builder::new()
+            .name("test-producer-1".to_string())
+            .spawn(move || {
+                debug!("thread 1 starts with {} txs", txs_1.len());
+                let tx_costs = qos_service_1.compute_transaction_costs(txs_1.iter(), false);
+                assert_eq!(txs_count, tx_costs.len());
+                debug!(
+                    "thread 1 done, generated {} count, see service count as {}",
+                    txs_count,
+                    qos_service_1
+                        .metrics
+                        .compute_cost_count
+                        .load(Ordering::Relaxed)
+                );
+            })
+            .unwrap();
 
-        let th_2 = thread::spawn(move || {
-            qos_service_2.compute_transaction_costs(txs_2.iter(), false);
-        });
+        let th_2 = Builder::new()
+            .name("test-producer-2".to_string())
+            .spawn(move || {
+                debug!("thread 2 starts with {} txs", txs_2.len());
+                let tx_costs = qos_service_2.compute_transaction_costs(txs_2.iter(), false);
+                assert_eq!(txs_count, tx_costs.len());
+                debug!(
+                    "thread 2 done, generated {} count, see service count as {}",
+                    txs_count,
+                    qos_service_2
+                        .metrics
+                        .compute_cost_count
+                        .load(Ordering::Relaxed)
+                );
+            })
+            .unwrap();
 
-        th_1.join().expect("qos service 1 faield to join");
-        th_2.join().expect("qos service 2 faield to join");
+        th_1.join().expect("qos service 1 panicked");
+        th_2.join().expect("qos service 2 panicked");
+
+        debug!(
+            "all threads joined. count {}",
+            qos_service
+                .metrics
+                .compute_cost_count
+                .load(Ordering::Relaxed)
+        );
 
         assert_eq!(
             txs_count as u64 * 2,
