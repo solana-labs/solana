@@ -3,7 +3,7 @@ use crate::{
     ancestors::Ancestors,
     bucket_map_holder::{Age, BucketMapHolder},
     contains::Contains,
-    in_mem_accounts_index::InMemAccountsIndex,
+    in_mem_accounts_index::{InMemAccountsIndex, InsertNewEntryResults},
     inline_spl_token_v2_0::{self, SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
     pubkey_bins::PubkeyBinCalculator24,
     secondary_index::*,
@@ -1648,28 +1648,14 @@ impl<T: IndexValue> AccountsIndex<T> {
         let insertion_time = AtomicU64::new(0);
 
         binned.into_iter().for_each(|(pubkey_bin, items)| {
-            let mut _reclaims = SlotList::new();
-
-            // big enough so not likely to re-allocate, small enough to not over-allocate by too much
-            // this assumes 10% of keys are duplicates. This vector will be flattened below.
             let w_account_maps = self.account_maps[pubkey_bin].write().unwrap();
             let mut insert_time = Measure::start("insert_into_primary_index");
             items.into_iter().for_each(|(pubkey, new_item)| {
-                let already_exists =
-                    w_account_maps.insert_new_entry_if_missing_with_lock(pubkey, new_item);
-                if let Some((account_entry, account_info, pubkey)) = already_exists {
-                    let is_zero_lamport = account_info.is_zero_lamport();
-                    InMemAccountsIndex::lock_and_update_slot_list(
-                        &account_entry,
-                        (slot, account_info),
-                        &mut _reclaims,
-                        false,
-                    );
-
-                    if !is_zero_lamport {
-                        // zero lamports were already added to dirty_pubkeys above
-                        dirty_pubkeys.push(pubkey);
-                    }
+                if let InsertNewEntryResults::ExistedNewEntryNonZeroLamports =
+                    w_account_maps.insert_new_entry_if_missing_with_lock(pubkey, new_item)
+                {
+                    // zero lamports were already added to dirty_pubkeys above
+                    dirty_pubkeys.push(pubkey);
                 }
             });
             insert_time.stop();
