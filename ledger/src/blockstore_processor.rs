@@ -987,11 +987,10 @@ pub fn confirm_slot(
     timing.execute_timings.accumulate(&execute_timings);
 
     // If running signature verification on the GPU, wait for that
-    // computation to finish, and check the result. If we did the
+    // computation to finish, and get the result of it. If we did the
     // signature verification on the CPU, this just returns the
     // already-computed result produced in start_verify_transactions.
-    // Either way, check the result of the signature verification, and return
-    // early if that has failed.
+    // Either way, check the result of the signature verification.
     let transaction_check_result = check_result.finish_verify();
 
     match verifier {
