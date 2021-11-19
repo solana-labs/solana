@@ -24,6 +24,10 @@ use {
 };
 
 pub struct QosService {
+    // cost_model instance is owned by validator, shared between replay_stage and
+    // banking_stage. replay_stage writes the latest on-chain program timings to
+    // it; banking_stage's qos_service reads that information to calculate
+    // transaction cost, hence RwLock wrapped.
     cost_model: Arc<RwLock<CostModel>>,
     metrics: Arc<QosServiceMetrics>,
     reporting_thread: Option<JoinHandle<()>>,

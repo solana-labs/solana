@@ -969,22 +969,27 @@ impl Accounts {
             .collect()
     }
 
+    #[must_use]
     #[allow(clippy::needless_collect)]
     pub fn lock_accounts_with_results<'a>(
         &self,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
-        results: impl Iterator<Item = &'a Result<()>>,
+        results: impl Iterator<Item = Result<()>>,
         demote_program_write_locks: bool,
     ) -> Vec<Result<()>> {
-        let keys: Vec<_> = txs
-            .map(|tx| tx.get_account_locks(demote_program_write_locks))
+        let key_results: Vec<_> = txs
+            .zip(results)
+            .map(|(tx, result)| match result {
+                Ok(()) => Ok(tx.get_account_locks(demote_program_write_locks)),
+                Err(e) => Err(e),
+            })
             .collect();
         let account_locks = &mut self.account_locks.lock().unwrap();
-        keys.into_iter()
-            .zip(results)
-            .map(|(keys, result)| match result {
-                Ok(()) => self.lock_account(account_locks, keys.writable, keys.readonly),
-                Err(e) => Err(e.clone()),
+        key_results
+            .into_iter()
+            .map(|key_result| match key_result {
+                Ok(keys) => self.lock_account(account_locks, keys.writable, keys.readonly),
+                Err(e) => Err(e),
             })
             .collect()
     }
@@ -1003,6 +1008,8 @@ impl Accounts {
                 Err(TransactionError::AccountInUse) => None,
                 Err(TransactionError::SanitizeFailure) => None,
                 Err(TransactionError::AccountLoadedTwice) => None,
+                Err(TransactionError::WouldExceedMaxBlockCostLimit) => None,
+                Err(TransactionError::WouldExceedMaxAccountCostLimit) => None,
                 _ => Some(tx.get_account_locks(demote_program_write_locks)),
             })
             .collect();
@@ -2389,6 +2396,117 @@ mod tests {
             .unwrap()
             .write_locks
             .contains(&keypair1.pubkey()));
+    }
+
+    #[test]
+    fn test_accounts_locks_with_results() {
+        let keypair0 = Keypair::new();
+        let keypair1 = Keypair::new();
+        let keypair2 = Keypair::new();
+        let keypair3 = Keypair::new();
+
+        let account0 = AccountSharedData::new(1, 0, &Pubkey::default());
+        let account1 = AccountSharedData::new(2, 0, &Pubkey::default());
+        let account2 = AccountSharedData::new(3, 0, &Pubkey::default());
+        let account3 = AccountSharedData::new(4, 0, &Pubkey::default());
+
+        let accounts = Accounts::new_with_config_for_tests(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            false,
+            AccountShrinkThreshold::default(),
+        );
+        accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
+        accounts.store_slow_uncached(0, &keypair1.pubkey(), &account1);
+        accounts.store_slow_uncached(0, &keypair2.pubkey(), &account2);
+        accounts.store_slow_uncached(0, &keypair3.pubkey(), &account3);
+
+        let demote_program_write_locks = true;
+
+        let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
+        let message = Message::new_with_compiled_instructions(
+            1,
+            0,
+            2,
+            vec![keypair1.pubkey(), keypair0.pubkey(), native_loader::id()],
+            Hash::default(),
+            instructions,
+        );
+        let tx0 = new_sanitized_tx(&[&keypair1], message, Hash::default());
+        let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
+        let message = Message::new_with_compiled_instructions(
+            1,
+            0,
+            2,
+            vec![keypair2.pubkey(), keypair0.pubkey(), native_loader::id()],
+            Hash::default(),
+            instructions,
+        );
+        let tx1 = new_sanitized_tx(&[&keypair2], message, Hash::default());
+        let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
+        let message = Message::new_with_compiled_instructions(
+            1,
+            0,
+            2,
+            vec![keypair3.pubkey(), keypair0.pubkey(), native_loader::id()],
+            Hash::default(),
+            instructions,
+        );
+        let tx2 = new_sanitized_tx(&[&keypair3], message, Hash::default());
+        let txs = vec![tx0, tx1, tx2];
+
+        let qos_results = vec![
+            Ok(()),
+            Err(TransactionError::WouldExceedMaxBlockCostLimit),
+            Ok(()),
+        ];
+
+        let results = accounts.lock_accounts_with_results(
+            txs.iter(),
+            qos_results.into_iter(),
+            demote_program_write_locks,
+        );
+
+        assert!(results[0].is_ok()); // Read-only account (keypair0) can be referenced multiple times
+        assert!(results[1].is_err()); // is not locked due to !qos_results[1].is_ok()
+        assert!(results[2].is_ok()); // Read-only account (keypair0) can be referenced multiple times
+
+        // verify that keypair0 read-only lock twice (for tx0 and tx2)
+        assert_eq!(
+            *accounts
+                .account_locks
+                .lock()
+                .unwrap()
+                .readonly_locks
+                .get(&keypair0.pubkey())
+                .unwrap(),
+            2
+        );
+        // verify that keypair2 (for tx1) is not write-locked
+        assert!(accounts
+            .account_locks
+            .lock()
+            .unwrap()
+            .write_locks
+            .get(&keypair2.pubkey())
+            .is_none());
+
+        accounts.unlock_accounts(txs.iter(), &results, demote_program_write_locks);
+
+        // check all locks to be removed
+        assert!(accounts
+            .account_locks
+            .lock()
+            .unwrap()
+            .readonly_locks
+            .is_empty());
+        assert!(accounts
+            .account_locks
+            .lock()
+            .unwrap()
+            .write_locks
+            .is_empty());
     }
 
     #[test]

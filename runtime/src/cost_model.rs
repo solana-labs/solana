@@ -14,17 +14,15 @@ use std::collections::HashMap;
 const MAX_WRITABLE_ACCOUNTS: usize = 256;
 
 // costs are stored in number of 'compute unit's
-#[derive(AbiExample, Debug)]
+#[derive(Debug)]
 pub struct TransactionCost {
     pub writable_accounts: Vec<Pubkey>,
     pub signature_cost: u64,
     pub write_lock_cost: u64,
     pub data_bytes_cost: u64,
     pub execution_cost: u64,
-    // `cost_weight` is a multiplier to be applied to tx cost, that
-    // allows to increase/decrease tx cost linearly based on algo.
-    // for example, vote tx could have weight zero to bypass cost
-    // limit checking during block packing.
+    // `cost_weight` is a multiplier could be applied to transaction cost,
+    // if set to zero allows the transaction to bypass cost limit check.
     pub cost_weight: u32,
 }
 
