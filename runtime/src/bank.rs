@@ -4172,6 +4172,7 @@ impl Bank {
             lamports_per_signature,
             self.rent_for_sysvars(),
             self.demote_program_write_locks(),
+            self.leave_nonce_on_success(),
         );
         let rent_debits = self.collect_rent(executed_results, loaded_txs);
 
@@ -6032,11 +6033,6 @@ impl Bank {
             .is_active(&feature_set::verify_tx_signatures_len::id())
     }
 
-    pub fn merge_nonce_error_into_system_error(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::merge_nonce_error_into_system_error::id())
-    }
-
     pub fn versioned_tx_message_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::versioned_tx_message_enabled::id())
@@ -6050,6 +6046,11 @@ impl Bank {
     pub fn demote_program_write_locks(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::demote_program_write_locks::id())
+    }
+
+    pub fn leave_nonce_on_success(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::leave_nonce_on_success::id())
     }
 
     pub fn stakes_remove_delegation_if_inactive_enabled(&self) -> bool {

@@ -1034,6 +1034,7 @@ impl Accounts {
         lamports_per_signature: u64,
         rent_for_sysvars: bool,
         demote_program_write_locks: bool,
+        leave_nonce_on_success: bool,
     ) {
         let accounts_to_store = self.collect_accounts_to_store(
             txs,
@@ -1044,6 +1045,7 @@ impl Accounts {
             lamports_per_signature,
             rent_for_sysvars,
             demote_program_write_locks,
+            leave_nonce_on_success,
         );
         self.accounts_db.store_cached(slot, &accounts_to_store);
     }
@@ -1071,6 +1073,7 @@ impl Accounts {
         lamports_per_signature: u64,
         rent_for_sysvars: bool,
         demote_program_write_locks: bool,
+        leave_nonce_on_success: bool,
     ) -> Vec<(&'a Pubkey, &'a AccountSharedData)> {
         let mut accounts = Vec::with_capacity(load_results.len());
         for (i, ((tx_load_result, _), tx)) in load_results.iter_mut().zip(txs).enumerate() {
@@ -1081,7 +1084,16 @@ impl Accounts {
 
             let (execution_result, nonce) = &execution_results[i];
             let maybe_nonce = match (execution_result, nonce) {
-                (Err(TransactionError::InstructionError(_, _)), Some(nonce)) => Some(nonce),
+                (Ok(_), Some(nonce)) => {
+                    if leave_nonce_on_success {
+                        None
+                    } else {
+                        Some((nonce, false /* rollback */))
+                    }
+                }
+                (Err(TransactionError::InstructionError(_, _)), Some(nonce)) => {
+                    Some((nonce, true /* rollback */))
+                }
                 (Ok(_), _) => None, // Success, don't do any additional nonce processing
                 (Err(_), _) => continue, // Not nonce, don't store any accounts
             };
@@ -1138,17 +1150,19 @@ pub fn prepare_if_nonce_account<'a>(
     account: &mut AccountSharedData,
     execution_result: &Result<()>,
     is_fee_payer: bool,
-    maybe_nonce: Option<&'a NonceFull>,
+    maybe_nonce: Option<(&'a NonceFull, bool)>,
     blockhash: &Hash,
     lamports_per_signature: u64,
 ) -> bool {
-    if let Some(nonce) = maybe_nonce {
+    if let Some((nonce, rollback)) = maybe_nonce {
         if address == nonce.address() {
-            // The transaction failed which would normally drop the account
-            // processing changes, since this account is now being included
-            // in the accounts written back to the db, roll it back to
-            // pre-processing state.
-            *account = nonce.account().clone();
+            if rollback {
+                // The transaction failed which would normally drop the account
+                // processing changes, since this account is now being included
+                // in the accounts written back to the db, roll it back to
+                // pre-processing state.
+                *account = nonce.account().clone();
+            }
 
             // Advance the stored blockhash to prevent fee theft by someone
             // replaying nonce transactions that have failed with an
@@ -1170,9 +1184,7 @@ pub fn prepare_if_nonce_account<'a>(
             }
             true
         } else {
-            if
-            /*TODO remove this first part? */
-            execution_result.is_err() && is_fee_payer {
+            if execution_result.is_err() && is_fee_payer {
                 if let Some(fee_payer_account) = nonce.fee_payer_account() {
                     // Instruction error and fee-payer for this nonce tx is not
                     // the nonce account itself, rollback the fee payer to the
@@ -2569,6 +2581,7 @@ mod tests {
             0,
             true,
             true, // demote_program_write_locks
+            true, // leave_nonce_on_success
         );
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
@@ -2694,7 +2707,7 @@ mod tests {
         account: &mut AccountSharedData,
         tx_result: &Result<()>,
         is_fee_payer: bool,
-        maybe_nonce: Option<&NonceFull>,
+        maybe_nonce: Option<(&NonceFull, bool)>,
         blockhash: &Hash,
         lamports_per_signature: u64,
         expect_account: &AccountSharedData,
@@ -2702,7 +2715,7 @@ mod tests {
         // Verify expect_account's relationship
         if !is_fee_payer {
             match maybe_nonce {
-                Some(nonce) if nonce.address() == account_address => {
+                Some((nonce, _)) if nonce.address() == account_address => {
                     assert_ne!(expect_account, nonce.account())
                 }
                 _ => assert_eq!(expect_account, account),
@@ -2751,7 +2764,7 @@ mod tests {
             &mut post_account,
             &Ok(()),
             false,
-            Some(&nonce),
+            Some((&nonce, true)),
             &blockhash,
             lamports_per_signature,
             &expect_account,
@@ -2804,7 +2817,7 @@ mod tests {
             &mut post_account,
             &Ok(()),
             false,
-            Some(&nonce),
+            Some((&nonce, true)),
             &blockhash,
             lamports_per_signature,
             &expect_account,
@@ -2840,7 +2853,7 @@ mod tests {
                 InstructionError::InvalidArgument,
             )),
             false,
-            Some(&nonce),
+            Some((&nonce, true)),
             &blockhash,
             lamports_per_signature,
             &expect_account,
@@ -2868,7 +2881,7 @@ mod tests {
                 InstructionError::InvalidArgument,
             )),
             false,
-            Some(&nonce),
+            Some((&nonce, true)),
             &Hash::default(),
             1,
             &post_fee_payer_account.clone(),
@@ -2879,7 +2892,7 @@ mod tests {
             &mut post_fee_payer_account.clone(),
             &Ok(()),
             true,
-            Some(&nonce),
+            Some((&nonce, true)),
             &Hash::default(),
             1,
             &post_fee_payer_account.clone(),
@@ -2907,7 +2920,7 @@ mod tests {
                 InstructionError::InvalidArgument,
             )),
             true,
-            Some(&nonce),
+            Some((&nonce, true)),
             &Hash::default(),
             1,
             &pre_fee_payer_account,
@@ -2998,6 +3011,7 @@ mod tests {
             0,
             true,
             true, // demote_program_write_locks
+            true, // leave_nonce_on_success
         );
         assert_eq!(collected_accounts.len(), 2);
         assert_eq!(
@@ -3108,6 +3122,7 @@ mod tests {
             0,
             true,
             true, // demote_program_write_locks
+            true, // leave_nonce_on_success
         );
         assert_eq!(collected_accounts.len(), 1);
         let collected_nonce_account = collected_accounts
