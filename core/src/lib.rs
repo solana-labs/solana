@@ -34,6 +34,7 @@ pub mod outstanding_requests;
 pub mod packet_hasher;
 pub mod progress_map;
 pub mod qos_service;
+pub mod repair_generic_traversal;
 pub mod repair_response;
 pub mod repair_service;
 pub mod repair_weight;
