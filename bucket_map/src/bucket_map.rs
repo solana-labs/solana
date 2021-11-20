@@ -148,7 +148,7 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
     /// Update Pubkey `key`'s value with function `updatefn`
     pub fn update<F>(&self, key: &Pubkey, updatefn: F)
     where
-        F: Fn(Option<(&[T], RefCount)>) -> Option<(Vec<T>, RefCount)>,
+        F: FnMut(Option<(&[T], RefCount)>) -> Option<(Vec<T>, RefCount)>,
     {
         self.get_bucket(key).update(key, updatefn)
     }

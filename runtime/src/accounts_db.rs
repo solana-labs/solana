@@ -3060,7 +3060,7 @@ impl AccountsDb {
         ancestors: &Ancestors,
         bank_id: BankId,
         scan_func: F,
-        config: ScanConfig,
+        config: &ScanConfig,
     ) -> ScanResult<A>
     where
         F: Fn(&mut A, Option<(&Pubkey, AccountSharedData, Slot)>),
@@ -3090,7 +3090,7 @@ impl AccountsDb {
         metric_name: &'static str,
         ancestors: &Ancestors,
         scan_func: F,
-        config: ScanConfig,
+        config: &ScanConfig,
     ) -> A
     where
         F: Fn(&mut A, (&Pubkey, LoadedAccount, Slot)),
@@ -3118,7 +3118,7 @@ impl AccountsDb {
         metric_name: &'static str,
         ancestors: &Ancestors,
         range: R,
-        config: ScanConfig,
+        config: &ScanConfig,
         scan_func: F,
     ) -> A
     where
@@ -3159,7 +3159,7 @@ impl AccountsDb {
         bank_id: BankId,
         index_key: IndexKey,
         scan_func: F,
-        config: ScanConfig,
+        config: &ScanConfig,
     ) -> ScanResult<(A, bool)>
     where
         F: Fn(&mut A, Option<(&Pubkey, AccountSharedData, Slot)>),
@@ -8049,7 +8049,7 @@ pub mod tests {
             |accounts: &mut Vec<AccountSharedData>, option| {
                 accounts.push(option.1.take_account());
             },
-            ScanConfig::default(),
+            &ScanConfig::default(),
         );
         assert_eq!(accounts, vec![account1]);
     }
@@ -8959,7 +8959,7 @@ pub mod tests {
                 |key, _| {
                     found_accounts.insert(*key);
                 },
-                ScanConfig::default(),
+                &ScanConfig::default(),
             )
             .unwrap();
         assert_eq!(found_accounts.len(), 2);
@@ -8980,7 +8980,7 @@ pub mod tests {
                     |collection: &mut HashSet<Pubkey>, account| {
                         collection.insert(*account.unwrap().0);
                     },
-                    ScanConfig::default(),
+                    &ScanConfig::default(),
                 )
                 .unwrap();
             assert!(!found_accounts.1);
@@ -8999,7 +8999,7 @@ pub mod tests {
                     |collection: &mut HashSet<Pubkey>, account| {
                         collection.insert(*account.unwrap().0);
                     },
-                    ScanConfig::default(),
+                    &ScanConfig::default(),
                 )
                 .unwrap();
             assert!(found_accounts.1);
@@ -9033,7 +9033,7 @@ pub mod tests {
                 bank_id,
                 IndexKey::SplTokenMint(mint_key),
                 |key, _| found_accounts.push(*key),
-                ScanConfig::default(),
+                &ScanConfig::default(),
             )
             .unwrap();
         assert_eq!(found_accounts, vec![pubkey2]);
@@ -9589,7 +9589,7 @@ pub mod tests {
             |accounts: &mut Vec<AccountSharedData>, option| {
                 accounts.push(option.1.take_account());
             },
-            ScanConfig::default(),
+            &ScanConfig::default(),
         );
         assert_eq!(accounts, vec![account0]);
 
@@ -9600,7 +9600,7 @@ pub mod tests {
             |accounts: &mut Vec<AccountSharedData>, option| {
                 accounts.push(option.1.take_account());
             },
-            ScanConfig::default(),
+            &ScanConfig::default(),
         );
         assert_eq!(accounts.len(), 2);
     }
@@ -11774,7 +11774,7 @@ pub mod tests {
                             }
                         }
                     },
-                    ScanConfig::default(),
+                    &ScanConfig::default(),
                 )
                 .unwrap();
             })

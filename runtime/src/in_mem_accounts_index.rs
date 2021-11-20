@@ -47,6 +47,12 @@ impl<T: IndexValue> Debug for InMemAccountsIndex<T> {
     }
 }
 
+pub enum InsertNewEntryResults {
+    DidNotExist,
+    ExistedNewEntryZeroLamports,
+    ExistedNewEntryNonZeroLamports,
+}
+
 #[allow(dead_code)] // temporary during staging
 impl<T: IndexValue> InMemAccountsIndex<T> {
     pub fn new(storage: &Arc<BucketMapHolder<T>>, bin: usize) -> Self {
@@ -479,52 +485,85 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         )
     }
 
-    // return None if item was created new
-    // if entry for pubkey already existed, return Some(entry). Caller needs to call entry.update.
     pub fn insert_new_entry_if_missing_with_lock(
         &self,
         pubkey: Pubkey,
         new_entry: PreAllocatedAccountMapEntry<T>,
-    ) -> Option<(AccountMapEntry<T>, T, Pubkey)> {
+    ) -> InsertNewEntryResults {
         let mut m = Measure::start("entry");
         let mut map = self.map().write().unwrap();
         let entry = map.entry(pubkey);
         m.stop();
-        let found = matches!(entry, Entry::Occupied(_));
-        let result = match entry {
-            Entry::Occupied(occupied) => Some(Self::insert_returner(
-                occupied.get(),
-                occupied.key(),
-                new_entry,
-            )),
+        let mut new_entry_zero_lamports = false;
+        let (found_in_mem, already_existed) = match entry {
+            Entry::Occupied(occupied) => {
+                // in cache, so merge into cache
+                let (slot, account_info) = new_entry.into();
+                new_entry_zero_lamports = account_info.is_zero_lamport();
+                InMemAccountsIndex::lock_and_update_slot_list(
+                    occupied.get(),
+                    (slot, account_info),
+                    &mut Vec::default(),
+                    false,
+                );
+                (
+                    true, /* found in mem */
+                    true, /* already existed */
+                )
+            }
             Entry::Vacant(vacant) => {
                 // not in cache, look on disk
-                let disk_entry = self.load_account_entry_from_disk(vacant.key());
-                self.stats().insert_or_delete_mem(true, self.bin);
-                if let Some(disk_entry) = disk_entry {
-                    // on disk, so insert into cache, then return cache value so caller will merge
-                    let result = Some(Self::insert_returner(&disk_entry, vacant.key(), new_entry));
-                    assert!(disk_entry.dirty());
-                    vacant.insert(disk_entry);
-                    result
+                let mut existed = false;
+                if let Some(disk) = self.bucket.as_ref() {
+                    let (slot, account_info) = new_entry.into();
+                    new_entry_zero_lamports = account_info.is_zero_lamport();
+                    disk.update(vacant.key(), |current| {
+                        if let Some((slot_list, mut ref_count)) = current {
+                            // on disk, so merge and update disk
+                            let mut slot_list = slot_list.to_vec();
+                            let addref = Self::update_slot_list(
+                                &mut slot_list,
+                                slot,
+                                account_info,
+                                &mut Vec::default(),
+                                false,
+                            );
+                            if addref {
+                                ref_count += 1
+                            };
+                            existed = true;
+                            Some((slot_list, ref_count))
+                        } else {
+                            // doesn't exist on disk yet, so insert it
+                            let ref_count = if account_info.is_cached() { 0 } else { 1 };
+                            Some((vec![(slot, account_info)], ref_count))
+                        }
+                    });
                 } else {
-                    // not on disk, so insert new thing and we're done
+                    // not using disk, so insert into mem
+                    self.stats().insert_or_delete_mem(true, self.bin);
                     let new_entry: AccountMapEntry<T> = new_entry.into();
                     assert!(new_entry.dirty());
                     vacant.insert(new_entry);
-                    None // returns None if item was created new
                 }
+                (false, existed)
             }
         };
         drop(map);
-        self.update_entry_stats(m, found);
+        self.update_entry_stats(m, found_in_mem);
         let stats = self.stats();
-        if result.is_none() {
+        if !already_existed {
             stats.insert_or_delete(true, self.bin);
         } else {
             Self::update_stat(&stats.updates_in_mem, 1);
         }
-        result
+        if !already_existed {
+            InsertNewEntryResults::DidNotExist
+        } else if new_entry_zero_lamports {
+            InsertNewEntryResults::ExistedNewEntryZeroLamports
+        } else {
+            InsertNewEntryResults::ExistedNewEntryNonZeroLamports
+        }
     }
 
     pub fn just_set_hold_range_in_memory<R>(&self, range: &R, start_holding: bool)

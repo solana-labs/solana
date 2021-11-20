@@ -13,7 +13,10 @@ use {
         erasure::ErasureConfig,
         leader_schedule_cache::LeaderScheduleCache,
         next_slots_iterator::NextSlotsIterator,
-        shred::{Result as ShredResult, Shred, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK},
+        shred::{
+            Result as ShredResult, Shred, ShredType, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK,
+            SHRED_PAYLOAD_SIZE,
+        },
     },
     bincode::deserialize,
     log::*,
@@ -803,52 +806,55 @@ impl Blockstore {
         let mut newly_completed_data_sets: Vec<CompletedDataSetInfo> = vec![];
         let mut inserted_indices = Vec::new();
         for (i, (shred, is_repaired)) in shreds.into_iter().zip(is_repaired).enumerate() {
-            if shred.is_data() {
-                let shred_source = if is_repaired {
-                    ShredSource::Repaired
-                } else {
-                    ShredSource::Turbine
-                };
-                match self.check_insert_data_shred(
-                    shred,
-                    &mut erasure_metas,
-                    &mut index_working_set,
-                    &mut slot_meta_working_set,
-                    &mut write_batch,
-                    &mut just_inserted_data_shreds,
-                    &mut index_meta_time,
-                    is_trusted,
-                    handle_duplicate,
-                    leader_schedule,
-                    shred_source,
-                ) {
-                    Err(InsertDataShredError::Exists) => metrics.num_data_shreds_exists += 1,
-                    Err(InsertDataShredError::InvalidShred) => metrics.num_data_shreds_invalid += 1,
-                    Err(InsertDataShredError::BlockstoreError(err)) => {
-                        metrics.num_data_shreds_blockstore_error += 1;
-                        error!("blockstore error: {}", err);
-                    }
-                    Ok(completed_data_sets) => {
-                        newly_completed_data_sets.extend(completed_data_sets);
-                        inserted_indices.push(i);
-                        metrics.num_inserted += 1;
-                    }
-                };
-            } else if shred.is_code() {
-                self.check_cache_coding_shred(
-                    shred,
-                    &mut erasure_metas,
-                    &mut index_working_set,
-                    &mut just_inserted_coding_shreds,
-                    &mut index_meta_time,
-                    handle_duplicate,
-                    is_trusted,
-                    is_repaired,
-                    metrics,
-                );
-            } else {
-                panic!("There should be no other case");
-            }
+            match shred.shred_type() {
+                ShredType::Data => {
+                    let shred_source = if is_repaired {
+                        ShredSource::Repaired
+                    } else {
+                        ShredSource::Turbine
+                    };
+                    match self.check_insert_data_shred(
+                        shred,
+                        &mut erasure_metas,
+                        &mut index_working_set,
+                        &mut slot_meta_working_set,
+                        &mut write_batch,
+                        &mut just_inserted_data_shreds,
+                        &mut index_meta_time,
+                        is_trusted,
+                        handle_duplicate,
+                        leader_schedule,
+                        shred_source,
+                    ) {
+                        Err(InsertDataShredError::Exists) => metrics.num_data_shreds_exists += 1,
+                        Err(InsertDataShredError::InvalidShred) => {
+                            metrics.num_data_shreds_invalid += 1
+                        }
+                        Err(InsertDataShredError::BlockstoreError(err)) => {
+                            metrics.num_data_shreds_blockstore_error += 1;
+                            error!("blockstore error: {}", err);
+                        }
+                        Ok(completed_data_sets) => {
+                            newly_completed_data_sets.extend(completed_data_sets);
+                            inserted_indices.push(i);
+                            metrics.num_inserted += 1;
+                        }
+                    };
+                }
+                ShredType::Code => {
+                    self.check_cache_coding_shred(
+                        shred,
+                        &mut erasure_metas,
+                        &mut index_working_set,
+                        &mut just_inserted_coding_shreds,
+                        &mut index_meta_time,
+                        handle_duplicate,
+                        is_trusted,
+                        is_repaired,
+                        metrics,
+                    );
+                }
+            };
         }
         start.stop();
 
@@ -1323,7 +1329,6 @@ impl Blockstore {
         leader_schedule: Option<&LeaderScheduleCache>,
         shred_source: ShredSource,
     ) -> bool {
-        use crate::shred::SHRED_PAYLOAD_SIZE;
         let shred_index = u64::from(shred.index());
         let slot = shred.slot();
         let last_in_slot = if shred.last_in_slot() {
@@ -1552,7 +1557,6 @@ impl Blockstore {
     }
 
     pub fn get_data_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
-        use crate::shred::SHRED_PAYLOAD_SIZE;
         self.data_shred_cf.get_bytes((slot, index)).map(|data| {
             data.map(|mut d| {
                 // Only data_header.size bytes stored in the blockstore so
@@ -3030,31 +3034,18 @@ impl Blockstore {
         &self,
         slot: u64,
         index: u32,
-        new_shred_raw: &[u8],
-        is_data: bool,
+        mut payload: Vec<u8>,
+        shred_type: ShredType,
     ) -> Option<Vec<u8>> {
-        let res = if is_data {
-            self.get_data_shred(slot, index as u64)
-                .expect("fetch from DuplicateSlots column family failed")
-        } else {
-            self.get_coding_shred(slot, index as u64)
-                .expect("fetch from DuplicateSlots column family failed")
-        };
-
-        let mut payload = new_shred_raw.to_vec();
-        payload.resize(
-            std::cmp::max(new_shred_raw.len(), crate::shred::SHRED_PAYLOAD_SIZE),
-            0,
-        );
+        let existing_shred = match shred_type {
+            ShredType::Data => self.get_data_shred(slot, index as u64),
+            ShredType::Code => self.get_coding_shred(slot, index as u64),
+        }
+        .expect("fetch from DuplicateSlots column family failed")?;
+        let size = payload.len().max(SHRED_PAYLOAD_SIZE);
+        payload.resize(size, 0u8);
         let new_shred = Shred::new_from_serialized_shred(payload).unwrap();
-        res.map(|existing_shred| {
-            if existing_shred != new_shred.payload {
-                Some(existing_shred)
-            } else {
-                None
-            }
-        })
-        .unwrap_or(None)
+        (existing_shred != new_shred.payload).then(|| existing_shred)
     }
 
     pub fn has_duplicate_shreds_in_slot(&self, slot: Slot) -> bool {
@@ -8111,8 +8102,8 @@ pub mod tests {
             blockstore.is_shred_duplicate(
                 slot,
                 0,
-                &duplicate_shred.payload,
-                duplicate_shred.is_data()
+                duplicate_shred.payload.clone(),
+                duplicate_shred.shred_type(),
             ),
             Some(shred.payload.to_vec())
         );
@@ -8120,8 +8111,8 @@ pub mod tests {
             .is_shred_duplicate(
                 slot,
                 0,
-                &non_duplicate_shred.payload,
-                duplicate_shred.is_data()
+                non_duplicate_shred.payload.clone(),
+                non_duplicate_shred.shred_type(),
             )
             .is_none());
 
@@ -8591,8 +8582,8 @@ pub mod tests {
             .is_shred_duplicate(
                 slot,
                 even_smaller_last_shred_duplicate.index(),
-                &even_smaller_last_shred_duplicate.payload,
-                true
+                even_smaller_last_shred_duplicate.payload.clone(),
+                ShredType::Data,
             )
             .is_some());
         blockstore

@@ -18,7 +18,7 @@ use {
     solana_ledger::{
         blockstore::{self, Blockstore, BlockstoreInsertionMetrics, MAX_DATA_SHREDS_PER_SLOT},
         leader_schedule_cache::LeaderScheduleCache,
-        shred::{Nonce, Shred},
+        shred::{Nonce, Shred, ShredType},
     },
     solana_measure::measure::Measure,
     solana_metrics::{inc_new_counter_debug, inc_new_counter_error},
@@ -162,12 +162,11 @@ impl ReceiveWindowStats {
 }
 
 fn verify_shred_slot(shred: &Shred, root: u64) -> bool {
-    if shred.is_data() {
+    match shred.shred_type() {
         // Only data shreds have parent information
-        blockstore::verify_shred_slots(shred.slot(), shred.parent(), root)
-    } else {
+        ShredType::Data => blockstore::verify_shred_slots(shred.slot(), shred.parent(), root),
         // Filter out outdated coding shreds
-        shred.slot() >= root
+        ShredType::Code => shred.slot() >= root,
     }
 }
 
@@ -219,8 +218,8 @@ fn run_check_duplicate(
             if let Some(existing_shred_payload) = blockstore.is_shred_duplicate(
                 shred_slot,
                 shred.index(),
-                &shred.payload,
-                shred.is_data(),
+                shred.payload.clone(),
+                shred.shred_type(),
             ) {
                 cluster_info.push_duplicate_shred(&shred, &existing_shred_payload)?;
                 blockstore.store_duplicate_slot(

@@ -327,38 +327,21 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             return Err(InstructionError::CallDepth);
         }
 
-        let program_id = if let Some(index_of_program_id) = program_indices.last() {
-            let program_id = &self.accounts[*index_of_program_id].0;
-            let contains = self
-                .invoke_stack
-                .iter()
-                .any(|frame| frame.program_id() == Some(program_id));
-            let is_last = if let Some(last_frame) = self.invoke_stack.last() {
-                last_frame.program_id() == Some(program_id)
-            } else {
-                false
-            };
-            if contains && !is_last {
-                // Reentrancy not allowed unless caller is calling itself
-                return Err(InstructionError::ReentrancyNotAllowed);
-            }
-            *program_id
-        } else {
-            return Err(InstructionError::UnsupportedProgramId);
-        };
-
+        let program_id = program_indices
+            .last()
+            .map(|index_of_program_id| &self.accounts[*index_of_program_id].0);
         if self.invoke_stack.is_empty() {
             let mut compute_budget = self.compute_budget;
             if !self.is_feature_active(&tx_wide_compute_cap::id())
                 && self.is_feature_active(&neon_evm_compute_budget::id())
-                && program_id == crate::neon_evm_program::id()
+                && program_id == Some(&crate::neon_evm_program::id())
             {
                 // Bump the compute budget for neon_evm
                 compute_budget.max_units = compute_budget.max_units.max(500_000);
             }
             if !self.is_feature_active(&requestable_heap_size::id())
                 && self.is_feature_active(&neon_evm_compute_budget::id())
-                && program_id == crate::neon_evm_program::id()
+                && program_id == Some(&crate::neon_evm_program::id())
             {
                 // Bump the compute budget for neon_evm
                 compute_budget.heap_size = Some(256_usize.saturating_mul(1024));
@@ -381,6 +364,20 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                 Err(InstructionError::MissingAccount)
             };
             instruction.visit_each_account(&mut work)?;
+        } else {
+            let contains = self
+                .invoke_stack
+                .iter()
+                .any(|frame| frame.program_id() == program_id);
+            let is_last = if let Some(last_frame) = self.invoke_stack.last() {
+                last_frame.program_id() == program_id
+            } else {
+                false
+            };
+            if contains && !is_last {
+                // Reentrancy not allowed unless caller is calling itself
+                return Err(InstructionError::ReentrancyNotAllowed);
+            }
         }
 
         // Create the KeyedAccounts that will be passed to the program

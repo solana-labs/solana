@@ -1504,6 +1504,14 @@ impl Bank {
         new
     }
 
+    pub fn byte_limit_for_scans(&self) -> Option<usize> {
+        self.rc
+            .accounts
+            .accounts_db
+            .accounts_index
+            .scan_results_limit_bytes
+    }
+
     /// Returns all ancestors excluding self.slot.
     pub(crate) fn proper_ancestors(&self) -> impl Iterator<Item = Slot> + '_ {
         self.ancestors
@@ -5241,7 +5249,7 @@ impl Bank {
     pub fn get_program_accounts(
         &self,
         program_id: &Pubkey,
-        config: ScanConfig,
+        config: &ScanConfig,
     ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         self.rc
             .accounts
@@ -5252,7 +5260,7 @@ impl Bank {
         &self,
         program_id: &Pubkey,
         filter: F,
-        config: ScanConfig,
+        config: &ScanConfig,
     ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         self.rc.accounts.load_by_program_with_filter(
             &self.ancestors,
@@ -5267,7 +5275,8 @@ impl Bank {
         &self,
         index_key: &IndexKey,
         filter: F,
-        config: ScanConfig,
+        config: &ScanConfig,
+        byte_limit_for_scan: Option<usize>,
     ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         self.rc.accounts.load_by_index_key_with_filter(
             &self.ancestors,
@@ -5275,6 +5284,7 @@ impl Bank {
             index_key,
             filter,
             config,
+            byte_limit_for_scan,
         )
     }
 
@@ -6363,6 +6373,7 @@ impl Bank {
                 total_accounts_stats.num_rent_exempt_accounts += 1;
             } else {
                 total_accounts_stats.num_rent_paying_accounts += 1;
+                total_accounts_stats.lamports_in_rent_paying_accounts += account.lamports();
                 if data_len == 0 {
                     total_accounts_stats.num_rent_paying_accounts_without_data += 1;
                 }
@@ -6392,6 +6403,8 @@ pub struct TotalAccountsStats {
     pub num_rent_paying_accounts: usize,
     /// Total number of rent paying accounts without data
     pub num_rent_paying_accounts_without_data: usize,
+    /// Total amount of lamports in rent paying accounts
+    pub lamports_in_rent_paying_accounts: u64,
 }
 
 impl Drop for Bank {
@@ -10482,13 +10495,13 @@ pub(crate) mod tests {
         bank1.squash();
         assert_eq!(
             bank0
-                .get_program_accounts(&program_id, ScanConfig::default(),)
+                .get_program_accounts(&program_id, &ScanConfig::default(),)
                 .unwrap(),
             vec![(pubkey0, account0.clone())]
         );
         assert_eq!(
             bank1
-                .get_program_accounts(&program_id, ScanConfig::default(),)
+                .get_program_accounts(&program_id, &ScanConfig::default(),)
                 .unwrap(),
             vec![(pubkey0, account0)]
         );
@@ -10510,14 +10523,14 @@ pub(crate) mod tests {
         bank3.squash();
         assert_eq!(
             bank1
-                .get_program_accounts(&program_id, ScanConfig::default(),)
+                .get_program_accounts(&program_id, &ScanConfig::default(),)
                 .unwrap()
                 .len(),
             2
         );
         assert_eq!(
             bank3
-                .get_program_accounts(&program_id, ScanConfig::default(),)
+                .get_program_accounts(&program_id, &ScanConfig::default(),)
                 .unwrap()
                 .len(),
             2
@@ -10545,7 +10558,8 @@ pub(crate) mod tests {
             .get_filtered_indexed_accounts(
                 &IndexKey::ProgramId(program_id),
                 |_| true,
-                ScanConfig::default(),
+                &ScanConfig::default(),
+                None,
             )
             .unwrap();
         assert_eq!(indexed_accounts.len(), 1);
@@ -10562,7 +10576,8 @@ pub(crate) mod tests {
             .get_filtered_indexed_accounts(
                 &IndexKey::ProgramId(program_id),
                 |_| true,
-                ScanConfig::default(),
+                &ScanConfig::default(),
+                None,
             )
             .unwrap();
         assert_eq!(indexed_accounts.len(), 1);
@@ -10571,7 +10586,8 @@ pub(crate) mod tests {
             .get_filtered_indexed_accounts(
                 &IndexKey::ProgramId(another_program_id),
                 |_| true,
-                ScanConfig::default(),
+                &ScanConfig::default(),
+                None,
             )
             .unwrap();
         assert_eq!(indexed_accounts.len(), 1);
@@ -10582,7 +10598,8 @@ pub(crate) mod tests {
             .get_filtered_indexed_accounts(
                 &IndexKey::ProgramId(program_id),
                 |account| account.owner() == &program_id,
-                ScanConfig::default(),
+                &ScanConfig::default(),
+                None,
             )
             .unwrap();
         assert!(indexed_accounts.is_empty());
@@ -10590,7 +10607,8 @@ pub(crate) mod tests {
             .get_filtered_indexed_accounts(
                 &IndexKey::ProgramId(another_program_id),
                 |account| account.owner() == &another_program_id,
-                ScanConfig::default(),
+                &ScanConfig::default(),
+                None,
             )
             .unwrap();
         assert_eq!(indexed_accounts.len(), 1);
@@ -13219,7 +13237,7 @@ pub(crate) mod tests {
             Bank::new_from_parent(&bank1, &Pubkey::default(), bank1.first_slot_in_next_epoch());
         assert_eq!(
             bank2
-                .get_program_accounts(&sysvar::id(), ScanConfig::default(),)
+                .get_program_accounts(&sysvar::id(), &ScanConfig::default(),)
                 .unwrap()
                 .len(),
             8
@@ -13231,7 +13249,7 @@ pub(crate) mod tests {
         // no sysvar should be deleted due to rent
         assert_eq!(
             bank2
-                .get_program_accounts(&sysvar::id(), ScanConfig::default(),)
+                .get_program_accounts(&sysvar::id(), &ScanConfig::default(),)
                 .unwrap()
                 .len(),
             8
@@ -13269,7 +13287,7 @@ pub(crate) mod tests {
 
         {
             let sysvars = bank1
-                .get_program_accounts(&sysvar::id(), ScanConfig::default())
+                .get_program_accounts(&sysvar::id(), &ScanConfig::default())
                 .unwrap();
             assert_eq!(sysvars.len(), 8);
             assert!(sysvars
@@ -13306,7 +13324,7 @@ pub(crate) mod tests {
 
         {
             let sysvars = bank2
-                .get_program_accounts(&sysvar::id(), ScanConfig::default())
+                .get_program_accounts(&sysvar::id(), &ScanConfig::default())
                 .unwrap();
             assert_eq!(sysvars.len(), 8);
             assert!(sysvars
@@ -13385,7 +13403,7 @@ pub(crate) mod tests {
         );
         {
             let sysvars = bank1
-                .get_program_accounts(&sysvar::id(), ScanConfig::default())
+                .get_program_accounts(&sysvar::id(), &ScanConfig::default())
                 .unwrap();
             assert_eq!(sysvars.len(), 9);
             assert!(sysvars
@@ -13422,7 +13440,7 @@ pub(crate) mod tests {
         );
         {
             let sysvars = bank2
-                .get_program_accounts(&sysvar::id(), ScanConfig::default())
+                .get_program_accounts(&sysvar::id(), &ScanConfig::default())
                 .unwrap();
             assert_eq!(sysvars.len(), 9);
             assert!(sysvars
@@ -13793,7 +13811,7 @@ pub(crate) mod tests {
                         {
                             info!("scanning program accounts for slot {}", bank_to_scan.slot());
                             let accounts_result = bank_to_scan
-                                .get_program_accounts(&program_id, ScanConfig::default());
+                                .get_program_accounts(&program_id, &ScanConfig::default());
                             let _ = scan_finished_sender.send(bank_to_scan.bank_id());
                             num_banks_scanned.fetch_add(1, Relaxed);
                             match (&acceptable_scan_results, accounts_result.is_err()) {
@@ -15366,5 +15384,19 @@ pub(crate) mod tests {
         ))
         .unwrap();
         assert_eq!(Bank::calculate_fee(&message, 1), 11);
+    }
+
+    #[test]
+    fn test_an_empty_transaction_without_program() {
+        let (genesis_config, mint_keypair) = create_genesis_config(1);
+        let bank = Bank::new_for_tests(&genesis_config);
+
+        let destination = solana_sdk::pubkey::new_rand();
+        let mut ix = system_instruction::transfer(&mint_keypair.pubkey(), &destination, 0);
+        ix.program_id = native_loader::id(); // Empty executable account chain
+
+        let message = Message::new(&[ix], Some(&mint_keypair.pubkey()));
+        let tx = Transaction::new(&[&mint_keypair], message, genesis_config.hash());
+        bank.process_transaction(&tx).unwrap();
     }
 }

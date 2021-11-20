@@ -377,7 +377,8 @@ impl InstructionProcessor {
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
-        let root_account = keyed_account_at_index(keyed_accounts, 0)?;
+        let root_account = keyed_account_at_index(keyed_accounts, 0)
+            .map_err(|_| InstructionError::UnsupportedProgramId)?;
         let root_id = root_account.unsigned_key();
         let owner_id = &root_account.owner()?;
         if solana_sdk::native_loader::check_id(owner_id) {
