@@ -62,4 +62,15 @@ impl AccountsDbPluginManager {
         }
         false
     }
+
+
+    /// Check if there is any plugin interested in transaction data
+    pub fn to_notify_transaction_data(&self) -> bool {
+        for plugin in &self.plugins {
+            if plugin.to_notify_transaction_data() {
+                return true;
+            }
+        }
+        false
+    }
 }
