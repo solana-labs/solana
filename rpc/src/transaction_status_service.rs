@@ -215,7 +215,7 @@ pub(crate) mod tests {
         solana_account_decoder::parse_token::token_amount_to_ui_amount,
         solana_ledger::{genesis_utils::create_genesis_config, get_tmp_ledger_path},
         solana_runtime::bank::{
-            NonceRollbackFull, NonceRollbackPartial, RentDebits, TransactionBalancesSet,
+            NonceFull, NoncePartial, RentDebits, TransactionBalancesSet,
         },
         solana_sdk::{
             account_utils::StateMut,
@@ -329,7 +329,7 @@ pub(crate) mod tests {
 
         let message = build_message();
 
-        let rollback_partial = NonceRollbackPartial::new(pubkey, nonce_account.clone());
+        let rollback_partial = NoncePartial::new(pubkey, nonce_account.clone());
 
         let mut rent_debits = RentDebits::default();
         rent_debits.insert(&pubkey, 123, 456);
@@ -337,7 +337,7 @@ pub(crate) mod tests {
         let transaction_result = (
             Ok(()),
             Some(
-                NonceRollbackFull::from_partial(
+                NonceFull::from_partial(
                     rollback_partial,
                     &SanitizedMessage::Legacy(message),
                     &[(pubkey, nonce_account)],
