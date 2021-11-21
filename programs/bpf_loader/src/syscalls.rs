@@ -1290,6 +1290,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcpy<'a, 'b> {
             .feature_set
             .is_active(&fixed_memcpy_nonoverlapping_check::id());
 
+        #[allow(clippy::collapsible_else_if)]
         if use_fixed_nonoverlapping_check {
             if !is_nonoverlapping(src_addr, dst_addr, n) {
                 *result = Err(SyscallError::CopyOverlapping.into());
