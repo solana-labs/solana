@@ -41,7 +41,15 @@ pub struct Config {
     ///
     /// The default value is the empty string.
     pub websocket_url: String,
-    /// The path to the keypair file.
+    /// The default signing source, which may be a keypair file, but may also
+    /// represent several other types of signers, as described in the
+    /// documentation for `solana_clap_utils::keypair::signer_from_path`.
+    /// Because it represents sources other than a simple path, the name
+    /// `keypair_path` is misleading, and exists for backwards compatibility
+    /// reasons.
+    ///
+    /// The signing source can be loaded with either the `signer_from_path`
+    /// function, or with `solana_clap_utils::keypair::DefaultSigner`.
     pub keypair_path: String,
     /// A mapping from Solana addresses to human-readable names.
     ///
@@ -50,7 +58,8 @@ pub struct Config {
     pub address_labels: HashMap<String, String>,
     /// The default commitment level.
     ///
-    /// By default the value is "confirmed".
+    /// By default the value is "confirmed", as defined by
+    /// `solana_sdk::commitment_config::CommitmentLevel::Confirmed`.
     #[serde(default)]
     pub commitment: String,
 }

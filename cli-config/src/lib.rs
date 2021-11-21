@@ -1,9 +1,9 @@
 //! Loading and saving the Solana CLI configuration file.
 //!
 //! The configuration file used by the Solana CLI includes information about the
-//! RPC node to connect to, the path to the user's keypair, and more. Other
-//! software than the Solana CLI may wish to access the same configuration and
-//! keypair.
+//! RPC node to connect to, the path to the user's signing source, and more.
+//! Other software than the Solana CLI may wish to access the same configuration
+//! and signer.
 //!
 //! The default path to the configuration file can be retrieved from
 //! [`CONFIG_FILE`], which is a [lazy_static] of `Option<String>`, the value of
@@ -24,8 +24,9 @@
 //!
 //! - [`json_rpc_url`], the URL to pass to
 //!   `solana_client::rpc_client::RpcClient`.
-//! - [`keypair_path`], the secret keypair, which is loaded with
-//!   `solana_sdk::signature::read_keypair_file`.
+//! - [`keypair_path`], a signing source, which may be a keypair file, but
+//!   may also represent several other types of signers, as described in
+//!   the documentation for `solana_clap_utils::keypair::signer_from_path`.
 //!
 //! [`json_rpc_url`]: Config::json_rpc_url
 //! [`keypair_path`]: Config::keypair_path
