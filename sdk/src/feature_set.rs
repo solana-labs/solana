@@ -251,6 +251,21 @@ pub mod add_compute_budget_program {
     solana_sdk::declare_id!("4d5AKtxoh93Dwm1vHXUU3iRATuMndx1c431KgT2td52r");
 }
 
+<<<<<<< HEAD
+=======
+pub mod reject_deployment_of_unresolved_syscalls {
+    solana_sdk::declare_id!("DqniU3MfvdpU3yhmNF1RKeaM5TZQELZuyFGosASRVUoy");
+}
+
+pub mod nonce_must_be_writable {
+    solana_sdk::declare_id!("BiCU7M5w8ZCMykVSyhZ7Q3m2SWoR2qrEQ86ERcDX77ME");
+}
+
+pub mod spl_token_v3_3_0_release {
+    solana_sdk::declare_id!("Ftok2jhqAqxUWEiCVRrfRs9DPppWP8cgTB7NQNKL88mS");
+}
+
+>>>>>>> 02bc4e3fc (spl-token: New program feature flag (#21354))
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -314,6 +329,12 @@ lazy_static! {
         (ed25519_program_enabled::id(), "enable builtin ed25519 signature verify program"),
         (requestable_heap_size::id(), "Requestable heap frame size"),
         (add_compute_budget_program::id(), "Add compute_budget_program"),
+<<<<<<< HEAD
+=======
+        (reject_deployment_of_unresolved_syscalls::id(), "Reject deployment of programs with unresolved syscall symbols"),
+        (nonce_must_be_writable::id(), "nonce must be writable"),
+        (spl_token_v3_3_0_release::id(), "spl-token v3.3.0 release"),
+>>>>>>> 02bc4e3fc (spl-token: New program feature flag (#21354))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

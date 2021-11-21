@@ -18,11 +18,19 @@ Inflector = "0.11.4"
 lazy_static = "1.4.0"
 serde = "1.0.122"
 serde_derive = "1.0.103"
+<<<<<<< HEAD
 serde_json = "1.0.56"
 solana-config-program = { path = "../programs/config", version = "=1.8.6" }
 solana-sdk = { path = "../sdk", version = "=1.8.6" }
 solana-vote-program = { path = "../programs/vote", version = "=1.8.6" }
 spl-token-v2-0 = { package = "spl-token", version = "=3.2.0", features = ["no-entrypoint"] }
+=======
+serde_json = "1.0.71"
+solana-config-program = { path = "../programs/config", version = "=1.9.0" }
+solana-sdk = { path = "../sdk", version = "=1.9.0" }
+solana-vote-program = { path = "../programs/vote", version = "=1.9.0" }
+spl-token = { version = "=3.2.0", features = ["no-entrypoint"] }
+>>>>>>> 02bc4e3fc (spl-token: New program feature flag (#21354))
 thiserror = "1.0"
 zstd = "0.5.1"
 

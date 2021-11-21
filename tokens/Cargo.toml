@@ -20,6 +20,7 @@ indexmap = "1.5.1"
 indicatif = "0.15.0"
 pickledb = "0.4.1"
 serde = { version = "1.0", features = ["derive"] }
+<<<<<<< HEAD
 solana-account-decoder = { path = "../account-decoder", version = "=1.8.6" }
 solana-clap-utils = { path = "../clap-utils", version = "=1.8.6" }
 solana-cli-config = { path = "../cli-config", version = "=1.8.6" }
@@ -32,6 +33,19 @@ solana-version = { path = "../version", version = "=1.8.6" }
 spl-associated-token-account-v1-0 = { package = "spl-associated-token-account", version = "=1.0.3" }
 spl-token-v2-0 = { package = "spl-token", version = "=3.2.0", features = ["no-entrypoint"] }
 tempfile = "3.1.0"
+=======
+solana-account-decoder = { path = "../account-decoder", version = "=1.9.0" }
+solana-clap-utils = { path = "../clap-utils", version = "=1.9.0" }
+solana-cli-config = { path = "../cli-config", version = "=1.9.0" }
+solana-client = { path = "../client", version = "=1.9.0" }
+solana-remote-wallet = { path = "../remote-wallet", version = "=1.9.0" }
+solana-sdk = { path = "../sdk", version = "=1.9.0" }
+solana-transaction-status = { path = "../transaction-status", version = "=1.9.0" }
+solana-version = { path = "../version", version = "=1.9.0" }
+spl-associated-token-account = { version = "=1.0.3" }
+spl-token = { version = "=3.2.0", features = ["no-entrypoint"] }
+tempfile = "3.2.0"
+>>>>>>> 02bc4e3fc (spl-token: New program feature flag (#21354))
 thiserror = "1.0"
 
 [dev-dependencies]
