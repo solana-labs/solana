@@ -46,7 +46,7 @@ use crate::{
     builtins::{self, ActivationType, Builtin, Builtins},
     cost_tracker::CostTracker,
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
-    inline_spl_token_v2_0,
+    inline_spl_token,
     message_processor::MessageProcessor,
     rent_collector::RentCollector,
     stake_weighted_timestamp::{
@@ -6100,8 +6100,8 @@ impl Bank {
             self.rent_collector.rent.burn_percent = 50; // 50% rent burn
         }
 
-        if new_feature_activations.contains(&feature_set::spl_token_v2_set_authority_fix::id()) {
-            self.apply_spl_token_v2_set_authority_fix();
+        if new_feature_activations.contains(&feature_set::spl_token_v3_3_0_release::id()) {
+            self.apply_spl_token_v3_3_0_release();
         }
         if new_feature_activations.contains(&feature_set::rent_for_sysvars::id()) {
             // when this feature is activated, immediately all of existing sysvars are susceptible
@@ -6237,13 +6237,13 @@ impl Bank {
         }
     }
 
-    fn apply_spl_token_v2_set_authority_fix(&mut self) {
-        if let Some(old_account) = self.get_account_with_fixed_root(&inline_spl_token_v2_0::id()) {
+    fn apply_spl_token_v3_3_0_release(&mut self) {
+        if let Some(old_account) = self.get_account_with_fixed_root(&inline_spl_token::id()) {
             if let Some(new_account) =
-                self.get_account_with_fixed_root(&inline_spl_token_v2_0::new_token_program::id())
+                self.get_account_with_fixed_root(&inline_spl_token::new_token_program::id())
             {
                 datapoint_info!(
-                    "bank-apply_spl_token_v2_set_authority_fix",
+                    "bank-apply_spl_token_v3_3_0_release",
                     ("slot", self.slot, i64),
                 );
 
@@ -6252,15 +6252,15 @@ impl Bank {
                     .fetch_sub(old_account.lamports(), Relaxed);
 
                 // Transfer new token account to old token account
-                self.store_account(&inline_spl_token_v2_0::id(), &new_account);
+                self.store_account(&inline_spl_token::id(), &new_account);
 
                 // Clear new token account
                 self.store_account(
-                    &inline_spl_token_v2_0::new_token_program::id(),
+                    &inline_spl_token::new_token_program::id(),
                     &AccountSharedData::default(),
                 );
 
-                self.remove_executor(&inline_spl_token_v2_0::id());
+                self.remove_executor(&inline_spl_token::id());
             }
         }
     }
@@ -6274,8 +6274,8 @@ impl Bank {
 
         if reconfigure_token2_native_mint {
             let mut native_mint_account = solana_sdk::account::AccountSharedData::from(Account {
-                owner: inline_spl_token_v2_0::id(),
-                data: inline_spl_token_v2_0::native_mint::ACCOUNT_DATA.to_vec(),
+                owner: inline_spl_token::id(),
+                data: inline_spl_token::native_mint::ACCOUNT_DATA.to_vec(),
                 lamports: sol_to_lamports(1.),
                 executable: false,
                 rent_epoch: self.epoch() + 1,
@@ -6285,7 +6285,7 @@ impl Bank {
             // https://github.com/solana-labs/solana-program-library/issues/374, ensure that the
             // spl-token 2 native mint account is owned by the spl-token 2 program.
             let store = if let Some(existing_native_mint_account) =
-                self.get_account_with_fixed_root(&inline_spl_token_v2_0::native_mint::id())
+                self.get_account_with_fixed_root(&inline_spl_token::native_mint::id())
             {
                 if existing_native_mint_account.owner() == &solana_sdk::system_program::id() {
                     native_mint_account.set_lamports(existing_native_mint_account.lamports());
@@ -6300,10 +6300,7 @@ impl Bank {
             };
 
             if store {
-                self.store_account(
-                    &inline_spl_token_v2_0::native_mint::id(),
-                    &native_mint_account,
-                );
+                self.store_account(&inline_spl_token::native_mint::id(), &native_mint_account);
             }
         }
     }
@@ -12733,18 +12730,15 @@ pub(crate) mod tests {
         assert_eq!(genesis_config.cluster_type, ClusterType::Development);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         assert_eq!(
-            bank.get_balance(&inline_spl_token_v2_0::native_mint::id()),
+            bank.get_balance(&inline_spl_token::native_mint::id()),
             1000000000
         );
 
         // Testnet - Native mint blinks into existence at epoch 93
         genesis_config.cluster_type = ClusterType::Testnet;
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-        assert_eq!(
-            bank.get_balance(&inline_spl_token_v2_0::native_mint::id()),
-            0
-        );
-        bank.deposit(&inline_spl_token_v2_0::native_mint::id(), 4200000000)
+        assert_eq!(bank.get_balance(&inline_spl_token::native_mint::id()), 0);
+        bank.deposit(&inline_spl_token::native_mint::id(), 4200000000)
             .unwrap();
 
         let bank = Bank::new_from_parent(
@@ -12754,23 +12748,20 @@ pub(crate) mod tests {
         );
 
         let native_mint_account = bank
-            .get_account(&inline_spl_token_v2_0::native_mint::id())
+            .get_account(&inline_spl_token::native_mint::id())
             .unwrap();
         assert_eq!(native_mint_account.data().len(), 82);
         assert_eq!(
-            bank.get_balance(&inline_spl_token_v2_0::native_mint::id()),
+            bank.get_balance(&inline_spl_token::native_mint::id()),
             4200000000
         );
-        assert_eq!(native_mint_account.owner(), &inline_spl_token_v2_0::id());
+        assert_eq!(native_mint_account.owner(), &inline_spl_token::id());
 
         // MainnetBeta - Native mint blinks into existence at epoch 75
         genesis_config.cluster_type = ClusterType::MainnetBeta;
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-        assert_eq!(
-            bank.get_balance(&inline_spl_token_v2_0::native_mint::id()),
-            0
-        );
-        bank.deposit(&inline_spl_token_v2_0::native_mint::id(), 4200000000)
+        assert_eq!(bank.get_balance(&inline_spl_token::native_mint::id()), 0);
+        bank.deposit(&inline_spl_token::native_mint::id(), 4200000000)
             .unwrap();
 
         let bank = Bank::new_from_parent(
@@ -12780,14 +12771,14 @@ pub(crate) mod tests {
         );
 
         let native_mint_account = bank
-            .get_account(&inline_spl_token_v2_0::native_mint::id())
+            .get_account(&inline_spl_token::native_mint::id())
             .unwrap();
         assert_eq!(native_mint_account.data().len(), 82);
         assert_eq!(
-            bank.get_balance(&inline_spl_token_v2_0::native_mint::id()),
+            bank.get_balance(&inline_spl_token::native_mint::id()),
             4200000000
         );
-        assert_eq!(native_mint_account.owner(), &inline_spl_token_v2_0::id());
+        assert_eq!(native_mint_account.owner(), &inline_spl_token::id());
     }
 
     #[test]
@@ -13115,19 +13106,19 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_spl_token_v2_replacement() {
+    fn test_spl_token_replacement() {
         let (genesis_config, _mint_keypair) = create_genesis_config(0);
         let mut bank = Bank::new_for_tests(&genesis_config);
 
         // Setup original token account
         bank.store_account_and_update_capitalization(
-            &inline_spl_token_v2_0::id(),
+            &inline_spl_token::id(),
             &AccountSharedData::from(Account {
                 lamports: 100,
                 ..Account::default()
             }),
         );
-        assert_eq!(bank.get_balance(&inline_spl_token_v2_0::id()), 100);
+        assert_eq!(bank.get_balance(&inline_spl_token::id()), 100);
 
         // Setup new token account
         let new_token_account = AccountSharedData::from(Account {
@@ -13135,27 +13126,27 @@ pub(crate) mod tests {
             ..Account::default()
         });
         bank.store_account_and_update_capitalization(
-            &inline_spl_token_v2_0::new_token_program::id(),
+            &inline_spl_token::new_token_program::id(),
             &new_token_account,
         );
         assert_eq!(
-            bank.get_balance(&inline_spl_token_v2_0::new_token_program::id()),
+            bank.get_balance(&inline_spl_token::new_token_program::id()),
             123
         );
 
         let original_capitalization = bank.capitalization();
 
-        bank.apply_spl_token_v2_set_authority_fix();
+        bank.apply_spl_token_v3_3_0_release();
 
         // New token account is now empty
         assert_eq!(
-            bank.get_balance(&inline_spl_token_v2_0::new_token_program::id()),
+            bank.get_balance(&inline_spl_token::new_token_program::id()),
             0
         );
 
         // Old token account holds the new token account
         assert_eq!(
-            bank.get_account(&inline_spl_token_v2_0::id()),
+            bank.get_account(&inline_spl_token::id()),
             Some(new_token_account)
         );
 
