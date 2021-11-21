@@ -25,14 +25,9 @@ pub mod epoch_stakes;
 pub mod execute_cost_table;
 pub mod genesis_utils;
 pub mod hardened_unpack;
-<<<<<<< HEAD
 pub mod hashed_transaction;
-pub mod inline_spl_token_v2_0;
-pub mod instruction_recorder;
-=======
-pub mod in_mem_accounts_index;
 pub mod inline_spl_token;
->>>>>>> 02bc4e3fc (spl-token: New program feature flag (#21354))
+pub mod instruction_recorder;
 pub mod loader_utils;
 pub mod log_collector;
 pub mod message_processor;

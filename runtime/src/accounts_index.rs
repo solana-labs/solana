@@ -1,13 +1,7 @@
 use crate::{
     ancestors::Ancestors,
     contains::Contains,
-<<<<<<< HEAD
-    inline_spl_token_v2_0::{self, SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
-=======
-    in_mem_accounts_index::{InMemAccountsIndex, InsertNewEntryResults},
     inline_spl_token::{self, SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
-    pubkey_bins::PubkeyBinCalculator24,
->>>>>>> 02bc4e3fc (spl-token: New program feature flag (#21354))
     secondary_index::*,
 };
 use bv::BitVec;

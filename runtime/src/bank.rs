@@ -46,16 +46,11 @@ use crate::{
     builtins::{self, ActivationType},
     cost_tracker::CostTracker,
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
-<<<<<<< HEAD
     hashed_transaction::{HashedTransaction, HashedTransactionSlice},
-    inline_spl_token_v2_0,
+    inline_spl_token,
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
     message_processor::{ExecuteDetailsTimings, Executors, MessageProcessor},
-=======
-    inline_spl_token,
-    message_processor::MessageProcessor,
->>>>>>> 02bc4e3fc (spl-token: New program feature flag (#21354))
     rent_collector::RentCollector,
     stake_weighted_timestamp::{
         calculate_stake_weighted_timestamp, MaxAllowableDrift, MAX_ALLOWABLE_DRIFT_PERCENTAGE,
@@ -12014,18 +12009,9 @@ pub(crate) mod tests {
 
         // Testnet - Native mint blinks into existence at epoch 93
         genesis_config.cluster_type = ClusterType::Testnet;
-<<<<<<< HEAD
         let bank = Arc::new(Bank::new(&genesis_config));
-        assert_eq!(
-            bank.get_balance(&inline_spl_token_v2_0::native_mint::id()),
-            0
-        );
-        bank.deposit(&inline_spl_token_v2_0::native_mint::id(), 4200000000)
-=======
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         assert_eq!(bank.get_balance(&inline_spl_token::native_mint::id()), 0);
         bank.deposit(&inline_spl_token::native_mint::id(), 4200000000)
->>>>>>> 02bc4e3fc (spl-token: New program feature flag (#21354))
             .unwrap();
 
         let bank = Bank::new_from_parent(
@@ -12046,18 +12032,9 @@ pub(crate) mod tests {
 
         // MainnetBeta - Native mint blinks into existence at epoch 75
         genesis_config.cluster_type = ClusterType::MainnetBeta;
-<<<<<<< HEAD
         let bank = Arc::new(Bank::new(&genesis_config));
-        assert_eq!(
-            bank.get_balance(&inline_spl_token_v2_0::native_mint::id()),
-            0
-        );
-        bank.deposit(&inline_spl_token_v2_0::native_mint::id(), 4200000000)
-=======
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         assert_eq!(bank.get_balance(&inline_spl_token::native_mint::id()), 0);
         bank.deposit(&inline_spl_token::native_mint::id(), 4200000000)
->>>>>>> 02bc4e3fc (spl-token: New program feature flag (#21354))
             .unwrap();
 
         let bank = Bank::new_from_parent(

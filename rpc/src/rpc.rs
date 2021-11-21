@@ -1860,32 +1860,13 @@ impl JsonRpcRequestProcessor {
                 });
             }
             Ok(bank
-<<<<<<< HEAD
                 .get_filtered_indexed_accounts(&IndexKey::SplTokenOwner(*owner_key), |account| {
-                    account.owner() == &spl_token_id_v2_0()
+                    account.owner() == &spl_token_id()
                         && filters.iter().all(|filter_type| match filter_type {
                             RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
                             RpcFilterType::Memcmp(compare) => compare.bytes_match(account.data()),
                         })
                 })
-=======
-                .get_filtered_indexed_accounts(
-                    &IndexKey::SplTokenOwner(*owner_key),
-                    |account| {
-                        account.owner() == &spl_token_id()
-                            && filters.iter().all(|filter_type| match filter_type {
-                                RpcFilterType::DataSize(size) => {
-                                    account.data().len() as u64 == *size
-                                }
-                                RpcFilterType::Memcmp(compare) => {
-                                    compare.bytes_match(account.data())
-                                }
-                            })
-                    },
-                    &ScanConfig::default(),
-                    bank.byte_limit_for_scans(),
-                )
->>>>>>> 02bc4e3fc (spl-token: New program feature flag (#21354))
                 .map_err(|e| RpcCustomError::ScanError {
                     message: e.to_string(),
                 })?)
@@ -1927,32 +1908,13 @@ impl JsonRpcRequestProcessor {
                 });
             }
             Ok(bank
-<<<<<<< HEAD
                 .get_filtered_indexed_accounts(&IndexKey::SplTokenMint(*mint_key), |account| {
-                    account.owner() == &spl_token_id_v2_0()
+                    account.owner() == &spl_token_id()
                         && filters.iter().all(|filter_type| match filter_type {
                             RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
                             RpcFilterType::Memcmp(compare) => compare.bytes_match(account.data()),
                         })
                 })
-=======
-                .get_filtered_indexed_accounts(
-                    &IndexKey::SplTokenMint(*mint_key),
-                    |account| {
-                        account.owner() == &spl_token_id()
-                            && filters.iter().all(|filter_type| match filter_type {
-                                RpcFilterType::DataSize(size) => {
-                                    account.data().len() as u64 == *size
-                                }
-                                RpcFilterType::Memcmp(compare) => {
-                                    compare.bytes_match(account.data())
-                                }
-                            })
-                    },
-                    &ScanConfig::default(),
-                    bank.byte_limit_for_scans(),
-                )
->>>>>>> 02bc4e3fc (spl-token: New program feature flag (#21354))
                 .map_err(|e| RpcCustomError::ScanError {
                     message: e.to_string(),
                 })?)
