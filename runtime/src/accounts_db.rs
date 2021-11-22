@@ -4556,7 +4556,7 @@ impl AccountsDb {
         let mut unflushable_unrooted_slot_count = 0;
         let max_flushed_root = self.accounts_cache.fetch_max_flush_root();
         if self.should_aggressively_flush_cache() {
-            let old_slots = self.accounts_cache.find_older_frozen_slots();
+            let old_slots = self.accounts_cache.cached_frozen_slots();
             excess_slot_count = old_slots.len();
             let old_slot_flush_stats: Vec<_> = old_slots
                 .into_iter()
@@ -4607,7 +4607,7 @@ impl AccountsDb {
         let num_slots_remaining = self.accounts_cache.num_slots();
         if force_flush && num_slots_remaining >= FLUSH_CACHE_RANDOM_THRESHOLD {
             // Don't flush slots that are known to be unrooted
-            let mut frozen_slots = self.accounts_cache.find_older_frozen_slots();
+            let mut frozen_slots = self.accounts_cache.cached_frozen_slots();
             frozen_slots.retain(|s| *s > max_flushed_root);
             // Remove a random index 0 <= i < `frozen_slots.len()`
             let rand_slot = frozen_slots.choose(&mut thread_rng());

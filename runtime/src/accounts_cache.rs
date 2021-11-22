@@ -289,7 +289,7 @@ impl AccountsCache {
         removed_slots
     }
 
-    pub fn find_older_frozen_slots(&self) -> Vec<Slot> {
+    pub fn cached_frozen_slots(&self) -> Vec<Slot> {
         let mut slots: Vec<_> = self
             .cache
             .iter()
@@ -342,10 +342,10 @@ pub mod tests {
     }
 
     #[test]
-    fn test_find_older_frozen_slots() {
+    fn test_cached_frozen_slots() {
         let cache = AccountsCache::default();
         // Cache is empty, should return nothing
-        assert!(cache.find_older_frozen_slots().is_empty());
+        assert!(cache.cached_frozen_slots().is_empty());
         let inserted_slot = 0;
         cache.store(
             inserted_slot,
@@ -356,9 +356,9 @@ pub mod tests {
 
         // If the cache is told the size limit is 0, it should return nothing, because there's no
         // frozen slots
-        assert!(cache.find_older_frozen_slots().is_empty());
+        assert!(cache.cached_frozen_slots().is_empty());
         cache.slot_cache(inserted_slot).unwrap().mark_slot_frozen();
         // If the cache is told the size limit is 0, it should return the one frozen slot
-        assert_eq!(cache.find_older_frozen_slots(), vec![inserted_slot]);
+        assert_eq!(cache.cached_frozen_slots(), vec![inserted_slot]);
     }
 }
