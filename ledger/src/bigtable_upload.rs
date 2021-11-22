@@ -1,15 +1,17 @@
-use crate::blockstore::Blockstore;
-use log::*;
-use solana_measure::measure::Measure;
-use solana_sdk::clock::Slot;
-use std::{
-    collections::HashSet,
-    result::Result,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
+use {
+    crate::blockstore::Blockstore,
+    log::*,
+    solana_measure::measure::Measure,
+    solana_sdk::clock::Slot,
+    std::{
+        collections::HashSet,
+        result::Result,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
+        time::Duration,
     },
-    time::Duration,
 };
 
 // Attempt to upload this many blocks in parallel
