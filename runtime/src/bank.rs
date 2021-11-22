@@ -102,7 +102,7 @@ use solana_sdk::{
     hash::{extend_and_hash, hashv, Hash},
     incinerator,
     inflation::Inflation,
-    instruction::{CompiledInstruction, InstructionError},
+    instruction::CompiledInstruction,
     lamports::LamportsError,
     message::SanitizedMessage,
     native_loader,
@@ -423,28 +423,6 @@ impl CachedExecutors {
     }
     fn remove(&mut self, pubkey: &Pubkey) {
         let _ = self.executors.remove(pubkey);
-    }
-}
-
-pub struct TransactionComputeMeter {
-    remaining: u64,
-}
-impl TransactionComputeMeter {
-    pub fn new(cap: u64) -> Self {
-        Self { remaining: cap }
-    }
-}
-impl ComputeMeter for TransactionComputeMeter {
-    fn consume(&mut self, amount: u64) -> std::result::Result<(), InstructionError> {
-        let exceeded = self.remaining < amount;
-        self.remaining = self.remaining.saturating_sub(amount);
-        if exceeded {
-            return Err(InstructionError::ComputationalBudgetExceeded);
-        }
-        Ok(())
-    }
-    fn get_remaining(&self) -> u64 {
-        self.remaining
     }
 }
 
@@ -3887,9 +3865,7 @@ impl Bank {
                             None
                         };
 
-                        let compute_meter = Rc::new(RefCell::new(TransactionComputeMeter::new(
-                            compute_budget.max_units,
-                        )));
+                        let compute_meter = ComputeMeter::new_ref(compute_budget.max_units);
 
                         let (blockhash, lamports_per_signature) = {
                             let blockhash_queue = self.blockhash_queue.read().unwrap();

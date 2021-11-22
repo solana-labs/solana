@@ -97,7 +97,7 @@ impl From<SyscallError> for EbpfError<BpfError> {
 trait SyscallConsume {
     fn consume(&mut self, amount: u64) -> Result<(), EbpfError<BpfError>>;
 }
-impl SyscallConsume for Rc<RefCell<dyn ComputeMeter>> {
+impl SyscallConsume for Rc<RefCell<ComputeMeter>> {
     fn consume(&mut self, amount: u64) -> Result<(), EbpfError<BpfError>> {
         self.try_borrow_mut()
             .map_err(|_| SyscallError::InvokeContextBorrowFailed)?
@@ -580,7 +580,7 @@ impl SyscallObject<BpfError> for SyscallAbort {
 /// Causes the BPF program to be halted immediately
 /// Log a user's info message
 pub struct SyscallPanic<'a> {
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    compute_meter: Rc<RefCell<ComputeMeter>>,
     loader_id: &'a Pubkey,
 }
 impl<'a> SyscallObject<BpfError> for SyscallPanic<'a> {
@@ -607,7 +607,7 @@ impl<'a> SyscallObject<BpfError> for SyscallPanic<'a> {
 
 /// Log a user's info message
 pub struct SyscallLog<'a> {
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    compute_meter: Rc<RefCell<ComputeMeter>>,
     logger: Rc<RefCell<dyn Logger>>,
     loader_id: &'a Pubkey,
 }
@@ -643,7 +643,7 @@ impl<'a> SyscallObject<BpfError> for SyscallLog<'a> {
 /// Log 5 64-bit values
 pub struct SyscallLogU64 {
     cost: u64,
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    compute_meter: Rc<RefCell<ComputeMeter>>,
     logger: Rc<RefCell<dyn Logger>>,
 }
 impl SyscallObject<BpfError> for SyscallLogU64 {
@@ -672,7 +672,7 @@ impl SyscallObject<BpfError> for SyscallLogU64 {
 /// Log current compute consumption
 pub struct SyscallLogBpfComputeUnits {
     cost: u64,
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    compute_meter: Rc<RefCell<ComputeMeter>>,
     logger: Rc<RefCell<dyn Logger>>,
 }
 impl SyscallObject<BpfError> for SyscallLogBpfComputeUnits {
@@ -706,7 +706,7 @@ impl SyscallObject<BpfError> for SyscallLogBpfComputeUnits {
 /// Log 5 64-bit values
 pub struct SyscallLogPubkey<'a> {
     cost: u64,
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    compute_meter: Rc<RefCell<ComputeMeter>>,
     logger: Rc<RefCell<dyn Logger>>,
     loader_id: &'a Pubkey,
 }
@@ -809,7 +809,7 @@ fn translate_and_check_program_address_inputs<'a>(
 /// Create a program address
 struct SyscallCreateProgramAddress<'a> {
     cost: u64,
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    compute_meter: Rc<RefCell<ComputeMeter>>,
     loader_id: &'a Pubkey,
 }
 impl<'a> SyscallObject<BpfError> for SyscallCreateProgramAddress<'a> {
@@ -855,7 +855,7 @@ impl<'a> SyscallObject<BpfError> for SyscallCreateProgramAddress<'a> {
 /// Create a program address
 struct SyscallTryFindProgramAddress<'a> {
     cost: u64,
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    compute_meter: Rc<RefCell<ComputeMeter>>,
     loader_id: &'a Pubkey,
 }
 impl<'a> SyscallObject<BpfError> for SyscallTryFindProgramAddress<'a> {
@@ -916,7 +916,7 @@ impl<'a> SyscallObject<BpfError> for SyscallTryFindProgramAddress<'a> {
 pub struct SyscallSha256<'a> {
     sha256_base_cost: u64,
     sha256_byte_cost: u64,
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    compute_meter: Rc<RefCell<ComputeMeter>>,
     loader_id: &'a Pubkey,
 }
 impl<'a> SyscallObject<BpfError> for SyscallSha256<'a> {
@@ -1097,7 +1097,7 @@ impl<'a> SyscallObject<BpfError> for SyscallGetRentSysvar<'a> {
 pub struct SyscallKeccak256<'a> {
     base_cost: u64,
     byte_cost: u64,
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    compute_meter: Rc<RefCell<ComputeMeter>>,
     loader_id: &'a Pubkey,
 }
 impl<'a> SyscallObject<BpfError> for SyscallKeccak256<'a> {
@@ -1158,7 +1158,7 @@ fn check_overlapping(src_addr: u64, dst_addr: u64, n: u64) -> bool {
 /// memcpy
 pub struct SyscallMemcpy<'a> {
     cost: u64,
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    compute_meter: Rc<RefCell<ComputeMeter>>,
     loader_id: &'a Pubkey,
 }
 impl<'a> SyscallObject<BpfError> for SyscallMemcpy<'a> {
@@ -1195,7 +1195,7 @@ impl<'a> SyscallObject<BpfError> for SyscallMemcpy<'a> {
 /// memmove
 pub struct SyscallMemmove<'a> {
     cost: u64,
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    compute_meter: Rc<RefCell<ComputeMeter>>,
     loader_id: &'a Pubkey,
 }
 impl<'a> SyscallObject<BpfError> for SyscallMemmove<'a> {
@@ -1227,7 +1227,7 @@ impl<'a> SyscallObject<BpfError> for SyscallMemmove<'a> {
 /// memcmp
 pub struct SyscallMemcmp<'a> {
     cost: u64,
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    compute_meter: Rc<RefCell<ComputeMeter>>,
     loader_id: &'a Pubkey,
 }
 impl<'a> SyscallObject<BpfError> for SyscallMemcmp<'a> {
@@ -1272,7 +1272,7 @@ impl<'a> SyscallObject<BpfError> for SyscallMemcmp<'a> {
 /// memset
 pub struct SyscallMemset<'a> {
     cost: u64,
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    compute_meter: Rc<RefCell<ComputeMeter>>,
     loader_id: &'a Pubkey,
 }
 impl<'a> SyscallObject<BpfError> for SyscallMemset<'a> {
@@ -1301,7 +1301,7 @@ impl<'a> SyscallObject<BpfError> for SyscallMemset<'a> {
 /// secp256k1_recover
 pub struct SyscallSecp256k1Recover<'a> {
     cost: u64,
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    compute_meter: Rc<RefCell<ComputeMeter>>,
     loader_id: &'a Pubkey,
     libsecp256k1_0_5_upgrade_enabled: bool,
 }
@@ -1392,7 +1392,7 @@ impl<'a> SyscallObject<BpfError> for SyscallSecp256k1Recover<'a> {
 pub struct SyscallBlake3<'a> {
     base_cost: u64,
     byte_cost: u64,
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    compute_meter: Rc<RefCell<ComputeMeter>>,
     loader_id: &'a Pubkey,
 }
 impl<'a> SyscallObject<BpfError> for SyscallBlake3<'a> {
@@ -2441,7 +2441,7 @@ impl<'a> SyscallObject<BpfError> for SyscallLogData<'a> {
 mod tests {
     use super::*;
     use solana_program_runtime::{
-        invoke_context::{ThisComputeMeter, ThisInvokeContext, ThisLogger},
+        invoke_context::{ComputeMeter, ThisInvokeContext, ThisLogger},
         log_collector::LogCollector,
     };
     use solana_rbpf::{
@@ -2776,7 +2776,7 @@ mod tests {
         )
         .unwrap();
 
-        let compute_meter = ThisComputeMeter::new_ref(string.len() as u64 - 1);
+        let compute_meter = ComputeMeter::new_ref(string.len() as u64 - 1);
         let mut syscall_panic = SyscallPanic {
             compute_meter,
             loader_id: &bpf_loader::id(),
@@ -2798,7 +2798,7 @@ mod tests {
             result
         );
 
-        let compute_meter = ThisComputeMeter::new_ref(string.len() as u64);
+        let compute_meter = ComputeMeter::new_ref(string.len() as u64);
         let mut syscall_panic = SyscallPanic {
             compute_meter,
             loader_id: &bpf_loader::id(),
@@ -2839,7 +2839,7 @@ mod tests {
 
         {
             let mut syscall_sol_log = SyscallLog {
-                compute_meter: ThisComputeMeter::new_ref(string.len() as u64),
+                compute_meter: ComputeMeter::new_ref(string.len() as u64),
                 logger: ThisLogger::new_ref(Some(log.clone())),
                 loader_id: &bpf_loader::id(),
             };
@@ -2864,7 +2864,7 @@ mod tests {
         assert_eq!(log[0], "Program log: Gaggablaghblagh!");
 
         let mut syscall_sol_log = SyscallLog {
-            compute_meter: ThisComputeMeter::new_ref(string.len() as u64 * 3),
+            compute_meter: ComputeMeter::new_ref(string.len() as u64 * 3),
             logger: ThisLogger::new_ref(None),
             loader_id: &bpf_loader::id(),
         };
@@ -2902,7 +2902,7 @@ mod tests {
         );
 
         let mut syscall_sol_log = SyscallLog {
-            compute_meter: ThisComputeMeter::new_ref((string.len() as u64 * 2) - 1),
+            compute_meter: ComputeMeter::new_ref((string.len() as u64 * 2) - 1),
             logger: ThisLogger::new_ref(None),
             loader_id: &bpf_loader::id(),
         };
@@ -2942,7 +2942,7 @@ mod tests {
         {
             let mut syscall_sol_log_u64 = SyscallLogU64 {
                 cost: 0,
-                compute_meter: ThisComputeMeter::new_ref(std::u64::MAX),
+                compute_meter: ComputeMeter::new_ref(std::u64::MAX),
                 logger: ThisLogger::new_ref(Some(log.clone())),
             };
             let config = Config::default();
@@ -2984,7 +2984,7 @@ mod tests {
         {
             let mut syscall_sol_pubkey = SyscallLogPubkey {
                 cost: 1,
-                compute_meter: ThisComputeMeter::new_ref(1),
+                compute_meter: ComputeMeter::new_ref(1),
                 logger: ThisLogger::new_ref(Some(log.clone())),
                 loader_id: &bpf_loader::id(),
             };
@@ -3005,7 +3005,7 @@ mod tests {
 
         let mut syscall_sol_pubkey = SyscallLogPubkey {
             cost: 1,
-            compute_meter: ThisComputeMeter::new_ref(1),
+            compute_meter: ComputeMeter::new_ref(1),
             logger: ThisLogger::new_ref(None),
             loader_id: &bpf_loader::id(),
         };
@@ -3210,7 +3210,7 @@ mod tests {
             &config,
         )
         .unwrap();
-        let compute_meter = ThisComputeMeter::new_ref((bytes1.len() + bytes2.len()) as u64);
+        let compute_meter = ComputeMeter::new_ref((bytes1.len() + bytes2.len()) as u64);
         let mut syscall = SyscallSha256 {
             sha256_base_cost: 0,
             sha256_byte_cost: 2,
@@ -3564,7 +3564,7 @@ mod tests {
     ) -> Result<Pubkey, EbpfError<BpfError>> {
         let mut syscall = SyscallCreateProgramAddress {
             cost: 1,
-            compute_meter: ThisComputeMeter::new_ref(remaining),
+            compute_meter: ComputeMeter::new_ref(remaining),
             loader_id: &bpf_loader::id(),
         };
         let (address, _) = call_program_address_common(seeds, program_id, &mut syscall)?;
@@ -3578,7 +3578,7 @@ mod tests {
     ) -> Result<(Pubkey, u8), EbpfError<BpfError>> {
         let mut syscall = SyscallTryFindProgramAddress {
             cost: 1,
-            compute_meter: ThisComputeMeter::new_ref(remaining),
+            compute_meter: ComputeMeter::new_ref(remaining),
             loader_id: &bpf_loader::id(),
         };
         call_program_address_common(seeds, program_id, &mut syscall)

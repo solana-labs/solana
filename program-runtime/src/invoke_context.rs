@@ -23,18 +23,12 @@ use solana_sdk::{
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 /// Compute meter
-pub trait ComputeMeter {
-    /// Consume compute units
-    fn consume(&mut self, amount: u64) -> Result<(), InstructionError>;
-    /// Get the number of remaining compute units
-    fn get_remaining(&self) -> u64;
-}
-
-pub struct ThisComputeMeter {
+pub struct ComputeMeter {
     remaining: u64,
 }
-impl ComputeMeter for ThisComputeMeter {
-    fn consume(&mut self, amount: u64) -> Result<(), InstructionError> {
+impl ComputeMeter {
+    /// Consume compute units
+    pub fn consume(&mut self, amount: u64) -> Result<(), InstructionError> {
         let exceeded = self.remaining < amount;
         self.remaining = self.remaining.saturating_sub(amount);
         if exceeded {
@@ -42,11 +36,11 @@ impl ComputeMeter for ThisComputeMeter {
         }
         Ok(())
     }
-    fn get_remaining(&self) -> u64 {
+    /// Get the number of remaining compute units
+    pub fn get_remaining(&self) -> u64 {
         self.remaining
     }
-}
-impl ThisComputeMeter {
+    /// Construct a new one with the given remaining units
     pub fn new_ref(remaining: u64) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self { remaining }))
     }
@@ -150,7 +144,7 @@ pub struct ThisInvokeContext<'a> {
     logger: Rc<RefCell<dyn Logger>>,
     compute_budget: ComputeBudget,
     current_compute_budget: ComputeBudget,
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    compute_meter: Rc<RefCell<ComputeMeter>>,
     executors: Rc<RefCell<Executors>>,
     instruction_recorders: Option<&'a [InstructionRecorder]>,
     feature_set: Arc<FeatureSet>,
@@ -168,7 +162,7 @@ impl<'a> ThisInvokeContext<'a> {
         sysvars: &'a [(Pubkey, Vec<u8>)],
         log_collector: Option<Rc<LogCollector>>,
         compute_budget: ComputeBudget,
-        compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+        compute_meter: Rc<RefCell<ComputeMeter>>,
         executors: Rc<RefCell<Executors>>,
         instruction_recorders: Option<&'a [InstructionRecorder]>,
         feature_set: Arc<FeatureSet>,
@@ -210,7 +204,7 @@ impl<'a> ThisInvokeContext<'a> {
             sysvars,
             None,
             ComputeBudget::default(),
-            ThisComputeMeter::new_ref(std::i64::MAX as u64),
+            ComputeMeter::new_ref(std::i64::MAX as u64),
             Rc::new(RefCell::new(Executors::default())),
             None,
             feature_set,
@@ -275,7 +269,7 @@ pub trait InvokeContext {
     /// Get this invocation's logger
     fn get_logger(&self) -> Rc<RefCell<dyn Logger>>;
     /// Get this invocation's compute meter
-    fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>>;
+    fn get_compute_meter(&self) -> Rc<RefCell<ComputeMeter>>;
     /// Loaders may need to do work in order to execute a program.  Cache
     /// the work that can be re-used across executions
     fn add_executor(&self, pubkey: &Pubkey, executor: Arc<dyn Executor>);
@@ -349,8 +343,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             self.current_compute_budget = compute_budget;
 
             if !self.feature_set.is_active(&tx_wide_compute_cap::id()) {
-                self.compute_meter =
-                    ThisComputeMeter::new_ref(self.current_compute_budget.max_units);
+                self.compute_meter = ComputeMeter::new_ref(self.current_compute_budget.max_units);
             }
 
             self.pre_accounts = Vec::with_capacity(instruction.accounts.len());
@@ -590,7 +583,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
         self.logger.clone()
     }
-    fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
+    fn get_compute_meter(&self) -> Rc<RefCell<ComputeMeter>> {
         self.compute_meter.clone()
     }
     fn add_executor(&self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {

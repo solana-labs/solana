@@ -901,10 +901,10 @@ fn process_loader_instruction(
 
 /// Passed to the VM to enforce the compute budget
 pub struct ThisInstructionMeter {
-    pub compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    pub compute_meter: Rc<RefCell<ComputeMeter>>,
 }
 impl ThisInstructionMeter {
-    fn new(compute_meter: Rc<RefCell<dyn ComputeMeter>>) -> Self {
+    fn new(compute_meter: Rc<RefCell<ComputeMeter>>) -> Self {
         Self { compute_meter }
     }
 }
