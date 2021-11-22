@@ -119,7 +119,6 @@ pub trait AccountsDbPlugin: Any + Send + Sync + std::fmt::Debug {
         Ok(())
     }
 
-
     /// Called when a transaction is updated at a slot.
     #[allow(unused_variables)]
     fn notify_transaction(

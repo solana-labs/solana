@@ -177,7 +177,6 @@ impl AccountsDbPluginService {
         self.accounts_update_notifier.clone()
     }
 
-
     pub fn get_transaction_notifier(&self) -> Option<TransactionNotifier> {
         self.transaction_notifier.clone()
     }
