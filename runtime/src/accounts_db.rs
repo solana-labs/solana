@@ -104,6 +104,44 @@ const CACHE_VIRTUAL_WRITE_VERSION: StoredMetaWriteVersion = 0;
 const CACHE_VIRTUAL_OFFSET: usize = 0;
 const CACHE_VIRTUAL_STORED_SIZE: usize = 0;
 
+<<<<<<< HEAD
+=======
+pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
+    index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+    accounts_hash_cache_path: None,
+    filler_account_count: None,
+    hash_calc_num_passes: None,
+};
+pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
+    index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
+    accounts_hash_cache_path: None,
+    filler_account_count: None,
+    hash_calc_num_passes: None,
+};
+
+pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
+
+pub struct AccountsAddRootTiming {
+    pub index_us: u64,
+    pub cache_us: u64,
+    pub store_us: u64,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct AccountsDbConfig {
+    pub index: Option<AccountsIndexConfig>,
+    pub accounts_hash_cache_path: Option<PathBuf>,
+    pub filler_account_count: Option<usize>,
+    pub hash_calc_num_passes: Option<usize>,
+}
+
+struct FoundStoredAccount<'a> {
+    pub account: StoredAccountMeta<'a>,
+    pub store_id: AppendVecId,
+    pub account_size: usize,
+}
+
+>>>>>>> c4d68063c (Add timing for accounts add_root (#21379))
 #[cfg(not(test))]
 const ABSURD_CONSECUTIVE_FAILED_ITERATIONS: usize = 100;
 
@@ -5793,15 +5831,27 @@ impl AccountsDb {
         }
     }
 
-    pub fn add_root(&self, slot: Slot) {
+    pub fn add_root(&self, slot: Slot) -> AccountsAddRootTiming {
+        let mut index_time = Measure::start("index_add_root");
         self.accounts_index.add_root(slot, self.caching_enabled);
+        index_time.stop();
+        let mut cache_time = Measure::start("cache_add_root");
         if self.caching_enabled {
             self.accounts_cache.add_root(slot);
         }
+        cache_time.stop();
+        let mut store_time = Measure::start("store_add_root");
         if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
             for (store_id, store) in slot_stores.read().unwrap().iter() {
                 self.dirty_stores.insert((slot, *store_id), store.clone());
             }
+        }
+        store_time.stop();
+
+        AccountsAddRootTiming {
+            index_us: index_time.as_us(),
+            cache_us: cache_time.as_us(),
+            store_us: store_time.as_us(),
         }
     }
 
