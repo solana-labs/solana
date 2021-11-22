@@ -7,6 +7,7 @@ use {
     solana_sdk::{
         clock::{Slot, DEFAULT_SLOTS_PER_EPOCH},
         pubkey::Pubkey,
+        timing::AtomicInterval,
     },
     std::{
         collections::{BTreeMap, HashMap},
@@ -26,6 +27,7 @@ pub struct ClusterSlots {
     validator_stakes: RwLock<Arc<NodeIdToVoteAccounts>>,
     epoch: RwLock<Option<u64>>,
     cursor: Mutex<Cursor>,
+    last_report: AtomicInterval,
 }
 
 impl ClusterSlots {
@@ -98,6 +100,36 @@ impl ClusterSlots {
                 let key = *cluster_slots.keys().nth(CLUSTER_SLOTS_TRIM_SIZE).unwrap();
                 cluster_slots.split_off(&key);
             }
+        }
+        self.report_cluster_slots_size();
+    }
+
+    fn report_cluster_slots_size(&self) {
+        if self.last_report.should_update(10_000) {
+            let (cluster_slots_cap, pubkeys_capacity) = {
+                let cluster_slots = self.cluster_slots.read().unwrap();
+                let cluster_slots_cap = cluster_slots.len();
+                let pubkeys_capacity = cluster_slots
+                    .iter()
+                    .map(|(_slot, slot_pubkeys)| slot_pubkeys.read().unwrap().capacity())
+                    .sum::<usize>();
+                (cluster_slots_cap, pubkeys_capacity)
+            };
+            let (validator_stakes_cap, validator_pubkeys_len) = {
+                let validator_stakes = self.validator_stakes.read().unwrap();
+                let validator_len = validator_stakes
+                    .iter()
+                    .map(|(_pubkey, vote_accounts)| vote_accounts.vote_accounts.capacity())
+                    .sum::<usize>();
+                (validator_stakes.capacity(), validator_len)
+            };
+            datapoint_info!(
+                "cluster-slots-size",
+                ("cluster_slots_capacity", cluster_slots_cap, i64),
+                ("pubkeys_capacity", pubkeys_capacity, i64),
+                ("validator_stakes_capacity", validator_stakes_cap, i64),
+                ("validator_pubkeys_len", validator_pubkeys_len, i64),
+            );
         }
     }
 
