@@ -227,7 +227,24 @@ impl CostModel {
                 space,
                 owner: _owner,
             } => space,
-            _ => 0,
+            SystemInstruction::Assign { owner: _owner } => 0,
+            SystemInstruction::WithdrawNonceAccount(_) => 0,
+            SystemInstruction::AuthorizeNonceAccount(_) => 0,
+            SystemInstruction::InitializeNonceAccount(_) => 0,
+            SystemInstruction::AssignWithSeed {
+                base: _base,
+                seed: _seed,
+                owner: _owner,
+            } => 0,
+            SystemInstruction::TransferWithSeed {
+                lamports: _lamports,
+                from_seed: _from_seed,
+                from_owner: _from_owner,
+            } => 0,
+            SystemInstruction::Transfer {
+                lamports: _lamports,
+            } => 0,
+            SystemInstruction::AdvanceNonceAccount => 0,
         }
     }
 
