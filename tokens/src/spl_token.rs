@@ -4,16 +4,13 @@ use crate::{
 };
 use console::style;
 use solana_account_decoder::parse_token::{
-    pubkey_from_spl_token_v2_0, real_number_string, real_number_string_trimmed,
-    spl_token_v2_0_pubkey,
+    pubkey_from_spl_token, real_number_string, real_number_string_trimmed, spl_token_pubkey,
 };
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{instruction::Instruction, message::Message, native_token::lamports_to_sol};
-use solana_transaction_status::parse_token::spl_token_v2_0_instruction;
-use spl_associated_token_account_v1_0::{
-    create_associated_token_account, get_associated_token_address,
-};
-use spl_token_v2_0::{
+use solana_transaction_status::parse_token::spl_token_instruction;
+use spl_associated_token_account::{create_associated_token_account, get_associated_token_address};
+use spl_token::{
     solana_program::program_pack::Pack,
     state::{Account as SplTokenAccount, Mint},
 };
@@ -24,7 +21,7 @@ pub fn update_token_args(client: &RpcClient, args: &mut Option<SplTokenArgs>) ->
             .get_account(&spl_token_args.token_account_address)
             .unwrap_or_default();
         let mint_address =
-            pubkey_from_spl_token_v2_0(&SplTokenAccount::unpack(&sender_account.data)?.mint);
+            pubkey_from_spl_token(&SplTokenAccount::unpack(&sender_account.data)?.mint);
         spl_token_args.mint = mint_address;
         update_decimals(client, args)?;
     }
@@ -54,33 +51,31 @@ pub fn build_spl_token_instructions(
         .as_ref()
         .expect("spl_token_args must be some");
     let wallet_address = allocation.recipient.parse().unwrap();
-    let associated_token_address = get_associated_token_address(
-        &wallet_address,
-        &spl_token_v2_0_pubkey(&spl_token_args.mint),
-    );
+    let associated_token_address =
+        get_associated_token_address(&wallet_address, &spl_token_pubkey(&spl_token_args.mint));
     let mut instructions = vec![];
     if do_create_associated_token_account {
         let create_associated_token_account_instruction = create_associated_token_account(
-            &spl_token_v2_0_pubkey(&args.fee_payer.pubkey()),
+            &spl_token_pubkey(&args.fee_payer.pubkey()),
             &wallet_address,
-            &spl_token_v2_0_pubkey(&spl_token_args.mint),
+            &spl_token_pubkey(&spl_token_args.mint),
         );
-        instructions.push(spl_token_v2_0_instruction(
+        instructions.push(spl_token_instruction(
             create_associated_token_account_instruction,
         ));
     }
-    let spl_instruction = spl_token_v2_0::instruction::transfer_checked(
-        &spl_token_v2_0::id(),
-        &spl_token_v2_0_pubkey(&spl_token_args.token_account_address),
-        &spl_token_v2_0_pubkey(&spl_token_args.mint),
+    let spl_instruction = spl_token::instruction::transfer_checked(
+        &spl_token::id(),
+        &spl_token_pubkey(&spl_token_args.token_account_address),
+        &spl_token_pubkey(&spl_token_args.mint),
         &associated_token_address,
-        &spl_token_v2_0_pubkey(&args.sender_keypair.pubkey()),
+        &spl_token_pubkey(&args.sender_keypair.pubkey()),
         &[],
         allocation.amount,
         spl_token_args.decimals,
     )
     .unwrap();
-    instructions.push(spl_token_v2_0_instruction(spl_instruction));
+    instructions.push(spl_token_instruction(spl_instruction));
     instructions
 }
 
@@ -136,11 +131,11 @@ pub fn print_token_balances(
     let address = allocation.recipient.parse().unwrap();
     let expected = allocation.amount;
     let associated_token_address = get_associated_token_address(
-        &spl_token_v2_0_pubkey(&address),
-        &spl_token_v2_0_pubkey(&spl_token_args.mint),
+        &spl_token_pubkey(&address),
+        &spl_token_pubkey(&spl_token_args.mint),
     );
     let recipient_account = client
-        .get_account(&pubkey_from_spl_token_v2_0(&associated_token_address))
+        .get_account(&pubkey_from_spl_token(&associated_token_address))
         .unwrap_or_default();
     let (actual, difference) = if let Ok(recipient_token) =
         SplTokenAccount::unpack(&recipient_account.data)

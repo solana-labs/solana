@@ -332,7 +332,6 @@ pub fn cluster_info_scale() {
                 //if node.0.get_votes(0).1.len() != (num_nodes * num_votes) {
                 let has_tx = node
                     .get_votes(&mut Cursor::default())
-                    .1
                     .iter()
                     .filter(|v| v.message.account_keys == tx.message.account_keys)
                     .count();

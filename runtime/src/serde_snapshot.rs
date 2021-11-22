@@ -463,7 +463,7 @@ where
                 // Remap the AppendVec ID to handle any duplicate IDs that may previously existed
                 // due to full snapshots and incremental snapshots generated from different nodes
                 let (remapped_append_vec_id, remapped_append_vec_path) = loop {
-                    let remapped_append_vec_id = next_append_vec_id.fetch_add(1, Ordering::Relaxed);
+                    let remapped_append_vec_id = next_append_vec_id.fetch_add(1, Ordering::AcqRel);
                     let remapped_file_name = AppendVec::file_name(*slot, remapped_append_vec_id);
                     let remapped_append_vec_path =
                         append_vec_path.parent().unwrap().join(&remapped_file_name);
@@ -512,7 +512,7 @@ where
         "At least one storage entry must exist from deserializing stream"
     );
 
-    let next_append_vec_id = next_append_vec_id.load(Ordering::Relaxed);
+    let next_append_vec_id = next_append_vec_id.load(Ordering::Acquire);
     let max_append_vec_id = next_append_vec_id - 1;
     assert!(
         max_append_vec_id <= AppendVecId::MAX / 2,
@@ -533,7 +533,7 @@ where
     );
     accounts_db
         .next_id
-        .store(next_append_vec_id, Ordering::Relaxed);
+        .store(next_append_vec_id, Ordering::Release);
     accounts_db
         .write_version
         .fetch_add(snapshot_version, Ordering::Release);

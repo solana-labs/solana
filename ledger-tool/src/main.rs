@@ -833,6 +833,12 @@ fn assert_capitalization(bank: &Bank) {
     let debug_verify = true;
     assert!(bank.calculate_and_verify_capitalization(debug_verify));
 }
+#[cfg(not(target_env = "msvc"))]
+use jemallocator::Jemalloc;
+
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
 
 #[allow(clippy::cognitive_complexity)]
 fn main() {
@@ -2251,7 +2257,7 @@ fn main() {
 
                     if remove_stake_accounts {
                         for (address, mut account) in bank
-                            .get_program_accounts(&stake::program::id(), ScanConfig::default())
+                            .get_program_accounts(&stake::program::id(), &ScanConfig::default())
                             .unwrap()
                             .into_iter()
                         {
@@ -2275,7 +2281,7 @@ fn main() {
 
                     if !vote_accounts_to_destake.is_empty() {
                         for (address, mut account) in bank
-                            .get_program_accounts(&stake::program::id(), ScanConfig::default())
+                            .get_program_accounts(&stake::program::id(), &ScanConfig::default())
                             .unwrap()
                             .into_iter()
                         {
@@ -2313,7 +2319,10 @@ fn main() {
 
                         // Delete existing vote accounts
                         for (address, mut account) in bank
-                            .get_program_accounts(&solana_vote_program::id(), ScanConfig::default())
+                            .get_program_accounts(
+                                &solana_vote_program::id(),
+                                &ScanConfig::default(),
+                            )
                             .unwrap()
                             .into_iter()
                         {

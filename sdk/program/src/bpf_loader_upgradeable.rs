@@ -261,7 +261,7 @@ pub fn close_any(
         AccountMeta::new(*recipient_address, false),
     ];
     if let Some(authority_address) = authority_address {
-        metas.push(AccountMeta::new(*authority_address, true));
+        metas.push(AccountMeta::new_readonly(*authority_address, true));
     }
     if let Some(program_address) = program_address {
         metas.push(AccountMeta::new(*program_address, false));

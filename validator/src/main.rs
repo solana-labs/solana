@@ -1509,6 +1509,14 @@ pub fn main() {
                       This option is for use during testing."),
         )
         .arg(
+            Arg::with_name("accounts_index_scan_results_limit_mb")
+                .long("accounts-index-scan-results-limit-mb")
+                .value_name("MEGABYTES")
+                .validator(is_parsable::<usize>)
+                .takes_value(true)
+                .help("How large accumulated results from an accounts index scan can become. If this is exceeded, the scan aborts."),
+        )
+        .arg(
             Arg::with_name("accounts_index_memory_limit_mb")
                 .long("accounts-index-memory-limit-mb")
                 .value_name("MEGABYTES")
@@ -2116,6 +2124,12 @@ pub fn main() {
         }
         accounts_index_config.drives = Some(accounts_index_paths);
     }
+
+    const MB: usize = 1_024 * 1_024;
+    accounts_index_config.scan_results_limit_bytes =
+        value_t!(matches, "accounts_index_scan_results_limit_mb", usize)
+            .ok()
+            .map(|mb| mb * MB);
 
     let filler_account_count = value_t!(matches, "accounts_filler_count", usize).ok();
     let mut accounts_db_config = AccountsDbConfig {

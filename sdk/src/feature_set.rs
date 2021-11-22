@@ -241,6 +241,10 @@ pub mod nonce_must_be_writable {
     solana_sdk::declare_id!("BiCU7M5w8ZCMykVSyhZ7Q3m2SWoR2qrEQ86ERcDX77ME");
 }
 
+pub mod spl_token_v3_3_0_release {
+    solana_sdk::declare_id!("Ftok2jhqAqxUWEiCVRrfRs9DPppWP8cgTB7NQNKL88mS");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -296,6 +300,7 @@ lazy_static! {
         (add_compute_budget_program::id(), "Add compute_budget_program"),
         (reject_deployment_of_unresolved_syscalls::id(), "Reject deployment of programs with unresolved syscall symbols"),
         (nonce_must_be_writable::id(), "nonce must be writable"),
+        (spl_token_v3_3_0_release::id(), "spl-token v3.3.0 release"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

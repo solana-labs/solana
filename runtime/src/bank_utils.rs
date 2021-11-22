@@ -38,8 +38,10 @@ pub fn find_and_send_votes(
         execution_results, ..
     } = tx_results;
     if let Some(vote_sender) = vote_sender {
-        sanitized_txs.iter().zip(execution_results.iter()).for_each(
-            |(tx, (result, _nonce_rollback))| {
+        sanitized_txs
+            .iter()
+            .zip(execution_results.iter())
+            .for_each(|(tx, (result, _nonce))| {
                 if tx.is_simple_vote_transaction() && result.is_ok() {
                     if let Some(parsed_vote) =
                         vote_transaction::parse_sanitized_vote_transaction(tx)
@@ -49,7 +51,6 @@ pub fn find_and_send_votes(
                         }
                     }
                 }
-            },
-        );
+            });
     }
 }

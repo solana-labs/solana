@@ -140,6 +140,12 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
 
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
 
+pub struct AccountsAddRootTiming {
+    pub index_us: u64,
+    pub cache_us: u64,
+    pub store_us: u64,
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct AccountsDbConfig {
     pub index: Option<AccountsIndexConfig>,
@@ -700,9 +706,9 @@ impl AccountStorageEntry {
         self.accounts.reset();
         *count_and_status = (0, AccountStorageStatus::Available);
         self.slot.store(slot, Ordering::Release);
-        self.id.store(id, Ordering::Relaxed);
+        self.id.store(id, Ordering::Release);
         self.approx_store_count.store(0, Ordering::Relaxed);
-        self.alive_bytes.store(0, Ordering::Relaxed);
+        self.alive_bytes.store(0, Ordering::Release);
     }
 
     pub fn status(&self) -> AccountStorageStatus {
@@ -738,7 +744,7 @@ impl AccountStorageEntry {
     }
 
     pub fn append_vec_id(&self) -> AppendVecId {
-        self.id.load(Ordering::Relaxed)
+        self.id.load(Ordering::Acquire)
     }
 
     pub fn flush(&self) -> Result<(), IoError> {
@@ -1717,7 +1723,7 @@ impl AccountsDb {
         AccountStorageEntry::new(
             path,
             slot,
-            self.next_id.fetch_add(1, Ordering::Relaxed),
+            self.next_id.fetch_add(1, Ordering::AcqRel),
             size,
         )
     }
@@ -3060,7 +3066,7 @@ impl AccountsDb {
         ancestors: &Ancestors,
         bank_id: BankId,
         scan_func: F,
-        config: ScanConfig,
+        config: &ScanConfig,
     ) -> ScanResult<A>
     where
         F: Fn(&mut A, Option<(&Pubkey, AccountSharedData, Slot)>),
@@ -3090,7 +3096,7 @@ impl AccountsDb {
         metric_name: &'static str,
         ancestors: &Ancestors,
         scan_func: F,
-        config: ScanConfig,
+        config: &ScanConfig,
     ) -> A
     where
         F: Fn(&mut A, (&Pubkey, LoadedAccount, Slot)),
@@ -3118,7 +3124,7 @@ impl AccountsDb {
         metric_name: &'static str,
         ancestors: &Ancestors,
         range: R,
-        config: ScanConfig,
+        config: &ScanConfig,
         scan_func: F,
     ) -> A
     where
@@ -3159,7 +3165,7 @@ impl AccountsDb {
         bank_id: BankId,
         index_key: IndexKey,
         scan_func: F,
-        config: ScanConfig,
+        config: &ScanConfig,
     ) -> ScanResult<(A, bool)>
     where
         F: Fn(&mut A, Option<(&Pubkey, AccountSharedData, Slot)>),
@@ -3729,7 +3735,7 @@ impl AccountsDb {
                     let ret = recycle_stores.remove_entry(i);
                     drop(recycle_stores);
                     let old_id = ret.append_vec_id();
-                    ret.recycle(slot, self.next_id.fetch_add(1, Ordering::Relaxed));
+                    ret.recycle(slot, self.next_id.fetch_add(1, Ordering::AcqRel));
                     debug!(
                         "recycling store: {} {:?} old_id: {}",
                         ret.append_vec_id(),
@@ -5415,7 +5421,7 @@ impl AccountsDb {
                 if let Some(storages) = storages.get(slot) {
                     storages.iter().for_each(|store| {
                         self.dirty_stores
-                            .insert((slot, store.id.load(Ordering::Relaxed)), store.clone());
+                            .insert((slot, store.append_vec_id()), store.clone());
                     });
                 }
             }
@@ -6545,15 +6551,27 @@ impl AccountsDb {
         }
     }
 
-    pub fn add_root(&self, slot: Slot) {
+    pub fn add_root(&self, slot: Slot) -> AccountsAddRootTiming {
+        let mut index_time = Measure::start("index_add_root");
         self.accounts_index.add_root(slot, self.caching_enabled);
+        index_time.stop();
+        let mut cache_time = Measure::start("cache_add_root");
         if self.caching_enabled {
             self.accounts_cache.add_root(slot);
         }
+        cache_time.stop();
+        let mut store_time = Measure::start("store_add_root");
         if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
             for (store_id, store) in slot_stores.read().unwrap().iter() {
                 self.dirty_stores.insert((slot, *store_id), store.clone());
             }
+        }
+        store_time.stop();
+
+        AccountsAddRootTiming {
+            index_us: index_time.as_us(),
+            cache_us: cache_time.as_us(),
+            store_us: store_time.as_us(),
         }
     }
 
@@ -7374,7 +7392,7 @@ pub mod tests {
         accounts_index::RefCount,
         accounts_index::{tests::*, AccountSecondaryIndexesIncludeExclude},
         append_vec::{test_utils::TempFile, AccountMeta},
-        inline_spl_token_v2_0,
+        inline_spl_token,
     };
     use assert_matches::assert_matches;
     use rand::{thread_rng, Rng};
@@ -8049,7 +8067,7 @@ pub mod tests {
             |accounts: &mut Vec<AccountSharedData>, option| {
                 accounts.push(option.1.take_account());
             },
-            ScanConfig::default(),
+            &ScanConfig::default(),
         );
         assert_eq!(accounts, vec![account1]);
     }
@@ -8916,14 +8934,14 @@ pub mod tests {
         // Set up account to be added to secondary index
         let mint_key = Pubkey::new_unique();
         let mut account_data_with_mint =
-            vec![0; inline_spl_token_v2_0::state::Account::get_packed_len()];
+            vec![0; inline_spl_token::state::Account::get_packed_len()];
         account_data_with_mint[..PUBKEY_BYTES].clone_from_slice(&(mint_key.to_bytes()));
 
         let mut normal_account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
-        normal_account.set_owner(inline_spl_token_v2_0::id());
+        normal_account.set_owner(inline_spl_token::id());
         normal_account.set_data(account_data_with_mint.clone());
         let mut zero_account = AccountSharedData::new(0, 0, AccountSharedData::default().owner());
-        zero_account.set_owner(inline_spl_token_v2_0::id());
+        zero_account.set_owner(inline_spl_token::id());
         zero_account.set_data(account_data_with_mint);
 
         //store an account
@@ -8959,7 +8977,7 @@ pub mod tests {
                 |key, _| {
                     found_accounts.insert(*key);
                 },
-                ScanConfig::default(),
+                &ScanConfig::default(),
             )
             .unwrap();
         assert_eq!(found_accounts.len(), 2);
@@ -8980,7 +8998,7 @@ pub mod tests {
                     |collection: &mut HashSet<Pubkey>, account| {
                         collection.insert(*account.unwrap().0);
                     },
-                    ScanConfig::default(),
+                    &ScanConfig::default(),
                 )
                 .unwrap();
             assert!(!found_accounts.1);
@@ -8999,7 +9017,7 @@ pub mod tests {
                     |collection: &mut HashSet<Pubkey>, account| {
                         collection.insert(*account.unwrap().0);
                     },
-                    ScanConfig::default(),
+                    &ScanConfig::default(),
                 )
                 .unwrap();
             assert!(found_accounts.1);
@@ -9033,7 +9051,7 @@ pub mod tests {
                 bank_id,
                 IndexKey::SplTokenMint(mint_key),
                 |key, _| found_accounts.push(*key),
-                ScanConfig::default(),
+                &ScanConfig::default(),
             )
             .unwrap();
         assert_eq!(found_accounts, vec![pubkey2]);
@@ -9589,7 +9607,7 @@ pub mod tests {
             |accounts: &mut Vec<AccountSharedData>, option| {
                 accounts.push(option.1.take_account());
             },
-            ScanConfig::default(),
+            &ScanConfig::default(),
         );
         assert_eq!(accounts, vec![account0]);
 
@@ -9600,7 +9618,7 @@ pub mod tests {
             |accounts: &mut Vec<AccountSharedData>, option| {
                 accounts.push(option.1.take_account());
             },
-            ScanConfig::default(),
+            &ScanConfig::default(),
         );
         assert_eq!(accounts.len(), 2);
     }
@@ -10810,7 +10828,7 @@ pub mod tests {
             store1_id,
             store_file_size,
         ));
-        store1.alive_bytes.store(0, Ordering::Relaxed);
+        store1.alive_bytes.store(0, Ordering::Release);
 
         candidates
             .entry(common_slot_id)
@@ -10829,7 +10847,7 @@ pub mod tests {
         let store2_alive_bytes = (PAGE_SIZE - 1) as usize;
         store2
             .alive_bytes
-            .store(store2_alive_bytes, Ordering::Relaxed);
+            .store(store2_alive_bytes, Ordering::Release);
         candidates
             .entry(common_slot_id)
             .or_default()
@@ -10847,7 +10865,7 @@ pub mod tests {
         let store3_alive_bytes = (PAGE_SIZE + 1) as usize;
         entry3
             .alive_bytes
-            .store(store3_alive_bytes, Ordering::Relaxed);
+            .store(store3_alive_bytes, Ordering::Release);
 
         candidates
             .entry(common_slot_id)
@@ -10886,7 +10904,7 @@ pub mod tests {
             store1_id,
             store_file_size,
         ));
-        store1.alive_bytes.store(0, Ordering::Relaxed);
+        store1.alive_bytes.store(0, Ordering::Release);
 
         candidates
             .entry(common_slot_id)
@@ -10905,7 +10923,7 @@ pub mod tests {
         let store2_alive_bytes = (PAGE_SIZE - 1) as usize;
         store2
             .alive_bytes
-            .store(store2_alive_bytes, Ordering::Relaxed);
+            .store(store2_alive_bytes, Ordering::Release);
         candidates
             .entry(common_slot_id)
             .or_default()
@@ -10923,7 +10941,7 @@ pub mod tests {
         let store3_alive_bytes = (PAGE_SIZE + 1) as usize;
         entry3
             .alive_bytes
-            .store(store3_alive_bytes, Ordering::Relaxed);
+            .store(store3_alive_bytes, Ordering::Release);
 
         candidates
             .entry(common_slot_id)
@@ -10964,7 +10982,7 @@ pub mod tests {
         let store1_alive_bytes = (PAGE_SIZE - 1) as usize;
         store1
             .alive_bytes
-            .store(store1_alive_bytes, Ordering::Relaxed);
+            .store(store1_alive_bytes, Ordering::Release);
 
         candidates
             .entry(slot1)
@@ -10984,7 +11002,7 @@ pub mod tests {
         let store2_alive_bytes = (PAGE_SIZE + 1) as usize;
         store2
             .alive_bytes
-            .store(store2_alive_bytes, Ordering::Relaxed);
+            .store(store2_alive_bytes, Ordering::Release);
 
         candidates
             .entry(slot2)
@@ -11774,7 +11792,7 @@ pub mod tests {
                             }
                         }
                     },
-                    ScanConfig::default(),
+                    &ScanConfig::default(),
                 )
                 .unwrap();
             })
@@ -11927,7 +11945,7 @@ pub mod tests {
         let accounts = storage0.all_accounts();
 
         for account in accounts {
-            let before_size = storage0.alive_bytes.load(Ordering::Relaxed);
+            let before_size = storage0.alive_bytes.load(Ordering::Acquire);
             let account_info = accounts_db
                 .accounts_index
                 .get_account_read_entry(&account.meta.pubkey)
@@ -11943,7 +11961,7 @@ pub mod tests {
             assert_eq!(account_info.0, slot);
             let reclaims = vec![account_info];
             accounts_db.remove_dead_accounts(&reclaims, None, None, true);
-            let after_size = storage0.alive_bytes.load(Ordering::Relaxed);
+            let after_size = storage0.alive_bytes.load(Ordering::Acquire);
             assert_eq!(before_size, after_size + account.stored_size);
         }
     }
@@ -13150,12 +13168,12 @@ pub mod tests {
                 panic!("Expect the default to be TotalSpace")
             }
         }
-        entry.alive_bytes.store(3000, Ordering::Relaxed);
+        entry.alive_bytes.store(3000, Ordering::Release);
         assert!(accounts.is_candidate_for_shrink(&entry));
-        entry.alive_bytes.store(5000, Ordering::Relaxed);
+        entry.alive_bytes.store(5000, Ordering::Release);
         assert!(!accounts.is_candidate_for_shrink(&entry));
         accounts.shrink_ratio = AccountShrinkThreshold::TotalSpace { shrink_ratio: 0.3 };
-        entry.alive_bytes.store(3000, Ordering::Relaxed);
+        entry.alive_bytes.store(3000, Ordering::Release);
         assert!(accounts.is_candidate_for_shrink(&entry));
         accounts.shrink_ratio = AccountShrinkThreshold::IndividalStore { shrink_ratio: 0.3 };
         assert!(!accounts.is_candidate_for_shrink(&entry));
@@ -13249,7 +13267,7 @@ pub mod tests {
         // fake out the store count to avoid the assert
         for slot_stores in accounts.storage.0.iter() {
             for (_id, store) in slot_stores.value().read().unwrap().iter() {
-                store.alive_bytes.store(0, Ordering::SeqCst);
+                store.alive_bytes.store(0, Ordering::Release);
             }
         }
 
@@ -13268,7 +13286,7 @@ pub mod tests {
             for (id, store) in slot_stores.value().read().unwrap().iter() {
                 assert_eq!(id, &0);
                 assert_eq!(store.count_and_status.read().unwrap().0, 3);
-                assert_eq!(store.alive_bytes.load(Ordering::SeqCst), 2);
+                assert_eq!(store.alive_bytes.load(Ordering::Acquire), 2);
             }
         }
     }

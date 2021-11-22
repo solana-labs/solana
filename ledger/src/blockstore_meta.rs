@@ -192,6 +192,14 @@ impl SlotMeta {
         self.consumed == self.last_index + 1
     }
 
+    pub fn known_last_index(&self) -> Option<u64> {
+        if self.last_index == std::u64::MAX {
+            None
+        } else {
+            Some(self.last_index)
+        }
+    }
+
     pub fn is_parent_set(&self) -> bool {
         self.parent_slot != std::u64::MAX
     }
