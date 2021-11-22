@@ -17,7 +17,8 @@ use solana_measure::measure::Measure;
 use solana_program_runtime::{
     ic_logger_msg, ic_msg,
     instruction_processor::{Executor, InstructionProcessor},
-    invoke_context::{ComputeMeter, InvokeContext, Logger},
+    invoke_context::{ComputeMeter, InvokeContext},
+    log_collector::Logger,
     stable_log,
 };
 use solana_rbpf::{

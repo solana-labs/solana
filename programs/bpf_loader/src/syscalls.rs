@@ -3,7 +3,8 @@ use alloc::Alloc;
 use solana_program_runtime::{
     ic_msg,
     instruction_processor::InstructionProcessor,
-    invoke_context::{ComputeMeter, InvokeContext, Logger},
+    invoke_context::{ComputeMeter, InvokeContext},
+    log_collector::Logger,
     stable_log,
 };
 use solana_rbpf::{
@@ -2441,8 +2442,8 @@ impl<'a> SyscallObject<BpfError> for SyscallLogData<'a> {
 mod tests {
     use super::*;
     use solana_program_runtime::{
-        invoke_context::{ComputeMeter, Logger, ThisInvokeContext},
-        log_collector::LogCollector,
+        invoke_context::{ComputeMeter, ThisInvokeContext},
+        log_collector::{LogCollector, Logger},
     };
     use solana_rbpf::{
         ebpf::HOST_ALIGN, memory_region::MemoryRegion, user_error::UserError, vm::Config,

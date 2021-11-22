@@ -2,7 +2,7 @@
 //!
 //! The format of these log messages should not be modified to avoid breaking downstream consumers
 //! of program logging
-use crate::{ic_logger_msg, invoke_context::Logger};
+use crate::{ic_logger_msg, log_collector::Logger};
 use itertools::Itertools;
 use solana_sdk::{instruction::InstructionError, pubkey::Pubkey};
 use std::{cell::RefCell, rc::Rc};
