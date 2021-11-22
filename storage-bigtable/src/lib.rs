@@ -48,6 +48,9 @@ pub enum Error {
 
     #[error("Signature not found")]
     SignatureNotFound,
+
+    #[error("Transaction metadata missing from slot {0}")]
+    TransactionMetadataMissing(Slot),
 }
 
 impl std::convert::From<bigtable::Error> for Error {

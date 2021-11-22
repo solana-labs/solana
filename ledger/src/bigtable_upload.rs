@@ -165,7 +165,7 @@ pub async fn upload_confirmed_blocks(
     };
 
     let mut failures = 0;
-    use futures::stream::StreamExt;
+    use futures::{future::Either, stream::StreamExt};
 
     let mut stream =
         tokio_stream::iter(receiver.into_iter()).chunks(NUM_BLOCKS_TO_UPLOAD_IN_PARALLEL);
@@ -193,10 +193,15 @@ pub async fn upload_confirmed_blocks(
                     if allow_missing_metadata {
                         info!("Transaction metadata missing from slot {}", slot);
                     } else {
-                        panic!("Transaction metadata missing from slot {}", slot);
+                        error!("Transaction metadata missing from slot {}", slot);
+                        return Some(Either::Left(futures::future::err(
+                            solana_storage_bigtable::Error::TransactionMetadataMissing(slot),
+                        )));
                     }
                 }
-                Some(bigtable.upload_confirmed_block(slot, confirmed_block))
+                Some(Either::Right(
+                    bigtable.upload_confirmed_block(slot, confirmed_block),
+                ))
             }
         });
 
