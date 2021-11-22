@@ -451,7 +451,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
         )
         .subcommand(
             SubCommand::with_name("rent")
-                .about("Calculate per-epoch and rent-exempt-minimum values for a given account data length.")
+                .about("Calculate per-epoch and rent-exempt-minimum values for a given account data length (account overhead is already included).")
                 .arg(
                     Arg::with_name("data_length")
                         .index(1)
@@ -462,7 +462,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                                 .map(|_| ())
                                 .map_err(|e| e.to_string())
                         })
-                        .help("Length of data in the account to calculate rent for, or moniker: [nonce, stake, system, vote]"),
+                        .help("Length of data in the account to calculate rent for (excluding account overhead), or moniker: [nonce, stake, system, vote]"),
                 )
                 .arg(
                     Arg::with_name("lamports")
