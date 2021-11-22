@@ -349,6 +349,7 @@ impl LedgerStorage {
 
     /// Return the available slot that contains a block
     pub async fn get_first_available_block(&self) -> Result<Option<Slot>> {
+        debug!("LedgerStorage::get_first_available_block request received");
         let mut bigtable = self.connection.client();
         let blocks = bigtable.get_row_keys("blocks", None, None, 1).await?;
         if blocks.is_empty() {
@@ -363,6 +364,10 @@ impl LedgerStorage {
     /// limit: stop after this many slots have been found; if limit==0, all records in the table
     /// after start_slot will be read
     pub async fn get_confirmed_blocks(&self, start_slot: Slot, limit: usize) -> Result<Vec<Slot>> {
+        debug!(
+            "LedgerStorage::get_confirmed_blocks request received: {:?} {:?}",
+            start_slot, limit
+        );
         let mut bigtable = self.connection.client();
         let blocks = bigtable
             .get_row_keys(
@@ -377,6 +382,10 @@ impl LedgerStorage {
 
     /// Fetch the confirmed block from the desired slot
     pub async fn get_confirmed_block(&self, slot: Slot) -> Result<ConfirmedBlock> {
+        debug!(
+            "LedgerStorage::get_confirmed_block request received: {:?}",
+            slot
+        );
         let mut bigtable = self.connection.client();
         let block_cell_data = bigtable
             .get_protobuf_or_bincode_cell::<StoredConfirmedBlock, generated::ConfirmedBlock>(
@@ -397,6 +406,10 @@ impl LedgerStorage {
     }
 
     pub async fn get_signature_status(&self, signature: &Signature) -> Result<TransactionStatus> {
+        debug!(
+            "LedgerStorage::get_signature_status request received: {:?}",
+            signature
+        );
         let mut bigtable = self.connection.client();
         let transaction_info = bigtable
             .get_bincode_cell::<TransactionInfo>("tx", signature.to_string())
@@ -413,6 +426,10 @@ impl LedgerStorage {
         &self,
         signature: &Signature,
     ) -> Result<Option<ConfirmedTransaction>> {
+        debug!(
+            "LedgerStorage::get_confirmed_transaction request received: {:?}",
+            signature
+        );
         let mut bigtable = self.connection.client();
 
         // Figure out which block the transaction is located in
@@ -468,6 +485,10 @@ impl LedgerStorage {
             u32, /*slot index*/
         )>,
     > {
+        debug!(
+            "LedgerStorage::get_confirmed_signatures_for_address request received: {:?}",
+            address
+        );
         let mut bigtable = self.connection.client();
         let address_prefix = format!("{}/", address);
 
