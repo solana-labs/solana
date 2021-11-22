@@ -7,3 +7,16 @@ DROP FUNCTION audit_account_update;
 DROP TABLE account_audit;
 DROP TABLE account;
 DROP TABLE slot;
+DROP TABLE transaction;
+
+DROP TYPE "MappedMessage" CASCADE;
+DROP TYPE "MappedAddresses" CASCADE;
+DROP TYPE "TransactionMessageV0" CASCADE;
+DROP TYPE "AddressMapIndexes" CASCADE;
+DROP TYPE "TransactionMessage" CASCADE;
+DROP TYPE "TransactionMessageHeader" CASCADE;
+DROP TYPE "TransactionStatusMeta" CASCADE;
+DROP TYPE "Rewards" CASCADE;
+DROP TYPE "TransactionTokenBalance" CASCADE;
+DROP TYPE "InnerInstructions" CASCADE;
+DROP TYPE "CompiledInstruction" CASCADE;
