@@ -4576,8 +4576,8 @@ impl AccountsDb {
                 "accounts_db-flush_accounts_cache_aggressively",
                 ("num_flushed", flush_stats.num_flushed, i64),
                 ("num_purged", flush_stats.num_purged, i64),
-                ("total_size", flush_stats.total_size, i64),
-                ("total_size", flush_stats.total_size, i64),
+                ("total_flush_size", flush_stats.total_size, i64),
+                ("total_cache_size", self.accounts_cache.size(), i64),
                 ("total_frozen_slots", excess_slot_count, i64),
                 ("total_slots", self.accounts_cache.num_slots(), i64),
             );
