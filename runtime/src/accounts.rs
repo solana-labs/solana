@@ -1,8 +1,8 @@
 use crate::{
     accounts_db::{
-        AccountShrinkThreshold, AccountsDb, AccountsDbConfig, BankHashInfo, ErrorCounters,
-        LoadHint, LoadedAccount, ScanStorageResult, ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS,
-        ACCOUNTS_DB_CONFIG_FOR_TESTING,
+        AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, AccountsDbConfig, BankHashInfo,
+        ErrorCounters, LoadHint, LoadedAccount, ScanStorageResult,
+        ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
     },
     accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanError, ScanResult},
     accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -1051,7 +1051,7 @@ impl Accounts {
     }
 
     /// Add a slot to root.  Root slots cannot be purged
-    pub fn add_root(&self, slot: Slot) {
+    pub fn add_root(&self, slot: Slot) -> AccountsAddRootTiming {
         self.accounts_db.add_root(slot)
     }
 
