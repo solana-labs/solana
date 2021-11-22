@@ -4,6 +4,16 @@ use std::{collections::HashMap, io, path::Path};
 use url::Url;
 
 lazy_static! {
+    /// The default path to the CLI configuration file.
+    ///
+    /// This is a [lazy_static] of `Option<String>`, the value of which is
+    ///
+    /// > `~/.config/solana/cli/config.yml`
+    ///
+    /// It will only be `None` if it is unable to identify the user's home
+    /// directory, which should not happen under typical OS environments.
+    ///
+    /// [lazy_static]: https://docs.rs/lazy_static
     pub static ref CONFIG_FILE: Option<String> = {
         dirs_next::home_dir().map(|mut path| {
             path.extend(&[".config", "solana", "cli", "config.yml"]);
@@ -12,13 +22,44 @@ lazy_static! {
     };
 }
 
+/// The Solana CLI configuration.
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Config {
+    /// The RPC address of a Solana validator node.
+    ///
+    /// Typical values for mainnet, devnet, and testnet are [described in the
+    /// Solana documentation][rpcdocs].
+    ///
+    /// For local testing, the typical value is `http://localhost:8899`.
+    ///
+    /// [rpcdocs]: https://docs.solana.com/cluster/rpc-endpoints
     pub json_rpc_url: String,
+    /// The address to connect to for receiving event notifications.
+    ///
+    /// If it is an empty string then the correct value will be derived
+    /// from `json_rpc_url`.
+    ///
+    /// The default value is the empty string.
     pub websocket_url: String,
+    /// The default signing source, which may be a keypair file, but may also
+    /// represent several other types of signers, as described in the
+    /// documentation for `solana_clap_utils::keypair::signer_from_path`.
+    /// Because it represents sources other than a simple path, the name
+    /// `keypair_path` is misleading, and exists for backwards compatibility
+    /// reasons.
+    ///
+    /// The signing source can be loaded with either the `signer_from_path`
+    /// function, or with `solana_clap_utils::keypair::DefaultSigner`.
     pub keypair_path: String,
+    /// A mapping from Solana addresses to human-readable names.
+    ///
+    /// By default the only value in this map is the system program.
     #[serde(default)]
     pub address_labels: HashMap<String, String>,
+    /// The default commitment level.
+    ///
+    /// By default the value is "confirmed", as defined by
+    /// `solana_sdk::commitment_config::CommitmentLevel::Confirmed`.
     #[serde(default)]
     pub commitment: String,
 }
@@ -55,14 +96,37 @@ impl Default for Config {
 }
 
 impl Config {
+    /// Load a configuration from file.
+    ///
+    /// # Errors
+    ///
+    /// This function may return typical file I/O errors.
     pub fn load(config_file: &str) -> Result<Self, io::Error> {
         crate::load_config_file(config_file)
     }
 
+    /// Save a configuration to file.
+    ///
+    /// If the file's directory does not exist, it will be created. If the file
+    /// already exists, it will be overwritten.
+    ///
+    /// # Errors
+    ///
+    /// This function may return typical file I/O errors.
     pub fn save(&self, config_file: &str) -> Result<(), io::Error> {
         crate::save_config_file(self, config_file)
     }
 
+    /// Compute the websocket URL from the RPC URL.
+    ///
+    /// The address is created from the RPC URL by:
+    ///
+    /// - adding 1 to the port number,
+    /// - using the "wss" scheme if the RPC URL has an "https" scheme, or the
+    ///   "ws" scheme if the RPC URL has an "http" scheme.
+    ///
+    /// If `json_rpc_url` cannot be parsed as a URL then this function returns
+    /// the empty string.
     pub fn compute_websocket_url(json_rpc_url: &str) -> String {
         let json_rpc_url: Option<Url> = json_rpc_url.parse().ok();
         if json_rpc_url.is_none() {
@@ -81,6 +145,8 @@ impl Config {
         ws_url.to_string()
     }
 
+    /// Load a map of address/name pairs from a YAML file at the given path and
+    /// insert them into the configuration.
     pub fn import_address_labels<P>(&mut self, filename: P) -> Result<(), io::Error>
     where
         P: AsRef<Path>,
@@ -92,6 +158,8 @@ impl Config {
         Ok(())
     }
 
+    /// Save the map of address/name pairs contained in the configuration to a
+    /// YAML file at the given path.
     pub fn export_address_labels<P>(&self, filename: P) -> Result<(), io::Error>
     where
         P: AsRef<Path>,
