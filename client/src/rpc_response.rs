@@ -9,9 +9,10 @@ use {
         transaction::{Result, TransactionError},
     },
     solana_transaction_status::{
-        ConfirmedTransactionStatusWithSignature, TransactionConfirmationStatus,
+        ConfirmedTransactionStatusWithSignature, TransactionConfirmationStatus, UiConfirmedBlock,
     },
     std::{collections::HashMap, fmt, net::SocketAddr},
+    thiserror::Error,
 };
 
 pub type RpcResult<T> = client_error::Result<Response<T>>;
@@ -424,9 +425,19 @@ pub struct RpcInflationReward {
     pub commission: Option<u8>, // Vote account commission when the reward was credited
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Deserialize, Serialize, Debug, Error, Eq, PartialEq)]
+pub enum RpcBlockUpdateError {
+    #[error("block store error")]
+    BlockStoreError,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct RpcBlockUpdate {}
+pub struct RpcBlockUpdate {
+    pub slot: Slot,
+    pub block: Option<UiConfirmedBlock>,
+    pub err: Option<RpcBlockUpdateError>,
+}
 
 impl From<ConfirmedTransactionStatusWithSignature> for RpcConfirmedTransactionStatusWithSignature {
     fn from(value: ConfirmedTransactionStatusWithSignature) -> Self {

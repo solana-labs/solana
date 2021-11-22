@@ -191,6 +191,7 @@ fn start_client_rpc_services(
 
     let subscriptions = Arc::new(RpcSubscriptions::new(
         &exit,
+        blockstore.clone(),
         bank_forks.clone(),
         block_commitment_cache.clone(),
         optimistically_confirmed_bank.clone(),

@@ -4,11 +4,16 @@ use {
     solana_client::{
         pubsub_client::PubsubClient,
         rpc_client::RpcClient,
-        rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
-        rpc_response::SlotInfo,
+        rpc_config::{
+            RpcAccountInfoConfig, RpcBlockSubscribeConfig, RpcBlockSubscribeFilter,
+            RpcProgramAccountsConfig,
+        },
+        rpc_response::{RpcBlockUpdate, SlotInfo},
     },
+    solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path},
     solana_rpc::{
         optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
+        rpc::create_test_transactions_and_populate_blockstore,
         rpc_pubsub_service::{PubSubConfig, PubSubService},
         rpc_subscriptions::RpcSubscriptions,
     },
@@ -20,7 +25,7 @@ use {
     },
     solana_sdk::{
         clock::Slot,
-        commitment_config::CommitmentConfig,
+        commitment_config::{CommitmentConfig, CommitmentLevel},
         native_token::sol_to_lamports,
         pubkey::Pubkey,
         rpc_port,
@@ -29,11 +34,12 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::TestValidator,
+    solana_transaction_status::{TransactionDetails, UiTransactionEncoding},
     std::{
         collections::HashSet,
         net::{IpAddr, SocketAddr},
         sync::{
-            atomic::{AtomicBool, Ordering},
+            atomic::{AtomicBool, AtomicU64, Ordering},
             Arc, RwLock,
         },
         thread::sleep,
@@ -192,6 +198,102 @@ fn test_account_subscription() {
     client.shutdown().unwrap();
     pubsub_service.close().unwrap();
     assert_eq!(errors, [].to_vec());
+}
+
+#[test]
+#[serial]
+fn test_block_subscription() {
+    // setup BankForks
+    let exit = Arc::new(AtomicBool::new(false));
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair: alice,
+        ..
+    } = create_genesis_config(10_000);
+    let bank = Bank::new_for_tests(&genesis_config);
+    let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+
+    // setup Blockstore
+    let ledger_path = get_tmp_ledger_path!();
+    let blockstore = Blockstore::open(&ledger_path).unwrap();
+    let blockstore = Arc::new(blockstore);
+
+    // populate ledger with test txs
+    let bank = bank_forks.read().unwrap().working_bank();
+    let keypair1 = Keypair::new();
+    let keypair2 = Keypair::new();
+    let keypair3 = Keypair::new();
+    let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(blockstore.max_root()));
+    let _confirmed_block_signatures = create_test_transactions_and_populate_blockstore(
+        vec![&alice, &keypair1, &keypair2, &keypair3],
+        0,
+        bank,
+        blockstore.clone(),
+        max_complete_transaction_status_slot,
+    );
+
+    // setup RpcSubscriptions && PubSubService
+    let subscriptions = Arc::new(RpcSubscriptions::new_for_tests_with_blockstore(
+        &exit,
+        blockstore.clone(),
+        bank_forks.clone(),
+        Arc::new(RwLock::new(BlockCommitmentCache::default())),
+        OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
+    ));
+    let pubsub_addr = SocketAddr::new(
+        IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+        rpc_port::DEFAULT_RPC_PUBSUB_PORT,
+    );
+    let (trigger, pubsub_service) =
+        PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr);
+
+    std::thread::sleep(Duration::from_millis(400));
+
+    // setup PubsubClient
+    let (mut client, receiver) = PubsubClient::block_subscribe(
+        &format!("ws://0.0.0.0:{}/", pubsub_addr.port()),
+        RpcBlockSubscribeFilter::All,
+        Some(RpcBlockSubscribeConfig {
+            commitment: Some(CommitmentConfig {
+                commitment: CommitmentLevel::Confirmed,
+            }),
+            encoding: Some(UiTransactionEncoding::Json),
+            transaction_details: Some(TransactionDetails::Signatures),
+        }),
+    )
+    .unwrap();
+
+    // trigger Gossip notification
+    let slot = bank_forks.read().unwrap().highest_slot();
+    subscriptions.notify_gossip_subscribers(slot);
+    let maybe_actual = receiver.recv_timeout(Duration::from_millis(400));
+    match maybe_actual {
+        Ok(actual) => {
+            let block = blockstore.get_complete_block(slot, false).unwrap();
+            let block = block.configure(
+                UiTransactionEncoding::Json,
+                TransactionDetails::Signatures,
+                false,
+            );
+            let expected = RpcBlockUpdate {
+                slot,
+                block: Some(block.clone()),
+                err: None,
+            };
+            assert_eq!(actual.value.slot, expected.slot);
+            assert!(block.eq(&actual.value.block.unwrap()));
+        }
+        Err(e) => {
+            eprintln!("unexpected websocket receive timeout");
+            assert_eq!(Some(e), None);
+        }
+    }
+
+    // cleanup
+    exit.store(true, Ordering::Relaxed);
+    trigger.cancel();
+    client.shutdown().unwrap();
+    pubsub_service.close().unwrap();
 }
 
 #[test]

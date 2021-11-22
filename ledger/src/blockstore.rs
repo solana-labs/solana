@@ -956,11 +956,6 @@ impl Blockstore {
         start.stop();
         metrics.write_batch_elapsed += start.as_us();
 
-        // for s in &newly_completed_slots {
-        //     let block = self.get_complete_block(*s, true);
-        //     info!("block={:?}", block);
-        // }
-
         send_signals(
             &self.new_shreds_signals,
             &self.completed_slots_senders,
@@ -3556,9 +3551,9 @@ fn slot_has_updates(slot_meta: &SlotMeta, slot_meta_backup: &Option<SlotMeta>) -
         // 1) The slot didn't exist in the database before, and now we have a consecutive
         // block for that slot
         ((slot_meta_backup.is_none() && slot_meta.consumed != 0) ||
-            // OR
-            // 2) The slot did exist, but now we have a new consecutive block for that slot
-            (slot_meta_backup.is_some() && slot_meta_backup.as_ref().unwrap().consumed != slot_meta.consumed))
+        // OR
+        // 2) The slot did exist, but now we have a new consecutive block for that slot
+        (slot_meta_backup.is_some() && slot_meta_backup.as_ref().unwrap().consumed != slot_meta.consumed))
 }
 
 // Creates a new ledger with slot 0 full of ticks (and only ticks).
