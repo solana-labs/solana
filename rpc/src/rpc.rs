@@ -148,6 +148,7 @@ pub struct JsonRpcConfig {
     pub minimal_api: bool,
     pub obsolete_v1_7_api: bool,
     pub rpc_scan_and_fix_roots: bool,
+    pub bigtable_allow_missing_metadata: bool,
 }
 
 #[derive(Clone)]

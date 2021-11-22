@@ -28,6 +28,7 @@ impl BigTableUploadService {
         blockstore: Arc<Blockstore>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         exit: Arc<AtomicBool>,
+        allow_missing_metadata: bool,
     ) -> Self {
         info!("Starting BigTable upload service");
         let thread = Builder::new()
@@ -39,6 +40,7 @@ impl BigTableUploadService {
                     blockstore,
                     block_commitment_cache,
                     exit,
+                    allow_missing_metadata,
                 )
             })
             .unwrap();
@@ -52,6 +54,7 @@ impl BigTableUploadService {
         blockstore: Arc<Blockstore>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         exit: Arc<AtomicBool>,
+        allow_missing_metadata: bool,
     ) {
         let mut start_slot = 0;
         loop {
@@ -75,7 +78,7 @@ impl BigTableUploadService {
                 bigtable_ledger_storage.clone(),
                 start_slot,
                 Some(end_slot),
-                true,
+                allow_missing_metadata,
                 false,
                 exit.clone(),
             ));

@@ -1198,6 +1198,13 @@ pub fn main() {
                 .help("Number of seconds before timing out RPC requests backed by BigTable"),
         )
         .arg(
+            Arg::with_name("bigtable_upload_allow_missing_metadata")
+                .long("bigtable-upload-allow-missing-metadata")
+                .takes_value(false)
+                .requires("enable_bigtable_ledger_upload")
+                .help("Allow upload to BigTable even if transaction metadata is missing in Blockstore"),
+        )
+        .arg(
             Arg::with_name("rpc_pubsub_worker_threads")
                 .long("rpc-pubsub-worker-threads")
                 .takes_value(true)
@@ -2215,6 +2222,7 @@ pub fn main() {
                 .map(Duration::from_secs),
             account_indexes: account_indexes.clone(),
             rpc_scan_and_fix_roots: matches.is_present("rpc_scan_and_fix_roots"),
+            bigtable_allow_missing_metadata: matches.is_present("bigtable_allow_missing_metadata"),
         },
         accountsdb_repl_service_config,
         accountsdb_plugin_config_files,

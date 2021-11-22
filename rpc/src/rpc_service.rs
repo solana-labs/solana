@@ -357,6 +357,7 @@ impl JsonRpcService {
                                 blockstore.clone(),
                                 block_commitment_cache.clone(),
                                 exit_bigtable_ledger_upload_service.clone(),
+                                config.bigtable_allow_missing_metadata,
                             )))
                         } else {
                             None
