@@ -1,13 +1,7 @@
 use crate::{
     accounts_db::{
-<<<<<<< HEAD
-        AccountShrinkThreshold, AccountsDb, BankHashInfo, ErrorCounters, LoadHint, LoadedAccount,
-        ScanStorageResult,
-=======
-        AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, AccountsDbConfig, BankHashInfo,
-        ErrorCounters, LoadHint, LoadedAccount, ScanStorageResult,
-        ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
->>>>>>> c4d68063c (Add timing for accounts add_root (#21379))
+        AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, BankHashInfo, ErrorCounters,
+        LoadHint, LoadedAccount, ScanStorageResult,
     },
     accounts_index::{AccountSecondaryIndexes, IndexKey, ScanResult},
     accounts_update_notifier_interface::AccountsUpdateNotifier,

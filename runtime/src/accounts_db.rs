@@ -104,44 +104,12 @@ const CACHE_VIRTUAL_WRITE_VERSION: StoredMetaWriteVersion = 0;
 const CACHE_VIRTUAL_OFFSET: usize = 0;
 const CACHE_VIRTUAL_STORED_SIZE: usize = 0;
 
-<<<<<<< HEAD
-=======
-pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
-    index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
-    accounts_hash_cache_path: None,
-    filler_account_count: None,
-    hash_calc_num_passes: None,
-};
-pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
-    index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
-    accounts_hash_cache_path: None,
-    filler_account_count: None,
-    hash_calc_num_passes: None,
-};
-
-pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
-
 pub struct AccountsAddRootTiming {
     pub index_us: u64,
     pub cache_us: u64,
     pub store_us: u64,
 }
 
-#[derive(Debug, Default, Clone)]
-pub struct AccountsDbConfig {
-    pub index: Option<AccountsIndexConfig>,
-    pub accounts_hash_cache_path: Option<PathBuf>,
-    pub filler_account_count: Option<usize>,
-    pub hash_calc_num_passes: Option<usize>,
-}
-
-struct FoundStoredAccount<'a> {
-    pub account: StoredAccountMeta<'a>,
-    pub store_id: AppendVecId,
-    pub account_size: usize,
-}
-
->>>>>>> c4d68063c (Add timing for accounts add_root (#21379))
 #[cfg(not(test))]
 const ABSURD_CONSECUTIVE_FAILED_ITERATIONS: usize = 100;
 
