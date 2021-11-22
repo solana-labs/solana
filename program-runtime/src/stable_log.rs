@@ -14,7 +14,7 @@ use std::{cell::RefCell, rc::Rc};
 /// ```notrust
 /// "Program <address> invoke [<depth>]"
 /// ```
-pub fn program_invoke(logger: &Rc<RefCell<dyn Logger>>, program_id: &Pubkey, invoke_depth: usize) {
+pub fn program_invoke(logger: &Rc<RefCell<Logger>>, program_id: &Pubkey, invoke_depth: usize) {
     ic_logger_msg!(logger, "Program {} invoke [{}]", program_id, invoke_depth);
 }
 
@@ -27,7 +27,7 @@ pub fn program_invoke(logger: &Rc<RefCell<dyn Logger>>, program_id: &Pubkey, inv
 /// ```
 ///
 /// That is, any program-generated output is guaranteed to be prefixed by "Program log: "
-pub fn program_log(logger: &Rc<RefCell<dyn Logger>>, message: &str) {
+pub fn program_log(logger: &Rc<RefCell<Logger>>, message: &str) {
     ic_logger_msg!(logger, "Program log: {}", message);
 }
 
@@ -40,7 +40,7 @@ pub fn program_log(logger: &Rc<RefCell<dyn Logger>>, message: &str) {
 /// ```
 ///
 /// That is, any program-generated output is guaranteed to be prefixed by "Program data: "
-pub fn program_data(logger: &Rc<RefCell<dyn Logger>>, data: &[&[u8]]) {
+pub fn program_data(logger: &Rc<RefCell<Logger>>, data: &[&[u8]]) {
     ic_logger_msg!(
         logger,
         "Program data: {}",
@@ -58,7 +58,7 @@ pub fn program_data(logger: &Rc<RefCell<dyn Logger>>, data: &[&[u8]]) {
 /// ```
 ///
 /// That is, any program-generated output is guaranteed to be prefixed by "Program return: "
-pub fn program_return(logger: &Rc<RefCell<dyn Logger>>, program_id: &Pubkey, data: &[u8]) {
+pub fn program_return(logger: &Rc<RefCell<Logger>>, program_id: &Pubkey, data: &[u8]) {
     ic_logger_msg!(
         logger,
         "Program return: {} {}",
@@ -74,7 +74,7 @@ pub fn program_return(logger: &Rc<RefCell<dyn Logger>>, program_id: &Pubkey, dat
 /// ```notrust
 /// "Program <address> success"
 /// ```
-pub fn program_success(logger: &Rc<RefCell<dyn Logger>>, program_id: &Pubkey) {
+pub fn program_success(logger: &Rc<RefCell<Logger>>, program_id: &Pubkey) {
     ic_logger_msg!(logger, "Program {} success", program_id);
 }
 
@@ -85,10 +85,6 @@ pub fn program_success(logger: &Rc<RefCell<dyn Logger>>, program_id: &Pubkey) {
 /// ```notrust
 /// "Program <address> failed: <program error details>"
 /// ```
-pub fn program_failure(
-    logger: &Rc<RefCell<dyn Logger>>,
-    program_id: &Pubkey,
-    err: &InstructionError,
-) {
+pub fn program_failure(logger: &Rc<RefCell<Logger>>, program_id: &Pubkey, err: &InstructionError) {
     ic_logger_msg!(logger, "Program {} failed: {}", program_id, err);
 }

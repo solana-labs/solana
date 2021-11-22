@@ -608,7 +608,7 @@ impl<'a> SyscallObject<BpfError> for SyscallPanic<'a> {
 /// Log a user's info message
 pub struct SyscallLog<'a> {
     compute_meter: Rc<RefCell<ComputeMeter>>,
-    logger: Rc<RefCell<dyn Logger>>,
+    logger: Rc<RefCell<Logger>>,
     loader_id: &'a Pubkey,
 }
 impl<'a> SyscallObject<BpfError> for SyscallLog<'a> {
@@ -644,7 +644,7 @@ impl<'a> SyscallObject<BpfError> for SyscallLog<'a> {
 pub struct SyscallLogU64 {
     cost: u64,
     compute_meter: Rc<RefCell<ComputeMeter>>,
-    logger: Rc<RefCell<dyn Logger>>,
+    logger: Rc<RefCell<Logger>>,
 }
 impl SyscallObject<BpfError> for SyscallLogU64 {
     fn call(
@@ -673,7 +673,7 @@ impl SyscallObject<BpfError> for SyscallLogU64 {
 pub struct SyscallLogBpfComputeUnits {
     cost: u64,
     compute_meter: Rc<RefCell<ComputeMeter>>,
-    logger: Rc<RefCell<dyn Logger>>,
+    logger: Rc<RefCell<Logger>>,
 }
 impl SyscallObject<BpfError> for SyscallLogBpfComputeUnits {
     fn call(
@@ -707,7 +707,7 @@ impl SyscallObject<BpfError> for SyscallLogBpfComputeUnits {
 pub struct SyscallLogPubkey<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<ComputeMeter>>,
-    logger: Rc<RefCell<dyn Logger>>,
+    logger: Rc<RefCell<Logger>>,
     loader_id: &'a Pubkey,
 }
 impl<'a> SyscallObject<BpfError> for SyscallLogPubkey<'a> {
@@ -2441,7 +2441,7 @@ impl<'a> SyscallObject<BpfError> for SyscallLogData<'a> {
 mod tests {
     use super::*;
     use solana_program_runtime::{
-        invoke_context::{ComputeMeter, ThisInvokeContext, ThisLogger},
+        invoke_context::{ComputeMeter, Logger, ThisInvokeContext},
         log_collector::LogCollector,
     };
     use solana_rbpf::{
@@ -2840,7 +2840,7 @@ mod tests {
         {
             let mut syscall_sol_log = SyscallLog {
                 compute_meter: ComputeMeter::new_ref(string.len() as u64),
-                logger: ThisLogger::new_ref(Some(log.clone())),
+                logger: Logger::new_ref(Some(log.clone())),
                 loader_id: &bpf_loader::id(),
             };
             let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
@@ -2865,7 +2865,7 @@ mod tests {
 
         let mut syscall_sol_log = SyscallLog {
             compute_meter: ComputeMeter::new_ref(string.len() as u64 * 3),
-            logger: ThisLogger::new_ref(None),
+            logger: Logger::new_ref(None),
             loader_id: &bpf_loader::id(),
         };
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
@@ -2903,7 +2903,7 @@ mod tests {
 
         let mut syscall_sol_log = SyscallLog {
             compute_meter: ComputeMeter::new_ref((string.len() as u64 * 2) - 1),
-            logger: ThisLogger::new_ref(None),
+            logger: Logger::new_ref(None),
             loader_id: &bpf_loader::id(),
         };
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
@@ -2943,7 +2943,7 @@ mod tests {
             let mut syscall_sol_log_u64 = SyscallLogU64 {
                 cost: 0,
                 compute_meter: ComputeMeter::new_ref(std::u64::MAX),
-                logger: ThisLogger::new_ref(Some(log.clone())),
+                logger: Logger::new_ref(Some(log.clone())),
             };
             let config = Config::default();
             let memory_mapping = MemoryMapping::new::<UserError>(vec![], &config).unwrap();
@@ -2985,7 +2985,7 @@ mod tests {
             let mut syscall_sol_pubkey = SyscallLogPubkey {
                 cost: 1,
                 compute_meter: ComputeMeter::new_ref(1),
-                logger: ThisLogger::new_ref(Some(log.clone())),
+                logger: Logger::new_ref(Some(log.clone())),
                 loader_id: &bpf_loader::id(),
             };
             let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
@@ -3006,7 +3006,7 @@ mod tests {
         let mut syscall_sol_pubkey = SyscallLogPubkey {
             cost: 1,
             compute_meter: ComputeMeter::new_ref(1),
-            logger: ThisLogger::new_ref(None),
+            logger: Logger::new_ref(None),
             loader_id: &bpf_loader::id(),
         };
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);

@@ -824,7 +824,7 @@ fn common_close_account(
     authority_account: &KeyedAccount,
     close_account: &KeyedAccount,
     recipient_account: &KeyedAccount,
-    logger: Rc<RefCell<dyn Logger>>,
+    logger: Rc<RefCell<Logger>>,
 ) -> Result<(), InstructionError> {
     if authority_address.is_none() {
         ic_logger_msg!(logger, "Account is immutable");

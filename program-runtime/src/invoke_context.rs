@@ -47,37 +47,31 @@ impl ComputeMeter {
 }
 
 /// Log messages
-pub trait Logger {
-    fn log_enabled(&self) -> bool;
-
+pub struct Logger {
+    log_collector: Option<Rc<LogCollector>>,
+}
+impl Logger {
+    /// Is logging enabled
+    pub fn log_enabled(&self) -> bool {
+        log_enabled!(log::Level::Info) || self.log_collector.is_some()
+    }
     /// Log a message.
     ///
     /// Unless explicitly stated, log messages are not considered stable and may change in the
     /// future as necessary
-    fn log(&self, message: &str);
-}
-
-pub struct ThisLogger {
-    log_collector: Option<Rc<LogCollector>>,
-}
-impl Logger for ThisLogger {
-    fn log_enabled(&self) -> bool {
-        log_enabled!(log::Level::Info) || self.log_collector.is_some()
-    }
-    fn log(&self, message: &str) {
+    pub fn log(&self, message: &str) {
         debug!("{}", message);
         if let Some(log_collector) = &self.log_collector {
             log_collector.log(message);
         }
     }
-}
-impl ThisLogger {
+    /// Construct a new one
     pub fn new_ref(log_collector: Option<Rc<LogCollector>>) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self { log_collector }))
     }
 }
 
-/// Convenience macro to log a message with an `Rc<RefCell<dyn Logger>>`
+/// Convenience macro to log a message with an `Rc<RefCell<Logger>>`
 #[macro_export]
 macro_rules! ic_logger_msg {
     ($logger:expr, $message:expr) => {
@@ -141,7 +135,7 @@ pub struct ThisInvokeContext<'a> {
     accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
     programs: &'a [(Pubkey, ProcessInstructionWithContext)],
     sysvars: &'a [(Pubkey, Vec<u8>)],
-    logger: Rc<RefCell<dyn Logger>>,
+    logger: Rc<RefCell<Logger>>,
     compute_budget: ComputeBudget,
     current_compute_budget: ComputeBudget,
     compute_meter: Rc<RefCell<ComputeMeter>>,
@@ -177,7 +171,7 @@ impl<'a> ThisInvokeContext<'a> {
             accounts,
             programs,
             sysvars,
-            logger: ThisLogger::new_ref(log_collector),
+            logger: Logger::new_ref(log_collector),
             current_compute_budget: compute_budget,
             compute_budget,
             compute_meter,
@@ -267,7 +261,7 @@ pub trait InvokeContext {
     /// Get a list of built-in programs
     fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)];
     /// Get this invocation's logger
-    fn get_logger(&self) -> Rc<RefCell<dyn Logger>>;
+    fn get_logger(&self) -> Rc<RefCell<Logger>>;
     /// Get this invocation's compute meter
     fn get_compute_meter(&self) -> Rc<RefCell<ComputeMeter>>;
     /// Loaders may need to do work in order to execute a program.  Cache
@@ -580,7 +574,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {
         self.programs
     }
-    fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
+    fn get_logger(&self) -> Rc<RefCell<Logger>> {
         self.logger.clone()
     }
     fn get_compute_meter(&self) -> Rc<RefCell<ComputeMeter>> {
