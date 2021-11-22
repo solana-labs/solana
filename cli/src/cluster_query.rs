@@ -451,7 +451,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
         )
         .subcommand(
             SubCommand::with_name("rent")
-                .about("Calculate per-epoch and rent-exempt-minimum values for a given account data length (account overhead is already included).")
+                .about("Calculate per-epoch and rent-exempt-minimum values for a given account data field length.")
                 .arg(
                     Arg::with_name("data_length")
                         .index(1)
