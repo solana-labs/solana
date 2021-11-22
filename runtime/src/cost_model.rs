@@ -208,25 +208,10 @@ impl CostModel {
         instruction: SystemInstruction,
     ) -> u64 {
         match instruction {
-            SystemInstruction::CreateAccount {
-                lamports: _lamports,
-                space,
-                owner: _owner,
-            } => space,
-            SystemInstruction::CreateAccountWithSeed {
-                base: _base,
-                seed: _seed,
-                lamports: _lamports,
-                space,
-                owner: _owner,
-            } => space,
-            SystemInstruction::Allocate { space } => space,
-            SystemInstruction::AllocateWithSeed {
-                base: _base,
-                seed: _seed,
-                space,
-                owner: _owner,
-            } => space,
+            SystemInstruction::CreateAccount { space, .. }
+            | SystemInstruction::CreateAccountWithSeed { space, .. }
+            | SystemInstruction::Allocate { space }
+            | SystemInstruction::AllocateWithSeed { space, .. } => space,
             SystemInstruction::Assign { .. }
             | SystemInstruction::InitializeNonceAccount(_)
             | SystemInstruction::WithdrawNonceAccount(_)
