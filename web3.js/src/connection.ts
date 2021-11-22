@@ -1,6 +1,5 @@
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
-import fetch from 'cross-fetch';
 import type {Response} from 'cross-fetch';
 import {
   type as pick,
@@ -751,6 +750,7 @@ export type PerfSample = {
 function createRpcClient(
   url: string,
   useHttps: boolean,
+  _fetch: typeof fetch,
   httpHeaders?: HttpHeaders,
   fetchMiddleware?: FetchMiddleware,
   disableRetryOnRateLimit?: boolean,
@@ -767,7 +767,7 @@ function createRpcClient(
       return new Promise<Response>((resolve, reject) => {
         fetchMiddleware(url, options, async (url: string, options: any) => {
           try {
-            resolve(await fetch(url, options));
+            resolve(await _fetch(url, options));
           } catch (error) {
             reject(error);
           }
@@ -798,7 +798,7 @@ function createRpcClient(
         if (fetchWithMiddleware) {
           res = await fetchWithMiddleware(url, options);
         } else {
-          res = await fetch(url, options);
+          res = await _fetch(url, options);
         }
 
         if (res.status !== 429 /* Too many requests */) {
@@ -2067,10 +2067,12 @@ export class Connection {
    *
    * @param endpoint URL to the fullnode JSON RPC endpoint
    * @param commitmentOrConfig optional default commitment level or optional ConnectionConfig configuration object
+   * @param fetch optional fetch compatible [API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API) for making a request
    */
   constructor(
     endpoint: string,
     commitmentOrConfig?: Commitment | ConnectionConfig,
+    _fetch?: typeof fetch,
   ) {
     let url = new URL(endpoint);
     const useHttps = url.protocol === 'https:';
@@ -2097,6 +2099,7 @@ export class Connection {
     this._rpcClient = createRpcClient(
       url.toString(),
       useHttps,
+      _fetch || require('cross-fetch'),
       httpHeaders,
       fetchMiddleware,
       disableRetryOnRateLimit,

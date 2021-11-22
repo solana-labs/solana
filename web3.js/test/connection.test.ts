@@ -3338,5 +3338,20 @@ describe('Connection', () => {
       const version = await connection.getVersion();
       expect(version['solana-core']).to.be.ok;
     });
+
+    it('custom fetch option', async () => {
+      let count = 0;
+      const connection = new Connection(
+        'https://api.mainnet-beta.solana.com',
+        {},
+        (input, init) => {
+          count++;
+          return fetch(input, init);
+        },
+      );
+      const version = await connection.getVersion();
+      expect(version['solana-core']).to.be.ok;
+      expect(count).to.eq(1);
+    });
   }
 });
