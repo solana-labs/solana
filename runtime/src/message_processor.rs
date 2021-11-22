@@ -45,7 +45,7 @@ impl MessageProcessor {
         program_indices: &[Vec<usize>],
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         rent: Rent,
-        log_collector: Option<Rc<LogCollector>>,
+        log_collector: Option<Rc<RefCell<LogCollector>>>,
         executors: Rc<RefCell<Executors>>,
         instruction_recorders: Option<&[InstructionRecorder]>,
         feature_set: Arc<FeatureSet>,

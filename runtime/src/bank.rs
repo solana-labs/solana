@@ -3681,24 +3681,6 @@ impl Bank {
         Ok(())
     }
 
-    fn collect_log_messages(
-        log_collector: Option<Rc<LogCollector>>,
-    ) -> Option<TransactionLogMessages> {
-        log_collector.and_then(|log_collector| Rc::try_unwrap(log_collector).map(Into::into).ok())
-    }
-
-    fn compile_recorded_instructions(
-        instruction_recorders: Option<Vec<InstructionRecorder>>,
-        message: &SanitizedMessage,
-    ) -> Option<InnerInstructionsList> {
-        instruction_recorders.and_then(|instruction_recorders| {
-            instruction_recorders
-                .into_iter()
-                .map(|r| r.compile_instructions(message))
-                .collect()
-        })
-    }
-
     /// Get any cached executors needed by the transaction
     fn get_executors(
         &self,
@@ -3860,7 +3842,7 @@ impl Bank {
                         };
 
                         let log_collector = if enable_log_recording {
-                            Some(Rc::new(LogCollector::default()))
+                            Some(LogCollector::new_ref())
                         } else {
                             None
                         };
@@ -3901,11 +3883,21 @@ impl Bank {
                             process_result = Err(TransactionError::UnsupportedVersion);
                         }
 
-                        transaction_log_messages.push(Self::collect_log_messages(log_collector));
-                        inner_instructions.push(Self::compile_recorded_instructions(
-                            instruction_recorders,
-                            tx.message(),
-                        ));
+                        let log_messages: Option<TransactionLogMessages> =
+                            log_collector.and_then(|log_collector| {
+                                Rc::try_unwrap(log_collector)
+                                    .map(|log_collector| log_collector.into_inner().into())
+                                    .ok()
+                            });
+                        transaction_log_messages.push(log_messages);
+                        let inner_instruction_list: Option<InnerInstructionsList> =
+                            instruction_recorders.and_then(|instruction_recorders| {
+                                instruction_recorders
+                                    .into_iter()
+                                    .map(|r| r.compile_instructions(tx.message()))
+                                    .collect()
+                            });
+                        inner_instructions.push(inner_instruction_list);
 
                         if let Err(e) = Self::refcells_to_accounts(
                             &mut loaded_transaction.accounts,

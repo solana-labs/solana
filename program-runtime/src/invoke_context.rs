@@ -2,7 +2,7 @@ use crate::{
     ic_logger_msg, ic_msg,
     instruction_processor::{ExecuteDetailsTimings, Executor, Executors, PreAccount},
     instruction_recorder::InstructionRecorder,
-    log_collector::{LogCollector, Logger},
+    log_collector::LogCollector,
 };
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
@@ -79,7 +79,7 @@ pub struct ThisInvokeContext<'a> {
     accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
     programs: &'a [(Pubkey, ProcessInstructionWithContext)],
     sysvars: &'a [(Pubkey, Vec<u8>)],
-    logger: Rc<RefCell<Logger>>,
+    log_collector: Option<Rc<RefCell<LogCollector>>>,
     compute_budget: ComputeBudget,
     current_compute_budget: ComputeBudget,
     compute_meter: Rc<RefCell<ComputeMeter>>,
@@ -98,7 +98,7 @@ impl<'a> ThisInvokeContext<'a> {
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         programs: &'a [(Pubkey, ProcessInstructionWithContext)],
         sysvars: &'a [(Pubkey, Vec<u8>)],
-        log_collector: Option<Rc<LogCollector>>,
+        log_collector: Option<Rc<RefCell<LogCollector>>>,
         compute_budget: ComputeBudget,
         compute_meter: Rc<RefCell<ComputeMeter>>,
         executors: Rc<RefCell<Executors>>,
@@ -115,7 +115,7 @@ impl<'a> ThisInvokeContext<'a> {
             accounts,
             programs,
             sysvars,
-            logger: Logger::new_ref(log_collector),
+            log_collector,
             current_compute_budget: compute_budget,
             compute_budget,
             compute_meter,
@@ -204,9 +204,9 @@ pub trait InvokeContext {
     fn get_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError>;
     /// Get a list of built-in programs
     fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)];
-    /// Get this invocation's logger
-    fn get_logger(&self) -> Rc<RefCell<Logger>>;
-    /// Get this invocation's compute meter
+    /// Get this invocation's LogCollector
+    fn get_log_collector(&self) -> Option<Rc<RefCell<LogCollector>>>;
+    /// Get this invocation's ComputeMeter
     fn get_compute_meter(&self) -> Rc<RefCell<ComputeMeter>>;
     /// Loaders may need to do work in order to execute a program.  Cache
     /// the work that can be re-used across executions
@@ -395,7 +395,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                 )
                 .map_err(|err| {
                     ic_logger_msg!(
-                        self.logger,
+                        self.log_collector,
                         "failed to verify account {}: {}",
                         pre_account.key(),
                         err
@@ -431,7 +431,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             .and_then(|frame| frame.program_id())
             .ok_or(InstructionError::CallDepth)?;
         let rent = &self.rent;
-        let logger = &self.logger;
+        let log_collector = &self.log_collector;
         let accounts = &self.accounts;
         let pre_accounts = &mut self.pre_accounts;
         let timings = &mut self.timings;
@@ -466,7 +466,12 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                                 do_support_realloc,
                             )
                             .map_err(|err| {
-                                ic_logger_msg!(logger, "failed to verify account {}: {}", key, err);
+                                ic_logger_msg!(
+                                    log_collector,
+                                    "failed to verify account {}: {}",
+                                    key,
+                                    err
+                                );
                                 err
                             })?;
                         pre_sum = pre_sum
@@ -518,8 +523,8 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {
         self.programs
     }
-    fn get_logger(&self) -> Rc<RefCell<Logger>> {
-        self.logger.clone()
+    fn get_log_collector(&self) -> Option<Rc<RefCell<LogCollector>>> {
+        self.log_collector.clone()
     }
     fn get_compute_meter(&self) -> Rc<RefCell<ComputeMeter>> {
         self.compute_meter.clone()

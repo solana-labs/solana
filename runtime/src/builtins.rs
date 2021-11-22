@@ -17,7 +17,7 @@ fn process_instruction_with_program_logging(
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
-    let logger = invoke_context.get_logger();
+    let logger = invoke_context.get_log_collector();
     let program_id = invoke_context.get_caller()?;
     stable_log::program_invoke(&logger, program_id, invoke_context.invoke_depth());
 

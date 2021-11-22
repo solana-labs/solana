@@ -1,10 +1,10 @@
 use crate::{alloc, BpfError};
 use alloc::Alloc;
 use solana_program_runtime::{
-    ic_msg,
+    ic_logger_msg, ic_msg,
     instruction_processor::InstructionProcessor,
     invoke_context::{ComputeMeter, InvokeContext},
-    log_collector::Logger,
+    log_collector::LogCollector,
     stable_log,
 };
 use solana_rbpf::{
@@ -230,7 +230,7 @@ pub fn bind_syscall_context_objects<'a>(
     vm.bind_syscall_context_object(
         Box::new(SyscallLog {
             compute_meter: invoke_context.get_compute_meter(),
-            logger: invoke_context.get_logger(),
+            log_collector: invoke_context.get_log_collector(),
             loader_id,
         }),
         None,
@@ -239,7 +239,7 @@ pub fn bind_syscall_context_objects<'a>(
         Box::new(SyscallLogU64 {
             cost: compute_budget.log_64_units,
             compute_meter: invoke_context.get_compute_meter(),
-            logger: invoke_context.get_logger(),
+            log_collector: invoke_context.get_log_collector(),
         }),
         None,
     )?;
@@ -248,7 +248,7 @@ pub fn bind_syscall_context_objects<'a>(
         Box::new(SyscallLogBpfComputeUnits {
             cost: 0,
             compute_meter: invoke_context.get_compute_meter(),
-            logger: invoke_context.get_logger(),
+            log_collector: invoke_context.get_log_collector(),
         }),
         None,
     )?;
@@ -257,7 +257,7 @@ pub fn bind_syscall_context_objects<'a>(
         Box::new(SyscallLogPubkey {
             cost: compute_budget.log_pubkey_units,
             compute_meter: invoke_context.get_compute_meter(),
-            logger: invoke_context.get_logger(),
+            log_collector: invoke_context.get_log_collector(),
             loader_id,
         }),
         None,
@@ -609,7 +609,7 @@ impl<'a> SyscallObject<BpfError> for SyscallPanic<'a> {
 /// Log a user's info message
 pub struct SyscallLog<'a> {
     compute_meter: Rc<RefCell<ComputeMeter>>,
-    logger: Rc<RefCell<Logger>>,
+    log_collector: Option<Rc<RefCell<LogCollector>>>,
     loader_id: &'a Pubkey,
 }
 impl<'a> SyscallObject<BpfError> for SyscallLog<'a> {
@@ -631,7 +631,7 @@ impl<'a> SyscallObject<BpfError> for SyscallLog<'a> {
                 len,
                 self.loader_id,
                 &mut |string: &str| {
-                    stable_log::program_log(&self.logger, string);
+                    stable_log::program_log(&self.log_collector, string);
                     Ok(0)
                 },
             ),
@@ -645,7 +645,7 @@ impl<'a> SyscallObject<BpfError> for SyscallLog<'a> {
 pub struct SyscallLogU64 {
     cost: u64,
     compute_meter: Rc<RefCell<ComputeMeter>>,
-    logger: Rc<RefCell<Logger>>,
+    log_collector: Option<Rc<RefCell<LogCollector>>>,
 }
 impl SyscallObject<BpfError> for SyscallLogU64 {
     fn call(
@@ -660,7 +660,7 @@ impl SyscallObject<BpfError> for SyscallLogU64 {
     ) {
         question_mark!(self.compute_meter.consume(self.cost), result);
         stable_log::program_log(
-            &self.logger,
+            &self.log_collector,
             &format!(
                 "{:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
                 arg1, arg2, arg3, arg4, arg5
@@ -674,7 +674,7 @@ impl SyscallObject<BpfError> for SyscallLogU64 {
 pub struct SyscallLogBpfComputeUnits {
     cost: u64,
     compute_meter: Rc<RefCell<ComputeMeter>>,
-    logger: Rc<RefCell<Logger>>,
+    log_collector: Option<Rc<RefCell<LogCollector>>>,
 }
 impl SyscallObject<BpfError> for SyscallLogBpfComputeUnits {
     fn call(
@@ -688,18 +688,11 @@ impl SyscallObject<BpfError> for SyscallLogBpfComputeUnits {
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         question_mark!(self.compute_meter.consume(self.cost), result);
-        let logger = question_mark!(
-            self.logger
-                .try_borrow_mut()
-                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
-            result
+        ic_logger_msg!(
+            self.log_collector,
+            "Program consumption: {} units remaining",
+            self.compute_meter.borrow().get_remaining()
         );
-        if logger.log_enabled() {
-            logger.log(&format!(
-                "Program consumption: {} units remaining",
-                self.compute_meter.borrow().get_remaining()
-            ));
-        }
         *result = Ok(0);
     }
 }
@@ -708,7 +701,7 @@ impl SyscallObject<BpfError> for SyscallLogBpfComputeUnits {
 pub struct SyscallLogPubkey<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<ComputeMeter>>,
-    logger: Rc<RefCell<Logger>>,
+    log_collector: Option<Rc<RefCell<LogCollector>>>,
     loader_id: &'a Pubkey,
 }
 impl<'a> SyscallObject<BpfError> for SyscallLogPubkey<'a> {
@@ -727,7 +720,7 @@ impl<'a> SyscallObject<BpfError> for SyscallLogPubkey<'a> {
             translate_type::<Pubkey>(memory_mapping, pubkey_addr, self.loader_id,),
             result
         );
-        stable_log::program_log(&self.logger, &pubkey.to_string());
+        stable_log::program_log(&self.log_collector, &pubkey.to_string());
         *result = Ok(0);
     }
 }
@@ -2430,9 +2423,9 @@ impl<'a> SyscallObject<BpfError> for SyscallLogData<'a> {
             ));
         }
 
-        let logger = invoke_context.get_logger();
+        let log_collector = invoke_context.get_log_collector();
 
-        stable_log::program_data(&logger, &fields);
+        stable_log::program_data(&log_collector, &fields);
 
         *result = Ok(0);
     }
@@ -2443,7 +2436,7 @@ mod tests {
     use super::*;
     use solana_program_runtime::{
         invoke_context::{ComputeMeter, ThisInvokeContext},
-        log_collector::{LogCollector, Logger},
+        log_collector::LogCollector,
     };
     use solana_rbpf::{
         ebpf::HOST_ALIGN, memory_region::MemoryRegion, user_error::UserError, vm::Config,
@@ -2836,12 +2829,12 @@ mod tests {
             &config,
         )
         .unwrap();
-        let log = Rc::new(LogCollector::default());
+        let log = LogCollector::new_ref();
 
         {
             let mut syscall_sol_log = SyscallLog {
                 compute_meter: ComputeMeter::new_ref(string.len() as u64),
-                logger: Logger::new_ref(Some(log.clone())),
+                log_collector: Some(log.clone()),
                 loader_id: &bpf_loader::id(),
             };
             let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
@@ -2858,7 +2851,7 @@ mod tests {
         }
 
         let log: Vec<String> = match Rc::try_unwrap(log) {
-            Ok(log) => log.into(),
+            Ok(log) => log.into_inner().into(),
             Err(_) => panic!("Unwrap failed"),
         };
         assert_eq!(log.len(), 1);
@@ -2866,7 +2859,7 @@ mod tests {
 
         let mut syscall_sol_log = SyscallLog {
             compute_meter: ComputeMeter::new_ref(string.len() as u64 * 3),
-            logger: Logger::new_ref(None),
+            log_collector: None,
             loader_id: &bpf_loader::id(),
         };
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
@@ -2904,7 +2897,7 @@ mod tests {
 
         let mut syscall_sol_log = SyscallLog {
             compute_meter: ComputeMeter::new_ref((string.len() as u64 * 2) - 1),
-            logger: Logger::new_ref(None),
+            log_collector: None,
             loader_id: &bpf_loader::id(),
         };
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
@@ -2938,13 +2931,13 @@ mod tests {
 
     #[test]
     fn test_syscall_sol_log_u64() {
-        let log = Rc::new(LogCollector::default());
+        let log = LogCollector::new_ref();
 
         {
             let mut syscall_sol_log_u64 = SyscallLogU64 {
                 cost: 0,
                 compute_meter: ComputeMeter::new_ref(std::u64::MAX),
-                logger: Logger::new_ref(Some(log.clone())),
+                log_collector: Some(log.clone()),
             };
             let config = Config::default();
             let memory_mapping = MemoryMapping::new::<UserError>(vec![], &config).unwrap();
@@ -2954,7 +2947,7 @@ mod tests {
         }
 
         let log: Vec<String> = match Rc::try_unwrap(log) {
-            Ok(log) => log.into(),
+            Ok(log) => log.into_inner().into(),
             Err(_) => panic!("Unwrap failed"),
         };
         assert_eq!(log.len(), 1);
@@ -2980,13 +2973,13 @@ mod tests {
             &config,
         )
         .unwrap();
-        let log = Rc::new(LogCollector::default());
+        let log = LogCollector::new_ref();
 
         {
             let mut syscall_sol_pubkey = SyscallLogPubkey {
                 cost: 1,
                 compute_meter: ComputeMeter::new_ref(1),
-                logger: Logger::new_ref(Some(log.clone())),
+                log_collector: Some(log.clone()),
                 loader_id: &bpf_loader::id(),
             };
             let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
@@ -2995,7 +2988,7 @@ mod tests {
         }
 
         let log: Vec<String> = match Rc::try_unwrap(log) {
-            Ok(log) => log.into(),
+            Ok(log) => log.into_inner().into(),
             Err(_) => panic!("Unwrap failed"),
         };
         assert_eq!(log.len(), 1);
@@ -3007,7 +3000,7 @@ mod tests {
         let mut syscall_sol_pubkey = SyscallLogPubkey {
             cost: 1,
             compute_meter: ComputeMeter::new_ref(1),
-            logger: Logger::new_ref(None),
+            log_collector: None,
             loader_id: &bpf_loader::id(),
         };
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
