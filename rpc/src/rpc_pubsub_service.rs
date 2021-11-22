@@ -190,16 +190,17 @@ pub struct TestBroadcastReceiver {
 #[cfg(test)]
 impl TestBroadcastReceiver {
     pub fn recv(&mut self) -> String {
-        use {
-            std::{
-                thread::sleep,
-                time::{Duration, Instant},
-            },
-            tokio::sync::broadcast::error::TryRecvError,
+        return match self.recv_timeout(std::time::Duration::from_secs(5)) {
+            Err(err) => panic!("broadcast receiver error: {}", err),
+            Ok(str) => str,
         };
+    }
 
-        let timeout = Duration::from_secs(5);
-        let started = Instant::now();
+    pub fn recv_timeout(&mut self, timeout: std::time::Duration) -> Result<String, String> {
+        use std::thread::sleep;
+        use tokio::sync::broadcast::error::TryRecvError;
+
+        let started = std::time::Instant::now();
 
         loop {
             match self.inner.try_recv() {
@@ -209,17 +210,16 @@ impl TestBroadcastReceiver {
                         started.elapsed().as_millis()
                     );
                     if let Some(json) = self.handler.handle(notification).expect("handler failed") {
-                        return json.to_string();
+                        return Ok(json.to_string());
                     }
                 }
                 Err(TryRecvError::Empty) => {
-                    assert!(
-                        started.elapsed() <= timeout,
-                        "TestBroadcastReceiver: no data, timeout reached"
-                    );
-                    sleep(Duration::from_millis(50));
+                    if started.elapsed() > timeout {
+                        return Err("TestBroadcastReceiver: no data, timeout reached".into());
+                    }
+                    sleep(std::time::Duration::from_millis(50));
                 }
-                Err(err) => panic!("broadcast receiver error: {}", err),
+                Err(e) => return Err(e.to_string()),
             }
         }
     }

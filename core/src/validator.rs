@@ -538,6 +538,7 @@ impl Validator {
 
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new_with_config(
             &exit,
+            blockstore.clone(),
             bank_forks.clone(),
             block_commitment_cache.clone(),
             optimistically_confirmed_bank.clone(),
