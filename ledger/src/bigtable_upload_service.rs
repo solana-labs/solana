@@ -1,9 +1,11 @@
 use {
     crate::{bigtable_upload, blockstore::Blockstore},
+    solana_runtime::commitment::BlockCommitmentCache,
     std::{
+        cmp::min,
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
-            Arc,
+            Arc, RwLock,
         },
         thread::{self, Builder, JoinHandle},
     },
@@ -19,6 +21,7 @@ impl BigTableUploadService {
         runtime: Arc<Runtime>,
         bigtable_ledger_storage: solana_storage_bigtable::LedgerStorage,
         blockstore: Arc<Blockstore>,
+        block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         max_complete_transaction_status_slot: Arc<AtomicU64>,
         exit: Arc<AtomicBool>,
     ) -> Self {
@@ -30,6 +33,7 @@ impl BigTableUploadService {
                     runtime,
                     bigtable_ledger_storage,
                     blockstore,
+                    block_commitment_cache,
                     max_complete_transaction_status_slot,
                     exit,
                 )
@@ -43,6 +47,7 @@ impl BigTableUploadService {
         runtime: Arc<Runtime>,
         bigtable_ledger_storage: solana_storage_bigtable::LedgerStorage,
         blockstore: Arc<Blockstore>,
+        block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         max_complete_transaction_status_slot: Arc<AtomicU64>,
         exit: Arc<AtomicBool>,
     ) {
@@ -52,7 +57,10 @@ impl BigTableUploadService {
                 break;
             }
 
-            let end_slot = max_complete_transaction_status_slot.load(Ordering::SeqCst);
+            let end_slot = min(
+                max_complete_transaction_status_slot.load(Ordering::SeqCst),
+                block_commitment_cache.read().unwrap().root(),
+            );
 
             if end_slot <= start_slot {
                 std::thread::sleep(std::time::Duration::from_secs(1));
