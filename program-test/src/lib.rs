@@ -9,10 +9,7 @@ use {
     log::*,
     solana_banks_client::start_client,
     solana_banks_server::banks_server::start_local_server,
-    solana_program_runtime::{
-        ic_msg, instruction_processor::InstructionProcessor,
-        invoke_context::ProcessInstructionWithContext, stable_log,
-    },
+    solana_program_runtime::{ic_msg, invoke_context::ProcessInstructionWithContext, stable_log},
     solana_runtime::{
         bank::{Bank, ExecuteTimings},
         bank_forks::BankForks,
@@ -323,14 +320,14 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
         invoke_context.record_instruction(instruction);
 
-        InstructionProcessor::process_cross_program_instruction(
-            &message,
-            &program_indices,
-            &account_indices,
-            &caller_privileges,
-            invoke_context,
-        )
-        .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;
+        invoke_context
+            .process_cross_program_instruction(
+                &message,
+                &program_indices,
+                &account_indices,
+                &caller_privileges,
+            )
+            .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;
 
         // Copy writeable account modifications back into the caller's AccountInfos
         for (account, account_info) in accounts.iter() {

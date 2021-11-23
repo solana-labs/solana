@@ -1,24 +1,20 @@
 use crate::{
-    ic_msg,
     invoke_context::{InvokeContext, ProcessInstructionWithContext},
     native_loader::NativeLoader,
 };
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
-    account_utils::StateMut,
-    bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    feature_set::{demote_program_write_locks, do_support_realloc, remove_native_loader},
-    instruction::{Instruction, InstructionError},
+    feature_set::remove_native_loader,
+    instruction::InstructionError,
     keyed_account::keyed_account_at_index,
-    message::Message,
     pubkey::Pubkey,
     rent::Rent,
     system_instruction::MAX_PERMITTED_DATA_LENGTH,
     system_program,
 };
 use std::{
-    cell::{Ref, RefCell, RefMut},
+    cell::{Ref, RefCell},
     collections::HashMap,
     fmt::Debug,
     rc::Rc,
@@ -411,230 +407,6 @@ impl InstructionProcessor {
             }
         }
         Err(InstructionError::UnsupportedProgramId)
-    }
-
-    pub fn create_message(
-        instruction: &Instruction,
-        signers: &[Pubkey],
-        invoke_context: &RefMut<&mut dyn InvokeContext>,
-    ) -> Result<(Message, Vec<bool>, Vec<usize>), InstructionError> {
-        let message = Message::new(&[instruction.clone()], None);
-
-        // Gather keyed_accounts in the order of message.account_keys
-        let caller_keyed_accounts = invoke_context.get_keyed_accounts()?;
-        let callee_keyed_accounts = message
-            .account_keys
-            .iter()
-            .map(|account_key| {
-                caller_keyed_accounts
-                    .iter()
-                    .find(|keyed_account| keyed_account.unsigned_key() == account_key)
-                    .ok_or_else(|| {
-                        ic_msg!(
-                            *invoke_context,
-                            "Instruction references an unknown account {}",
-                            account_key
-                        );
-                        InstructionError::MissingAccount
-                    })
-            })
-            .collect::<Result<Vec<_>, InstructionError>>()?;
-
-        // Check for privilege escalation
-        for account in instruction.accounts.iter() {
-            let keyed_account = callee_keyed_accounts
-                .iter()
-                .find_map(|keyed_account| {
-                    if &account.pubkey == keyed_account.unsigned_key() {
-                        Some(keyed_account)
-                    } else {
-                        None
-                    }
-                })
-                .ok_or_else(|| {
-                    ic_msg!(
-                        invoke_context,
-                        "Instruction references an unknown account {}",
-                        account.pubkey
-                    );
-                    InstructionError::MissingAccount
-                })?;
-            // Readonly account cannot become writable
-            if account.is_writable && !keyed_account.is_writable() {
-                ic_msg!(
-                    invoke_context,
-                    "{}'s writable privilege escalated",
-                    account.pubkey
-                );
-                return Err(InstructionError::PrivilegeEscalation);
-            }
-
-            if account.is_signer && // If message indicates account is signed
-            !( // one of the following needs to be true:
-                keyed_account.signer_key().is_some() // Signed in the parent instruction
-                || signers.contains(&account.pubkey) // Signed by the program
-            ) {
-                ic_msg!(
-                    invoke_context,
-                    "{}'s signer privilege escalated",
-                    account.pubkey
-                );
-                return Err(InstructionError::PrivilegeEscalation);
-            }
-        }
-        let caller_write_privileges = callee_keyed_accounts
-            .iter()
-            .map(|keyed_account| keyed_account.is_writable())
-            .collect::<Vec<bool>>();
-
-        // Find and validate executables / program accounts
-        let callee_program_id = instruction.program_id;
-        let (program_account_index, program_account) = callee_keyed_accounts
-            .iter()
-            .find(|keyed_account| &callee_program_id == keyed_account.unsigned_key())
-            .and_then(|_keyed_account| invoke_context.get_account(&callee_program_id))
-            .ok_or_else(|| {
-                ic_msg!(invoke_context, "Unknown program {}", callee_program_id);
-                InstructionError::MissingAccount
-            })?;
-        if !program_account.borrow().executable() {
-            ic_msg!(
-                invoke_context,
-                "Account {} is not executable",
-                callee_program_id
-            );
-            return Err(InstructionError::AccountNotExecutable);
-        }
-        let mut program_indices = vec![];
-        if program_account.borrow().owner() == &bpf_loader_upgradeable::id() {
-            if let UpgradeableLoaderState::Program {
-                programdata_address,
-            } = program_account.borrow().state()?
-            {
-                if let Some((programdata_account_index, _programdata_account)) =
-                    invoke_context.get_account(&programdata_address)
-                {
-                    program_indices.push(programdata_account_index);
-                } else {
-                    ic_msg!(
-                        invoke_context,
-                        "Unknown upgradeable programdata account {}",
-                        programdata_address,
-                    );
-                    return Err(InstructionError::MissingAccount);
-                }
-            } else {
-                ic_msg!(
-                    invoke_context,
-                    "Invalid upgradeable program account {}",
-                    callee_program_id,
-                );
-                return Err(InstructionError::MissingAccount);
-            }
-        }
-        program_indices.push(program_account_index);
-
-        Ok((message, caller_write_privileges, program_indices))
-    }
-
-    /// Entrypoint for a cross-program invocation from a native program
-    pub fn native_invoke(
-        invoke_context: &mut dyn InvokeContext,
-        instruction: Instruction,
-        signers: &[Pubkey],
-    ) -> Result<(), InstructionError> {
-        let do_support_realloc = invoke_context.is_feature_active(&do_support_realloc::id());
-        let invoke_context = RefCell::new(invoke_context);
-        let mut invoke_context = invoke_context.borrow_mut();
-
-        // Translate and verify caller's data
-        let (message, caller_write_privileges, program_indices) =
-            Self::create_message(&instruction, signers, &invoke_context)?;
-        let mut account_indices = Vec::with_capacity(message.account_keys.len());
-        let mut accounts = Vec::with_capacity(message.account_keys.len());
-        for account_key in message.account_keys.iter() {
-            let (account_index, account) = invoke_context
-                .get_account(account_key)
-                .ok_or(InstructionError::MissingAccount)?;
-            let account_length = account.borrow().data().len();
-            account_indices.push(account_index);
-            accounts.push((account, account_length));
-        }
-
-        // Record the instruction
-        invoke_context.record_instruction(&instruction);
-
-        // Process instruction
-        InstructionProcessor::process_cross_program_instruction(
-            &message,
-            &program_indices,
-            &account_indices,
-            &caller_write_privileges,
-            *invoke_context,
-        )?;
-
-        // Verify the called program has not misbehaved
-        for (account, prev_size) in accounts.iter() {
-            if !do_support_realloc && *prev_size != account.borrow().data().len() && *prev_size != 0
-            {
-                // Only support for `CreateAccount` at this time.
-                // Need a way to limit total realloc size across multiple CPI calls
-                ic_msg!(
-                    invoke_context,
-                    "Inner instructions do not support realloc, only SystemProgram::CreateAccount",
-                );
-                return Err(InstructionError::InvalidRealloc);
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Process a cross-program instruction
-    /// This method calls the instruction's program entrypoint function
-    pub fn process_cross_program_instruction(
-        message: &Message,
-        program_indices: &[usize],
-        account_indices: &[usize],
-        caller_write_privileges: &[bool],
-        invoke_context: &mut dyn InvokeContext,
-    ) -> Result<(), InstructionError> {
-        // This function is always called with a valid instruction, if that changes return an error
-        let instruction = message
-            .instructions
-            .get(0)
-            .ok_or(InstructionError::GenericError)?;
-
-        // Verify the calling program hasn't misbehaved
-        invoke_context.verify_and_update(instruction, account_indices, caller_write_privileges)?;
-
-        // clear the return data
-        invoke_context.set_return_data(Vec::new())?;
-
-        // Invoke callee
-        invoke_context.push(message, instruction, program_indices, Some(account_indices))?;
-
-        let mut instruction_processor = InstructionProcessor::default();
-        for (program_id, process_instruction) in invoke_context.get_programs().iter() {
-            instruction_processor.add_program(program_id, *process_instruction);
-        }
-
-        let mut result =
-            instruction_processor.process_instruction(&instruction.data, invoke_context);
-        if result.is_ok() {
-            // Verify the called program has not misbehaved
-            let demote_program_write_locks =
-                invoke_context.is_feature_active(&demote_program_write_locks::id());
-            let write_privileges: Vec<bool> = (0..message.account_keys.len())
-                .map(|i| message.is_writable(i, demote_program_write_locks))
-                .collect();
-            result =
-                invoke_context.verify_and_update(instruction, account_indices, &write_privileges);
-        }
-
-        // Restore previous state
-        invoke_context.pop();
-        result
     }
 }
 
