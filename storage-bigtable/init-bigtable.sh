@@ -5,7 +5,7 @@
 
 set -e
 
-instance=solana-ledger
+[[ -z "${BIGTABLE_INSTANCE_ID}" ]] && instance='solana-ledger' || instance="${BIGTABLE_INSTANCE_ID}"
 
 cbt=(
   cbt

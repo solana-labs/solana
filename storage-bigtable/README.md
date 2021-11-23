@@ -16,6 +16,8 @@ Export a standard `GOOGLE_APPLICATION_CREDENTIALS` environment variable to your
 service account credentials.  The project should contain a BigTable instance
 called `solana-ledger` that has been initialized by running the `./init-bigtable.sh` script.
 
+You can also set the `instance ID` of your BigTable exporting `BIGTABLE_INSTANCE_ID`. If not defined, the default value is `solana-ledger`.
+
 Depending on what operation mode is required, either the
 `https://www.googleapis.com/auth/bigtable.data` or
 `https://www.googleapis.com/auth/bigtable.data.readonly` OAuth scope will be
