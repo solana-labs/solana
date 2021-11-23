@@ -24,6 +24,7 @@ rand_core = "0.6.2"
 serde = "1.0.122"
 serde_derive = "1.0.103"
 smpl_jwt = "0.6.0"
+solana-metrics = { path = "../metrics", version = "=1.8.6" }
 solana-sdk = { path = "../sdk", version = "=1.8.6" }
 solana-storage-proto = { path = "../storage-proto", version = "=1.8.6" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.8.6" }
