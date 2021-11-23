@@ -599,8 +599,7 @@ VoteAccount {
     ...
   ],
   authorizedVoters: [ { epoch: 242, authorizedVoter: [PublicKey] } ],
-  priorVoters: {
-    buf: [
+  priorVoters: [
       [Object], [Object], [Object],
       [Object], [Object], [Object],
       [Object], [Object], [Object],
@@ -612,10 +611,7 @@ VoteAccount {
       [Object], [Object], [Object],
       [Object], [Object], [Object],
       [Object], [Object]
-    ],
-    idx: 31,
-    isEmpty: 1
-  },
+   ],
   epochCredits: [
     { epoch: 179, credits: 33723163, prevCredits: 33431259 },
     { epoch: 180, credits: 34022643, prevCredits: 33723163 },

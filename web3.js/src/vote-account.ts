@@ -17,7 +17,7 @@ export type Lockout = {
 /**
  * History of how many credits earned by the end of each epoch
  */
-export type EpochCredit = {
+export type EpochCredits = {
   epoch: number;
   credits: number;
   prevCredits: number;
@@ -28,19 +28,13 @@ export type AuthorizedVoter = {
   authorizedVoter: PublicKey;
 };
 
-export type PriorVoters = {
-  buf: Buf;
-  idx: number;
-  isEmpty: boolean;
-};
-
-export type Buf = {
+export type PriorVoter = {
   authorizedPubkey: PublicKey;
   epochOfLastAuthorizedSwitch: number;
   targetEpoch: number;
 };
 
-export type Timestamp = {
+export type BlockTimestamp = {
   slot: number;
   timetamp: number;
 };
@@ -113,9 +107,9 @@ type VoteAccountArgs = {
   rootSlot: number | null;
   votes: Lockout[];
   authorizedVoters: AuthorizedVoter[];
-  priorVoters: PriorVoters;
-  epochCredits: EpochCredit[];
-  lastTimestamp: Timestamp;
+  priorVoters: PriorVoter[];
+  epochCredits: EpochCredits[];
+  lastTimestamp: BlockTimestamp;
 };
 
 /**
@@ -128,9 +122,9 @@ export class VoteAccount {
   rootSlot: number | null;
   votes: Lockout[];
   authorizedVoters: AuthorizedVoter[];
-  priorVoters: PriorVoters;
-  epochCredits: EpochCredit[];
-  lastTimestamp: Timestamp;
+  priorVoters: PriorVoter[];
+  epochCredits: EpochCredits[];
+  lastTimestamp: BlockTimestamp;
 
   /**
    * @internal
@@ -171,10 +165,7 @@ export class VoteAccount {
       votes: va.votes,
       rootSlot,
       authorizedVoters: va.authorizedVoters.map(parseAuthorizedVoter),
-      priorVoters: {
-        ...va.priorVoters,
-        buf: va.priorVoters.buf.map(parsePriorVoters),
-      },
+      priorVoters: va.priorVoters.isEmpty ? [] : va.priorVoters.buf.map(parsePriorVoters),
       epochCredits: va.epochCredits,
       lastTimestamp: va.lastTimestamp,
     });
@@ -192,7 +183,7 @@ function parsePriorVoters({
   authorizedPubkey,
   epochOfLastAuthorizedSwitch,
   targetEpoch,
-}: Buf) {
+}: PriorVoter) {
   return {
     authorizedPubkey: new PublicKey(authorizedPubkey),
     epochOfLastAuthorizedSwitch,
