@@ -3,11 +3,15 @@ use {
         accounts_update_notifier::AccountsUpdateNotifierImpl,
         accountsdb_plugin_manager::AccountsDbPluginManager,
         slot_status_notifier::SlotStatusNotifierImpl, slot_status_observer::SlotStatusObserver,
+        transaction_notifier::TransactionNotifierImpl,
     },
     crossbeam_channel::Receiver,
     log::*,
     serde_json,
-    solana_rpc::optimistically_confirmed_bank_tracker::BankNotification,
+    solana_rpc::{
+        optimistically_confirmed_bank_tracker::BankNotification,
+        transaction_notifier_interface::TransactionNotifierLock,
+    },
     solana_runtime::accounts_update_notifier_interface::AccountsUpdateNotifier,
     std::{
         fs::File,
@@ -45,6 +49,7 @@ pub struct AccountsDbPluginService {
     slot_status_observer: Option<SlotStatusObserver>,
     plugin_manager: Arc<RwLock<AccountsDbPluginManager>>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
+    transaction_notifier: Option<TransactionNotifierLock>,
 }
 
 impl AccountsDbPluginService {
@@ -74,33 +79,47 @@ impl AccountsDbPluginService {
         for accountsdb_plugin_config_file in accountsdb_plugin_config_files {
             Self::load_plugin(&mut plugin_manager, accountsdb_plugin_config_file)?;
         }
-        let to_notify_account_data = plugin_manager.to_notify_account_data();
+        let account_data_notifications_enabled =
+            plugin_manager.account_data_notifications_enabled();
+        let transaction_notifications_enabled = plugin_manager.transaction_notifications_enabled();
 
         let plugin_manager = Arc::new(RwLock::new(plugin_manager));
 
-        let accounts_update_notifier: Option<AccountsUpdateNotifier> = if to_notify_account_data {
-            let accounts_update_notifier = AccountsUpdateNotifierImpl::new(plugin_manager.clone());
-            Some(Arc::new(RwLock::new(accounts_update_notifier)))
-        } else {
-            None
-        };
+        let accounts_update_notifier: Option<AccountsUpdateNotifier> =
+            if account_data_notifications_enabled {
+                let accounts_update_notifier =
+                    AccountsUpdateNotifierImpl::new(plugin_manager.clone());
+                Some(Arc::new(RwLock::new(accounts_update_notifier)))
+            } else {
+                None
+            };
 
-        let slot_status_observer = if to_notify_account_data {
-            let slot_status_notifier = SlotStatusNotifierImpl::new(plugin_manager.clone());
-            let slot_status_notifier = Arc::new(RwLock::new(slot_status_notifier));
-            Some(SlotStatusObserver::new(
-                confirmed_bank_receiver,
-                slot_status_notifier,
-            ))
-        } else {
-            None
-        };
+        let transaction_notifier: Option<TransactionNotifierLock> =
+            if transaction_notifications_enabled {
+                let transaction_notifier = TransactionNotifierImpl::new(plugin_manager.clone());
+                Some(Arc::new(RwLock::new(transaction_notifier)))
+            } else {
+                None
+            };
+
+        let slot_status_observer =
+            if account_data_notifications_enabled || transaction_notifications_enabled {
+                let slot_status_notifier = SlotStatusNotifierImpl::new(plugin_manager.clone());
+                let slot_status_notifier = Arc::new(RwLock::new(slot_status_notifier));
+                Some(SlotStatusObserver::new(
+                    confirmed_bank_receiver,
+                    slot_status_notifier,
+                ))
+            } else {
+                None
+            };
 
         info!("Started AccountsDbPluginService");
         Ok(AccountsDbPluginService {
             slot_status_observer,
             plugin_manager,
             accounts_update_notifier,
+            transaction_notifier,
         })
     }
 
@@ -161,6 +180,10 @@ impl AccountsDbPluginService {
 
     pub fn get_accounts_update_notifier(&self) -> Option<AccountsUpdateNotifier> {
         self.accounts_update_notifier.clone()
+    }
+
+    pub fn get_transaction_notifier(&self) -> Option<TransactionNotifierLock> {
+        self.transaction_notifier.clone()
     }
 
     pub fn join(self) -> thread::Result<()> {

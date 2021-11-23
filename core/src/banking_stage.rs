@@ -2541,6 +2541,8 @@ mod tests {
             let transaction_status_service = TransactionStatusService::new(
                 transaction_status_receiver,
                 Arc::new(AtomicU64::default()),
+                true,
+                None,
                 blockstore.clone(),
                 &Arc::new(AtomicBool::new(false)),
             );
