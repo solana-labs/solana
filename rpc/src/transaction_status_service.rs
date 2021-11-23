@@ -1,5 +1,5 @@
 use {
-    crate::transaction_notifier_interface::TransactionNotifier,
+    crate::transaction_notifier_interface::TransactionNotifierLock,
     crossbeam_channel::{Receiver, RecvTimeoutError},
     itertools::izip,
     solana_ledger::{
@@ -30,7 +30,7 @@ impl TransactionStatusService {
         write_transaction_status_receiver: Receiver<TransactionStatusMessage>,
         max_complete_transaction_status_slot: Arc<AtomicU64>,
         enable_rpc_transaction_history: bool,
-        transaction_notifier: Option<TransactionNotifier>,
+        transaction_notifier: Option<TransactionNotifierLock>,
         blockstore: Arc<Blockstore>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
@@ -60,7 +60,7 @@ impl TransactionStatusService {
         write_transaction_status_receiver: &Receiver<TransactionStatusMessage>,
         max_complete_transaction_status_slot: &Arc<AtomicU64>,
         enable_rpc_transaction_history: bool,
-        transaction_notifier: Option<TransactionNotifier>,
+        transaction_notifier: Option<TransactionNotifierLock>,
         blockstore: &Arc<Blockstore>,
     ) -> Result<(), RecvTimeoutError> {
         match write_transaction_status_receiver.recv_timeout(Duration::from_secs(1))? {
@@ -209,7 +209,7 @@ impl TransactionStatusService {
 pub(crate) mod tests {
     use {
         super::*,
-        crate::transaction_notifier_interface::TransactionNotifierInterface,
+        crate::transaction_notifier_interface::TransactionNotifier,
         crossbeam_channel::unbounded,
         dashmap::DashMap,
         solana_account_decoder::parse_token::token_amount_to_ui_amount,
@@ -255,7 +255,7 @@ pub(crate) mod tests {
         }
     }
 
-    impl TransactionNotifierInterface for TestTransactionNotifier {
+    impl TransactionNotifier for TestTransactionNotifier {
         fn notify_transaction(
             &self,
             slot: Slot,

@@ -60,7 +60,7 @@ use {
         rpc_pubsub_service::{PubSubConfig, PubSubService},
         rpc_service::JsonRpcService,
         rpc_subscriptions::RpcSubscriptions,
-        transaction_notifier_interface::TransactionNotifier,
+        transaction_notifier_interface::TransactionNotifierLock,
         transaction_status_service::TransactionStatusService,
     },
     solana_runtime::{
@@ -1193,7 +1193,7 @@ fn new_banks_from_ledger(
     no_poh_speed_test: bool,
     accounts_package_sender: AccountsPackageSender,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    transaction_notifier: Option<TransactionNotifier>,
+    transaction_notifier: Option<TransactionNotifierLock>,
 ) -> (
     GenesisConfig,
     BankForks,
@@ -1489,7 +1489,7 @@ fn initialize_rpc_transaction_history_services(
     exit: &Arc<AtomicBool>,
     enable_rpc_transaction_history: bool,
     enable_cpi_and_log_storage: bool,
-    transaction_notifier: Option<TransactionNotifier>,
+    transaction_notifier: Option<TransactionNotifierLock>,
 ) -> TransactionHistoryServices {
     let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(blockstore.max_root()));
     let (transaction_status_sender, transaction_status_receiver) = unbounded();

@@ -4,7 +4,7 @@ use {
     std::sync::{Arc, RwLock},
 };
 
-pub trait TransactionNotifierInterface {
+pub trait TransactionNotifier {
     fn notify_transaction(
         &self,
         slot: Slot,
@@ -14,4 +14,4 @@ pub trait TransactionNotifierInterface {
     );
 }
 
-pub type TransactionNotifier = Arc<RwLock<dyn TransactionNotifierInterface + Sync + Send>>;
+pub type TransactionNotifierLock = Arc<RwLock<dyn TransactionNotifier + Sync + Send>>;

@@ -132,14 +132,14 @@ pub trait AccountsDbPlugin: Any + Send + Sync + std::fmt::Debug {
     /// Check if the plugin is interested in account data
     /// Default is true -- if the plugin is not interested in
     /// account data, please return false.
-    fn to_notify_account_data(&self) -> bool {
+    fn account_data_notifications_enabled(&self) -> bool {
         true
     }
 
     /// Check if the plugin is interested in transaction data
     /// Default is false -- if the plugin is not interested in
     /// transaction data, please return false.
-    fn to_notify_transaction_data(&self) -> bool {
+    fn transaction_notifications_enabled(&self) -> bool {
         false
     }
 }
