@@ -18,8 +18,16 @@ use std::{
     time::Instant,
 };
 use thiserror::Error;
+use lazy_static::lazy_static;
 
-const MAX_SIGVERIFY_BATCH: usize = 10_000;
+lazy_static!{
+    static ref MAX_SIGVERIFY_BATCH: usize = if std::env::var("SOLANA_ALT_BATCH_SIZE").is_ok() {
+        500_000
+    }
+    else {
+        10_000
+    };
+}
 
 #[derive(Error, Debug)]
 pub enum SigVerifyServiceError {
@@ -153,7 +161,7 @@ impl SigVerifyStage {
                 if !indexes.is_empty() {
                     indexes.remove(0);
                     batch_len += 1;
-                    if batch_len >= MAX_SIGVERIFY_BATCH {
+                    if batch_len >= *MAX_SIGVERIFY_BATCH {
                         break;
                     }
                 }
@@ -180,8 +188,8 @@ impl SigVerifyStage {
             timing::timestamp(),
             num_packets,
         );
-        if num_packets > MAX_SIGVERIFY_BATCH {
-            Self::discard_excess_packets(&mut batches, MAX_SIGVERIFY_BATCH);
+        if num_packets > *MAX_SIGVERIFY_BATCH {
+            Self::discard_excess_packets(&mut batches, *MAX_SIGVERIFY_BATCH);
         }
 
         let mut verify_batch_time = Measure::start("sigverify_batch_time");

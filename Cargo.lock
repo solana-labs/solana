@@ -4743,6 +4743,7 @@ dependencies = [
  "jsonrpc-core-client",
  "jsonrpc-derive",
  "jsonrpc-pubsub",
+ "lazy_static",
  "log 0.4.14",
  "lru",
  "matches",

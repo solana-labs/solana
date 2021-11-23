@@ -61,6 +61,7 @@ solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.9.0" }
 sys-info = "0.9.1"
 tokio = { version = "1", features = ["full"] }
 trees = "0.4.2"
+lazy_static = "1.4.0"
 
 [dev-dependencies]
 jsonrpc-core = "18.0.0"
