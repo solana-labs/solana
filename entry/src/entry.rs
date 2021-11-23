@@ -441,16 +441,26 @@ pub fn start_verify_transactions(
 
     let api = perf_libs::api();
 
-    let num_transactions: usize = entries
-        .iter()
-        .map(|entry: &Entry| -> usize { entry.transactions.len() })
-        .sum();
-
-    // Use the CPU if we have too few transactions for GPU sigverify to be worth it.
-    // TODO: make this dynamic, perhaps based on similar future heuristics
-    // to what might be used in sigverify::ed25519_verify when a dynamic crossover
+    // Use the CPU if we have too few transactions for GPU signature verification to be worth it.
+    // We will also use the CPU if no acceleration API is used or if we're skipping
+    // the signature verification as we'd have nothing to do on the GPU in that case.
+    // TODO: make the CPU-to GPU crossover point dynamic, perhaps based on similar future
+    // heuristics to what might be used in sigverify::ed25519_verify when a dynamic crossover
     // is introduced for that function (see TODO in sigverify::ed25519_verify)
-    if api.is_none() || skip_verification || num_transactions < 512 {
+    let use_cpu = skip_verification
+        || api.is_none()
+        || entries
+            .iter()
+            .try_fold(0, |accum: usize, entry: &Entry| -> Option<usize> {
+                if accum + entry.transactions.len() < 512 {
+                    Some(accum + entry.transactions.len())
+                } else {
+                    None
+                }
+            })
+            .is_some();
+
+    if use_cpu {
         let verify_func = {
             move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
                 verify(
