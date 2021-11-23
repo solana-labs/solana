@@ -1,3 +1,4 @@
+pub use log;
 use std::{cell::RefCell, rc::Rc};
 
 const LOG_MESSAGES_BYTES_LIMIT: usize = 10 * 1000;
@@ -38,6 +39,7 @@ impl From<LogCollector> for Vec<String> {
 #[macro_export]
 macro_rules! ic_logger_msg {
     ($log_collector:expr, $message:expr) => {
+        $crate::log_collector::log::debug!("{}", $message);
         if let Some(log_collector) = $log_collector.as_ref() {
             if let Ok(mut log_collector) = log_collector.try_borrow_mut() {
                 log_collector.log($message);
@@ -45,6 +47,7 @@ macro_rules! ic_logger_msg {
         }
     };
     ($log_collector:expr, $fmt:expr, $($arg:tt)*) => {
+        $crate::log_collector::log::debug!($fmt, $($arg)*);
         if let Some(log_collector) = $log_collector.as_ref() {
             if let Ok(mut log_collector) = log_collector.try_borrow_mut() {
                 log_collector.log(&format!($fmt, $($arg)*));
