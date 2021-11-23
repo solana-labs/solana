@@ -72,7 +72,7 @@ use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
 use solana_program_runtime::{
     instruction_recorder::InstructionRecorder,
     invoke_context::{
-        ComputeMeter, Executor, Executors, ProcessInstructionWithContext, ProgramEntry,
+        BuiltinProgram, ComputeMeter, Executor, Executors, ProcessInstructionWithContext,
     },
     log_collector::LogCollector,
     timings::ExecuteDetailsTimings,
@@ -873,6 +873,18 @@ impl AbiExample for OptionalDropCallback {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct BuiltinPrograms {
+    pub vec: Vec<BuiltinProgram>,
+}
+
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl AbiExample for BuiltinPrograms {
+    fn example() -> Self {
+        Self::default()
+    }
+}
+
 /// Manager for the state of all accounts and programs after processing its entries.
 /// AbiExample is needed even without Serialize/Deserialize; actual (de-)serialization
 /// are implemented elsewhere for versioning
@@ -991,7 +1003,7 @@ pub struct Bank {
     is_delta: AtomicBool,
 
     /// The builtin programs
-    programs: Vec<ProgramEntry>,
+    builtin_programs: BuiltinPrograms,
 
     compute_budget: Option<ComputeBudget>,
 
@@ -1150,7 +1162,7 @@ impl Bank {
             stakes: RwLock::<Stakes>::default(),
             epoch_stakes: HashMap::<Epoch, EpochStakes>::default(),
             is_delta: AtomicBool::default(),
-            programs: Vec::default(),
+            builtin_programs: BuiltinPrograms::default(),
             compute_budget: Option::<ComputeBudget>::default(),
             feature_builtins: Arc::<Vec<(Builtin, Pubkey, ActivationType)>>::default(),
             rewards: RwLock::<Vec<(Pubkey, RewardInfo)>>::default(),
@@ -1390,7 +1402,7 @@ impl Bank {
             is_delta: AtomicBool::new(false),
             tick_height: AtomicU64::new(parent.tick_height.load(Relaxed)),
             signature_count: AtomicU64::new(0),
-            programs: parent.programs.clone(),
+            builtin_programs: parent.builtin_programs.clone(),
             compute_budget: parent.compute_budget,
             feature_builtins: parent.feature_builtins.clone(),
             hard_forks: parent.hard_forks.clone(),
@@ -1599,7 +1611,7 @@ impl Bank {
             stakes: RwLock::new(fields.stakes),
             epoch_stakes: fields.epoch_stakes,
             is_delta: AtomicBool::new(fields.is_delta),
-            programs: new(),
+            builtin_programs: new(),
             compute_budget: None,
             feature_builtins: new(),
             rewards: new(),
@@ -3868,7 +3880,7 @@ impl Bank {
 
                         if let Some(legacy_message) = tx.message().legacy_message() {
                             process_result = MessageProcessor::process_message(
-                                &self.programs,
+                                &self.builtin_programs.vec,
                                 legacy_message,
                                 &loaded_transaction.program_indices,
                                 &account_refcells,
@@ -5898,13 +5910,14 @@ impl Bank {
         debug!("Adding program {} under {:?}", name, program_id);
         self.add_builtin_account(name, program_id, false);
         if let Some(entry) = self
-            .programs
+            .builtin_programs
+            .vec
             .iter_mut()
             .find(|entry| entry.program_id == *program_id)
         {
             entry.process_instruction = process_instruction;
         } else {
-            self.programs.push(ProgramEntry {
+            self.builtin_programs.vec.push(BuiltinProgram {
                 program_id: *program_id,
                 process_instruction,
             });
@@ -5922,7 +5935,8 @@ impl Bank {
         debug!("Replacing program {} under {:?}", name, program_id);
         self.add_builtin_account(name, program_id, true);
         if let Some(entry) = self
-            .programs
+            .builtin_programs
+            .vec
             .iter_mut()
             .find(|entry| entry.program_id == *program_id)
         {
@@ -5937,11 +5951,12 @@ impl Bank {
         // Don't remove the account since the bank expects the account state to
         // be idempotent
         if let Some(position) = self
-            .programs
+            .builtin_programs
+            .vec
             .iter()
             .position(|entry| entry.program_id == *program_id)
         {
-            self.programs.remove(position);
+            self.builtin_programs.vec.remove(position);
         }
         debug!("Removed program {} under {:?}", name, program_id);
     }

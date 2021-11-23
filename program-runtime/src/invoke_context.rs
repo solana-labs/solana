@@ -25,12 +25,12 @@ pub type ProcessInstructionWithContext =
     fn(usize, &[u8], &mut dyn InvokeContext) -> Result<(), InstructionError>;
 
 #[derive(Clone)]
-pub struct ProgramEntry {
+pub struct BuiltinProgram {
     pub program_id: Pubkey,
     pub process_instruction: ProcessInstructionWithContext,
 }
 
-impl std::fmt::Debug for ProgramEntry {
+impl std::fmt::Debug for BuiltinProgram {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         // These are just type aliases for work around of Debug-ing above pointers
         type ErasedProcessInstructionWithContext = fn(
@@ -130,7 +130,7 @@ pub struct ThisInvokeContext<'a> {
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
     accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
-    programs: &'a [ProgramEntry],
+    builtin_programs: &'a [BuiltinProgram],
     sysvars: &'a [(Pubkey, Vec<u8>)],
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     compute_budget: ComputeBudget,
@@ -149,7 +149,7 @@ impl<'a> ThisInvokeContext<'a> {
     pub fn new(
         rent: Rent,
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        programs: &'a [ProgramEntry],
+        builtin_programs: &'a [BuiltinProgram],
         sysvars: &'a [(Pubkey, Vec<u8>)],
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         compute_budget: ComputeBudget,
@@ -166,7 +166,7 @@ impl<'a> ThisInvokeContext<'a> {
             rent,
             pre_accounts: Vec::new(),
             accounts,
-            programs,
+            builtin_programs,
             sysvars,
             log_collector,
             current_compute_budget: compute_budget,
@@ -184,14 +184,14 @@ impl<'a> ThisInvokeContext<'a> {
 
     pub fn new_mock_with_sysvars_and_features(
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        programs: &'a [ProgramEntry],
+        builtin_programs: &'a [BuiltinProgram],
         sysvars: &'a [(Pubkey, Vec<u8>)],
         feature_set: Arc<FeatureSet>,
     ) -> Self {
         Self::new(
             Rent::default(),
             accounts,
-            programs,
+            builtin_programs,
             sysvars,
             None,
             ComputeBudget::default(),
@@ -206,11 +206,11 @@ impl<'a> ThisInvokeContext<'a> {
 
     pub fn new_mock(
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        programs: &'a [ProgramEntry],
+        builtin_programs: &'a [BuiltinProgram],
     ) -> Self {
         Self::new_mock_with_sysvars_and_features(
             accounts,
-            programs,
+            builtin_programs,
             &[],
             Arc::new(FeatureSet::all_enabled()),
         )
@@ -763,7 +763,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         let root_id = root_account.unsigned_key();
         let owner_id = &root_account.owner()?;
         if solana_sdk::native_loader::check_id(owner_id) {
-            for entry in self.programs {
+            for entry in self.builtin_programs {
                 if entry.program_id == *root_id {
                     // Call the builtin program
                     return (entry.process_instruction)(
@@ -779,7 +779,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                 return native_loader.process_instruction(0, instruction_data, self);
             }
         } else {
-            for entry in self.programs {
+            for entry in self.builtin_programs {
                 if entry.program_id == *owner_id {
                     // Call the program via a builtin loader
                     return (entry.process_instruction)(
@@ -1067,17 +1067,17 @@ mod tests {
         ) -> Result<(), InstructionError> {
             Ok(())
         }
-        let programs = &[
-            ProgramEntry {
+        let builtin_programs = &[
+            BuiltinProgram {
                 program_id: solana_sdk::pubkey::new_rand(),
                 process_instruction: mock_process_instruction,
             },
-            ProgramEntry {
+            BuiltinProgram {
                 program_id: solana_sdk::pubkey::new_rand(),
                 process_instruction: mock_ix_processor,
             },
         ];
-        assert!(!format!("{:?}", programs).is_empty());
+        assert!(!format!("{:?}", builtin_programs).is_empty());
     }
 
     #[allow(clippy::integer_arithmetic)]
@@ -1306,11 +1306,11 @@ mod tests {
         );
         let message = Message::new(&[callee_instruction], None);
 
-        let programs = &[ProgramEntry {
+        let builtin_programs = &[BuiltinProgram {
             program_id: callee_program_id,
             process_instruction: mock_process_instruction,
         }];
-        let mut invoke_context = ThisInvokeContext::new_mock(&accounts, programs);
+        let mut invoke_context = ThisInvokeContext::new_mock(&accounts, builtin_programs);
         invoke_context
             .push(&message, &caller_instruction, &program_indices[..1], None)
             .unwrap();
@@ -1433,11 +1433,11 @@ mod tests {
         );
         let message = Message::new(&[callee_instruction.clone()], None);
 
-        let programs = &[ProgramEntry {
+        let builtin_programs = &[BuiltinProgram {
             program_id: callee_program_id,
             process_instruction: mock_process_instruction,
         }];
-        let mut invoke_context = ThisInvokeContext::new_mock(&accounts, programs);
+        let mut invoke_context = ThisInvokeContext::new_mock(&accounts, builtin_programs);
         invoke_context
             .push(&message, &caller_instruction, &program_indices, None)
             .unwrap();

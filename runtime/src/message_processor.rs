@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
 use solana_program_runtime::{
     instruction_recorder::InstructionRecorder,
-    invoke_context::{ComputeMeter, Executors, InvokeContext, ProgramEntry, ThisInvokeContext},
+    invoke_context::{BuiltinProgram, ComputeMeter, Executors, InvokeContext, ThisInvokeContext},
     log_collector::LogCollector,
     timings::ExecuteDetailsTimings,
 };
@@ -40,7 +40,7 @@ impl MessageProcessor {
     /// The accounts are committed back to the bank only if every instruction succeeds.
     #[allow(clippy::too_many_arguments)]
     pub fn process_message(
-        programs: &[ProgramEntry],
+        builtin_programs: &[BuiltinProgram],
         message: &Message,
         program_indices: &[Vec<usize>],
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
@@ -59,7 +59,7 @@ impl MessageProcessor {
         let mut invoke_context = ThisInvokeContext::new(
             rent,
             accounts,
-            programs,
+            builtin_programs,
             sysvars,
             log_collector,
             compute_budget,
@@ -198,7 +198,7 @@ mod tests {
 
         let mock_system_program_id = Pubkey::new(&[2u8; 32]);
         let rent_collector = RentCollector::default();
-        let programs = &[ProgramEntry {
+        let builtin_programs = &[BuiltinProgram {
             program_id: mock_system_program_id,
             process_instruction: mock_system_process_instruction,
         }];
@@ -235,7 +235,7 @@ mod tests {
         );
 
         let result = MessageProcessor::process_message(
-            programs,
+            builtin_programs,
             &message,
             &program_indices,
             &accounts,
@@ -265,7 +265,7 @@ mod tests {
         );
 
         let result = MessageProcessor::process_message(
-            programs,
+            builtin_programs,
             &message,
             &program_indices,
             &accounts,
@@ -299,7 +299,7 @@ mod tests {
         );
 
         let result = MessageProcessor::process_message(
-            programs,
+            builtin_programs,
             &message,
             &program_indices,
             &accounts,
@@ -405,7 +405,7 @@ mod tests {
 
         let mock_program_id = Pubkey::new(&[2u8; 32]);
         let rent_collector = RentCollector::default();
-        let programs = &[ProgramEntry {
+        let builtin_programs = &[BuiltinProgram {
             program_id: mock_program_id,
             process_instruction: mock_system_process_instruction,
         }];
@@ -444,7 +444,7 @@ mod tests {
             Some(&accounts[0].0),
         );
         let result = MessageProcessor::process_message(
-            programs,
+            builtin_programs,
             &message,
             &program_indices,
             &accounts,
@@ -478,7 +478,7 @@ mod tests {
             Some(&accounts[0].0),
         );
         let result = MessageProcessor::process_message(
-            programs,
+            builtin_programs,
             &message,
             &program_indices,
             &accounts,
@@ -509,7 +509,7 @@ mod tests {
             Some(&accounts[0].0),
         );
         let result = MessageProcessor::process_message(
-            programs,
+            builtin_programs,
             &message,
             &program_indices,
             &accounts,
@@ -541,7 +541,7 @@ mod tests {
         ) -> Result<(), InstructionError> {
             Err(InstructionError::Custom(0xbabb1e))
         }
-        let programs = &[ProgramEntry {
+        let builtin_programs = &[BuiltinProgram {
             program_id: mock_program_id,
             process_instruction: mock_process_instruction,
         }];
@@ -567,7 +567,7 @@ mod tests {
         );
 
         let result = MessageProcessor::process_message(
-            programs,
+            builtin_programs,
             &message,
             &[vec![0], vec![1]],
             &accounts,
