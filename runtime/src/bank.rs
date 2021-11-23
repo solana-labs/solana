@@ -70,9 +70,9 @@ use rayon::{
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
 use solana_program_runtime::{
-    instruction_processor::{ExecuteDetailsTimings, Executor, Executors, InstructionProcessor},
+    instruction_processor::{ExecuteDetailsTimings, Executor, Executors},
     instruction_recorder::InstructionRecorder,
-    invoke_context::{ComputeMeter, ProcessInstructionWithContext},
+    invoke_context::{ComputeMeter, ProcessInstructionWithContext, ProgramEntry},
     log_collector::LogCollector,
 };
 #[allow(deprecated)]
@@ -988,8 +988,8 @@ pub struct Bank {
     /// stream for the slot == self.slot
     is_delta: AtomicBool,
 
-    /// The InstructionProcessor
-    instruction_processor: InstructionProcessor,
+    /// The builtin programs
+    programs: Vec<ProgramEntry>,
 
     compute_budget: Option<ComputeBudget>,
 
@@ -1148,7 +1148,7 @@ impl Bank {
             stakes: RwLock::<Stakes>::default(),
             epoch_stakes: HashMap::<Epoch, EpochStakes>::default(),
             is_delta: AtomicBool::default(),
-            instruction_processor: InstructionProcessor::default(),
+            programs: Vec::default(),
             compute_budget: Option::<ComputeBudget>::default(),
             feature_builtins: Arc::<Vec<(Builtin, Pubkey, ActivationType)>>::default(),
             rewards: RwLock::<Vec<(Pubkey, RewardInfo)>>::default(),
@@ -1388,7 +1388,7 @@ impl Bank {
             is_delta: AtomicBool::new(false),
             tick_height: AtomicU64::new(parent.tick_height.load(Relaxed)),
             signature_count: AtomicU64::new(0),
-            instruction_processor: parent.instruction_processor.clone(),
+            programs: parent.programs.clone(),
             compute_budget: parent.compute_budget,
             feature_builtins: parent.feature_builtins.clone(),
             hard_forks: parent.hard_forks.clone(),
@@ -1597,7 +1597,7 @@ impl Bank {
             stakes: RwLock::new(fields.stakes),
             epoch_stakes: fields.epoch_stakes,
             is_delta: AtomicBool::new(fields.is_delta),
-            instruction_processor: new(),
+            programs: new(),
             compute_budget: None,
             feature_builtins: new(),
             rewards: new(),
@@ -3039,7 +3039,7 @@ impl Bank {
             &genesis_config.rent,
         );
 
-        // Add additional native programs specified in the genesis config
+        // Add additional builtin programs specified in the genesis config
         for (name, program_id) in &genesis_config.native_instruction_processors {
             self.add_builtin_account(name, program_id, false);
         }
@@ -3072,10 +3072,10 @@ impl Bank {
                 });
 
         if must_replace {
-            // updating native program
+            // updating builtin program
             match &existing_genuine_program {
                 None => panic!(
-                    "There is no account to replace with native program ({}, {}).",
+                    "There is no account to replace with builtin program ({}, {}).",
                     name, program_id
                 ),
                 Some(account) => {
@@ -3086,7 +3086,7 @@ impl Bank {
                 }
             }
         } else {
-            // introducing native program
+            // introducing builtin program
             if existing_genuine_program.is_some() {
                 // The existing account is sufficient
                 return;
@@ -3095,13 +3095,13 @@ impl Bank {
 
         assert!(
             !self.freeze_started(),
-            "Can't change frozen bank by adding not-existing new native program ({}, {}). \
+            "Can't change frozen bank by adding not-existing new builtin program ({}, {}). \
             Maybe, inconsistent program activation is detected on snapshot restore?",
             name,
             program_id
         );
 
-        // Add a bogus executable native account, which will be loaded and ignored.
+        // Add a bogus executable builtin account, which will be loaded and ignored.
         let account = native_loader::create_loadable_account_with_fields(
             name,
             self.inherit_specially_retained_account_fields(&existing_genuine_program),
@@ -3866,7 +3866,7 @@ impl Bank {
 
                         if let Some(legacy_message) = tx.message().legacy_message() {
                             process_result = MessageProcessor::process_message(
-                                &self.instruction_processor,
+                                &self.programs,
                                 legacy_message,
                                 &loaded_transaction.program_indices,
                                 &account_refcells,
@@ -5891,12 +5891,22 @@ impl Bank {
         &mut self,
         name: &str,
         program_id: &Pubkey,
-        process_instruction_with_context: ProcessInstructionWithContext,
+        process_instruction: ProcessInstructionWithContext,
     ) {
         debug!("Adding program {} under {:?}", name, program_id);
         self.add_builtin_account(name, program_id, false);
-        self.instruction_processor
-            .add_program(program_id, process_instruction_with_context);
+        if let Some(entry) = self
+            .programs
+            .iter_mut()
+            .find(|entry| entry.program_id == *program_id)
+        {
+            entry.process_instruction = process_instruction;
+        } else {
+            self.programs.push(ProgramEntry {
+                program_id: *program_id,
+                process_instruction,
+            });
+        }
         debug!("Added program {} under {:?}", name, program_id);
     }
 
@@ -5905,12 +5915,17 @@ impl Bank {
         &mut self,
         name: &str,
         program_id: &Pubkey,
-        process_instruction_with_context: ProcessInstructionWithContext,
+        process_instruction: ProcessInstructionWithContext,
     ) {
         debug!("Replacing program {} under {:?}", name, program_id);
         self.add_builtin_account(name, program_id, true);
-        self.instruction_processor
-            .add_program(program_id, process_instruction_with_context);
+        if let Some(entry) = self
+            .programs
+            .iter_mut()
+            .find(|entry| entry.program_id == *program_id)
+        {
+            entry.process_instruction = process_instruction;
+        }
         debug!("Replaced program {} under {:?}", name, program_id);
     }
 
@@ -5919,7 +5934,13 @@ impl Bank {
         debug!("Removing program {} under {:?}", name, program_id);
         // Don't remove the account since the bank expects the account state to
         // be idempotent
-        self.instruction_processor.remove_program(program_id);
+        if let Some(position) = self
+            .programs
+            .iter()
+            .position(|entry| entry.program_id == *program_id)
+        {
+            self.programs.remove(position);
+        }
         debug!("Removed program {} under {:?}", name, program_id);
     }
 
@@ -6783,16 +6804,16 @@ pub(crate) mod tests {
             cluster_type: ClusterType::MainnetBeta,
             ..GenesisConfig::default()
         }));
-        let sysvar_and_native_program_delta0 = 11;
+        let sysvar_and_builtin_program_delta0 = 11;
         assert_eq!(
             bank0.capitalization(),
-            42 * 42 + sysvar_and_native_program_delta0
+            42 * 42 + sysvar_and_builtin_program_delta0
         );
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
-        let sysvar_and_native_program_delta1 = 2;
+        let sysvar_and_builtin_program_delta1 = 2;
         assert_eq!(
             bank1.capitalization(),
-            42 * 42 + sysvar_and_native_program_delta0 + sysvar_and_native_program_delta1,
+            42 * 42 + sysvar_and_builtin_program_delta0 + sysvar_and_builtin_program_delta1,
         );
     }
 
@@ -6862,7 +6883,7 @@ pub(crate) mod tests {
         bank_with_success_txs.store_account(&keypair5.pubkey(), &account5);
         bank_with_success_txs.store_account(&keypair6.pubkey(), &account6);
 
-        // Make native instruction loader rent exempt
+        // Make builtin instruction loader rent exempt
         let system_program_id = system_program::id();
         let mut system_program_account = bank.get_account(&system_program_id).unwrap();
         system_program_account.set_lamports(
@@ -7389,10 +7410,10 @@ pub(crate) mod tests {
         let current_capitalization = bank.capitalization.load(Relaxed);
 
         // only slot history is newly created
-        let sysvar_and_native_program_delta =
+        let sysvar_and_builtin_program_delta =
             min_rent_excempt_balance_for_sysvars(&bank, &[sysvar::slot_history::id()]);
         assert_eq!(
-            previous_capitalization - (current_capitalization - sysvar_and_native_program_delta),
+            previous_capitalization - (current_capitalization - sysvar_and_builtin_program_delta),
             burned_portion
         );
 
@@ -8527,10 +8548,10 @@ pub(crate) mod tests {
         // not being eagerly-collected for exact rewards calculation
         bank0.restore_old_behavior_for_fragile_tests();
 
-        let sysvar_and_native_program_delta0 = 11;
+        let sysvar_and_builtin_program_delta0 = 11;
         assert_eq!(
             bank0.capitalization(),
-            42 * 1_000_000_000 + sysvar_and_native_program_delta0
+            42 * 1_000_000_000 + sysvar_and_builtin_program_delta0
         );
         assert!(bank0.rewards.read().unwrap().is_empty());
 
@@ -8592,9 +8613,9 @@ pub(crate) mod tests {
         assert_ne!(bank1.capitalization(), bank0.capitalization());
 
         // verify the inflation is represented in validator_points *
-        let sysvar_and_native_program_delta1 = 2;
+        let sysvar_and_builtin_program_delta1 = 2;
         let paid_rewards =
-            bank1.capitalization() - bank0.capitalization() - sysvar_and_native_program_delta1;
+            bank1.capitalization() - bank0.capitalization() - sysvar_and_builtin_program_delta1;
 
         let rewards = bank1
             .get_account(&sysvar::rewards::id())
@@ -8661,10 +8682,10 @@ pub(crate) mod tests {
         // not being eagerly-collected for exact rewards calculation
         bank.restore_old_behavior_for_fragile_tests();
 
-        let sysvar_and_native_program_delta = 11;
+        let sysvar_and_builtin_program_delta = 11;
         assert_eq!(
             bank.capitalization(),
-            42 * 1_000_000_000 + sysvar_and_native_program_delta
+            42 * 1_000_000_000 + sysvar_and_builtin_program_delta
         );
         assert!(bank.rewards.read().unwrap().is_empty());
 
@@ -9112,9 +9133,9 @@ pub(crate) mod tests {
         ); // Leader collects fee after the bank is frozen
 
         // verify capitalization
-        let sysvar_and_native_program_delta = 1;
+        let sysvar_and_builtin_program_delta = 1;
         assert_eq!(
-            capitalization - expected_fee_burned + sysvar_and_native_program_delta,
+            capitalization - expected_fee_burned + sysvar_and_builtin_program_delta,
             bank.capitalization()
         );
 
@@ -10778,7 +10799,7 @@ pub(crate) mod tests {
             Err(InstructionError::Custom(42))
         }
 
-        // Non-native loader accounts can not be used for instruction processing
+        // Non-builtin loader accounts can not be used for instruction processing
         {
             let stakes = bank.stakes.read().unwrap();
             assert!(stakes.vote_accounts().as_ref().is_empty());
@@ -12540,7 +12561,7 @@ pub(crate) mod tests {
         assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
 
         let bank = Arc::new(new_from_parent(&bank));
-        // When replacing native_program, name must change to disambiguate from repeated
+        // When replacing builtin_program, name must change to disambiguate from repeated
         // invocations.
         assert_capitalization_diff(
             &bank,
@@ -12604,7 +12625,7 @@ pub(crate) mod tests {
 
     #[test]
     #[should_panic(
-        expected = "Can't change frozen bank by adding not-existing new native \
+        expected = "Can't change frozen bank by adding not-existing new builtin \
                    program (mock_program, CiXgo2KHKSDmDnV1F6B69eWFgNAPiSBjjYvfB4cvRNre). \
                    Maybe, inconsistent program activation is detected on snapshot restore?"
     )]
@@ -12627,7 +12648,7 @@ pub(crate) mod tests {
 
     #[test]
     #[should_panic(
-        expected = "There is no account to replace with native program (mock_program, \
+        expected = "There is no account to replace with builtin program (mock_program, \
                     CiXgo2KHKSDmDnV1F6B69eWFgNAPiSBjjYvfB4cvRNre)."
     )]
     fn test_add_builtin_account_replace_none() {
@@ -12832,9 +12853,9 @@ pub(crate) mod tests {
 
         // assert that everything gets in order....
         assert!(bank1.get_account(&reward_pubkey).is_none());
-        let sysvar_and_native_program_delta = 1;
+        let sysvar_and_builtin_program_delta = 1;
         assert_eq!(
-            bank0.capitalization() + 1 + 1_000_000_000 + sysvar_and_native_program_delta,
+            bank0.capitalization() + 1 + 1_000_000_000 + sysvar_and_builtin_program_delta,
             bank1.capitalization()
         );
         assert_eq!(bank1.capitalization(), bank1.calculate_capitalization(true));
@@ -13373,7 +13394,7 @@ pub(crate) mod tests {
             .accounts
             .remove(&feature_set::deprecate_rewards_sysvar::id());
 
-        // intentionally create bogus native programs
+        // intentionally create bogus builtin programs
         #[allow(clippy::unnecessary_wraps)]
         fn mock_process_instruction(
             _first_instruction_account: usize,
