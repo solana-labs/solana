@@ -364,7 +364,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         } else {
                             // not on disk, so insert new thing
                             self.stats().insert_or_delete(true, self.bin);
-                            new_value.into()
+                            new_value.into_account_map_entry(&self.storage)
                         };
                         assert!(new_value.dirty());
                         vacant.insert(new_value);
@@ -542,7 +542,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 } else {
                     // not using disk, so insert into mem
                     self.stats().insert_or_delete_mem(true, self.bin);
-                    let new_entry: AccountMapEntry<T> = new_entry.into();
+                    let new_entry: AccountMapEntry<T> =
+                        new_entry.into_account_map_entry(&self.storage);
                     assert!(new_entry.dirty());
                     vacant.insert(new_entry);
                 }

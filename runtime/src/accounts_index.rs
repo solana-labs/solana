@@ -286,19 +286,18 @@ impl<T: IndexValue> ReadAccountMapEntry<T> {
     }
 }
 
-pub struct PreAllocatedAccountMapEntry<T: IndexValue> {
-    entry: AccountMapEntry<T>,
-}
-
-impl<T: IndexValue> From<PreAllocatedAccountMapEntry<T>> for AccountMapEntry<T> {
-    fn from(source: PreAllocatedAccountMapEntry<T>) -> AccountMapEntry<T> {
-        source.entry
-    }
+/// can be used to pre-allocate structures for insertion into accounts index outside of lock
+pub enum PreAllocatedAccountMapEntry<T: IndexValue> {
+    Entry(AccountMapEntry<T>),
+    Raw((Slot, T)),
 }
 
 impl<T: IndexValue> From<PreAllocatedAccountMapEntry<T>> for (Slot, T) {
     fn from(source: PreAllocatedAccountMapEntry<T>) -> (Slot, T) {
-        source.entry.slot_list.write().unwrap().remove(0)
+        match source {
+            PreAllocatedAccountMapEntry::Entry(entry) => entry.slot_list.write().unwrap().remove(0),
+            PreAllocatedAccountMapEntry::Raw(raw) => raw,
+        }
     }
 }
 
@@ -311,22 +310,33 @@ impl<T: IndexValue> PreAllocatedAccountMapEntry<T> {
         slot: Slot,
         account_info: T,
         storage: &Arc<BucketMapHolder<T>>,
+        store_raw: bool,
     ) -> PreAllocatedAccountMapEntry<T> {
-        Self::new_internal(slot, account_info, AccountMapEntryMeta::new_dirty(storage))
+        if store_raw {
+            Self::Raw((slot, account_info))
+        } else {
+            Self::Entry(Self::allocate(slot, account_info, storage))
+        }
     }
 
-    fn new_internal(
+    fn allocate(
         slot: Slot,
         account_info: T,
-        meta: AccountMapEntryMeta,
-    ) -> PreAllocatedAccountMapEntry<T> {
+        storage: &Arc<BucketMapHolder<T>>,
+    ) -> AccountMapEntry<T> {
         let ref_count = if account_info.is_cached() { 0 } else { 1 };
-        PreAllocatedAccountMapEntry {
-            entry: Arc::new(AccountMapEntryInner::new(
-                vec![(slot, account_info)],
-                ref_count,
-                meta,
-            )),
+        let meta = AccountMapEntryMeta::new_dirty(storage);
+        Arc::new(AccountMapEntryInner::new(
+            vec![(slot, account_info)],
+            ref_count,
+            meta,
+        ))
+    }
+
+    pub fn into_account_map_entry(self, storage: &Arc<BucketMapHolder<T>>) -> AccountMapEntry<T> {
+        match self {
+            Self::Entry(entry) => entry,
+            Self::Raw((slot, account_info)) => Self::allocate(slot, account_info, storage),
         }
     }
 }
@@ -1617,6 +1627,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         // offset bin 0 in the 'binned' array by a random amount.
         // This results in calls to insert_new_entry_if_missing_with_lock from different threads starting at different bins.
         let random_offset = thread_rng().gen_range(0, bins);
+        let use_disk = self.storage.storage.disk.is_some();
         let mut binned = (0..bins)
             .into_iter()
             .map(|mut pubkey_bin| {
@@ -1637,8 +1648,12 @@ impl<T: IndexValue> AccountsIndex<T> {
                 let is_zero_lamport = account_info.is_zero_lamport();
                 let result = if is_zero_lamport { Some(pubkey) } else { None };
 
-                let info =
-                    PreAllocatedAccountMapEntry::new(slot, account_info, &self.storage.storage);
+                let info = PreAllocatedAccountMapEntry::new(
+                    slot,
+                    account_info,
+                    &self.storage.storage,
+                    use_disk,
+                );
                 binned[binned_index].1.push((pubkey, info));
                 result
             })
@@ -1690,7 +1705,8 @@ impl<T: IndexValue> AccountsIndex<T> {
         //  - The secondary index is never consulted as primary source of truth for gets/stores.
         //  So, what the accounts_index sees alone is sufficient as a source of truth for other non-scan
         //  account operations.
-        let new_item = PreAllocatedAccountMapEntry::new(slot, account_info, &self.storage.storage);
+        let new_item =
+            PreAllocatedAccountMapEntry::new(slot, account_info, &self.storage.storage, false);
         let map = &self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)];
 
         {
@@ -2033,12 +2049,21 @@ pub mod tests {
     impl<T: IndexValue> Clone for PreAllocatedAccountMapEntry<T> {
         fn clone(&self) -> Self {
             // clone the AccountMapEntryInner into a new Arc
-            let (slot, info) = self.entry.slot_list.read().unwrap()[0];
-            let meta = AccountMapEntryMeta {
-                dirty: AtomicBool::new(self.entry.dirty()),
-                age: AtomicU8::new(self.entry.age()),
-            };
-            PreAllocatedAccountMapEntry::new_internal(slot, info, meta)
+            match self {
+                PreAllocatedAccountMapEntry::Entry(entry) => {
+                    let (slot, account_info) = entry.slot_list.read().unwrap()[0];
+                    let meta = AccountMapEntryMeta {
+                        dirty: AtomicBool::new(entry.dirty()),
+                        age: AtomicU8::new(entry.age()),
+                    };
+                    PreAllocatedAccountMapEntry::Entry(Arc::new(AccountMapEntryInner::new(
+                        vec![(slot, account_info)],
+                        entry.ref_count(),
+                        meta,
+                    )))
+                }
+                PreAllocatedAccountMapEntry::Raw(raw) => PreAllocatedAccountMapEntry::Raw(*raw),
+            }
         }
     }
 
@@ -2866,7 +2891,8 @@ pub mod tests {
         let index = AccountsIndex::default_for_tests();
 
         let new_entry: AccountMapEntry<_> =
-            PreAllocatedAccountMapEntry::new(slot, account_info, &index.storage.storage).into();
+            PreAllocatedAccountMapEntry::new(slot, account_info, &index.storage.storage, false)
+                .into_account_map_entry(&index.storage.storage);
         assert_eq!(new_entry.ref_count.load(Ordering::Relaxed), 0);
         assert_eq!(new_entry.slot_list.read().unwrap().capacity(), 1);
         assert_eq!(
@@ -2879,7 +2905,8 @@ pub mod tests {
         let index = AccountsIndex::default_for_tests();
 
         let new_entry: AccountMapEntry<_> =
-            PreAllocatedAccountMapEntry::new(slot, account_info, &index.storage.storage).into();
+            PreAllocatedAccountMapEntry::new(slot, account_info, &index.storage.storage, false)
+                .into_account_map_entry(&index.storage.storage);
         assert_eq!(new_entry.ref_count.load(Ordering::Relaxed), 1);
         assert_eq!(new_entry.slot_list.read().unwrap().capacity(), 1);
         assert_eq!(
@@ -2943,9 +2970,13 @@ pub mod tests {
             assert_eq!(entry.ref_count(), if is_cached { 0 } else { 1 });
             let expected = vec![(slot0, account_infos[0])];
             assert_eq!(entry.slot_list().to_vec(), expected);
-            let new_entry: AccountMapEntry<_> =
-                PreAllocatedAccountMapEntry::new(slot0, account_infos[0], &index.storage.storage)
-                    .into();
+            let new_entry: AccountMapEntry<_> = PreAllocatedAccountMapEntry::new(
+                slot0,
+                account_infos[0],
+                &index.storage.storage,
+                false,
+            )
+            .into_account_map_entry(&index.storage.storage);
             assert_eq!(
                 entry.slot_list().to_vec(),
                 new_entry.slot_list.read().unwrap().to_vec(),
@@ -2991,8 +3022,12 @@ pub mod tests {
                 vec![(slot0, account_infos[0]), (slot1, account_infos[1])]
             );
 
-            let new_entry =
-                PreAllocatedAccountMapEntry::new(slot1, account_infos[1], &index.storage.storage);
+            let new_entry = PreAllocatedAccountMapEntry::new(
+                slot1,
+                account_infos[1],
+                &index.storage.storage,
+                false,
+            );
             assert_eq!(entry.slot_list()[1], new_entry.into());
         }
     }
@@ -3016,7 +3051,7 @@ pub mod tests {
         let account_info = true;
 
         let new_entry =
-            PreAllocatedAccountMapEntry::new(slot, account_info, &index.storage.storage);
+            PreAllocatedAccountMapEntry::new(slot, account_info, &index.storage.storage, false);
         assert_eq!(0, account_maps_len_expensive(&index));
         assert_eq!((slot, account_info), new_entry.clone().into());
 
