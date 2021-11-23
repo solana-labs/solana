@@ -345,7 +345,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
     }
 
     /// Check if the plugin is interested in transaction data
-    fn to_notify_transaction_data(&self) -> bool {
+    fn transaction_notifications_enabled(&self) -> bool {
         self.transaction_selector
             .as_ref()
             .map_or_else(|| false, |selector| selector.is_enabled())
