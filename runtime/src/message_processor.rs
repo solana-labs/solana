@@ -1,9 +1,8 @@
 use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
 use solana_program_runtime::{
-    instruction_processor::Executors,
     instruction_recorder::InstructionRecorder,
-    invoke_context::{ComputeMeter, InvokeContext, ProgramEntry, ThisInvokeContext},
+    invoke_context::{ComputeMeter, Executors, InvokeContext, ProgramEntry, ThisInvokeContext},
     log_collector::LogCollector,
     timings::ExecuteDetailsTimings,
 };

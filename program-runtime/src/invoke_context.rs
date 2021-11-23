@@ -1,10 +1,7 @@
 use crate::{
-    ic_logger_msg, ic_msg,
-    instruction_processor::{Executor, Executors, PreAccount},
-    instruction_recorder::InstructionRecorder,
-    log_collector::LogCollector,
-    native_loader::NativeLoader,
-    timings::ExecuteDetailsTimings,
+    ic_logger_msg, ic_msg, instruction_processor::PreAccount,
+    instruction_recorder::InstructionRecorder, log_collector::LogCollector,
+    native_loader::NativeLoader, timings::ExecuteDetailsTimings,
 };
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
@@ -23,7 +20,7 @@ use solana_sdk::{
     rent::Rent,
     sysvar::Sysvar,
 };
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, sync::Arc};
 
 pub type ProcessInstructionWithContext =
     fn(usize, &[u8], &mut dyn InvokeContext) -> Result<(), InstructionError>;
@@ -48,6 +45,33 @@ impl std::fmt::Debug for ProgramEntry {
         // https://users.rust-lang.org/t/display-function-pointer/17073/2
         let erased_instruction: ErasedProcessInstructionWithContext = self.process_instruction;
         write!(f, "{}: {:p}", self.program_id, erased_instruction)
+    }
+}
+
+/// Program executor
+pub trait Executor: Debug + Send + Sync {
+    /// Execute the program
+    fn execute(
+        &self,
+        first_instruction_account: usize,
+        instruction_data: &[u8],
+        invoke_context: &mut dyn InvokeContext,
+        use_jit: bool,
+    ) -> Result<(), InstructionError>;
+}
+
+#[derive(Default)]
+pub struct Executors {
+    pub executors: HashMap<Pubkey, Arc<dyn Executor>>,
+    pub is_dirty: bool,
+}
+impl Executors {
+    pub fn insert(&mut self, key: Pubkey, executor: Arc<dyn Executor>) {
+        let _ = self.executors.insert(key, executor);
+        self.is_dirty = true;
+    }
+    pub fn get(&self, key: &Pubkey) -> Option<Arc<dyn Executor>> {
+        self.executors.get(key).cloned()
     }
 }
 

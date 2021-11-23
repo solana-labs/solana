@@ -1,4 +1,4 @@
-use crate::{invoke_context::InvokeContext, timings::ExecuteDetailsTimings};
+use crate::timings::ExecuteDetailsTimings;
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     instruction::InstructionError,
@@ -9,38 +9,9 @@ use solana_sdk::{
 };
 use std::{
     cell::{Ref, RefCell},
-    collections::HashMap,
     fmt::Debug,
     rc::Rc,
-    sync::Arc,
 };
-
-/// Program executor
-pub trait Executor: Debug + Send + Sync {
-    /// Execute the program
-    fn execute(
-        &self,
-        first_instruction_account: usize,
-        instruction_data: &[u8],
-        invoke_context: &mut dyn InvokeContext,
-        use_jit: bool,
-    ) -> Result<(), InstructionError>;
-}
-
-#[derive(Default)]
-pub struct Executors {
-    pub executors: HashMap<Pubkey, Arc<dyn Executor>>,
-    pub is_dirty: bool,
-}
-impl Executors {
-    pub fn insert(&mut self, key: Pubkey, executor: Arc<dyn Executor>) {
-        let _ = self.executors.insert(key, executor);
-        self.is_dirty = true;
-    }
-    pub fn get(&self, key: &Pubkey) -> Option<Arc<dyn Executor>> {
-        self.executors.get(key).cloned()
-    }
-}
 
 // The relevant state of an account before an Instruction executes, used
 // to verify account integrity after the Instruction completes

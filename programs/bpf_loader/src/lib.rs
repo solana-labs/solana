@@ -16,8 +16,7 @@ use log::{log_enabled, trace, Level::Trace};
 use solana_measure::measure::Measure;
 use solana_program_runtime::{
     ic_logger_msg, ic_msg,
-    instruction_processor::Executor,
-    invoke_context::{ComputeMeter, InvokeContext},
+    invoke_context::{ComputeMeter, Executor, InvokeContext},
     log_collector::LogCollector,
     stable_log,
 };
