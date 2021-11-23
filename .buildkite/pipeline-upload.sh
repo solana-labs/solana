@@ -16,3 +16,4 @@ echo +++ pipeline
 cat pipeline.yml
 
 _ buildkite-agent pipeline upload pipeline.yml
+
