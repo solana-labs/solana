@@ -1,9 +1,10 @@
 use crate::{
     ic_logger_msg, ic_msg,
-    instruction_processor::{ExecuteDetailsTimings, Executor, Executors, PreAccount},
+    instruction_processor::{Executor, Executors, PreAccount},
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
     native_loader::NativeLoader,
+    timings::ExecuteDetailsTimings,
 };
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},

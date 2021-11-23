@@ -70,10 +70,11 @@ use rayon::{
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
 use solana_program_runtime::{
-    instruction_processor::{ExecuteDetailsTimings, Executor, Executors},
+    instruction_processor::{Executor, Executors},
     instruction_recorder::InstructionRecorder,
     invoke_context::{ComputeMeter, ProcessInstructionWithContext, ProgramEntry},
     log_collector::LogCollector,
+    timings::ExecuteDetailsTimings,
 };
 #[allow(deprecated)]
 use solana_sdk::recent_blockhashes_account;

@@ -1,10 +1,11 @@
 use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
 use solana_program_runtime::{
-    instruction_processor::{ExecuteDetailsTimings, Executors},
+    instruction_processor::Executors,
     instruction_recorder::InstructionRecorder,
     invoke_context::{ComputeMeter, InvokeContext, ProgramEntry, ThisInvokeContext},
     log_collector::LogCollector,
+    timings::ExecuteDetailsTimings,
 };
 use solana_sdk::{
     account::{AccountSharedData, WritableAccount},
