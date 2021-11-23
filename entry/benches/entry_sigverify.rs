@@ -24,14 +24,15 @@ fn bench_gpusigverify(bencher: &mut Bencher) {
 
     let verify_transaction = {
         move |versioned_tx: VersionedTransaction,
-              verification_options: entry::EntryVerificationOptions|
+              verification_mode: entry::EntryVerificationMode|
               -> Result<SanitizedTransaction> {
             let sanitized_tx = {
-                let message_hash = if !verification_options.skip_verification {
-                    versioned_tx.verify_and_hash_message()?
-                } else {
-                    versioned_tx.message.hash()
-                };
+                let message_hash =
+                    if verification_mode == entry::EntryVerificationMode::FullVerification {
+                        versioned_tx.verify_and_hash_message()?
+                    } else {
+                        versioned_tx.message.hash()
+                    };
 
                 SanitizedTransaction::try_create(versioned_tx, message_hash, None, |_| {
                     Err(TransactionError::UnsupportedVersion)

@@ -154,17 +154,11 @@ pub enum EntryType {
     Tick(Hash),
 }
 
-pub struct EntryVerificationOptions {
-    // If true only hash the transactions
-    // and do no other verification, unless
-    // force_verify_precompiles is also true
-    // in which case, also verify precompiles
-    // and do no other verification
-    pub skip_verification: bool,
-    // Force verifying the precompiles
-    // regardless of whether we have skipped
-    // the other verification
-    pub force_verify_precompiles: bool,
+#[derive(PartialEq, Clone, Copy, Debug)]
+pub enum EntryVerificationMode {
+    HashOnly,
+    HashAndVerifyPrecompiles,
+    FullVerification,
 }
 
 impl Entry {
@@ -432,7 +426,7 @@ pub fn start_verify_transactions(
     skip_verification: bool,
     verify_recyclers: VerifyRecyclers,
     verify: Arc<
-        dyn Fn(VersionedTransaction, EntryVerificationOptions) -> Result<SanitizedTransaction>
+        dyn Fn(VersionedTransaction, EntryVerificationMode) -> Result<SanitizedTransaction>
             + Send
             + Sync,
     >,
@@ -462,14 +456,13 @@ pub fn start_verify_transactions(
 
     if use_cpu {
         let verify_func = {
+            let verification_mode = if skip_verification {
+                EntryVerificationMode::HashOnly
+            } else {
+                EntryVerificationMode::FullVerification
+            };
             move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
-                verify(
-                    versioned_tx,
-                    EntryVerificationOptions {
-                        skip_verification,
-                        force_verify_precompiles: false,
-                    },
-                )
+                verify(versioned_tx, verification_mode)
             }
         };
 
@@ -501,10 +494,7 @@ pub fn start_verify_transactions(
         move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
             verify(
                 versioned_tx,
-                EntryVerificationOptions {
-                    skip_verification: true,
-                    force_verify_precompiles: true,
-                },
+                EntryVerificationMode::HashAndVerifyPrecompiles,
             )
         }
     };
@@ -981,21 +971,20 @@ mod tests {
         skip_verification: bool,
         verify_recyclers: VerifyRecyclers,
         verify: Arc<
-            dyn Fn(VersionedTransaction, EntryVerificationOptions) -> Result<SanitizedTransaction>
+            dyn Fn(VersionedTransaction, EntryVerificationMode) -> Result<SanitizedTransaction>
                 + Send
                 + Sync,
         >,
     ) -> bool {
         let verify_func = {
             let verify = verify.clone();
+            let verification_mode = if skip_verification {
+                EntryVerificationMode::HashOnly
+            } else {
+                EntryVerificationMode::FullVerification
+            };
             move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
-                verify(
-                    versioned_tx,
-                    EntryVerificationOptions {
-                        skip_verification,
-                        force_verify_precompiles: false,
-                    },
-                )
+                verify(versioned_tx, verification_mode)
             }
         };
 
@@ -1023,14 +1012,15 @@ mod tests {
     fn test_entry_gpu_verify() {
         let verify_transaction = {
             move |versioned_tx: VersionedTransaction,
-                  verification_options: EntryVerificationOptions|
+                  verification_mode: EntryVerificationMode|
                   -> Result<SanitizedTransaction> {
                 let sanitized_tx = {
-                    let message_hash = if !verification_options.skip_verification {
-                        versioned_tx.verify_and_hash_message()?
-                    } else {
-                        versioned_tx.message.hash()
-                    };
+                    let message_hash =
+                        if verification_mode == EntryVerificationMode::FullVerification {
+                            versioned_tx.verify_and_hash_message()?
+                        } else {
+                            versioned_tx.message.hash()
+                        };
 
                     SanitizedTransaction::try_create(versioned_tx, message_hash, None, |_| {
                         Err(TransactionError::UnsupportedVersion)
