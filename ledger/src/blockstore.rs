@@ -1209,8 +1209,12 @@ impl Blockstore {
             get_index_meta_entry(&self.db, slot, index_working_set, index_meta_time);
 
         let index_meta = &mut index_meta_working_set_entry.index;
-        let slot_meta_entry =
-            get_slot_meta_entry(&self.db, slot_meta_working_set, slot, shred.parent());
+        let slot_meta_entry = get_slot_meta_entry(
+            &self.db,
+            slot_meta_working_set,
+            slot,
+            shred.parent().ok_or(InsertDataShredError::InvalidShred)?,
+        );
 
         let slot_meta = &mut slot_meta_entry.new_slot_meta.borrow_mut();
 
