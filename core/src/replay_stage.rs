@@ -771,7 +771,7 @@ impl ReplayStage {
                     dump_then_repair_correct_slots_time.stop();
 
                     let mut retransmit_not_propagated_time = Measure::start("retransmit_not_propagated_time");
-                    let retransmitted = Self::retransmit_not_propagated(
+                    let retransmitted_slot = Self::retransmit_not_propagated(
                         &poh_recorder,
                         &bank_forks,
                         &retransmit_slots_sender,
@@ -796,7 +796,7 @@ impl ReplayStage {
                             &mut skipped_slots_info,
                             has_new_vote_been_rooted,
                             disable_epoch_boundary_optimization,
-                            retransmitted,
+                            retransmitted_slot,
                         );
 
                         let poh_bank = poh_recorder.lock().unwrap().bank();
@@ -860,8 +860,8 @@ impl ReplayStage {
         retransmit_slots_sender: &RetransmitSlotsSender,
         progress: &mut ProgressMap,
         last_retransmit_retry_info: &mut LastRetransmitInfo,
-    ) -> bool {
-        let mut did_retransmit = false;
+    ) -> Option<Slot> {
+        let mut retransmitted_slot = None;
         let start_slot = poh_recorder.lock().unwrap().start_slot();
 
         if let Some(latest_leader_slot) = progress.get_latest_leader_slot(start_slot) {
@@ -897,11 +897,11 @@ impl ReplayStage {
                             time_offset,
                         );
                         datapoint_info!("replay_stage-retransmit", ("slot", bank.slot(), i64));
+                        retransmitted_slot = Some(bank.slot());
                         let _ = retransmit_slots_sender
                             .send(vec![(bank.slot(), bank.clone())].into_iter().collect());
                         last_retransmit_retry_info.retry_iteration += 1;
                         last_retransmit_retry_info.time = Instant::now();
-                        did_retransmit = true;
                     } else {
                         info!(
                             "retransmit_not_propagated: bypass retry. elapsed:{} time_offset:{}",
@@ -920,7 +920,7 @@ impl ReplayStage {
             }
         }
 
-        did_retransmit
+        retransmitted_slot
     }
 
     fn is_partition_detected(
@@ -1450,7 +1450,7 @@ impl ReplayStage {
         skipped_slots_info: &mut SkippedSlotsInfo,
         has_new_vote_been_rooted: bool,
         disable_epoch_boundary_optimization: bool,
-        has_retransmitted: bool,
+        retransmitted_slot: Option<Slot>,
     ) {
         // all the individual calls to poh_recorder.lock() are designed to
         // increase granularity, decrease contention
@@ -1510,8 +1510,7 @@ impl ReplayStage {
                 ("leader", next_leader.to_string(), String),
             );
 
-            if !has_retransmitted
-                && !Self::check_propagation_for_start_leader(poh_slot, parent_slot, progress_map)
+            if !Self::check_propagation_for_start_leader(poh_slot, parent_slot, progress_map)
             {
                 let latest_unconfirmed_leader_slot = progress_map.get_latest_leader_slot(parent_slot)
                     .expect("In order for propagated check to fail, latest leader must exist in progress map");
@@ -1541,9 +1540,11 @@ impl ReplayStage {
 
                 // Signal retransmit
                 if Self::should_retransmit(poh_slot, &mut skipped_slots_info.last_retransmit_slot) {
-                    datapoint_info!("replay_stage-retransmit", ("slot", bank.slot(), i64),);
-                    let _ = retransmit_slots_sender
-                        .send(vec![(bank.slot(), bank.clone())].into_iter().collect());
+                    if retransmitted_slot.map(|slot| slot != bank.slot()).unwrap_or(true) {
+                        datapoint_info!("replay_stage-retransmit", ("slot", bank.slot(), i64),);
+                        let _ = retransmit_slots_sender
+                            .send(vec![(bank.slot(), bank.clone())].into_iter().collect());
+                    }
                 }
                 return;
             }
