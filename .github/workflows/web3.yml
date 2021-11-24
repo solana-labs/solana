@@ -19,18 +19,16 @@ jobs:
     steps:
       - run: echo "Done"
 
-  check-web3:
+  web3-commit-lint:
     runs-on: ubuntu-latest
+    # Set to true in order to avoid cancelling other workflow jobs.
+    # Mergify will still require web3-commit-lint for automerge
+    continue-on-error: true
 
     defaults:
       run:
         working-directory: web3.js
 
-    strategy:
-      matrix:
-        node: [ '12', '14', '16' ]
-
-    name: Node ${{ matrix.node }}
     steps:
       - uses: actions/checkout@v2
         with:
@@ -48,6 +46,28 @@ jobs:
         run: bash commitlint.sh
         env:
           COMMIT_RANGE: ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}
+
+  check-web3:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: web3.js
+
+    strategy:
+      matrix:
+        node: [ '12', '14', '16' ]
+
+    name: Node ${{ matrix.node }}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: ${{ matrix.node }}
+          cache: 'npm'
+          cache-dependency-path: web3.js/package-lock.json
+      - run: npm i -g npm@7
+      - run: npm ci
       - run: npm run lint
       - run: |
           npm run build
