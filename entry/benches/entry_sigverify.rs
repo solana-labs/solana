@@ -6,7 +6,8 @@ use std::sync::Arc;
 
 use solana_perf::test_tx::test_tx;
 use solana_sdk::transaction::{
-    Result, SanitizedTransaction, TransactionError, VersionedTransaction,
+    Result, SanitizedTransaction, TransactionError, TransactionVerificationMode,
+    VersionedTransaction,
 };
 
 use solana_entry::entry::{self, VerifyRecyclers};
@@ -24,11 +25,11 @@ fn bench_gpusigverify(bencher: &mut Bencher) {
 
     let verify_transaction = {
         move |versioned_tx: VersionedTransaction,
-              verification_mode: entry::EntryVerificationMode|
+              verification_mode: TransactionVerificationMode|
               -> Result<SanitizedTransaction> {
             let sanitized_tx = {
                 let message_hash =
-                    if verification_mode == entry::EntryVerificationMode::FullVerification {
+                    if verification_mode == TransactionVerificationMode::FullVerification {
                         versioned_tx.verify_and_hash_message()?
                     } else {
                         versioned_tx.message.hash()

@@ -127,6 +127,13 @@ pub enum TransactionError {
     WouldExceedMaxAccountCostLimit,
 }
 
+#[derive(PartialEq, Clone, Copy, Debug)]
+pub enum TransactionVerificationMode {
+    HashOnly,
+    HashAndVerifyPrecompiles,
+    FullVerification,
+}
+
 pub type Result<T> = result::Result<T, TransactionError>;
 
 impl From<SanitizeError> for TransactionError {

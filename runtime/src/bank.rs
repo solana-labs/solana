@@ -120,7 +120,8 @@ use solana_sdk::{
     sysvar::{self},
     timing::years_as_slots,
     transaction::{
-        Result, SanitizedTransaction, Transaction, TransactionError, VersionedTransaction,
+        Result, SanitizedTransaction, Transaction, TransactionError, TransactionVerificationMode,
+        VersionedTransaction,
     },
 };
 use solana_stake_program::stake_state::{
@@ -5501,7 +5502,7 @@ impl Bank {
     pub fn verify_transaction(
         &self,
         tx: VersionedTransaction,
-        verification_mode: solana_entry::entry::EntryVerificationMode,
+        verification_mode: TransactionVerificationMode,
     ) -> Result<SanitizedTransaction> {
         let sanitized_tx = {
             let size =
@@ -5509,8 +5510,7 @@ impl Bank {
             if size > PACKET_DATA_SIZE as u64 {
                 return Err(TransactionError::SanitizeFailure);
             }
-            let message_hash = if verification_mode
-                == solana_entry::entry::EntryVerificationMode::FullVerification
+            let message_hash = if verification_mode == TransactionVerificationMode::FullVerification
             {
                 tx.verify_and_hash_message()?
             } else {
@@ -5526,9 +5526,8 @@ impl Bank {
             return Err(TransactionError::SanitizeFailure);
         }
 
-        if verification_mode == solana_entry::entry::EntryVerificationMode::HashAndVerifyPrecompiles
-            || verification_mode
-                == solana_entry::entry::EntryVerificationMode::FullVerification
+        if verification_mode == TransactionVerificationMode::HashAndVerifyPrecompiles
+            || verification_mode == TransactionVerificationMode::FullVerification
         {
             sanitized_tx.verify_precompiles(&self.feature_set)?;
         }
@@ -15189,11 +15188,8 @@ pub(crate) mod tests {
         {
             let tx = make_transaction(TestCase::RemoveSignature);
             assert_eq!(
-                bank.verify_transaction(
-                    tx.into(),
-                    solana_entry::entry::EntryVerificationMode::FullVerification
-                )
-                .err(),
+                bank.verify_transaction(tx.into(), TransactionVerificationMode::FullVerification)
+                    .err(),
                 Some(TransactionError::SanitizeFailure),
             );
         }
@@ -15201,10 +15197,7 @@ pub(crate) mod tests {
         {
             let tx = make_transaction(TestCase::AddSignature);
             assert!(bank
-                .verify_transaction(
-                    tx.into(),
-                    solana_entry::entry::EntryVerificationMode::FullVerification
-                )
+                .verify_transaction(tx.into(), TransactionVerificationMode::FullVerification)
                 .is_ok());
         }
     }
@@ -15240,11 +15233,8 @@ pub(crate) mod tests {
         {
             let tx = make_transaction();
             assert_eq!(
-                bank.verify_transaction(
-                    tx.into(),
-                    solana_entry::entry::EntryVerificationMode::FullVerification
-                )
-                .err(),
+                bank.verify_transaction(tx.into(), TransactionVerificationMode::FullVerification)
+                    .err(),
                 Some(TransactionError::AccountLoadedTwice),
             );
         }
@@ -15274,10 +15264,7 @@ pub(crate) mod tests {
             let tx = make_transaction(5);
             assert!(bincode::serialized_size(&tx).unwrap() <= PACKET_DATA_SIZE as u64);
             assert!(bank
-                .verify_transaction(
-                    tx.into(),
-                    solana_entry::entry::EntryVerificationMode::FullVerification
-                )
+                .verify_transaction(tx.into(), TransactionVerificationMode::FullVerification)
                 .is_ok(),);
         }
         // Big transaction.
@@ -15285,11 +15272,8 @@ pub(crate) mod tests {
             let tx = make_transaction(25);
             assert!(bincode::serialized_size(&tx).unwrap() > PACKET_DATA_SIZE as u64);
             assert_eq!(
-                bank.verify_transaction(
-                    tx.into(),
-                    solana_entry::entry::EntryVerificationMode::FullVerification
-                )
-                .err(),
+                bank.verify_transaction(tx.into(), TransactionVerificationMode::FullVerification)
+                    .err(),
                 Some(TransactionError::SanitizeFailure),
             );
         }
@@ -15299,11 +15283,8 @@ pub(crate) mod tests {
             let tx = make_transaction(size);
             assert_eq!(
                 bincode::serialized_size(&tx).unwrap() <= PACKET_DATA_SIZE as u64,
-                bank.verify_transaction(
-                    tx.into(),
-                    solana_entry::entry::EntryVerificationMode::FullVerification
-                )
-                .is_ok(),
+                bank.verify_transaction(tx.into(), TransactionVerificationMode::FullVerification)
+                    .is_ok(),
             );
         }
     }

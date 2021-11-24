@@ -40,7 +40,10 @@ use solana_sdk::{
     hash::Hash,
     pubkey::Pubkey,
     signature::{Keypair, Signature},
-    transaction::{Result, SanitizedTransaction, TransactionError, VersionedTransaction},
+    transaction::{
+        Result, SanitizedTransaction, TransactionError, TransactionVerificationMode,
+        VersionedTransaction,
+    },
 };
 use solana_transaction_status::token_balances::{
     collect_token_balances, TransactionTokenBalancesSet,
@@ -300,7 +303,7 @@ pub fn process_entries_for_tests(
     let verify_transaction = {
         let bank = bank.clone();
         move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
-            bank.verify_transaction(versioned_tx, entry::EntryVerificationMode::FullVerification)
+            bank.verify_transaction(versioned_tx, TransactionVerificationMode::FullVerification)
         }
     };
 
@@ -921,7 +924,7 @@ pub fn confirm_slot(
     let verify_transaction = {
         let bank = bank.clone();
         move |versioned_tx: VersionedTransaction,
-              verification_mode: entry::EntryVerificationMode|
+              verification_mode: TransactionVerificationMode|
               -> Result<SanitizedTransaction> {
             bank.verify_transaction(versioned_tx, verification_mode)
         }

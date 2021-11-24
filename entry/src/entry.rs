@@ -24,7 +24,9 @@ use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::hash::Hash;
 use solana_sdk::packet::Meta;
 use solana_sdk::timing;
-use solana_sdk::transaction::{Result, SanitizedTransaction, Transaction, VersionedTransaction};
+use solana_sdk::transaction::{
+    Result, SanitizedTransaction, Transaction, TransactionVerificationMode, VersionedTransaction,
+};
 use std::cell::RefCell;
 use std::cell::UnsafeCell;
 use std::ffi::OsStr;
@@ -152,13 +154,6 @@ pub struct Entry {
 pub enum EntryType {
     Transactions(Vec<SanitizedTransaction>),
     Tick(Hash),
-}
-
-#[derive(PartialEq, Clone, Copy, Debug)]
-pub enum EntryVerificationMode {
-    HashOnly,
-    HashAndVerifyPrecompiles,
-    FullVerification,
 }
 
 impl Entry {
@@ -426,7 +421,7 @@ pub fn start_verify_transactions(
     skip_verification: bool,
     verify_recyclers: VerifyRecyclers,
     verify: Arc<
-        dyn Fn(VersionedTransaction, EntryVerificationMode) -> Result<SanitizedTransaction>
+        dyn Fn(VersionedTransaction, TransactionVerificationMode) -> Result<SanitizedTransaction>
             + Send
             + Sync,
     >,
@@ -457,9 +452,9 @@ pub fn start_verify_transactions(
     if use_cpu {
         let verify_func = {
             let verification_mode = if skip_verification {
-                EntryVerificationMode::HashOnly
+                TransactionVerificationMode::HashOnly
             } else {
-                EntryVerificationMode::FullVerification
+                TransactionVerificationMode::FullVerification
             };
             move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
                 verify(versioned_tx, verification_mode)
@@ -494,7 +489,7 @@ pub fn start_verify_transactions(
         move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
             verify(
                 versioned_tx,
-                EntryVerificationMode::HashAndVerifyPrecompiles,
+                TransactionVerificationMode::HashAndVerifyPrecompiles,
             )
         }
     };
@@ -971,7 +966,10 @@ mod tests {
         skip_verification: bool,
         verify_recyclers: VerifyRecyclers,
         verify: Arc<
-            dyn Fn(VersionedTransaction, EntryVerificationMode) -> Result<SanitizedTransaction>
+            dyn Fn(
+                    VersionedTransaction,
+                    TransactionVerificationMode,
+                ) -> Result<SanitizedTransaction>
                 + Send
                 + Sync,
         >,
@@ -979,9 +977,9 @@ mod tests {
         let verify_func = {
             let verify = verify.clone();
             let verification_mode = if skip_verification {
-                EntryVerificationMode::HashOnly
+                TransactionVerificationMode::HashOnly
             } else {
-                EntryVerificationMode::FullVerification
+                TransactionVerificationMode::FullVerification
             };
             move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
                 verify(versioned_tx, verification_mode)
@@ -1012,11 +1010,11 @@ mod tests {
     fn test_entry_gpu_verify() {
         let verify_transaction = {
             move |versioned_tx: VersionedTransaction,
-                  verification_mode: EntryVerificationMode|
+                  verification_mode: TransactionVerificationMode|
                   -> Result<SanitizedTransaction> {
                 let sanitized_tx = {
                     let message_hash =
-                        if verification_mode == EntryVerificationMode::FullVerification {
+                        if verification_mode == TransactionVerificationMode::FullVerification {
                             versioned_tx.verify_and_hash_message()?
                         } else {
                             versioned_tx.message.hash()
