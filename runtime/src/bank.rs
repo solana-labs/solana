@@ -614,7 +614,7 @@ pub struct TransactionLogCollectorConfig {
     pub filter: TransactionLogCollectorFilter,
 }
 
-#[derive(AbiExample, Clone, Debug)]
+#[derive(AbiExample, Clone, Debug, PartialEq)]
 pub struct TransactionLogInfo {
     pub signature: Signature,
     pub result: Result<()>,
@@ -14413,5 +14413,21 @@ pub(crate) mod tests {
         );
         let tx = Transaction::new(&[&mint_keypair], message, bank.last_blockhash());
         bank.process_transaction(&tx).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_transaction_log_collector_get_logs_for_address() {
+        let address = Pubkey::new_unique();
+        let mut mentioned_address_map = HashMap::new();
+        mentioned_address_map.insert(address, vec![0]);
+        let transaction_log_collector = TransactionLogCollector {
+            mentioned_address_map,
+            ..TransactionLogCollector::default()
+        };
+        assert_eq!(
+            transaction_log_collector.get_logs_for_address(Some(&address)),
+            Some(Vec::<TransactionLogInfo>::new()),
+        );
     }
 }
