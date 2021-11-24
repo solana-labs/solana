@@ -582,10 +582,12 @@ impl TransactionLogCollector {
     ) -> Option<Vec<TransactionLogInfo>> {
         match address {
             None => Some(self.logs.clone()),
-            Some(address) => self
-                .mentioned_address_map
-                .get(address)
-                .map(|log_indices| log_indices.iter().map(|i| self.logs[*i].clone()).collect()),
+            Some(address) => self.mentioned_address_map.get(address).map(|log_indices| {
+                log_indices
+                    .iter()
+                    .filter_map(|i| self.logs.get(*i).cloned())
+                    .collect()
+            }),
         }
     }
 }
@@ -15397,7 +15399,6 @@ pub(crate) mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_transaction_log_collector_get_logs_for_address() {
         let address = Pubkey::new_unique();
         let mut mentioned_address_map = HashMap::new();
