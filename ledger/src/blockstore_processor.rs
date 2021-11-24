@@ -300,7 +300,7 @@ pub fn process_entries_for_tests(
     let verify_transaction = {
         let bank = bank.clone();
         move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
-            bank.verify_transaction(versioned_tx, false)
+            bank.verify_transaction(versioned_tx, entry::EntryVerificationMode::FullVerification)
         }
     };
 
@@ -923,23 +923,7 @@ pub fn confirm_slot(
         move |versioned_tx: VersionedTransaction,
               verification_mode: entry::EntryVerificationMode|
               -> Result<SanitizedTransaction> {
-            let result = bank.verify_transaction(
-                versioned_tx,
-                verification_mode == entry::EntryVerificationMode::HashOnly
-                    || verification_mode == entry::EntryVerificationMode::HashAndVerifyPrecompiles,
-            );
-
-            match result {
-                Ok(val) => {
-                    // If verification_mode == entry::EntryVerificationMode::HashAndVerifyPrecompiles then we will have
-                    // only hashed the transaction in the call to bank.verify_transaction so call verify_precompiles here
-                    if verification_mode == entry::EntryVerificationMode::HashAndVerifyPrecompiles {
-                        val.verify_precompiles(&bank.feature_set)?;
-                    }
-                    Ok(val)
-                }
-                Err(error) => Err(error),
-            }
+            bank.verify_transaction(versioned_tx, verification_mode)
         }
     };
 
