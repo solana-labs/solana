@@ -1037,6 +1037,18 @@ impl ProgramTestContext {
         bank.store_account(vote_account_address, &vote_account);
     }
 
+    /// Create or overwrite an account, subverting normal runtime checks.
+    ///
+    /// This method exists to make it easier to set up artificial situations
+    /// that would be difficult to replicate by sending individual transactions.
+    /// Beware that it can be used to create states that would not be reachable
+    /// by sending transactions!
+    pub fn set_account(&mut self, address: &Pubkey, account: &AccountSharedData) {
+        let bank_forks = self.bank_forks.read().unwrap();
+        let bank = bank_forks.working_bank();
+        bank.store_account(address, account);
+    }
+
     /// Force the working bank ahead to a new slot
     pub fn warp_to_slot(&mut self, warp_slot: Slot) -> Result<(), ProgramTestError> {
         let mut bank_forks = self.bank_forks.write().unwrap();
