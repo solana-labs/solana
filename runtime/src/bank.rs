@@ -3978,10 +3978,7 @@ impl Bank {
             if Self::can_commit(r) // Skip log collection for unprocessed transactions
                 && transaction_log_collector_config.filter != TransactionLogCollectorFilter::None
             {
-                let mut transaction_log_collector = self.transaction_log_collector.write().unwrap();
-                let transaction_log_index = transaction_log_collector.logs.len();
-
-                let mut mentioned_address = false;
+                let mut filtered_mentioned_addresses = Vec::new();
                 if !transaction_log_collector_config
                     .mentioned_addresses
                     .is_empty()
@@ -3991,32 +3988,42 @@ impl Bank {
                             .mentioned_addresses
                             .contains(key)
                         {
-                            transaction_log_collector
-                                .mentioned_address_map
-                                .entry(*key)
-                                .or_default()
-                                .push(transaction_log_index);
-                            mentioned_address = true;
+                            filtered_mentioned_addresses.push(*key);
                         }
                     }
                 }
 
                 let is_vote = is_simple_vote_transaction(tx);
                 let store = match transaction_log_collector_config.filter {
-                    TransactionLogCollectorFilter::All => !is_vote || mentioned_address,
+                    TransactionLogCollectorFilter::All => {
+                        !is_vote || !filtered_mentioned_addresses.is_empty()
+                    }
                     TransactionLogCollectorFilter::AllWithVotes => true,
                     TransactionLogCollectorFilter::None => false,
-                    TransactionLogCollectorFilter::OnlyMentionedAddresses => mentioned_address,
+                    TransactionLogCollectorFilter::OnlyMentionedAddresses => {
+                        !filtered_mentioned_addresses.is_empty()
+                    }
                 };
 
                 if store {
                     if let Some(log_messages) = transaction_log_messages.get(i).cloned().flatten() {
+                        let mut transaction_log_collector =
+                            self.transaction_log_collector.write().unwrap();
+                        let transaction_log_index = transaction_log_collector.logs.len();
+
                         transaction_log_collector.logs.push(TransactionLogInfo {
                             signature: *tx.signature(),
                             result: r.clone(),
                             is_vote,
                             log_messages,
                         });
+                        for key in filtered_mentioned_addresses.into_iter() {
+                            transaction_log_collector
+                                .mentioned_address_map
+                                .entry(key)
+                                .or_default()
+                                .push(transaction_log_index);
+                        }
                     }
                 }
             }
