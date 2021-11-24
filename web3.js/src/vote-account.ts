@@ -165,7 +165,9 @@ export class VoteAccount {
       votes: va.votes,
       rootSlot,
       authorizedVoters: va.authorizedVoters.map(parseAuthorizedVoter),
-      priorVoters: va.priorVoters.isEmpty ? [] : va.priorVoters.buf.map(parsePriorVoters),
+      priorVoters: va.priorVoters.isEmpty
+        ? []
+        : va.priorVoters.buf.slice(va.priorVoters.idx).map(parsePriorVoters),
       epochCredits: va.epochCredits,
       lastTimestamp: va.lastTimestamp,
     });
