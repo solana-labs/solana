@@ -1510,8 +1510,7 @@ impl ReplayStage {
                 ("leader", next_leader.to_string(), String),
             );
 
-            if !Self::check_propagation_for_start_leader(poh_slot, parent_slot, progress_map)
-            {
+            if !Self::check_propagation_for_start_leader(poh_slot, parent_slot, progress_map) {
                 let latest_unconfirmed_leader_slot = progress_map.get_latest_leader_slot(parent_slot)
                     .expect("In order for propagated check to fail, latest leader must exist in progress map");
                 if poh_slot != skipped_slots_info.last_skipped_slot {
@@ -1539,12 +1538,14 @@ impl ReplayStage {
                     .clone();
 
                 // Signal retransmit
-                if Self::should_retransmit(poh_slot, &mut skipped_slots_info.last_retransmit_slot) {
-                    if retransmitted_slot.map(|slot| slot != bank.slot()).unwrap_or(true) {
-                        datapoint_info!("replay_stage-retransmit", ("slot", bank.slot(), i64),);
-                        let _ = retransmit_slots_sender
-                            .send(vec![(bank.slot(), bank.clone())].into_iter().collect());
-                    }
+                if Self::should_retransmit(poh_slot, &mut skipped_slots_info.last_retransmit_slot)
+                    && retransmitted_slot
+                        .map(|slot| slot != bank.slot())
+                        .unwrap_or(true)
+                {
+                    datapoint_info!("replay_stage-retransmit", ("slot", bank.slot(), i64),);
+                    let _ = retransmit_slots_sender
+                        .send(vec![(bank.slot(), bank.clone())].into_iter().collect());
                 }
                 return;
             }
