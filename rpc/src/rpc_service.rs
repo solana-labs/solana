@@ -356,6 +356,7 @@ impl JsonRpcService {
                                 bigtable_ledger_storage.clone(),
                                 blockstore.clone(),
                                 block_commitment_cache.clone(),
+                                current_transaction_status_slot.clone(),
                                 exit_bigtable_ledger_upload_service.clone(),
                             )))
                         } else {

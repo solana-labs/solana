@@ -2,20 +2,15 @@ use {
     crate::{bigtable_upload, blockstore::Blockstore},
     solana_runtime::commitment::BlockCommitmentCache,
     std::{
-        sync::atomic::{AtomicBool, Ordering},
-        sync::{Arc, RwLock},
+        cmp::min,
+        sync::{
+            atomic::{AtomicBool, AtomicU64, Ordering},
+            Arc, RwLock,
+        },
         thread::{self, Builder, JoinHandle},
     },
     tokio::runtime::Runtime,
 };
-
-// Delay uploading the largest confirmed root for this many slots.  This is done in an attempt to
-// ensure that the `CacheBlockMetaService` has had enough time to add the block time for the root
-// before it's uploaded to BigTable.
-//
-// A more direct connection between CacheBlockMetaService and BigTableUploadService would be
-// preferable...
-const LARGEST_CONFIRMED_ROOT_UPLOAD_DELAY: usize = 100;
 
 pub struct BigTableUploadService {
     thread: JoinHandle<()>,
@@ -27,6 +22,7 @@ impl BigTableUploadService {
         bigtable_ledger_storage: solana_storage_bigtable::LedgerStorage,
         blockstore: Arc<Blockstore>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
+        max_complete_transaction_status_slot: Arc<AtomicU64>,
         exit: Arc<AtomicBool>,
     ) -> Self {
         info!("Starting BigTable upload service");
@@ -38,6 +34,7 @@ impl BigTableUploadService {
                     bigtable_ledger_storage,
                     blockstore,
                     block_commitment_cache,
+                    max_complete_transaction_status_slot,
                     exit,
                 )
             })
@@ -51,6 +48,7 @@ impl BigTableUploadService {
         bigtable_ledger_storage: solana_storage_bigtable::LedgerStorage,
         blockstore: Arc<Blockstore>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
+        max_complete_transaction_status_slot: Arc<AtomicU64>,
         exit: Arc<AtomicBool>,
     ) {
         let mut start_slot = 0;
@@ -59,11 +57,10 @@ impl BigTableUploadService {
                 break;
             }
 
-            let end_slot = block_commitment_cache
-                .read()
-                .unwrap()
-                .highest_confirmed_root()
-                .saturating_sub(LARGEST_CONFIRMED_ROOT_UPLOAD_DELAY as u64);
+            let end_slot = min(
+                max_complete_transaction_status_slot.load(Ordering::SeqCst),
+                block_commitment_cache.read().unwrap().root(),
+            );
 
             if end_slot <= start_slot {
                 std::thread::sleep(std::time::Duration::from_secs(1));
