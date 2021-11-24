@@ -52,6 +52,9 @@ struct SetRootTimings {
     total_parent_banks: i64,
     total_squash_cache_ms: i64,
     total_squash_accounts_ms: i64,
+    total_squash_accounts_index_ms: i64,
+    total_squash_accounts_cache_ms: i64,
+    total_squash_accounts_store_ms: i64,
     total_snapshot_ms: i64,
     tx_count: i64,
     prune_non_rooted_ms: i64,
@@ -255,6 +258,9 @@ impl BankForks {
         banks.extend(parents.iter());
         let total_parent_banks = banks.len();
         let mut total_squash_accounts_ms = 0;
+        let mut total_squash_accounts_index_ms = 0;
+        let mut total_squash_accounts_cache_ms = 0;
+        let mut total_squash_accounts_store_ms = 0;
         let mut total_squash_cache_ms = 0;
         let mut total_snapshot_ms = 0;
         for bank in banks.iter() {
@@ -265,6 +271,9 @@ impl BankForks {
                 self.last_accounts_hash_slot = bank_slot;
                 let squash_timing = bank.squash();
                 total_squash_accounts_ms += squash_timing.squash_accounts_ms as i64;
+                total_squash_accounts_index_ms += squash_timing.squash_accounts_index_ms as i64;
+                total_squash_accounts_cache_ms += squash_timing.squash_accounts_cache_ms as i64;
+                total_squash_accounts_store_ms += squash_timing.squash_accounts_store_ms as i64;
                 total_squash_cache_ms += squash_timing.squash_cache_ms as i64;
                 is_root_bank_squashed = bank_slot == root;
 
@@ -297,6 +306,9 @@ impl BankForks {
         if !is_root_bank_squashed {
             let squash_timing = root_bank.squash();
             total_squash_accounts_ms += squash_timing.squash_accounts_ms as i64;
+            total_squash_accounts_index_ms += squash_timing.squash_accounts_index_ms as i64;
+            total_squash_accounts_cache_ms += squash_timing.squash_accounts_cache_ms as i64;
+            total_squash_accounts_store_ms += squash_timing.squash_accounts_store_ms as i64;
             total_squash_cache_ms += squash_timing.squash_cache_ms as i64;
         }
         let new_tx_count = root_bank.transaction_count();
@@ -316,6 +328,9 @@ impl BankForks {
                 total_parent_banks: total_parent_banks as i64,
                 total_squash_cache_ms,
                 total_squash_accounts_ms,
+                total_squash_accounts_index_ms,
+                total_squash_accounts_cache_ms,
+                total_squash_accounts_store_ms,
                 total_snapshot_ms,
                 tx_count: (new_tx_count - root_tx_count) as i64,
                 prune_non_rooted_ms: prune_time.as_ms() as i64,
@@ -361,6 +376,21 @@ impl BankForks {
             (
                 "total_squash_accounts_ms",
                 set_root_metrics.total_squash_accounts_ms,
+                i64
+            ),
+            (
+                "total_squash_accounts_index_ms",
+                set_root_metrics.total_squash_accounts_index_ms,
+                i64
+            ),
+            (
+                "total_squash_accounts_cache_ms",
+                set_root_metrics.total_squash_accounts_cache_ms,
+                i64
+            ),
+            (
+                "total_squash_accounts_store_ms",
+                set_root_metrics.total_squash_accounts_store_ms,
                 i64
             ),
             ("total_snapshot_ms", set_root_metrics.total_snapshot_ms, i64),
