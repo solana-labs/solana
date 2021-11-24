@@ -120,7 +120,4 @@ function generateConfig(configType, format) {
   return config;
 }
 
-export default [
-  generateConfig('node'),
-  generateConfig('browser', 'iife'),
-];
+export default [generateConfig('node'), generateConfig('browser', 'iife')];
