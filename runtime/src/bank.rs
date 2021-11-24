@@ -575,6 +575,21 @@ pub struct TransactionLogCollector {
     pub mentioned_address_map: HashMap<Pubkey, Vec<usize>>,
 }
 
+impl TransactionLogCollector {
+    pub fn get_logs_for_address(
+        &self,
+        address: Option<&Pubkey>,
+    ) -> Option<Vec<TransactionLogInfo>> {
+        match address {
+            None => Some(self.logs.clone()),
+            Some(address) => self
+                .mentioned_address_map
+                .get(address)
+                .map(|log_indices| log_indices.iter().map(|i| self.logs[*i].clone()).collect()),
+        }
+    }
+}
+
 pub trait NonceInfo {
     fn address(&self) -> &Pubkey;
     fn account(&self) -> &AccountSharedData;
@@ -5302,20 +5317,10 @@ impl Bank {
         &self,
         address: Option<&Pubkey>,
     ) -> Option<Vec<TransactionLogInfo>> {
-        let transaction_log_collector = self.transaction_log_collector.read().unwrap();
-
-        match address {
-            None => Some(transaction_log_collector.logs.clone()),
-            Some(address) => transaction_log_collector
-                .mentioned_address_map
-                .get(address)
-                .map(|log_indices| {
-                    log_indices
-                        .iter()
-                        .map(|i| transaction_log_collector.logs[*i].clone())
-                        .collect()
-                }),
-        }
+        self.transaction_log_collector
+            .read()
+            .unwrap()
+            .get_logs_for_address(address)
     }
 
     pub fn get_all_accounts_modified_since_parent(&self) -> Vec<(Pubkey, AccountSharedData)> {
