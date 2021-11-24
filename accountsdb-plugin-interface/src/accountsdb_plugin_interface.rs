@@ -3,6 +3,8 @@
 /// In addition, the dynamic library must export a "C" function _create_plugin which
 /// creates the implementation of the plugin.
 use {
+    solana_sdk::{signature::Signature, transaction::SanitizedTransaction},
+    solana_transaction_status::TransactionStatusMeta,
     std::{any::Any, error, io},
     thiserror::Error,
 };
@@ -22,6 +24,18 @@ pub struct ReplicaAccountInfo<'a> {
 
 pub enum ReplicaAccountInfoVersions<'a> {
     V0_0_1(&'a ReplicaAccountInfo<'a>),
+}
+
+#[derive(Clone, Debug)]
+pub struct ReplicaTransactionInfo<'a> {
+    pub signature: &'a Signature,
+    pub is_vote: bool,
+    pub transaction: &'a SanitizedTransaction,
+    pub transaction_status_meta: &'a TransactionStatusMeta,
+}
+
+pub enum ReplicaTransactionInfoVersions<'a> {
+    V0_0_1(&'a ReplicaTransactionInfo<'a>),
 }
 
 #[derive(Error, Debug)]
@@ -105,10 +119,27 @@ pub trait AccountsDbPlugin: Any + Send + Sync + std::fmt::Debug {
         Ok(())
     }
 
+    /// Called when a transaction is updated at a slot.
+    #[allow(unused_variables)]
+    fn notify_transaction(
+        &mut self,
+        transaction: ReplicaTransactionInfoVersions,
+        slot: u64,
+    ) -> Result<()> {
+        Ok(())
+    }
+
     /// Check if the plugin is interested in account data
     /// Default is true -- if the plugin is not interested in
     /// account data, please return false.
-    fn to_notify_account_data(&self) -> bool {
+    fn account_data_notifications_enabled(&self) -> bool {
         true
+    }
+
+    /// Check if the plugin is interested in transaction data
+    /// Default is false -- if the plugin is not interested in
+    /// transaction data, please return false.
+    fn transaction_notifications_enabled(&self) -> bool {
+        false
     }
 }

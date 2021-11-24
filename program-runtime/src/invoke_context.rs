@@ -4,7 +4,6 @@ use crate::{
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
 };
-use log::*;
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
     compute_budget::ComputeBudget,
@@ -23,18 +22,12 @@ use solana_sdk::{
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 /// Compute meter
-pub trait ComputeMeter {
-    /// Consume compute units
-    fn consume(&mut self, amount: u64) -> Result<(), InstructionError>;
-    /// Get the number of remaining compute units
-    fn get_remaining(&self) -> u64;
-}
-
-pub struct ThisComputeMeter {
+pub struct ComputeMeter {
     remaining: u64,
 }
-impl ComputeMeter for ThisComputeMeter {
-    fn consume(&mut self, amount: u64) -> Result<(), InstructionError> {
+impl ComputeMeter {
+    /// Consume compute units
+    pub fn consume(&mut self, amount: u64) -> Result<(), InstructionError> {
         let exceeded = self.remaining < amount;
         self.remaining = self.remaining.saturating_sub(amount);
         if exceeded {
@@ -42,75 +35,14 @@ impl ComputeMeter for ThisComputeMeter {
         }
         Ok(())
     }
-    fn get_remaining(&self) -> u64 {
+    /// Get the number of remaining compute units
+    pub fn get_remaining(&self) -> u64 {
         self.remaining
     }
-}
-impl ThisComputeMeter {
+    /// Construct a new one with the given remaining units
     pub fn new_ref(remaining: u64) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self { remaining }))
     }
-}
-
-/// Log messages
-pub trait Logger {
-    fn log_enabled(&self) -> bool;
-
-    /// Log a message.
-    ///
-    /// Unless explicitly stated, log messages are not considered stable and may change in the
-    /// future as necessary
-    fn log(&self, message: &str);
-}
-
-pub struct ThisLogger {
-    log_collector: Option<Rc<LogCollector>>,
-}
-impl Logger for ThisLogger {
-    fn log_enabled(&self) -> bool {
-        log_enabled!(log::Level::Info) || self.log_collector.is_some()
-    }
-    fn log(&self, message: &str) {
-        debug!("{}", message);
-        if let Some(log_collector) = &self.log_collector {
-            log_collector.log(message);
-        }
-    }
-}
-impl ThisLogger {
-    pub fn new_ref(log_collector: Option<Rc<LogCollector>>) -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Self { log_collector }))
-    }
-}
-
-/// Convenience macro to log a message with an `Rc<RefCell<dyn Logger>>`
-#[macro_export]
-macro_rules! ic_logger_msg {
-    ($logger:expr, $message:expr) => {
-        if let Ok(logger) = $logger.try_borrow_mut() {
-            if logger.log_enabled() {
-                logger.log($message);
-            }
-        }
-    };
-    ($logger:expr, $fmt:expr, $($arg:tt)*) => {
-        if let Ok(logger) = $logger.try_borrow_mut() {
-            if logger.log_enabled() {
-                logger.log(&format!($fmt, $($arg)*));
-            }
-        }
-    };
-}
-
-/// Convenience macro to log a message with an `InvokeContext`
-#[macro_export]
-macro_rules! ic_msg {
-    ($invoke_context:expr, $message:expr) => {
-        $crate::ic_logger_msg!($invoke_context.get_logger(), $message)
-    };
-    ($invoke_context:expr, $fmt:expr, $($arg:tt)*) => {
-        $crate::ic_logger_msg!($invoke_context.get_logger(), $fmt, $($arg)*)
-    };
 }
 
 pub struct InvokeContextStackFrame<'a> {
@@ -147,10 +79,10 @@ pub struct ThisInvokeContext<'a> {
     accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
     programs: &'a [(Pubkey, ProcessInstructionWithContext)],
     sysvars: &'a [(Pubkey, Vec<u8>)],
-    logger: Rc<RefCell<dyn Logger>>,
+    log_collector: Option<Rc<RefCell<LogCollector>>>,
     compute_budget: ComputeBudget,
     current_compute_budget: ComputeBudget,
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    compute_meter: Rc<RefCell<ComputeMeter>>,
     executors: Rc<RefCell<Executors>>,
     instruction_recorders: Option<&'a [InstructionRecorder]>,
     feature_set: Arc<FeatureSet>,
@@ -166,9 +98,9 @@ impl<'a> ThisInvokeContext<'a> {
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         programs: &'a [(Pubkey, ProcessInstructionWithContext)],
         sysvars: &'a [(Pubkey, Vec<u8>)],
-        log_collector: Option<Rc<LogCollector>>,
+        log_collector: Option<Rc<RefCell<LogCollector>>>,
         compute_budget: ComputeBudget,
-        compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+        compute_meter: Rc<RefCell<ComputeMeter>>,
         executors: Rc<RefCell<Executors>>,
         instruction_recorders: Option<&'a [InstructionRecorder]>,
         feature_set: Arc<FeatureSet>,
@@ -183,7 +115,7 @@ impl<'a> ThisInvokeContext<'a> {
             accounts,
             programs,
             sysvars,
-            logger: ThisLogger::new_ref(log_collector),
+            log_collector,
             current_compute_budget: compute_budget,
             compute_budget,
             compute_meter,
@@ -210,7 +142,7 @@ impl<'a> ThisInvokeContext<'a> {
             sysvars,
             None,
             ComputeBudget::default(),
-            ThisComputeMeter::new_ref(std::i64::MAX as u64),
+            ComputeMeter::new_ref(std::i64::MAX as u64),
             Rc::new(RefCell::new(Executors::default())),
             None,
             feature_set,
@@ -272,10 +204,10 @@ pub trait InvokeContext {
     fn get_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError>;
     /// Get a list of built-in programs
     fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)];
-    /// Get this invocation's logger
-    fn get_logger(&self) -> Rc<RefCell<dyn Logger>>;
-    /// Get this invocation's compute meter
-    fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>>;
+    /// Get this invocation's LogCollector
+    fn get_log_collector(&self) -> Option<Rc<RefCell<LogCollector>>>;
+    /// Get this invocation's ComputeMeter
+    fn get_compute_meter(&self) -> Rc<RefCell<ComputeMeter>>;
     /// Loaders may need to do work in order to execute a program.  Cache
     /// the work that can be re-used across executions
     fn add_executor(&self, pubkey: &Pubkey, executor: Arc<dyn Executor>);
@@ -349,8 +281,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             self.current_compute_budget = compute_budget;
 
             if !self.feature_set.is_active(&tx_wide_compute_cap::id()) {
-                self.compute_meter =
-                    ThisComputeMeter::new_ref(self.current_compute_budget.max_units);
+                self.compute_meter = ComputeMeter::new_ref(self.current_compute_budget.max_units);
             }
 
             self.pre_accounts = Vec::with_capacity(instruction.accounts.len());
@@ -464,7 +395,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                 )
                 .map_err(|err| {
                     ic_logger_msg!(
-                        self.logger,
+                        self.log_collector,
                         "failed to verify account {}: {}",
                         pre_account.key(),
                         err
@@ -500,7 +431,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             .and_then(|frame| frame.program_id())
             .ok_or(InstructionError::CallDepth)?;
         let rent = &self.rent;
-        let logger = &self.logger;
+        let log_collector = &self.log_collector;
         let accounts = &self.accounts;
         let pre_accounts = &mut self.pre_accounts;
         let timings = &mut self.timings;
@@ -535,7 +466,12 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                                 do_support_realloc,
                             )
                             .map_err(|err| {
-                                ic_logger_msg!(logger, "failed to verify account {}: {}", key, err);
+                                ic_logger_msg!(
+                                    log_collector,
+                                    "failed to verify account {}: {}",
+                                    key,
+                                    err
+                                );
                                 err
                             })?;
                         pre_sum = pre_sum
@@ -587,10 +523,10 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {
         self.programs
     }
-    fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
-        self.logger.clone()
+    fn get_log_collector(&self) -> Option<Rc<RefCell<LogCollector>>> {
+        self.log_collector.clone()
     }
-    fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
+    fn get_compute_meter(&self) -> Rc<RefCell<ComputeMeter>> {
         self.compute_meter.clone()
     }
     fn add_executor(&self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {

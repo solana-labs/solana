@@ -10,8 +10,8 @@ use {
     solana_banks_client::start_client,
     solana_banks_server::banks_server::start_local_server,
     solana_program_runtime::{
-        instruction_processor::InstructionProcessor, invoke_context::ProcessInstructionWithContext,
-        stable_log,
+        ic_msg, instruction_processor::InstructionProcessor,
+        invoke_context::ProcessInstructionWithContext, stable_log,
     },
     solana_runtime::{
         bank::{Bank, ExecuteTimings},
@@ -110,9 +110,9 @@ pub fn builtin_process_instruction(
 ) -> Result<(), InstructionError> {
     set_invoke_context(invoke_context);
 
-    let logger = invoke_context.get_logger();
+    let log_collector = invoke_context.get_log_collector();
     let program_id = invoke_context.get_caller()?;
-    stable_log::program_invoke(&logger, program_id, invoke_context.invoke_depth());
+    stable_log::program_invoke(&log_collector, program_id, invoke_context.invoke_depth());
 
     // Skip the processor account
     let keyed_accounts = &invoke_context.get_keyed_accounts()?[1..];
@@ -165,10 +165,10 @@ pub fn builtin_process_instruction(
     // Execute the program
     process_instruction(program_id, &account_infos, input).map_err(|err| {
         let err = u64::from(err);
-        stable_log::program_failure(&logger, program_id, &err.into());
+        stable_log::program_failure(&log_collector, program_id, &err.into());
         err
     })?;
-    stable_log::program_success(&logger, program_id);
+    stable_log::program_success(&log_collector, program_id);
 
     // Commit AccountInfo changes back into KeyedAccounts
     for keyed_account in keyed_accounts {
@@ -231,11 +231,7 @@ struct SyscallStubs {}
 impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
     fn sol_log(&self, message: &str) {
         let invoke_context = get_invoke_context();
-        let logger = invoke_context.get_logger();
-        let logger = logger.borrow_mut();
-        if logger.log_enabled() {
-            logger.log(&format!("Program log: {}", message));
-        }
+        ic_msg!(invoke_context, "Program log: {}", message);
     }
 
     fn sol_invoke_signed(
@@ -250,7 +246,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         //
 
         let invoke_context = get_invoke_context();
-        let logger = invoke_context.get_logger();
+        let log_collector = invoke_context.get_log_collector();
 
         let caller = *invoke_context.get_caller().expect("get_caller");
         let message = Message::new(&[instruction.clone()], None);
@@ -266,7 +262,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             .map(|(i, _)| message.is_writable(i, demote_program_write_locks))
             .collect::<Vec<bool>>();
 
-        stable_log::program_invoke(&logger, &program_id, invoke_context.invoke_depth());
+        stable_log::program_invoke(&log_collector, &program_id, invoke_context.invoke_depth());
 
         // Convert AccountInfos into Accounts
         let mut account_indices = Vec::with_capacity(message.account_keys.len());
@@ -363,7 +359,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             }
         }
 
-        stable_log::program_success(&logger, &program_id);
+        stable_log::program_success(&log_collector, &program_id);
         Ok(())
     }
 

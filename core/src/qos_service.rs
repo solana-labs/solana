@@ -24,6 +24,10 @@ use {
 };
 
 pub struct QosService {
+    // cost_model instance is owned by validator, shared between replay_stage and
+    // banking_stage. replay_stage writes the latest on-chain program timings to
+    // it; banking_stage's qos_service reads that information to calculate
+    // transaction cost, hence RwLock wrapped.
     cost_model: Arc<RwLock<CostModel>>,
     metrics: Arc<QosServiceMetrics>,
     reporting_thread: Option<JoinHandle<()>>,
@@ -43,6 +47,13 @@ impl Drop for QosService {
 
 impl QosService {
     pub fn new(cost_model: Arc<RwLock<CostModel>>) -> Self {
+        Self::new_with_reporting_duration(cost_model, 1000u64)
+    }
+
+    pub fn new_with_reporting_duration(
+        cost_model: Arc<RwLock<CostModel>>,
+        reporting_duration_ms: u64,
+    ) -> Self {
         let running_flag = Arc::new(AtomicBool::new(true));
         let metrics = Arc::new(QosServiceMetrics::default());
 
@@ -52,7 +63,7 @@ impl QosService {
             Builder::new()
                 .name("solana-qos-service-metrics-repoting".to_string())
                 .spawn(move || {
-                    Self::reporting_loop(running_flag_clone, metrics_clone);
+                    Self::reporting_loop(running_flag_clone, metrics_clone, reporting_duration_ms);
                 })
                 .unwrap(),
         );
@@ -133,10 +144,13 @@ impl QosService {
         select_results
     }
 
-    fn reporting_loop(running_flag: Arc<AtomicBool>, metrics: Arc<QosServiceMetrics>) {
+    fn reporting_loop(
+        running_flag: Arc<AtomicBool>,
+        metrics: Arc<QosServiceMetrics>,
+        reporting_duration_ms: u64,
+    ) {
         while running_flag.load(Ordering::Relaxed) {
-            // hardcode to report every 1000ms
-            metrics.report(1000u64);
+            metrics.report(reporting_duration_ms);
             thread::sleep(Duration::from_millis(100));
         }
     }
@@ -323,8 +337,10 @@ mod tests {
             txs_2.push(transfer_tx.clone());
         }
 
+        // set reporting duration to long enough so the stats wouldn't reset during testing
+        let ten_min = 600_000u64;
         let cost_model = Arc::new(RwLock::new(CostModel::default()));
-        let qos_service = Arc::new(QosService::new(cost_model));
+        let qos_service = Arc::new(QosService::new_with_reporting_duration(cost_model, ten_min));
         let qos_service_1 = qos_service.clone();
         let qos_service_2 = qos_service.clone();
 

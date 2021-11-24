@@ -2,7 +2,7 @@
 //!
 //! The format of these log messages should not be modified to avoid breaking downstream consumers
 //! of program logging
-use crate::{ic_logger_msg, invoke_context::Logger};
+use crate::{ic_logger_msg, log_collector::LogCollector};
 use itertools::Itertools;
 use solana_sdk::{instruction::InstructionError, pubkey::Pubkey};
 use std::{cell::RefCell, rc::Rc};
@@ -14,8 +14,17 @@ use std::{cell::RefCell, rc::Rc};
 /// ```notrust
 /// "Program <address> invoke [<depth>]"
 /// ```
-pub fn program_invoke(logger: &Rc<RefCell<dyn Logger>>, program_id: &Pubkey, invoke_depth: usize) {
-    ic_logger_msg!(logger, "Program {} invoke [{}]", program_id, invoke_depth);
+pub fn program_invoke(
+    log_collector: &Option<Rc<RefCell<LogCollector>>>,
+    program_id: &Pubkey,
+    invoke_depth: usize,
+) {
+    ic_logger_msg!(
+        log_collector,
+        "Program {} invoke [{}]",
+        program_id,
+        invoke_depth
+    );
 }
 
 /// Log a message from the program itself.
@@ -27,8 +36,8 @@ pub fn program_invoke(logger: &Rc<RefCell<dyn Logger>>, program_id: &Pubkey, inv
 /// ```
 ///
 /// That is, any program-generated output is guaranteed to be prefixed by "Program log: "
-pub fn program_log(logger: &Rc<RefCell<dyn Logger>>, message: &str) {
-    ic_logger_msg!(logger, "Program log: {}", message);
+pub fn program_log(log_collector: &Option<Rc<RefCell<LogCollector>>>, message: &str) {
+    ic_logger_msg!(log_collector, "Program log: {}", message);
 }
 
 /// Emit a program data.
@@ -40,9 +49,9 @@ pub fn program_log(logger: &Rc<RefCell<dyn Logger>>, message: &str) {
 /// ```
 ///
 /// That is, any program-generated output is guaranteed to be prefixed by "Program data: "
-pub fn program_data(logger: &Rc<RefCell<dyn Logger>>, data: &[&[u8]]) {
+pub fn program_data(log_collector: &Option<Rc<RefCell<LogCollector>>>, data: &[&[u8]]) {
     ic_logger_msg!(
-        logger,
+        log_collector,
         "Program data: {}",
         data.iter().map(base64::encode).join(" ")
     );
@@ -58,9 +67,13 @@ pub fn program_data(logger: &Rc<RefCell<dyn Logger>>, data: &[&[u8]]) {
 /// ```
 ///
 /// That is, any program-generated output is guaranteed to be prefixed by "Program return: "
-pub fn program_return(logger: &Rc<RefCell<dyn Logger>>, program_id: &Pubkey, data: &[u8]) {
+pub fn program_return(
+    log_collector: &Option<Rc<RefCell<LogCollector>>>,
+    program_id: &Pubkey,
+    data: &[u8],
+) {
     ic_logger_msg!(
-        logger,
+        log_collector,
         "Program return: {} {}",
         program_id,
         base64::encode(data)
@@ -74,8 +87,8 @@ pub fn program_return(logger: &Rc<RefCell<dyn Logger>>, program_id: &Pubkey, dat
 /// ```notrust
 /// "Program <address> success"
 /// ```
-pub fn program_success(logger: &Rc<RefCell<dyn Logger>>, program_id: &Pubkey) {
-    ic_logger_msg!(logger, "Program {} success", program_id);
+pub fn program_success(log_collector: &Option<Rc<RefCell<LogCollector>>>, program_id: &Pubkey) {
+    ic_logger_msg!(log_collector, "Program {} success", program_id);
 }
 
 /// Log program execution failure
@@ -86,9 +99,9 @@ pub fn program_success(logger: &Rc<RefCell<dyn Logger>>, program_id: &Pubkey) {
 /// "Program <address> failed: <program error details>"
 /// ```
 pub fn program_failure(
-    logger: &Rc<RefCell<dyn Logger>>,
+    log_collector: &Option<Rc<RefCell<LogCollector>>>,
     program_id: &Pubkey,
     err: &InstructionError,
 ) {
-    ic_logger_msg!(logger, "Program {} failed: {}", program_id, err);
+    ic_logger_msg!(log_collector, "Program {} failed: {}", program_id, err);
 }

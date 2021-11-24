@@ -60,6 +60,7 @@ use {
         rpc_pubsub_service::{PubSubConfig, PubSubService},
         rpc_service::JsonRpcService,
         rpc_subscriptions::RpcSubscriptions,
+        transaction_notifier_interface::TransactionNotifierLock,
         transaction_status_service::TransactionStatusService,
     },
     solana_runtime::{
@@ -420,9 +421,18 @@ impl Validator {
                 .and_then(|accountsdb_plugin_service| {
                     accountsdb_plugin_service.get_accounts_update_notifier()
                 });
+
+        let transaction_notifier =
+            accountsdb_plugin_service
+                .as_ref()
+                .and_then(|accountsdb_plugin_service| {
+                    accountsdb_plugin_service.get_transaction_notifier()
+                });
+
         info!(
-            "AccountsDb plugin: accounts_update_notifier: {}",
-            accounts_update_notifier.is_some()
+            "AccountsDb plugin: accounts_update_notifier: {} transaction_notifier: {}",
+            accounts_update_notifier.is_some(),
+            transaction_notifier.is_some()
         );
 
         let system_monitor_service = Some(SystemMonitorService::new(
@@ -461,6 +471,7 @@ impl Validator {
             config.no_poh_speed_test,
             accounts_package_channel.0.clone(),
             accounts_update_notifier,
+            transaction_notifier,
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;
@@ -1183,6 +1194,7 @@ fn new_banks_from_ledger(
     no_poh_speed_test: bool,
     accounts_package_sender: AccountsPackageSender,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
+    transaction_notifier: Option<TransactionNotifierLock>,
 ) -> (
     GenesisConfig,
     BankForks,
@@ -1275,12 +1287,17 @@ fn new_banks_from_ledger(
         ..blockstore_processor::ProcessOptions::default()
     };
 
+    let enable_rpc_transaction_history =
+        config.rpc_addrs.is_some() && config.rpc_config.enable_rpc_transaction_history;
+    let is_plugin_transaction_history_required = transaction_notifier.as_ref().is_some();
     let transaction_history_services =
-        if config.rpc_addrs.is_some() && config.rpc_config.enable_rpc_transaction_history {
+        if enable_rpc_transaction_history || is_plugin_transaction_history_required {
             initialize_rpc_transaction_history_services(
                 blockstore.clone(),
                 exit,
+                enable_rpc_transaction_history,
                 config.rpc_config.enable_cpi_and_log_storage,
+                transaction_notifier,
             )
         } else {
             TransactionHistoryServices::default()
@@ -1471,7 +1488,9 @@ fn backup_and_clear_blockstore(ledger_path: &Path, start_slot: Slot, shred_versi
 fn initialize_rpc_transaction_history_services(
     blockstore: Arc<Blockstore>,
     exit: &Arc<AtomicBool>,
+    enable_rpc_transaction_history: bool,
     enable_cpi_and_log_storage: bool,
+    transaction_notifier: Option<TransactionNotifierLock>,
 ) -> TransactionHistoryServices {
     let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(blockstore.max_root()));
     let (transaction_status_sender, transaction_status_receiver) = unbounded();
@@ -1482,6 +1501,8 @@ fn initialize_rpc_transaction_history_services(
     let transaction_status_service = Some(TransactionStatusService::new(
         transaction_status_receiver,
         max_complete_transaction_status_slot.clone(),
+        enable_rpc_transaction_history,
+        transaction_notifier.clone(),
         blockstore.clone(),
         exit,
     ));

@@ -69,7 +69,11 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signature, Signer},
     },
-    std::{cell::RefCell, convert::TryInto, mem::size_of},
+    std::{
+        cell::RefCell,
+        convert::{TryFrom, TryInto},
+        mem::size_of,
+    },
     thiserror::Error,
 };
 
@@ -443,12 +447,13 @@ impl Shred {
         self.common_header.slot
     }
 
-    // TODO: This should return Option<Slot>
-    pub fn parent(&self) -> Slot {
-        if self.is_data() {
-            self.common_header.slot - u64::from(self.data_header.parent_offset)
-        } else {
-            std::u64::MAX
+    pub fn parent(&self) -> Option<Slot> {
+        match self.shred_type() {
+            ShredType::Data => {
+                let parent_offset = Slot::try_from(self.data_header.parent_offset);
+                self.slot().checked_sub(parent_offset.ok()?)
+            }
+            ShredType::Code => None,
         }
     }
 
@@ -1098,7 +1103,7 @@ pub fn verify_test_data_shred(
     assert!(shred.is_data());
     assert_eq!(shred.index(), index);
     assert_eq!(shred.slot(), slot);
-    assert_eq!(shred.parent(), parent);
+    assert_eq!(shred.parent(), Some(parent));
     assert_eq!(verify, shred.verify(pk));
     if is_last_in_slot {
         assert!(shred.last_in_slot());
