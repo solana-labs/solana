@@ -110,6 +110,7 @@
     "@typescript-eslint/parser": "^4.14.2",
     "babel-plugin-minify-dead-code-elimination": "^0.5.1",
     "babel-plugin-transform-inline-environment-variables": "^0.4.3",
+    "babel-plugin-transform-remove-imports": "^1.7.0",
     "chai": "^4.3.0",
     "chai-as-promised": "^7.1.1",
     "codecov": "^3.0.4",

@@ -51,6 +51,12 @@ module.exports = api => {
           keepClassName: true,
         },
       ],
+      transformEnvVariables && [
+        'babel-plugin-transform-remove-imports',
+        {
+          test: 'agent-manager',
+        },
+      ],
     ].filter(Boolean),
   };
 };
