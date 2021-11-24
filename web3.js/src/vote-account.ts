@@ -165,9 +165,7 @@ export class VoteAccount {
       votes: va.votes,
       rootSlot,
       authorizedVoters: va.authorizedVoters.map(parseAuthorizedVoter),
-      priorVoters: va.priorVoters.isEmpty
-        ? []
-        : va.priorVoters.buf.slice(va.priorVoters.idx).map(parsePriorVoters),
+      priorVoters: getPriorVoters(va.priorVoters),
       epochCredits: va.epochCredits,
       lastTimestamp: va.lastTimestamp,
     });
@@ -191,4 +189,20 @@ function parsePriorVoters({
     epochOfLastAuthorizedSwitch,
     targetEpoch,
   };
+}
+
+function getPriorVoters({
+  buf,
+  idx,
+  isEmpty,
+}: {
+  buf: PriorVoter[];
+  idx: number;
+  isEmpty: boolean;
+}): PriorVoter[] {
+  if (isEmpty) {
+    return [];
+  }
+
+  return [...buf.slice(idx).map(parsePriorVoters), ...buf.slice(0, idx - 1)];
 }
