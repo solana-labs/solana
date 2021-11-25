@@ -25,7 +25,7 @@ reqwest = { version = "0.11.6", default-features = false, features = ["blocking"
 semver = "1.0.4"
 serde = "1.0.130"
 serde_derive = "1.0.103"
-serde_json = "1.0.71"
+serde_json = "1.0.72"
 solana-account-decoder = { path = "../account-decoder", version = "=1.9.0" }
 solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.9.0" }
 solana-clap-utils = { path = "../clap-utils", version = "=1.9.0" }

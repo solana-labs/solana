@@ -10,7 +10,7 @@ homepage = "https://solana.com/"
 publish = false
 
 [dependencies]
-serde_json = "1.0.71"
+serde_json = "1.0.72"
 solana-metrics = { path = "../metrics", version = "=1.9.0" }
 
 [[bin]]
