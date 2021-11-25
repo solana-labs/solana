@@ -82,4 +82,3 @@ jobs:
           PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           solana --version
       - run: npm run test:live-with-test-validator
-      - run: npm run test:browser-with-test-validator
