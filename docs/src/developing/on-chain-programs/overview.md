@@ -21,7 +21,7 @@ currently supports writing programs in Rust and C/C++.
 
 BPF provides an efficient [instruction
 set](https://github.com/iovisor/bpf-docs/blob/master/eBPF.md) that can be
-executed in a interpreted virtual machine or as efficient just-in-time compiled
+executed in an interpreted virtual machine or as efficient just-in-time compiled
 native instructions.
 
 ## Memory map
