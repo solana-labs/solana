@@ -4,7 +4,6 @@
 /deploy
 /doc
 /lib
-/module.flow.js
 /.eslintrc.js
 /test/.eslintrc.js
 /test/dist

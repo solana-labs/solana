@@ -94,18 +94,6 @@ Example scripts for the Solana Program Library:
 
 - [Token Program Examples](https://github.com/solana-labs/solana-program-library/tree/master/token/js/examples)
 
-## Flow
-
-A [Flow library definition](https://flow.org/en/docs/libdefs/) is provided at
-https://unpkg.com/@solana/web3.js@latest/module.flow.js.
-Download the file and add the following line under the [libs] section of your project's `.flowconfig` to
-activate it:
-
-```ini
-[libs]
-node_modules/@solana/web3.js/module.flow.js
-```
-
 ## Releases
 
 Releases are available on [Github](https://github.com/solana-labs/solana-web3.js/releases)
