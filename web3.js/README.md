@@ -94,10 +94,11 @@ Example scripts for the Solana Program Library:
 
 - [Token Program Examples](https://github.com/solana-labs/solana-program-library/tree/master/token/js/examples)
 
-## Flow
+## Flow Support (Discontinued)
 
-A [Flow library definition](https://flow.org/en/docs/libdefs/) is provided at
-https://unpkg.com/@solana/web3.js@latest/module.flow.js.
+Flow types are no longer supported in new releases. The last release with Flow support is v1.37.2 and its
+[Flow library definition](https://flow.org/en/docs/libdefs/) is provided at
+https://unpkg.com/@solana/web3.js@v1.37.2/module.flow.js.
 Download the file and add the following line under the [libs] section of your project's `.flowconfig` to
 activate it:
 

@@ -33,18 +33,15 @@
   ],
   "files": [
     "/lib",
-    "/module.flow.js",
     "/src"
   ],
   "scripts": {
-    "build": "npm run clean; cross-env NODE_ENV=production rollup -c; npm run type:gen; npm run flow:gen; npm run flow:check",
+    "build": "npm run clean; cross-env NODE_ENV=production rollup -c; npm run type:gen",
     "build:fixtures": "set -ex; ./test/fixtures/noop-program/build.sh",
     "clean": "rimraf ./coverage ./lib",
     "codecov": "set -ex; npm run test:cover; cat ./coverage/lcov.info | codecov",
     "dev": "cross-env NODE_ENV=development rollup -c",
     "doc": "set -ex; typedoc --treatWarningsAsErrors",
-    "flow:check": "flow check-contents < module.flow.js",
-    "flow:gen": "flowgen lib/index.d.ts -o module.flow.js",
     "type:gen": "./scripts/typegen.sh",
     "lint": "set -ex; npm run pretty; eslint . --ext .js,.ts",
     "lint:fix": "npm run pretty:fix && eslint . --fix --ext .js,.ts",
@@ -113,8 +110,6 @@
     "eslint-plugin-mocha": "^9.0.0",
     "eslint-plugin-prettier": "^4.0.0",
     "esm": "^3.2.25",
-    "flow-bin": "^0.150.0",
-    "flowgen": "^1.13.0",
     "http-server": "^14.0.0",
     "mocha": "^8.2.1",
     "mockttp": "^2.0.1",
