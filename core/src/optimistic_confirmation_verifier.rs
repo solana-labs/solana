@@ -1,4 +1,4 @@
-use crate::cluster_info_vote_listener::VoteTracker;
+use crate::cluster_info_vote_listener::{OptimisticConfirmedSlots, VoteTracker};
 use solana_ledger::blockstore::Blockstore;
 use solana_runtime::bank::Bank;
 use solana_sdk::{clock::Slot, hash::Hash};
@@ -8,6 +8,7 @@ pub struct OptimisticConfirmationVerifier {
     snapshot_start_slot: Slot,
     unchecked_slots: BTreeSet<(Slot, Hash)>,
     last_optimistic_slot_ts: Instant,
+    last_higher_optimistic_slot_ts: Instant,
 }
 
 impl OptimisticConfirmationVerifier {
@@ -16,6 +17,7 @@ impl OptimisticConfirmationVerifier {
             snapshot_start_slot,
             unchecked_slots: BTreeSet::default(),
             last_optimistic_slot_ts: Instant::now(),
+            last_higher_optimistic_slot_ts: Instant::now(),
         }
     }
 
@@ -50,30 +52,65 @@ impl OptimisticConfirmationVerifier {
             .collect()
     }
 
-    pub fn add_new_optimistic_confirmed_slots(&mut self, new_optimistic_slots: Vec<(Slot, Hash)>) {
-        if new_optimistic_slots.is_empty() {
+    pub fn add_new_optimistic_confirmed_slots(
+        &mut self,
+        new_optimistic_slots: OptimisticConfirmedSlots,
+    ) {
+        if new_optimistic_slots.confirmed_slots.is_empty()
+            && new_optimistic_slots
+                .higher_threshold_confirmed_slots
+                .is_empty()
+        {
             return;
         }
 
-        datapoint_info!(
-            "optimistic_slot_elapsed",
-            (
-                "average_elapsed_ms",
-                self.last_optimistic_slot_ts.elapsed().as_millis() as i64,
-                i64
-            ),
-        );
-
         // We don't have any information about ancestors before the snapshot root,
         // so ignore those slots
-        for (new_optimistic_slot, hash) in new_optimistic_slots {
+        let mut new_optimistic_slot_found = false;
+        for (new_optimistic_slot, hash) in new_optimistic_slots.confirmed_slots {
             if new_optimistic_slot > self.snapshot_start_slot {
                 datapoint_info!("optimistic_slot", ("slot", new_optimistic_slot, i64),);
                 self.unchecked_slots.insert((new_optimistic_slot, hash));
+                new_optimistic_slot_found = true;
+            }
+
+            if new_optimistic_slot_found {
+                datapoint_info!(
+                    "optimistic_slot_elapsed",
+                    (
+                        "average_elapsed_ms",
+                        self.last_optimistic_slot_ts.elapsed().as_millis() as i64,
+                        i64
+                    ),
+                );
+                self.last_optimistic_slot_ts = Instant::now();
             }
         }
 
-        self.last_optimistic_slot_ts = Instant::now();
+        let mut new_higher_optimistic_slot_found = false;
+        for (new_higher_optimistic_slot, _hash) in
+            new_optimistic_slots.higher_threshold_confirmed_slots
+        {
+            if new_higher_optimistic_slot > self.snapshot_start_slot {
+                datapoint_info!(
+                    "optimistic_slot_higher_threshold",
+                    ("slot", new_higher_optimistic_slot, i64),
+                );
+                new_higher_optimistic_slot_found = true;
+            }
+
+            if new_higher_optimistic_slot_found {
+                datapoint_info!(
+                    "new_higher_optimistic_slot_elapsed",
+                    (
+                        "average_elapsed_ms",
+                        self.last_higher_optimistic_slot_ts.elapsed().as_millis() as i64,
+                        i64
+                    ),
+                );
+                self.last_higher_optimistic_slot_ts = Instant::now();
+            }
+        }
     }
 
     pub fn format_optimistic_confirmed_slot_violation_log(slot: Slot) -> String {

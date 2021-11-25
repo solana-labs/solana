@@ -67,8 +67,19 @@ pub type GossipVerifiedVoteHashReceiver = CrossbeamReceiver<(Pubkey, Slot, Hash)
 pub type GossipDuplicateConfirmedSlotsSender = CrossbeamSender<ThresholdConfirmedSlots>;
 pub type GossipDuplicateConfirmedSlotsReceiver = CrossbeamReceiver<ThresholdConfirmedSlots>;
 
-const THRESHOLDS_TO_CHECK: [f64; 2] = [DUPLICATE_THRESHOLD, VOTE_THRESHOLD_SIZE];
+const NEW_OPTIMISTIC_CONF_THRESHOLD: f64 = 0.80;
+const THRESHOLDS_TO_CHECK: [f64; 3] = [
+    DUPLICATE_THRESHOLD,
+    VOTE_THRESHOLD_SIZE,
+    NEW_OPTIMISTIC_CONF_THRESHOLD,
+];
 const BANK_SEND_VOTES_LOOP_SLEEP_MS: u128 = 10;
+
+#[derive(Default)]
+pub struct OptimisticConfirmedSlots {
+    pub confirmed_slots: ThresholdConfirmedSlots,
+    pub higher_threshold_confirmed_slots: ThresholdConfirmedSlots,
+}
 
 #[derive(Default)]
 pub struct SlotVoteTracker {
@@ -580,8 +591,7 @@ impl ClusterInfoVoteListener {
             );
             match confirmed_slots {
                 Ok(confirmed_slots) => {
-                    confirmation_verifier
-                        .add_new_optimistic_confirmed_slots(confirmed_slots.clone());
+                    confirmation_verifier.add_new_optimistic_confirmed_slots(confirmed_slots);
                 }
                 Err(e) => match e {
                     Error::CrossbeamRecvTimeout(RecvTimeoutError::Disconnected) => {
@@ -629,7 +639,7 @@ impl ClusterInfoVoteListener {
         replay_votes_receiver: &ReplayVoteReceiver,
         bank_notification_sender: &Option<BankNotificationSender>,
         cluster_confirmed_slot_sender: &Option<GossipDuplicateConfirmedSlotsSender>,
-    ) -> Result<ThresholdConfirmedSlots> {
+    ) -> Result<OptimisticConfirmedSlots> {
         let mut sel = Select::new();
         sel.recv(gossip_vote_txs_receiver);
         sel.recv(replay_votes_receiver);
@@ -666,7 +676,7 @@ impl ClusterInfoVoteListener {
                     .saturating_sub(std::cmp::max(start.elapsed().as_millis() as u64, 1));
             }
         }
-        Ok(vec![])
+        Ok(OptimisticConfirmedSlots::default())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -679,7 +689,7 @@ impl ClusterInfoVoteListener {
         verified_vote_sender: &VerifiedVoteSender,
         gossip_verified_vote_hash_sender: &GossipVerifiedVoteHashSender,
         diff: &mut HashMap<Slot, HashMap<Pubkey, bool>>,
-        new_optimistic_confirmed_slots: &mut ThresholdConfirmedSlots,
+        new_optimistic_confirmed_slots: &mut OptimisticConfirmedSlots,
         is_gossip_vote: bool,
         bank_notification_sender: &Option<BankNotificationSender>,
         cluster_confirmed_slot_sender: &Option<GossipDuplicateConfirmedSlotsSender>,
@@ -741,7 +751,9 @@ impl ClusterInfoVoteListener {
                     }
                 }
                 if reached_threshold_results[1] {
-                    new_optimistic_confirmed_slots.push((last_vote_slot, last_vote_hash));
+                    new_optimistic_confirmed_slots
+                        .confirmed_slots
+                        .push((last_vote_slot, last_vote_hash));
                     // Notify subscribers about new optimistic confirmation
                     if let Some(sender) = bank_notification_sender {
                         sender
@@ -750,6 +762,11 @@ impl ClusterInfoVoteListener {
                                 warn!("bank_notification_sender failed: {:?}", err)
                             });
                     }
+                }
+                if reached_threshold_results[2] {
+                    new_optimistic_confirmed_slots
+                        .higher_threshold_confirmed_slots
+                        .push((last_vote_slot, last_vote_hash));
                 }
 
                 if !is_new && !is_gossip_vote {
@@ -826,9 +843,9 @@ impl ClusterInfoVoteListener {
         verified_vote_sender: &VerifiedVoteSender,
         bank_notification_sender: &Option<BankNotificationSender>,
         cluster_confirmed_slot_sender: &Option<GossipDuplicateConfirmedSlotsSender>,
-    ) -> ThresholdConfirmedSlots {
+    ) -> OptimisticConfirmedSlots {
         let mut diff: HashMap<Slot, HashMap<Pubkey, bool>> = HashMap::new();
-        let mut new_optimistic_confirmed_slots = vec![];
+        let mut new_optimistic_confirmed_slots = OptimisticConfirmedSlots::default();
 
         // Process votes from gossip and ReplayStage
         for (is_gossip, (vote_pubkey, vote, _)) in gossip_vote_txs
