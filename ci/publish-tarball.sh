@@ -15,7 +15,8 @@ if [[ -n $APPVEYOR ]]; then
   rustc -vV
   cargo -vV
 fi
-
+source ci/env.sh
+source ci/rust-version.sh
 DRYRUN=
 if [[ -z $CI_BRANCH ]]; then
   DRYRUN="echo"
