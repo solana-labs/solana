@@ -6,6 +6,10 @@
 
 if [[ -n $CI ]]; then
   export CI=1
+  export CI_BRANCH=$(git branch | sed -n -e 's/^\* \(.*\)/\1/p')
+  export CI_BASE_BRANCH=$(git branch | sed -n -e 's/^\* \(.*\)/\1/p')
+  export CI_OS_NAME="$(echo "$RUNNER_OS" | tr A-Z a-z)"
+  test macos != "$CI_OS_NAME" || CI_OS_NAME=osx
   if [[ -n $TRAVIS ]]; then
     export CI_BRANCH=$TRAVIS_BRANCH
     export CI_BASE_BRANCH=$TRAVIS_BRANCH
