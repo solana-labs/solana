@@ -23,7 +23,7 @@ jobs:
         uses: actions/setup-python@v2
         with:
           GITHUB_TOKEN: ${{secrets.PAT}}
-        if: ${{ github.event_name == 'push' && 'cron'&& github.ref == 'refs/heads/master'}}
+        if: ${{ github.event_name == 'push' || 'cron'&& github.ref == 'refs/heads/master'}}
       - name: cmd
         run : |
             .travis/export-github-repo.sh web3.js/ solana-web3.js
@@ -32,7 +32,7 @@ jobs:
     strategy:
       fail-fast: false
     runs-on: macos-latest
-    if : ${{ github.event_name == 'api' && 'cron' || 'push' || startsWith(github.ref, 'refs/tags/v')}}
+    if : ${{ github.event_name == 'api' || 'cron' ||  startsWith(github.ref, 'refs/tags/v')}}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -67,7 +67,7 @@ jobs:
   windows-artifact:
     needs: [Export_Github_Repositories]
     runs-on: windows-latest
-    if : ${{ github.event_name == 'api' && 'cron'|| 'push' || startsWith(github.ref, 'refs/tags/v')}}
+    if : ${{ github.event_name == 'api' || 'cron'|| startsWith(github.ref, 'refs/tags/v')}}
     steps:
       - name: release artifact 
         run: |
