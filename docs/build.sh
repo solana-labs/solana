@@ -23,7 +23,7 @@ if [ "$CHANNEL" = stable ]; then
   npm run crowdin:download
   npm run crowdin:upload
 fi
-
+npm install
 # Build from /src into /build
 npm run build
 echo $?
