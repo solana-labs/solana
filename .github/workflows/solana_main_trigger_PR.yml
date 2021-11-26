@@ -1,0 +1,12 @@
+name : solana_main
+on:
+  pull_request:
+    branches:  [master]
+    tags : /^v\d+\.\d+/
+    paths-ignore:
+      - 'docs/**'
+jobs:
+ solana_main_trigger:
+    runs-on: windows-latest
+    steps:
+      - run: echo "Triggering solana_main on PR"
