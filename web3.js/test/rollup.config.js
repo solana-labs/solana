@@ -12,7 +12,11 @@ const extensions = ['.js', '.ts'];
 export default {
   input: {
     include: ['test/**/*.test.ts'],
-    exclude: ['test/agent-manager.test.ts', 'test/bpf-loader.test.ts'],
+    exclude: [
+      'test/agent-manager.test.ts',
+      'test/bpf-loader.test.ts',
+      'test/bpf-loader-upgradeable.test.ts',
+    ],
   },
   external: ['node-forge', 'http2', '_stream_wrap', 'mockttp'],
   output: {
