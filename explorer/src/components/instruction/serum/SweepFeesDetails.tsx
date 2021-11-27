@@ -2,13 +2,13 @@ import React from "react";
 import { SignatureResult, TransactionInstruction } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
-import { MatchOrders } from "./types";
+import { SweepFees } from "./types";
 
-export function MatchOrdersDetailsCard(props: {
+export function SweepFeesDetailsCard(props: {
   ix: TransactionInstruction;
   index: number;
   result: SignatureResult;
-  info: MatchOrders;
+  info: SweepFees;
   innerCards?: JSX.Element[];
   childIndex?: number;
 }) {
@@ -19,7 +19,7 @@ export function MatchOrdersDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Serum Program: Match Orders"
+      title="Serum Program: Sweep Fees"
       innerCards={innerCards}
       childIndex={childIndex}
     >
@@ -38,36 +38,35 @@ export function MatchOrdersDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>Request Queue</td>
+        <td>Quote Vault</td>
         <td className="text-lg-right">
-          <Address pubkey={info.accounts.requestQueue} alignRight link />
+          <Address pubkey={info.accounts.quoteVault} alignRight link />
         </td>
       </tr>
 
       <tr>
-        <td>Event Queue</td>
+        <td>Fee Sweeping Authority</td>
         <td className="text-lg-right">
-          <Address pubkey={info.accounts.eventQueue} alignRight link />
+          <Address
+            pubkey={info.accounts.feeSweepingAuthority}
+            alignRight
+            link
+          />
         </td>
       </tr>
 
       <tr>
-        <td>Bids</td>
+        <td>Fee Receiver</td>
         <td className="text-lg-right">
-          <Address pubkey={info.accounts.bids} alignRight link />
+          <Address pubkey={info.accounts.quoteFeeReceiver} alignRight link />
         </td>
       </tr>
 
       <tr>
-        <td>Asks</td>
+        <td>Vault Signer</td>
         <td className="text-lg-right">
-          <Address pubkey={info.accounts.asks} alignRight link />
+          <Address pubkey={info.accounts.vaultSigner} alignRight link />
         </td>
-      </tr>
-
-      <tr>
-        <td>Limit</td>
-        <td className="text-lg-right">{info.data.limit}</td>
       </tr>
     </InstructionCard>
   );

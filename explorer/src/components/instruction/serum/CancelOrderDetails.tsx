@@ -33,44 +33,44 @@ export function CancelOrderDetailsCard(props: {
       <tr>
         <td>Market</td>
         <td className="text-lg-right">
-          <Address pubkey={info.market} alignRight link />
+          <Address pubkey={info.accounts.market} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Open Orders</td>
         <td className="text-lg-right">
-          <Address pubkey={info.openOrders} alignRight link />
+          <Address pubkey={info.accounts.openOrders} alignRight link />
+        </td>
+      </tr>
+
+      <tr>
+        <td>Open Orders Owner</td>
+        <td className="text-lg-right">
+          <Address pubkey={info.accounts.openOrdersOwner} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Request Queue</td>
         <td className="text-lg-right">
-          <Address pubkey={info.requestQueue} alignRight link />
-        </td>
-      </tr>
-
-      <tr>
-        <td>Owner</td>
-        <td className="text-lg-right">
-          <Address pubkey={info.owner} alignRight link />
+          <Address pubkey={info.accounts.requestQueue} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Side</td>
-        <td className="text-lg-right">{info.side}</td>
+        <td className="text-lg-right">{info.data.side}</td>
       </tr>
 
       <tr>
         <td>Open Orders Slot</td>
-        <td className="text-lg-right">{info.openOrdersSlot}</td>
+        <td className="text-lg-right">{info.data.openOrdersSlot}</td>
       </tr>
 
       <tr>
         <td>Order Id</td>
-        <td className="text-lg-right">{info.orderId.toString(10)}</td>
+        <td className="text-lg-right">{info.data.orderId.toString(10)}</td>
       </tr>
     </InstructionCard>
   );

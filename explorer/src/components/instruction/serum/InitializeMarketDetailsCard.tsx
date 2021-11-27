@@ -33,91 +33,93 @@ export function InitializeMarketDetailsCard(props: {
       <tr>
         <td>Market</td>
         <td className="text-lg-right">
-          <Address pubkey={info.market} alignRight link />
+          <Address pubkey={info.accounts.market} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Request Queue</td>
         <td className="text-lg-right">
-          <Address pubkey={info.requestQueue} alignRight link />
+          <Address pubkey={info.accounts.requestQueue} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Event Queue</td>
         <td className="text-lg-right">
-          <Address pubkey={info.eventQueue} alignRight link />
+          <Address pubkey={info.accounts.eventQueue} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Bids</td>
         <td className="text-lg-right">
-          <Address pubkey={info.bids} alignRight link />
+          <Address pubkey={info.accounts.bids} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Asks</td>
         <td className="text-lg-right">
-          <Address pubkey={info.asks} alignRight link />
+          <Address pubkey={info.accounts.asks} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Base Vault</td>
         <td className="text-lg-right">
-          <Address pubkey={info.baseVault} alignRight link />
+          <Address pubkey={info.accounts.baseVault} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Quote Vault</td>
         <td className="text-lg-right">
-          <Address pubkey={info.quoteVault} alignRight link />
+          <Address pubkey={info.accounts.quoteVault} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Base Mint</td>
         <td className="text-lg-right">
-          <Address pubkey={info.baseMint} alignRight link />
+          <Address pubkey={info.accounts.baseMint} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Quote Mint</td>
         <td className="text-lg-right">
-          <Address pubkey={info.quoteMint} alignRight link />
+          <Address pubkey={info.accounts.quoteMint} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Base Lot Size</td>
-        <td className="text-lg-right">{info.baseLotSize.toString(10)}</td>
+        <td className="text-lg-right">{info.data.baseLotSize.toString(10)}</td>
       </tr>
 
       <tr>
         <td>Quote Lot Size</td>
-        <td className="text-lg-right">{info.quoteLotSize.toString(10)}</td>
+        <td className="text-lg-right">{info.data.quoteLotSize.toString(10)}</td>
       </tr>
 
       <tr>
         <td>Fee Rate Bps</td>
-        <td className="text-lg-right">{info.feeRateBps}</td>
+        <td className="text-lg-right">{info.data.feeRateBps}</td>
       </tr>
 
       <tr>
         <td>Quote Dust Threshold</td>
         <td className="text-lg-right">
-          {info.quoteDustThreshold.toString(10)}
+          {info.data.quoteDustThreshold.toString(10)}
         </td>
       </tr>
 
       <tr>
         <td>Vault Signer Nonce</td>
-        <td className="text-lg-right">{info.vaultSignerNonce.toString(10)}</td>
+        <td className="text-lg-right">
+          {info.data.vaultSignerNonce.toString(10)}
+        </td>
       </tr>
     </InstructionCard>
   );
