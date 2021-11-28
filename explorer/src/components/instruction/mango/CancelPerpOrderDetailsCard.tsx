@@ -38,7 +38,7 @@ export function CancelPerpOrderDetailsCard(props: {
       {mangoPerpMarketConfig !== undefined && (
         <tr>
           <td>Perp market</td>
-          <td className="text-lg-right">{mangoPerpMarketConfig.name}</td>
+          <td className="text-lg-end">{mangoPerpMarketConfig.name}</td>
         </tr>
       )}
 
@@ -51,7 +51,7 @@ export function CancelPerpOrderDetailsCard(props: {
 
       <tr>
         <td>Order Id</td>
-        <td className="text-lg-right">{info.orderId}</td>
+        <td className="text-lg-end">{info.orderId}</td>
       </tr>
     </InstructionCard>
   );

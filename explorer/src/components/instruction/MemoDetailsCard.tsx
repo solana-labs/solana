@@ -29,15 +29,15 @@ export function MemoDetailsCard({
     >
       <tr>
         <td>Program</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={ix.programId} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Data (UTF-8)</td>
-        <td className="text-lg-right">
-          <pre className="d-inline-block text-left mb-0">{data}</pre>
+        <td className="text-lg-end">
+          <pre className="d-inline-block text-start mb-0">{data}</pre>
         </td>
       </tr>
     </InstructionCard>

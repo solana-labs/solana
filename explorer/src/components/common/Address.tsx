@@ -47,7 +47,7 @@ export function Address({
 
   const content = (
     <Copyable text={address} replaceText={!alignRight}>
-      <span className="text-monospace">
+      <span className="font-monospace">
         {link ? (
           <Link
             className={truncate ? "text-truncate address-truncate" : ""}

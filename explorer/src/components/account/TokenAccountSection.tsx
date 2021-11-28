@@ -130,7 +130,7 @@ function FungibleTokenMintAccountCard({
                 <h4>
                   Price{" "}
                   {tokenPriceInfo.market_cap_rank && (
-                    <span className="ml-2 badge badge-primary rank">
+                    <span className="ms-2 badge bg-primary rank">
                       Rank #{tokenPriceInfo.market_cap_rank}
                     </span>
                   )}
@@ -190,14 +190,14 @@ function FungibleTokenMintAccountCard({
             {tokenInfo ? "Overview" : "Token Mint"}
           </h3>
           <button className="btn btn-white btn-sm" onClick={refresh}>
-            <span className="fe fe-refresh-cw mr-2"></span>
+            <span className="fe fe-refresh-cw me-2"></span>
             Refresh
           </button>
         </div>
         <TableCardBody>
           <tr>
             <td>Address</td>
-            <td className="text-lg-right">
+            <td className="text-lg-end">
               <Address pubkey={account.pubkey} alignRight raw />
             </td>
           </tr>
@@ -205,7 +205,7 @@ function FungibleTokenMintAccountCard({
             <td>
               {info.mintAuthority === null ? "Fixed Supply" : "Current Supply"}
             </td>
-            <td className="text-lg-right">
+            <td className="text-lg-end">
               {normalizeTokenAmount(info.supply, info.decimals).toLocaleString(
                 "en-US",
                 {
@@ -217,14 +217,14 @@ function FungibleTokenMintAccountCard({
           {tokenInfo?.extensions?.website && (
             <tr>
               <td>Website</td>
-              <td className="text-lg-right">
+              <td className="text-lg-end">
                 <a
                   rel="noopener noreferrer"
                   target="_blank"
                   href={tokenInfo.extensions.website}
                 >
                   {tokenInfo.extensions.website}
-                  <span className="fe fe-external-link ml-2"></span>
+                  <span className="fe fe-external-link ms-2"></span>
                 </a>
               </td>
             </tr>
@@ -232,7 +232,7 @@ function FungibleTokenMintAccountCard({
           {info.mintAuthority && (
             <tr>
               <td>Mint Authority</td>
-              <td className="text-lg-right">
+              <td className="text-lg-end">
                 <Address pubkey={info.mintAuthority} alignRight link />
               </td>
             </tr>
@@ -240,25 +240,25 @@ function FungibleTokenMintAccountCard({
           {info.freezeAuthority && (
             <tr>
               <td>Freeze Authority</td>
-              <td className="text-lg-right">
+              <td className="text-lg-end">
                 <Address pubkey={info.freezeAuthority} alignRight link />
               </td>
             </tr>
           )}
           <tr>
             <td>Decimals</td>
-            <td className="text-lg-right">{info.decimals}</td>
+            <td className="text-lg-end">{info.decimals}</td>
           </tr>
           {!info.isInitialized && (
             <tr>
               <td>Status</td>
-              <td className="text-lg-right">Uninitialized</td>
+              <td className="text-lg-end">Uninitialized</td>
             </tr>
           )}
           {tokenInfo?.extensions?.bridgeContract && bridgeContractAddress && (
             <tr>
               <td>Bridge Contract</td>
-              <td className="text-lg-right">
+              <td className="text-lg-end">
                 <Copyable text={bridgeContractAddress}>
                   <a
                     href={tokenInfo.extensions.bridgeContract}
@@ -274,7 +274,7 @@ function FungibleTokenMintAccountCard({
           {tokenInfo?.extensions?.assetContract && assetContractAddress && (
             <tr>
               <td>Bridged Asset Contract</td>
-              <td className="text-lg-right">
+              <td className="text-lg-end">
                 <Copyable text={assetContractAddress}>
                   <a
                     href={tokenInfo.extensions.bridgeContract}
@@ -312,21 +312,21 @@ function NonFungibleTokenMintAccountCard({
           Overview
         </h3>
         <button className="btn btn-white btn-sm" onClick={refresh}>
-          <span className="fe fe-refresh-cw mr-2"></span>
+          <span className="fe fe-refresh-cw me-2"></span>
           Refresh
         </button>
       </div>
       <TableCardBody>
         <tr>
           <td>Address</td>
-          <td className="text-lg-right">
+          <td className="text-lg-end">
             <Address pubkey={account.pubkey} alignRight raw />
           </td>
         </tr>
         {nftData.editionInfo.masterEdition?.maxSupply && (
           <tr>
             <td>Max Total Supply</td>
-            <td className="text-lg-right">
+            <td className="text-lg-end">
               {nftData.editionInfo.masterEdition.maxSupply.toNumber() === 0
                 ? 1
                 : nftData.editionInfo.masterEdition.maxSupply.toNumber()}
@@ -336,7 +336,7 @@ function NonFungibleTokenMintAccountCard({
         {nftData?.editionInfo.masterEdition?.supply && (
           <tr>
             <td>Current Supply</td>
-            <td className="text-lg-right">
+            <td className="text-lg-end">
               {nftData.editionInfo.masterEdition.supply.toNumber() === 0
                 ? 1
                 : nftData.editionInfo.masterEdition.supply.toNumber()}
@@ -346,14 +346,14 @@ function NonFungibleTokenMintAccountCard({
         {mintInfo.mintAuthority && (
           <tr>
             <td>Mint Authority</td>
-            <td className="text-lg-right">
+            <td className="text-lg-end">
               <Address pubkey={mintInfo.mintAuthority} alignRight link />
             </td>
           </tr>
         )}
         <tr>
           <td>Update Authority</td>
-          <td className="text-lg-right">
+          <td className="text-lg-end">
             <Address
               pubkey={new PublicKey(nftData.metadata.updateAuthority)}
               alignRight
@@ -364,7 +364,7 @@ function NonFungibleTokenMintAccountCard({
         {nftData?.metadata.data && (
           <tr>
             <td>Seller Fee</td>
-            <td className="text-lg-right">
+            <td className="text-lg-end">
               {`${nftData?.metadata.data.sellerFeeBasisPoints / 100}%`}
             </td>
           </tr>
@@ -392,7 +392,7 @@ function TokenAccountCard({
     balance = (
       <>
         ◎
-        <span className="text-monospace">
+        <span className="font-monospace">
           {new BigNumber(info.tokenAmount.uiAmountString).toFormat(9)}
         </span>
       </>
@@ -412,7 +412,7 @@ function TokenAccountCard({
           className="btn btn-white btn-sm"
           onClick={() => refresh(account.pubkey)}
         >
-          <span className="fe fe-refresh-cw mr-2"></span>
+          <span className="fe fe-refresh-cw me-2"></span>
           Refresh
         </button>
       </div>
@@ -420,45 +420,45 @@ function TokenAccountCard({
       <TableCardBody>
         <tr>
           <td>Address</td>
-          <td className="text-lg-right">
+          <td className="text-lg-end">
             <Address pubkey={account.pubkey} alignRight raw />
           </td>
         </tr>
         {label && (
           <tr>
             <td>Address Label</td>
-            <td className="text-lg-right">{label}</td>
+            <td className="text-lg-end">{label}</td>
           </tr>
         )}
         <tr>
           <td>Mint</td>
-          <td className="text-lg-right">
+          <td className="text-lg-end">
             <Address pubkey={info.mint} alignRight link />
           </td>
         </tr>
         <tr>
           <td>Owner</td>
-          <td className="text-lg-right">
+          <td className="text-lg-end">
             <Address pubkey={info.owner} alignRight link />
           </td>
         </tr>
         <tr>
           <td>Token balance ({unit})</td>
-          <td className="text-lg-right">{balance}</td>
+          <td className="text-lg-end">{balance}</td>
         </tr>
         {info.state === "uninitialized" && (
           <tr>
             <td>Status</td>
-            <td className="text-lg-right">Uninitialized</td>
+            <td className="text-lg-end">Uninitialized</td>
           </tr>
         )}
         {info.rentExemptReserve && (
           <tr>
             <td>Rent-exempt reserve (SOL)</td>
-            <td className="text-lg-right">
+            <td className="text-lg-end">
               <>
                 ◎
-                <span className="text-monospace">
+                <span className="font-monospace">
                   {new BigNumber(
                     info.rentExemptReserve.uiAmountString
                   ).toFormat(9)}
@@ -491,7 +491,7 @@ function MultisigAccountCard({
           className="btn btn-white btn-sm"
           onClick={() => refresh(account.pubkey)}
         >
-          <span className="fe fe-refresh-cw mr-2"></span>
+          <span className="fe fe-refresh-cw me-2"></span>
           Refresh
         </button>
       </div>
@@ -499,22 +499,22 @@ function MultisigAccountCard({
       <TableCardBody>
         <tr>
           <td>Address</td>
-          <td className="text-lg-right">
+          <td className="text-lg-end">
             <Address pubkey={account.pubkey} alignRight raw />
           </td>
         </tr>
         <tr>
           <td>Required Signers</td>
-          <td className="text-lg-right">{info.numRequiredSigners}</td>
+          <td className="text-lg-end">{info.numRequiredSigners}</td>
         </tr>
         <tr>
           <td>Valid Signers</td>
-          <td className="text-lg-right">{info.numValidSigners}</td>
+          <td className="text-lg-end">{info.numValidSigners}</td>
         </tr>
         {info.signers.map((signer) => (
           <tr key={signer.toString()}>
             <td>Signer</td>
-            <td className="text-lg-right">
+            <td className="text-lg-end">
               <Address pubkey={signer} alignRight link />
             </td>
           </tr>
@@ -522,7 +522,7 @@ function MultisigAccountCard({
         {!info.isInitialized && (
           <tr>
             <td>Status</td>
-            <td className="text-lg-right">Uninitialized</td>
+            <td className="text-lg-end">Uninitialized</td>
           </tr>
         )}
       </TableCardBody>

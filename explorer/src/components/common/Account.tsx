@@ -17,7 +17,7 @@ export function AccountHeader({ title, refresh }: AccountHeaderProps) {
     <div className="card-header align-items-center">
       <h3 className="card-header-title">{title}</h3>
       <button className="btn btn-white btn-sm" onClick={() => refresh()}>
-        <span className="fe fe-refresh-cw mr-2"></span>
+        <span className="fe fe-refresh-cw me-2"></span>
         Refresh
       </button>
     </div>
@@ -28,7 +28,7 @@ export function AccountAddressRow({ account }: AccountProps) {
   return (
     <tr>
       <td>Address</td>
-      <td className="text-lg-right">
+      <td className="text-lg-end">
         <Address pubkey={account.pubkey} alignRight raw />
       </td>
     </tr>
@@ -40,7 +40,7 @@ export function AccountBalanceRow({ account }: AccountProps) {
   return (
     <tr>
       <td>Balance (SOL)</td>
-      <td className="text-lg-right text-uppercase">
+      <td className="text-lg-end text-uppercase">
         <SolBalance lamports={lamports} />
       </td>
     </tr>

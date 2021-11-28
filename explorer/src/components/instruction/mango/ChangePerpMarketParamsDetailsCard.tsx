@@ -59,25 +59,25 @@ export function ChangePerpMarketParamsDetailsCard(props: {
       {info.initLeverageOption && (
         <tr>
           <td>Init leverage</td>
-          <td className="text-lg-right">{info.initLeverage}</td>
+          <td className="text-lg-end">{info.initLeverage}</td>
         </tr>
       )}
       {info.liquidationFeeOption && (
         <tr>
           <td>Liquidation fee</td>
-          <td className="text-lg-right">{info.liquidationFee}</td>
+          <td className="text-lg-end">{info.liquidationFee}</td>
         </tr>
       )}
       {info.maintLeverageOption && (
         <tr>
           <td>Maint leverage</td>
-          <td className="text-lg-right">{info.maintLeverage}</td>
+          <td className="text-lg-end">{info.maintLeverage}</td>
         </tr>
       )}
       {info.makerFeeOption && (
         <tr>
           <td>Maker fee</td>
-          <td className="text-lg-right">{info.makerFee}</td>
+          <td className="text-lg-end">{info.makerFee}</td>
         </tr>
       )}
       {info.mngoPerPeriodOption && (
@@ -87,7 +87,7 @@ export function ChangePerpMarketParamsDetailsCard(props: {
             {targetPeriodLength !== null &&
               moment.duration(targetPeriodLength, "seconds").humanize()}
           </td>
-          <td className="text-lg-right">
+          <td className="text-lg-end">
             {info.mngoPerPeriod} {}
           </td>
         </tr>
@@ -96,25 +96,25 @@ export function ChangePerpMarketParamsDetailsCard(props: {
       {info.maxDepthBpsOption && (
         <tr>
           <td>Max depth bps</td>
-          <td className="text-lg-right">{info.maxDepthBps}</td>
+          <td className="text-lg-end">{info.maxDepthBps}</td>
         </tr>
       )}
       {info.rateOption && (
         <tr>
           <td>Rate</td>
-          <td className="text-lg-right">{info.rate}</td>
+          <td className="text-lg-end">{info.rate}</td>
         </tr>
       )}
       {info.takerFeeOption && (
         <tr>
           <td>Taker fee</td>
-          <td className="text-lg-right">{info.takerFee}</td>
+          <td className="text-lg-end">{info.takerFee}</td>
         </tr>
       )}
       {info.targetPeriodLengthOption && (
         <tr>
           <td>Target period length</td>
-          <td className="text-lg-right">{info.targetPeriodLength}</td>
+          <td className="text-lg-end">{info.targetPeriodLength}</td>
         </tr>
       )}
     </InstructionCard>

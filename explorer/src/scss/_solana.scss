@@ -11,6 +11,10 @@ pre {
   color: $black;
 }
 
+.badge.bg-primary, .btn-primary {
+  color: $gray-900;
+}
+
 ul.log-messages {
   padding: 0.66rem;
   margin: 1rem;
@@ -61,12 +65,12 @@ ul.log-messages {
   }
 }
 
-.modal-backdrop {
+.modal-backdrop.disable-pointer-events {
   pointer-events: none;
 }
 
-.modal.show {
-  display: block;
+.offcanvas {
+  visibility: visible;
 }
 
 .c-pointer {
@@ -125,7 +129,7 @@ h4.ix-pill {
   border-radius: $border-radius;
   margin-bottom: 2rem;
   margin-left: -5px;
-  background-color: theme-color-level(info, $badge-soft-bg-level);
+  background-color: shift-color($info, $bg-soft-scale);
 }
 
 h4.slot-pill {
@@ -133,7 +137,7 @@ h4.slot-pill {
   padding: 5px;
   border-radius: $border-radius;
   margin-left: -5px;
-  background-color: theme-color-level(primary, $badge-soft-bg-level);
+  background-color: shift-color($primary, $bg-soft-scale);
   margin-bottom: 1.5rem;
 }
 

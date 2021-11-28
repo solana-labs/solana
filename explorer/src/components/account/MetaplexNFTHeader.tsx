@@ -17,20 +17,20 @@ export function NFTHeader({
   const metadata = nftData.metadata;
   return (
     <div className="row">
-      <div className="col-auto ml-2 d-flex align-items-center">
+      <div className="col-auto ms-2 d-flex align-items-center">
         <ArtContent metadata={metadata} pubkey={address} />
       </div>
-      <div className="col mb-3 ml-0.5 mt-3">
-        {<h6 className="header-pretitle ml-1">Metaplex NFT</h6>}
+      <div className="col mb-3 ms-0.5 mt-3">
+        {<h6 className="header-pretitle ms-1">Metaplex NFT</h6>}
         <div className="d-flex align-items-center">
-          <h2 className="header-title ml-1 align-items-center no-overflow-with-ellipsis">
+          <h2 className="header-title ms-1 align-items-center no-overflow-with-ellipsis">
             {metadata.data.name !== ""
               ? metadata.data.name
               : "No NFT name was found"}
           </h2>
           {getEditionPill(nftData.editionInfo)}
         </div>
-        <h4 className="header-pretitle ml-1 mt-1 no-overflow-with-ellipsis">
+        <h4 className="header-pretitle ms-1 mt-1 no-overflow-with-ellipsis">
           {metadata.data.symbol !== ""
             ? metadata.data.symbol
             : "No Symbol was found"}
@@ -43,7 +43,7 @@ export function NFTHeader({
           <button
             className="btn btn-dark btn-sm dropdown-toggle creators-dropdown-button-width"
             type="button"
-            data-toggle="dropdown"
+            data-bs-toggle="dropdown"
             aria-haspopup="true"
             aria-expanded="false"
           >
@@ -72,12 +72,12 @@ function getCreatorDropdownItems(creators: Creator[] | null) {
           "d-flex align-items-center dropdown-header creator-dropdown-entry"
         }
       >
-        <div className="d-flex text-monospace creator-dropdown-header">
+        <div className="d-flex font-monospace creator-dropdown-header">
           <span>Creator Address</span>
           <InfoTooltip bottom text={creatorTooltip} />
         </div>
-        <div className="d-flex text-monospace">
-          <span className="text-monospace">Royalty</span>
+        <div className="d-flex font-monospace">
+          <span className="font-monospace">Royalty</span>
           <InfoTooltip bottom text={shareTooltip} />
         </div>
       </div>
@@ -86,24 +86,24 @@ function getCreatorDropdownItems(creators: Creator[] | null) {
 
   const getVerifiedIcon = (isVerified: boolean) => {
     const className = isVerified ? "fe fe-check" : "fe fe-alert-octagon";
-    return <i className={`ml-3 ${className}`}></i>;
+    return <i className={`ms-3 ${className}`}></i>;
   };
 
   const CreatorEntry = (creator: Creator) => {
     return (
       <div
         className={
-          "d-flex align-items-center text-monospace creator-dropdown-entry ml-3 mr-3"
+          "d-flex align-items-center font-monospace creator-dropdown-entry ms-3 me-3"
         }
       >
         {getVerifiedIcon(creator.verified)}
         <Link
-          className="dropdown-item text-monospace creator-dropdown-entry-address"
+          className="dropdown-item font-monospace creator-dropdown-entry-address"
           to={clusterPath(`/address/${creator.address}`)}
         >
           {creator.address}
         </Link>
-        <div className="mr-3"> {`${creator.share}%`}</div>
+        <div className="me-3"> {`${creator.share}%`}</div>
       </div>
     );
   };
@@ -120,8 +120,8 @@ function getCreatorDropdownItems(creators: Creator[] | null) {
   }
 
   return (
-    <div className={"dropdown-item text-monospace"}>
-      <div className="mr-3">No creators are associated with this NFT.</div>
+    <div className={"dropdown-item font-monospace"}>
+      <div className="me-3">No creators are associated with this NFT.</div>
     </div>
   );
 }
@@ -131,8 +131,8 @@ function getEditionPill(editionInfo: EditionInfo) {
   const edition = editionInfo.edition;
 
   return (
-    <div className={"d-inline-flex ml-2"}>
-      <span className="badge badge-pill badge-dark">{`${
+    <div className={"d-inline-flex ms-2"}>
+      <span className="badge badge-pill bg-dark">{`${
         edition && masterEdition
           ? `Edition ${edition.edition.toNumber()} / ${masterEdition.supply.toNumber()}`
           : masterEdition
@@ -152,7 +152,7 @@ function getSaleTypePill(hasPrimarySaleHappened: boolean) {
 
   return (
     <div className={"d-inline-flex align-items-center"}>
-      <span className="badge badge-pill badge-dark">{`${
+      <span className="badge badge-pill bg-dark">{`${
         hasPrimarySaleHappened ? "Secondary Market" : "Primary Market"
       }`}</span>
       <InfoTooltip
@@ -167,7 +167,7 @@ function getSaleTypePill(hasPrimarySaleHappened: boolean) {
 
 function getIsMutablePill(isMutable: boolean) {
   return (
-    <span className="badge badge-pill badge-dark">{`${
+    <span className="badge badge-pill bg-dark">{`${
       isMutable ? "Mutable" : "Immutable"
     }`}</span>
   );

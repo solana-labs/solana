@@ -91,8 +91,8 @@ export function TokenLargestAccountsCard({ pubkey }: { pubkey: PublicKey }) {
                 <th className="text-muted">Rank</th>
                 <th className="text-muted">Address</th>
                 <th className="text-muted">Owner</th>
-                <th className="text-muted text-right">Balance {unitLabel}</th>
-                <th className="text-muted text-right">% of Total Supply</th>
+                <th className="text-muted text-end">Balance {unitLabel}</th>
+                <th className="text-muted text-end">% of Total Supply</th>
               </tr>
             </thead>
             <tbody className="list">
@@ -131,7 +131,7 @@ const renderAccountRow = (
   return (
     <tr key={index}>
       <td>
-        <span className="badge badge-soft-gray badge-pill">{index + 1}</span>
+        <span className="badge bg-gray-soft badge-pill">{index + 1}</span>
       </td>
       <td className="td">
         <Address pubkey={account.address} link truncate />
@@ -139,11 +139,11 @@ const renderAccountRow = (
       <td>
         {account.owner && <Address pubkey={account.owner} link truncate />}
       </td>
-      <td className="text-right text-monospace">
+      <td className="text-end font-monospace">
         {account.uiAmountString &&
           new BigNumber(account.uiAmountString).toFormat(balanceFixedPoint)}
       </td>
-      <td className="text-right text-monospace">{percent}</td>
+      <td className="text-end font-monospace">{percent}</td>
     </tr>
   );
 };

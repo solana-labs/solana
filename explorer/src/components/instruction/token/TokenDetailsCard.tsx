@@ -124,7 +124,7 @@ function TokenInstruction(props: InfoProps) {
     attributes.push(
       <tr key={mintAddress}>
         <td>Token</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={new PublicKey(mintAddress)} alignRight link />
         </td>
       </tr>
@@ -144,7 +144,7 @@ function TokenInstruction(props: InfoProps) {
         attributes.push(
           <tr key={key + i}>
             <td>{label}</td>
-            <td className="text-lg-right">
+            <td className="text-lg-end">
               <Address pubkey={publicKey} alignRight link />
             </td>
           </tr>
@@ -187,7 +187,7 @@ function TokenInstruction(props: InfoProps) {
     attributes.push(
       <tr key={key}>
         <td>{label}</td>
-        <td className="text-lg-right">{tag}</td>
+        <td className="text-lg-end">{tag}</td>
       </tr>
     );
   }

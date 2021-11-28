@@ -25,63 +25,63 @@ export function PruneDetailsCard(props: {
     >
       <tr>
         <td>Program</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.programId} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Market</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.accounts.market} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Bids</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.accounts.bids} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Asks</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.accounts.asks} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Prune Authority</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.accounts.pruneAuthority} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Open Orders</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.accounts.openOrders} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Open Orders Owner</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.accounts.openOrdersOwner} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Event Queue</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.accounts.eventQueue} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Iteration Limit</td>
-        <td className="text-lg-right">{info.data.limit}</td>
+        <td className="text-lg-end">{info.data.limit}</td>
       </tr>
     </InstructionCard>
   );

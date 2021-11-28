@@ -25,61 +25,61 @@ export function DepositDetailsCard(props: {
     >
       <tr>
         <td>Program</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.programId} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Signal Provider Fee Address</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.sigProviderFeeReceiverKey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Insurance Funds</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.bonfidaFeeReceiverKey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Buy and Burn</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.bonfidaBuyAndBurnKey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Bot Token Mint</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.mintKey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Bot Address</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.poolKey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Target Pool Token Address</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.targetPoolTokenKey} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Pool Seed</td>
-        <td className="text-lg-right">{info.poolSeed}</td>
+        <td className="text-lg-end">{info.poolSeed}</td>
       </tr>
 
       <tr>
         <td>Pool Token Amount</td>
-        <td className="text-lg-right">{info.poolTokenAmount.toString()}</td>
+        <td className="text-lg-end">{info.poolTokenAmount.toString()}</td>
       </tr>
     </InstructionCard>
   );
