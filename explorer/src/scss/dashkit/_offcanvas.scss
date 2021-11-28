@@ -1,0 +1,10 @@
+//
+// offcanvas.scss
+//
+
+// Header
+
+.offcanvas-header {
+  padding: $offcanvas-header-padding-y $offcanvas-header-padding-x;
+  border-bottom: $border-width solid $border-color;
+}

@@ -57,8 +57,9 @@
     border: 0;
   }
 
-  // Customize the `:focus` state to imitate native WebKit styles.
-  @include form-control-focus($ignore-warning: true);
+  &:focus {
+    border-color: $input-focus-border-color;
+  }
 }
 
 .ql-hidden {
@@ -148,6 +149,7 @@
 
 .ql-tooltip {
   position: absolute;
+  z-index: $zindex-tooltip;
   display: flex;
   flex-wrap: nowrap;
   width: 18.5rem;
@@ -187,7 +189,7 @@
 
 .ql-tooltip .ql-preview {
   width: 100%;
-  @include button-size($btn-padding-y-sm, $btn-padding-x-sm, $font-size-sm, $btn-line-height-sm, $btn-border-radius-sm);
+  @include button-size($btn-padding-y-sm, $btn-padding-x-sm, $font-size-sm, $btn-border-radius-sm);
   @include transition($btn-transition);
 }
 
@@ -231,11 +233,11 @@
   user-select: none;
   border: $btn-border-width solid transparent;
   cursor: pointer;
-  @include button-size($btn-padding-y-sm, $btn-padding-x-sm, $font-size-sm, $btn-line-height-sm, $btn-border-radius-sm);
+  @include button-size($btn-padding-y-sm, $btn-padding-x-sm, $font-size-sm, $btn-border-radius-sm);
   @include transition($btn-transition);
 
   // Share hover and focus styles
-  @include hover-focus {
+  &:hover, &:focus {
     text-decoration: none;
   }
 

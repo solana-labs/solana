@@ -1,40 +1,44 @@
-//
+// 
 // tables.scss
 // Extended from Bootstrap
 //
 
-//
+// 
 // Bootstrap Overrides =====================================
 //
 
-.table {
-
-  thead th {
-    background-color: $table-head-bg;
-    text-transform: uppercase;
-    font-size: $font-size-sm;
-    font-weight: $font-weight-bold;
-    letter-spacing: .08em;
-    color: $table-head-color;
-    border-bottom-width: $table-border-width;
-  }
-
-  thead th, tbody th, tbody td {
-    vertical-align: middle;
-  }
+.table thead th {
+  background-color: $table-head-bg;
+  text-transform: uppercase;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-bold;
+  letter-spacing: .08em;
+  color: $table-head-color;
 }
+
+.table thead th, tbody th, tbody td {
+  vertical-align: middle;
+}
+
+.table td, .table th {
+  border-top: $table-border-width solid $table-border-color;
+  border-bottom: 0;
+}
+
+
+// Sizing
 
 .table-sm {
   font-size: $font-size-sm;
+}
 
-  thead th {
-    font-size: $font-size-xs;
-  }
+.table-sm thead th {
+  font-size: $font-size-xs;
 }
 
 
 //
-// Dashkit =====================================
+// Theme =====================================
 //
 
 // No wrap
@@ -63,14 +67,8 @@
 }
 
 
-// Table checkbox
+// Links
 
-.table-checkbox {
-  min-height: 0;
-}
-
-.table-checkbox .custom-control-label::before,
-.table-checkbox .custom-control-label::after {
-  top: 50%;
-  transform: translateY(-50%);
+.table a[class*="text-reset"]:hover {
+  color: $link-color !important;
 }

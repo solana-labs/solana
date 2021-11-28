@@ -1,9 +1,9 @@
-//
+// 
 // card.scss
 // Extended from Bootstrap
 //
 
-//
+// 
 // Bootstrap Overrides =====================================
 //
 
@@ -32,15 +32,13 @@
   }
 }
 
-// Title
-
-.card-title {
-  margin-bottom: $card-spacer-y / 2;
+.card-header + .card-footer {
+  border-top-width: 0;
 }
 
 
 //
-// Dashkit ===================================
+// Theme ===================================
 //
 
 // Card header
@@ -62,6 +60,10 @@
 .card-header-tabs .nav-link {
   padding-top: calc((#{$card-header-height} - 1em * #{$line-height-base}) / 2) !important;
   padding-bottom: calc((#{$card-header-height} - 1em * #{$line-height-base}) / 2) !important;
+}
+
+.card-header-tabs .nav-link.active {
+  border-bottom-color: $primary;
 }
 
 
@@ -122,7 +124,7 @@
   display: block !important;
   margin-left: auto;
   margin-right: auto;
-  margin-bottom: $card-spacer-y;
+  margin-bottom: 1rem;
 }
 
 .card-avatar-top {
@@ -295,4 +297,27 @@
   padding-left: 0;
   margin-left: $card-spacer-x;
   margin-right: $card-spacer-x;
+}
+
+
+// Card pagination
+
+.card-pagination.pagination-tabs {
+  margin-top: -$card-cap-padding-y;
+  margin-bottom: -$card-cap-padding-y;
+  border: 0;
+}
+
+.card-pagination.pagination-tabs .page-link {
+  border-top-width: 0 !important;
+}
+
+.card-pagination.pagination-tabs .active .page-link {
+  border-width: 0 0 $border-width 0 !important;
+}
+
+// Card divider 
+
+.card-divider {
+  border-color: $card-border-color;
 }

@@ -1,7 +1,7 @@
 //
 // dropdowns.scss
 // Extended from Bootstrap
-//
+// 
 
 //
 // Bootstrap overrides ==================================
@@ -33,7 +33,7 @@
   }
 }
 
-.dropright > .dropdown-toggle {
+.dropend > .dropdown-toggle {
 
   &::after {
     content: '\e930';
@@ -84,7 +84,7 @@
 
 
 //
-// Dashkit ===================================
+// Theme ===================================
 //
 
 
@@ -121,4 +121,17 @@
     max-height: $dropdown-card-body-max-height;
     overflow-y: auto;
   }
+}
+
+
+// Sizing
+
+.dropdown-menu-sm {
+  padding-top: $dropdown-padding-y-sm;
+  padding-bottom: $dropdown-padding-y-sm;
+  font-size: $dropdown-font-size-sm;
+}
+
+.dropdown-menu-sm .dropdown-item {
+  padding: $dropdown-item-padding-y-sm $dropdown-item-padding-x-sm;
 }
