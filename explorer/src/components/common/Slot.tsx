@@ -9,7 +9,7 @@ type Props = {
 };
 export function Slot({ slot, link }: Props) {
   return (
-    <span className="text-monospace">
+    <span className="font-monospace">
       {link ? (
         <Copyable text={slot.toString()}>
           <Link to={clusterPath(`/block/${slot}`)}>

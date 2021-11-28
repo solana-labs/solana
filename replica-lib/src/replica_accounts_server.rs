@@ -73,7 +73,7 @@ impl ReplicaAccountsServer for ReplicaAccountsServerImpl {
                     LoadedAccount::Stored(stored_account_meta) => Some(
                         ReplicaAccountInfo::from_stored_account_meta(&stored_account_meta),
                     ),
-                    LoadedAccount::Cached((_pubkey, cached_account)) => {
+                    LoadedAccount::Cached(cached_account) => {
                         Some(ReplicaAccountInfo::from_cached_account(&cached_account))
                     }
                 });

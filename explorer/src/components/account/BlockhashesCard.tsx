@@ -52,7 +52,7 @@ const renderAccountRow = (entry: RecentBlockhashesEntry, index: number) => {
   return (
     <tr key={index}>
       <td className="w-1">{index + 1}</td>
-      <td className="w-1 text-monospace">{entry.blockhash}</td>
+      <td className="w-1 font-monospace">{entry.blockhash}</td>
       <td className="">
         {entry.feeCalculator.lamportsPerSignature} lamports per signature
       </td>

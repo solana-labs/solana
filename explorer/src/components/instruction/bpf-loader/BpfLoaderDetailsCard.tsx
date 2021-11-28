@@ -70,14 +70,14 @@ export function BpfLoaderWriteDetailsCard(props: Props<WriteInfo>) {
     >
       <tr>
         <td>Program</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={BPF_LOADER_PROGRAM_ID} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Account</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.account} alignRight link />
         </td>
       </tr>
@@ -86,14 +86,14 @@ export function BpfLoaderWriteDetailsCard(props: Props<WriteInfo>) {
         <td>
           Bytes <span className="text-muted">(Base 64)</span>
         </td>
-        <td className="text-lg-right">
-          <pre className="d-inline-block text-left mb-0">{bytes}</pre>
+        <td className="text-lg-end">
+          <pre className="d-inline-block text-start mb-0">{bytes}</pre>
         </td>
       </tr>
 
       <tr>
         <td>Offset</td>
-        <td className="text-lg-right">{info.offset}</td>
+        <td className="text-lg-end">{info.offset}</td>
       </tr>
     </InstructionCard>
   );
@@ -113,14 +113,14 @@ export function BpfLoaderFinalizeDetailsCard(props: Props<FinalizeInfo>) {
     >
       <tr>
         <td>Program</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={BPF_LOADER_PROGRAM_ID} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Account</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.account} alignRight link />
         </td>
       </tr>

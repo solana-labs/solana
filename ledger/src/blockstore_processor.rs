@@ -291,7 +291,7 @@ fn execute_batches(
 /// 2. Process the locked group in parallel
 /// 3. Register the `Tick` if it's available
 /// 4. Update the leader scheduler, goto 1
-pub fn process_entries(
+pub fn process_entries_for_tests(
     bank: &Arc<Bank>,
     entries: Vec<Entry>,
     randomize: bool,
@@ -2170,7 +2170,7 @@ pub mod tests {
         );
 
         // Now ensure the TX is accepted despite pointing to the ID of an empty entry.
-        process_entries(&bank, slot_entries, true, None, None).unwrap();
+        process_entries_for_tests(&bank, slot_entries, true, None, None).unwrap();
         assert_eq!(bank.process_transaction(&tx), Ok(()));
     }
 
@@ -2377,7 +2377,10 @@ pub mod tests {
         // ensure bank can process a tick
         assert_eq!(bank.tick_height(), 0);
         let tick = next_entry(&genesis_config.hash(), 1, vec![]);
-        assert_eq!(process_entries(&bank, vec![tick], true, None, None), Ok(()));
+        assert_eq!(
+            process_entries_for_tests(&bank, vec![tick], true, None, None),
+            Ok(())
+        );
         assert_eq!(bank.tick_height(), 1);
     }
 
@@ -2410,7 +2413,7 @@ pub mod tests {
         );
         let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
         assert_eq!(
-            process_entries(&bank, vec![entry_1, entry_2], true, None, None),
+            process_entries_for_tests(&bank, vec![entry_1, entry_2], true, None, None),
             Ok(())
         );
         assert_eq!(bank.get_balance(&keypair1.pubkey()), 2);
@@ -2466,7 +2469,7 @@ pub mod tests {
         );
 
         assert_eq!(
-            process_entries(
+            process_entries_for_tests(
                 &bank,
                 vec![entry_1_to_mint, entry_2_to_3_mint_to_1],
                 false,
@@ -2538,7 +2541,7 @@ pub mod tests {
             ],
         );
 
-        assert!(process_entries(
+        assert!(process_entries_for_tests(
             &bank,
             vec![entry_1_to_mint.clone(), entry_2_to_3_mint_to_1.clone()],
             false,
@@ -2646,7 +2649,7 @@ pub mod tests {
         // keypair2=3
         // keypair3=3
 
-        assert!(process_entries(
+        assert!(process_entries_for_tests(
             &bank,
             vec![
                 entry_1_to_mint,
@@ -2703,7 +2706,7 @@ pub mod tests {
             system_transaction::transfer(&keypair2, &keypair4.pubkey(), 1, bank.last_blockhash());
         let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
         assert_eq!(
-            process_entries(&bank, vec![entry_1, entry_2], true, None, None),
+            process_entries_for_tests(&bank, vec![entry_1, entry_2], true, None, None),
             Ok(())
         );
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
@@ -2763,7 +2766,10 @@ pub mod tests {
                 next_entry_mut(&mut hash, 0, transactions)
             })
             .collect();
-        assert_eq!(process_entries(&bank, entries, true, None, None), Ok(()));
+        assert_eq!(
+            process_entries_for_tests(&bank, entries, true, None, None),
+            Ok(())
+        );
     }
 
     #[test]
@@ -2824,7 +2830,7 @@ pub mod tests {
         // Transfer lamports to each other
         let entry = next_entry(&bank.last_blockhash(), 1, tx_vector);
         assert_eq!(
-            process_entries(&bank, vec![entry], true, None, None),
+            process_entries_for_tests(&bank, vec![entry], true, None, None),
             Ok(())
         );
         bank.squash();
@@ -2884,7 +2890,7 @@ pub mod tests {
             system_transaction::transfer(&keypair1, &keypair4.pubkey(), 1, bank.last_blockhash());
         let entry_2 = next_entry(&tick.hash, 1, vec![tx]);
         assert_eq!(
-            process_entries(
+            process_entries_for_tests(
                 &bank,
                 vec![entry_1, tick, entry_2.clone()],
                 true,
@@ -2901,7 +2907,7 @@ pub mod tests {
             system_transaction::transfer(&keypair2, &keypair3.pubkey(), 1, bank.last_blockhash());
         let entry_3 = next_entry(&entry_2.hash, 1, vec![tx]);
         assert_eq!(
-            process_entries(&bank, vec![entry_3], true, None, None),
+            process_entries_for_tests(&bank, vec![entry_3], true, None, None),
             Err(TransactionError::AccountNotFound)
         );
     }
@@ -2981,7 +2987,7 @@ pub mod tests {
         );
 
         assert_eq!(
-            process_entries(&bank, vec![entry_1_to_mint], false, None, None),
+            process_entries_for_tests(&bank, vec![entry_1_to_mint], false, None, None),
             Err(TransactionError::AccountInUse)
         );
 
@@ -3283,7 +3289,7 @@ pub mod tests {
                 })
                 .collect();
             info!("paying iteration {}", i);
-            process_entries(&bank, entries, true, None, None).expect("paying failed");
+            process_entries_for_tests(&bank, entries, true, None, None).expect("paying failed");
 
             let entries: Vec<_> = (0..NUM_TRANSFERS)
                 .step_by(NUM_TRANSFERS_PER_ENTRY)
@@ -3306,10 +3312,10 @@ pub mod tests {
                 .collect();
 
             info!("refunding iteration {}", i);
-            process_entries(&bank, entries, true, None, None).expect("refunding failed");
+            process_entries_for_tests(&bank, entries, true, None, None).expect("refunding failed");
 
             // advance to next block
-            process_entries(
+            process_entries_for_tests(
                 &bank,
                 (0..bank.ticks_per_slot())
                     .map(|_| next_entry_mut(&mut hash, 1, vec![]))
@@ -3359,7 +3365,7 @@ pub mod tests {
         let entry = next_entry(&new_blockhash, 1, vec![tx]);
         entries.push(entry);
 
-        process_entries(&bank0, entries, true, None, None).unwrap();
+        process_entries_for_tests(&bank0, entries, true, None, None).unwrap();
         assert_eq!(bank0.get_balance(&keypair.pubkey()), 1)
     }
 
@@ -3529,7 +3535,8 @@ pub mod tests {
             .collect();
         let entry = next_entry(&bank_1_blockhash, 1, vote_txs);
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
-        let _ = process_entries(&bank1, vec![entry], true, None, Some(&replay_vote_sender));
+        let _ =
+            process_entries_for_tests(&bank1, vec![entry], true, None, Some(&replay_vote_sender));
         let successes: BTreeSet<Pubkey> = replay_vote_receiver
             .try_iter()
             .map(|(vote_pubkey, _, _)| vote_pubkey)

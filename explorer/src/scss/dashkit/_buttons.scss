@@ -1,11 +1,25 @@
-//
+// 
 // buttons.scss
 // Extended from Bootstrap
 //
 
+// 
+// Bootstrap Overrides =====================================
+//
+
+// Sizing
+
+.btn-lg {
+  line-height: $btn-line-height-lg;
+}
+
+.btn-sm {
+  line-height: $btn-line-height-sm;
+}
+
 
 //
-// Dashkit ===================================
+// Theme ===================================
 //
 
 // Button white
@@ -13,16 +27,18 @@
 .btn-white {
   border-color: $gray-300;
 
-  @include hover-focus {
+  &:hover, &:focus {
     background-color: $gray-100;
     border-color: $gray-400;
   }
 }
 
 .btn-group-toggle .btn-white:not(:disabled):not(.disabled):active,
-.btn-group-toggle .btn-white:not(:disabled):not(.disabled).active {
+.btn-group-toggle .btn-white:not(:disabled):not(.disabled).active,
+.btn-group-toggle .btn-check:checked + .btn-white {
   background-color: $input-bg;
   border-color: $input-focus-border-color;
+  box-shadow: none;
   color: $primary;
 }
 
@@ -32,10 +48,25 @@
 }
 
 
+// Button white 20
+
+.btn-white-20 {
+  background-color: rgba($white, .2);
+  border-color: transparent;
+  color: $white;
+
+  &:hover, &:focus {
+    background-color: rgba($white, .12);
+    border-color: transparent;
+    color: $white;
+  }
+}
+
+
 // Button outline secondary
 
 .btn-outline-secondary {
-  &:not(:hover):not([aria-expanded="true"]):not([aria-pressed="true"]){
+  &:not(:hover):not([aria-expanded="true"]):not([aria-pressed="true"]) {
     border-color: $gray-400;
   }
 }
@@ -51,18 +82,11 @@
   padding-right: 0;
   border-radius: 50%;
 }
+
 .btn-rounded-circle.btn-lg {
   width: calc(1em * #{$btn-line-height-lg} + #{$input-btn-padding-y-lg * 2 } + #{$btn-border-width} * 2);
 }
+
 .btn-rounded-circle.btn-sm {
   width: calc(1em * #{$btn-line-height-sm} + #{$input-btn-padding-y-sm * 2 } + #{$btn-border-width} * 2);
-}
-
-
-// Button group
-//
-// Prevent buttons from jittering on hover
-
-.btn-group .btn + .btn {
-  margin-left: 0;
 }

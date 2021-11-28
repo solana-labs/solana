@@ -553,6 +553,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
             17 => TransactionError::WouldExceedMaxBlockCostLimit,
             18 => TransactionError::UnsupportedVersion,
             19 => TransactionError::InvalidWritableAccount,
+            20 => TransactionError::WouldExceedMaxAccountCostLimit,
             _ => return Err("Invalid TransactionError"),
         })
     }
@@ -619,6 +620,9 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                 }
                 TransactionError::InvalidWritableAccount => {
                     tx_by_addr::TransactionErrorType::InvalidWritableAccount
+                }
+                TransactionError::WouldExceedMaxAccountCostLimit => {
+                    tx_by_addr::TransactionErrorType::WouldExceedMaxAccountCostLimit
                 }
             } as i32,
             instruction_error: match transaction_error {
@@ -1024,6 +1028,14 @@ mod test {
         );
 
         let transaction_error = TransactionError::WouldExceedMaxBlockCostLimit;
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error = TransactionError::WouldExceedMaxAccountCostLimit;
         let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
             transaction_error.clone().into();
         assert_eq!(

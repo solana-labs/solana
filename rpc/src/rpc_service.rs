@@ -24,6 +24,7 @@ use {
         leader_schedule_cache::LeaderScheduleCache,
     },
     solana_metrics::inc_new_counter_info,
+    solana_perf::thread::renice_this_thread,
     solana_poh::poh_recorder::PohRecorder,
     solana_runtime::{
         bank_forks::BankForks, commitment::BlockCommitmentCache,
@@ -294,7 +295,7 @@ impl JsonRpcService {
         genesis_hash: Hash,
         ledger_path: &Path,
         validator_exit: Arc<RwLock<Exit>>,
-        trusted_validators: Option<HashSet<Pubkey>>,
+        known_validators: Option<HashSet<Pubkey>>,
         override_health_check: Arc<AtomicBool>,
         optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
         send_transaction_service_config: send_transaction_service::Config,
@@ -305,10 +306,11 @@ impl JsonRpcService {
         info!("rpc bound to {:?}", rpc_addr);
         info!("rpc configuration: {:?}", config);
         let rpc_threads = 1.max(config.rpc_threads);
+        let rpc_niceness_adj = config.rpc_niceness_adj;
 
         let health = Arc::new(RpcHealth::new(
             cluster_info.clone(),
-            trusted_validators,
+            known_validators,
             config.health_check_slot_distance,
             override_health_check,
         ));
@@ -328,6 +330,7 @@ impl JsonRpcService {
         let runtime = Arc::new(
             tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(rpc_threads)
+                .on_thread_start(move || renice_this_thread(rpc_niceness_adj).unwrap())
                 .thread_name("sol-rpc-el")
                 .enable_all()
                 .build()
@@ -353,6 +356,7 @@ impl JsonRpcService {
                                 bigtable_ledger_storage.clone(),
                                 blockstore.clone(),
                                 block_commitment_cache.clone(),
+                                current_transaction_status_slot.clone(),
                                 exit_bigtable_ledger_upload_service.clone(),
                             )))
                         } else {
@@ -411,6 +415,8 @@ impl JsonRpcService {
         let thread_hdl = Builder::new()
             .name("solana-jsonrpc".to_string())
             .spawn(move || {
+                renice_this_thread(rpc_niceness_adj).unwrap();
+
                 let mut io = MetaIoHandler::default();
 
                 io.extend_with(rpc_minimal::MinimalImpl.to_delegate());
@@ -732,7 +738,7 @@ mod tests {
     }
 
     #[test]
-    fn test_health_check_with_no_trusted_validators() {
+    fn test_health_check_with_no_known_validators() {
         let rm = RpcRequestMiddleware::new(
             PathBuf::from("/"),
             None,
@@ -743,7 +749,7 @@ mod tests {
     }
 
     #[test]
-    fn test_health_check_with_trusted_validators() {
+    fn test_health_check_with_known_validators() {
         let cluster_info = Arc::new(ClusterInfo::new(
             ContactInfo::default(),
             Arc::new(Keypair::new()),
@@ -751,7 +757,7 @@ mod tests {
         ));
         let health_check_slot_distance = 123;
         let override_health_check = Arc::new(AtomicBool::new(false));
-        let trusted_validators = vec![
+        let known_validators = vec![
             solana_sdk::pubkey::new_rand(),
             solana_sdk::pubkey::new_rand(),
             solana_sdk::pubkey::new_rand(),
@@ -759,17 +765,17 @@ mod tests {
 
         let health = Arc::new(RpcHealth::new(
             cluster_info.clone(),
-            Some(trusted_validators.clone().into_iter().collect()),
+            Some(known_validators.clone().into_iter().collect()),
             health_check_slot_distance,
             override_health_check.clone(),
         ));
 
         let rm = RpcRequestMiddleware::new(PathBuf::from("/"), None, create_bank_forks(), health);
 
-        // No account hashes for this node or any trusted validators
+        // No account hashes for this node or any known validators
         assert_eq!(rm.health_check(), "unknown");
 
-        // No account hashes for any trusted validators
+        // No account hashes for any known validators
         cluster_info.push_accounts_hashes(vec![(1000, Hash::default()), (900, Hash::default())]);
         cluster_info.flush_push_queue();
         assert_eq!(rm.health_check(), "unknown");
@@ -779,7 +785,7 @@ mod tests {
         assert_eq!(rm.health_check(), "ok");
         override_health_check.store(false, Ordering::Relaxed);
 
-        // This node is ahead of the trusted validators
+        // This node is ahead of the known validators
         cluster_info
             .gossip
             .crds
@@ -787,7 +793,7 @@ mod tests {
             .unwrap()
             .insert(
                 CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHashes::new(
-                    trusted_validators[0],
+                    known_validators[0],
                     vec![
                         (1, Hash::default()),
                         (1001, Hash::default()),
@@ -800,7 +806,7 @@ mod tests {
             .unwrap();
         assert_eq!(rm.health_check(), "ok");
 
-        // Node is slightly behind the trusted validators
+        // Node is slightly behind the known validators
         cluster_info
             .gossip
             .crds
@@ -808,7 +814,7 @@ mod tests {
             .unwrap()
             .insert(
                 CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHashes::new(
-                    trusted_validators[1],
+                    known_validators[1],
                     vec![(1000 + health_check_slot_distance - 1, Hash::default())],
                 ))),
                 1,
@@ -817,7 +823,7 @@ mod tests {
             .unwrap();
         assert_eq!(rm.health_check(), "ok");
 
-        // Node is far behind the trusted validators
+        // Node is far behind the known validators
         cluster_info
             .gossip
             .crds
@@ -825,7 +831,7 @@ mod tests {
             .unwrap()
             .insert(
                 CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHashes::new(
-                    trusted_validators[2],
+                    known_validators[2],
                     vec![(1000 + health_check_slot_distance, Hash::default())],
                 ))),
                 1,

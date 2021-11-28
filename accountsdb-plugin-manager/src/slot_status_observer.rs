@@ -1,7 +1,7 @@
 use {
+    crate::slot_status_notifier::SlotStatusNotifier,
     crossbeam_channel::Receiver,
     solana_rpc::optimistically_confirmed_bank_tracker::BankNotification,
-    solana_runtime::accounts_update_notifier_interface::AccountsUpdateNotifier,
     std::{
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -20,7 +20,7 @@ pub(crate) struct SlotStatusObserver {
 impl SlotStatusObserver {
     pub fn new(
         bank_notification_receiver: Receiver<BankNotification>,
-        accounts_update_notifier: AccountsUpdateNotifier,
+        slot_status_notifier: SlotStatusNotifier,
     ) -> Self {
         let exit_updated_slot_server = Arc::new(AtomicBool::new(false));
 
@@ -28,7 +28,7 @@ impl SlotStatusObserver {
             bank_notification_receiver_service: Some(Self::run_bank_notification_receiver(
                 bank_notification_receiver,
                 exit_updated_slot_server.clone(),
-                accounts_update_notifier,
+                slot_status_notifier,
             )),
             exit_updated_slot_server,
         }
@@ -45,7 +45,7 @@ impl SlotStatusObserver {
     fn run_bank_notification_receiver(
         bank_notification_receiver: Receiver<BankNotification>,
         exit: Arc<AtomicBool>,
-        accounts_update_notifier: AccountsUpdateNotifier,
+        slot_status_notifier: SlotStatusNotifier,
     ) -> JoinHandle<()> {
         Builder::new()
             .name("bank_notification_receiver".to_string())
@@ -54,19 +54,19 @@ impl SlotStatusObserver {
                     if let Ok(slot) = bank_notification_receiver.recv() {
                         match slot {
                             BankNotification::OptimisticallyConfirmed(slot) => {
-                                accounts_update_notifier
+                                slot_status_notifier
                                     .read()
                                     .unwrap()
                                     .notify_slot_confirmed(slot, None);
                             }
                             BankNotification::Frozen(bank) => {
-                                accounts_update_notifier
+                                slot_status_notifier
                                     .read()
                                     .unwrap()
                                     .notify_slot_processed(bank.slot(), Some(bank.parent_slot()));
                             }
                             BankNotification::Root(bank) => {
-                                accounts_update_notifier
+                                slot_status_notifier
                                     .read()
                                     .unwrap()
                                     .notify_slot_rooted(bank.slot(), Some(bank.parent_slot()));

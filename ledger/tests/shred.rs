@@ -72,14 +72,7 @@ fn test_multi_fec_block_coding() {
             .filter_map(|(i, b)| if i % 2 != 0 { Some(b.clone()) } else { None })
             .collect();
 
-        let recovered_data = Shredder::try_recovery(
-            shred_info.clone(),
-            MAX_DATA_SHREDS_PER_FEC_BLOCK as usize,
-            MAX_DATA_SHREDS_PER_FEC_BLOCK as usize,
-            shred_start_index,
-            slot,
-        )
-        .unwrap();
+        let recovered_data = Shredder::try_recovery(shred_info.clone()).unwrap();
 
         for (i, recovered_shred) in recovered_data.into_iter().enumerate() {
             let index = shred_start_index + (i * 2);
@@ -122,17 +115,13 @@ fn test_multi_fec_block_different_size_coding() {
         let first_data_index = fec_data_shreds.first().unwrap().index() as usize;
         let first_code_index = fec_coding_shreds.first().unwrap().index() as usize;
         assert_eq!(first_data_index, first_code_index);
-        let num_data = fec_data_shreds.len();
-        let num_coding = fec_coding_shreds.len();
         let all_shreds: Vec<Shred> = fec_data_shreds
             .iter()
             .step_by(2)
             .chain(fec_coding_shreds.iter().step_by(2))
             .cloned()
             .collect();
-        let recovered_data =
-            Shredder::try_recovery(all_shreds, num_data, num_coding, first_data_index, slot)
-                .unwrap();
+        let recovered_data = Shredder::try_recovery(all_shreds).unwrap();
         // Necessary in order to ensure the last shred in the slot
         // is part of the recovered set, and that the below `index`
         // calcuation in the loop is correct

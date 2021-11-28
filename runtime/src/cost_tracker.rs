@@ -72,7 +72,7 @@ impl CostTracker {
         _transaction: &SanitizedTransaction,
         tx_cost: &TransactionCost,
     ) -> Result<u64, CostTrackerError> {
-        let cost = tx_cost.sum();
+        let cost = tx_cost.sum() * tx_cost.cost_weight as u64;
         self.would_fit(&tx_cost.writable_accounts, &cost)?;
         self.add_transaction(&tx_cost.writable_accounts, &cost);
         Ok(self.block_cost)
@@ -368,5 +368,27 @@ mod tests {
             assert_eq!(cost * 2, costliest_account_cost);
             assert_eq!(acct2, costliest_account);
         }
+    }
+
+    #[test]
+    fn test_try_add_with_cost_weight() {
+        let (mint_keypair, start_hash) = test_setup();
+        let (tx, _keys, _cost) = build_simple_transaction(&mint_keypair, &start_hash);
+        let tx = SanitizedTransaction::from_transaction_for_tests(tx);
+
+        let limit = 100u64;
+        let mut testee = CostTracker::new(limit, limit);
+
+        let mut cost = TransactionCost {
+            execution_cost: limit + 1,
+            ..TransactionCost::default()
+        };
+
+        // cost exceed limit by 1, will not fit
+        assert!(testee.try_add(&tx, &cost).is_err());
+
+        cost.cost_weight = 0u32;
+        // setting cost_weight to zero will allow this tx
+        assert!(testee.try_add(&tx, &cost).is_ok());
     }
 }

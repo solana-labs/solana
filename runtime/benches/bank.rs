@@ -4,6 +4,7 @@
 extern crate test;
 
 use log::*;
+use solana_program_runtime::invoke_context::InvokeContext;
 use solana_runtime::{bank::*, bank_client::BankClient, loader_utils::create_invoke_instruction};
 use solana_sdk::{
     client::AsyncClient,
@@ -12,7 +13,6 @@ use solana_sdk::{
     genesis_config::create_genesis_config,
     instruction::InstructionError,
     message::Message,
-    process_instruction::InvokeContext,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     transaction::Transaction,

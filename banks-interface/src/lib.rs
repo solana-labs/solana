@@ -52,6 +52,10 @@ pub trait Banks {
         address: Pubkey,
         commitment: CommitmentLevel,
     ) -> Option<Account>;
+    async fn get_latest_blockhash_with_context() -> Hash;
+    async fn get_latest_blockhash_with_commitment_and_context(
+        commitment: CommitmentLevel,
+    ) -> Option<(Hash, u64)>;
     async fn get_fee_for_message_with_commitment_and_context(
         commitment: CommitmentLevel,
         message: Message,

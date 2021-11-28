@@ -202,6 +202,7 @@ impl VoteSimulator {
     }
 
     pub fn set_root(&mut self, new_root: Slot) {
+        let (drop_bank_sender, _drop_bank_receiver) = std::sync::mpsc::channel();
         ReplayStage::handle_new_root(
             new_root,
             &self.bank_forks,
@@ -215,6 +216,7 @@ impl VoteSimulator {
             &mut true,
             &mut Vec::new(),
             &mut EpochSlotsFrozenSlots::default(),
+            &drop_bank_sender,
         )
     }
 

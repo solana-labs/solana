@@ -27,7 +27,7 @@ solana-sdk = { path = "../sdk", version = "=1.9.0" }
 solana-streamer = { path = "../streamer", version = "=1.9.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.9.0" }
 solana-version = { path = "../version", version = "=1.9.0" }
-spl-token-v2-0 = { package = "spl-token", version = "=3.2.0", features = ["no-entrypoint"] }
+spl-token = { version = "=3.2.0", features = ["no-entrypoint"] }
 
 [dev-dependencies]
 solana-local-cluster = { path = "../local-cluster", version = "=1.9.0" }

@@ -15,6 +15,7 @@ use solana_clap_utils::{
         is_parsable, is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
     },
 };
+use solana_core::system_monitor_service::SystemMonitorService;
 use solana_entry::entry::Entry;
 use solana_ledger::{
     ancestor_iterator::AncestorIterator,
@@ -24,9 +25,10 @@ use solana_ledger::{
     blockstore_processor::ProcessOptions,
     shred::Shred,
 };
+use solana_measure::measure::Measure;
 use solana_runtime::{
     accounts_db::AccountsDbConfig,
-    accounts_index::AccountsIndexConfig,
+    accounts_index::{AccountsIndexConfig, ScanConfig},
     bank::{Bank, RewardCalculationEvent},
     bank_forks::BankForks,
     cost_model::CostModel,
@@ -67,7 +69,11 @@ use std::{
     path::{Path, PathBuf},
     process::{exit, Command, Stdio},
     str::FromStr,
-    sync::{mpsc::channel, Arc, RwLock},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::channel,
+        Arc, RwLock,
+    },
 };
 
 mod bigtable;
@@ -223,7 +229,7 @@ fn output_slot(
             for transaction in entry.transactions {
                 let tx_signature = transaction.signatures[0];
                 let sanitize_result =
-                    SanitizedTransaction::try_create(transaction, Hash::default(), |_| {
+                    SanitizedTransaction::try_create(transaction, Hash::default(), None, |_| {
                         Err(TransactionError::UnsupportedVersion)
                     });
 
@@ -779,7 +785,7 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
             .transactions
             .into_iter()
             .filter_map(|transaction| {
-                SanitizedTransaction::try_create(transaction, Hash::default(), |_| {
+                SanitizedTransaction::try_create(transaction, Hash::default(), None, |_| {
                     Err(TransactionError::UnsupportedVersion)
                 })
                 .map_err(|err| {
@@ -827,6 +833,12 @@ fn assert_capitalization(bank: &Bank) {
     let debug_verify = true;
     assert!(bank.calculate_and_verify_capitalization(debug_verify));
 }
+#[cfg(not(target_env = "msvc"))]
+use jemallocator::Jemalloc;
+
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
 
 #[allow(clippy::cognitive_complexity)]
 fn main() {
@@ -879,6 +891,12 @@ fn main() {
         .validator(is_parsable::<usize>)
         .takes_value(true)
         .help("How much memory the accounts index can consume. If this is exceeded, some account index entries will be stored on disk. If missing, the entire index is stored in memory.");
+    let accountsdb_skip_shrink = Arg::with_name("accounts_db_skip_shrink")
+        .long("accounts-db-skip-shrink")
+        .help(
+            "Enables faster starting of ledger-tool by skipping shrink. \
+                      This option is for use during testing.",
+        );
     let accounts_filler_count = Arg::with_name("accounts_filler_count")
         .long("accounts-filler-count")
         .value_name("COUNT")
@@ -1223,6 +1241,7 @@ fn main() {
             .arg(&limit_load_slot_count_from_snapshot_arg)
             .arg(&accounts_index_bins)
             .arg(&accounts_index_limit)
+            .arg(&accountsdb_skip_shrink)
             .arg(&accounts_filler_count)
             .arg(&verify_index_arg)
             .arg(&hard_forks_arg)
@@ -1413,7 +1432,7 @@ fn main() {
             )
         ).subcommand(
             SubCommand::with_name("accounts")
-            .about("Print account contents after processing in the ledger")
+            .about("Print account stats and contents after processing the ledger")
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
             .arg(&halt_at_slot_arg)
@@ -1425,10 +1444,16 @@ fn main() {
                     .help("Include sysvars too"),
             )
             .arg(
-                Arg::with_name("exclude_account_data")
-                    .long("exclude-account-data")
+                Arg::with_name("no_account_contents")
+                    .long("no-account-contents")
                     .takes_value(false)
-                    .help("Exclude account data (useful for large number of accounts)"),
+                    .help("Do not print contents of each account, which is very slow with lots of accounts."),
+            )
+            .arg(
+                Arg::with_name("no_account_data")
+                    .long("no-account-data")
+                    .takes_value(false)
+                    .help("Do not print account data when printing account contents."),
             )
             .arg(&max_genesis_archive_unpacked_size_arg)
         ).subcommand(
@@ -1969,6 +1994,9 @@ fn main() {
                 accounts_index_config.bins = Some(bins);
             }
 
+            let exit_signal = Arc::new(AtomicBool::new(false));
+            let system_monitor_service = SystemMonitorService::new(Arc::clone(&exit_signal), false);
+
             if let Some(limit) = value_t!(arg_matches, "accounts_index_memory_limit_mb", usize).ok()
             {
                 accounts_index_config.index_limit_mb = Some(limit);
@@ -2016,6 +2044,7 @@ fn main() {
                 allow_dead_slots: arg_matches.is_present("allow_dead_slots"),
                 accounts_db_test_hash_calculation: arg_matches
                     .is_present("accounts_db_test_hash_calculation"),
+                accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
                 ..ProcessOptions::default()
             };
             let print_accounts_stats = arg_matches.is_present("print_accounts_stats");
@@ -2044,6 +2073,8 @@ fn main() {
                 let working_bank = bank_forks.working_bank();
                 working_bank.print_accounts_stats();
             }
+            exit_signal.store(true, Ordering::Relaxed);
+            system_monitor_service.join().unwrap();
             println!("Ok");
         }
         ("graph", Some(arg_matches)) => {
@@ -2226,7 +2257,7 @@ fn main() {
 
                     if remove_stake_accounts {
                         for (address, mut account) in bank
-                            .get_program_accounts(&stake::program::id())
+                            .get_program_accounts(&stake::program::id(), &ScanConfig::default())
                             .unwrap()
                             .into_iter()
                         {
@@ -2250,7 +2281,7 @@ fn main() {
 
                     if !vote_accounts_to_destake.is_empty() {
                         for (address, mut account) in bank
-                            .get_program_accounts(&stake::program::id())
+                            .get_program_accounts(&stake::program::id(), &ScanConfig::default())
                             .unwrap()
                             .into_iter()
                         {
@@ -2288,7 +2319,10 @@ fn main() {
 
                         // Delete existing vote accounts
                         for (address, mut account) in bank
-                            .get_program_accounts(&solana_vote_program::id())
+                            .get_program_accounts(
+                                &solana_vote_program::id(),
+                                &ScanConfig::default(),
+                            )
                             .unwrap()
                             .into_iter()
                         {
@@ -2471,56 +2505,68 @@ fn main() {
             };
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
             let include_sysvars = arg_matches.is_present("include_sysvars");
-            let exclude_account_data = arg_matches.is_present("exclude_account_data");
             let blockstore = open_blockstore(
                 &ledger_path,
                 AccessType::TryPrimaryThenSecondary,
                 wal_recovery_mode,
             );
-            match load_bank_forks(
+            let (bank_forks, ..) = load_bank_forks(
                 arg_matches,
                 &genesis_config,
                 &blockstore,
                 process_options,
                 snapshot_archive_path,
-            ) {
-                Ok((bank_forks, ..)) => {
-                    let slot = bank_forks.working_bank().slot();
-                    let bank = bank_forks.get(slot).unwrap_or_else(|| {
-                        eprintln!("Error: Slot {} is not available", slot);
-                        exit(1);
-                    });
+            )
+            .unwrap_or_else(|err| {
+                eprintln!("Failed to load ledger: {:?}", err);
+                exit(1);
+            });
 
-                    let accounts: BTreeMap<_, _> = bank
-                        .get_all_accounts_with_modified_slots()
-                        .unwrap()
-                        .into_iter()
-                        .filter(|(pubkey, _account, _slot)| {
-                            include_sysvars || !solana_sdk::sysvar::is_sysvar_id(pubkey)
-                        })
-                        .map(|(pubkey, account, slot)| (pubkey, (account, slot)))
-                        .collect();
+            let bank = bank_forks.working_bank();
+            let mut measure = Measure::start("getting accounts");
+            let accounts: BTreeMap<_, _> = bank
+                .get_all_accounts_with_modified_slots()
+                .unwrap()
+                .into_iter()
+                .filter(|(pubkey, _account, _slot)| {
+                    include_sysvars || !solana_sdk::sysvar::is_sysvar_id(pubkey)
+                })
+                .map(|(pubkey, account, slot)| (pubkey, (account, slot)))
+                .collect();
+            measure.stop();
+            info!("{}", measure);
 
-                    println!("---");
-                    for (pubkey, (account, slot)) in accounts.into_iter() {
-                        let data_len = account.data().len();
-                        println!("{}:", pubkey);
-                        println!("  - balance: {} SOL", lamports_to_sol(account.lamports()));
-                        println!("  - owner: '{}'", account.owner());
-                        println!("  - executable: {}", account.executable());
-                        println!("  - slot: {}", slot);
-                        println!("  - rent_epoch: {}", account.rent_epoch());
-                        if !exclude_account_data {
-                            println!("  - data: '{}'", bs58::encode(account.data()).into_string());
-                        }
-                        println!("  - data_len: {}", data_len);
+            let mut measure = Measure::start("calculating total accounts stats");
+            let total_accounts_stats = bank.calculate_total_accounts_stats(
+                accounts
+                    .iter()
+                    .map(|(pubkey, (account, _slot))| (pubkey, account)),
+            );
+            measure.stop();
+            info!("{}", measure);
+
+            let print_account_contents = !arg_matches.is_present("no_account_contents");
+            if print_account_contents {
+                let print_account_data = !arg_matches.is_present("no_account_data");
+                let mut measure = Measure::start("printing account contents");
+                for (pubkey, (account, slot)) in accounts.into_iter() {
+                    let data_len = account.data().len();
+                    println!("{}:", pubkey);
+                    println!("  - balance: {} SOL", lamports_to_sol(account.lamports()));
+                    println!("  - owner: '{}'", account.owner());
+                    println!("  - executable: {}", account.executable());
+                    println!("  - slot: {}", slot);
+                    println!("  - rent_epoch: {}", account.rent_epoch());
+                    if print_account_data {
+                        println!("  - data: '{}'", bs58::encode(account.data()).into_string());
                     }
+                    println!("  - data_len: {}", data_len);
                 }
-                Err(err) => {
-                    eprintln!("Failed to load ledger: {:?}", err);
-                    exit(1);
-                }
+                measure.stop();
+                info!("{}", measure);
             }
+
+            println!("{:#?}", total_accounts_stats);
         }
         ("capitalization", Some(arg_matches)) => {
             let dev_halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();

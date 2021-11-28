@@ -13,7 +13,10 @@ use {
         erasure::ErasureConfig,
         leader_schedule_cache::LeaderScheduleCache,
         next_slots_iterator::NextSlotsIterator,
-        shred::{Result as ShredResult, Shred, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK},
+        shred::{
+            Result as ShredResult, Shred, ShredType, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK,
+            SHRED_PAYLOAD_SIZE,
+        },
     },
     bincode::deserialize,
     log::*,
@@ -623,146 +626,98 @@ impl Blockstore {
         Ok(slot_iterator.map(move |(rooted_slot, _)| rooted_slot))
     }
 
-    fn get_recovery_data_shreds(
-        index: &mut Index,
-        set_index: u64,
+    fn get_recovery_data_shreds<'a>(
+        index: &'a Index,
         slot: Slot,
-        erasure_meta: &ErasureMeta,
-        available_shreds: &mut Vec<Shred>,
-        prev_inserted_datas: &mut HashMap<(u64, u64), Shred>,
-        data_cf: &LedgerColumn<cf::ShredData>,
-    ) {
-        (set_index..set_index + erasure_meta.config.num_data() as u64).for_each(|i| {
-            if index.data().is_present(i) {
-                if let Some(shred) = prev_inserted_datas.remove(&(slot, i)).or_else(|| {
-                    let some_data = data_cf
-                        .get_bytes((slot, i))
-                        .expect("Database failure, could not fetch data shred");
-                    if let Some(data) = some_data {
-                        Shred::new_from_serialized_shred(data).ok()
-                    } else {
-                        warn!("Data shred deleted while reading for recovery");
-                        None
-                    }
-                }) {
-                    available_shreds.push(shred);
-                }
+        erasure_meta: &'a ErasureMeta,
+        prev_inserted_datas: &'a mut HashMap<(Slot, /*shred index:*/ u64), Shred>,
+        data_cf: &'a LedgerColumn<cf::ShredData>,
+    ) -> impl Iterator<Item = Shred> + 'a {
+        erasure_meta.data_shreds_indices().filter_map(move |i| {
+            if let Some(shred) = prev_inserted_datas.remove(&(slot, i)) {
+                return Some(shred);
             }
-        });
+            if !index.data().is_present(i) {
+                return None;
+            }
+            match data_cf.get_bytes((slot, i)).unwrap() {
+                None => {
+                    warn!("Data shred deleted while reading for recovery");
+                    None
+                }
+                Some(data) => Shred::new_from_serialized_shred(data).ok(),
+            }
+        })
     }
 
-    fn get_recovery_coding_shreds(
-        index: &mut Index,
+    fn get_recovery_coding_shreds<'a>(
+        index: &'a mut Index,
         slot: Slot,
-        erasure_meta: &ErasureMeta,
-        available_shreds: &mut Vec<Shred>,
-        prev_inserted_codes: &mut HashMap<(u64, u64), Shred>,
-        code_cf: &LedgerColumn<cf::ShredCode>,
-    ) {
-        (erasure_meta.set_index..erasure_meta.set_index + erasure_meta.config.num_coding() as u64)
-            .for_each(|i| {
-                if let Some(shred) = prev_inserted_codes
-                    .remove(&(slot, i))
-                    .map(|s| {
-                        // Remove from the index so it doesn't get committed. We know
-                        // this is safe to do because everything in
-                        // `prev_inserted_codes` does not yet exist in blockstore
-                        // (guaranteed by `check_cache_coding_shred`)
-                        index.coding_mut().set_present(i, false);
-                        s
-                    })
-                    .or_else(|| {
-                        if index.coding().is_present(i) {
-                            let some_code = code_cf
-                                .get_bytes((slot, i))
-                                .expect("Database failure, could not fetch code shred");
-                            if let Some(code) = some_code {
-                                Shred::new_from_serialized_shred(code).ok()
-                            } else {
-                                warn!("Code shred deleted while reading for recovery");
-                                None
-                            }
-                        } else {
-                            None
-                        }
-                    })
-                {
-                    available_shreds.push(shred);
+        erasure_meta: &'a ErasureMeta,
+        prev_inserted_codes: &'a HashMap<(Slot, /*shred index:*/ u64), Shred>,
+        code_cf: &'a LedgerColumn<cf::ShredCode>,
+    ) -> impl Iterator<Item = Shred> + 'a {
+        erasure_meta.coding_shreds_indices().filter_map(move |i| {
+            if let Some(shred) = prev_inserted_codes.get(&(slot, i)) {
+                return Some(shred.clone());
+            }
+            if !index.coding().is_present(i) {
+                return None;
+            }
+            match code_cf.get_bytes((slot, i)).unwrap() {
+                None => {
+                    warn!("Code shred deleted while reading for recovery");
+                    None
                 }
-            });
+                Some(code) => Shred::new_from_serialized_shred(code).ok(),
+            }
+        })
     }
 
     fn recover_shreds(
         index: &mut Index,
-        set_index: u64,
         erasure_meta: &ErasureMeta,
-        prev_inserted_datas: &mut HashMap<(u64, u64), Shred>,
-        prev_inserted_codes: &mut HashMap<(u64, u64), Shred>,
+        prev_inserted_datas: &mut HashMap<(Slot, /*shred index:*/ u64), Shred>,
+        prev_inserted_codes: &HashMap<(Slot, /*shred index:*/ u64), Shred>,
         recovered_data_shreds: &mut Vec<Shred>,
         data_cf: &LedgerColumn<cf::ShredData>,
         code_cf: &LedgerColumn<cf::ShredCode>,
     ) {
         // Find shreds for this erasure set and try recovery
         let slot = index.slot;
-        let mut available_shreds = vec![];
-
-        Self::get_recovery_data_shreds(
-            index,
-            set_index,
-            slot,
-            erasure_meta,
-            &mut available_shreds,
-            prev_inserted_datas,
-            data_cf,
-        );
-
-        Self::get_recovery_coding_shreds(
+        let mut available_shreds: Vec<_> =
+            Self::get_recovery_data_shreds(index, slot, erasure_meta, prev_inserted_datas, data_cf)
+                .collect();
+        available_shreds.extend(Self::get_recovery_coding_shreds(
             index,
             slot,
             erasure_meta,
-            &mut available_shreds,
             prev_inserted_codes,
             code_cf,
-        );
-
-        if let Ok(mut result) = Shredder::try_recovery(
-            available_shreds,
-            erasure_meta.config.num_data(),
-            erasure_meta.config.num_coding(),
-            set_index as usize,
-            slot,
-        ) {
-            Self::submit_metrics(
-                slot,
-                set_index,
-                erasure_meta,
-                true,
-                "complete".into(),
-                result.len(),
-            );
+        ));
+        if let Ok(mut result) = Shredder::try_recovery(available_shreds) {
+            Self::submit_metrics(slot, erasure_meta, true, "complete".into(), result.len());
             recovered_data_shreds.append(&mut result);
         } else {
-            Self::submit_metrics(slot, set_index, erasure_meta, true, "incomplete".into(), 0);
+            Self::submit_metrics(slot, erasure_meta, true, "incomplete".into(), 0);
         }
     }
 
     fn submit_metrics(
         slot: Slot,
-        set_index: u64,
         erasure_meta: &ErasureMeta,
         attempted: bool,
         status: String,
         recovered: usize,
     ) {
+        let mut data_shreds_indices = erasure_meta.data_shreds_indices();
+        let start_index = data_shreds_indices.next().unwrap_or_default();
+        let end_index = data_shreds_indices.last().unwrap_or(start_index);
         datapoint_debug!(
             "blockstore-erasure",
             ("slot", slot as i64, i64),
-            ("start_index", set_index as i64, i64),
-            (
-                "end_index",
-                (erasure_meta.set_index + erasure_meta.config.num_data() as u64) as i64,
-                i64
-            ),
+            ("start_index", start_index, i64),
+            ("end_index", end_index + 1, i64),
             ("recovery_attempted", attempted, bool),
             ("recovery_status", status, String),
             ("recovered", recovered as i64, i64),
@@ -771,10 +726,10 @@ impl Blockstore {
 
     fn try_shred_recovery(
         db: &Database,
-        erasure_metas: &HashMap<(u64, u64), ErasureMeta>,
+        erasure_metas: &HashMap<(Slot, /*fec set index:*/ u64), ErasureMeta>,
         index_working_set: &mut HashMap<u64, IndexMetaWorkingSetEntry>,
-        prev_inserted_datas: &mut HashMap<(u64, u64), Shred>,
-        prev_inserted_codes: &mut HashMap<(u64, u64), Shred>,
+        prev_inserted_datas: &mut HashMap<(Slot, /*shred index:*/ u64), Shred>,
+        prev_inserted_codes: &HashMap<(Slot, /*shred index:*/ u64), Shred>,
     ) -> Vec<Shred> {
         let data_cf = db.column::<cf::ShredData>();
         let code_cf = db.column::<cf::ShredCode>();
@@ -784,14 +739,13 @@ impl Blockstore {
         // 2. For new data shreds, check if an erasure set exists. If not, don't try recovery
         // 3. Before trying recovery, check if enough number of shreds have been received
         // 3a. Enough number of shreds = (#data + #coding shreds) > erasure.num_data
-        for (&(slot, set_index), erasure_meta) in erasure_metas.iter() {
+        for (&(slot, _fec_set_index), erasure_meta) in erasure_metas.iter() {
             let index_meta_entry = index_working_set.get_mut(&slot).expect("Index");
             let index = &mut index_meta_entry.index;
             match erasure_meta.status(index) {
                 ErasureMetaStatus::CanRecover => {
                     Self::recover_shreds(
                         index,
-                        set_index,
                         erasure_meta,
                         prev_inserted_datas,
                         prev_inserted_codes,
@@ -801,31 +755,11 @@ impl Blockstore {
                     );
                 }
                 ErasureMetaStatus::DataFull => {
-                    (set_index..set_index + erasure_meta.config.num_coding() as u64).for_each(
-                        |i| {
-                            // Remove saved coding shreds. We don't need these for future recovery.
-                            if prev_inserted_codes.remove(&(slot, i)).is_some() {
-                                // Remove from the index so it doesn't get committed. We know
-                                // this is safe to do because everything in
-                                // `prev_inserted_codes` does not yet exist in blockstore
-                                // (guaranteed by `check_cache_coding_shred`)
-                                index.coding_mut().set_present(i, false);
-                            }
-                        },
-                    );
-                    Self::submit_metrics(
-                        slot,
-                        set_index,
-                        erasure_meta,
-                        false,
-                        "complete".into(),
-                        0,
-                    );
+                    Self::submit_metrics(slot, erasure_meta, false, "complete".into(), 0);
                 }
                 ErasureMetaStatus::StillNeed(needed) => {
                     Self::submit_metrics(
                         slot,
-                        set_index,
                         erasure_meta,
                         false,
                         format!("still need: {}", needed),
@@ -872,52 +806,55 @@ impl Blockstore {
         let mut newly_completed_data_sets: Vec<CompletedDataSetInfo> = vec![];
         let mut inserted_indices = Vec::new();
         for (i, (shred, is_repaired)) in shreds.into_iter().zip(is_repaired).enumerate() {
-            if shred.is_data() {
-                let shred_source = if is_repaired {
-                    ShredSource::Repaired
-                } else {
-                    ShredSource::Turbine
-                };
-                match self.check_insert_data_shred(
-                    shred,
-                    &mut erasure_metas,
-                    &mut index_working_set,
-                    &mut slot_meta_working_set,
-                    &mut write_batch,
-                    &mut just_inserted_data_shreds,
-                    &mut index_meta_time,
-                    is_trusted,
-                    handle_duplicate,
-                    leader_schedule,
-                    shred_source,
-                ) {
-                    Err(InsertDataShredError::Exists) => metrics.num_data_shreds_exists += 1,
-                    Err(InsertDataShredError::InvalidShred) => metrics.num_data_shreds_invalid += 1,
-                    Err(InsertDataShredError::BlockstoreError(err)) => {
-                        metrics.num_data_shreds_blockstore_error += 1;
-                        error!("blockstore error: {}", err);
-                    }
-                    Ok(completed_data_sets) => {
-                        newly_completed_data_sets.extend(completed_data_sets);
-                        inserted_indices.push(i);
-                        metrics.num_inserted += 1;
-                    }
-                };
-            } else if shred.is_code() {
-                self.check_cache_coding_shred(
-                    shred,
-                    &mut erasure_metas,
-                    &mut index_working_set,
-                    &mut just_inserted_coding_shreds,
-                    &mut index_meta_time,
-                    handle_duplicate,
-                    is_trusted,
-                    is_repaired,
-                    metrics,
-                );
-            } else {
-                panic!("There should be no other case");
-            }
+            match shred.shred_type() {
+                ShredType::Data => {
+                    let shred_source = if is_repaired {
+                        ShredSource::Repaired
+                    } else {
+                        ShredSource::Turbine
+                    };
+                    match self.check_insert_data_shred(
+                        shred,
+                        &mut erasure_metas,
+                        &mut index_working_set,
+                        &mut slot_meta_working_set,
+                        &mut write_batch,
+                        &mut just_inserted_data_shreds,
+                        &mut index_meta_time,
+                        is_trusted,
+                        handle_duplicate,
+                        leader_schedule,
+                        shred_source,
+                    ) {
+                        Err(InsertDataShredError::Exists) => metrics.num_data_shreds_exists += 1,
+                        Err(InsertDataShredError::InvalidShred) => {
+                            metrics.num_data_shreds_invalid += 1
+                        }
+                        Err(InsertDataShredError::BlockstoreError(err)) => {
+                            metrics.num_data_shreds_blockstore_error += 1;
+                            error!("blockstore error: {}", err);
+                        }
+                        Ok(completed_data_sets) => {
+                            newly_completed_data_sets.extend(completed_data_sets);
+                            inserted_indices.push(i);
+                            metrics.num_inserted += 1;
+                        }
+                    };
+                }
+                ShredType::Code => {
+                    self.check_cache_coding_shred(
+                        shred,
+                        &mut erasure_metas,
+                        &mut index_working_set,
+                        &mut just_inserted_coding_shreds,
+                        &mut index_meta_time,
+                        handle_duplicate,
+                        is_trusted,
+                        is_repaired,
+                        metrics,
+                    );
+                }
+            };
         }
         start.stop();
 
@@ -929,7 +866,7 @@ impl Blockstore {
                 &erasure_metas,
                 &mut index_working_set,
                 &mut just_inserted_data_shreds,
-                &mut just_inserted_coding_shreds,
+                &just_inserted_coding_shreds,
             );
 
             metrics.num_recovered += recovered_data_shreds.len();
@@ -1116,9 +1053,9 @@ impl Blockstore {
     fn check_cache_coding_shred<F>(
         &self,
         shred: Shred,
-        erasure_metas: &mut HashMap<(u64, u64), ErasureMeta>,
+        erasure_metas: &mut HashMap<(Slot, /*fec set index:*/ u64), ErasureMeta>,
         index_working_set: &mut HashMap<u64, IndexMetaWorkingSetEntry>,
-        just_received_coding_shreds: &mut HashMap<(u64, u64), Shred>,
+        just_received_coding_shreds: &mut HashMap<(Slot, /*shred index:*/ u64), Shred>,
         index_meta_time: &mut u64,
         handle_duplicate: &F,
         is_trusted: bool,
@@ -1159,13 +1096,14 @@ impl Blockstore {
         );
 
         let erasure_meta = erasure_metas.entry((slot, set_index)).or_insert_with(|| {
-            self.erasure_meta_cf
-                .get((slot, set_index))
+            self.erasure_meta(slot, set_index)
                 .expect("Expect database get to succeed")
                 .unwrap_or_else(|| ErasureMeta::new(set_index, erasure_config))
         });
 
-        if erasure_config != erasure_meta.config {
+        // TODO: handle_duplicate is not invoked and so duplicate shreds are
+        // not gossiped to the rest of cluster.
+        if erasure_config != erasure_meta.config() {
             metrics.num_coding_shreds_invalid_erasure_config += 1;
             let conflicting_shred = self.find_conflicting_coding_shred(
                 &shred,
@@ -1188,7 +1126,7 @@ impl Blockstore {
             warn!("Received multiple erasure configs for the same erasure set!!!");
             warn!(
                 "Slot: {}, shred index: {}, set_index: {}, is_duplicate: {}, stored config: {:#?}, new config: {:#?}",
-                slot, shred.index(), set_index, self.has_duplicate_shreds_in_slot(slot), erasure_meta.config, erasure_config
+                slot, shred.index(), set_index, self.has_duplicate_shreds_in_slot(slot), erasure_meta.config(), erasure_config
             );
 
             return false;
@@ -1220,14 +1158,12 @@ impl Blockstore {
         shred: &Shred,
         slot: Slot,
         erasure_meta: &ErasureMeta,
-        just_received_coding_shreds: &mut HashMap<(u64, u64), Shred>,
+        just_received_coding_shreds: &mut HashMap<(Slot, /*shred index:*/ u64), Shred>,
     ) -> Option<Vec<u8>> {
         // Search for the shred which set the initial erasure config, either inserted,
         // or in the current batch in just_received_coding_shreds.
-        let coding_indices = erasure_meta.set_index
-            ..erasure_meta.set_index + erasure_meta.config.num_coding() as u64;
         let mut conflicting_shred = None;
-        for coding_index in coding_indices {
+        for coding_index in erasure_meta.coding_shreds_indices() {
             let maybe_shred = self.get_coding_shred(slot, coding_index);
             if let Ok(Some(shred_data)) = maybe_shred {
                 let potential_shred = Shred::new_from_serialized_shred(shred_data).unwrap();
@@ -1252,11 +1188,11 @@ impl Blockstore {
     fn check_insert_data_shred<F>(
         &self,
         shred: Shred,
-        erasure_metas: &mut HashMap<(u64, u64), ErasureMeta>,
+        erasure_metas: &mut HashMap<(Slot, /*fec set index:*/ u64), ErasureMeta>,
         index_working_set: &mut HashMap<u64, IndexMetaWorkingSetEntry>,
         slot_meta_working_set: &mut HashMap<u64, SlotMetaWorkingSetEntry>,
         write_batch: &mut WriteBatch,
-        just_inserted_data_shreds: &mut HashMap<(u64, u64), Shred>,
+        just_inserted_data_shreds: &mut HashMap<(Slot, /*shred index:*/ u64), Shred>,
         index_meta_time: &mut u64,
         is_trusted: bool,
         handle_duplicate: &F,
@@ -1273,8 +1209,12 @@ impl Blockstore {
             get_index_meta_entry(&self.db, slot, index_working_set, index_meta_time);
 
         let index_meta = &mut index_meta_working_set_entry.index;
-        let slot_meta_entry =
-            get_slot_meta_entry(&self.db, slot_meta_working_set, slot, shred.parent());
+        let slot_meta_entry = get_slot_meta_entry(
+            &self.db,
+            slot_meta_working_set,
+            slot,
+            shred.parent().ok_or(InsertDataShredError::InvalidShred)?,
+        );
 
         let slot_meta = &mut slot_meta_entry.new_slot_meta.borrow_mut();
 
@@ -1321,14 +1261,9 @@ impl Blockstore {
         just_inserted_data_shreds.insert((slot, shred_index), shred);
         index_meta_working_set_entry.did_insert_occur = true;
         slot_meta_entry.did_insert_occur = true;
-        if let std::collections::hash_map::Entry::Vacant(_) = erasure_metas.entry((slot, set_index))
-        {
-            if let Some(meta) = self
-                .erasure_meta_cf
-                .get((slot, set_index))
-                .expect("Expect database get to succeed")
-            {
-                erasure_metas.insert((slot, set_index), meta);
+        if let HashMapEntry::Vacant(entry) = erasure_metas.entry((slot, set_index)) {
+            if let Some(meta) = self.erasure_meta(slot, set_index).unwrap() {
+                entry.insert(meta);
             }
         }
         Ok(newly_completed_data_sets)
@@ -1376,7 +1311,7 @@ impl Blockstore {
 
     fn get_data_shred_from_just_inserted_or_db<'a>(
         &'a self,
-        just_inserted_data_shreds: &'a HashMap<(u64, u64), Shred>,
+        just_inserted_data_shreds: &'a HashMap<(Slot, /*shred index:*/ u64), Shred>,
         slot: Slot,
         index: u64,
     ) -> Cow<'a, Vec<u8>> {
@@ -1393,12 +1328,11 @@ impl Blockstore {
         &self,
         shred: &Shred,
         slot_meta: &SlotMeta,
-        just_inserted_data_shreds: &HashMap<(u64, u64), Shred>,
+        just_inserted_data_shreds: &HashMap<(Slot, /*shred index:*/ u64), Shred>,
         last_root: &RwLock<u64>,
         leader_schedule: Option<&LeaderScheduleCache>,
         shred_source: ShredSource,
     ) -> bool {
-        use crate::shred::SHRED_PAYLOAD_SIZE;
         let shred_index = u64::from(shred.index());
         let slot = shred.slot();
         let last_in_slot = if shred.last_in_slot() {
@@ -1627,7 +1561,6 @@ impl Blockstore {
     }
 
     pub fn get_data_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
-        use crate::shred::SHRED_PAYLOAD_SIZE;
         self.data_shred_cf.get_bytes((slot, index)).map(|data| {
             data.map(|mut d| {
                 // Only data_header.size bytes stored in the blockstore so
@@ -3105,31 +3038,18 @@ impl Blockstore {
         &self,
         slot: u64,
         index: u32,
-        new_shred_raw: &[u8],
-        is_data: bool,
+        mut payload: Vec<u8>,
+        shred_type: ShredType,
     ) -> Option<Vec<u8>> {
-        let res = if is_data {
-            self.get_data_shred(slot, index as u64)
-                .expect("fetch from DuplicateSlots column family failed")
-        } else {
-            self.get_coding_shred(slot, index as u64)
-                .expect("fetch from DuplicateSlots column family failed")
-        };
-
-        let mut payload = new_shred_raw.to_vec();
-        payload.resize(
-            std::cmp::max(new_shred_raw.len(), crate::shred::SHRED_PAYLOAD_SIZE),
-            0,
-        );
+        let existing_shred = match shred_type {
+            ShredType::Data => self.get_data_shred(slot, index as u64),
+            ShredType::Code => self.get_coding_shred(slot, index as u64),
+        }
+        .expect("fetch from DuplicateSlots column family failed")?;
+        let size = payload.len().max(SHRED_PAYLOAD_SIZE);
+        payload.resize(size, 0u8);
         let new_shred = Shred::new_from_serialized_shred(payload).unwrap();
-        res.map(|existing_shred| {
-            if existing_shred != new_shred.payload {
-                Some(existing_shred)
-            } else {
-                None
-            }
-        })
-        .unwrap_or(None)
+        (existing_shred != new_shred.payload).then(|| existing_shred)
     }
 
     pub fn has_duplicate_shreds_in_slot(&self, slot: Slot) -> bool {
@@ -8186,8 +8106,8 @@ pub mod tests {
             blockstore.is_shred_duplicate(
                 slot,
                 0,
-                &duplicate_shred.payload,
-                duplicate_shred.is_data()
+                duplicate_shred.payload.clone(),
+                duplicate_shred.shred_type(),
             ),
             Some(shred.payload.to_vec())
         );
@@ -8195,8 +8115,8 @@ pub mod tests {
             .is_shred_duplicate(
                 slot,
                 0,
-                &non_duplicate_shred.payload,
-                duplicate_shred.is_data()
+                non_duplicate_shred.payload.clone(),
+                non_duplicate_shred.shred_type(),
             )
             .is_none());
 
@@ -8666,8 +8586,8 @@ pub mod tests {
             .is_shred_duplicate(
                 slot,
                 even_smaller_last_shred_duplicate.index(),
-                &even_smaller_last_shred_duplicate.payload,
-                true
+                even_smaller_last_shred_duplicate.payload.clone(),
+                ShredType::Data,
             )
             .is_some());
         blockstore

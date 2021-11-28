@@ -1,15 +1,17 @@
-use crate::native_loader::NativeLoader;
+use crate::{
+    ic_msg,
+    invoke_context::{InvokeContext, ProcessInstructionWithContext},
+    native_loader::NativeLoader,
+};
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     feature_set::{demote_program_write_locks, do_support_realloc, remove_native_loader},
-    ic_msg,
     instruction::{Instruction, InstructionError},
     keyed_account::keyed_account_at_index,
     message::Message,
-    process_instruction::{Executor, InvokeContext, ProcessInstructionWithContext},
     pubkey::Pubkey,
     rent::Rent,
     system_instruction::MAX_PERMITTED_DATA_LENGTH,
@@ -18,9 +20,22 @@ use solana_sdk::{
 use std::{
     cell::{Ref, RefCell, RefMut},
     collections::HashMap,
+    fmt::Debug,
     rc::Rc,
     sync::Arc,
 };
+
+/// Program executor
+pub trait Executor: Debug + Send + Sync {
+    /// Execute the program
+    fn execute(
+        &self,
+        first_instruction_account: usize,
+        instruction_data: &[u8],
+        invoke_context: &mut dyn InvokeContext,
+        use_jit: bool,
+    ) -> Result<(), InstructionError>;
+}
 
 #[derive(Default)]
 pub struct Executors {
@@ -58,14 +73,20 @@ pub struct ExecuteDetailsTimings {
 }
 impl ExecuteDetailsTimings {
     pub fn accumulate(&mut self, other: &ExecuteDetailsTimings) {
-        self.serialize_us += other.serialize_us;
-        self.create_vm_us += other.create_vm_us;
-        self.execute_us += other.execute_us;
-        self.deserialize_us += other.deserialize_us;
-        self.changed_account_count += other.changed_account_count;
-        self.total_account_count += other.total_account_count;
-        self.total_data_size += other.total_data_size;
-        self.data_size_changed += other.data_size_changed;
+        self.serialize_us = self.serialize_us.saturating_add(other.serialize_us);
+        self.create_vm_us = self.create_vm_us.saturating_add(other.create_vm_us);
+        self.execute_us = self.execute_us.saturating_add(other.execute_us);
+        self.deserialize_us = self.deserialize_us.saturating_add(other.deserialize_us);
+        self.changed_account_count = self
+            .changed_account_count
+            .saturating_add(other.changed_account_count);
+        self.total_account_count = self
+            .total_account_count
+            .saturating_add(other.total_account_count);
+        self.total_data_size = self.total_data_size.saturating_add(other.total_data_size);
+        self.data_size_changed = self
+            .data_size_changed
+            .saturating_add(other.data_size_changed);
         for (id, other) in &other.per_program_timings {
             let program_timing = self.per_program_timings.entry(*id).or_default();
             program_timing.accumulated_us = program_timing
@@ -209,8 +230,8 @@ impl PreAccount {
         }
 
         if outermost_call {
-            timings.total_account_count += 1;
-            timings.total_data_size += post.data().len();
+            timings.total_account_count = timings.total_account_count.saturating_add(1);
+            timings.total_data_size = timings.total_data_size.saturating_add(post.data().len());
             if owner_changed
                 || lamports_changed
                 || data_len_changed
@@ -218,8 +239,9 @@ impl PreAccount {
                 || rent_epoch_changed
                 || self.changed
             {
-                timings.changed_account_count += 1;
-                timings.data_size_changed += post.data().len();
+                timings.changed_account_count = timings.changed_account_count.saturating_add(1);
+                timings.data_size_changed =
+                    timings.data_size_changed.saturating_add(post.data().len());
             }
         }
 
@@ -355,38 +377,36 @@ impl InstructionProcessor {
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
-        if let Ok(root_account) = keyed_account_at_index(keyed_accounts, 0) {
-            let root_id = root_account.unsigned_key();
-            let owner_id = &root_account.owner()?;
-            if solana_sdk::native_loader::check_id(owner_id) {
-                for (id, process_instruction) in &self.programs {
-                    if id == root_id {
-                        // Call the builtin program
-                        return process_instruction(
-                            1, // root_id to be skipped
-                            instruction_data,
-                            invoke_context,
-                        );
-                    }
-                }
-                if !invoke_context.is_feature_active(&remove_native_loader::id()) {
-                    // Call the program via the native loader
-                    return self.native_loader.process_instruction(
-                        0,
+        let root_account = keyed_account_at_index(keyed_accounts, 0)
+            .map_err(|_| InstructionError::UnsupportedProgramId)?;
+        let root_id = root_account.unsigned_key();
+        let owner_id = &root_account.owner()?;
+        if solana_sdk::native_loader::check_id(owner_id) {
+            for (id, process_instruction) in &self.programs {
+                if id == root_id {
+                    // Call the builtin program
+                    return process_instruction(
+                        1, // root_id to be skipped
                         instruction_data,
                         invoke_context,
                     );
                 }
-            } else {
-                for (id, process_instruction) in &self.programs {
-                    if id == owner_id {
-                        // Call the program via a builtin loader
-                        return process_instruction(
-                            0, // no root_id was provided
-                            instruction_data,
-                            invoke_context,
-                        );
-                    }
+            }
+            if !invoke_context.is_feature_active(&remove_native_loader::id()) {
+                // Call the program via the native loader
+                return self
+                    .native_loader
+                    .process_instruction(0, instruction_data, invoke_context);
+            }
+        } else {
+            for (id, process_instruction) in &self.programs {
+                if id == owner_id {
+                    // Call the program via a builtin loader
+                    return process_instruction(
+                        0, // no root_id was provided
+                        instruction_data,
+                        invoke_context,
+                    );
                 }
             }
         }

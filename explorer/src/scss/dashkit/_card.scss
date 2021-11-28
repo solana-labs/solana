@@ -1,9 +1,11 @@
-//
+// 
 // card.scss
 // Extended from Bootstrap
 //
 
-//
+@use 'sass:math';
+
+// 
 // Bootstrap Overrides =====================================
 //
 
@@ -24,23 +26,21 @@
   flex-direction: row;
   align-items: center;
   height: $card-header-height;
-  padding-top: $card-spacer-y / 2;
-  padding-bottom: $card-spacer-y / 2;
+  padding-top: math.div($card-spacer-y, 2);
+  padding-bottom: math.div($card-spacer-y, 2);
 
   > *:first-child {
     flex: 1;
   }
 }
 
-// Title
-
-.card-title {
-  margin-bottom: $card-spacer-y / 2;
+.card-header + .card-footer {
+  border-top-width: 0;
 }
 
 
 //
-// Dashkit ===================================
+// Theme ===================================
 //
 
 // Card header
@@ -53,8 +53,8 @@
 }
 
 .card-header-tabs {
-  margin-top: -$card-spacer-y / 2;
-  margin-bottom: -$card-spacer-y / 2;
+  margin-top: math.div(-$card-spacer-y, 2);
+  margin-bottom: math.div(-$card-spacer-y, 2);
   margin-left: 0;
   margin-right: 0;
 }
@@ -62,6 +62,10 @@
 .card-header-tabs .nav-link {
   padding-top: calc((#{$card-header-height} - 1em * #{$line-height-base}) / 2) !important;
   padding-bottom: calc((#{$card-header-height} - 1em * #{$line-height-base}) / 2) !important;
+}
+
+.card-header-tabs .nav-link.active {
+  border-bottom-color: $primary;
 }
 
 
@@ -122,31 +126,31 @@
   display: block !important;
   margin-left: auto;
   margin-right: auto;
-  margin-bottom: $card-spacer-y;
+  margin-bottom: 1rem;
 }
 
 .card-avatar-top {
-  margin-top: -($card-spacer-x + $avatar-size-base / 2);
+  margin-top: -($card-spacer-x + math.div($avatar-size-base, 2));
 }
 
 .card-avatar-top.avatar-xs {
-  margin-top: -($card-spacer-x + $avatar-size-xs / 2);
+  margin-top: -($card-spacer-x + math.div($avatar-size-xs, 2));
 }
 
 .card-avatar-top.avatar-sm {
-  margin-top: -($card-spacer-x + $avatar-size-sm / 2);
+  margin-top: -($card-spacer-x + math.div($avatar-size-sm, 2));
 }
 
 .card-avatar-top.avatar-lg {
-  margin-top: -($card-spacer-x + $avatar-size-lg / 2);
+  margin-top: -($card-spacer-x + math.div($avatar-size-lg, 2));
 }
 
 .card-avatar-top.avatar-xl {
-  margin-top: -($card-spacer-x + $avatar-size-xl / 2);
+  margin-top: -($card-spacer-x + math.div($avatar-size-xl, 2));
 }
 
 .card-avatar-top.avatar-xxl {
-  margin-top: -($card-spacer-x + $avatar-size-xxl / 2);
+  margin-top: -($card-spacer-x + math.div($avatar-size-xxl, 2));
 }
 
 
@@ -295,4 +299,27 @@
   padding-left: 0;
   margin-left: $card-spacer-x;
   margin-right: $card-spacer-x;
+}
+
+
+// Card pagination
+
+.card-pagination.pagination-tabs {
+  margin-top: -$card-cap-padding-y;
+  margin-bottom: -$card-cap-padding-y;
+  border: 0;
+}
+
+.card-pagination.pagination-tabs .page-link {
+  border-top-width: 0 !important;
+}
+
+.card-pagination.pagination-tabs .active .page-link {
+  border-width: 0 0 $border-width 0 !important;
+}
+
+// Card divider 
+
+.card-divider {
+  border-color: $card-border-color;
 }

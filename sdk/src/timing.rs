@@ -28,6 +28,7 @@ pub fn duration_as_s(d: &Duration) -> f32 {
     d.as_secs() as f32 + (d.subsec_nanos() as f32 / 1_000_000_000.0)
 }
 
+/// return timestamp as ms
 pub fn timestamp() -> u64 {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -66,14 +67,18 @@ pub struct AtomicInterval {
 }
 
 impl AtomicInterval {
-    pub fn should_update(&self, interval_time: u64) -> bool {
-        self.should_update_ext(interval_time, true)
+    /// true if 'interval_time_ms' has elapsed since last time we returned true as long as it has been 'interval_time_ms' since this struct was created
+    pub fn should_update(&self, interval_time_ms: u64) -> bool {
+        self.should_update_ext(interval_time_ms, true)
     }
 
-    pub fn should_update_ext(&self, interval_time: u64, skip_first: bool) -> bool {
+    /// a primary use case is periodic metric reporting, potentially from different threads
+    /// true if 'interval_time_ms' has elapsed since last time we returned true
+    /// except, if skip_first=false, false until 'interval_time_ms' has elapsed since this struct was created
+    pub fn should_update_ext(&self, interval_time_ms: u64, skip_first: bool) -> bool {
         let now = timestamp();
         let last = self.last_update.load(Ordering::Relaxed);
-        now.saturating_sub(last) > interval_time
+        now.saturating_sub(last) > interval_time_ms
             && self
                 .last_update
                 .compare_exchange(last, now, Ordering::Relaxed, Ordering::Relaxed)

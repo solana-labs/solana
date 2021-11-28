@@ -166,7 +166,7 @@ export function AccountHeader({
   const data = account?.details?.data;
   const isToken = data?.program === "spl-token" && data?.parsed.type === "mint";
 
-  if (isMetaplexNFT(data, mintInfo?.decimals)) {
+  if (isMetaplexNFT(data, mintInfo)) {
     return (
       <NFTHeader
         nftData={(data as TokenProgramData).nftData!}
@@ -196,7 +196,7 @@ export function AccountHeader({
           </div>
         </div>
 
-        <div className="col mb-3 ml-n3 ml-md-n2">
+        <div className="col mb-3 ms-n3 ms-md-n2">
           <h6 className="header-pretitle">Token</h6>
           <h2 className="header-title">
             {tokenDetails?.name || "Unknown Token"}

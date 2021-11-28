@@ -34,6 +34,9 @@ impl SlotHashes {
         slot_hashes.sort_by(|(a, _), (b, _)| b.cmp(a));
         Self(slot_hashes)
     }
+    pub fn slot_hashes(&self) -> &[SlotHash] {
+        &self.0
+    }
 }
 
 impl FromIterator<(Slot, Hash)> for SlotHashes {
