@@ -1,14 +1,14 @@
 use {
     crate::TransactionTokenBalance,
     solana_account_decoder::parse_token::{
-        pubkey_from_spl_token_v2_0, spl_token_id_v2_0, spl_token_v2_0_native_mint,
-        token_amount_to_ui_amount, UiTokenAmount,
+        pubkey_from_spl_token, spl_token_id, spl_token_native_mint, token_amount_to_ui_amount,
+        UiTokenAmount,
     },
     solana_measure::measure::Measure,
     solana_metrics::datapoint_debug,
     solana_runtime::{bank::Bank, transaction_batch::TransactionBatch},
     solana_sdk::{account::ReadableAccount, pubkey::Pubkey},
-    spl_token_v2_0::{
+    spl_token::{
         solana_program::program_pack::Pack,
         state::{Account as TokenAccount, Mint},
     },
@@ -36,12 +36,12 @@ impl TransactionTokenBalancesSet {
 }
 
 fn is_token_program(program_id: &Pubkey) -> bool {
-    program_id == &spl_token_id_v2_0()
+    program_id == &spl_token_id()
 }
 
 fn get_mint_decimals(bank: &Bank, mint: &Pubkey) -> Option<u8> {
-    if mint == &spl_token_v2_0_native_mint() {
-        Some(spl_token_v2_0::native_mint::DECIMALS)
+    if mint == &spl_token_native_mint() {
+        Some(spl_token::native_mint::DECIMALS)
     } else {
         let mint_account = bank.get_account(mint)?;
 
@@ -113,7 +113,7 @@ fn collect_token_balance_from_account(
     let account = bank.get_account(account_id)?;
 
     let token_account = TokenAccount::unpack(account.data()).ok()?;
-    let mint = pubkey_from_spl_token_v2_0(&token_account.mint);
+    let mint = pubkey_from_spl_token(&token_account.mint);
 
     let decimals = mint_decimals.get(&mint).cloned().or_else(|| {
         let decimals = get_mint_decimals(bank, &mint)?;

@@ -1,0 +1,22 @@
+steps:
+  - command: "system-test/testnet-automation.sh"
+    label: "Partition recovery on GCE"
+    env:
+      UPLOAD_RESULTS_TO_SLACK: "true"
+      CLOUD_PROVIDER: "gce"
+      ENABLE_GPU: "false"
+      NUMBER_OF_VALIDATOR_NODES: 9
+      VALIDATOR_NODE_MACHINE_TYPE: "--machine-type n1-standard-16"
+      NUMBER_OF_CLIENT_NODES: 1
+      ADDITIONAL_FLAGS: "--dedicated"
+      SKIP_PERF_RESULTS: "true"
+      EXTRA_PRIMORDIAL_STAKES: 4
+      TEST_TYPE: "script"
+      WARMUP_SLOTS_BEFORE_TEST: 400
+      PRE_PARTITION_DURATION: 120
+      PARTITION_DURATION: 360
+      PARTITION_INCREMENT: 60
+      NETEM_CONFIG_FILE: "system-test/netem-configs/complete-loss-two-partitions"
+      CUSTOM_SCRIPT: "system-test/partition-testcases/measure-partition-recovery.sh"
+    agents:
+      - "queue=gce-deploy"

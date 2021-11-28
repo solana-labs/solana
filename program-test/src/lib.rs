@@ -9,7 +9,10 @@ use {
     log::*,
     solana_banks_client::start_client,
     solana_banks_server::banks_server::start_local_server,
-    solana_program_runtime::InstructionProcessor,
+    solana_program_runtime::{
+        ic_msg, instruction_processor::InstructionProcessor,
+        invoke_context::ProcessInstructionWithContext, stable_log,
+    },
     solana_runtime::{
         bank::{Bank, ExecuteTimings},
         bank_forks::BankForks,
@@ -25,7 +28,7 @@ use {
         entrypoint::{ProgramResult, SUCCESS},
         epoch_schedule::EpochSchedule,
         feature_set::demote_program_write_locks,
-        fee_calculator::FeeRateGovernor,
+        fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
         instruction::Instruction,
@@ -33,7 +36,6 @@ use {
         message::Message,
         native_token::sol_to_lamports,
         poh_config::PohConfig,
-        process_instruction::{self, stable_log, InvokeContext, ProcessInstructionWithContext},
         program_error::{ProgramError, ACCOUNT_BORROW_FAILED, UNSUPPORTED_SYSVAR},
         pubkey::Pubkey,
         rent::Rent,
@@ -66,6 +68,7 @@ use {
 
 // Export types so test clients can limit their solana crate dependencies
 pub use solana_banks_client::BanksClient;
+pub use solana_program_runtime::invoke_context::InvokeContext;
 
 // Export tokio for test clients
 pub use tokio;
@@ -107,9 +110,9 @@ pub fn builtin_process_instruction(
 ) -> Result<(), InstructionError> {
     set_invoke_context(invoke_context);
 
-    let logger = invoke_context.get_logger();
+    let log_collector = invoke_context.get_log_collector();
     let program_id = invoke_context.get_caller()?;
-    stable_log::program_invoke(&logger, program_id, invoke_context.invoke_depth());
+    stable_log::program_invoke(&log_collector, program_id, invoke_context.invoke_depth());
 
     // Skip the processor account
     let keyed_accounts = &invoke_context.get_keyed_accounts()?[1..];
@@ -162,10 +165,10 @@ pub fn builtin_process_instruction(
     // Execute the program
     process_instruction(program_id, &account_infos, input).map_err(|err| {
         let err = u64::from(err);
-        stable_log::program_failure(&logger, program_id, &err.into());
+        stable_log::program_failure(&log_collector, program_id, &err.into());
         err
     })?;
-    stable_log::program_success(&logger, program_id);
+    stable_log::program_success(&log_collector, program_id);
 
     // Commit AccountInfo changes back into KeyedAccounts
     for keyed_account in keyed_accounts {
@@ -187,7 +190,7 @@ macro_rules! processor {
         Some(
             |first_instruction_account: usize,
              input: &[u8],
-             invoke_context: &mut dyn solana_sdk::process_instruction::InvokeContext| {
+             invoke_context: &mut dyn solana_program_test::InvokeContext| {
                 $crate::builtin_process_instruction(
                     $process_instruction,
                     first_instruction_account,
@@ -215,7 +218,7 @@ fn get_sysvar<T: Default + Sysvar + Sized + serde::de::DeserializeOwned>(
         panic!("Exceeded compute budget");
     }
 
-    match process_instruction::get_sysvar::<T>(invoke_context, id) {
+    match solana_program_runtime::invoke_context::get_sysvar::<T>(invoke_context, id) {
         Ok(sysvar_data) => unsafe {
             *(var_addr as *mut _ as *mut T) = sysvar_data;
             SUCCESS
@@ -228,11 +231,7 @@ struct SyscallStubs {}
 impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
     fn sol_log(&self, message: &str) {
         let invoke_context = get_invoke_context();
-        let logger = invoke_context.get_logger();
-        let logger = logger.borrow_mut();
-        if logger.log_enabled() {
-            logger.log(&format!("Program log: {}", message));
-        }
+        ic_msg!(invoke_context, "Program log: {}", message);
     }
 
     fn sol_invoke_signed(
@@ -247,7 +246,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         //
 
         let invoke_context = get_invoke_context();
-        let logger = invoke_context.get_logger();
+        let log_collector = invoke_context.get_log_collector();
 
         let caller = *invoke_context.get_caller().expect("get_caller");
         let message = Message::new(&[instruction.clone()], None);
@@ -263,7 +262,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             .map(|(i, _)| message.is_writable(i, demote_program_write_locks))
             .collect::<Vec<bool>>();
 
-        stable_log::program_invoke(&logger, &program_id, invoke_context.invoke_depth());
+        stable_log::program_invoke(&log_collector, &program_id, invoke_context.invoke_depth());
 
         // Convert AccountInfos into Accounts
         let mut account_indices = Vec::with_capacity(message.account_keys.len());
@@ -360,7 +359,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             }
         }
 
-        stable_log::program_success(&logger, &program_id);
+        stable_log::program_success(&log_collector, &program_id);
         Ok(())
     }
 
@@ -880,25 +879,56 @@ impl ProgramTest {
     }
 }
 
-// TODO need to return lamports_per_signature?
 #[async_trait]
 pub trait ProgramTestBanksClientExt {
-    async fn get_new_blockhash(&mut self, blockhash: &Hash) -> io::Result<(Hash, u64)>;
+    /// Get a new blockhash, similar in spirit to RpcClient::get_new_blockhash()
+    ///
+    /// This probably should eventually be moved into BanksClient proper in some form
+    #[deprecated(
+        since = "1.9.0",
+        note = "Please use `get_new_latest_blockhash `instead"
+    )]
+    async fn get_new_blockhash(&mut self, blockhash: &Hash) -> io::Result<(Hash, FeeCalculator)>;
+    /// Get a new latest blockhash, similar in spirit to RpcClient::get_latest_blockhash()
+    async fn get_new_latest_blockhash(&mut self, blockhash: &Hash) -> io::Result<Hash>;
 }
 
 #[async_trait]
 impl ProgramTestBanksClientExt for BanksClient {
-    /// Get a new blockhash, similar in spirit to RpcClient::get_new_blockhash()
-    ///
-    /// This probably should eventually be moved into BanksClient proper in some form
-    async fn get_new_blockhash(&mut self, blockhash: &Hash) -> io::Result<(Hash, u64)> {
+    async fn get_new_blockhash(&mut self, blockhash: &Hash) -> io::Result<(Hash, FeeCalculator)> {
         let mut num_retries = 0;
         let start = Instant::now();
         while start.elapsed().as_secs() < 5 {
+            #[allow(deprecated)]
             if let Ok((fee_calculator, new_blockhash, _slot)) = self.get_fees().await {
                 if new_blockhash != *blockhash {
-                    return Ok((new_blockhash, fee_calculator.lamports_per_signature));
+                    return Ok((new_blockhash, fee_calculator));
                 }
+            }
+            debug!("Got same blockhash ({:?}), will retry...", blockhash);
+
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            num_retries += 1;
+        }
+
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!(
+                "Unable to get new blockhash after {}ms (retried {} times), stuck at {}",
+                start.elapsed().as_millis(),
+                num_retries,
+                blockhash
+            ),
+        ))
+    }
+
+    async fn get_new_latest_blockhash(&mut self, blockhash: &Hash) -> io::Result<Hash> {
+        let mut num_retries = 0;
+        let start = Instant::now();
+        while start.elapsed().as_secs() < 5 {
+            let new_blockhash = self.get_latest_blockhash().await?;
+            if new_blockhash != *blockhash {
+                return Ok(new_blockhash);
             }
             debug!("Got same blockhash ({:?}), will retry...", blockhash);
 
@@ -1005,6 +1035,18 @@ impl ProgramTestContext {
         let versioned = VoteStateVersions::new_current(vote_state);
         VoteState::to(&versioned, &mut vote_account).unwrap();
         bank.store_account(vote_account_address, &vote_account);
+    }
+
+    /// Create or overwrite an account, subverting normal runtime checks.
+    ///
+    /// This method exists to make it easier to set up artificial situations
+    /// that would be difficult to replicate by sending individual transactions.
+    /// Beware that it can be used to create states that would not be reachable
+    /// by sending transactions!
+    pub fn set_account(&mut self, address: &Pubkey, account: &AccountSharedData) {
+        let bank_forks = self.bank_forks.read().unwrap();
+        let bank = bank_forks.working_bank();
+        bank.store_account(address, account);
     }
 
     /// Force the working bank ahead to a new slot

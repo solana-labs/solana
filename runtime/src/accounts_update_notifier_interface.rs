@@ -14,15 +14,6 @@ pub trait AccountsUpdateNotifierInterface: std::fmt::Debug {
 
     /// Notified when all accounts have been notified when restoring from a snapshot.
     fn notify_end_of_restore_from_snapshot(&self);
-
-    /// Notified when a slot is optimistically confirmed
-    fn notify_slot_confirmed(&self, slot: Slot, parent: Option<Slot>);
-
-    /// Notified when a slot is marked frozen.
-    fn notify_slot_processed(&self, slot: Slot, parent: Option<Slot>);
-
-    /// Notified when a slot is rooted.
-    fn notify_slot_rooted(&self, slot: Slot, parent: Option<Slot>);
 }
 
 pub type AccountsUpdateNotifier = Arc<RwLock<dyn AccountsUpdateNotifierInterface + Sync + Send>>;

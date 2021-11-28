@@ -45,7 +45,7 @@ use {
 pub struct RpcBootstrapConfig {
     pub no_genesis_fetch: bool,
     pub no_snapshot_fetch: bool,
-    pub no_untrusted_rpc: bool,
+    pub only_known_rpc: bool,
     pub max_genesis_archive_unpacked_size: u64,
     pub no_check_vote_account: bool,
     pub incremental_snapshot_fetch: bool,
@@ -195,9 +195,9 @@ fn verify_reachable_ports(
     )
 }
 
-fn is_trusted_validator(id: &Pubkey, trusted_validators: &Option<HashSet<Pubkey>>) -> bool {
-    if let Some(trusted_validators) = trusted_validators {
-        trusted_validators.contains(id)
+fn is_known_validator(id: &Pubkey, known_validators: &Option<HashSet<Pubkey>>) -> bool {
+    if let Some(known_validators) = known_validators {
+        known_validators.contains(id)
     } else {
         false
     }
@@ -284,14 +284,14 @@ fn get_rpc_peers(
         .filter(|rpc_peer| !blacklisted_rpc_nodes.contains(&rpc_peer.id))
         .collect();
     let rpc_peers_blacklisted = rpc_peers_total - rpc_peers.len();
-    let rpc_peers_trusted = rpc_peers
+    let rpc_known_peers = rpc_peers
         .iter()
-        .filter(|rpc_peer| is_trusted_validator(&rpc_peer.id, &validator_config.trusted_validators))
+        .filter(|rpc_peer| is_known_validator(&rpc_peer.id, &validator_config.known_validators))
         .count();
 
     info!(
         "Total {} RPC nodes found. {} known, {} blacklisted ",
-        rpc_peers_total, rpc_peers_trusted, rpc_peers_blacklisted
+        rpc_peers_total, rpc_known_peers, rpc_peers_blacklisted
     );
 
     if rpc_peers_blacklisted == rpc_peers_total {
@@ -568,10 +568,10 @@ mod without_incremental_snapshots {
                                        && download_progress.percentage_done <= 2_f32
                                        && download_progress.estimated_remaining_time > 60_f32
                                        && download_abort_count < maximum_snapshot_download_abort {
-                                        if let Some(ref trusted_validators) = validator_config.trusted_validators {
-                                            if trusted_validators.contains(&rpc_contact_info.id)
-                                               && trusted_validators.len() == 1
-                                               && bootstrap_config.no_untrusted_rpc {
+                                        if let Some(ref known_validators) = validator_config.known_validators {
+                                            if known_validators.contains(&rpc_contact_info.id)
+                                               && known_validators.len() == 1
+                                               && bootstrap_config.only_known_rpc {
                                                 warn!("The snapshot download is too slow, throughput: {} < min speed {} bytes/sec, but will NOT abort \
                                                       and try a different node as it is the only known validator and the --only-known-rpc flag \
                                                       is set. \
@@ -632,9 +632,9 @@ mod without_incremental_snapshots {
             }
             warn!("{}", result.unwrap_err());
 
-            if let Some(ref trusted_validators) = validator_config.trusted_validators {
-                if trusted_validators.contains(&rpc_contact_info.id) {
-                    continue; // Never blacklist a trusted node
+            if let Some(ref known_validators) = validator_config.known_validators {
+                if known_validators.contains(&rpc_contact_info.id) {
+                    continue; // Never blacklist a known node
                 }
             }
 
@@ -684,22 +684,22 @@ mod without_incremental_snapshots {
             let eligible_rpc_peers = if bootstrap_config.no_snapshot_fetch {
                 rpc_peers
             } else {
-                let trusted_snapshot_hashes =
-                    get_trusted_snapshot_hashes(cluster_info, &validator_config.trusted_validators);
+                let known_snapshot_hashes =
+                    get_known_snapshot_hashes(cluster_info, &validator_config.known_validators);
 
                 let mut eligible_rpc_peers = vec![];
 
                 for rpc_peer in rpc_peers.iter() {
-                    if bootstrap_config.no_untrusted_rpc
-                        && !is_trusted_validator(&rpc_peer.id, &validator_config.trusted_validators)
+                    if bootstrap_config.only_known_rpc
+                        && !is_known_validator(&rpc_peer.id, &validator_config.known_validators)
                     {
                         continue;
                     }
                     cluster_info.get_snapshot_hash_for_node(&rpc_peer.id, |snapshot_hashes| {
                         for snapshot_hash in snapshot_hashes {
-                            if let Some(ref trusted_snapshot_hashes) = trusted_snapshot_hashes {
-                                if !trusted_snapshot_hashes.contains(snapshot_hash) {
-                                    // Ignore all untrusted snapshot hashes
+                            if let Some(ref known_snapshot_hashes) = known_snapshot_hashes {
+                                if !known_snapshot_hashes.contains(snapshot_hash) {
+                                    // Ignore all unknown snapshot hashes
                                     continue;
                                 }
                             }
@@ -770,20 +770,20 @@ mod without_incremental_snapshots {
         }
     }
 
-    fn get_trusted_snapshot_hashes(
+    fn get_known_snapshot_hashes(
         cluster_info: &ClusterInfo,
-        trusted_validators: &Option<HashSet<Pubkey>>,
+        known_validators: &Option<HashSet<Pubkey>>,
     ) -> Option<HashSet<(Slot, Hash)>> {
-        if let Some(trusted_validators) = trusted_validators {
-            let mut trusted_snapshot_hashes = HashSet::new();
-            for trusted_validator in trusted_validators {
-                cluster_info.get_snapshot_hash_for_node(trusted_validator, |snapshot_hashes| {
+        if let Some(known_validators) = known_validators {
+            let mut known_snapshot_hashes = HashSet::new();
+            for known_validator in known_validators {
+                cluster_info.get_snapshot_hash_for_node(known_validator, |snapshot_hashes| {
                     for snapshot_hash in snapshot_hashes {
-                        trusted_snapshot_hashes.insert(*snapshot_hash);
+                        known_snapshot_hashes.insert(*snapshot_hash);
                     }
                 });
             }
-            Some(trusted_snapshot_hashes)
+            Some(known_snapshot_hashes)
         } else {
             None
         }
@@ -811,7 +811,7 @@ mod with_incremental_snapshots {
 
     /// A snapshot hash.  In this context (bootstrap *with* incremental snapshots), a snapshot hash
     /// is _both_ a full snapshot hash and an (optional) incremental snapshot hash.
-    #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+    #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
     struct SnapshotHash {
         full: (Slot, Hash),
         incr: Option<(Slot, Hash)>,
@@ -972,9 +972,9 @@ mod with_incremental_snapshots {
             }
             warn!("{}", result.unwrap_err());
 
-            if let Some(ref trusted_validators) = validator_config.trusted_validators {
-                if trusted_validators.contains(&rpc_contact_info.id) {
-                    continue; // Never blacklist a trusted node
+            if let Some(ref known_validators) = validator_config.known_validators {
+                if known_validators.contains(&rpc_contact_info.id) {
+                    continue; // Never blacklist a known node
                 }
             }
 
@@ -994,16 +994,14 @@ mod with_incremental_snapshots {
     /// Get an RPC peer node to download from.
     ///
     /// This function finds the highest compatible snapshots from the cluster, then picks one peer
-    /// at random to use (return).  The chosen snapshots are:
-    /// 1. have a full snapshot slot that is a multiple of our full snapshot interval
-    /// 2. have the highest full snapshot slot
-    /// 3. have the highest incremental snapshot slot
+    /// at random to use (return).
     ///
-    /// NOTE: If the node has configured a full snapshot interval that is non-standard, it is
-    /// possible that there are no compatible snapshot hashes available.  At that time, a node may
-    /// (1) try again, (2) change its full snapshot interval back to a standard/default value, or
-    /// (3) disable downloading an incremental snapshot and instead download the highest full
-    /// snapshot hash, regardless of compatibility.
+    /// NOTE: If the node has configured a full snapshot interval that is not common and/or
+    /// different from its known validators, then it is possible that there are no compatible
+    /// snapshot hashes available.  At that time, a node may (1) try again, (2) change its full
+    /// snapshot interval back to a standard/default value, or (3) disable downloading an
+    /// incremental snapshot and instead download the highest full snapshot hash, regardless of
+    /// compatibility.
     fn get_rpc_node(
         cluster_info: &ClusterInfo,
         cluster_entrypoints: &[ContactInfo],
@@ -1057,14 +1055,7 @@ mod with_incremental_snapshots {
                     None => newer_cluster_snapshot_timeout = Some(Instant::now()),
                     Some(newer_cluster_snapshot_timeout) => {
                         if newer_cluster_snapshot_timeout.elapsed().as_secs() > 180 {
-                            warn!(
-                                "Giving up, did not get newer snapshots from the cluster. \
-                              If this persists, it may be that there are no nodes with \
-                              the same full snapshot interval. Try using the default \
-                              value (i.e. do not set --full-snapshot-interval-slots). \
-                              Alternatively, disable fetching incremental snapshots, just \
-                              fetch full snapshots, by setting --no-incremental-snapshot-fetch."
-                            );
+                            warn!("Giving up, did not get newer snapshots from the cluster.");
                             return None;
                         }
                     }
@@ -1102,32 +1093,27 @@ mod with_incremental_snapshots {
     /// Get peer snapshot hashes
     ///
     /// The result is a vector of peers with snapshot hashes that:
-    /// 1. have a full snapshot slot that is a multiple of our full snapshot interval
+    /// 1. match a snapshot hash from the known validators
     /// 2. have the highest full snapshot slot
     /// 3. have the highest incremental snapshot slot
+    ///
+    /// NOTE: If the node's full snapshot interval is different from its known validators, it may
+    /// be more likely to download full snapshots more often than necessary.
     fn get_peer_snapshot_hashes(
         cluster_info: &ClusterInfo,
         validator_config: &ValidatorConfig,
         bootstrap_config: &RpcBootstrapConfig,
         rpc_peers: &[ContactInfo],
     ) -> Vec<PeerSnapshotHash> {
-        let trusted_snapshot_hashes = get_trusted_snapshot_hashes(cluster_info, validator_config);
+        let known_snapshot_hashes = get_known_snapshot_hashes(cluster_info, validator_config);
 
-        let mut peer_snapshot_hashes = get_trusted_peer_snapshot_hashes(
+        let mut peer_snapshot_hashes = get_eligible_peer_snapshot_hashes(
             cluster_info,
             validator_config,
             bootstrap_config,
             rpc_peers,
         );
-        retain_trusted_peer_snapshot_hashes(&trusted_snapshot_hashes, &mut peer_snapshot_hashes);
-        retain_peer_snapshot_hashes_with_a_multiple_of_full_snapshot_archive_interval(
-            validator_config
-                .snapshot_config
-                .as_ref()
-                .unwrap()
-                .full_snapshot_archive_interval_slots,
-            &mut peer_snapshot_hashes,
-        );
+        retain_known_peer_snapshot_hashes(&known_snapshot_hashes, &mut peer_snapshot_hashes);
         retain_peer_snapshot_hashes_with_highest_full_snapshot_slot(&mut peer_snapshot_hashes);
         retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(
             &mut peer_snapshot_hashes,
@@ -1136,79 +1122,87 @@ mod with_incremental_snapshots {
         peer_snapshot_hashes
     }
 
-    /// Get the snapshot hashes from trusted peers.
+    /// Get the snapshot hashes from known peers.
     ///
     /// The hashes are put into a map from full snapshot hash to a set of incremental snapshot
     /// hashes.  This map will be used as the golden hashes; when peers are queried for their
     /// individual snapshot hashes, their results will be checked against this map to verify
     /// correctness.
     ///
-    /// NOTE: Only a single full snashot hash is allowed per slot.  If somehow two trusted peers
-    /// have a full snapshot hash with the same slot and _different_ hashes, the second will be
-    /// skipped, and its incremental snapshot hashes will not be added to the map.
-    fn get_trusted_snapshot_hashes(
+    /// NOTE: Only a single snashot hash is allowed per slot.  If somehow two known peers have a
+    /// snapshot hash with the same slot and _different_ hashes, the second will be skipped.  This
+    /// applies to both full and incremental snapshot hashes.
+    fn get_known_snapshot_hashes(
         cluster_info: &ClusterInfo,
         validator_config: &ValidatorConfig,
     ) -> HashMap<(Slot, Hash), HashSet<(Slot, Hash)>> {
-        if validator_config.trusted_validators.is_none() {
-            trace!("no trusted validators, so no trusted snapshot hashes");
+        if validator_config.known_validators.is_none() {
+            trace!("no known validators, so no known snapshot hashes");
             return HashMap::new();
         }
-        let trusted_validators = validator_config.trusted_validators.as_ref().unwrap();
+        let known_validators = validator_config.known_validators.as_ref().unwrap();
 
-        let mut trusted_snapshot_hashes: HashMap<(Slot, Hash), HashSet<(Slot, Hash)>> =
+        let mut known_snapshot_hashes: HashMap<(Slot, Hash), HashSet<(Slot, Hash)>> =
             HashMap::new();
-        trusted_validators
+        known_validators
             .iter()
-            .for_each(|trusted_validator| {
-                if let Some(crds_value::IncrementalSnapshotHashes {base: full_snapshot_hash, hashes: incremental_snapshot_hashes, ..}) = cluster_info.get_incremental_snapshot_hashes_for_node(trusted_validator) {
-                    match trusted_snapshot_hashes.get_mut(&full_snapshot_hash) {
-                        Some(hashes) => {
-                            // Do not add these hashes if there's already an incremental
-                            // snapshot hash with this same slot, but with a _different_ hash.
-                            // NOTE: There's no good reason for trusted validators to
-                            // produce incremental snapshots at the same slot with
-                            // different hashes, so this should not happen.
-                            for incremental_snapshot_hash in incremental_snapshot_hashes {
-                                if !hashes.iter().any(|(slot, hash)| slot == &incremental_snapshot_hash.0 && hash != &incremental_snapshot_hash.1) {
-                                    hashes.insert(incremental_snapshot_hash);
-                                } else {
-                                    info!("Ignoring incremental snapshot hash from trusted validator {} with a slot we've already seen (slot: {}), but a different hash.", trusted_validator, incremental_snapshot_hash.0);
-                                }
-                            }
-                        }
-                        None => {
-                            // Do not add these hashes if there's already a full snapshot hash
-                            // with the same slot but with a _different_ hash.
-                            // NOTE: There's no good reason for trusted validators to
-                            // produce full snapshots at the same slot with different
-                            // hashes, so this should not happen.
-                            if !trusted_snapshot_hashes.keys().any(
-                                |(slot, hash)| {
-                                    slot == &full_snapshot_hash.0
-                                        && hash != &full_snapshot_hash.1
-                                },
-                            ) {
-                                let mut hashes = HashSet::new();
-                                hashes.extend(incremental_snapshot_hashes);
-                                trusted_snapshot_hashes
-                                    .insert(full_snapshot_hash, hashes);
+            .for_each(|known_validator| {
+                // First get the Crds::SnapshotHashes for each known validator and add them as
+                // the keys in the known snapshot hashes HashMap.
+                let mut full_snapshot_hashes = Vec::new();
+                cluster_info.get_snapshot_hash_for_node(known_validator, |snapshot_hashes| {
+                    full_snapshot_hashes = snapshot_hashes.clone();
+                });
+                full_snapshot_hashes.into_iter().for_each(|full_snapshot_hash| {
+                    // Do not add this hash if there's already a full snapshot hash with the same
+                    // slot but with a _different_ hash.
+                    // NOTE: There's no good reason for known validators to produce snapshots at
+                    // the same slot with different hashes, so this should not happen.
+                    if !known_snapshot_hashes.keys().any(|known_snapshot_hash| {
+                        known_snapshot_hash.0 == full_snapshot_hash.0 && known_snapshot_hash.1 != full_snapshot_hash.1
+                    }) {
+                        known_snapshot_hashes.insert(full_snapshot_hash, HashSet::new());
+                    } else {
+                        info!("Ignoring full snapshot hash from known validator {} with a slot we've already seen (slot: {}), but a different hash.", known_validator, full_snapshot_hash.0);
+                    }
+                });
+
+                // Then get the Crds::IncrementalSnapshotHashes for each known validator and add
+                // them as the values in the known snapshot hashes HashMap.
+                if let Some(crds_value::IncrementalSnapshotHashes {base: full_snapshot_hash, hashes: incremental_snapshot_hashes, ..}) = cluster_info.get_incremental_snapshot_hashes_for_node(known_validator) {
+                    if let Some(hashes) = known_snapshot_hashes.get_mut(&full_snapshot_hash) {
+                        // Do not add this hash if there's already an incremental snapshot hash
+                        // with the same slot, but with a _different_ hash.
+                        // NOTE: There's no good reason for known validators to produce snapshots
+                        // at the same slot with different hashes, so this should not happen.
+                        for incremental_snapshot_hash in incremental_snapshot_hashes {
+                            if !hashes.iter().any(|(slot, hash)| slot == &incremental_snapshot_hash.0 && hash != &incremental_snapshot_hash.1) {
+                                hashes.insert(incremental_snapshot_hash);
                             } else {
-                                info!("Ignoring full snapshot hashes from trusted validator {} with a slot we've already seen (slot: {}), but a different hash.", trusted_validator, full_snapshot_hash.0);
+                                info!("Ignoring incremental snapshot hash from known validator {} with a slot we've already seen (slot: {}), but a different hash.", known_validator, incremental_snapshot_hash.0);
                             }
                         }
+                    } else {
+                        // Since incremental snapshots *must* have a valid base (i.e. full)
+                        // snapshot, if .get() returned None, then that can only happen if there
+                        // already is a full snapshot hash in the known snapshot hashes with the
+                        // same slot but _different_ a hash.  Assert that below.  If the assert
+                        // ever fails, there is a programmer bug.
+                        assert!(known_snapshot_hashes.keys().any(|(slot, hash)| slot == &full_snapshot_hash.0 && hash != &full_snapshot_hash.1),
+                            "There must exist a full snapshot hash already in known snapshot hashes with the same slot but a different hash");
+                        info!("Ignoring incremental snapshot hashes from known validator {} with a base slot we've already seen (base slot: {}), but a different base hash.", known_validator, full_snapshot_hash.0);
                     }
                 }
             });
 
-        trace!("trusted snapshot hashes: {:?}", &trusted_snapshot_hashes);
-        trusted_snapshot_hashes
+        trace!("known snapshot hashes: {:?}", &known_snapshot_hashes);
+        known_snapshot_hashes
     }
 
-    /// Get trusted snapshot hashes from all the eligible peers.  This fn will get only one
+    /// Get snapshot hashes from all the eligible peers.  This fn will get only one
     /// snapshot hash per peer (the one with the highest slot).  This may be just a full snapshot
     /// hash, or a combo full (i.e. base) snapshot hash and incremental snapshot hash.
-    fn get_trusted_peer_snapshot_hashes(
+    fn get_eligible_peer_snapshot_hashes(
         cluster_info: &ClusterInfo,
         validator_config: &ValidatorConfig,
         bootstrap_config: &RpcBootstrapConfig,
@@ -1216,71 +1210,52 @@ mod with_incremental_snapshots {
     ) -> Vec<PeerSnapshotHash> {
         let mut peer_snapshot_hashes = Vec::new();
         for rpc_peer in rpc_peers {
-            if bootstrap_config.no_untrusted_rpc
-                && !is_trusted_validator(&rpc_peer.id, &validator_config.trusted_validators)
+            if bootstrap_config.only_known_rpc
+                && !is_known_validator(&rpc_peer.id, &validator_config.known_validators)
             {
-                // Ignore all untrusted peers
+                // We were told to ignore unknown peers
                 continue;
             }
 
-            cluster_info
-                .get_incremental_snapshot_hashes_for_node(&rpc_peer.id)
-                .and_then(
-                    |crds_value::IncrementalSnapshotHashes { base, hashes, .. }| {
-                        // Newer hashes are pushed to the end of `hashes`, so the last element should
-                        // be the newest (i.e. have the highest slot).
-                        //
-                        // NOTE: It is important that the result of `last().map()` is the return  value
-                        // from `and_then()`, so that the `or_else()` can run in _both_ scenarios where
-                        // either (1) the peer does not have incremental snapshots enabled, or (2) the
-                        // peer has not generated any incremental snapshots yet.
-                        hashes.last().map(|incremental_snapshot_hash| {
-                            peer_snapshot_hashes.push(PeerSnapshotHash {
-                                rpc_contact_info: rpc_peer.clone(),
-                                snapshot_hash: SnapshotHash {
-                                    full: base,
-                                    incr: Some(*incremental_snapshot_hash),
-                                },
-                            })
-                        })
-                    },
-                )
-                // If the peer does not have any incremental snapshot hashes, then get its highest full
-                // snapshot hash instead.
-                .or_else(|| {
-                    cluster_info.get_snapshot_hash_for_node(&rpc_peer.id, |hashes| {
-                        if let Some(full_snapshot_hash) = hashes.last() {
-                            peer_snapshot_hashes.push(PeerSnapshotHash {
-                                rpc_contact_info: rpc_peer.clone(),
-                                snapshot_hash: SnapshotHash {
-                                    full: *full_snapshot_hash,
-                                    incr: None,
-                                },
-                            })
-                        }
-                    })
+            let mut highest_snapshot_hash =
+                get_highest_incremental_snapshot_hash_for_peer(cluster_info, &rpc_peer.id);
+
+            // Get this peer's highest (full) snapshot hash.  We need to get these snapshot hashes
+            // (instead of just the IncrementalSnapshotHashes) in case the peer is either (1) not
+            // taking incremental snapshots, or (2) if the last snapshot taken was a full snapshot,
+            // which would get pushed to CRDS here (i.e. `crds_value::SnapshotHashes`) first.
+            let snapshot_hash = get_highest_full_snapshot_hash_for_peer(cluster_info, &rpc_peer.id);
+            if snapshot_hash > highest_snapshot_hash {
+                highest_snapshot_hash = snapshot_hash;
+            }
+
+            if let Some(snapshot_hash) = highest_snapshot_hash {
+                peer_snapshot_hashes.push(PeerSnapshotHash {
+                    rpc_contact_info: rpc_peer.clone(),
+                    snapshot_hash,
                 });
+            };
         }
 
         trace!("peer snapshot hashes: {:?}", &peer_snapshot_hashes);
         peer_snapshot_hashes
     }
 
-    /// Retain the peer snapshot hashes that match a hash from the trusted snapshot hashes
-    fn retain_trusted_peer_snapshot_hashes(
-        trusted_snapshot_hashes: &HashMap<(Slot, Hash), HashSet<(Slot, Hash)>>,
+    /// Retain the peer snapshot hashes that match a hash from the known snapshot hashes
+    fn retain_known_peer_snapshot_hashes(
+        known_snapshot_hashes: &HashMap<(Slot, Hash), HashSet<(Slot, Hash)>>,
         peer_snapshot_hashes: &mut Vec<PeerSnapshotHash>,
     ) {
         peer_snapshot_hashes.retain(|peer_snapshot_hash| {
-            trusted_snapshot_hashes
+            known_snapshot_hashes
                 .get(&peer_snapshot_hash.snapshot_hash.full)
-                .map(|trusted_incremental_hashes| {
+                .map(|known_incremental_hashes| {
                     if peer_snapshot_hash.snapshot_hash.incr.is_none() {
                         // If the peer's full snapshot hashes match, but doesn't have any
                         // incremental snapshots, that's fine; keep 'em!
                         true
                     } else {
-                        trusted_incremental_hashes
+                        known_incremental_hashes
                             .contains(peer_snapshot_hash.snapshot_hash.incr.as_ref().unwrap())
                     }
                 })
@@ -1288,23 +1263,7 @@ mod with_incremental_snapshots {
         });
 
         trace!(
-            "retain trusted peer snapshot hashes: {:?}",
-            &peer_snapshot_hashes
-        );
-    }
-
-    /// Retain the peer snapshot hashes with a full snapshot slot that is a multiple of the full
-    /// snapshot archive interval
-    fn retain_peer_snapshot_hashes_with_a_multiple_of_full_snapshot_archive_interval(
-        full_snapshot_archive_interval: Slot,
-        peer_snapshot_hashes: &mut Vec<PeerSnapshotHash>,
-    ) {
-        peer_snapshot_hashes.retain(|peer_snapshot_hash| {
-            peer_snapshot_hash.snapshot_hash.full.0 % full_snapshot_archive_interval == 0
-        });
-
-        trace!(
-            "retain peer snapshot hashes with a multiple of full snapshot archive interval: {:?}",
+            "retain known peer snapshot hashes: {:?}",
             &peer_snapshot_hashes
         );
     }
@@ -1527,10 +1486,10 @@ mod with_incremental_snapshots {
                     && download_progress.estimated_remaining_time > 60_f32
                     && *download_abort_count < maximum_snapshot_download_abort
                 {
-                    if let Some(ref trusted_validators) = validator_config.trusted_validators {
-                        if trusted_validators.contains(&rpc_contact_info.id)
-                            && trusted_validators.len() == 1
-                            && bootstrap_config.no_untrusted_rpc
+                    if let Some(ref known_validators) = validator_config.known_validators {
+                        if known_validators.contains(&rpc_contact_info.id)
+                            && known_validators.len() == 1
+                            && bootstrap_config.only_known_rpc
                         {
                             warn!("The snapshot download is too slow, throughput: {} < min speed {} bytes/sec, but will NOT abort \
                                       and try a different node as it is the only known validator and the --only-known-rpc flag \
@@ -1596,6 +1555,42 @@ mod with_incremental_snapshots {
         }
     }
 
+    /// Get the highest full snapshot hash for a peer from CRDS
+    fn get_highest_full_snapshot_hash_for_peer(
+        cluster_info: &ClusterInfo,
+        peer: &Pubkey,
+    ) -> Option<SnapshotHash> {
+        let mut full_snapshot_hashes = Vec::new();
+        cluster_info.get_snapshot_hash_for_node(peer, |snapshot_hashes| {
+            full_snapshot_hashes = snapshot_hashes.clone()
+        });
+        full_snapshot_hashes
+            .into_iter()
+            .max()
+            .map(|full_snapshot_hash| SnapshotHash {
+                full: full_snapshot_hash,
+                incr: None,
+            })
+    }
+
+    /// Get the highest incremental snapshot hash for a peer from CRDS
+    fn get_highest_incremental_snapshot_hash_for_peer(
+        cluster_info: &ClusterInfo,
+        peer: &Pubkey,
+    ) -> Option<SnapshotHash> {
+        cluster_info
+            .get_incremental_snapshot_hashes_for_node(peer)
+            .map(
+                |crds_value::IncrementalSnapshotHashes { base, hashes, .. }| {
+                    let highest_incremental_snapshot_hash = hashes.into_iter().max();
+                    SnapshotHash {
+                        full: base,
+                        incr: highest_incremental_snapshot_hash,
+                    }
+                },
+            )
+    }
+
     #[cfg(test)]
     mod tests {
         use super::*;
@@ -1636,8 +1631,8 @@ mod with_incremental_snapshots {
         }
 
         #[test]
-        fn test_retain_trusted_peer_snapshot_hashes() {
-            let trusted_snapshot_hashes: HashMap<(Slot, Hash), HashSet<(Slot, Hash)>> = [
+        fn test_retain_known_peer_snapshot_hashes() {
+            let known_snapshot_hashes: HashMap<(Slot, Hash), HashSet<(Slot, Hash)>> = [
                 (
                     (200_000, Hash::new_unique()),
                     [
@@ -1666,9 +1661,9 @@ mod with_incremental_snapshots {
             .cloned()
             .collect();
 
-            let trusted_snapshot_hash = trusted_snapshot_hashes.iter().next().unwrap();
-            let trusted_full_snapshot_hash = trusted_snapshot_hash.0;
-            let trusted_incremental_snapshot_hash = trusted_snapshot_hash.1.iter().next().unwrap();
+            let known_snapshot_hash = known_snapshot_hashes.iter().next().unwrap();
+            let known_full_snapshot_hash = known_snapshot_hash.0;
+            let known_incremental_snapshot_hash = known_snapshot_hash.1.iter().next().unwrap();
 
             let contact_info = default_contact_info_for_tests();
             let peer_snapshot_hashes = vec![
@@ -1681,66 +1676,37 @@ mod with_incremental_snapshots {
                     Some((111_111, Hash::default())),
                 ),
                 // good full snapshot hash, no incremental snapshot hash
-                PeerSnapshotHash::new(contact_info.clone(), *trusted_full_snapshot_hash, None),
+                PeerSnapshotHash::new(contact_info.clone(), *known_full_snapshot_hash, None),
                 // bad full snapshot hash, good (not possible) incremental snapshot hash
                 PeerSnapshotHash::new(
                     contact_info.clone(),
                     (111_000, Hash::default()),
-                    Some(*trusted_incremental_snapshot_hash),
+                    Some(*known_incremental_snapshot_hash),
                 ),
                 // good full snapshot hash, bad incremental snapshot hash
                 PeerSnapshotHash::new(
                     contact_info.clone(),
-                    *trusted_full_snapshot_hash,
+                    *known_full_snapshot_hash,
                     Some((111_111, Hash::default())),
                 ),
                 // good everything
                 PeerSnapshotHash::new(
                     contact_info.clone(),
-                    *trusted_full_snapshot_hash,
-                    Some(*trusted_incremental_snapshot_hash),
+                    *known_full_snapshot_hash,
+                    Some(*known_incremental_snapshot_hash),
                 ),
             ];
 
             let expected = vec![
-                PeerSnapshotHash::new(contact_info.clone(), *trusted_full_snapshot_hash, None),
+                PeerSnapshotHash::new(contact_info.clone(), *known_full_snapshot_hash, None),
                 PeerSnapshotHash::new(
                     contact_info,
-                    *trusted_full_snapshot_hash,
-                    Some(*trusted_incremental_snapshot_hash),
+                    *known_full_snapshot_hash,
+                    Some(*known_incremental_snapshot_hash),
                 ),
             ];
             let mut actual = peer_snapshot_hashes;
-            retain_trusted_peer_snapshot_hashes(&trusted_snapshot_hashes, &mut actual);
-            assert_eq!(expected, actual);
-        }
-
-        #[test]
-        fn test_retain_peer_snapshot_hashes_with_a_multiple_of_full_snapshot_interval() {
-            let full_snapshot_archive_interval = 100_000;
-            let contact_info = default_contact_info_for_tests();
-            let per_snapshot_hashes = vec![
-                // good full snapshot hash slots
-                PeerSnapshotHash::new(contact_info.clone(), (100_000, Hash::default()), None),
-                PeerSnapshotHash::new(contact_info.clone(), (200_000, Hash::default()), None),
-                PeerSnapshotHash::new(contact_info.clone(), (300_000, Hash::default()), None),
-                // bad full snapshot hash slots
-                PeerSnapshotHash::new(contact_info.clone(), (999, Hash::default()), None),
-                PeerSnapshotHash::new(contact_info.clone(), (100_777, Hash::default()), None),
-                PeerSnapshotHash::new(contact_info.clone(), (101_000, Hash::default()), None),
-                PeerSnapshotHash::new(contact_info.clone(), (999_000, Hash::default()), None),
-            ];
-
-            let expected = vec![
-                PeerSnapshotHash::new(contact_info.clone(), (100_000, Hash::default()), None),
-                PeerSnapshotHash::new(contact_info.clone(), (200_000, Hash::default()), None),
-                PeerSnapshotHash::new(contact_info, (300_000, Hash::default()), None),
-            ];
-            let mut actual = per_snapshot_hashes;
-            retain_peer_snapshot_hashes_with_a_multiple_of_full_snapshot_archive_interval(
-                full_snapshot_archive_interval,
-                &mut actual,
-            );
+            retain_known_peer_snapshot_hashes(&known_snapshot_hashes, &mut actual);
             assert_eq!(expected, actual);
         }
 
@@ -1805,7 +1771,7 @@ mod with_incremental_snapshots {
         }
 
         #[test]
-        fn test_retain_peer_snapshot_hashes_with_highest_incremental_snasphot_slot() {
+        fn test_retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot() {
             let contact_info = default_contact_info_for_tests();
             let peer_snapshot_hashes = vec![
                 PeerSnapshotHash::new(contact_info.clone(), (200_000, Hash::default()), None),

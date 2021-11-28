@@ -1246,23 +1246,23 @@ mod tests {
         // 2) repair validator set only includes our own id
         // then no repairs should be generated
         for pubkey in &[solana_sdk::pubkey::new_rand(), me.id] {
-            let trusted_validators = Some(vec![*pubkey].into_iter().collect());
-            assert!(serve_repair.repair_peers(&trusted_validators, 1).is_empty());
+            let known_validators = Some(vec![*pubkey].into_iter().collect());
+            assert!(serve_repair.repair_peers(&known_validators, 1).is_empty());
             assert!(serve_repair
                 .repair_request(
                     &cluster_slots,
                     ShredRepairType::Shred(0, 0),
                     &mut LruCache::new(100),
                     &mut RepairStats::default(),
-                    &trusted_validators,
+                    &known_validators,
                     &mut OutstandingShredRepairs::default(),
                 )
                 .is_err());
         }
 
-        // If trusted validator exists in gossip, should return repair successfully
-        let trusted_validators = Some(vec![contact_info2.id].into_iter().collect());
-        let repair_peers = serve_repair.repair_peers(&trusted_validators, 1);
+        // If known validator exists in gossip, should return repair successfully
+        let known_validators = Some(vec![contact_info2.id].into_iter().collect());
+        let repair_peers = serve_repair.repair_peers(&known_validators, 1);
         assert_eq!(repair_peers.len(), 1);
         assert_eq!(repair_peers[0].id, contact_info2.id);
         assert!(serve_repair
@@ -1271,12 +1271,12 @@ mod tests {
                 ShredRepairType::Shred(0, 0),
                 &mut LruCache::new(100),
                 &mut RepairStats::default(),
-                &trusted_validators,
+                &known_validators,
                 &mut OutstandingShredRepairs::default(),
             )
             .is_ok());
 
-        // Using no trusted validators should default to all
+        // Using no known validators should default to all
         // validator's available in gossip, excluding myself
         let repair_peers: HashSet<Pubkey> = serve_repair
             .repair_peers(&None, 1)

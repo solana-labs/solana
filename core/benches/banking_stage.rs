@@ -8,10 +8,11 @@ use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use solana_core::banking_stage::{BankingStage, BankingStageStats};
+use solana_core::qos_service::QosService;
 use solana_entry::entry::{next_hash, Entry};
 use solana_gossip::cluster_info::ClusterInfo;
 use solana_gossip::cluster_info::Node;
-use solana_ledger::blockstore_processor::process_entries;
+use solana_ledger::blockstore_processor::process_entries_for_tests;
 use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
 use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
 use solana_perf::packet::to_packets_chunked;
@@ -93,7 +94,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 None::<Box<dyn Fn()>>,
                 &BankingStageStats::default(),
                 &recorder,
-                &Arc::new(RwLock::new(CostModel::default())),
+                &Arc::new(QosService::new(Arc::new(RwLock::new(CostModel::default())))),
             );
         });
 
@@ -321,7 +322,7 @@ fn simulate_process_entries(
         hash: next_hash(&bank.last_blockhash(), 1, &tx_vector),
         transactions: tx_vector,
     };
-    process_entries(&bank, vec![entry], randomize_txs, None, None).unwrap();
+    process_entries_for_tests(&bank, vec![entry], randomize_txs, None, None).unwrap();
 }
 
 #[allow(clippy::same_item_push)]

@@ -1,10 +1,10 @@
 use crate::system_instruction_processor;
+use solana_program_runtime::{
+    invoke_context::{InvokeContext, ProcessInstructionWithContext},
+    stable_log,
+};
 use solana_sdk::{
-    feature_set,
-    instruction::InstructionError,
-    process_instruction::{stable_log, InvokeContext, ProcessInstructionWithContext},
-    pubkey::Pubkey,
-    stake, system_program,
+    feature_set, instruction::InstructionError, pubkey::Pubkey, stake, system_program,
 };
 use std::fmt;
 
@@ -17,9 +17,7 @@ fn process_instruction_with_program_logging(
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
-    debug_assert_eq!(first_instruction_account, 1);
-
-    let logger = invoke_context.get_logger();
+    let logger = invoke_context.get_log_collector();
     let program_id = invoke_context.get_caller()?;
     stable_log::program_invoke(&logger, program_id, invoke_context.invoke_depth());
 

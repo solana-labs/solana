@@ -10,7 +10,7 @@ use {
     jsonrpc_derive::rpc,
     serde::{Deserialize, Serialize},
     solana_account_decoder::{
-        parse_token::{spl_token_id_v2_0, token_amount_to_ui_amount, UiTokenAmount},
+        parse_token::{spl_token_id, token_amount_to_ui_amount, UiTokenAmount},
         UiAccount, UiAccountEncoding, UiDataSliceConfig, MAX_BASE58_BYTES,
     },
     solana_client::{
@@ -39,11 +39,11 @@ use {
     solana_perf::packet::PACKET_DATA_SIZE,
     solana_runtime::{
         accounts::AccountAddressFilter,
-        accounts_index::{AccountIndex, AccountSecondaryIndexes, IndexKey},
+        accounts_index::{AccountIndex, AccountSecondaryIndexes, IndexKey, ScanConfig},
         bank::{Bank, TransactionSimulationResult},
         bank_forks::BankForks,
         commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
-        inline_spl_token_v2_0::{SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
+        inline_spl_token::{SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
         non_circulating_supply::calculate_non_circulating_supply,
         snapshot_config::SnapshotConfig,
         snapshot_utils,
@@ -56,7 +56,7 @@ use {
         epoch_info::EpochInfo,
         epoch_schedule::EpochSchedule,
         exit::Exit,
-        feature_set,
+        feature_set::{self, nonce_must_be_writable},
         fee_calculator::FeeCalculator,
         hash::Hash,
         message::{Message, SanitizedMessage},
@@ -78,7 +78,7 @@ use {
         TransactionConfirmationStatus, TransactionStatus, UiConfirmedBlock, UiTransactionEncoding,
     },
     solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY},
-    spl_token_v2_0::{
+    spl_token::{
         solana_program::program_pack::Pack,
         state::{Account as TokenAccount, Mint},
     },
@@ -143,6 +143,7 @@ pub struct JsonRpcConfig {
     pub max_multiple_accounts: Option<usize>,
     pub account_indexes: AccountSecondaryIndexes,
     pub rpc_threads: usize,
+    pub rpc_niceness_adj: i8,
     pub rpc_bigtable_timeout: Option<Duration>,
     pub minimal_api: bool,
     pub obsolete_v1_7_api: bool,
@@ -395,9 +396,7 @@ impl JsonRpcRequestProcessor {
                 self.get_filtered_program_accounts(&bank, program_id, filters)?
             }
         };
-        let result = if program_id == &spl_token_id_v2_0()
-            && encoding == UiAccountEncoding::JsonParsed
-        {
+        let result = if program_id == &spl_token_id() && encoding == UiAccountEncoding::JsonParsed {
             get_parsed_token_accounts(bank.clone(), keyed_accounts.into_iter()).collect()
         } else {
             keyed_accounts
@@ -1627,14 +1626,13 @@ impl JsonRpcRequestProcessor {
             Error::invalid_params("Invalid param: could not find account".to_string())
         })?;
 
-        if account.owner() != &spl_token_id_v2_0() {
+        if account.owner() != &spl_token_id() {
             return Err(Error::invalid_params(
-                "Invalid param: not a v2.0 Token account".to_string(),
+                "Invalid param: not a Token account".to_string(),
             ));
         }
-        let token_account = TokenAccount::unpack(account.data()).map_err(|_| {
-            Error::invalid_params("Invalid param: not a v2.0 Token account".to_string())
-        })?;
+        let token_account = TokenAccount::unpack(account.data())
+            .map_err(|_| Error::invalid_params("Invalid param: not a Token account".to_string()))?;
         let mint = &Pubkey::from_str(&token_account.mint.to_string())
             .expect("Token account mint should be convertible to Pubkey");
         let (_, decimals) = get_mint_owner_and_decimals(&bank, mint)?;
@@ -1651,9 +1649,9 @@ impl JsonRpcRequestProcessor {
         let mint_account = bank.get_account(mint).ok_or_else(|| {
             Error::invalid_params("Invalid param: could not find account".to_string())
         })?;
-        if mint_account.owner() != &spl_token_id_v2_0() {
+        if mint_account.owner() != &spl_token_id() {
             return Err(Error::invalid_params(
-                "Invalid param: not a v2.0 Token mint".to_string(),
+                "Invalid param: not a Token mint".to_string(),
             ));
         }
         let mint = Mint::unpack(mint_account.data()).map_err(|_| {
@@ -1671,9 +1669,9 @@ impl JsonRpcRequestProcessor {
     ) -> Result<RpcResponse<Vec<RpcTokenAccountBalance>>> {
         let bank = self.bank(commitment);
         let (mint_owner, decimals) = get_mint_owner_and_decimals(&bank, mint)?;
-        if mint_owner != spl_token_id_v2_0() {
+        if mint_owner != spl_token_id() {
             return Err(Error::invalid_params(
-                "Invalid param: not a v2.0 Token mint".to_string(),
+                "Invalid param: not a Token mint".to_string(),
             ));
         }
         let mut token_balances: Vec<RpcTokenAccountBalance> = self
@@ -1829,20 +1827,26 @@ impl JsonRpcRequestProcessor {
                 });
             }
             Ok(bank
-                .get_filtered_indexed_accounts(&IndexKey::ProgramId(*program_id), |account| {
-                    // The program-id account index checks for Account owner on inclusion. However, due
-                    // to the current AccountsDb implementation, an account may remain in storage as a
-                    // zero-lamport AccountSharedData::Default() after being wiped and reinitialized in later
-                    // updates. We include the redundant filters here to avoid returning these
-                    // accounts.
-                    account.owner() == program_id && filter_closure(account)
-                })
+                .get_filtered_indexed_accounts(
+                    &IndexKey::ProgramId(*program_id),
+                    |account| {
+                        // The program-id account index checks for Account owner on inclusion. However, due
+                        // to the current AccountsDb implementation, an account may remain in storage as a
+                        // zero-lamport AccountSharedData::Default() after being wiped and reinitialized in later
+                        // updates. We include the redundant filters here to avoid returning these
+                        // accounts.
+                        account.owner() == program_id && filter_closure(account)
+                    },
+                    &ScanConfig::default(),
+                    bank.byte_limit_for_scans(),
+                )
                 .map_err(|e| RpcCustomError::ScanError {
                     message: e.to_string(),
                 })?)
         } else {
+            // this path does not need to provide a mb limit because we only want to support secondary indexes
             Ok(bank
-                .get_filtered_program_accounts(program_id, filter_closure)
+                .get_filtered_program_accounts(program_id, filter_closure, &ScanConfig::default())
                 .map_err(|e| RpcCustomError::ScanError {
                     message: e.to_string(),
                 })?)
@@ -1883,18 +1887,27 @@ impl JsonRpcRequestProcessor {
                 });
             }
             Ok(bank
-                .get_filtered_indexed_accounts(&IndexKey::SplTokenOwner(*owner_key), |account| {
-                    account.owner() == &spl_token_id_v2_0()
-                        && filters.iter().all(|filter_type| match filter_type {
-                            RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
-                            RpcFilterType::Memcmp(compare) => compare.bytes_match(account.data()),
-                        })
-                })
+                .get_filtered_indexed_accounts(
+                    &IndexKey::SplTokenOwner(*owner_key),
+                    |account| {
+                        account.owner() == &spl_token_id()
+                            && filters.iter().all(|filter_type| match filter_type {
+                                RpcFilterType::DataSize(size) => {
+                                    account.data().len() as u64 == *size
+                                }
+                                RpcFilterType::Memcmp(compare) => {
+                                    compare.bytes_match(account.data())
+                                }
+                            })
+                    },
+                    &ScanConfig::default(),
+                    bank.byte_limit_for_scans(),
+                )
                 .map_err(|e| RpcCustomError::ScanError {
                     message: e.to_string(),
                 })?)
         } else {
-            self.get_filtered_program_accounts(bank, &spl_token_id_v2_0(), filters)
+            self.get_filtered_program_accounts(bank, &spl_token_id(), filters)
         }
     }
 
@@ -1931,18 +1944,27 @@ impl JsonRpcRequestProcessor {
                 });
             }
             Ok(bank
-                .get_filtered_indexed_accounts(&IndexKey::SplTokenMint(*mint_key), |account| {
-                    account.owner() == &spl_token_id_v2_0()
-                        && filters.iter().all(|filter_type| match filter_type {
-                            RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
-                            RpcFilterType::Memcmp(compare) => compare.bytes_match(account.data()),
-                        })
-                })
+                .get_filtered_indexed_accounts(
+                    &IndexKey::SplTokenMint(*mint_key),
+                    |account| {
+                        account.owner() == &spl_token_id()
+                            && filters.iter().all(|filter_type| match filter_type {
+                                RpcFilterType::DataSize(size) => {
+                                    account.data().len() as u64 == *size
+                                }
+                                RpcFilterType::Memcmp(compare) => {
+                                    compare.bytes_match(account.data())
+                                }
+                            })
+                    },
+                    &ScanConfig::default(),
+                    bank.byte_limit_for_scans(),
+                )
                 .map_err(|e| RpcCustomError::ScanError {
                     message: e.to_string(),
                 })?)
         } else {
-            self.get_filtered_program_accounts(bank, &spl_token_id_v2_0(), filters)
+            self.get_filtered_program_accounts(bank, &spl_token_id(), filters)
         }
     }
 
@@ -2124,7 +2146,7 @@ fn get_encoded_account(
 ) -> Result<Option<UiAccount>> {
     match bank.get_account(pubkey) {
         Some(account) => {
-            let response = if account.owner() == &spl_token_id_v2_0()
+            let response = if account.owner() == &spl_token_id()
                 && encoding == UiAccountEncoding::JsonParsed
             {
                 get_parsed_token_account(bank.clone(), pubkey, account)
@@ -2164,7 +2186,7 @@ fn encode_account<T: ReadableAccount>(
 /// NOTE: `optimize_filters()` should almost always be called before using this method because of
 /// the strict match on `MemcmpEncodedBytes::Bytes`.
 fn get_spl_token_owner_filter(program_id: &Pubkey, filters: &[RpcFilterType]) -> Option<Pubkey> {
-    if program_id != &spl_token_id_v2_0() {
+    if program_id != &spl_token_id() {
         return None;
     }
     let mut data_size_filter: Option<u64> = None;
@@ -2206,7 +2228,7 @@ fn get_spl_token_owner_filter(program_id: &Pubkey, filters: &[RpcFilterType]) ->
 /// NOTE: `optimize_filters()` should almost always be called before using this method because of
 /// the strict match on `MemcmpEncodedBytes::Bytes`.
 fn get_spl_token_mint_filter(program_id: &Pubkey, filters: &[RpcFilterType]) -> Option<Pubkey> {
-    if program_id != &spl_token_id_v2_0() {
+    if program_id != &spl_token_id() {
         return None;
     }
     let mut data_size_filter: Option<u64> = None;
@@ -2252,15 +2274,15 @@ fn get_token_program_id_and_mint(
     match token_account_filter {
         TokenAccountsFilter::Mint(mint) => {
             let (mint_owner, _) = get_mint_owner_and_decimals(bank, &mint)?;
-            if mint_owner != spl_token_id_v2_0() {
+            if mint_owner != spl_token_id() {
                 return Err(Error::invalid_params(
-                    "Invalid param: not a v2.0 Token mint".to_string(),
+                    "Invalid param: not a Token mint".to_string(),
                 ));
             }
             Ok((mint_owner, Some(mint)))
         }
         TokenAccountsFilter::ProgramId(program_id) => {
-            if program_id == spl_token_id_v2_0() {
+            if program_id == spl_token_id() {
                 Ok((program_id, None))
             } else {
                 Err(Error::invalid_params(
@@ -2295,7 +2317,7 @@ fn _send_transaction(
     Ok(signature.to_string())
 }
 
-// Minimal RPC interface that trusted validators are expected to provide
+// Minimal RPC interface that known validators are expected to provide
 pub mod rpc_minimal {
     use super::*;
     #[rpc]
@@ -3395,7 +3417,11 @@ pub mod rpc_full {
                 .unwrap_or(0);
 
             let durable_nonce_info = transaction
-                .get_durable_nonce()
+                .get_durable_nonce(
+                    preflight_bank
+                        .feature_set
+                        .is_active(&nonce_must_be_writable::id()),
+                )
                 .map(|&pubkey| (pubkey, *transaction.message().recent_blockhash()));
             if durable_nonce_info.is_some() {
                 // While it uses a defined constant, this last_valid_block_height value is chosen arbitrarily.
@@ -4172,7 +4198,7 @@ where
 
 fn sanitize_transaction(transaction: VersionedTransaction) -> Result<SanitizedTransaction> {
     let message_hash = transaction.message.hash();
-    SanitizedTransaction::try_create(transaction, message_hash, |_| {
+    SanitizedTransaction::try_create(transaction, message_hash, None, |_| {
         Err(TransactionError::UnsupportedVersion)
     })
     .map_err(|err| Error::invalid_params(format!("invalid transaction: {}", err)))
@@ -4237,13 +4263,15 @@ pub fn create_test_transactions_and_populate_blockstore(
         crate::transaction_status_service::TransactionStatusService::new(
             transaction_status_receiver,
             max_complete_transaction_status_slot,
+            true,
+            None,
             blockstore,
             &Arc::new(AtomicBool::new(false)),
         );
 
     // Check that process_entries successfully writes can_commit transactions statuses, and
     // that they are matched properly by get_rooted_block
-    let _result = solana_ledger::blockstore_processor::process_entries(
+    let _result = solana_ledger::blockstore_processor::process_entries_for_tests(
         &bank,
         entries,
         true,
@@ -4308,7 +4336,7 @@ pub mod tests {
             vote_instruction,
             vote_state::{BlockTimestamp, Vote, VoteInit, VoteStateVersions, MAX_LOCKOUT_HISTORY},
         },
-        spl_token_v2_0::{
+        spl_token::{
             solana_program::{program_option::COption, pubkey::Pubkey as SplTokenPubkey},
             state::AccountState as TokenAccountState,
             state::Mint,
@@ -7203,7 +7231,7 @@ pub mod tests {
         let token_account = AccountSharedData::from(Account {
             lamports: 111,
             data: account_data.to_vec(),
-            owner: spl_token_id_v2_0(),
+            owner: spl_token_id(),
             ..Account::default()
         });
         let token_account_pubkey = solana_sdk::pubkey::new_rand();
@@ -7222,7 +7250,7 @@ pub mod tests {
         let mint_account = AccountSharedData::from(Account {
             lamports: 111,
             data: mint_data.to_vec(),
-            owner: spl_token_id_v2_0(),
+            owner: spl_token_id(),
             ..Account::default()
         });
         bank.store_account(&Pubkey::from_str(&mint.to_string()).unwrap(), &mint_account);
@@ -7299,7 +7327,7 @@ pub mod tests {
         let token_account = AccountSharedData::from(Account {
             lamports: 111,
             data: account_data.to_vec(),
-            owner: spl_token_id_v2_0(),
+            owner: spl_token_id(),
             ..Account::default()
         });
         let token_with_different_mint_pubkey = solana_sdk::pubkey::new_rand();
@@ -7314,7 +7342,7 @@ pub mod tests {
                 "params":["{}", {{"programId": "{}"}}]
             }}"#,
             owner,
-            spl_token_id_v2_0(),
+            spl_token_id(),
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
@@ -7332,7 +7360,7 @@ pub mod tests {
                 "params":["{}", {{"programId": "{}"}}, {{"encoding": "jsonParsed"}}]
             }}"#,
             owner,
-            spl_token_id_v2_0(),
+            spl_token_id(),
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
@@ -7349,7 +7377,7 @@ pub mod tests {
                 "method":"getProgramAccounts",
                 "params":["{}", {{"encoding": "jsonParsed"}}]
             }}"#,
-            spl_token_id_v2_0(),
+            spl_token_id(),
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
@@ -7413,7 +7441,7 @@ pub mod tests {
                 "params":["{}", {{"programId": "{}"}}]
             }}"#,
             solana_sdk::pubkey::new_rand(),
-            spl_token_id_v2_0(),
+            spl_token_id(),
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
@@ -7431,7 +7459,7 @@ pub mod tests {
                 "params":["{}", {{"programId": "{}"}}]
             }}"#,
             delegate,
-            spl_token_id_v2_0(),
+            spl_token_id(),
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
@@ -7496,7 +7524,7 @@ pub mod tests {
                 "params":["{}", {{"programId": "{}"}}]
             }}"#,
             solana_sdk::pubkey::new_rand(),
-            spl_token_id_v2_0(),
+            spl_token_id(),
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
@@ -7518,7 +7546,7 @@ pub mod tests {
         let mint_account = AccountSharedData::from(Account {
             lamports: 111,
             data: mint_data.to_vec(),
-            owner: spl_token_id_v2_0(),
+            owner: spl_token_id(),
             ..Account::default()
         });
         bank.store_account(
@@ -7540,7 +7568,7 @@ pub mod tests {
         let token_account = AccountSharedData::from(Account {
             lamports: 111,
             data: account_data.to_vec(),
-            owner: spl_token_id_v2_0(),
+            owner: spl_token_id(),
             ..Account::default()
         });
         let token_with_smaller_balance = solana_sdk::pubkey::new_rand();
@@ -7604,7 +7632,7 @@ pub mod tests {
         let token_account = AccountSharedData::from(Account {
             lamports: 111,
             data: account_data.to_vec(),
-            owner: spl_token_id_v2_0(),
+            owner: spl_token_id(),
             ..Account::default()
         });
         let token_account_pubkey = solana_sdk::pubkey::new_rand();
@@ -7623,7 +7651,7 @@ pub mod tests {
         let mint_account = AccountSharedData::from(Account {
             lamports: 111,
             data: mint_data.to_vec(),
-            owner: spl_token_id_v2_0(),
+            owner: spl_token_id(),
             ..Account::default()
         });
         bank.store_account(&Pubkey::from_str(&mint.to_string()).unwrap(), &mint_account);

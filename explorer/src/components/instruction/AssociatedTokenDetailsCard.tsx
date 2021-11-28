@@ -28,28 +28,28 @@ export function AssociatedTokenDetailsCard({
     >
       <tr>
         <td>Program</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={ix.programId} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Account</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={new PublicKey(info.account)} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Mint</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={new PublicKey(info.mint)} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Wallet</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={new PublicKey(info.wallet)} alignRight link />
         </td>
       </tr>

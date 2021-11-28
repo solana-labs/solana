@@ -233,6 +233,18 @@ pub mod add_compute_budget_program {
     solana_sdk::declare_id!("4d5AKtxoh93Dwm1vHXUU3iRATuMndx1c431KgT2td52r");
 }
 
+pub mod reject_deployment_of_unresolved_syscalls {
+    solana_sdk::declare_id!("DqniU3MfvdpU3yhmNF1RKeaM5TZQELZuyFGosASRVUoy");
+}
+
+pub mod nonce_must_be_writable {
+    solana_sdk::declare_id!("BiCU7M5w8ZCMykVSyhZ7Q3m2SWoR2qrEQ86ERcDX77ME");
+}
+
+pub mod spl_token_v3_3_0_release {
+    solana_sdk::declare_id!("Ftok2jhqAqxUWEiCVRrfRs9DPppWP8cgTB7NQNKL88mS");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -286,6 +298,9 @@ lazy_static! {
         (requestable_heap_size::id(), "Requestable heap frame size"),
         (disable_fee_calculator::id(), "deprecate fee calculator"),
         (add_compute_budget_program::id(), "Add compute_budget_program"),
+        (reject_deployment_of_unresolved_syscalls::id(), "Reject deployment of programs with unresolved syscall symbols"),
+        (nonce_must_be_writable::id(), "nonce must be writable"),
+        (spl_token_v3_3_0_release::id(), "spl-token v3.3.0 release"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
@@ -373,6 +388,18 @@ impl FeatureSet {
             inactive: HashSet::new(),
         }
     }
+
+    /// Activate a feature
+    pub fn activate(&mut self, feature_id: &Pubkey, slot: u64) {
+        self.inactive.remove(feature_id);
+        self.active.insert(*feature_id, slot);
+    }
+
+    /// Deactivate a feature
+    pub fn deactivate(&mut self, feature_id: &Pubkey) {
+        self.active.remove(feature_id);
+        self.inactive.insert(*feature_id);
+    }
 }
 
 #[cfg(test)]
@@ -432,5 +459,17 @@ mod test {
                 .cloned()
                 .collect()
         );
+    }
+
+    #[test]
+    fn test_feature_set_activate_deactivate() {
+        let mut feature_set = FeatureSet::default();
+
+        let feature = Pubkey::new_unique();
+        assert!(!feature_set.is_active(&feature));
+        feature_set.activate(&feature, 0);
+        assert!(feature_set.is_active(&feature));
+        feature_set.deactivate(&feature);
+        assert!(!feature_set.is_active(&feature));
     }
 }

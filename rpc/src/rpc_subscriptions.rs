@@ -14,7 +14,7 @@ use {
     crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
     rayon::prelude::*,
     serde::Serialize,
-    solana_account_decoder::{parse_token::spl_token_id_v2_0, UiAccount, UiAccountEncoding},
+    solana_account_decoder::{parse_token::spl_token_id, UiAccount, UiAccountEncoding},
     solana_client::{
         rpc_filter::RpcFilterType,
         rpc_response::{
@@ -301,9 +301,7 @@ fn filter_account_result(
     // If last_modified_slot < last_notified_slot this means that we last notified for a fork
     // and should notify that the account state has been reverted.
     let results: Box<dyn Iterator<Item = UiAccount>> = if last_modified_slot != last_notified_slot {
-        if account.owner() == &spl_token_id_v2_0()
-            && params.encoding == UiAccountEncoding::JsonParsed
-        {
+        if account.owner() == &spl_token_id() && params.encoding == UiAccountEncoding::JsonParsed {
             Box::new(iter::once(get_parsed_token_account(
                 bank,
                 &params.pubkey,
@@ -354,8 +352,7 @@ fn filter_program_results(
             RpcFilterType::Memcmp(compare) => compare.bytes_match(account.data()),
         })
     });
-    let accounts: Box<dyn Iterator<Item = RpcKeyedAccount>> = if params.pubkey
-        == spl_token_id_v2_0()
+    let accounts: Box<dyn Iterator<Item = RpcKeyedAccount>> = if params.pubkey == spl_token_id()
         && params.encoding == UiAccountEncoding::JsonParsed
         && !accounts_is_empty
     {
@@ -428,6 +425,40 @@ fn initial_last_notified_slot(
         | SubscriptionParams::SlotsUpdates
         | SubscriptionParams::Root
         | SubscriptionParams::Vote => 0,
+    }
+}
+
+#[derive(Default)]
+struct PubsubNotificationStats {
+    since: Option<Instant>,
+    notification_entry_processing_count: u64,
+    notification_entry_processing_time_us: u64,
+}
+
+impl PubsubNotificationStats {
+    fn maybe_submit(&mut self) {
+        const SUBMIT_CADENCE: Duration = Duration::from_secs(2);
+        let elapsed = self.since.as_ref().map(Instant::elapsed);
+        if elapsed.unwrap_or(Duration::MAX) < SUBMIT_CADENCE {
+            return;
+        }
+        datapoint_info!(
+            "pubsub_notification_entries",
+            (
+                "notification_entry_processing_count",
+                self.notification_entry_processing_count,
+                i64
+            ),
+            (
+                "notification_entry_processing_time_us",
+                self.notification_entry_processing_time_us,
+                i64
+            ),
+        );
+        *self = Self {
+            since: Some(Instant::now()),
+            ..Self::default()
+        };
     }
 }
 
@@ -618,6 +649,8 @@ impl RpcSubscriptions {
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
     ) {
+        let mut stats = PubsubNotificationStats::default();
+
         loop {
             if exit.load(Ordering::Relaxed) {
                 break;
@@ -738,14 +771,9 @@ impl RpcSubscriptions {
                             }
                         }
                     }
-                    datapoint_info!(
-                        "pubsub_notification_entries",
-                        (
-                            "notification_entry_processing_time_us",
-                            queued_at.elapsed().as_micros() as i64,
-                            i64
-                        )
-                    );
+                    stats.notification_entry_processing_time_us +=
+                        queued_at.elapsed().as_micros() as u64;
+                    stats.notification_entry_processing_count += 1;
                 }
                 Err(RecvTimeoutError::Timeout) => {
                     // not a problem - try reading again
@@ -755,6 +783,7 @@ impl RpcSubscriptions {
                     break;
                 }
             }
+            stats.maybe_submit();
         }
     }
 

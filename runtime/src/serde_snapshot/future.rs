@@ -242,7 +242,7 @@ impl<'a> TypeContext<'a> for Context {
         let version = serializable_db
             .accounts_db
             .write_version
-            .load(Ordering::Relaxed);
+            .load(Ordering::Acquire);
 
         // (1st of 3 elements) write the list of account storage entry lists out as a map
         let entry_count = RefCell::<usize>::new(0);

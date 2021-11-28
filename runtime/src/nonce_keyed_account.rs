@@ -1,11 +1,11 @@
+use solana_program_runtime::{ic_msg, invoke_context::InvokeContext};
 use solana_sdk::{
     account::{ReadableAccount, WritableAccount},
     account_utils::State as AccountUtilsState,
-    feature_set, ic_msg,
+    feature_set::{self, nonce_must_be_writable},
     instruction::{checked_add, InstructionError},
     keyed_account::KeyedAccount,
     nonce::{self, state::Versions, State},
-    process_instruction::InvokeContext,
     pubkey::Pubkey,
     system_instruction::{nonce_to_instruction_error, NonceError},
     sysvar::rent::Rent,
@@ -48,6 +48,16 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
     ) -> Result<(), InstructionError> {
         let merge_nonce_error_into_system_error = invoke_context
             .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
+
+        if invoke_context.is_feature_active(&nonce_must_be_writable::id()) && !self.is_writable() {
+            ic_msg!(
+                invoke_context,
+                "Advance nonce account: Account {} must be writeable",
+                self.unsigned_key()
+            );
+            return Err(InstructionError::InvalidArgument);
+        }
+
         let state = AccountUtilsState::<Versions>::state(self)?.convert_to_current();
         match state {
             State::Initialized(data) => {
@@ -102,6 +112,16 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
     ) -> Result<(), InstructionError> {
         let merge_nonce_error_into_system_error = invoke_context
             .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
+
+        if invoke_context.is_feature_active(&nonce_must_be_writable::id()) && !self.is_writable() {
+            ic_msg!(
+                invoke_context,
+                "Withdraw nonce account: Account {} must be writeable",
+                self.unsigned_key()
+            );
+            return Err(InstructionError::InvalidArgument);
+        }
+
         let signer = match AccountUtilsState::<Versions>::state(self)?.convert_to_current() {
             State::Uninitialized => {
                 if lamports > self.lamports()? {
@@ -178,6 +198,16 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
     ) -> Result<(), InstructionError> {
         let merge_nonce_error_into_system_error = invoke_context
             .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
+
+        if invoke_context.is_feature_active(&nonce_must_be_writable::id()) && !self.is_writable() {
+            ic_msg!(
+                invoke_context,
+                "Initialize nonce account: Account {} must be writeable",
+                self.unsigned_key()
+            );
+            return Err(InstructionError::InvalidArgument);
+        }
+
         match AccountUtilsState::<Versions>::state(self)?.convert_to_current() {
             State::Uninitialized => {
                 let min_balance = rent.minimum_balance(self.data_len()?);
@@ -219,6 +249,16 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
     ) -> Result<(), InstructionError> {
         let merge_nonce_error_into_system_error = invoke_context
             .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
+
+        if invoke_context.is_feature_active(&nonce_must_be_writable::id()) && !self.is_writable() {
+            ic_msg!(
+                invoke_context,
+                "Authorize nonce account: Account {} must be writeable",
+                self.unsigned_key()
+            );
+            return Err(InstructionError::InvalidArgument);
+        }
+
         match AccountUtilsState::<Versions>::state(self)?.convert_to_current() {
             State::Initialized(data) => {
                 if !signers.contains(&data.authority) {
@@ -254,15 +294,14 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use solana_program_runtime::invoke_context::ThisInvokeContext;
     use solana_sdk::{
         account::ReadableAccount,
         account_utils::State as AccountUtilsState,
         hash::{hash, Hash},
         keyed_account::KeyedAccount,
         nonce::{self, State},
-        nonce_account::create_account,
-        nonce_account::verify_nonce_account,
-        process_instruction::MockInvokeContext,
+        nonce_account::{create_account, verify_nonce_account},
         system_instruction::SystemError,
     };
 
@@ -283,11 +322,11 @@ mod test {
         )
     }
 
-    fn create_invoke_context_with_blockhash<'a>(seed: usize) -> MockInvokeContext<'a> {
-        let mut invoke_context = MockInvokeContext::new(&Pubkey::default(), vec![]);
+    fn create_invoke_context_with_blockhash<'a>(seed: usize) -> ThisInvokeContext<'a> {
+        let mut invoke_context = ThisInvokeContext::new_mock(&[], &[]);
         let (blockhash, lamports_per_signature) = create_test_blockhash(seed);
-        invoke_context.blockhash = blockhash;
-        invoke_context.lamports_per_signature = lamports_per_signature;
+        invoke_context.set_blockhash(blockhash);
+        invoke_context.set_lamports_per_signature(lamports_per_signature);
         invoke_context
     }
 
@@ -974,12 +1013,11 @@ mod test {
         let min_lamports = rent.minimum_balance(State::size());
         with_test_keyed_account(min_lamports + 42, true, |nonce_account| {
             let mut signers = HashSet::new();
-            let invoke_context = MockInvokeContext::new(&Pubkey::default(), vec![]);
             signers.insert(*nonce_account.signer_key().unwrap());
             let result = nonce_account.authorize_nonce_account(
                 &Pubkey::default(),
                 &signers,
-                &invoke_context,
+                &ThisInvokeContext::new_mock(&[], &[]),
             );
             assert_eq!(result, Err(InstructionError::InvalidAccountData));
         })

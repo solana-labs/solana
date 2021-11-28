@@ -41,29 +41,15 @@
 //!
 //!
 
-use reed_solomon_erasure::galois_8::Field;
-use reed_solomon_erasure::ReedSolomon;
-use serde::{Deserialize, Serialize};
-
-//TODO(sakridge) pick these values
-/// Number of data shreds
-pub const NUM_DATA: usize = 8;
-/// Number of coding shreds; also the maximum number that can go missing.
-pub const NUM_CODING: usize = 8;
+use {
+    reed_solomon_erasure::{galois_8::Field, ReconstructShard, ReedSolomon},
+    serde::{Deserialize, Serialize},
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ErasureConfig {
     num_data: usize,
     num_coding: usize,
-}
-
-impl Default for ErasureConfig {
-    fn default() -> ErasureConfig {
-        ErasureConfig {
-            num_data: NUM_DATA,
-            num_coding: NUM_CODING,
-        }
-    }
 }
 
 impl ErasureConfig {
@@ -113,20 +99,11 @@ impl Session {
     }
 
     /// Recover data + coding blocks into data blocks
-    /// # Arguments
-    /// * `data` - array of data blocks to recover into
-    /// * `coding` - array of coding blocks
-    /// * `erasures` - list of indices in data where blocks should be recovered
-    pub fn decode_blocks(&self, blocks: &mut [(&mut [u8], bool)]) -> Result<()> {
-        self.0.reconstruct_data(blocks)?;
-
-        Ok(())
-    }
-}
-
-impl Default for Session {
-    fn default() -> Session {
-        Session::new(NUM_DATA, NUM_CODING).unwrap()
+    pub fn decode_blocks<T>(&self, blocks: &mut [T]) -> Result<()>
+    where
+        T: ReconstructShard<Field>,
+    {
+        self.0.reconstruct_data(blocks)
     }
 }
 

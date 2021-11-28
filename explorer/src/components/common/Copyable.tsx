@@ -54,9 +54,9 @@ export function Copyable({
   function PrependCopyIcon() {
     return (
       <>
-        <span className="font-size-tiny mr-2">
+        <span className="font-size-tiny me-2">
           <span className={textColor}>
-            {message !== undefined && <span className="mr-2">{message}</span>}
+            {message !== undefined && <span className="me-2">{message}</span>}
             <CopyIcon />
           </span>
         </span>
@@ -71,7 +71,7 @@ export function Copyable({
         <span className="font-size-tiny">
           <span className={textColor}>
             <CopyIcon />
-            <span className="ml-2">{message}</span>
+            <span className="ms-2">{message}</span>
           </span>
         </span>
         <span className="v-hidden">{children}</span>

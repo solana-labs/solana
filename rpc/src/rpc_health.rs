@@ -11,13 +11,13 @@ use {
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum RpcHealthStatus {
     Ok,
-    Behind { num_slots: Slot }, // Validator is behind its trusted validators
+    Behind { num_slots: Slot }, // Validator is behind its known validators
     Unknown,
 }
 
 pub struct RpcHealth {
     cluster_info: Arc<ClusterInfo>,
-    trusted_validators: Option<HashSet<Pubkey>>,
+    known_validators: Option<HashSet<Pubkey>>,
     health_check_slot_distance: u64,
     override_health_check: Arc<AtomicBool>,
     #[cfg(test)]
@@ -27,13 +27,13 @@ pub struct RpcHealth {
 impl RpcHealth {
     pub fn new(
         cluster_info: Arc<ClusterInfo>,
-        trusted_validators: Option<HashSet<Pubkey>>,
+        known_validators: Option<HashSet<Pubkey>>,
         health_check_slot_distance: u64,
         override_health_check: Arc<AtomicBool>,
     ) -> Self {
         Self {
             cluster_info,
-            trusted_validators,
+            known_validators,
             health_check_slot_distance,
             override_health_check,
             #[cfg(test)]
@@ -51,7 +51,7 @@ impl RpcHealth {
 
         if self.override_health_check.load(Ordering::Relaxed) {
             RpcHealthStatus::Ok
-        } else if let Some(trusted_validators) = &self.trusted_validators {
+        } else if let Some(known_validators) = &self.known_validators {
             match (
                 self.cluster_info
                     .get_accounts_hash_for_node(&self.cluster_info.id(), |hashes| {
@@ -61,11 +61,11 @@ impl RpcHealth {
                             .map(|slot_hash| slot_hash.0)
                     })
                     .flatten(),
-                trusted_validators
+                known_validators
                     .iter()
-                    .filter_map(|trusted_validator| {
+                    .filter_map(|known_validator| {
                         self.cluster_info
-                            .get_accounts_hash_for_node(trusted_validator, |hashes| {
+                            .get_accounts_hash_for_node(known_validator, |hashes| {
                                 hashes
                                     .iter()
                                     .max_by(|a, b| a.0.cmp(&b.0))
@@ -77,39 +77,41 @@ impl RpcHealth {
             ) {
                 (
                     Some(latest_account_hash_slot),
-                    Some(latest_trusted_validator_account_hash_slot),
+                    Some(latest_known_validator_account_hash_slot),
                 ) => {
                     // The validator is considered healthy if its latest account hash slot is within
-                    // `health_check_slot_distance` of the latest trusted validator's account hash slot
+                    // `health_check_slot_distance` of the latest known validator's account hash slot
                     if latest_account_hash_slot
-                        > latest_trusted_validator_account_hash_slot
+                        > latest_known_validator_account_hash_slot
                             .saturating_sub(self.health_check_slot_distance)
                     {
                         RpcHealthStatus::Ok
                     } else {
-                        let num_slots = latest_trusted_validator_account_hash_slot
+                        let num_slots = latest_known_validator_account_hash_slot
                             .saturating_sub(latest_account_hash_slot);
                         warn!(
-                            "health check: behind by {} slots: me={}, latest trusted_validator={}",
+                            "health check: behind by {} slots: me={}, latest known_validator={}",
                             num_slots,
                             latest_account_hash_slot,
-                            latest_trusted_validator_account_hash_slot
+                            latest_known_validator_account_hash_slot
                         );
                         RpcHealthStatus::Behind { num_slots }
                     }
                 }
-                (latest_account_hash_slot, latest_trusted_validator_account_hash_slot) => {
+                (latest_account_hash_slot, latest_known_validator_account_hash_slot) => {
                     if latest_account_hash_slot.is_none() {
                         warn!("health check: latest_account_hash_slot not available");
                     }
-                    if latest_trusted_validator_account_hash_slot.is_none() {
-                        warn!("health check: latest_trusted_validator_account_hash_slot not available");
+                    if latest_known_validator_account_hash_slot.is_none() {
+                        warn!(
+                            "health check: latest_known_validator_account_hash_slot not available"
+                        );
                     }
                     RpcHealthStatus::Unknown
                 }
             }
         } else {
-            // No trusted validator point of reference available, so this validator is healthy
+            // No known validator point of reference available, so this validator is healthy
             // because it's running
             RpcHealthStatus::Ok
         }

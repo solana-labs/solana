@@ -158,7 +158,7 @@ pub trait SyncClient {
     /// Get last known blockhash
     fn get_latest_blockhash(&self) -> Result<Hash>;
 
-    /// Get recent blockhash. Uses explicit commitment configuration.
+    /// Get latest blockhash with last valid block height. Uses explicit commitment configuration.
     fn get_latest_blockhash_with_commitment(
         &self,
         commitment_config: CommitmentConfig,

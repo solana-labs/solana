@@ -4,6 +4,7 @@ import {
   TokenInfoMap,
   TokenInfo,
   TokenListContainer,
+  Strategy,
 } from "@solana/spl-token-registry";
 import { Cluster, clusterSlug, useCluster } from "providers/cluster";
 
@@ -18,19 +19,21 @@ export function TokenRegistryProvider({ children }: ProviderProps) {
   const { cluster } = useCluster();
 
   React.useEffect(() => {
-    new TokenListProvider().resolve().then((tokens: TokenListContainer) => {
-      const tokenList =
-        cluster === Cluster.Custom
-          ? []
-          : tokens.filterByClusterSlug(clusterSlug(cluster)).getList();
+    new TokenListProvider()
+      .resolve(Strategy.Solana)
+      .then((tokens: TokenListContainer) => {
+        const tokenList =
+          cluster === Cluster.Custom
+            ? []
+            : tokens.filterByClusterSlug(clusterSlug(cluster)).getList();
 
-      setTokenRegistry(
-        tokenList.reduce((map: TokenInfoMap, item: TokenInfo) => {
-          map.set(item.address, item);
-          return map;
-        }, new Map())
-      );
-    });
+        setTokenRegistry(
+          tokenList.reduce((map: TokenInfoMap, item: TokenInfo) => {
+            map.set(item.address, item);
+            return map;
+          }, new Map())
+        );
+      });
   }, [cluster]);
 
   return (

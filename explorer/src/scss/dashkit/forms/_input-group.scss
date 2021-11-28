@@ -1,0 +1,171 @@
+//
+// input-group.scss
+// Extended from Bootstrap
+//
+
+//
+// Bootstrap overrides ===================================
+//
+
+// Sizing
+
+.input-group-sm > .form-control {
+  line-height: $input-line-height-sm;
+}
+
+.input-group-lg > .form-control {
+  line-height: $input-line-height-lg;
+}
+
+
+//
+// Theme ===================================
+//
+
+.input-group-merge > .form-control {
+  border-right-width: 0;
+}
+
+.input-group-merge > .input-group-text {
+  border-left-width: 0;
+  transition: $input-transition;
+}
+
+.input-group-merge > .form-control:focus + .input-group-text {
+  border-color: $input-focus-border-color;
+}
+
+.input-group > :not(:first-child):not(.dropdown-menu) {
+  margin-left: 0;
+}
+
+
+// Reverse
+
+.input-group-merge.input-group-reverse {
+  display: flex;
+  flex-direction: row-reverse;
+}
+
+.input-group-merge.input-group-reverse > .form-control {
+  padding-right: $input-padding-x;
+  padding-left: 0;
+  border-radius: 0 $input-border-radius $input-border-radius 0;
+  border-right-width: $input-border-width;
+  border-left-width: 0;
+}
+
+.input-group-merge.input-group-reverse > .input-group-text {
+  border-radius: $input-border-radius 0 0 $input-border-radius;
+  border-left-width: $input-border-width;
+  border-right-width: 0;
+}
+
+.input-group-merge.input-group-reverse:not(.input-group-rounded) > :not(:last-child):not(.dropdown-toggle):not(.dropdown-menu) {
+  border-top-right-radius: $input-border-radius;
+  border-bottom-right-radius: $input-border-radius;
+}
+
+.input-group-merge.input-group-reverse:not(.input-group-rounded) > :not(:first-child):not(.dropdown-menu):not(.valid-tooltip):not(.valid-feedback):not(.invalid-tooltip):not(.invalid-feedback) {
+  border-top-left-radius: $input-border-radius;
+  border-bottom-left-radius: $input-border-radius;
+}
+
+
+// Sizing
+
+.input-group-sm.input-group-merge.input-group-reverse > .form-control {
+  padding-right: $input-padding-x-sm;
+  border-radius: 0 $input-border-radius-sm $input-border-radius-sm 0;
+}
+
+.input-group-sm.input-group-merge.input-group-reverse > .input-group-text {
+  border-radius: $input-border-radius-sm 0 0 $input-border-radius-sm;
+}
+
+.input-group-sm.input-group-merge.input-group-reverse:not(.input-group-rounded) > :not(:last-child):not(.dropdown-toggle):not(.dropdown-menu) {
+  border-top-right-radius: $input-border-radius-sm;
+  border-bottom-right-radius: $input-border-radius-sm;
+}
+
+.input-group-sm.input-group-merge.input-group-reverse:not(.input-group-rounded) > :not(:first-child):not(.dropdown-menu):not(.valid-tooltip):not(.valid-feedback):not(.invalid-tooltip):not(.invalid-feedback) {
+  border-top-left-radius: $input-border-radius-sm;
+  border-bottom-left-radius: $input-border-radius-sm;
+}
+
+.input-group-lg.input-group-merge.input-group-reverse > .form-control {
+  padding-right: $input-padding-x-lg;
+  border-radius: 0 $input-border-radius-lg $input-border-radius-lg 0;
+}
+
+.input-group-lg.input-group-merge.input-group-reverse > .input-group-text {
+  border-radius: $input-border-radius-lg 0 0 $input-border-radius-lg;
+}
+
+.input-group-lg.input-group-merge.input-group-reverse:not(.input-group-rounded) > :not(:last-child):not(.dropdown-toggle):not(.dropdown-menu) {
+  border-top-right-radius: $input-border-radius-lg;
+  border-bottom-right-radius: $input-border-radius-lg;
+}
+
+.input-group-lg.input-group-merge.input-group-reverse:not(.input-group-rounded) > :not(:first-child):not(.dropdown-menu):not(.valid-tooltip):not(.valid-feedback):not(.invalid-tooltip):not(.invalid-feedback) {
+  border-top-left-radius: $input-border-radius-lg;
+  border-bottom-left-radius: $input-border-radius-lg;
+}
+
+
+// Rounded
+
+.input-group-rounded.input-group-merge > .form-control {
+  border-top-left-radius: $border-radius-pill;
+  border-bottom-left-radius: $border-radius-pill;
+}
+
+.input-group-rounded.input-group-merge > .input-group-text {
+  border-top-right-radius: $border-radius-pill;
+  border-bottom-right-radius: $border-radius-pill;
+}
+
+.input-group-rounded.input-group-merge.input-group-reverse > .form-control {
+  border-radius: 0 $border-radius-pill $border-radius-pill 0 !important;
+}
+
+.input-group-rounded.input-group-merge.input-group-reverse > .input-group-text {
+  border-radius: $border-radius-pill 0 0 $border-radius-pill !important;
+}
+
+
+// Flush
+
+.input-group-flush.input-group-merge > .form-control,
+.input-group-flush.input-group-merge > .input-group-text {
+  border-color: transparent;
+  background-color: transparent;
+}
+
+.input-group-flush.input-group-merge > .form-control {
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.input-group-flush.input-group-merge > .form-control:focus + .input-group-text {
+  border-color: transparent;
+}
+
+.input-group-flush.input-group-merge:not(.input-group-reverse) > .input-group-text {
+  padding-right: 0;
+}
+
+.input-group-flush.input-group-merge.input-group-reverse > .input-group-text {
+  padding-left: 0;
+}
+
+
+// Validation
+
+.input-group-merge > .form-control.is-valid + .input-group-text {
+  border-color: $form-feedback-valid-color;
+}
+
+.input-group-merge > .form-control.is-invalid + .input-group-text {
+  border-color: $form-feedback-invalid-color;
+}
