@@ -23,7 +23,7 @@ export function AuthorizeDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Stake Authorize"
+      title="Stake Program: Authorize"
       innerCards={innerCards}
       childIndex={childIndex}
     >

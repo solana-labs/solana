@@ -92,7 +92,7 @@ export function SerumDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title={`Serum: ${title || "Unknown"}`}
+      title={`Serum Program: ${title || "Unknown"}`}
       innerCards={innerCards}
       childIndex={childIndex}
       defaultRaw

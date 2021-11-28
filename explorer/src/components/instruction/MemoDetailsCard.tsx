@@ -23,7 +23,7 @@ export function MemoDetailsCard({
       ix={ix}
       index={index}
       result={result}
-      title="Memo"
+      title="Memo Program: Memo"
       innerCards={innerCards}
       childIndex={childIndex}
     >

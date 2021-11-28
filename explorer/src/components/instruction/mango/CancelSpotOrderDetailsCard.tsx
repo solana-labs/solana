@@ -24,7 +24,7 @@ export function CancelSpotOrderDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Mango: CancelSpotOrder"
+      title="Mango Program: CancelSpotOrder"
       innerCards={innerCards}
       childIndex={childIndex}
     >

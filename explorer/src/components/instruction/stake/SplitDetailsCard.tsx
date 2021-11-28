@@ -24,7 +24,7 @@ export function SplitDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Split Stake"
+      title="Stake Program: Split Stake"
       innerCards={innerCards}
       childIndex={childIndex}
     >

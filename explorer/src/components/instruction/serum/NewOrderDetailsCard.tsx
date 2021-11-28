@@ -19,7 +19,7 @@ export function NewOrderDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Serum: New Order"
+      title="Serum Program: New Order"
       innerCards={innerCards}
       childIndex={childIndex}
     >

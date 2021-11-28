@@ -19,7 +19,7 @@ export function CancelOrderDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Serum: Cancel Order"
+      title="Serum Program: Cancel Order"
       innerCards={innerCards}
       childIndex={childIndex}
     >

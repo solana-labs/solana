@@ -35,7 +35,7 @@ export function GenericPerpMngoDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title={"Mango: " + title}
+      title={"Mango Program: " + title}
       innerCards={innerCards}
       childIndex={childIndex}
     >

@@ -23,7 +23,7 @@ export function DelegateDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Delegate Stake"
+      title="Stake Program: Delegate Stake"
       innerCards={innerCards}
       childIndex={childIndex}
     >

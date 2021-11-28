@@ -23,7 +23,7 @@ export function AssignDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Assign Account"
+      title="System Program: Assign Account"
       innerCards={innerCards}
       childIndex={childIndex}
     >

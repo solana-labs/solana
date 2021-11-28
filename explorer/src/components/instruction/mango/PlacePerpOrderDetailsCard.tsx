@@ -58,7 +58,7 @@ export function PlacePerpOrderDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Mango: PlacePerpOrder"
+      title="Mango Program: PlacePerpOrder"
       innerCards={innerCards}
       childIndex={childIndex}
     >

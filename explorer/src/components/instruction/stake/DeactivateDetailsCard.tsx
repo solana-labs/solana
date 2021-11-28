@@ -23,7 +23,7 @@ export function DeactivateDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Deactivate Stake"
+      title="Stake Program: Deactivate Stake"
       innerCards={innerCards}
       childIndex={childIndex}
     >

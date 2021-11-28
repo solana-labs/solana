@@ -23,7 +23,7 @@ export function NonceAdvanceDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Advance Nonce"
+      title="System Program: Advance Nonce"
       innerCards={innerCards}
       childIndex={childIndex}
     >

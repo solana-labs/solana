@@ -52,7 +52,7 @@ export function ChangePerpMarketParamsDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Mango: ChangePerpMarketParams"
+      title="Mango Program: ChangePerpMarketParams"
       innerCards={innerCards}
       childIndex={childIndex}
     >

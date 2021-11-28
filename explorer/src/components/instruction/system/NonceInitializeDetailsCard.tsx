@@ -23,7 +23,7 @@ export function NonceInitializeDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Initialize Nonce"
+      title="System Program: Initialize Nonce"
       innerCards={innerCards}
       childIndex={childIndex}
     >

@@ -15,7 +15,7 @@ export function AddOracleDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Mango: AddOracle"
+      title="Mango Program: AddOracle"
       innerCards={innerCards}
       childIndex={childIndex}
     ></InstructionCard>

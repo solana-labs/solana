@@ -24,7 +24,7 @@ export function WithdrawDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Withdraw Stake"
+      title="System Program: Withdraw Stake"
       innerCards={innerCards}
       childIndex={childIndex}
     >

@@ -24,7 +24,7 @@ export function AssignWithSeedDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Assign Account w/ Seed"
+      title="System Program: Assign Account w/ Seed"
       innerCards={innerCards}
       childIndex={childIndex}
     >

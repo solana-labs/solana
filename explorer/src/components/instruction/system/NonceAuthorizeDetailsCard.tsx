@@ -23,7 +23,7 @@ export function NonceAuthorizeDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Authorize Nonce"
+      title="System Program: Authorize Nonce"
       innerCards={innerCards}
       childIndex={childIndex}
     >
