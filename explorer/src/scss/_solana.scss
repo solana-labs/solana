@@ -15,6 +15,11 @@ pre {
   color: $gray-900;
 }
 
+.table > :not(:first-child) {
+  // Bootstrap v5.1 added this and dashkit doesn't handle it yet
+  border-top: 0px solid currentColor;
+}
+
 ul.log-messages {
   padding: 0.66rem;
   margin: 1rem;
@@ -226,7 +231,7 @@ h4.slot-pill {
 
 .address-truncate,
 .signature-truncate {
-  @include media-breakpoint-down(md) {
+  @include media-breakpoint-down(lg) {
     max-width: 180px;
     display: inline-block;
     vertical-align: bottom;
