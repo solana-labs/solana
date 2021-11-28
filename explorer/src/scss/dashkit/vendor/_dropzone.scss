@@ -27,6 +27,13 @@
   }
 }
 
+.dz-button {
+  background: none;
+  border: 0;
+  font-size: inherit;
+  color: inherit;
+}
+
 .dz-drag-hover .dz-message {
   border-color: $primary;
   color: $primary;
@@ -49,19 +56,26 @@
 
 .dz-preview-single {
   position: absolute;
-  top: 0; right: 0; bottom: 0; left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   border-radius: $border-radius;
 }
 
 .dz-preview-cover {
   position: absolute;
-  top: 0; right: 0; bottom: 0; left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   border-radius: $border-radius;
 }
 
 .dz-preview-img {
   object-fit: cover;
-  width: 100%; height: 100%;
+  width: 100%;
+  height: 100%;
   border-radius: $border-radius;
 }
 

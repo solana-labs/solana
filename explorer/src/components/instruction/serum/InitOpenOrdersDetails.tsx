@@ -25,28 +25,28 @@ export function InitOpenOrdersDetailsCard(props: {
     >
       <tr>
         <td>Program</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.programId} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Open Orders</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.accounts.openOrders} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Open Orders Owner</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.accounts.openOrdersOwner} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Market</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.accounts.market} alignRight link />
         </td>
       </tr>
@@ -54,7 +54,7 @@ export function InitOpenOrdersDetailsCard(props: {
       {info.accounts.openOrdersMarketAuthority && (
         <tr>
           <td>Open Orders Market Authority</td>
-          <td className="text-lg-right">
+          <td className="text-lg-end">
             <Address
               pubkey={info.accounts.openOrdersMarketAuthority}
               alignRight

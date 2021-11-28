@@ -31,42 +31,42 @@ export function TransferWithSeedDetailsCard(props: {
     >
       <tr>
         <td>Program</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={SystemProgram.programId} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>From Address</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.source} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Destination Address</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.destination} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Base Address</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.sourceBase} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Transfer Amount (SOL)</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <SolBalance lamports={info.lamports} />
         </td>
       </tr>
 
       <tr>
         <td>Seed</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Copyable text={info.sourceSeed}>
             <code>{info.sourceSeed}</code>
           </Copyable>
@@ -75,7 +75,7 @@ export function TransferWithSeedDetailsCard(props: {
 
       <tr>
         <td>Source Owner</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.sourceOwner} alignRight link />
         </td>
       </tr>

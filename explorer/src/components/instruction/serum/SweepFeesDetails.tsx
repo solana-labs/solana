@@ -25,28 +25,28 @@ export function SweepFeesDetailsCard(props: {
     >
       <tr>
         <td>Program</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.programId} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Market</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.accounts.market} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Quote Vault</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.accounts.quoteVault} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Fee Sweeping Authority</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address
             pubkey={info.accounts.feeSweepingAuthority}
             alignRight
@@ -57,14 +57,14 @@ export function SweepFeesDetailsCard(props: {
 
       <tr>
         <td>Fee Receiver</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.accounts.quoteFeeReceiver} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Vault Signer</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.accounts.vaultSigner} alignRight link />
         </td>
       </tr>

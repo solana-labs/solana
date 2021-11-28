@@ -42,13 +42,13 @@ export function ProgramLogsCardBody({
           <tr key={index}>
             <td>
               <div className="d-flex align-items-center">
-                <span className={`badge badge-soft-${badgeColor} mr-2`}>
+                <span className={`badge bg-${badgeColor}-soft me-2`}>
                   #{index + 1}
                 </span>
                 {programName} Instruction
               </div>
               {programLogs && (
-                <div className="d-flex align-items-start flex-column text-monospace p-2 font-size-sm">
+                <div className="d-flex align-items-start flex-column font-monospace p-2 font-size-sm">
                   {programLogs.logs.map((log, key) => {
                     return (
                       <span key={key}>

@@ -29,21 +29,21 @@ export function AllocateDetailsCard(props: {
     >
       <tr>
         <td>Program</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={SystemProgram.programId} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Account Address</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={info.account} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Allocated Data Size</td>
-        <td className="text-lg-right">{info.space} byte(s)</td>
+        <td className="text-lg-end">{info.space} byte(s)</td>
       </tr>
     </InstructionCard>
   );

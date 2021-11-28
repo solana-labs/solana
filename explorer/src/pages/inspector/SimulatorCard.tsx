@@ -22,7 +22,7 @@ export function SimulatorCard({ message }: { message: Message }) {
           <h3 className="card-header-title">Transaction Simulation</h3>
         </div>
         <div className="card-body text-center">
-          <span className="spinner-grow spinner-grow-sm mr-2"></span>
+          <span className="spinner-grow spinner-grow-sm me-2"></span>
           Simulating
         </div>
       </div>
@@ -39,7 +39,7 @@ export function SimulatorCard({ message }: { message: Message }) {
         {simulationError ? (
           <div className="card-body">
             Failed to run simulation:
-            <span className="text-warning ml-2">{simulationError}</span>
+            <span className="text-warning ms-2">{simulationError}</span>
           </div>
         ) : (
           <div className="card-body text-muted">
