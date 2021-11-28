@@ -19,7 +19,7 @@ export function ConsumeEventsDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Serum: Consume Events"
+      title="Serum Program: Consume Events"
       innerCards={innerCards}
       childIndex={childIndex}
     >

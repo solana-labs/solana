@@ -25,7 +25,7 @@ export function CreateWithSeedDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Create Account w/ Seed"
+      title="System Program: Create Account w/ Seed"
       innerCards={innerCards}
       childIndex={childIndex}
     >

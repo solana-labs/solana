@@ -18,7 +18,7 @@ export function AddPerpMarketDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Mango: AddPerpMarket"
+      title="Mango Program: AddPerpMarket"
       innerCards={innerCards}
       childIndex={childIndex}
     >

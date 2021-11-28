@@ -24,7 +24,7 @@ export function CreateDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Create Account"
+      title="System Program: Create Account"
       innerCards={innerCards}
       childIndex={childIndex}
     >

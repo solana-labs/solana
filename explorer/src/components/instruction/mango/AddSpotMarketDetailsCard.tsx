@@ -17,7 +17,7 @@ export function AddSpotMarketDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Mango: AddSpotMarket"
+      title="Mango Program: AddSpotMarket"
       innerCards={innerCards}
       childIndex={childIndex}
     >

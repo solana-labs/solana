@@ -23,7 +23,7 @@ export function MergeDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Stake Merge"
+      title="Stake Program: Merge Stake"
       innerCards={innerCards}
       childIndex={childIndex}
     >

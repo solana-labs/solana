@@ -24,7 +24,7 @@ export function NonceWithdrawDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Withdraw Nonce"
+      title="System Program: Withdraw Nonce"
       innerCards={innerCards}
       childIndex={childIndex}
     >

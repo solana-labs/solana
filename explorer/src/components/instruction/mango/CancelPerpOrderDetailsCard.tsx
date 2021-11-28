@@ -24,7 +24,7 @@ export function CancelPerpOrderDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Mango: CancelPerpOrder"
+      title="Mango Program: CancelPerpOrder"
       innerCards={innerCards}
       childIndex={childIndex}
     >

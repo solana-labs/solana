@@ -25,7 +25,7 @@ export function TransferWithSeedDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Transfer w/ Seed"
+      title="System Program: Transfer w/ Seed"
       innerCards={innerCards}
       childIndex={childIndex}
     >

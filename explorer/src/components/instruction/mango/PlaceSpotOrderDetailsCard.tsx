@@ -68,7 +68,7 @@ export function PlaceSpotOrderDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Mango: PlaceSpotOrder"
+      title="Mango Program: PlaceSpotOrder"
       innerCards={innerCards}
       childIndex={childIndex}
     >

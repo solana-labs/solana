@@ -19,7 +19,7 @@ export function SettleFundsDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Serum: Settle Funds"
+      title="Serum Program: Settle Funds"
       innerCards={innerCards}
       childIndex={childIndex}
     >

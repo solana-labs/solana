@@ -23,7 +23,7 @@ export function ConsumeEventsDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title={"Mango: ConsumeEvents"}
+      title={"Mango Program: ConsumeEvents"}
       innerCards={innerCards}
       childIndex={childIndex}
     >

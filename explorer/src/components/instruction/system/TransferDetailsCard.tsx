@@ -24,7 +24,7 @@ export function TransferDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Transfer"
+      title="System Program: Transfer"
       innerCards={innerCards}
       childIndex={childIndex}
     >

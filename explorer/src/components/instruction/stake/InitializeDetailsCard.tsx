@@ -26,7 +26,7 @@ export function InitializeDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Stake Initialize"
+      title="Stake Program: Initialize Stake"
       innerCards={innerCards}
       childIndex={childIndex}
     >

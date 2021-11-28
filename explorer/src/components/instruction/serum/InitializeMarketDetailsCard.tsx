@@ -19,7 +19,7 @@ export function InitializeMarketDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Serum: Initialize Market"
+      title="Serum Program: Initialize Market"
       innerCards={innerCards}
       childIndex={childIndex}
     >

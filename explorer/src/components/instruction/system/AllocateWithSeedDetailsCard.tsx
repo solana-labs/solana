@@ -24,7 +24,7 @@ export function AllocateWithSeedDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Allocate Account w/ Seed"
+      title="System Program: Allocate Account w/ Seed"
       innerCards={innerCards}
       childIndex={childIndex}
     >
