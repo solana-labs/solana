@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Stream, StreamPlayerApi } from "@cloudflare/stream-react";
 import { PublicKey } from "@solana/web3.js";
 import {
-  MetadataData,
+  programs,
   MetadataJson,
   MetaDataJsonCategory,
   MetadataJsonFile,
@@ -244,7 +244,7 @@ export const ArtContent = ({
   files,
   data,
 }: {
-  metadata: MetadataData;
+  metadata: programs.metadata.MetadataData;
   category?: MetaDataJsonCategory;
   active?: boolean;
   pubkey?: PublicKey | string;
