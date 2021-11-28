@@ -25,9 +25,11 @@ import {
   UpgradeableLoaderAccount,
 } from "validators/accounts/upgradeable-program";
 import { RewardsProvider } from "./rewards";
-import { Metadata, MetadataData } from "@metaplex/js";
+import { programs } from "@metaplex/js";
 import getEditionInfo, { EditionInfo } from "./utils/getEditionInfo";
 export { useAccountHistory } from "./history";
+
+const Metadata = programs.metadata.Metadata;
 
 export type StakeProgramData = {
   program: "stake";
@@ -42,7 +44,7 @@ export type UpgradeableLoaderAccountData = {
 };
 
 export type NFTData = {
-  metadata: MetadataData;
+  metadata: programs.metadata.MetadataData;
   editionInfo: EditionInfo;
 };
 

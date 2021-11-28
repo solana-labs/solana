@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Stream, StreamPlayerApi } from "@cloudflare/stream-react";
 import { PublicKey } from "@solana/web3.js";
 import {
-  MetadataData,
+  programs,
   MetadataJson,
   MetaDataJsonCategory,
   MetadataJsonFile,
@@ -243,7 +243,7 @@ export const ArtContent = ({
   animationURL,
   files,
 }: {
-  metadata: MetadataData;
+  metadata: programs.metadata.MetadataData;
   category?: MetaDataJsonCategory;
   active?: boolean;
   pubkey?: PublicKey | string;
@@ -358,7 +358,10 @@ export const useCachedImage = (uri: string) => {
   return { cachedBlob };
 };
 
-export const useExtendedArt = (id: string, metadata: MetadataData) => {
+export const useExtendedArt = (
+  id: string,
+  metadata: programs.metadata.MetadataData
+) => {
   const [data, setData] = useState<MetadataJson>();
 
   useEffect(() => {
