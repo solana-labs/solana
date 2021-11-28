@@ -3,6 +3,8 @@
 // Extended from Bootstrap
 //
 
+@use 'sass:math';
+
 // 
 // Bootstrap Overrides ===================================
 //
@@ -184,7 +186,7 @@ $grid-gutter-width: 1.5rem !default;
 
 // Container padding
 
-$container-padding-x: $grid-gutter-width / 2 !default;
+$container-padding-x: math.div($grid-gutter-width, 2) !default;
 
 
 // Components

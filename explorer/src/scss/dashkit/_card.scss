@@ -3,6 +3,8 @@
 // Extended from Bootstrap
 //
 
+@use 'sass:math';
+
 // 
 // Bootstrap Overrides =====================================
 //
@@ -24,8 +26,8 @@
   flex-direction: row;
   align-items: center;
   height: $card-header-height;
-  padding-top: $card-spacer-y / 2;
-  padding-bottom: $card-spacer-y / 2;
+  padding-top: math.div($card-spacer-y, 2);
+  padding-bottom: math.div($card-spacer-y, 2);
 
   > *:first-child {
     flex: 1;
@@ -51,8 +53,8 @@
 }
 
 .card-header-tabs {
-  margin-top: -$card-spacer-y / 2;
-  margin-bottom: -$card-spacer-y / 2;
+  margin-top: math.div(-$card-spacer-y, 2);
+  margin-bottom: math.div(-$card-spacer-y, 2);
   margin-left: 0;
   margin-right: 0;
 }
@@ -128,27 +130,27 @@
 }
 
 .card-avatar-top {
-  margin-top: -($card-spacer-x + $avatar-size-base / 2);
+  margin-top: -($card-spacer-x + math.div($avatar-size-base, 2));
 }
 
 .card-avatar-top.avatar-xs {
-  margin-top: -($card-spacer-x + $avatar-size-xs / 2);
+  margin-top: -($card-spacer-x + math.div($avatar-size-xs, 2));
 }
 
 .card-avatar-top.avatar-sm {
-  margin-top: -($card-spacer-x + $avatar-size-sm / 2);
+  margin-top: -($card-spacer-x + math.div($avatar-size-sm, 2));
 }
 
 .card-avatar-top.avatar-lg {
-  margin-top: -($card-spacer-x + $avatar-size-lg / 2);
+  margin-top: -($card-spacer-x + math.div($avatar-size-lg, 2));
 }
 
 .card-avatar-top.avatar-xl {
-  margin-top: -($card-spacer-x + $avatar-size-xl / 2);
+  margin-top: -($card-spacer-x + math.div($avatar-size-xl, 2));
 }
 
 .card-avatar-top.avatar-xxl {
-  margin-top: -($card-spacer-x + $avatar-size-xxl / 2);
+  margin-top: -($card-spacer-x + math.div($avatar-size-xxl, 2));
 }
 
 

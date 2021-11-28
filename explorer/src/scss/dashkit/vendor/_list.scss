@@ -3,6 +3,8 @@
 // List.js plugin overrides
 //
 
+@use 'sass:math';
+
 // Pagination
 
 .page {
@@ -32,7 +34,7 @@
 
 @include media-breakpoint-up($navbar-vertical-expand-breakpoint) {
   .navbar-vertical:not(.navbar-vertical-sm):not([style*="display: none"]) ~ .main-content .list-alert {
-    left: calc(50% + #{$navbar-vertical-width / 2});
+    left: calc(50% + #{math.div($navbar-vertical-width, 2)});
   }
 }
 

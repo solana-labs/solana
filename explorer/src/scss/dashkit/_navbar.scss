@@ -3,6 +3,7 @@
 // Extended from Bootstrap
 //
 
+@use 'sass:math';
 
 //
 // Bootstrap Overrides =======================
@@ -288,7 +289,7 @@
 }
 
 .navbar-nav .dropdown-menu .dropdown-menu {
-  margin-left: $dropdown-item-padding-x / 2;
+  margin-left: math.div($dropdown-item-padding-x, 2);
 }
 
 .navbar-expand {
@@ -666,8 +667,8 @@
           overflow: visible;
 
           .navbar-brand {
-            padding-top: ($nav-link-padding-y * 2 + $font-size-base * $line-height-base) / 2 - $navbar-padding-y;
-            padding-bottom: ($nav-link-padding-y * 2 + $font-size-base * $line-height-base) / 2;
+            padding-top: math.div($nav-link-padding-y * 2 + $font-size-base * $line-height-base, 2) - $navbar-padding-y;
+            padding-bottom: math.div($nav-link-padding-y * 2 + $font-size-base * $line-height-base, 2);
           }
 
           .navbar-brand-img {

@@ -3,6 +3,8 @@
 // Extended from Bootstrap
 //
 
+@use 'sass:math';
+
 // 
 // Bootstrap Overrides =====================================
 //
@@ -58,7 +60,7 @@
   content: '';
   position: absolute;
   top: $list-group-item-padding-y;
-  left: $avatar-size-sm / 2;
+  left: math.div($avatar-size-sm, 2);
   height: 100%;
   border-left: $border-width solid $border-color;
 }
