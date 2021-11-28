@@ -310,7 +310,7 @@ async function fetchAccountInfo(
 
 const getMetaDataJSON = async (
   id: string,
-  metadata: MetadataData
+  metadata: programs.metadata.MetadataData
 ): Promise<MetadataJson | undefined> => {
   return new Promise(async (resolve, reject) => {
     const uri = metadata.data.uri;
