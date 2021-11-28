@@ -1,6 +1,6 @@
 import "bootstrap/dist/js/bootstrap.min.js";
 import { NFTData } from "providers/accounts";
-import { Creator } from "@metaplex/js";
+import { programs } from "@metaplex/js";
 import { ArtContent } from "components/common/NFTArt";
 import { InfoTooltip } from "components/common/InfoTooltip";
 import { clusterPath } from "utils/url";
@@ -58,6 +58,7 @@ export function NFTHeader({
   );
 }
 
+type Creator = programs.metadata.Creator;
 function getCreatorDropdownItems(creators: Creator[] | null) {
   const CreatorHeader = () => {
     const creatorTooltip =
