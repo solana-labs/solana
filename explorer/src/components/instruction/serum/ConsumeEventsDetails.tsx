@@ -33,21 +33,21 @@ export function ConsumeEventsDetailsCard(props: {
       <tr>
         <td>Market</td>
         <td className="text-lg-right">
-          <Address pubkey={info.market} alignRight link />
+          <Address pubkey={info.accounts.market} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Event Queue</td>
         <td className="text-lg-right">
-          <Address pubkey={info.eventQueue} alignRight link />
+          <Address pubkey={info.accounts.eventQueue} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Open Orders Accounts</td>
         <td className="text-lg-right">
-          {info.openOrdersAccounts.map((account, index) => {
+          {info.accounts.openOrders.map((account, index) => {
             return <Address pubkey={account} key={index} alignRight link />;
           })}
         </td>
@@ -55,7 +55,7 @@ export function ConsumeEventsDetailsCard(props: {
 
       <tr>
         <td>Limit</td>
-        <td className="text-lg-right">{info.limit}</td>
+        <td className="text-lg-right">{info.data.limit}</td>
       </tr>
     </InstructionCard>
   );

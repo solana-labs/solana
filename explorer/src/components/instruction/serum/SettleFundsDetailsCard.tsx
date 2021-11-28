@@ -33,64 +33,68 @@ export function SettleFundsDetailsCard(props: {
       <tr>
         <td>Market</td>
         <td className="text-lg-right">
-          <Address pubkey={info.market} alignRight link />
+          <Address pubkey={info.accounts.market} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Open Orders</td>
         <td className="text-lg-right">
-          <Address pubkey={info.openOrders} alignRight link />
+          <Address pubkey={info.accounts.openOrders} alignRight link />
         </td>
       </tr>
 
       <tr>
-        <td>Owner</td>
+        <td>Open Orders Owner</td>
         <td className="text-lg-right">
-          <Address pubkey={info.owner} alignRight link />
+          <Address pubkey={info.accounts.openOrdersOwner} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Base Vault</td>
         <td className="text-lg-right">
-          <Address pubkey={info.baseVault} alignRight link />
+          <Address pubkey={info.accounts.baseVault} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Quote Vault</td>
         <td className="text-lg-right">
-          <Address pubkey={info.quoteVault} alignRight link />
+          <Address pubkey={info.accounts.quoteVault} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Base Wallet</td>
         <td className="text-lg-right">
-          <Address pubkey={info.baseWallet} alignRight link />
+          <Address pubkey={info.accounts.baseWallet} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Quote Wallet</td>
         <td className="text-lg-right">
-          <Address pubkey={info.quoteWallet} alignRight link />
+          <Address pubkey={info.accounts.quoteWallet} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Vault Signer</td>
         <td className="text-lg-right">
-          <Address pubkey={info.vaultSigner} alignRight link />
+          <Address pubkey={info.accounts.vaultSigner} alignRight link />
         </td>
       </tr>
 
-      {info.referrerQuoteWallet && (
+      {info.accounts.referrerQuoteWallet && (
         <tr>
           <td>Referrer Quote Wallet</td>
           <td className="text-lg-right">
-            <Address pubkey={info.referrerQuoteWallet} alignRight link />
+            <Address
+              pubkey={info.accounts.referrerQuoteWallet}
+              alignRight
+              link
+            />
           </td>
         </tr>
       )}

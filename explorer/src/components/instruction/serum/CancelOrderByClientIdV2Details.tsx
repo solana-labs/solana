@@ -2,13 +2,13 @@ import React from "react";
 import { SignatureResult, TransactionInstruction } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
-import { MatchOrders } from "./types";
+import { CancelOrderByClientIdV2 } from "./types";
 
-export function MatchOrdersDetailsCard(props: {
+export function CancelOrderByClientIdV2DetailsCard(props: {
   ix: TransactionInstruction;
   index: number;
   result: SignatureResult;
-  info: MatchOrders;
+  info: CancelOrderByClientIdV2;
   innerCards?: JSX.Element[];
   childIndex?: number;
 }) {
@@ -19,35 +19,14 @@ export function MatchOrdersDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Serum Program: Match Orders"
+      title="Serum Program: Cancel Order By Client Id v2"
       innerCards={innerCards}
       childIndex={childIndex}
     >
       <tr>
-        <td>Program</td>
-        <td className="text-lg-right">
-          <Address pubkey={info.programId} alignRight link />
-        </td>
-      </tr>
-
-      <tr>
         <td>Market</td>
         <td className="text-lg-right">
           <Address pubkey={info.accounts.market} alignRight link />
-        </td>
-      </tr>
-
-      <tr>
-        <td>Request Queue</td>
-        <td className="text-lg-right">
-          <Address pubkey={info.accounts.requestQueue} alignRight link />
-        </td>
-      </tr>
-
-      <tr>
-        <td>Event Queue</td>
-        <td className="text-lg-right">
-          <Address pubkey={info.accounts.eventQueue} alignRight link />
         </td>
       </tr>
 
@@ -66,8 +45,29 @@ export function MatchOrdersDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>Limit</td>
-        <td className="text-lg-right">{info.data.limit}</td>
+        <td>Open Orders</td>
+        <td className="text-lg-right">
+          <Address pubkey={info.accounts.openOrders} alignRight link />
+        </td>
+      </tr>
+
+      <tr>
+        <td>Open Orders Owner</td>
+        <td className="text-lg-right">
+          <Address pubkey={info.accounts.openOrdersOwner} alignRight link />
+        </td>
+      </tr>
+
+      <tr>
+        <td>Event Queue</td>
+        <td className="text-lg-right">
+          <Address pubkey={info.accounts.eventQueue} alignRight link />
+        </td>
+      </tr>
+
+      <tr>
+        <td>Client Id</td>
+        <td className="text-lg-right">{info.data.clientId.toString(10)}</td>
       </tr>
     </InstructionCard>
   );

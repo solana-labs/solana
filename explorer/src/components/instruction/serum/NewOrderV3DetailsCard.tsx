@@ -2,13 +2,13 @@ import React from "react";
 import { SignatureResult, TransactionInstruction } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
-import { NewOrder } from "./types";
+import { NewOrderV3 } from "./types";
 
-export function NewOrderDetailsCard(props: {
+export function NewOrderV3DetailsCard(props: {
   ix: TransactionInstruction;
   index: number;
   result: SignatureResult;
-  info: NewOrder;
+  info: NewOrderV3;
   innerCards?: JSX.Element[];
   childIndex?: number;
 }) {
@@ -19,7 +19,7 @@ export function NewOrderDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Serum Program: New Order"
+      title="Serum Program: New Order v3"
       innerCards={innerCards}
       childIndex={childIndex}
     >
@@ -52,6 +52,27 @@ export function NewOrderDetailsCard(props: {
       </tr>
 
       <tr>
+        <td>Event Queue</td>
+        <td className="text-lg-right">
+          <Address pubkey={info.accounts.eventQueue} alignRight link />
+        </td>
+      </tr>
+
+      <tr>
+        <td>Bids</td>
+        <td className="text-lg-right">
+          <Address pubkey={info.accounts.bids} alignRight link />
+        </td>
+      </tr>
+
+      <tr>
+        <td>Asks</td>
+        <td className="text-lg-right">
+          <Address pubkey={info.accounts.asks} alignRight link />
+        </td>
+      </tr>
+
+      <tr>
         <td>Payer</td>
         <td className="text-lg-right">
           <Address pubkey={info.accounts.payer} alignRight link />
@@ -79,9 +100,18 @@ export function NewOrderDetailsCard(props: {
         </td>
       </tr>
 
+      {info.accounts.feeDiscountPubkey && (
+        <tr>
+          <td>Fee Discount</td>
+          <td className="text-lg-right">
+            <Address pubkey={info.accounts.feeDiscountPubkey} alignRight link />
+          </td>
+        </tr>
+      )}
+
       <tr>
         <td>Side</td>
-        <td className="text-lg-right">{info.data.side}</td>
+        <td className="text-lg-right">{info.data.side.toUpperCase()}</td>
       </tr>
 
       <tr>
@@ -95,13 +125,27 @@ export function NewOrderDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>Max Quantity</td>
-        <td className="text-lg-right">{info.data.maxQuantity.toString(10)}</td>
+        <td>Max Base Quantity</td>
+        <td className="text-lg-right">
+          {info.data.maxBaseQuantity.toString(10)}
+        </td>
+      </tr>
+
+      <tr>
+        <td>Max Quote Quantity</td>
+        <td className="text-lg-right">
+          {info.data.maxQuoteQuantity.toString(10)}
+        </td>
       </tr>
 
       <tr>
         <td>Client Id</td>
         <td className="text-lg-right">{info.data.clientId.toString(10)}</td>
+      </tr>
+
+      <tr>
+        <td>Match Iteration Limit</td>
+        <td className="text-lg-right">{info.data.limit}</td>
       </tr>
     </InstructionCard>
   );

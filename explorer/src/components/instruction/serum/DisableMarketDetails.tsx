@@ -2,13 +2,13 @@ import React from "react";
 import { SignatureResult, TransactionInstruction } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
-import { MatchOrders } from "./types";
+import { DisableMarket } from "./types";
 
-export function MatchOrdersDetailsCard(props: {
+export function DisableMarketDetailsCard(props: {
   ix: TransactionInstruction;
   index: number;
   result: SignatureResult;
-  info: MatchOrders;
+  info: DisableMarket;
   innerCards?: JSX.Element[];
   childIndex?: number;
 }) {
@@ -19,7 +19,7 @@ export function MatchOrdersDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Serum Program: Match Orders"
+      title="Serum Program: Disable Market"
       innerCards={innerCards}
       childIndex={childIndex}
     >
@@ -38,36 +38,10 @@ export function MatchOrdersDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>Request Queue</td>
+        <td>Disable Authority</td>
         <td className="text-lg-right">
-          <Address pubkey={info.accounts.requestQueue} alignRight link />
+          <Address pubkey={info.accounts.disableAuthority} alignRight link />
         </td>
-      </tr>
-
-      <tr>
-        <td>Event Queue</td>
-        <td className="text-lg-right">
-          <Address pubkey={info.accounts.eventQueue} alignRight link />
-        </td>
-      </tr>
-
-      <tr>
-        <td>Bids</td>
-        <td className="text-lg-right">
-          <Address pubkey={info.accounts.bids} alignRight link />
-        </td>
-      </tr>
-
-      <tr>
-        <td>Asks</td>
-        <td className="text-lg-right">
-          <Address pubkey={info.accounts.asks} alignRight link />
-        </td>
-      </tr>
-
-      <tr>
-        <td>Limit</td>
-        <td className="text-lg-right">{info.data.limit}</td>
       </tr>
     </InstructionCard>
   );

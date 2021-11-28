@@ -2,13 +2,13 @@ import React from "react";
 import { SignatureResult, TransactionInstruction } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
-import { MatchOrders } from "./types";
+import { Prune } from "./types";
 
-export function MatchOrdersDetailsCard(props: {
+export function PruneDetailsCard(props: {
   ix: TransactionInstruction;
   index: number;
   result: SignatureResult;
-  info: MatchOrders;
+  info: Prune;
   innerCards?: JSX.Element[];
   childIndex?: number;
 }) {
@@ -19,7 +19,7 @@ export function MatchOrdersDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title="Serum Program: Match Orders"
+      title="Serum Program: Prune"
       innerCards={innerCards}
       childIndex={childIndex}
     >
@@ -38,20 +38,6 @@ export function MatchOrdersDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>Request Queue</td>
-        <td className="text-lg-right">
-          <Address pubkey={info.accounts.requestQueue} alignRight link />
-        </td>
-      </tr>
-
-      <tr>
-        <td>Event Queue</td>
-        <td className="text-lg-right">
-          <Address pubkey={info.accounts.eventQueue} alignRight link />
-        </td>
-      </tr>
-
-      <tr>
         <td>Bids</td>
         <td className="text-lg-right">
           <Address pubkey={info.accounts.bids} alignRight link />
@@ -66,7 +52,35 @@ export function MatchOrdersDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>Limit</td>
+        <td>Prune Authority</td>
+        <td className="text-lg-right">
+          <Address pubkey={info.accounts.pruneAuthority} alignRight link />
+        </td>
+      </tr>
+
+      <tr>
+        <td>Open Orders</td>
+        <td className="text-lg-right">
+          <Address pubkey={info.accounts.openOrders} alignRight link />
+        </td>
+      </tr>
+
+      <tr>
+        <td>Open Orders Owner</td>
+        <td className="text-lg-right">
+          <Address pubkey={info.accounts.openOrdersOwner} alignRight link />
+        </td>
+      </tr>
+
+      <tr>
+        <td>Event Queue</td>
+        <td className="text-lg-right">
+          <Address pubkey={info.accounts.eventQueue} alignRight link />
+        </td>
+      </tr>
+
+      <tr>
+        <td>Iteration Limit</td>
         <td className="text-lg-right">{info.data.limit}</td>
       </tr>
     </InstructionCard>
