@@ -5,7 +5,6 @@ import { Location } from "history";
 import {
   useCluster,
   ClusterStatus,
-  clusterUrl,
   clusterName,
   clusterSlug,
   CLUSTERS,
@@ -34,52 +33,50 @@ export function ClusterModal() {
   return (
     <>
       <div
-        className={`modal fade fixed-right${show ? " show" : ""}`}
+        className={`offcanvas offcanvas-end${show ? " show" : ""}`}
         onClick={onClose}
       >
-        <div className="modal-dialog modal-dialog-vertical">
-          <div className="modal-content">
-            <div className="modal-body" onClick={(e) => e.stopPropagation()}>
-              <span className="c-pointer" onClick={onClose}>
-                &times;
-              </span>
+        <div className="modal-body" onClick={(e) => e.stopPropagation()}>
+          <span className="c-pointer" onClick={onClose}>
+            &times;
+          </span>
 
-              <h2 className="text-center mb-4 mt-4">Choose a Cluster</h2>
-              <ClusterToggle />
+          <h2 className="text-center mb-4 mt-4">Choose a Cluster</h2>
+          <ClusterToggle />
 
-              {showDeveloperSettings && (
-                <>
-                  <hr />
+          {showDeveloperSettings && (
+            <>
+              <hr />
 
-                  <h2 className="text-center mb-4 mt-4">Developer Settings</h2>
-                  <div className="d-flex justify-content-between">
-                    <span className="mr-3">Enable custom url param</span>
-                    <div className="custom-control custom-switch d-inline">
-                      <input
-                        type="checkbox"
-                        defaultChecked={enableCustomUrl}
-                        className="custom-control-input"
-                        id="cardToggle"
-                        onChange={onToggleCustomUrlFeature}
-                      />
-                      <label
-                        className="custom-control-label"
-                        htmlFor="cardToggle"
-                      ></label>
-                    </div>
-                  </div>
-                  <p className="text-muted font-size-sm mt-3">
-                    Enable this setting to easily connect to a custom cluster
-                    via the "customUrl" url param.
-                  </p>
-                </>
-              )}
-            </div>
-          </div>
+              <h2 className="text-center mb-4 mt-4">Developer Settings</h2>
+              <div className="d-flex justify-content-between">
+                <span className="me-3">Enable custom url param</span>
+                <div className="form-check form-switch">
+                  <input
+                    type="checkbox"
+                    defaultChecked={enableCustomUrl}
+                    className="form-check-input"
+                    id="cardToggle"
+                    onChange={onToggleCustomUrlFeature}
+                  />
+                  <label
+                    className="form-check-label"
+                    htmlFor="cardToggle"
+                  ></label>
+                </div>
+              </div>
+              <p className="text-muted font-size-sm mt-3">
+                Enable this setting to easily connect to a custom cluster via
+                the "customUrl" url param.
+              </p>
+            </>
+          )}
         </div>
       </div>
 
-      <Overlay show={show} />
+      <div onClick={onClose}>
+        <Overlay show={show} />
+      </div>
     </>
   );
 }
@@ -93,8 +90,9 @@ function CustomClusterInput({ activeSuffix, active }: InputProps) {
   const history = useHistory();
   const location = useLocation();
 
-  const customClass = (prefix: string) =>
-    active ? `${prefix}-${activeSuffix}` : "";
+  const btnClass = active
+    ? `border-${activeSuffix} text-${activeSuffix}`
+    : "btn-white";
 
   const clusterLocation = (location: Location) => {
     if (customUrl.length > 0) {
@@ -118,31 +116,26 @@ function CustomClusterInput({ activeSuffix, active }: InputProps) {
 
   const inputTextClass = editing ? "" : "text-muted";
   return (
-    <Link
-      to={(location) => clusterLocation(location)}
-      className="btn input-group input-group-merge p-0"
-    >
-      <input
-        type="text"
-        defaultValue={customUrl}
-        className={`form-control form-control-prepended ${inputTextClass} ${customClass(
-          "border"
-        )}`}
-        onFocus={() => setEditing(true)}
-        onBlur={() => setEditing(false)}
-        onInput={(e) => onUrlInput(e.currentTarget.value)}
-      />
-      <div className="input-group-prepend">
-        <div className={`input-group-text pr-0 ${customClass("border")}`}>
-          <span className={customClass("text") || ""}>Custom:</span>
-        </div>
-      </div>
-    </Link>
+    <>
+      <Link className={`btn col-12 mb-3 ${btnClass}`} to={clusterLocation}>
+        Custom RPC URL
+      </Link>
+      {active && (
+        <input
+          type="text"
+          defaultValue={customUrl}
+          className={`form-control ${inputTextClass}`}
+          onFocus={() => setEditing(true)}
+          onBlur={() => setEditing(false)}
+          onInput={(e) => onUrlInput(e.currentTarget.value)}
+        />
+      )}
+    </>
   );
 }
 
 function ClusterToggle() {
-  const { status, cluster, customUrl } = useCluster();
+  const { status, cluster } = useCluster();
 
   let activeSuffix = "";
   switch (status) {
@@ -193,13 +186,10 @@ function ClusterToggle() {
         return (
           <Link
             key={index}
-            className={`btn text-left col-12 mb-3 ${btnClass}`}
+            className={`btn col-12 mb-3 ${btnClass}`}
             to={clusterLocation}
           >
-            {`${clusterName(net)}: `}
-            <span className="text-muted d-inline-block">
-              {clusterUrl(net, customUrl).replace("explorer-", "")}
-            </span>
+            {clusterName(net)}
           </Link>
         );
       })}

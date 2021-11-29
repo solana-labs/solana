@@ -721,7 +721,6 @@ const PARALLEL_UNTAR_READERS_DEFAULT: usize = 4;
 #[allow(clippy::too_many_arguments)]
 pub fn bank_from_snapshot_archives(
     account_paths: &[PathBuf],
-    frozen_account_pubkeys: &[Pubkey],
     bank_snapshots_dir: impl AsRef<Path>,
     full_snapshot_archive_info: &FullSnapshotArchiveInfo,
     incremental_snapshot_archive_info: Option<&IncrementalSnapshotArchiveInfo>,
@@ -789,7 +788,6 @@ pub fn bank_from_snapshot_archives(
             .map(|unarchive_preparation_result| {
                 &unarchive_preparation_result.unpacked_snapshots_dir_and_version
             }),
-        frozen_account_pubkeys,
         account_paths,
         unpacked_append_vec_map,
         genesis_config,
@@ -836,7 +834,6 @@ pub fn bank_from_latest_snapshot_archives(
     bank_snapshots_dir: impl AsRef<Path>,
     snapshot_archives_dir: impl AsRef<Path>,
     account_paths: &[PathBuf],
-    frozen_account_pubkeys: &[Pubkey],
     genesis_config: &GenesisConfig,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
@@ -877,7 +874,6 @@ pub fn bank_from_latest_snapshot_archives(
 
     let (bank, timings) = bank_from_snapshot_archives(
         account_paths,
-        frozen_account_pubkeys,
         bank_snapshots_dir.as_ref(),
         &full_snapshot_archive_info,
         incremental_snapshot_archive_info.as_ref(),
@@ -1418,7 +1414,6 @@ fn rebuild_bank_from_snapshots(
     incremental_snapshot_unpacked_snapshots_dir_and_version: Option<
         &UnpackedSnapshotsDirAndVersion,
     >,
-    frozen_account_pubkeys: &[Pubkey],
     account_paths: &[PathBuf],
     unpacked_append_vec_map: UnpackedAppendVecMap,
     genesis_config: &GenesisConfig,
@@ -1470,7 +1465,6 @@ fn rebuild_bank_from_snapshots(
                     account_paths,
                     unpacked_append_vec_map,
                     genesis_config,
-                    frozen_account_pubkeys,
                     debug_keys,
                     additional_builtins,
                     account_secondary_indexes,
@@ -2638,7 +2632,6 @@ mod tests {
 
         let (roundtrip_bank, _) = bank_from_snapshot_archives(
             &[PathBuf::from(accounts_dir.path())],
-            &[],
             bank_snapshots_dir.path(),
             &snapshot_archive_info,
             None,
@@ -2730,7 +2723,6 @@ mod tests {
 
         let (roundtrip_bank, _) = bank_from_snapshot_archives(
             &[PathBuf::from(accounts_dir.path())],
-            &[],
             bank_snapshots_dir.path(),
             &full_snapshot_archive_info,
             None,
@@ -2841,7 +2833,6 @@ mod tests {
 
         let (roundtrip_bank, _) = bank_from_snapshot_archives(
             &[PathBuf::from(accounts_dir.path())],
-            &[],
             bank_snapshots_dir.path(),
             &full_snapshot_archive_info,
             Some(&incremental_snapshot_archive_info),
@@ -2944,7 +2935,6 @@ mod tests {
             &bank_snapshots_dir,
             &snapshot_archives_dir,
             &[accounts_dir.as_ref().to_path_buf()],
-            &[],
             &genesis_config,
             None,
             None,
@@ -3004,7 +2994,6 @@ mod tests {
         let bank0 = Arc::new(Bank::new_with_paths_for_tests(
             &genesis_config,
             vec![accounts_dir.path().to_path_buf()],
-            &[],
             None,
             None,
             AccountSecondaryIndexes::default(),
@@ -3081,7 +3070,6 @@ mod tests {
         .unwrap();
         let (deserialized_bank, _) = bank_from_snapshot_archives(
             &[accounts_dir.path().to_path_buf()],
-            &[],
             bank_snapshots_dir.path(),
             &full_snapshot_archive_info,
             Some(&incremental_snapshot_archive_info),
@@ -3144,7 +3132,6 @@ mod tests {
 
         let (deserialized_bank, _) = bank_from_snapshot_archives(
             &[accounts_dir.path().to_path_buf()],
-            &[],
             bank_snapshots_dir.path(),
             &full_snapshot_archive_info,
             Some(&incremental_snapshot_archive_info),

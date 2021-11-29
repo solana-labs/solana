@@ -727,23 +727,19 @@ pub fn process_vote_authorize(
     let authorized = config.signers[authorized];
     let new_authorized_signer = new_authorized.map(|index| config.signers[index]);
 
-    check_unique_pubkeys(
-        (&authorized.pubkey(), "authorized_account".to_string()),
-        (new_authorized_pubkey, "new_authorized_pubkey".to_string()),
-    )?;
     let (_, vote_state) = get_vote_account(rpc_client, vote_account_pubkey, config.commitment)?;
     match vote_authorize {
         VoteAuthorize::Voter => {
+            let current_epoch = rpc_client.get_epoch_info()?.epoch;
             let current_authorized_voter = vote_state
                 .authorized_voters()
-                .last()
+                .get_authorized_voter(current_epoch)
                 .ok_or_else(|| {
                     CliError::RpcRequestError(
                         "Invalid vote account state; no authorized voters found".to_string(),
                     )
-                })?
-                .1;
-            check_current_authority(current_authorized_voter, &authorized.pubkey())?;
+                })?;
+            check_current_authority(&current_authorized_voter, &authorized.pubkey())?;
             if let Some(signer) = new_authorized_signer {
                 if signer.is_interactive() {
                     return Err(CliError::BadParameter(format!(
@@ -754,6 +750,10 @@ pub fn process_vote_authorize(
             }
         }
         VoteAuthorize::Withdrawer => {
+            check_unique_pubkeys(
+                (&authorized.pubkey(), "authorized_account".to_string()),
+                (new_authorized_pubkey, "new_authorized_pubkey".to_string()),
+            )?;
             check_current_authority(&vote_state.authorized_withdrawer, &authorized.pubkey())?
         }
     }

@@ -1,0 +1,90 @@
+// 
+// form-control.scss
+// Extended from Bootstrap
+//
+
+//
+// Bootstrap overrides ===================================
+//
+
+// Sizing
+
+.form-control-sm {
+  line-height: $input-line-height-sm;
+}
+
+.form-control-lg {
+  line-height: $input-line-height-lg;
+}
+
+
+//
+// Theme ===================================
+//
+
+// Form control flush
+//
+// Removes borders and paddings from inputs and text areas
+
+.form-control-flush {
+  padding-left: 0;
+  border-color: transparent !important;
+  background-color: transparent !important;
+  resize: none;
+}
+
+.form-control:not(.form-select) {
+  padding-right: 0;
+}
+
+
+// Form control auto
+//
+// Sets the height of the input to auto
+
+.form-control-auto {
+  min-height: 0 !important;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+
+// Form control rounded
+//
+// Makes input border radius round
+
+.form-control-rounded {
+  border-radius: 20rem;
+}
+
+
+// Font size
+
+.form-control {
+
+  &.h1, &.h2, &.h3, &.h4, &.h5 {
+    margin-bottom: 0;
+    font-weight: $headings-font-weight;
+    letter-spacing: $headings-letter-spacing;
+  }
+
+  &.h1 {
+    font-size: $h1-font-size;
+  }
+
+  &.h2 {
+    font-size: $h2-font-size;
+  }
+
+  &.h3 {
+    font-size: $h3-font-size;
+  }
+
+  &.h4 {
+    font-size: $h4-font-size;
+  }
+
+  &.h5 {
+    font-size: $h5-font-size;
+  }
+}

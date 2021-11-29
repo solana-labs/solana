@@ -45,7 +45,7 @@ export function InfoTooltip({ bottom, right, text, children }: Props) {
     >
       <div className={`d-flex align-items-center justify-content-${justify}`}>
         {children}
-        <span className="fe fe-help-circle ml-2"></span>
+        <span className="fe fe-help-circle ms-2"></span>
       </div>
       <Popover bottom={bottom} right={right} state={state} text={text} />
     </div>

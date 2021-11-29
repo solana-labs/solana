@@ -1,11 +1,14 @@
-import {
-  EditionData,
-  MasterEdition,
-  MasterEditionData,
-  Metadata,
-  MetadataKey,
-} from "@metaplex/js";
+import { programs } from "@metaplex/js";
 import { Connection } from "@solana/web3.js";
+
+const {
+  metadata: { Metadata, MasterEdition, MetadataKey },
+} = programs;
+
+type MasterEditionData =
+  | programs.metadata.MasterEditionV1Data
+  | programs.metadata.MasterEditionV2Data;
+type EditionData = programs.metadata.EditionData;
 
 export type EditionInfo = {
   masterEdition?: MasterEditionData;
@@ -13,11 +16,12 @@ export type EditionInfo = {
 };
 
 export default async function getEditionInfo(
-  metadata: Metadata,
+  metadata: programs.metadata.Metadata,
   connection: Connection
 ): Promise<EditionInfo> {
   try {
-    const edition = (await metadata.getEdition(connection)).data;
+    const edition = (await Metadata.getEdition(connection, metadata.data.mint))
+      .data;
 
     if (edition) {
       if (

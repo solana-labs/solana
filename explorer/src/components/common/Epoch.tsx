@@ -9,7 +9,7 @@ type Props = {
 };
 export function Epoch({ epoch, link }: Props) {
   return (
-    <span className="text-monospace">
+    <span className="font-monospace">
       {link ? (
         <Copyable text={epoch.toString()}>
           <Link to={clusterPath(`/epoch/${epoch}`)}>

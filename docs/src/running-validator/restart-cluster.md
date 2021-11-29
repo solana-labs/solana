@@ -34,6 +34,8 @@ Then restart the validator.
 
 Confirm with the log that the validator booted and is now in a holding pattern at `SLOT_X`, waiting for a super majority.
 
+Once NEW_SHRED_VERSION is determined, nudge foundation entrypoint operators to update entrypoints.
+
 ### Step 5. Announce the restart on Discord:
 
 Post something like the following to #announcements (adjusting the text as appropriate):

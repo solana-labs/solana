@@ -119,7 +119,6 @@ fn initialize_from_snapshot(
     );
     let (bank0, _) = snapshot_utils::bank_from_snapshot_archives(
         &replica_config.account_paths,
-        &[],
         &snapshot_config.bank_snapshots_dir,
         &archive_info,
         None,
