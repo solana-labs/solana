@@ -136,7 +136,6 @@ pub struct ValidatorConfig {
     pub gossip_validators: Option<HashSet<Pubkey>>, // None = gossip with all
     pub halt_on_known_validators_accounts_hash_mismatch: bool,
     pub accounts_hash_fault_injection_slots: u64, // 0 = no fault injection
-    pub frozen_accounts: Vec<Pubkey>,
     pub no_rocksdb_compaction: bool,
     pub rocksdb_compaction_interval: Option<u64>,
     pub rocksdb_max_compaction_jitter: Option<u64>,
@@ -197,7 +196,6 @@ impl Default for ValidatorConfig {
             gossip_validators: None,
             halt_on_known_validators_accounts_hash_mismatch: false,
             accounts_hash_fault_injection_slots: 0,
-            frozen_accounts: vec![],
             no_rocksdb_compaction: false,
             rocksdb_compaction_interval: None,
             rocksdb_max_compaction_jitter: None,
@@ -1276,7 +1274,6 @@ fn new_banks_from_ledger(
         poh_verify,
         dev_halt_at_slot: config.dev_halt_at_slot,
         new_hard_forks: config.new_hard_forks.clone(),
-        frozen_accounts: config.frozen_accounts.clone(),
         debug_keys: config.debug_keys.clone(),
         account_indexes: config.account_indexes.clone(),
         accounts_db_caching_enabled: config.accounts_db_caching_enabled,

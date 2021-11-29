@@ -169,7 +169,6 @@ fn load_from_snapshot(
             &snapshot_config.bank_snapshots_dir,
             &snapshot_config.snapshot_archives_dir,
             &account_paths,
-            &process_options.frozen_accounts,
             genesis_config,
             process_options.debug_keys.clone(),
             Some(&crate::builtins::get(process_options.bpf_jit)),

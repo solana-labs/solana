@@ -126,7 +126,6 @@ mod tests {
             let bank0 = Bank::new_with_paths_for_tests(
                 &genesis_config_info.genesis_config,
                 vec![accounts_dir.path().to_path_buf()],
-                &[],
                 None,
                 None,
                 AccountSecondaryIndexes::default(),
@@ -184,7 +183,6 @@ mod tests {
 
         let (deserialized_bank, _timing) = snapshot_utils::bank_from_snapshot_archives(
             account_paths,
-            &[],
             &old_bank_forks
                 .snapshot_config
                 .as_ref()
@@ -828,7 +826,6 @@ mod tests {
             &snapshot_config.bank_snapshots_dir,
             &snapshot_config.snapshot_archives_dir,
             &[accounts_dir],
-            &[],
             genesis_config,
             None,
             None,
@@ -1008,7 +1005,6 @@ mod tests {
             &snapshot_test_config.snapshot_config.bank_snapshots_dir,
             &snapshot_test_config.snapshot_config.snapshot_archives_dir,
             &[snapshot_test_config.accounts_dir.as_ref().to_path_buf()],
-            &[],
             &snapshot_test_config.genesis_config_info.genesis_config,
             None,
             None,

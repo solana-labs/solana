@@ -47,7 +47,6 @@ fn test_accounts_create(bencher: &mut Bencher) {
     let bank0 = Bank::new_with_paths_for_benches(
         &genesis_config,
         vec![PathBuf::from("bench_a0")],
-        &[],
         None,
         None,
         AccountSecondaryIndexes::default(),
@@ -68,7 +67,6 @@ fn test_accounts_squash(bencher: &mut Bencher) {
     let mut prev_bank = Arc::new(Bank::new_with_paths_for_benches(
         &genesis_config,
         vec![PathBuf::from("bench_a1")],
-        &[],
         None,
         None,
         AccountSecondaryIndexes::default(),

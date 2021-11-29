@@ -7,7 +7,6 @@ use {
         },
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
-        ancestors::Ancestors,
         append_vec::{AppendVec, StoredMetaWriteVersion},
         bank::{Bank, BankFieldsToDeserialize, BankRc},
         blockhash_queue::BlockhashQueue,
@@ -196,7 +195,6 @@ pub(crate) fn bank_from_streams<R>(
     account_paths: &[PathBuf],
     unpacked_append_vec_map: UnpackedAppendVecMap,
     genesis_config: &GenesisConfig,
-    frozen_account_pubkeys: &[Pubkey],
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
     account_secondary_indexes: AccountSecondaryIndexes,
@@ -233,7 +231,6 @@ where
                 incremental_snapshot_bank_fields.unwrap_or(full_snapshot_bank_fields),
                 snapshot_accounts_db_fields,
                 genesis_config,
-                frozen_account_pubkeys,
                 account_paths,
                 unpacked_append_vec_map,
                 debug_keys,
@@ -327,7 +324,6 @@ fn reconstruct_bank_from_fields<E>(
     bank_fields: BankFieldsToDeserialize,
     snapshot_accounts_db_fields: SnapshotAccountsDbFields<E>,
     genesis_config: &GenesisConfig,
-    frozen_account_pubkeys: &[Pubkey],
     account_paths: &[PathBuf],
     unpacked_append_vec_map: UnpackedAppendVecMap,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
@@ -343,7 +339,7 @@ fn reconstruct_bank_from_fields<E>(
 where
     E: SerializableStorage + std::marker::Sync,
 {
-    let mut accounts_db = reconstruct_accountsdb_from_fields(
+    let accounts_db = reconstruct_accountsdb_from_fields(
         snapshot_accounts_db_fields,
         account_paths,
         unpacked_append_vec_map,
@@ -356,10 +352,6 @@ where
         accounts_db_config,
         accounts_update_notifier,
     )?;
-    accounts_db.freeze_accounts(
-        &Ancestors::from(&bank_fields.ancestors),
-        frozen_account_pubkeys,
-    );
 
     let bank_rc = BankRc::new(Accounts::new_empty(accounts_db), bank_fields.slot);
 

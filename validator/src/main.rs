@@ -1387,17 +1387,6 @@ pub fn main() {
                 .help("Abort the validator if a bank hash mismatch is detected within known validator set"),
         )
         .arg(
-            Arg::with_name("frozen_accounts")
-                .long("frozen-account")
-                .validator(is_pubkey)
-                .value_name("PUBKEY")
-                .multiple(true)
-                .takes_value(true)
-                .help("Freeze the specified account.  This will cause the validator to \
-                       intentionally crash should any transaction modify the frozen account in any way \
-                       other than increasing the account balance"),
-        )
-        .arg(
             Arg::with_name("snapshot_archive_format")
                 .long("snapshot-archive-format")
                 .alias("snapshot-compression") // Legacy name used by Solana v1.5.x and older
@@ -2252,7 +2241,6 @@ pub fn main() {
         known_validators,
         repair_validators,
         gossip_validators,
-        frozen_accounts: values_t!(matches, "frozen_accounts", Pubkey).unwrap_or_default(),
         no_rocksdb_compaction,
         rocksdb_compaction_interval,
         rocksdb_max_compaction_jitter,
