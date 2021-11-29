@@ -308,6 +308,8 @@ impl Tower {
                     let vote = Lockout {
                         confirmation_count: MAX_LOCKOUT_HISTORY as u32,
                         slot: root,
+                        // credits_to_award is only used by the vote program and not needed here
+//                        credits_to_award: 1,
                     };
                     trace!("ROOT: {}", vote.slot);
                     bank_weight += vote.lockout() as u128 * voted_stake as u128;
@@ -318,6 +320,8 @@ impl Tower {
                 let vote = Lockout {
                     confirmation_count: MAX_LOCKOUT_HISTORY as u32,
                     slot: root,
+                    // credits_to_award is only used by the vote program and not needed here
+//                    credits_to_award: 1,
                 };
                 bank_weight += vote.lockout() as u128 * voted_stake as u128;
                 vote_slots.insert(vote.slot);
