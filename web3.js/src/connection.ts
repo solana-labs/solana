@@ -3264,52 +3264,57 @@ export class Connection {
   ): Promise<Array<TransactionSignature>> {
     const options: any = {};
 
-    const firstAvailableBlock = await this.getFirstAvailableBlock();
-    while (!('until' in options)) {
-      startSlot--;
-      if (startSlot <= 0 || startSlot < firstAvailableBlock) {
-        break;
-      }
+    await Promise.all([
+      (async () => {
+        const firstAvailableBlock = await this.getFirstAvailableBlock();
+        while (!('until' in options)) {
+          startSlot--;
+          if (startSlot <= 0 || startSlot < firstAvailableBlock) {
+            break;
+          }
 
-      try {
-        const block = await this.getConfirmedBlockSignatures(
-          startSlot,
-          'finalized',
-        );
-        if (block.signatures.length > 0) {
-          options.until =
-            block.signatures[block.signatures.length - 1].toString();
+          try {
+            const block = await this.getConfirmedBlockSignatures(
+              startSlot,
+              'finalized',
+            );
+            if (block.signatures.length > 0) {
+              options.until =
+                block.signatures[block.signatures.length - 1].toString();
+            }
+          } catch (err) {
+            if (err instanceof Error && err.message.includes('skipped')) {
+              continue;
+            } else {
+              throw err;
+            }
+          }
         }
-      } catch (err) {
-        if (err instanceof Error && err.message.includes('skipped')) {
-          continue;
-        } else {
-          throw err;
-        }
-      }
-    }
+      })(),
+      (async () => {
+        const highestConfirmedRoot = await this.getSlot('finalized');
+        while (!('before' in options)) {
+          endSlot++;
+          if (endSlot > highestConfirmedRoot) {
+            break;
+          }
 
-    const highestConfirmedRoot = await this.getSlot('finalized');
-    while (!('before' in options)) {
-      endSlot++;
-      if (endSlot > highestConfirmedRoot) {
-        break;
-      }
-
-      try {
-        const block = await this.getConfirmedBlockSignatures(endSlot);
-        if (block.signatures.length > 0) {
-          options.before =
-            block.signatures[block.signatures.length - 1].toString();
+          try {
+            const block = await this.getConfirmedBlockSignatures(endSlot);
+            if (block.signatures.length > 0) {
+              options.before =
+                block.signatures[block.signatures.length - 1].toString();
+            }
+          } catch (err) {
+            if (err instanceof Error && err.message.includes('skipped')) {
+              continue;
+            } else {
+              throw err;
+            }
+          }
         }
-      } catch (err) {
-        if (err instanceof Error && err.message.includes('skipped')) {
-          continue;
-        } else {
-          throw err;
-        }
-      }
-    }
+      })(),
+    ]);
 
     const confirmedSignatureInfo = await this.getConfirmedSignaturesForAddress2(
       address,
