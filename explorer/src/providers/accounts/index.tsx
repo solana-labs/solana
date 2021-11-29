@@ -1,4 +1,5 @@
 import React from "react";
+import { pubkeyToString } from "utils";
 import { PublicKey, Connection, StakeActivationData } from "@solana/web3.js";
 import { useCluster, Cluster } from "../cluster";
 import { HistoryProvider } from "./history";
@@ -25,7 +26,7 @@ import {
   UpgradeableLoaderAccount,
 } from "validators/accounts/upgradeable-program";
 import { RewardsProvider } from "./rewards";
-import { programs } from "@metaplex/js";
+import { programs, MetadataJson } from "@metaplex/js";
 import getEditionInfo, { EditionInfo } from "./utils/getEditionInfo";
 export { useAccountHistory } from "./history";
 
@@ -45,6 +46,7 @@ export type UpgradeableLoaderAccountData = {
 
 export type NFTData = {
   metadata: programs.metadata.MetadataData;
+  json: MetadataJson | undefined;
   editionInfo: EditionInfo;
 };
 
@@ -252,8 +254,16 @@ async function fetchAccountInfo(
                       metadata,
                       connection
                     );
-
-                    nftData = { metadata: metadata.data, editionInfo };
+                    const id = pubkeyToString(pubkey);
+                    const metadataJSON = await getMetaDataJSON(
+                      id,
+                      metadata.data
+                    );
+                    nftData = {
+                      metadata: metadata.data,
+                      json: metadataJSON,
+                      editionInfo,
+                    };
                   }
                 }
               } catch (error) {
@@ -297,6 +307,53 @@ async function fetchAccountInfo(
     url,
   });
 }
+
+const getMetaDataJSON = async (
+  id: string,
+  metadata: programs.metadata.MetadataData
+): Promise<MetadataJson | undefined> => {
+  return new Promise(async (resolve, reject) => {
+    const uri = metadata.data.uri;
+    if (!uri) return resolve(undefined);
+
+    const processJson = (extended: any) => {
+      if (!extended || extended?.properties?.files?.length === 0) {
+        return;
+      }
+
+      if (extended?.image) {
+        extended.image = extended.image.startsWith("http")
+          ? extended.image
+          : `${metadata.data.uri}/${extended.image}`;
+      }
+
+      return extended;
+    };
+
+    try {
+      fetch(uri)
+        .then(async (_) => {
+          try {
+            const data = await _.json();
+            try {
+              localStorage.setItem(uri, JSON.stringify(data));
+            } catch {
+              // ignore
+            }
+            resolve(processJson(data));
+          } catch {
+            resolve(undefined);
+          }
+        })
+        .catch(() => {
+          resolve(undefined);
+        });
+    } catch (ex) {
+      console.error(ex);
+      resolve(undefined);
+    }
+  });
+};
 
 export function useAccounts() {
   const context = React.useContext(StateContext);

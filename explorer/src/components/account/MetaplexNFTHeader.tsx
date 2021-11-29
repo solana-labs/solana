@@ -15,10 +15,11 @@ export function NFTHeader({
   address: string;
 }) {
   const metadata = nftData.metadata;
+  const data = nftData.json;
   return (
     <div className="row">
       <div className="col-auto ms-2 d-flex align-items-center">
-        <ArtContent metadata={metadata} pubkey={address} />
+        <ArtContent metadata={metadata} pubkey={address} data={data} />
       </div>
       <div className="col mb-3 ms-0.5 mt-3">
         {<h6 className="header-pretitle ms-1">Metaplex NFT</h6>}

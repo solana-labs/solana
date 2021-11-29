@@ -361,6 +361,21 @@ function NonFungibleTokenMintAccountCard({
             />
           </td>
         </tr>
+        {nftData?.json && nftData.json.external_url && (
+          <tr>
+            <td>Website</td>
+            <td className="text-lg-end">
+              <a
+                rel="noopener noreferrer"
+                target="_blank"
+                href={nftData.json.external_url}
+              >
+                {nftData.json.external_url}
+                <span className="fe fe-external-link ms-2"></span>
+              </a>
+            </td>
+          </tr>
+        )}
         {nftData?.metadata.data && (
           <tr>
             <td>Seller Fee</td>
