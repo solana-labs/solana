@@ -441,8 +441,8 @@ pub fn start_verify_transactions(
         || entries
             .iter()
             .try_fold(0, |accum: usize, entry: &Entry| -> Option<usize> {
-                if accum + entry.transactions.len() < 512 {
-                    Some(accum + entry.transactions.len())
+                if accum.saturating_add(entry.transactions.len()) < 512 {
+                    Some(accum.saturating_add(entry.transactions.len()))
                 } else {
                     None
                 }
