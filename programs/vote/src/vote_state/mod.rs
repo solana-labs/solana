@@ -36,6 +36,9 @@ pub const MAX_EPOCH_CREDITS_HISTORY: usize = 64;
 // Offset of VoteState::prior_voters, for determining initialization status without deserialization
 const DEFAULT_PRIOR_VOTERS_OFFSET: usize = 82;
 
+// Votes for SlotHash entries greater than this index will do not receive a reward credit
+const MAX_CREDIT_ELIGIBLE_SLOTHASH_INDEX: usize = 10;
+
 #[frozen_abi(digest = "Ch2vVEwos2EjAVqSHCyJjnN2MNX1yrpapZTGhMSCjWUH")]
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
 pub struct Vote {
@@ -356,13 +359,24 @@ impl VoteState {
         }
         self.check_slots_are_valid(vote, slot_hashes)?;
 
+        let oldest_credit_eligible_slot = slot_hashes
+            .get(MAX_CREDIT_ELIGIBLE_SLOTHASH_INDEX)
+            .map(|(slot, _)| slot)
+            .cloned()
+            .unwrap_or_default();
+
         vote.slots
             .iter()
-            .for_each(|s| self.process_next_vote_slot(*s, epoch));
+            .for_each(|s| self.process_next_vote_slot(*s, epoch, oldest_credit_eligible_slot));
         Ok(())
     }
 
-    pub fn process_next_vote_slot(&mut self, next_vote_slot: Slot, epoch: Epoch) {
+    fn process_next_vote_slot(
+        &mut self,
+        next_vote_slot: Slot,
+        epoch: Epoch,
+        oldest_credit_eligible_slot: Slot,
+    ) {
         // Ignore votes for slots earlier than we already have votes for
         if self
             .last_voted_slot()
@@ -380,7 +394,16 @@ impl VoteState {
             let vote = self.votes.pop_front().unwrap();
             self.root_slot = Some(vote.slot);
 
-            self.increment_credits(epoch);
+            // TODO: Needs feature gate...
+            if next_vote_slot >= oldest_credit_eligible_slot {
+                self.increment_credits(epoch);
+            } else {
+                error!(
+                    "{}: Vote for {} is not eligible for credit (older than {})",
+                    self.node_pubkey, next_vote_slot, oldest_credit_eligible_slot
+                );
+                self.increment_credits(epoch); // TODO: remove this line when feature gate is added
+            }
         }
         self.votes.push_back(vote);
         self.double_lockouts();
