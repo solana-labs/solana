@@ -10,12 +10,13 @@ use {
         cost_tracker::CostTrackerError,
     },
     solana_sdk::{
-        timing::AtomicInterval,
+        clock::Slot,
         transaction::{self, SanitizedTransaction, TransactionError},
     },
     std::{
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
+            mpsc::{channel, Receiver, Sender},
             Arc, RwLock,
         },
         thread::{self, Builder, JoinHandle},
@@ -29,7 +30,9 @@ pub struct QosService {
     // it; banking_stage's qos_service reads that information to calculate
     // transaction cost, hence RwLock wrapped.
     cost_model: Arc<RwLock<CostModel>>,
+    report_sender: Sender<Arc<Bank>>,
     metrics: Arc<QosServiceMetrics>,
+    // metrics reporting runs on a private thread
     reporting_thread: Option<JoinHandle<()>>,
     running_flag: Arc<AtomicBool>,
 }
@@ -46,16 +49,10 @@ impl Drop for QosService {
 }
 
 impl QosService {
-    pub fn new(cost_model: Arc<RwLock<CostModel>>) -> Self {
-        Self::new_with_reporting_duration(cost_model, 1000u64)
-    }
-
-    pub fn new_with_reporting_duration(
-        cost_model: Arc<RwLock<CostModel>>,
-        reporting_duration_ms: u64,
-    ) -> Self {
+    pub fn new(cost_model: Arc<RwLock<CostModel>>, id: u32) -> Self {
+        let (report_sender, report_receiver) = channel();
         let running_flag = Arc::new(AtomicBool::new(true));
-        let metrics = Arc::new(QosServiceMetrics::default());
+        let metrics = Arc::new(QosServiceMetrics::new(id));
 
         let running_flag_clone = running_flag.clone();
         let metrics_clone = metrics.clone();
@@ -63,18 +60,21 @@ impl QosService {
             Builder::new()
                 .name("solana-qos-service-metrics-repoting".to_string())
                 .spawn(move || {
-                    Self::reporting_loop(running_flag_clone, metrics_clone, reporting_duration_ms);
+                    Self::reporting_loop(running_flag_clone, metrics_clone, report_receiver);
                 })
                 .unwrap(),
         );
+
         Self {
             cost_model,
             metrics,
             reporting_thread,
             running_flag,
+            report_sender,
         }
     }
 
+    // invoke cost_model to calculate cost for the given list of transactions
     pub fn compute_transaction_costs<'a>(
         &self,
         transactions: impl Iterator<Item = &'a SanitizedTransaction>,
@@ -147,13 +147,22 @@ impl QosService {
         select_results
     }
 
+    // metrics are reported with bank slot
+    pub fn report_metrics(&self, bank: Arc<Bank>) {
+        self.report_sender
+            .send(bank)
+            .unwrap_or_else(|err| warn!("qos service report metrics failed: {:?}", err));
+    }
+
     fn reporting_loop(
         running_flag: Arc<AtomicBool>,
         metrics: Arc<QosServiceMetrics>,
-        reporting_duration_ms: u64,
+        report_receiver: Receiver<Arc<Bank>>,
     ) {
         while running_flag.load(Ordering::Relaxed) {
-            metrics.report(reporting_duration_ms);
+            for bank in report_receiver.try_iter() {
+                metrics.report(bank.slot());
+            }
             thread::sleep(Duration::from_millis(100));
         }
     }
@@ -161,61 +170,87 @@ impl QosService {
 
 #[derive(Default)]
 struct QosServiceMetrics {
-    last_report: AtomicInterval,
+    // bankign_stage creates one qos_service instance per working threads, which is uniquely
+    // identified by id. This field allows to categorize metrics for gossip votes, TPU votes
+    // and other transactions.
+    id: u32,
+
+    // accumulated time in micro-sec spent in computing transaction cost. It is the main performance
+    // overhead introduced by cost_model
     compute_cost_time: AtomicU64,
+
+    // total nummber of transactions in the reporting period to be computed for theit cost. It is
+    // usually the number of sanitized transactions leader receives.
     compute_cost_count: AtomicU64,
+
+    // acumulated time in micro-sec spent in tracking each bank's cost. It is the second part of
+    // overhead introduced
     cost_tracking_time: AtomicU64,
+
+    // number of transactions to be included in blocks
     selected_txs_count: AtomicU64,
+
+    // number of transactions to be queued for retry due to its potential to breach block limit
     retried_txs_per_block_limit_count: AtomicU64,
+
+    // number of transactions to be queued for retry due to its potential to breach writable
+    // account limit
     retried_txs_per_account_limit_count: AtomicU64,
     retried_txs_per_account_data_limit_count: AtomicU64,
 }
 
 impl QosServiceMetrics {
-    pub fn report(&self, report_interval_ms: u64) {
-        if self.last_report.should_update(report_interval_ms) {
-            datapoint_info!(
-                "qos-service-stats",
-                (
-                    "compute_cost_time",
-                    self.compute_cost_time.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "compute_cost_count",
-                    self.compute_cost_count.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "cost_tracking_time",
-                    self.cost_tracking_time.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "selected_txs_count",
-                    self.selected_txs_count.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "retried_txs_per_block_limit_count",
-                    self.retried_txs_per_block_limit_count
-                        .swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "retried_txs_per_account_limit_count",
-                    self.retried_txs_per_account_limit_count
-                        .swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "retried_txs_per_account_data_limit_count",
-                    self.retried_txs_per_account_data_limit_count
-                        .swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-            );
+    pub fn new(id: u32) -> Self {
+        QosServiceMetrics {
+            id,
+            ..QosServiceMetrics::default()
         }
+    }
+
+    pub fn report(&self, bank_slot: Slot) {
+        datapoint_info!(
+            "qos-service-stats",
+            ("id", self.id as i64, i64),
+            ("bank_slot", bank_slot as i64, i64),
+            (
+                "compute_cost_time",
+                self.compute_cost_time.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "compute_cost_count",
+                self.compute_cost_count.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "cost_tracking_time",
+                self.cost_tracking_time.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "selected_txs_count",
+                self.selected_txs_count.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "retried_txs_per_block_limit_count",
+                self.retried_txs_per_block_limit_count
+                    .swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "retried_txs_per_account_limit_count",
+                self.retried_txs_per_account_limit_count
+                    .swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "retried_txs_per_account_data_limit_count",
+                self.retried_txs_per_account_data_limit_count
+                    .swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+        );
     }
 }
 
@@ -259,7 +294,7 @@ mod tests {
         let txs = vec![transfer_tx.clone(), vote_tx.clone(), vote_tx, transfer_tx];
 
         let cost_model = Arc::new(RwLock::new(CostModel::default()));
-        let qos_service = QosService::new(cost_model.clone());
+        let qos_service = QosService::new(cost_model.clone(), 1);
         let txs_costs = qos_service.compute_transaction_costs(txs.iter());
 
         // verify the size of txs_costs and its contents
@@ -307,7 +342,7 @@ mod tests {
         // make a vec of txs
         let txs = vec![transfer_tx.clone(), vote_tx.clone(), transfer_tx, vote_tx];
 
-        let qos_service = QosService::new(cost_model);
+        let qos_service = QosService::new(cost_model, 1);
         let txs_costs = qos_service.compute_transaction_costs(txs.iter());
 
         // set cost tracker limit to fit 1 transfer tx, vote tx bypasses limit check
@@ -323,84 +358,5 @@ mod tests {
         assert!(results[1].is_ok());
         assert!(results[2].is_err());
         assert!(results[3].is_ok());
-    }
-
-    #[test]
-    fn test_async_report_metrics() {
-        solana_logger::setup();
-        //solana_logger::setup_with_default("solana=info");
-
-        // make a vec of txs
-        let txs_count = 128usize;
-        let keypair = Keypair::new();
-        let transfer_tx = SanitizedTransaction::from_transaction_for_tests(
-            system_transaction::transfer(&keypair, &keypair.pubkey(), 1, Hash::default()),
-        );
-        let mut txs_1 = Vec::with_capacity(txs_count);
-        let mut txs_2 = Vec::with_capacity(txs_count);
-        for _i in 0..txs_count {
-            txs_1.push(transfer_tx.clone());
-            txs_2.push(transfer_tx.clone());
-        }
-
-        // set reporting duration to long enough so the stats wouldn't reset during testing
-        let ten_min = 600_000u64;
-        let cost_model = Arc::new(RwLock::new(CostModel::default()));
-        let qos_service = Arc::new(QosService::new_with_reporting_duration(cost_model, ten_min));
-        let qos_service_1 = qos_service.clone();
-        let qos_service_2 = qos_service.clone();
-
-        let th_1 = Builder::new()
-            .name("test-producer-1".to_string())
-            .spawn(move || {
-                debug!("thread 1 starts with {} txs", txs_1.len());
-                let tx_costs = qos_service_1.compute_transaction_costs(txs_1.iter());
-                assert_eq!(txs_count, tx_costs.len());
-                debug!(
-                    "thread 1 done, generated {} count, see service count as {}",
-                    txs_count,
-                    qos_service_1
-                        .metrics
-                        .compute_cost_count
-                        .load(Ordering::Relaxed)
-                );
-            })
-            .unwrap();
-
-        let th_2 = Builder::new()
-            .name("test-producer-2".to_string())
-            .spawn(move || {
-                debug!("thread 2 starts with {} txs", txs_2.len());
-                let tx_costs = qos_service_2.compute_transaction_costs(txs_2.iter());
-                assert_eq!(txs_count, tx_costs.len());
-                debug!(
-                    "thread 2 done, generated {} count, see service count as {}",
-                    txs_count,
-                    qos_service_2
-                        .metrics
-                        .compute_cost_count
-                        .load(Ordering::Relaxed)
-                );
-            })
-            .unwrap();
-
-        th_1.join().expect("qos service 1 panicked");
-        th_2.join().expect("qos service 2 panicked");
-
-        debug!(
-            "all threads joined. count {}",
-            qos_service
-                .metrics
-                .compute_cost_count
-                .load(Ordering::Relaxed)
-        );
-
-        assert_eq!(
-            txs_count as u64 * 2,
-            qos_service
-                .metrics
-                .compute_cost_count
-                .load(Ordering::Relaxed)
-        );
     }
 }
