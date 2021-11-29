@@ -124,8 +124,8 @@ struct LastRetransmitInfo {
     retry_iteration: u32,
 }
 
-const RETRANSMIT_BASE_DELAY_MS: u64 = 5_000; // TODO change
-const RETRANSMIT_BACKOFF_CAP: u32 = 8;
+const RETRANSMIT_BASE_DELAY_MS: u64 = 5_000;
+const RETRANSMIT_BACKOFF_CAP: u32 = 6;
 
 pub struct ReplayStageConfig {
     pub vote_account: Pubkey,
