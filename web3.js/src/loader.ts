@@ -64,15 +64,11 @@ export class Loader {
     data: Buffer | Uint8Array | Array<number>,
   ): Promise<boolean> {
     {
-      const balanceNeeded = await connection.getMinimumBalanceForRentExemption(
-        data.length,
-      );
-
-      // Fetch program account info to check if it has already been created
-      const programInfo = await connection.getAccountInfo(
-        program.publicKey,
-        'confirmed',
-      );
+      const [balanceNeeded, programInfo] = await Promise.all([
+        connection.getMinimumBalanceForRentExemption(data.length),
+        // Fetch program account info to check if it has already been created
+        connection.getAccountInfo(program.publicKey, 'confirmed'),
+      ]);
 
       let transaction: Transaction | null = null;
       if (programInfo !== null) {
