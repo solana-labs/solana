@@ -76,6 +76,8 @@ ul.log-messages {
 
 .offcanvas {
   visibility: visible;
+  // Bootstrap 5.1 updates modal-backdrop to a higher z-index
+  z-index: 1060;
 }
 
 .c-pointer {
