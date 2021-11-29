@@ -1,0 +1,11 @@
+name : docs_PR_1
+on:
+  pull_request:
+    branches:  [master]
+    paths:
+      - 'docs/**'
+jobs:
+  docs_on_PR:
+    runs-on: windows-latest
+    steps:
+      - run: echo "this job will trigger docs_PR2 workflow on pull request on changes in the docs"
