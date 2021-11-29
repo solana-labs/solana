@@ -3616,11 +3616,7 @@ pub mod tests {
     }
 
     fn account_maps_len_expensive<T: IndexValue>(index: &AccountsIndex<T>) -> usize {
-        index
-            .account_maps
-            .iter()
-            .map(|bin_map| bin_map.read().unwrap().len())
-            .sum()
+        index.storage.storage.stats.total_count()
     }
 
     #[test]

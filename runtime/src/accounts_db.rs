@@ -6921,10 +6921,10 @@ impl AccountsDb {
                 .account_maps
                 .iter()
                 .map(|map_bin| {
-                    let len = map_bin.read().unwrap().len();
+                    let len = map_bin.read().unwrap().len_for_stats();
                     min_bin_size = std::cmp::min(min_bin_size, len);
                     max_bin_size = std::cmp::max(max_bin_size, len);
-                    len
+                    len as usize
                 })
                 .sum();
 
