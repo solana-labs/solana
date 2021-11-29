@@ -666,14 +666,6 @@ pub fn process_vote_authorize(
     let authorized = config.signers[authorized];
     let new_authorized_signer = new_authorized.map(|index| config.signers[index]);
 
-<<<<<<< HEAD
-    check_unique_pubkeys(
-        (&authorized.pubkey(), "authorized_account".to_string()),
-        (new_authorized_pubkey, "new_authorized_pubkey".to_string()),
-    )?;
-
-=======
->>>>>>> 09799590a (fix checks in process_vote_authorize (#21465))
     let (_, vote_state) = get_vote_account(rpc_client, vote_account_pubkey, config.commitment)?;
     match vote_authorize {
         VoteAuthorize::Voter => {
