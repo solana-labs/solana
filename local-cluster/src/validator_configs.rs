@@ -30,7 +30,6 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         halt_on_known_validators_accounts_hash_mismatch: config
             .halt_on_known_validators_accounts_hash_mismatch,
         accounts_hash_fault_injection_slots: config.accounts_hash_fault_injection_slots,
-        frozen_accounts: config.frozen_accounts.clone(),
         no_rocksdb_compaction: config.no_rocksdb_compaction,
         rocksdb_compaction_interval: config.rocksdb_compaction_interval,
         rocksdb_max_compaction_jitter: config.rocksdb_max_compaction_jitter,

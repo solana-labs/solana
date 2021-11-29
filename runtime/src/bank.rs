@@ -1065,7 +1065,6 @@ impl Bank {
         Self::new_with_paths_for_tests(
             genesis_config,
             Vec::new(),
-            &[],
             None,
             None,
             AccountSecondaryIndexes::default(),
@@ -1079,7 +1078,6 @@ impl Bank {
         let mut bank = Self::new_with_paths_for_tests(
             genesis_config,
             Vec::new(),
-            &[],
             None,
             None,
             AccountSecondaryIndexes::default(),
@@ -1102,7 +1100,6 @@ impl Bank {
         Self::new_with_paths_for_tests(
             genesis_config,
             Vec::new(),
-            &[],
             None,
             None,
             account_indexes,
@@ -1175,7 +1172,6 @@ impl Bank {
     pub fn new_with_paths_for_tests(
         genesis_config: &GenesisConfig,
         paths: Vec<PathBuf>,
-        frozen_account_pubkeys: &[Pubkey],
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
         account_indexes: AccountSecondaryIndexes,
@@ -1186,7 +1182,6 @@ impl Bank {
         Self::new_with_paths(
             genesis_config,
             paths,
-            frozen_account_pubkeys,
             debug_keys,
             additional_builtins,
             account_indexes,
@@ -1201,7 +1196,6 @@ impl Bank {
     pub fn new_with_paths_for_benches(
         genesis_config: &GenesisConfig,
         paths: Vec<PathBuf>,
-        frozen_account_pubkeys: &[Pubkey],
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
         account_indexes: AccountSecondaryIndexes,
@@ -1212,7 +1206,6 @@ impl Bank {
         Self::new_with_paths(
             genesis_config,
             paths,
-            frozen_account_pubkeys,
             debug_keys,
             additional_builtins,
             account_indexes,
@@ -1228,7 +1221,6 @@ impl Bank {
     pub fn new_with_paths(
         genesis_config: &GenesisConfig,
         paths: Vec<PathBuf>,
-        frozen_account_pubkeys: &[Pubkey],
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
         account_indexes: AccountSecondaryIndexes,
@@ -1258,11 +1250,6 @@ impl Bank {
             additional_builtins,
             debug_do_not_add_builtins,
         );
-
-        // Freeze accounts after process_genesis_config creates the initial append vecs
-        Arc::get_mut(&mut Arc::get_mut(&mut bank.rc.accounts).unwrap().accounts_db)
-            .unwrap()
-            .freeze_accounts(&bank.ancestors, frozen_account_pubkeys);
 
         // genesis needs stakes for all epochs up to the epoch implied by
         //  slot = 0 and genesis configuration
@@ -13386,7 +13373,6 @@ pub(crate) mod tests {
         let bank0 = Arc::new(Bank::new_with_paths_for_tests(
             &genesis_config,
             Vec::new(),
-            &[],
             None,
             Some(&builtins),
             AccountSecondaryIndexes::default(),

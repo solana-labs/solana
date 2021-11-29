@@ -241,7 +241,6 @@ fn test_bank_serialize_style(serde_style: SerdeStyle) {
         &dbank_paths,
         unpacked_append_vec_map,
         &genesis_config,
-        &[],
         None,
         None,
         AccountSecondaryIndexes::default(),

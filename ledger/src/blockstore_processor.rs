@@ -464,7 +464,6 @@ pub struct ProcessOptions {
     pub entry_callback: Option<ProcessCallback>,
     pub override_num_threads: Option<usize>,
     pub new_hard_forks: Option<Vec<Slot>>,
-    pub frozen_accounts: Vec<Pubkey>,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
     pub account_indexes: AccountSecondaryIndexes,
     pub accounts_db_caching_enabled: bool,
@@ -500,7 +499,6 @@ pub fn process_blockstore(
     let bank0 = Bank::new_with_paths(
         genesis_config,
         account_paths,
-        &opts.frozen_accounts,
         opts.debug_keys.clone(),
         Some(&crate::builtins::get(opts.bpf_jit)),
         opts.account_indexes.clone(),
@@ -3376,7 +3374,6 @@ pub mod tests {
         let bank = Bank::new_with_paths_for_tests(
             genesis_config,
             account_paths,
-            &[],
             None,
             None,
             AccountSecondaryIndexes::default(),
