@@ -117,6 +117,16 @@ struct SkippedSlotsInfo {
     last_skipped_slot: u64,
 }
 
+#[derive(Debug)]
+struct LastRetransmitInfo {
+    slot: Slot,
+    time: Instant,
+    retry_iteration: u32,
+}
+
+const RETRANSMIT_BASE_DELAY_MS: u64 = 5_000; // TODO change
+const RETRANSMIT_BACKOFF_CAP: u32 = 8;
+
 pub struct ReplayStageConfig {
     pub vote_account: Pubkey,
     pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
@@ -375,6 +385,7 @@ impl ReplayStage {
                 let mut last_reset = Hash::default();
                 let mut partition_exists = false;
                 let mut skipped_slots_info = SkippedSlotsInfo::default();
+                let mut last_retransmit_retry_info = LastRetransmitInfo { slot: 0, time: Instant::now(), retry_iteration: 0 };
                 let mut replay_timing = ReplayTiming::default();
                 let mut duplicate_slots_tracker = DuplicateSlotsTracker::default();
                 let mut gossip_duplicate_confirmed_slots: GossipDuplicateConfirmedSlots = GossipDuplicateConfirmedSlots::default();
@@ -759,6 +770,16 @@ impl ReplayStage {
                     Self::dump_then_repair_correct_slots(&mut duplicate_slots_to_repair, &mut ancestors, &mut descendants, &mut progress, &bank_forks, &blockstore, poh_bank.map(|bank| bank.slot()));
                     dump_then_repair_correct_slots_time.stop();
 
+                    let mut retransmit_not_propagated_time = Measure::start("retransmit_not_propagated_time");
+                    let retransmitted_slot = Self::retransmit_not_propagated(
+                        &poh_recorder,
+                        &bank_forks,
+                        &retransmit_slots_sender,
+                        &mut progress,
+                        &mut last_retransmit_retry_info,
+                    );
+                    retransmit_not_propagated_time.stop();
+
                     // From this point on, its not safe to use ancestors/descendants since maybe_start_leader
                     // may add a bank that will not included in either of these maps.
                     drop(ancestors);
@@ -775,6 +796,7 @@ impl ReplayStage {
                             &mut skipped_slots_info,
                             has_new_vote_been_rooted,
                             disable_epoch_boundary_optimization,
+                            retransmitted_slot,
                         );
 
                         let poh_bank = poh_recorder.lock().unwrap().bank();
@@ -830,6 +852,75 @@ impl ReplayStage {
             t_replay,
             commitment_service,
         }
+    }
+
+    fn retransmit_not_propagated(
+        poh_recorder: &Arc<Mutex<PohRecorder>>,
+        bank_forks: &Arc<RwLock<BankForks>>,
+        retransmit_slots_sender: &RetransmitSlotsSender,
+        progress: &mut ProgressMap,
+        last_retransmit_retry_info: &mut LastRetransmitInfo,
+    ) -> Option<Slot> {
+        let mut retransmitted_slot = None;
+        let start_slot = poh_recorder.lock().unwrap().start_slot();
+
+        if let Some(latest_leader_slot) = progress.get_latest_leader_slot(start_slot) {
+            let bank = bank_forks
+                .read()
+                .unwrap()
+                .get(latest_leader_slot)
+                .expect(
+                    "In order for propagated check to fail, \
+                        latest leader must exist in progress map, and thus also in BankForks",
+                )
+                .clone();
+            if last_retransmit_retry_info.slot == bank.slot() {
+                if !progress.is_propagated(bank.slot()) {
+                    warn!(
+                        "retransmit_not_propagated: Not propagated slot:{}",
+                        bank.slot()
+                    );
+                    let backoff = std::cmp::min(
+                        last_retransmit_retry_info.retry_iteration,
+                        RETRANSMIT_BACKOFF_CAP,
+                    );
+                    let time_offset = 2_u64.pow(backoff) * RETRANSMIT_BASE_DELAY_MS;
+                    let elapsed = last_retransmit_retry_info.time.elapsed().as_millis();
+                    if last_retransmit_retry_info.time.elapsed().as_millis() > time_offset.into() {
+                        info!(
+                            "retransmit_not_propagated: retrying retransmit. start_slot:{} bank_slot:{} retry_iteration:{} backoff:{} elapsed:{} time_offset:{}",
+                            start_slot,
+                            bank.slot(),
+                            last_retransmit_retry_info.retry_iteration,
+                            backoff,
+                            elapsed,
+                            time_offset,
+                        );
+                        datapoint_info!("replay_stage-retransmit", ("slot", bank.slot(), i64));
+                        retransmitted_slot = Some(bank.slot());
+                        let _ = retransmit_slots_sender
+                            .send(vec![(bank.slot(), bank.clone())].into_iter().collect());
+                        last_retransmit_retry_info.retry_iteration += 1;
+                        last_retransmit_retry_info.time = Instant::now();
+                    } else {
+                        info!(
+                            "retransmit_not_propagated: bypass retry. elapsed:{} time_offset:{}",
+                            elapsed, time_offset
+                        );
+                    }
+                }
+            } else {
+                last_retransmit_retry_info.slot = bank.slot();
+                last_retransmit_retry_info.time = Instant::now();
+                last_retransmit_retry_info.retry_iteration = 0;
+                info!(
+                    "retransmit_not_propagated: resetting last_retransmit_retry_info {:?}",
+                    &last_retransmit_retry_info
+                );
+            }
+        }
+
+        retransmitted_slot
     }
 
     fn is_partition_detected(
@@ -1359,6 +1450,7 @@ impl ReplayStage {
         skipped_slots_info: &mut SkippedSlotsInfo,
         has_new_vote_been_rooted: bool,
         disable_epoch_boundary_optimization: bool,
+        retransmitted_slot: Option<Slot>,
     ) {
         // all the individual calls to poh_recorder.lock() are designed to
         // increase granularity, decrease contention
@@ -1446,7 +1538,11 @@ impl ReplayStage {
                     .clone();
 
                 // Signal retransmit
-                if Self::should_retransmit(poh_slot, &mut skipped_slots_info.last_retransmit_slot) {
+                if Self::should_retransmit(poh_slot, &mut skipped_slots_info.last_retransmit_slot)
+                    && retransmitted_slot
+                        .map(|slot| slot != bank.slot())
+                        .unwrap_or(true)
+                {
                     datapoint_info!("replay_stage-retransmit", ("slot", bank.slot(), i64),);
                     let _ = retransmit_slots_sender
                         .send(vec![(bank.slot(), bank.clone())].into_iter().collect());
