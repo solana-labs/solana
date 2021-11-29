@@ -565,7 +565,6 @@ pub fn start_verify_transactions(
             let out_recycler = verify_recyclers.out_recycler;
             let gpu_verify_thread = thread::spawn(move || {
                 let mut verify_time = Measure::start("sigverify");
-                // TODO: what should reject_non_vote be?
                 sigverify::ed25519_verify(&mut packets, &tx_offset_recycler, &out_recycler, false);
                 let verified = packets[0].packets.iter().all(|p| !p.meta.discard);
                 verify_time.stop();
