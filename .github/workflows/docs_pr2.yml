@@ -1,0 +1,50 @@
+name: docs_PR_2
+on:
+  workflow_run:
+    workflows: ["docs_PR_1"]
+    types: 
+      - completed
+jobs :
+   docs_build_test_PREVIEW_DEPLOY:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 2
+      - name: docs
+        if: ${{github.event_name == 'pull_request' ||'push' || startsWith(github.ref, 'refs/tags/v')}}
+        run: |
+             touch .env
+             echo "COMMIT_RANGE=($COMMIT_RANGE)" > .env
+             source ci/env.sh
+             .travis/channel_restriction.sh edge beta master || exit 0
+             .travis/affects.sh docs/ .travis || exit 0
+      - name : changing docs
+        env: 
+         VERCEL_TOKEN: ${{secrets.VERCEL_TOKEN}}
+         GITHUB_TOKEN: ${{secrets.PAT_TOKEN }} 
+         GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+         GITHUB_EVENT_AFTER: ${{ github.event.after }}
+         COMMIT_RANGE: ${{ github.event.before }}...${{ github.event.after }}
+         GITHUB_CONTEXT: ${{ toJson(github.event.pull_request) }}
+        run : | 
+             cd docs/
+             sudo chmod 777 build_pr.sh
+             sudo chmod 777 publish-preview-docs.sh
+             sudo chmod 777 .travis/script_pr.sh
+             source .travis/before_install.sh
+             source .travis/script_pr.sh
+      - name: setup-node
+        uses: actions/checkout@v2
+      - name: setup-node
+        uses: actions/setup-node@v2
+        with:
+          node-version: 'lts/*'
+      - name: Cache
+        uses: actions/cache@v1
+        with:
+          path: ~/.npm
+          key: ${{ runner.OS }}-npm-cache-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.OS }}-npm-cache-2  
