@@ -30,7 +30,6 @@ use solana_sdk::transaction::{
 use std::cell::RefCell;
 use std::cell::UnsafeCell;
 use std::ffi::OsStr;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Once;
 use std::sync::{Arc, Mutex};
@@ -48,30 +47,6 @@ pub type EntrySender = Sender<Vec<Entry>>;
 pub type EntryReceiver = Receiver<Vec<Entry>>;
 
 static mut API: Option<Container<Api>> = None;
-
-// Used to wrap the memory behind a slice in such a way
-// as to allow for unrestricted concurrent mutable access to the memory
-// while promising to the compiler that the access will be
-// thread-safe.
-// WARNING: should not be used more than necessary.
-// Safety: it is completely up to the developer to ensure
-// that all access is thread-safe.
-// Based on https://stackoverflow.com/a/65182786
-#[derive(Copy, Clone)]
-struct UnsafeSlice<'a, T> {
-    slice: &'a [UnsafeCell<T>],
-}
-unsafe impl<'a, T: Send + Sync> Send for UnsafeSlice<'a, T> {}
-unsafe impl<'a, T: Send + Sync> Sync for UnsafeSlice<'a, T> {}
-
-impl<'a, T> UnsafeSlice<'a, T> {
-    pub fn new(slice: &'a mut [T]) -> Self {
-        let ptr = slice as *mut [T] as *const [UnsafeCell<T>];
-        Self {
-            slice: unsafe { &*ptr },
-        }
-    }
-}
 
 pub fn init_poh() {
     init(OsStr::new("libpoh-simd.so"));
@@ -525,29 +500,27 @@ pub fn start_verify_transactions(
             }
 
             {
-                let unsafe_packets = UnsafeSlice::new(&mut packets.packets[0..num_transactions]);
+                let entry_txs: Vec<&SanitizedTransaction> = entries
+                    .iter()
+                    .filter_map(|entry_type| match entry_type {
+                        EntryType::Tick(_) => None,
+                        EntryType::Transactions(transactions) => Some(transactions),
+                    })
+                    .flatten()
+                    .collect::<Vec<_>>();
 
-                let curr_packet = AtomicUsize::new(0);
+                let entry_tx_iter = entry_txs
+                    .into_par_iter()
+                    .map(|tx| tx.to_versioned_transaction());
 
-                let res = entries.par_iter().all(|entry| match entry {
-                    EntryType::Transactions(transactions) => {
-                        transactions.par_iter().all(|hashed_tx| {
-                            let idx = curr_packet.fetch_add(1, Ordering::SeqCst);
-
-                            unsafe {
-                                (*unsafe_packets.slice[idx].get()).meta = Meta::default();
-
-                                let res = Packet::populate_packet(
-                                    &mut (*unsafe_packets.slice[idx].get()),
-                                    None,
-                                    &hashed_tx.to_versioned_transaction(),
-                                );
-                                res.is_ok()
-                            }
-                        })
-                    }
-                    EntryType::Tick(_) => true,
-                });
+                let res = packets
+                    .packets
+                    .par_iter_mut()
+                    .zip(entry_tx_iter)
+                    .all(|pair| {
+                        pair.0.meta = Meta::default();
+                        Packet::populate_packet(pair.0, None, &pair.1).is_ok()
+                    });
 
                 if !res {
                     let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
