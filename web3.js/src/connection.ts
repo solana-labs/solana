@@ -3262,9 +3262,9 @@ export class Connection {
     startSlot: number,
     endSlot: number,
   ): Promise<Array<TransactionSignature>> {
-    let options: any = {};
+    const options: any = {};
 
-    let firstAvailableBlock = await this.getFirstAvailableBlock();
+    const firstAvailableBlock = await this.getFirstAvailableBlock();
     while (!('until' in options)) {
       startSlot--;
       if (startSlot <= 0 || startSlot < firstAvailableBlock) {
@@ -3289,7 +3289,7 @@ export class Connection {
       }
     }
 
-    let highestConfirmedRoot = await this.getSlot('finalized');
+    const highestConfirmedRoot = await this.getSlot('finalized');
     while (!('before' in options)) {
       endSlot++;
       if (endSlot > highestConfirmedRoot) {
