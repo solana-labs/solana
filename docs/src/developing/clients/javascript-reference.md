@@ -578,34 +578,55 @@ let voteAccountFromData = web3.VoteAccount.fromAccountData(voteAccountInfo[0].ac
 console.log(voteAccountFromData);
 /*
 VoteAccount {
-    nodePubkey: PublicKey {
-        _bn: <BN: 100000096c4e1e61a6393e51937e548aee2c062e23c67cbaa8d04f289d18232>
-    },
-    authorizedVoterPubkey: PublicKey {
-        _bn: <BN: 5862b94396c4e1e61a6393e51937e548aee2c062e23c67cbaa8d04f289d18232>
-    },
-    authorizedWithdrawerPubkey: PublicKey {
-        _bn: <BN: 5862b9430a0800000000000000cb136204000000001f000000cc136204000000>
-    },
-    commission: 0,
-    votes: [
-        { slot: 124554051584, confirmationCount: 73536462 },
-        { slot: 120259084288, confirmationCount: 73536463 },
-        { slot: 115964116992, confirmationCount: 73536464 },
-        { slot: 111669149696, confirmationCount: 73536465 },
-        { slot: 107374182400, confirmationCount: 96542804 },
-        { slot: 4294967296, confirmationCount: 1645464065 },
-        { slot: 1099511627780, confirmationCount: 0 },
-        { slot: 57088, confirmationCount: 3787757056 },
-        { slot: 16516698632215534000, confirmationCount: 3236081224 },
-        { slot: 328106138455040640, confirmationCount: 2194770418 },
-        { slot: 290873038898, confirmationCount: 0 },
-    ],
-    rootSlot: null,
-    epoch: 0,
-    credits: 0,
-    lastEpochCredits: 0,
-    epochCredits: []
+  nodePubkey: PublicKey {
+    _bn: <BN: cf1c635246d4a2ebce7b96bf9f44cacd7feed5552be3c714d8813c46c7e5ec02>
+  },
+  authorizedWithdrawer: PublicKey {
+    _bn: <BN: b76ae0caa56f2b9906a37f1b2d4f8c9d2a74c1420cd9eebe99920b364d5cde54>
+  },
+  commission: 10,
+  rootSlot: 104570885,
+  votes: [
+    { slot: 104570886, confirmationCount: 31 },
+    { slot: 104570887, confirmationCount: 30 },
+    { slot: 104570888, confirmationCount: 29 },
+    { slot: 104570889, confirmationCount: 28 },
+    { slot: 104570890, confirmationCount: 27 },
+    { slot: 104570891, confirmationCount: 26 },
+    { slot: 104570892, confirmationCount: 25 },
+    { slot: 104570893, confirmationCount: 24 },
+    { slot: 104570894, confirmationCount: 23 },
+    ...
+  ],
+  authorizedVoters: [ { epoch: 242, authorizedVoter: [PublicKey] } ],
+  priorVoters: [
+      [Object], [Object], [Object],
+      [Object], [Object], [Object],
+      [Object], [Object], [Object],
+      [Object], [Object], [Object],
+      [Object], [Object], [Object],
+      [Object], [Object], [Object],
+      [Object], [Object], [Object],
+      [Object], [Object], [Object],
+      [Object], [Object], [Object],
+      [Object], [Object], [Object],
+      [Object], [Object]
+   ],
+  epochCredits: [
+    { epoch: 179, credits: 33723163, prevCredits: 33431259 },
+    { epoch: 180, credits: 34022643, prevCredits: 33723163 },
+    { epoch: 181, credits: 34331103, prevCredits: 34022643 },
+    { epoch: 182, credits: 34619348, prevCredits: 34331103 },
+    { epoch: 183, credits: 34880375, prevCredits: 34619348 },
+    { epoch: 184, credits: 35074055, prevCredits: 34880375 },
+    { epoch: 185, credits: 35254965, prevCredits: 35074055 },
+    { epoch: 186, credits: 35437863, prevCredits: 35254965 },
+    { epoch: 187, credits: 35672671, prevCredits: 35437863 },
+    { epoch: 188, credits: 35950286, prevCredits: 35672671 },
+    { epoch: 189, credits: 36228439, prevCredits: 35950286 },
+    ...
+  ],
+  lastTimestamp: { slot: 104570916, timestamp: 1635730116 }
 }
 */
 ```
