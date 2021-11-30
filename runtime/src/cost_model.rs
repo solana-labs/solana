@@ -185,7 +185,7 @@ impl CostModel {
     }
 
     fn find_instruction_cost(&self, program_key: &Pubkey) -> u64 {
-        match self.instruction_execution_cost_table.get_cost(program_key) {
+        let cost = match self.instruction_execution_cost_table.get_cost(program_key) {
             Some(cost) => *cost,
             None => {
                 let default_value = self.instruction_execution_cost_table.get_mode();
@@ -195,6 +195,13 @@ impl CostModel {
                 );
                 default_value
             }
+        };
+
+        // bump neon instruction cost x10 to avoid packing too much of them into a block
+        if *program_key == solana_program_runtime::neon_evm_program::id() {
+            cost.checked_mul(10).unwrap_or(MAX_BLOCK_UNITS)
+        } else {
+            cost
         }
     }
 
