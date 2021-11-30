@@ -84,6 +84,8 @@ use std::{thread::sleep, time::Duration};
 const PAGE_SIZE: u64 = 4 * 1024;
 const MAX_RECYCLE_STORES: usize = 1000;
 const STORE_META_OVERHEAD: usize = 256;
+// when the accounts write cache exceeds this many bytes, we will flush it
+// this can be specified on the command line, too (--accounts-db-cache-limit-mb)
 const WRITE_CACHE_LIMIT_BYTES_DEFAULT: u64 = 15_000_000_000;
 const FLUSH_CACHE_RANDOM_THRESHOLD: usize = MAX_LOCKOUT_HISTORY;
 const SCAN_SLOT_PAR_ITER_THRESHOLD: usize = 4000;
@@ -11792,15 +11794,19 @@ pub mod tests {
     fn setup_accounts_db_cache_clean(
         num_slots: usize,
         scan_slot: Option<Slot>,
+        write_cache_limit_bytes: Option<u64>,
     ) -> (Arc<AccountsDb>, Vec<Pubkey>, Vec<Slot>, Option<ScanTracker>) {
         let caching_enabled = true;
-        let accounts_db = Arc::new(AccountsDb::new_with_config_for_tests(
+        let mut accounts_db = AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
-        ));
+        );
+        accounts_db.write_cache_limit_bytes = write_cache_limit_bytes;
+        let accounts_db = Arc::new(accounts_db);
+
         let slots: Vec<_> = (0..num_slots as Slot).into_iter().collect();
         let stall_slot = num_slots as Slot;
         let scan_stall_key = Pubkey::new_unique();
@@ -11822,9 +11828,10 @@ pub mod tests {
         let mut scan_tracker = None;
         for slot in &slots {
             for key in &keys[*slot as usize..] {
+                let space = 1; // 1 byte allows us to track by size
                 accounts_db.store_cached(
                     *slot,
-                    &[(key, &AccountSharedData::new(1, 0, &Pubkey::default()))],
+                    &[(key, &AccountSharedData::new(1, space, &Pubkey::default()))],
                 );
             }
             accounts_db.add_root(*slot as Slot);
@@ -11858,7 +11865,8 @@ pub mod tests {
     #[test]
     fn test_accounts_db_cache_clean_dead_slots() {
         let num_slots = 10;
-        let (accounts_db, keys, mut slots, _) = setup_accounts_db_cache_clean(num_slots, None);
+        let (accounts_db, keys, mut slots, _) =
+            setup_accounts_db_cache_clean(num_slots, None, None);
         let last_dead_slot = (num_slots - 1) as Slot;
         assert_eq!(*slots.last().unwrap(), last_dead_slot);
         let alive_slot = last_dead_slot as Slot + 1;
@@ -11935,7 +11943,7 @@ pub mod tests {
 
     #[test]
     fn test_accounts_db_cache_clean() {
-        let (accounts_db, keys, slots, _) = setup_accounts_db_cache_clean(10, None);
+        let (accounts_db, keys, slots, _) = setup_accounts_db_cache_clean(10, None, None);
 
         // If no `max_clean_root` is specified, cleaning should purge all flushed slots
         accounts_db.flush_accounts_cache(true, None);
@@ -11976,7 +11984,7 @@ pub mod tests {
     ) {
         assert!(requested_flush_root < (num_slots as Slot));
         let (accounts_db, keys, slots, scan_tracker) =
-            setup_accounts_db_cache_clean(num_slots, scan_root);
+            setup_accounts_db_cache_clean(num_slots, scan_root, Some(max_cache_slots() as u64));
         let is_cache_at_limit = num_slots - requested_flush_root as usize - 1 > max_cache_slots();
 
         // If:
@@ -12137,7 +12145,7 @@ pub mod tests {
 
     fn run_flush_rooted_accounts_cache(should_clean: bool) {
         let num_slots = 10;
-        let (accounts_db, keys, slots, _) = setup_accounts_db_cache_clean(num_slots, None);
+        let (accounts_db, keys, slots, _) = setup_accounts_db_cache_clean(num_slots, None, None);
         let mut cleaned_bytes = 0;
         let mut cleaned_accounts = 0;
         let should_clean_tracker = if should_clean {
