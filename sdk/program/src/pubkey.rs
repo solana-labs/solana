@@ -341,30 +341,22 @@ impl Pubkey {
     ///
     /// The client program:
     ///
-    /// ```no_run
+    /// ```ignore
+    /// # // NB: This example depends on solana_sdk and solana_client, and adding
+    /// # // those as dev-dependencies would create an unpublishable circular
+    /// # // dependency, hence it is ignored.
+    /// #
     /// # use borsh::{BorshSerialize, BorshDeserialize};
-    /// # use solana_sdk::signature::Keypair;
-    /// # use solana_sdk::transaction::Transaction;
-    /// # use solana_sdk::pubkey::Pubkey;
-    /// # use solana_sdk::instruction::Instruction;
-    /// # use solana_sdk::signature::{Signer, Signature};
-    /// # use solana_sdk::hash::Hash;
+    /// # use solana_program::pubkey::Pubkey;
+    /// # use solana_program::instruction::Instruction;
+    /// # use solana_program::hash::Hash;
     /// # use solana_program::instruction::AccountMeta;
     /// # use solana_program::system_program;
+    /// # use solana_sdk::signature::Keypair;
+    /// # use solana_sdk::signature::{Signer, Signature};
+    /// # use solana_sdk::transaction::Transaction;
+    /// # use solana_client::rpc_client::RpcClient;
     /// # use std::convert::TryFrom;
-    /// #
-    /// # // NB: As of 1.9.0, actually linking from this crate's dev-dependencies
-    /// # // to solana_client, introduces a dependency on the old 1.8.2 solana-program crate,
-    /// # // which causes common cargo invocations like `cargo test -p solana-program`
-    /// # // to be ambiguous. To avoid the resulting confusing dev experience,
-    /// # // we instead just stub out RpcClient for this no_run example.
-    /// #
-    /// # struct RpcClient;
-    /// # impl RpcClient {
-    /// #     fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> anyhow::Result<u64> { panic!() }
-    /// #     fn get_latest_blockhash(&self) -> anyhow::Result<Hash> { panic!() }
-    /// #     fn send_and_confirm_transaction(&self, transaction: &Transaction) -> anyhow::Result<Signature> { panic!() }
-    /// # }
     /// #
     /// # #[derive(BorshSerialize, BorshDeserialize, Debug)]
     /// # struct InstructionData {
@@ -375,7 +367,7 @@ impl Pubkey {
     /// # pub static VAULT_ACCOUNT_SIZE: u64 = 1024;
     /// # let program_id = Pubkey::new_unique();
     /// # let payer = Keypair::new();
-    /// # let rpc_client = RpcClient;
+    /// # let rpc_client = RpcClient::new("no-run".to_string());
     /// #
     /// // Derive the PDA from the payer account, a string representing the unique
     /// // purpose of the account ("vault"), and the address of our on-chain program.
