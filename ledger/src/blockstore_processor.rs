@@ -985,7 +985,7 @@ pub fn confirm_slot(
                         return Err(BlockError::InvalidEntryHash.into());
                     } else if !transaction_check_result {
                         warn!("Ledger proof of history failed at slot: {}", bank.slot());
-                        return Err(BlockError::InvalidEntryHash.into());
+                        return Err(TransactionError::SignatureFailure.into());
                     }
                 }
                 _ => {
