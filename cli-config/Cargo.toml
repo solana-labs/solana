@@ -18,7 +18,7 @@ serde_yaml = "0.8.21"
 url = "2.2.2"
 
 [dev-dependencies]
-anyhow = "1.0.48"
+anyhow = "1.0.51"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
