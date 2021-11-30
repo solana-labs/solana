@@ -204,5 +204,5 @@ function getPriorVoters({
     return [];
   }
 
-  return [...buf.slice(idx).map(parsePriorVoters), ...buf.slice(0, idx - 1)];
+  return [...buf.slice(idx + 1).map(parsePriorVoters), ...buf.slice(0, idx)];
 }
