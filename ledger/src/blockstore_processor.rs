@@ -970,29 +970,21 @@ pub fn confirm_slot(
             // signature verification on the CPU, this just returns the
             // already-computed result produced in start_verify_transactions.
             // Either way, check the result of the signature verification.
-            let transaction_check_result = check_result.finish_verify();
+            if !check_result.finish_verify() {
+                warn!("Ledger proof of history failed at slot: {}", bank.slot());
+                return Err(TransactionError::SignatureFailure.into());
+            }
 
-            match verifier {
-                Some(mut verifier) => {
-                    let verified = verifier.finish_verify();
-                    timing.poh_verify_elapsed += verifier.poh_duration_us();
-                    // The GPU Entry verification (if any) is kicked off right when the CPU-side
-                    // Entry verification finishes, so these times should be disjoint
-                    timing.transaction_verify_elapsed +=
-                        transaction_cpu_duration_us + check_result.gpu_verify_duration();
-                    if !verified {
-                        warn!("Ledger proof of history failed at slot: {}", bank.slot());
-                        return Err(BlockError::InvalidEntryHash.into());
-                    } else if !transaction_check_result {
-                        warn!("Ledger proof of history failed at slot: {}", bank.slot());
-                        return Err(TransactionError::SignatureFailure.into());
-                    }
-                }
-                _ => {
-                    if !transaction_check_result {
-                        warn!("Ledger proof of history failed at slot: {}", bank.slot());
-                        return Err(TransactionError::SignatureFailure.into());
-                    }
+            if let Some(mut verifier) = verifier {
+                let verified = verifier.finish_verify();
+                timing.poh_verify_elapsed += verifier.poh_duration_us();
+                // The GPU Entry verification (if any) is kicked off right when the CPU-side
+                // Entry verification finishes, so these times should be disjoint
+                timing.transaction_verify_elapsed +=
+                    transaction_cpu_duration_us + check_result.gpu_verify_duration();
+                if !verified {
+                    warn!("Ledger proof of history failed at slot: {}", bank.slot());
+                    return Err(BlockError::InvalidEntryHash.into());
                 }
             }
 
@@ -1008,9 +1000,6 @@ pub fn confirm_slot(
             Ok(())
         }
         Err(err) => {
-            if let Some(mut verifier) = verifier {
-                verifier.finish_verify();
-            }
             warn!("Ledger proof of history failed at slot: {}", bank.slot());
             Err(err.into())
         }
