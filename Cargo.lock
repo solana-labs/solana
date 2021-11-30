@@ -5331,6 +5331,7 @@ dependencies = [
 name = "solana-program"
 version = "1.9.0"
 dependencies = [
+ "anyhow",
  "assert_matches",
  "base64 0.13.0",
  "bincode",
@@ -5361,6 +5362,7 @@ dependencies = [
  "solana-frozen-abi 1.9.0",
  "solana-frozen-abi-macro 1.9.0",
  "solana-logger 1.9.0",
+ "solana-sdk",
  "solana-sdk-macro 1.9.0",
  "static_assertions",
  "thiserror",
