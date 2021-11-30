@@ -22,7 +22,7 @@ use solana_sdk::{
     account_info::AccountInfo,
     blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
     clock::Clock,
-    entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
+    entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     epoch_schedule::EpochSchedule,
     feature_set::{
         blake3_syscall_enabled, demote_program_write_locks, disable_fees_sysvar,
@@ -747,7 +747,7 @@ impl SyscallObject<BpfError> for SyscallAllocFree {
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         let align = if self.aligned {
-            align_of::<u128>()
+            BPF_ALIGN_OF_U128
         } else {
             align_of::<u8>()
         };
