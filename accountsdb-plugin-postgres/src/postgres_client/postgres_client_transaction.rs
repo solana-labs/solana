@@ -361,7 +361,7 @@ impl From<&TransactionError> for DbTransactionErrorCode {
 }
 
 #[derive(Clone, Debug, ToSql, PartialEq)]
-#[postgres(name = "TransactionStatus")]
+#[postgres(name = "TransactionError")]
 pub struct DbTransactionError {
     error_code: DbTransactionErrorCode,
     error_detail: Option<String>,
