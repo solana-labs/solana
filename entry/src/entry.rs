@@ -25,10 +25,10 @@ use solana_sdk::hash::Hash;
 use solana_sdk::packet::Meta;
 use solana_sdk::timing;
 use solana_sdk::transaction::{
-    Result, SanitizedTransaction, Transaction, TransactionVerificationMode, VersionedTransaction,
+    Result, SanitizedTransaction, Transaction, TransactionError, TransactionVerificationMode,
+    VersionedTransaction,
 };
 use std::cell::RefCell;
-use std::cell::UnsafeCell;
 use std::ffi::OsStr;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Once;
@@ -265,7 +265,7 @@ pub struct EntrySigVerificationState {
     verification_status: EntryVerificationStatus,
     entries: Option<Vec<EntryType>>,
     device_verification_data: DeviceSigVerificationData,
-    verify_duration_us: u64,
+    gpu_verify_duration_us: u64,
 }
 
 impl<'a> EntrySigVerificationState {
@@ -277,7 +277,13 @@ impl<'a> EntrySigVerificationState {
             DeviceSigVerificationData::Gpu(verification_state) => {
                 let (verified, gpu_time_us) =
                     verification_state.thread_h.take().unwrap().join().unwrap();
-                self.verify_duration_us += gpu_time_us;
+                self.gpu_verify_duration_us = gpu_time_us;
+                self.verification_status = if verified {
+                    EntryVerificationStatus::Success
+                }
+                else {
+                    EntryVerificationStatus::Failure
+                };
                 verified
             }
             DeviceSigVerificationData::Cpu() => {
@@ -288,8 +294,8 @@ impl<'a> EntrySigVerificationState {
     pub fn status(&self) -> EntryVerificationStatus {
         self.verification_status
     }
-    pub fn verify_duration(&self) -> u64 {
-        self.verify_duration_us
+    pub fn gpu_verify_duration(&self) -> u64 {
+        self.gpu_verify_duration_us
     }
 }
 
@@ -400,9 +406,7 @@ pub fn start_verify_transactions(
             + Send
             + Sync,
     >,
-) -> EntrySigVerificationState {
-    let check_start = Instant::now();
-
+) -> Result<EntrySigVerificationState> {
     let api = perf_libs::api();
 
     // Use the CPU if we have too few transactions for GPU signature verification to be worth it.
@@ -438,24 +442,17 @@ pub fn start_verify_transactions(
 
         let entries = verify_transactions(entries, Arc::new(verify_func));
 
-        let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
-
         match entries {
             Ok(entries_val) => {
-                return EntrySigVerificationState {
+                return Ok(EntrySigVerificationState {
                     verification_status: EntryVerificationStatus::Success,
                     entries: Some(entries_val),
                     device_verification_data: DeviceSigVerificationData::Cpu(),
-                    verify_duration_us: transaction_duration_us,
-                };
+                    gpu_verify_duration_us: 0,
+                });
             }
-            _ => {
-                return EntrySigVerificationState {
-                    verification_status: EntryVerificationStatus::Failure,
-                    entries: None,
-                    device_verification_data: DeviceSigVerificationData::Cpu(),
-                    verify_duration_us: transaction_duration_us,
-                };
+            Err(err) => {
+                return Err(err);
             }
         }
     }
@@ -482,13 +479,12 @@ pub fn start_verify_transactions(
                 .sum();
 
             if num_transactions == 0 {
-                let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
-                return EntrySigVerificationState {
+                return Ok(EntrySigVerificationState {
                     verification_status: EntryVerificationStatus::Success,
                     entries: Some(entries),
                     device_verification_data: DeviceSigVerificationData::Cpu(),
-                    verify_duration_us: transaction_duration_us,
-                };
+                    gpu_verify_duration_us: 0,
+                });
             }
             let mut packets = Packets::new_with_recycler(
                 verify_recyclers.packet_recycler,
@@ -523,13 +519,7 @@ pub fn start_verify_transactions(
                     });
 
                 if !res {
-                    let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
-                    return EntrySigVerificationState {
-                        verification_status: EntryVerificationStatus::Failure,
-                        entries: None,
-                        device_verification_data: DeviceSigVerificationData::Cpu(),
-                        verify_duration_us: transaction_duration_us,
-                    };
+                    return Err(TransactionError::SignatureFailure);
                 }
             }
 
@@ -543,25 +533,16 @@ pub fn start_verify_transactions(
                 verify_time.stop();
                 (verified, verify_time.as_us())
             });
-            let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
-            EntrySigVerificationState {
+            Ok(EntrySigVerificationState {
                 verification_status: EntryVerificationStatus::Pending,
                 entries: Some(entries),
                 device_verification_data: DeviceSigVerificationData::Gpu(GpuSigVerificationData {
                     thread_h: Some(gpu_verify_thread),
                 }),
-                verify_duration_us: transaction_duration_us,
-            }
+                gpu_verify_duration_us: 0,
+            })
         }
-        _ => {
-            let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
-            EntrySigVerificationState {
-                verification_status: EntryVerificationStatus::Failure,
-                entries: None,
-                device_verification_data: DeviceSigVerificationData::Cpu(),
-                verify_duration_us: transaction_duration_us,
-            }
-        }
+        Err(err) => Err(err),
     }
 }
 

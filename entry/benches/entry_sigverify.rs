@@ -85,4 +85,3 @@ fn bench_cpusigverify(bencher: &mut Bencher) {
         let _ans = entry::verify_transactions(entries.clone(), Arc::new(verify_transaction));
     })
 }
-
