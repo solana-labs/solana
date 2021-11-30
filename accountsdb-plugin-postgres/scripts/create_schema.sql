@@ -25,6 +25,36 @@ CREATE TABLE slot (
 );
 
 -- Types for Transactions
+
+Create TYPE "TransactionError" AS ENUM (
+    'AccountInUse',
+    'AccountLoadedTwice',
+    'AccountNotFound',
+    'ProgramAccountNotFound',
+    'InsufficientFundsForFee',
+    'InvalidAccountForFee',
+    'AlreadyProcessed',
+    'BlockhashNotFound',
+    'InstructionError',
+    'CallChainTooDeep',
+    'MissingSignatureForFee',
+    'InvalidAccountIndex',
+    'SignatureFailure',
+    'InvalidProgramForExecution',
+    'SanitizeFailure',
+    'ClusterMaintenance',
+    'AccountBorrowOutstanding',
+    'WouldExceedMaxAccountCostLimit',
+    'WouldExceedMaxBlockCostLimit',
+    'UnsupportedVersion',
+    'InvalidWritableAccount'
+);
+
+CREATE TYPE "TransactionStatus" AS (
+    error "TransactionError",
+    error_detail VARCHAR(256)
+);
+
 CREATE TYPE "CompiledInstruction" AS (
     program_id_index SMALLINT,
     accounts SMALLINT[],
@@ -43,16 +73,23 @@ CREATE TYPE "TransactionTokenBalance" AS (
     owner VARCHAR(44)
 );
 
+Create TYPE "RewardType" AS ENUM (
+    'Fee',
+    'Rent',
+    'Staking',
+    'Voting'
+);
+
 CREATE TYPE "Reward" AS (
     pubkey VARCHAR(44),
     lamports BIGINT,
     post_balance BIGINT,
-    reward_type VARCHAR(32),
+    reward_type "RewardType",
     commission SMALLINT
 );
 
 CREATE TYPE "TransactionStatusMeta" AS (
-    status VARCHAR(256),
+    status "TransactionStatus",
     fee BIGINT,
     pre_balances BIGINT[],
     post_balances BIGINT[],

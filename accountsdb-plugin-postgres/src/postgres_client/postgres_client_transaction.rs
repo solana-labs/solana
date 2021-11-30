@@ -54,20 +54,29 @@ pub struct DbTransactionTokenBalance {
     pub owner: String,
 }
 
+#[derive(Clone, Debug, ToSql, PartialEq)]
+#[postgres(name = "RewardType")]
+pub enum DbRewardType {
+    Fee,
+    Rent,
+    Staking,
+    Voting,
+}
+
 #[derive(Clone, Debug, ToSql)]
 #[postgres(name = "Reward")]
 pub struct DbReward {
     pub pubkey: String,
     pub lamports: i64,
     pub post_balance: i64,
-    pub reward_type: Option<String>,
+    pub reward_type: Option<DbRewardType>,
     pub commission: Option<i16>,
 }
 
 #[derive(Clone, Debug, ToSql)]
 #[postgres(name = "TransactionStatusMeta")]
 pub struct DbTransactionStatusMeta {
-    pub status: Option<String>,
+    pub status: Option<DbTransactionStatus>,
     pub fee: i64,
     pub pre_balances: Vec<i64>,
     pub post_balances: Vec<i64>,
@@ -187,15 +196,15 @@ impl From<&MessageHeader> for DbTransactionMessageHeader {
 }
 
 impl From<&CompiledInstruction> for DbCompiledInstruction {
-    fn from(instrtuction: &CompiledInstruction) -> Self {
+    fn from(instruction: &CompiledInstruction) -> Self {
         Self {
-            program_id_index: instrtuction.program_id_index as i16,
-            accounts: instrtuction
+            program_id_index: instruction.program_id_index as i16,
+            accounts: instruction
                 .accounts
                 .iter()
                 .map(|account_idx| *account_idx as i16)
                 .collect(),
-            data: instrtuction.data.clone(),
+            data: instruction.data.clone(),
         }
     }
 }
@@ -265,13 +274,19 @@ impl From<&InnerInstructions> for DbInnerInstructions {
     }
 }
 
-fn get_reward_type(reward: &Option<RewardType>) -> Option<String> {
-    reward.as_ref().map(|reward_type| match reward_type {
-        RewardType::Fee => "fee".to_string(),
-        RewardType::Rent => "rent".to_string(),
-        RewardType::Staking => "staking".to_string(),
-        RewardType::Voting => "voting".to_string(),
-    })
+impl From<&RewardType> for DbRewardType {
+    fn from(reward_type: &RewardType) -> Self {
+        match reward_type {
+            RewardType::Fee => Self::Fee,
+            RewardType::Rent => Self::Rent,
+            RewardType::Staking => Self::Staking,
+            RewardType::Voting => Self::Voting,
+        }
+    }
+}
+
+fn get_reward_type(reward: &Option<RewardType>) -> Option<DbRewardType> {
+    reward.as_ref().map(DbRewardType::from)
 }
 
 impl From<&Reward> for DbReward {
@@ -289,45 +304,94 @@ impl From<&Reward> for DbReward {
     }
 }
 
-fn get_transaction_status(result: &Result<(), TransactionError>) -> Option<String> {
+#[derive(Clone, Debug, ToSql, PartialEq)]
+#[postgres(name = "TransactionError")]
+pub enum DbTransactionError {
+    AccountInUse,
+    AccountLoadedTwice,
+    AccountNotFound,
+    ProgramAccountNotFound,
+    InsufficientFundsForFee,
+    InvalidAccountForFee,
+    AlreadyProcessed,
+    BlockhashNotFound,
+    InstructionError,
+    CallChainTooDeep,
+    MissingSignatureForFee,
+    InvalidAccountIndex,
+    SignatureFailure,
+    InvalidProgramForExecution,
+    SanitizeFailure,
+    ClusterMaintenance,
+    AccountBorrowOutstanding,
+    WouldExceedMaxAccountCostLimit,
+    WouldExceedMaxBlockCostLimit,
+    UnsupportedVersion,
+    InvalidWritableAccount,
+}
+
+impl From<&TransactionError> for DbTransactionError {
+    fn from(err: &TransactionError) -> Self {
+        match err {
+            TransactionError::AccountInUse => Self::AccountInUse,
+            TransactionError::AccountLoadedTwice => Self::AccountLoadedTwice,
+            TransactionError::AccountNotFound => Self::AccountNotFound,
+            TransactionError::ProgramAccountNotFound => Self::ProgramAccountNotFound,
+            TransactionError::InsufficientFundsForFee => Self::InsufficientFundsForFee,
+            TransactionError::InvalidAccountForFee => Self::InvalidAccountForFee,
+            TransactionError::AlreadyProcessed => Self::AlreadyProcessed,
+            TransactionError::BlockhashNotFound => Self::BlockhashNotFound,
+            TransactionError::InstructionError(_idx, _error) => Self::InstructionError,
+            TransactionError::CallChainTooDeep => Self::CallChainTooDeep,
+            TransactionError::MissingSignatureForFee => Self::MissingSignatureForFee,
+            TransactionError::InvalidAccountIndex => Self::InvalidAccountIndex,
+            TransactionError::SignatureFailure => Self::SignatureFailure,
+            TransactionError::InvalidProgramForExecution => Self::InvalidProgramForExecution,
+            TransactionError::SanitizeFailure => Self::SanitizeFailure,
+            TransactionError::ClusterMaintenance => Self::ClusterMaintenance,
+            TransactionError::AccountBorrowOutstanding => Self::AccountBorrowOutstanding,
+            TransactionError::WouldExceedMaxAccountCostLimit => {
+                Self::WouldExceedMaxAccountCostLimit
+            }
+            TransactionError::WouldExceedMaxBlockCostLimit => Self::WouldExceedMaxBlockCostLimit,
+            TransactionError::UnsupportedVersion => Self::UnsupportedVersion,
+            TransactionError::InvalidWritableAccount => Self::InvalidWritableAccount,
+        }
+    }
+}
+
+#[derive(Clone, Debug, ToSql, PartialEq)]
+#[postgres(name = "TransactionStatus")]
+pub struct DbTransactionStatus {
+    error: DbTransactionError,
+    error_detail: Option<String>,
+}
+
+fn get_transaction_status(result: &Result<(), TransactionError>) -> Option<DbTransactionStatus> {
     if result.is_ok() {
         return None;
     }
 
-    let err = match result.as_ref().err().unwrap() {
-        TransactionError::AccountInUse => "AccountInUse",
-        TransactionError::AccountLoadedTwice => "AccountLoadedTwice",
-        TransactionError::AccountNotFound => "AccountNotFound",
-        TransactionError::ProgramAccountNotFound => "ProgramAccountNotFound",
-        TransactionError::InsufficientFundsForFee => "InsufficientFundsForFee",
-        TransactionError::InvalidAccountForFee => "InvalidAccountForFee",
-        TransactionError::AlreadyProcessed => "AlreadyProcessed",
-        TransactionError::BlockhashNotFound => "BlockhashNotFound",
-        TransactionError::InstructionError(idx, error) => {
-            return Some(format!(
-                "InstructionError: idx ({}), error: ({})",
-                idx, error
-            ));
-        }
-        TransactionError::CallChainTooDeep => "CallChainTooDeep",
-        TransactionError::MissingSignatureForFee => "MissingSignatureForFee",
-        TransactionError::InvalidAccountIndex => "InvalidAccountIndex",
-        TransactionError::SignatureFailure => "SignatureFailure",
-        TransactionError::InvalidProgramForExecution => "InvalidProgramForExecution",
-        TransactionError::SanitizeFailure => "SanitizeFailure",
-        TransactionError::ClusterMaintenance => "ClusterMaintenance",
-        TransactionError::AccountBorrowOutstanding => "AccountBorrowOutstanding",
-        TransactionError::WouldExceedMaxAccountCostLimit => "WouldExceedMaxAccountCostLimit",
-        TransactionError::WouldExceedMaxBlockCostLimit => "WouldExceedMaxBlockCostLimit",
-        TransactionError::UnsupportedVersion => "UnsupportedVersion",
-        TransactionError::InvalidWritableAccount => "InvalidWritableAccount",
-    };
-
-    // make sure not to store more characters than the DB limit
-    if err.len() > MAX_TRANSACTION_STATUS_LEN {
-        return Some(err.to_string().split_off(MAX_TRANSACTION_STATUS_LEN));
-    }
-    Some(err.to_string())
+    let error = result.as_ref().err().unwrap();
+    Some(DbTransactionStatus {
+        error: DbTransactionError::from(error),
+        error_detail: {
+            if let TransactionError::InstructionError(idx, instruction_error) = error {
+                let mut error_detail = format!(
+                    "InstructionError: idx ({}), error: ({})",
+                    idx, instruction_error
+                );
+                if error_detail.len() > MAX_TRANSACTION_STATUS_LEN {
+                    error_detail = error_detail
+                        .to_string()
+                        .split_off(MAX_TRANSACTION_STATUS_LEN);
+                }
+                Some(error_detail)
+            } else {
+                None
+            }
+        },
+    })
 }
 
 impl From<&TransactionTokenBalance> for DbTransactionTokenBalance {

@@ -9,6 +9,8 @@ DROP TABLE account;
 DROP TABLE slot;
 DROP TABLE transaction;
 
+DROP TYPE "TransactionStatus" CASCADE;
+DROP TYPE "TransactionError" CASCADE;
 DROP TYPE "MappedMessage" CASCADE;
 DROP TYPE "MappedAddresses" CASCADE;
 DROP TYPE "TransactionMessageV0" CASCADE;
@@ -16,7 +18,8 @@ DROP TYPE "AddressMapIndexes" CASCADE;
 DROP TYPE "TransactionMessage" CASCADE;
 DROP TYPE "TransactionMessageHeader" CASCADE;
 DROP TYPE "TransactionStatusMeta" CASCADE;
-DROP TYPE "Rewards" CASCADE;
+DROP TYPE "RewardType" CASCADE;
+DROP TYPE "Reward" CASCADE;
 DROP TYPE "TransactionTokenBalance" CASCADE;
 DROP TYPE "InnerInstructions" CASCADE;
 DROP TYPE "CompiledInstruction" CASCADE;
