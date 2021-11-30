@@ -485,22 +485,16 @@ pub fn start_verify_transactions(
                     gpu_verify_duration_us: 0,
                 });
             }
-            // We purposely use this method to calculate num_vecs instead of
-            // (num_transactions + PACKETS_PER_BATCH - 1) / PACKETS_PER_BATCH
-            // to avoid the possibility of overflow. With this method, it should
-            // not be possible to have enough elements in the virtual address space
-            // to have an overflow in the calculation (and using saturating_add would lead to
-            // an incorrect result in cases where an overflow would happen)
-            let num_vecs: usize = num_transactions / PACKETS_PER_BATCH
-                + if num_transactions % PACKETS_PER_BATCH != 0 {
-                    1
-                } else {
-                    0
-                };
-            let mut packets_vec = Vec::<Packets>::with_capacity(num_vecs);
-            let mut remaining_transactions = num_transactions;
-            for _n in 0..num_vecs {
-                let vec_size = cmp::min(PACKETS_PER_BATCH, remaining_transactions);
+            let entry_txs: Vec<&SanitizedTransaction> = entries
+            .iter()
+            .filter_map(|entry_type| match entry_type {
+                EntryType::Tick(_) => None,
+                EntryType::Transactions(transactions) => Some(transactions),
+            })
+            .flatten()
+            .collect::<Vec<_>>();
+            let mut packets_vec = entry_txs.par_iter().chunks(PACKETS_PER_BATCH).map(|slice| {
+                let vec_size = slice.len();
                 let mut packets = Packets::new_with_recycler(
                     verify_recyclers.packet_recycler.clone(),
                     vec_size,
@@ -514,43 +508,25 @@ pub fn start_verify_transactions(
                 unsafe {
                     packets.packets.set_len(vec_size);
                 }
-                packets_vec.push(packets);
-                remaining_transactions -= vec_size;
-            }
-            assert!(remaining_transactions == 0);
-            let entry_txs: Vec<&SanitizedTransaction> = entries
-                .iter()
-                .filter_map(|entry_type| match entry_type {
-                    EntryType::Tick(_) => None,
-                    EntryType::Transactions(transactions) => Some(transactions),
-                })
-                .flatten()
-                .collect::<Vec<_>>();
-            let entry_txs = (0..num_vecs)
-                .map(|i: usize| {
-                    entry_txs[i * PACKETS_PER_BATCH
-                        ..i * PACKETS_PER_BATCH + packets_vec[i].packets.len()]
-                        .to_vec()
-                })
-                .collect::<Vec<_>>();
-            let res = packets_vec.par_iter_mut().zip(entry_txs).all(|pair| {
-                let entry_tx_iter = pair
-                    .1
-                    .into_par_iter()
-                    .map(|tx| tx.to_versioned_transaction());
-                pair.0
-                    .packets
-                    .par_iter_mut()
-                    .zip(entry_tx_iter)
-                    .all(|pair| {
-                        pair.0.meta = Meta::default();
-                        Packet::populate_packet(pair.0, None, &pair.1).is_ok()
-                    })
-            });
+                let entry_tx_iter = slice
+                .into_par_iter()
+                .map(|tx| tx.to_versioned_transaction());
 
-            if !res {
-                return Err(TransactionError::SanitizeFailure);
-            }
+                let res = packets
+                .packets
+                .par_iter_mut()
+                .zip(entry_tx_iter)
+                .all(|pair| {
+                    pair.0.meta = Meta::default();
+                    Packet::populate_packet(pair.0, None, &pair.1).is_ok()
+                });
+                if res {
+                    Ok(packets)
+                }
+                else {
+                    Err(TransactionError::SanitizeFailure)
+                }
+            }).collect::<Result<Vec<_>>>()?;
 
             let tx_offset_recycler = verify_recyclers.tx_offset_recycler;
             let out_recycler = verify_recyclers.out_recycler;
