@@ -15,7 +15,7 @@ use solana_merkle_tree::MerkleTree;
 use solana_metrics::*;
 use solana_perf::{
     cuda_runtime::PinnedVec,
-    packet::{Packet, Packets, PacketsRecycler},
+    packet::{Packet, Packets, PacketsRecycler, PACKETS_PER_BATCH},
     perf_libs,
     recycler::Recycler,
     sigverify,
@@ -485,55 +485,86 @@ pub fn start_verify_transactions(
                     gpu_verify_duration_us: 0,
                 });
             }
-            let mut packets = Packets::new_with_recycler(
-                verify_recyclers.packet_recycler,
-                num_transactions,
-                "entry-sig-verify",
-            );
-            // We use set_len here instead of resize(num_transactions, Packet::default()), to save
-            // memory bandwidth and avoid writing a large amount of data that will be overwritten
-            // immediately afterwards. As well, Packet::default() actually leaves the packet data
-            // uninitialized anyway, so the initilization would simply write junk into
-            // the vector anyway.
-            unsafe {
-                packets.packets.set_len(num_transactions);
+            // We purposely use this method to calculate num_vecs instead of
+            // (num_transactions + PACKETS_PER_BATCH - 1) / PACKETS_PER_BATCH
+            // to avoid the possibility of overflow. With this method, it should
+            // not be possible to have enough elements in the virtual address space
+            // to have an overflow in the calculation (and using saturating_add would lead to
+            // an incorrect result in cases where an overflow would happen)
+            let num_vecs: usize = num_transactions / PACKETS_PER_BATCH
+                + if num_transactions % PACKETS_PER_BATCH != 0 {
+                    1
+                } else {
+                    0
+                };
+            let mut packets_vec = Vec::<Packets>::with_capacity(num_vecs);
+            let mut remaining_transactions = num_transactions;
+            for _n in 0..num_vecs {
+                let vec_size = cmp::min(PACKETS_PER_BATCH, remaining_transactions);
+                let mut packets = Packets::new_with_recycler(
+                    verify_recyclers.packet_recycler.clone(),
+                    vec_size,
+                    "entry-sig-verify",
+                );
+                // We use set_len here instead of resize(num_transactions, Packet::default()), to save
+                // memory bandwidth and avoid writing a large amount of data that will be overwritten
+                // soon afterwards. As well, Packet::default() actually leaves the packet data
+                // uninitialized anyway, so the initilization would simply write junk into
+                // the vector anyway.
+                unsafe {
+                    packets.packets.set_len(vec_size);
+                }
+                packets_vec.push(packets);
+                remaining_transactions -= vec_size;
             }
-
-            {
-                let entry_txs: Vec<&SanitizedTransaction> = entries
-                    .iter()
-                    .filter_map(|entry_type| match entry_type {
-                        EntryType::Tick(_) => None,
-                        EntryType::Transactions(transactions) => Some(transactions),
-                    })
-                    .flatten()
-                    .collect::<Vec<_>>();
-
-                let entry_tx_iter = entry_txs
+            assert!(remaining_transactions == 0);
+            let entry_txs: Vec<&SanitizedTransaction> = entries
+                .iter()
+                .filter_map(|entry_type| match entry_type {
+                    EntryType::Tick(_) => None,
+                    EntryType::Transactions(transactions) => Some(transactions),
+                })
+                .flatten()
+                .collect::<Vec<_>>();
+            let entry_txs = (0..num_vecs)
+                .map(|i: usize| {
+                    entry_txs[i * PACKETS_PER_BATCH
+                        ..i * PACKETS_PER_BATCH + packets_vec[i].packets.len()]
+                        .to_vec()
+                })
+                .collect::<Vec<_>>();
+            let res = packets_vec.par_iter_mut().zip(entry_txs).all(|pair| {
+                let entry_tx_iter = pair
+                    .1
                     .into_par_iter()
                     .map(|tx| tx.to_versioned_transaction());
-
-                let res = packets
+                pair.0
                     .packets
                     .par_iter_mut()
                     .zip(entry_tx_iter)
                     .all(|pair| {
                         pair.0.meta = Meta::default();
                         Packet::populate_packet(pair.0, None, &pair.1).is_ok()
-                    });
+                    })
+            });
 
-                if !res {
-                    return Err(TransactionError::SanitizeFailure);
-                }
+            if !res {
+                return Err(TransactionError::SanitizeFailure);
             }
 
-            let mut packets = vec![packets];
             let tx_offset_recycler = verify_recyclers.tx_offset_recycler;
             let out_recycler = verify_recyclers.out_recycler;
             let gpu_verify_thread = thread::spawn(move || {
                 let mut verify_time = Measure::start("sigverify");
-                sigverify::ed25519_verify(&mut packets, &tx_offset_recycler, &out_recycler, false);
-                let verified = packets[0].packets.iter().all(|p| !p.meta.discard);
+                sigverify::ed25519_verify(
+                    &mut packets_vec,
+                    &tx_offset_recycler,
+                    &out_recycler,
+                    false,
+                );
+                let verified = packets_vec
+                    .iter()
+                    .all(|packets| packets.packets.iter().all(|p| !p.meta.discard));
                 verify_time.stop();
                 (verified, verify_time.as_us())
             });
@@ -999,14 +1030,15 @@ mod tests {
 
         let recycler = VerifyRecyclers::default();
 
-        let entries_invalid = (0..1024)
+        // Make sure we test with a number of transactions that's not a multiple of PACKETS_PER_BATCH
+        let entries_invalid = (0..1025)
             .map(|_| {
                 let transaction = test_invalid_tx();
                 next_entry_mut(&mut Hash::default(), 0, vec![transaction])
             })
             .collect::<Vec<_>>();
 
-        let entries_valid = (0..1024)
+        let entries_valid = (0..1025)
             .map(|_| {
                 let transaction = test_tx();
                 next_entry_mut(&mut Hash::default(), 0, vec![transaction])
