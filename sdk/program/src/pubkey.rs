@@ -202,7 +202,7 @@ impl Pubkey {
     ///
     /// Because the program address must not lie on the ed25519 curve there may
     /// be seed and program id combinations that are invalid. For this reason,
-    /// an extra extra seed (the bump seed) is calculated that results in a
+    /// an extra seed (the bump seed) is calculated that results in a
     /// point off the curve. The bump seed must be passed as an additional seed
     /// when calling `invoke_signed`.
     ///
@@ -241,7 +241,7 @@ impl Pubkey {
     ///
     /// [`try_find_program_address`]: Pubkey::try_find_program_address
     ///
-    /// Panics if any of the following preconditions are not met:
+    /// Panics if any of the following are true:
     ///
     /// - the number of provided seeds is greater than, _or equal to_,  [`MAX_SEEDS`],
     /// - any individual seed's length is greater than [`MAX_SEED_LEN`].
@@ -424,7 +424,7 @@ impl Pubkey {
     ///
     /// The only difference between this method and [`find_program_address`]
     /// is that this one returns `None` in the statistically improbable event
-    /// that a bump seed cannot be found; or if any of `find_program_address`s
+    /// that a bump seed cannot be found; or if any of `find_program_address`'s
     /// preconditions are violated.
     ///
     /// See the documentation for [`find_program_address`] for a full description.
