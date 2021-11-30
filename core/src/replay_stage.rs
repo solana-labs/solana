@@ -170,6 +170,7 @@ pub struct ReplayTiming {
     process_duplicate_slots_elapsed: u64,
     process_unfrozen_gossip_verified_vote_hashes_elapsed: u64,
     repair_correct_slots_elapsed: u64,
+    retransmit_not_propagated_elapsed: u64,
 }
 impl ReplayTiming {
     #[allow(clippy::too_many_arguments)]
@@ -192,6 +193,7 @@ impl ReplayTiming {
         process_unfrozen_gossip_verified_vote_hashes_elapsed: u64,
         process_duplicate_slots_elapsed: u64,
         repair_correct_slots_elapsed: u64,
+        retransmit_not_propagated_elapsed: u64,
     ) {
         self.collect_frozen_banks_elapsed += collect_frozen_banks_elapsed;
         self.compute_bank_stats_elapsed += compute_bank_stats_elapsed;
@@ -212,6 +214,7 @@ impl ReplayTiming {
             process_unfrozen_gossip_verified_vote_hashes_elapsed;
         self.process_duplicate_slots_elapsed += process_duplicate_slots_elapsed;
         self.repair_correct_slots_elapsed += repair_correct_slots_elapsed;
+        self.retransmit_not_propagated_elapsed += retransmit_not_propagated_elapsed;
         let now = timestamp();
         let elapsed_ms = now - self.last_print;
         if elapsed_ms > 1000 {
@@ -301,7 +304,12 @@ impl ReplayTiming {
                     "repair_correct_slots_elapsed",
                     self.repair_correct_slots_elapsed as i64,
                     i64
-                )
+                ),
+                (
+                    "retransmit_not_propagated_elapsed",
+                    self.retransmit_not_propagated_elapsed as i64,
+                    i64
+                ),
             );
 
             *self = ReplayTiming::default();
@@ -843,6 +851,7 @@ impl ReplayStage {
                         process_unfrozen_gossip_verified_vote_hashes_time.as_us(),
                         process_duplicate_slots_time.as_us(),
                         dump_then_repair_correct_slots_time.as_us(),
+                        retransmit_not_propagated_time.as_us(),
                     );
                 }
             })
@@ -896,7 +905,15 @@ impl ReplayStage {
                             elapsed,
                             time_offset,
                         );
-                        datapoint_info!("replay_stage-retransmit", ("slot", bank.slot(), i64));
+                        datapoint_info!(
+                            "replay_stage-retransmit",
+                            ("slot", bank.slot(), i64),
+                            (
+                                "retry_iteration",
+                                last_retransmit_retry_info.retry_iteration,
+                                i64
+                            ),
+                        );
                         retransmitted_slot = Some(bank.slot());
                         let _ = retransmit_slots_sender
                             .send(vec![(bank.slot(), bank.clone())].into_iter().collect());
