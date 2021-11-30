@@ -24,10 +24,11 @@ use solana_program_runtime::{
 use solana_rbpf::{
     aligned_memory::AlignedMemory,
     ebpf::HOST_ALIGN,
+    elf::Executable,
     error::{EbpfError, UserDefinedError},
     static_analysis::Analysis,
     verifier::{self, VerifierError},
-    vm::{Config, EbpfVm, Executable, InstructionMeter},
+    vm::{Config, EbpfVm, InstructionMeter},
 };
 use solana_sdk::{
     account::{ReadableAccount, WritableAccount},
@@ -99,7 +100,7 @@ pub fn create_executor(
     let mut executable = {
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
         let programdata = keyed_account_at_index(keyed_accounts, programdata_account_index)?;
-        <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
+        Executable::<BpfError, ThisInstructionMeter>::from_elf(
             &programdata.try_account_ref()?.data()[programdata_offset..],
             None,
             config,
@@ -152,7 +153,7 @@ fn check_loader_id(id: &Pubkey) -> bool {
 /// Create the BPF virtual machine
 pub fn create_vm<'a>(
     loader_id: &'a Pubkey,
-    program: &'a dyn Executable<BpfError, ThisInstructionMeter>,
+    program: &'a Executable<BpfError, ThisInstructionMeter>,
     parameter_bytes: &mut [u8],
     invoke_context: &'a mut dyn InvokeContext,
     orig_data_lens: &'a [usize],
@@ -945,7 +946,7 @@ impl InstructionMeter for ThisInstructionMeter {
 
 /// BPF Loader's Executor implementation
 pub struct BpfExecutor {
-    executable: Box<dyn Executable<BpfError, ThisInstructionMeter>>,
+    executable: Executable<BpfError, ThisInstructionMeter>,
 }
 
 // Well, implement Debug for solana_rbpf::vm::Executable in solana-rbpf...
@@ -985,7 +986,7 @@ impl Executor for BpfExecutor {
             let compute_meter = invoke_context.get_compute_meter();
             let mut vm = match create_vm(
                 loader_id,
-                self.executable.as_ref(),
+                &self.executable,
                 parameter_bytes.as_slice_mut(),
                 invoke_context,
                 &account_lengths,
@@ -1017,7 +1018,7 @@ impl Executor for BpfExecutor {
             );
             if log_enabled!(Trace) {
                 let mut trace_buffer = Vec::<u8>::new();
-                let analysis = Analysis::from_executable(self.executable.as_ref());
+                let analysis = Analysis::from_executable(&self.executable);
                 vm.get_tracer().write(&mut trace_buffer, &analysis).unwrap();
                 let trace_string = String::from_utf8(trace_buffer).unwrap();
                 trace!("BPF Program Instruction Trace:\n{}", trace_string);
@@ -1153,8 +1154,9 @@ mod tests {
         ];
         let input = &mut [0x00];
         let mut bpf_functions = std::collections::BTreeMap::<u32, (usize, String)>::new();
-        solana_rbpf::elf::register_bpf_function(&mut bpf_functions, 0, "entrypoint").unwrap();
-        let program = <dyn Executable<BpfError, TestInstructionMeter>>::from_text_bytes(
+        solana_rbpf::elf::register_bpf_function(&mut bpf_functions, 0, "entrypoint", false)
+            .unwrap();
+        let program = Executable::<BpfError, TestInstructionMeter>::from_text_bytes(
             program,
             None,
             Config::default(),
@@ -1163,8 +1165,7 @@ mod tests {
         )
         .unwrap();
         let mut vm =
-            EbpfVm::<BpfError, TestInstructionMeter>::new(program.as_ref(), &mut [], input)
-                .unwrap();
+            EbpfVm::<BpfError, TestInstructionMeter>::new(&program, &mut [], input).unwrap();
         let mut instruction_meter = TestInstructionMeter { remaining: 10 };
         vm.execute_program_interpreted(&mut instruction_meter)
             .unwrap();

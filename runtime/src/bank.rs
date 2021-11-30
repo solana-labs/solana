@@ -10530,6 +10530,34 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn test_get_filtered_indexed_accounts_limit_exceeded() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(500);
+        let mut account_indexes = AccountSecondaryIndexes::default();
+        account_indexes.indexes.insert(AccountIndex::ProgramId);
+        let bank = Arc::new(Bank::new_with_config(
+            &genesis_config,
+            account_indexes,
+            false,
+            AccountShrinkThreshold::default(),
+        ));
+
+        let address = Pubkey::new_unique();
+        let program_id = Pubkey::new_unique();
+        let limit = 100;
+        let account = AccountSharedData::new(1, limit, &program_id);
+        bank.store_account(&address, &account);
+
+        assert!(bank
+            .get_filtered_indexed_accounts(
+                &IndexKey::ProgramId(program_id),
+                |_| true,
+                &ScanConfig::default(),
+                Some(limit), // limit here will be exceeded, resulting in aborted scan
+            )
+            .is_err());
+    }
+
+    #[test]
     fn test_get_filtered_indexed_accounts() {
         let (genesis_config, _mint_keypair) = create_genesis_config(500);
         let mut account_indexes = AccountSecondaryIndexes::default();
