@@ -344,7 +344,7 @@ fn feature_activation_allowed(rpc_client: &RpcClient, quiet: bool) -> Result<boo
         )
         .unwrap_or((false, false));
 
-    if !stake_allowed && !rpc_allowed && !quiet {
+    if !quiet {
         if feature_set_stats.get(&my_feature_set).is_none() {
             println!(
                 "{}",
