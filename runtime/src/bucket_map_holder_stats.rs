@@ -2,7 +2,7 @@ use crate::accounts_index::IndexValue;
 use crate::bucket_map_holder::BucketMapHolder;
 use solana_sdk::timing::AtomicInterval;
 use std::fmt::Debug;
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering};
 
 // stats logged every 10 s
 const STATS_INTERVAL_MS: u64 = 10_000;
@@ -28,11 +28,11 @@ pub struct BucketMapHolderStats {
     pub keys: AtomicU64,
     pub deletes: AtomicU64,
     pub inserts: AtomicU64,
-    count: AtomicU64,
+    count: AtomicUsize,
     pub bg_waiting_us: AtomicU64,
     pub bg_throttling_wait_us: AtomicU64,
-    pub count_in_mem: AtomicU64,
-    pub per_bucket_count: Vec<AtomicU64>,
+    pub count_in_mem: AtomicUsize,
+    pub per_bucket_count: Vec<AtomicUsize>,
     pub flush_entries_updated_on_disk: AtomicU64,
     pub flush_entries_removed_from_mem: AtomicU64,
     pub active_threads: AtomicU64,
@@ -53,7 +53,7 @@ impl BucketMapHolderStats {
             bins: bins as u64,
             per_bucket_count: (0..bins)
                 .into_iter()
-                .map(|_| AtomicU64::default())
+                .map(|_| AtomicUsize::default())
                 .collect(),
             ..BucketMapHolderStats::default()
         }
@@ -73,7 +73,7 @@ impl BucketMapHolderStats {
         self.insert_or_delete_mem_count(insert, bin, 1)
     }
 
-    pub fn insert_or_delete_mem_count(&self, insert: bool, bin: usize, count: u64) {
+    pub fn insert_or_delete_mem_count(&self, insert: bool, bin: usize, count: usize) {
         let per_bucket = self.per_bucket_count.get(bin);
         if insert {
             self.count_in_mem.fetch_add(count, Ordering::Relaxed);
@@ -113,7 +113,7 @@ impl BucketMapHolderStats {
     }
 
     /// return min, max, sum, median of data
-    fn get_stats(mut data: Vec<u64>) -> (u64, u64, u64, u64) {
+    fn get_stats(mut data: Vec<usize>) -> (usize, usize, usize, usize) {
         if data.is_empty() {
             (0, 0, 0, 0)
         } else {
@@ -132,6 +132,18 @@ impl BucketMapHolderStats {
             0.0
         } else {
             (ms as f32 / elapsed_ms as f32) * 100.0
+        }
+    }
+
+    pub fn total_count(&self) -> usize {
+        self.count.load(Ordering::Relaxed)
+    }
+
+    pub fn count_in_bucket(&self, bucket: usize) -> usize {
+        if bucket < self.per_bucket_count.len() {
+            self.per_bucket_count[bucket].load(Ordering::Relaxed)
+        } else {
+            0
         }
     }
 
@@ -158,7 +170,7 @@ impl BucketMapHolderStats {
                 disk.stats
                     .per_bucket_count
                     .iter()
-                    .map(|count| count.load(Ordering::Relaxed))
+                    .map(|count| count.load(Ordering::Relaxed) as usize)
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
@@ -186,7 +198,7 @@ impl BucketMapHolderStats {
                     self.count_in_mem.load(Ordering::Relaxed),
                     i64
                 ),
-                ("count", self.count.load(Ordering::Relaxed), i64),
+                ("count", self.total_count(), i64),
                 (
                     "bg_waiting_percent",
                     Self::calc_percent(
@@ -424,7 +436,7 @@ impl BucketMapHolderStats {
                     self.count_in_mem.load(Ordering::Relaxed),
                     i64
                 ),
-                ("count", self.count.load(Ordering::Relaxed), i64),
+                ("count", self.total_count(), i64),
                 (
                     "bg_waiting_percent",
                     Self::calc_percent(

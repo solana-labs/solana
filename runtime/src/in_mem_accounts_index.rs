@@ -463,12 +463,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         ))
     }
 
-    pub fn len(&self) -> usize {
-        self.map().read().unwrap().len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
+    pub fn len_for_stats(&self) -> usize {
+        self.stats().count_in_bucket(self.bin)
     }
 
     fn insert_returner(
@@ -880,12 +876,12 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
         self.stats()
             .insert_or_delete_mem_count(false, self.bin, removed);
-        Self::update_stat(&self.stats().flush_entries_removed_from_mem, removed);
+        Self::update_stat(&self.stats().flush_entries_removed_from_mem, removed as u64);
 
         completed_scan
     }
 
-    fn stats(&self) -> &BucketMapHolderStats {
+    pub fn stats(&self) -> &BucketMapHolderStats {
         &self.storage.stats
     }
 
