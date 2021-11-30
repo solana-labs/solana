@@ -523,6 +523,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
                     46 => InstructionError::InvalidAccountOwner,
                     47 => InstructionError::ArithmeticOverflow,
                     48 => InstructionError::UnsupportedSysvar,
+                    49 => InstructionError::IllegalOwner,
                     _ => return Err("Invalid InstructionError"),
                 };
 
