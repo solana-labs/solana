@@ -76,7 +76,7 @@ pub struct DbReward {
 #[derive(Clone, Debug, ToSql)]
 #[postgres(name = "TransactionStatusMeta")]
 pub struct DbTransactionStatusMeta {
-    pub status: Option<DbTransactionStatus>,
+    pub error: Option<DbTransactionError>,
     pub fee: i64,
     pub pre_balances: Vec<i64>,
     pub post_balances: Vec<i64>,
@@ -305,8 +305,8 @@ impl From<&Reward> for DbReward {
 }
 
 #[derive(Clone, Debug, ToSql, PartialEq)]
-#[postgres(name = "TransactionError")]
-pub enum DbTransactionError {
+#[postgres(name = "TransactionErrorCode")]
+pub enum DbTransactionErrorCode {
     AccountInUse,
     AccountLoadedTwice,
     AccountNotFound,
@@ -330,7 +330,7 @@ pub enum DbTransactionError {
     InvalidWritableAccount,
 }
 
-impl From<&TransactionError> for DbTransactionError {
+impl From<&TransactionError> for DbTransactionErrorCode {
     fn from(err: &TransactionError) -> Self {
         match err {
             TransactionError::AccountInUse => Self::AccountInUse,
@@ -362,19 +362,19 @@ impl From<&TransactionError> for DbTransactionError {
 
 #[derive(Clone, Debug, ToSql, PartialEq)]
 #[postgres(name = "TransactionStatus")]
-pub struct DbTransactionStatus {
-    error: DbTransactionError,
+pub struct DbTransactionError {
+    error_code: DbTransactionErrorCode,
     error_detail: Option<String>,
 }
 
-fn get_transaction_status(result: &Result<(), TransactionError>) -> Option<DbTransactionStatus> {
+fn get_transaction_error(result: &Result<(), TransactionError>) -> Option<DbTransactionError> {
     if result.is_ok() {
         return None;
     }
 
     let error = result.as_ref().err().unwrap();
-    Some(DbTransactionStatus {
-        error: DbTransactionError::from(error),
+    Some(DbTransactionError {
+        error_code: DbTransactionErrorCode::from(error),
         error_detail: {
             if let TransactionError::InstructionError(idx, instruction_error) = error {
                 let mut error_detail = format!(
@@ -408,7 +408,7 @@ impl From<&TransactionTokenBalance> for DbTransactionTokenBalance {
 impl From<&TransactionStatusMeta> for DbTransactionStatusMeta {
     fn from(meta: &TransactionStatusMeta) -> Self {
         Self {
-            status: get_transaction_status(&meta.status),
+            error: get_transaction_error(&meta.status),
             fee: meta.fee as i64,
             pre_balances: meta
                 .pre_balances
@@ -809,8 +809,8 @@ pub(crate) mod tests {
         db_transaction_status_meta: &DbTransactionStatusMeta,
     ) {
         assert_eq!(
-            get_transaction_status(&transaction_status_meta.status),
-            db_transaction_status_meta.status
+            get_transaction_error(&transaction_status_meta.status),
+            db_transaction_status_meta.error
         );
         assert_eq!(
             transaction_status_meta.fee,

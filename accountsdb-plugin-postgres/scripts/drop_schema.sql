@@ -9,8 +9,8 @@ DROP TABLE account;
 DROP TABLE slot;
 DROP TABLE transaction;
 
-DROP TYPE "TransactionStatus" CASCADE;
 DROP TYPE "TransactionError" CASCADE;
+DROP TYPE "TransactionErrorCode" CASCADE;
 DROP TYPE "MappedMessage" CASCADE;
 DROP TYPE "MappedAddresses" CASCADE;
 DROP TYPE "TransactionMessageV0" CASCADE;

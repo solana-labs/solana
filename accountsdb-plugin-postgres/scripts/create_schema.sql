@@ -26,7 +26,7 @@ CREATE TABLE slot (
 
 -- Types for Transactions
 
-Create TYPE "TransactionError" AS ENUM (
+Create TYPE "TransactionErrorCode" AS ENUM (
     'AccountInUse',
     'AccountLoadedTwice',
     'AccountNotFound',
@@ -50,8 +50,8 @@ Create TYPE "TransactionError" AS ENUM (
     'InvalidWritableAccount'
 );
 
-CREATE TYPE "TransactionStatus" AS (
-    error "TransactionError",
+CREATE TYPE "TransactionError" AS (
+    error_code "TransactionErrorCode",
     error_detail VARCHAR(256)
 );
 
@@ -89,7 +89,7 @@ CREATE TYPE "Reward" AS (
 );
 
 CREATE TYPE "TransactionStatusMeta" AS (
-    status "TransactionStatus",
+    error "TransactionError",
     fee BIGINT,
     pre_balances BIGINT[],
     post_balances BIGINT[],
