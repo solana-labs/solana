@@ -518,7 +518,7 @@ pub fn start_verify_transactions(
                     });
 
                 if !res {
-                    return Err(TransactionError::SignatureFailure);
+                    return Err(TransactionError::SanitizeFailure);
                 }
             }
 
