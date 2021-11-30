@@ -490,6 +490,11 @@ pub fn start_verify_transactions(
                 num_transactions,
                 "entry-sig-verify",
             );
+            // We use set_len here instead of resize(num_transactions, Packet::default()), to save
+            // memory bandwidth and avoid writing a large amount of data that will be overwritten
+            // immediately afterwards. As well, Packet::default() actually leaves the packet data
+            // uninitialized anyway, so the initilization would simply write junk into
+            // the vector anyway.
             unsafe {
                 packets.packets.set_len(num_transactions);
             }
