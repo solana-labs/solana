@@ -280,8 +280,7 @@ impl<'a> EntrySigVerificationState {
                 self.gpu_verify_duration_us = gpu_time_us;
                 self.verification_status = if verified {
                     EntryVerificationStatus::Success
-                }
-                else {
+                } else {
                     EntryVerificationStatus::Failure
                 };
                 verified
@@ -940,8 +939,19 @@ mod tests {
         };
 
         let cpu_verify_result = verify_transactions(entries.clone(), Arc::new(verify_func));
-        let mut gpu_verify_result =
-            start_verify_transactions(entries, skip_verification, verify_recyclers, verify);
+        let mut gpu_verify_result: EntrySigVerificationState = {
+            let verify_result =
+                start_verify_transactions(entries, skip_verification, verify_recyclers, verify);
+            match verify_result {
+                Ok(res) => res,
+                _ => EntrySigVerificationState {
+                    verification_status: EntryVerificationStatus::Failure,
+                    entries: None,
+                    device_verification_data: DeviceSigVerificationData::Cpu(),
+                    gpu_verify_duration_us: 0,
+                },
+            }
+        };
 
         match cpu_verify_result {
             Ok(_) => {
