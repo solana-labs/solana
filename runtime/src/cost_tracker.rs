@@ -112,6 +112,7 @@ impl CostTracker {
             ),
             ("costliest_account", costliest_account.to_string(), String),
             ("costliest_account_cost", costliest_account_cost as i64, i64),
+            ("account_data_size", self.account_data_size, i64),
         );
     }
 
