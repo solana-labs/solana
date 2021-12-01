@@ -127,6 +127,13 @@ pub enum TransactionError {
     WouldExceedMaxAccountCostLimit,
 }
 
+#[derive(PartialEq, Clone, Copy, Debug)]
+pub enum TransactionVerificationMode {
+    HashOnly,
+    HashAndVerifyPrecompiles,
+    FullVerification,
+}
+
 pub type Result<T> = result::Result<T, TransactionError>;
 
 impl From<SanitizeError> for TransactionError {
@@ -402,6 +409,10 @@ impl Transaction {
         } else {
             Ok(())
         }
+    }
+
+    pub fn get_invalid_signature() -> Signature {
+        Signature::default()
     }
 
     /// Verify the length of signatures matches the value in the message header

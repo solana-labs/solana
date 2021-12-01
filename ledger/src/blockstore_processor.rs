@@ -33,6 +33,7 @@ use solana_runtime::{
     vote_account::VoteAccount,
     vote_sender_types::ReplayVoteSender,
 };
+use solana_sdk::timing;
 use solana_sdk::{
     clock::{Slot, MAX_PROCESSING_AGE},
     feature_set,
@@ -40,8 +41,10 @@ use solana_sdk::{
     hash::Hash,
     pubkey::Pubkey,
     signature::{Keypair, Signature},
-    timing,
-    transaction::{Result, SanitizedTransaction, TransactionError, VersionedTransaction},
+    transaction::{
+        Result, SanitizedTransaction, TransactionError, TransactionVerificationMode,
+        VersionedTransaction,
+    },
 };
 use solana_transaction_status::token_balances::{
     collect_token_balances, TransactionTokenBalancesSet,
@@ -301,7 +304,7 @@ pub fn process_entries_for_tests(
     let verify_transaction = {
         let bank = bank.clone();
         move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
-            bank.verify_transaction(versioned_tx, false)
+            bank.verify_transaction(versioned_tx, TransactionVerificationMode::FullVerification)
         }
     };
 
@@ -919,54 +922,86 @@ pub fn confirm_slot(
 
     let verify_transaction = {
         let bank = bank.clone();
-        move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
-            bank.verify_transaction(versioned_tx, skip_verification)
+        move |versioned_tx: VersionedTransaction,
+              verification_mode: TransactionVerificationMode|
+              -> Result<SanitizedTransaction> {
+            bank.verify_transaction(versioned_tx, verification_mode)
         }
     };
+
     let check_start = Instant::now();
-    let mut entries = entry::verify_transactions(entries, Arc::new(verify_transaction))?;
-    let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
+    let check_result = entry::start_verify_transactions(
+        entries,
+        skip_verification,
+        recyclers.clone(),
+        Arc::new(verify_transaction),
+    );
+    let transaction_cpu_duration_us = timing::duration_as_us(&check_start.elapsed());
 
-    let mut replay_elapsed = Measure::start("replay_elapsed");
-    let mut execute_timings = ExecuteTimings::default();
-    let cost_capacity_meter = Arc::new(RwLock::new(BlockCostCapacityMeter::default()));
-    // Note: This will shuffle entries' transactions in-place.
-    let process_result = process_entries_with_callback(
-        bank,
-        &mut entries,
-        true, // shuffle transactions.
-        entry_callback,
-        transaction_status_sender,
-        replay_vote_sender,
-        &mut execute_timings,
-        cost_capacity_meter,
-    )
-    .map_err(BlockstoreProcessorError::from);
-    replay_elapsed.stop();
-    timing.replay_elapsed += replay_elapsed.as_us();
+    match check_result {
+        Ok(mut check_result) => {
+            let entries = check_result.entries();
+            assert!(entries.is_some());
 
-    timing.execute_timings.accumulate(&execute_timings);
+            let mut replay_elapsed = Measure::start("replay_elapsed");
+            let mut execute_timings = ExecuteTimings::default();
+            let cost_capacity_meter = Arc::new(RwLock::new(BlockCostCapacityMeter::default()));
+            // Note: This will shuffle entries' transactions in-place.
+            let process_result = process_entries_with_callback(
+                bank,
+                &mut entries.unwrap(),
+                true, // shuffle transactions.
+                entry_callback,
+                transaction_status_sender,
+                replay_vote_sender,
+                &mut execute_timings,
+                cost_capacity_meter,
+            )
+            .map_err(BlockstoreProcessorError::from);
+            replay_elapsed.stop();
+            timing.replay_elapsed += replay_elapsed.as_us();
 
-    if let Some(mut verifier) = verifier {
-        let verified = verifier.finish_verify();
-        timing.poh_verify_elapsed += verifier.poh_duration_us();
-        timing.transaction_verify_elapsed += transaction_duration_us;
-        if !verified {
+            timing.execute_timings.accumulate(&execute_timings);
+
+            // If running signature verification on the GPU, wait for that
+            // computation to finish, and get the result of it. If we did the
+            // signature verification on the CPU, this just returns the
+            // already-computed result produced in start_verify_transactions.
+            // Either way, check the result of the signature verification.
+            if !check_result.finish_verify() {
+                warn!("Ledger proof of history failed at slot: {}", bank.slot());
+                return Err(TransactionError::SignatureFailure.into());
+            }
+
+            if let Some(mut verifier) = verifier {
+                let verified = verifier.finish_verify();
+                timing.poh_verify_elapsed += verifier.poh_duration_us();
+                // The GPU Entry verification (if any) is kicked off right when the CPU-side
+                // Entry verification finishes, so these times should be disjoint
+                timing.transaction_verify_elapsed +=
+                    transaction_cpu_duration_us + check_result.gpu_verify_duration();
+                if !verified {
+                    warn!("Ledger proof of history failed at slot: {}", bank.slot());
+                    return Err(BlockError::InvalidEntryHash.into());
+                }
+            }
+
+            process_result?;
+
+            progress.num_shreds += num_shreds;
+            progress.num_entries += num_entries;
+            progress.num_txs += num_txs;
+            if let Some(last_entry_hash) = last_entry_hash {
+                progress.last_entry = last_entry_hash;
+            }
+
+            Ok(())
+        }
+        Err(err) => {
             warn!("Ledger proof of history failed at slot: {}", bank.slot());
-            return Err(BlockError::InvalidEntryHash.into());
+            Err(err.into())
         }
     }
-
-    process_result?;
-
-    progress.num_shreds += num_shreds;
-    progress.num_entries += num_entries;
-    progress.num_txs += num_txs;
-    if let Some(last_entry_hash) = last_entry_hash {
-        progress.last_entry = last_entry_hash;
-    }
-
-    Ok(())
 }
 
 // Special handling required for processing the entries in slot 0

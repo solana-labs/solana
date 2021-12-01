@@ -4774,6 +4774,7 @@ dependencies = [
 name = "solana-entry"
 version = "1.9.0"
 dependencies = [
+ "bincode",
  "dlopen",
  "dlopen_derive",
  "log 0.4.14",
