@@ -67,7 +67,7 @@ pub type GossipVerifiedVoteHashReceiver = CrossbeamReceiver<(Pubkey, Slot, Hash)
 pub type GossipDuplicateConfirmedSlotsSender = CrossbeamSender<ThresholdConfirmedSlots>;
 pub type GossipDuplicateConfirmedSlotsReceiver = CrossbeamReceiver<ThresholdConfirmedSlots>;
 
-const NEW_OPTIMISTIC_CONF_THRESHOLD: f64 = 0.80;
+const NEW_OPTIMISTIC_CONF_THRESHOLD: f64 = 0.70;
 const THRESHOLDS_TO_CHECK: [f64; 3] = [
     DUPLICATE_THRESHOLD,
     VOTE_THRESHOLD_SIZE,
