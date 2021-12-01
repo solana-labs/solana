@@ -1,12 +1,16 @@
 use crate::cluster_info_vote_listener::{OptimisticConfirmedSlots, VoteTracker};
 use solana_ledger::blockstore::Blockstore;
 use solana_runtime::bank::Bank;
-use solana_sdk::{clock::Slot, hash::Hash};
-use std::{collections::BTreeSet, time::Instant};
+use solana_sdk::{
+    clock::Slot,
+    hash::Hash,
+    timing::{duration_as_us, timestamp},
+};
+use std::{collections::BTreeMap, time::Instant};
 
 pub struct OptimisticConfirmationVerifier {
     snapshot_start_slot: Slot,
-    unchecked_slots: BTreeSet<(Slot, Hash)>,
+    unchecked_slots: BTreeMap<(Slot, Hash), Instant>,
     last_optimistic_slot_ts: Instant,
     last_higher_optimistic_slot_ts: Instant,
 }
@@ -15,7 +19,7 @@ impl OptimisticConfirmationVerifier {
     pub fn new(snapshot_start_slot: Slot) -> Self {
         Self {
             snapshot_start_slot,
-            unchecked_slots: BTreeSet::default(),
+            unchecked_slots: BTreeMap::default(),
             last_optimistic_slot_ts: Instant::now(),
             last_higher_optimistic_slot_ts: Instant::now(),
         }
@@ -36,9 +40,9 @@ impl OptimisticConfirmationVerifier {
         std::mem::swap(&mut slots_before_root, &mut self.unchecked_slots);
         slots_before_root
             .into_iter()
-            .filter(|(optimistic_slot, optimistic_hash)| {
-                (*optimistic_slot == root && *optimistic_hash != root_bank.hash())
-                    || (!root_ancestors.contains_key(optimistic_slot) &&
+            .filter_map(|((optimistic_slot, optimistic_hash), _time)| {
+                if (optimistic_slot == root && optimistic_hash != root_bank.hash())
+                    || (!root_ancestors.contains_key(&optimistic_slot) &&
                     // In this second part of the `and`, we account for the possibility that
                     // there was some other root `rootX` set in BankForks where:
                     //
@@ -47,7 +51,12 @@ impl OptimisticConfirmationVerifier {
                     // in which case `root` may  not contain the ancestor information for
                     // slots < `rootX`, so we also have to check if `optimistic_slot` was rooted
                     // through blockstore.
-                    !blockstore.is_root(*optimistic_slot))
+                    !blockstore.is_root(optimistic_slot))
+                {
+                    Some((optimistic_slot, optimistic_hash))
+                } else {
+                    None
+                }
             })
             .collect()
     }
@@ -70,7 +79,8 @@ impl OptimisticConfirmationVerifier {
         for (new_optimistic_slot, hash) in new_optimistic_slots.confirmed_slots {
             if new_optimistic_slot > self.snapshot_start_slot {
                 datapoint_info!("optimistic_slot", ("slot", new_optimistic_slot, i64),);
-                self.unchecked_slots.insert((new_optimistic_slot, hash));
+                self.unchecked_slots
+                    .insert((new_optimistic_slot, hash), Instant::now());
                 new_optimistic_slot_found = true;
             }
 
@@ -88,7 +98,7 @@ impl OptimisticConfirmationVerifier {
         }
 
         let mut new_higher_optimistic_slot_found = false;
-        for (new_higher_optimistic_slot, _hash) in
+        for (new_higher_optimistic_slot, hash) in
             new_optimistic_slots.higher_threshold_confirmed_slots
         {
             if new_higher_optimistic_slot > self.snapshot_start_slot {
@@ -97,6 +107,15 @@ impl OptimisticConfirmationVerifier {
                     ("slot", new_higher_optimistic_slot, i64),
                 );
                 new_higher_optimistic_slot_found = true;
+                let old_timestamp = self
+                    .unchecked_slots
+                    .get(&(new_higher_optimistic_slot, hash))
+                    .unwrap();
+                let delay = old_timestamp.elapsed().as_millis();
+                datapoint_info!(
+                    "optimistic_slot_higher_threshold_delay",
+                    ("delay", delay, i64),
+                );
             }
 
             if new_higher_optimistic_slot_found {
