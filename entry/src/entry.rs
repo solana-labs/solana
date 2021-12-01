@@ -486,47 +486,50 @@ pub fn start_verify_transactions(
                 });
             }
             let entry_txs: Vec<&SanitizedTransaction> = entries
-            .iter()
-            .filter_map(|entry_type| match entry_type {
-                EntryType::Tick(_) => None,
-                EntryType::Transactions(transactions) => Some(transactions),
-            })
-            .flatten()
-            .collect::<Vec<_>>();
-            let mut packets_vec = entry_txs.par_iter().chunks(PACKETS_PER_BATCH).map(|slice| {
-                let vec_size = slice.len();
-                let mut packets = Packets::new_with_recycler(
-                    verify_recyclers.packet_recycler.clone(),
-                    vec_size,
-                    "entry-sig-verify",
-                );
-                // We use set_len here instead of resize(num_transactions, Packet::default()), to save
-                // memory bandwidth and avoid writing a large amount of data that will be overwritten
-                // soon afterwards. As well, Packet::default() actually leaves the packet data
-                // uninitialized anyway, so the initilization would simply write junk into
-                // the vector anyway.
-                unsafe {
-                    packets.packets.set_len(vec_size);
-                }
-                let entry_tx_iter = slice
-                .into_par_iter()
-                .map(|tx| tx.to_versioned_transaction());
+                .iter()
+                .filter_map(|entry_type| match entry_type {
+                    EntryType::Tick(_) => None,
+                    EntryType::Transactions(transactions) => Some(transactions),
+                })
+                .flatten()
+                .collect::<Vec<_>>();
+            let mut packets_vec = entry_txs
+                .par_iter()
+                .chunks(PACKETS_PER_BATCH)
+                .map(|slice| {
+                    let vec_size = slice.len();
+                    let mut packets = Packets::new_with_recycler(
+                        verify_recyclers.packet_recycler.clone(),
+                        vec_size,
+                        "entry-sig-verify",
+                    );
+                    // We use set_len here instead of resize(num_transactions, Packet::default()), to save
+                    // memory bandwidth and avoid writing a large amount of data that will be overwritten
+                    // soon afterwards. As well, Packet::default() actually leaves the packet data
+                    // uninitialized anyway, so the initilization would simply write junk into
+                    // the vector anyway.
+                    unsafe {
+                        packets.packets.set_len(vec_size);
+                    }
+                    let entry_tx_iter = slice
+                        .into_par_iter()
+                        .map(|tx| tx.to_versioned_transaction());
 
-                let res = packets
-                .packets
-                .par_iter_mut()
-                .zip(entry_tx_iter)
-                .all(|pair| {
-                    pair.0.meta = Meta::default();
-                    Packet::populate_packet(pair.0, None, &pair.1).is_ok()
-                });
-                if res {
-                    Ok(packets)
-                }
-                else {
-                    Err(TransactionError::SanitizeFailure)
-                }
-            }).collect::<Result<Vec<_>>>()?;
+                    let res = packets
+                        .packets
+                        .par_iter_mut()
+                        .zip(entry_tx_iter)
+                        .all(|pair| {
+                            pair.0.meta = Meta::default();
+                            Packet::populate_packet(pair.0, None, &pair.1).is_ok()
+                        });
+                    if res {
+                        Ok(packets)
+                    } else {
+                        Err(TransactionError::SanitizeFailure)
+                    }
+                })
+                .collect::<Result<Vec<_>>>()?;
 
             let tx_offset_recycler = verify_recyclers.tx_offset_recycler;
             let out_recycler = verify_recyclers.out_recycler;
