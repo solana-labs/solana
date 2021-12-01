@@ -2,7 +2,6 @@ use crate::{alloc, BpfError};
 use alloc::Alloc;
 use solana_program_runtime::{
     ic_logger_msg, ic_msg,
-    instruction_processor::InstructionProcessor,
     invoke_context::{ComputeMeter, InvokeContext},
     log_collector::LogCollector,
     stable_log,
@@ -2157,9 +2156,9 @@ fn call<'a>(
         signers_seeds_len,
         memory_mapping,
     )?;
-    let (message, caller_write_privileges, program_indices) =
-        InstructionProcessor::create_message(&instruction, &signers, &invoke_context)
-            .map_err(SyscallError::InstructionError)?;
+    let (message, caller_write_privileges, program_indices) = invoke_context
+        .create_message(&instruction, &signers)
+        .map_err(SyscallError::InstructionError)?;
     check_authorized_program(&instruction.program_id, &instruction.data, *invoke_context)?;
     let (account_indices, mut accounts) = syscall.translate_accounts(
         &message,
@@ -2173,14 +2172,14 @@ fn call<'a>(
     invoke_context.record_instruction(&instruction);
 
     // Process instruction
-    InstructionProcessor::process_cross_program_instruction(
-        &message,
-        &program_indices,
-        &account_indices,
-        &caller_write_privileges,
-        *invoke_context,
-    )
-    .map_err(SyscallError::InstructionError)?;
+    invoke_context
+        .process_cross_program_instruction(
+            &message,
+            &program_indices,
+            &account_indices,
+            &caller_write_privileges,
+        )
+        .map_err(SyscallError::InstructionError)?;
 
     // Copy results back to caller
     for (callee_account, caller_account) in accounts.iter_mut() {

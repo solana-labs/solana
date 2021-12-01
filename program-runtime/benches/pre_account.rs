@@ -3,7 +3,7 @@
 extern crate test;
 
 use log::*;
-use solana_program_runtime::instruction_processor::{ExecuteDetailsTimings, PreAccount};
+use solana_program_runtime::{pre_account::PreAccount, timings::ExecuteDetailsTimings};
 use solana_sdk::{account::AccountSharedData, pubkey, rent::Rent};
 use test::Bencher;
 
