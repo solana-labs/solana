@@ -3106,19 +3106,16 @@ mod tests {
             result
         );
 
-        let log_collector = syscall_sol_log
-            .invoke_context
-            .borrow()
-            .get_log_collector()
-            .unwrap();
-        drop(syscall_sol_log);
-        drop(invoke_context);
-        let log: Vec<String> = match Rc::try_unwrap(log_collector) {
-            Ok(log) => log.into_inner().into(),
-            Err(_) => panic!("Unwrap failed"),
-        };
-        assert_eq!(log.len(), 1);
-        assert_eq!(log[0], "Program log: Gaggablaghblagh!");
+        assert_eq!(
+            syscall_sol_log
+                .invoke_context
+                .borrow()
+                .get_log_collector()
+                .unwrap()
+                .borrow()
+                .get_recorded_content(),
+            &["Program log: Gaggablaghblagh!".to_string()]
+        );
     }
 
     #[test]
@@ -3151,19 +3148,16 @@ mod tests {
         syscall_sol_log_u64.call(1, 2, 3, 4, 5, &memory_mapping, &mut result);
         result.unwrap();
 
-        let log_collector = syscall_sol_log_u64
-            .invoke_context
-            .borrow()
-            .get_log_collector()
-            .unwrap();
-        drop(syscall_sol_log_u64);
-        drop(invoke_context);
-        let log: Vec<String> = match Rc::try_unwrap(log_collector) {
-            Ok(log) => log.into_inner().into(),
-            Err(_) => panic!("Unwrap failed"),
-        };
-        assert_eq!(log.len(), 1);
-        assert_eq!(log[0], "Program log: 0x1, 0x2, 0x3, 0x4, 0x5");
+        assert_eq!(
+            syscall_sol_log_u64
+                .invoke_context
+                .borrow()
+                .get_log_collector()
+                .unwrap()
+                .borrow()
+                .get_recorded_content(),
+            &["Program log: 0x1, 0x2, 0x3, 0x4, 0x5".to_string()]
+        );
     }
 
     #[test]
@@ -3239,21 +3233,15 @@ mod tests {
         syscall_sol_pubkey.call(0x100000000, 0, 0, 0, 0, &memory_mapping, &mut result);
         result.unwrap();
 
-        let log_collector = syscall_sol_pubkey
-            .invoke_context
-            .borrow()
-            .get_log_collector()
-            .unwrap();
-        drop(syscall_sol_pubkey);
-        drop(invoke_context);
-        let log: Vec<String> = match Rc::try_unwrap(log_collector) {
-            Ok(log) => log.into_inner().into(),
-            Err(_) => panic!("Unwrap failed"),
-        };
-        assert_eq!(log.len(), 1);
         assert_eq!(
-            log[0],
-            "Program log: MoqiU1vryuCGQSxFKA1SZ316JdLEFFhoAu6cKUNk7dN"
+            syscall_sol_pubkey
+                .invoke_context
+                .borrow()
+                .get_log_collector()
+                .unwrap()
+                .borrow()
+                .get_recorded_content(),
+            &["Program log: MoqiU1vryuCGQSxFKA1SZ316JdLEFFhoAu6cKUNk7dN".to_string()]
         );
     }
 
