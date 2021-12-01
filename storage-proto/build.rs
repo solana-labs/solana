@@ -14,11 +14,11 @@ fn main() -> Result<(), std::io::Error> {
         .format(true)
         .type_attribute(
             "TransactionErrorType",
-            "#[derive(enum_iterator::IntoEnumIterator)]",
+            "#[cfg_attr(test, derive(enum_iterator::IntoEnumIterator))]",
         )
         .type_attribute(
             "InstructionErrorType",
-            "#[derive(enum_iterator::IntoEnumIterator)]",
+            "#[cfg_attr(test, derive(enum_iterator::IntoEnumIterator))]",
         )
         .compile(&protos, &[proto_base_path])
 }
