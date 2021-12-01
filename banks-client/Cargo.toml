@@ -7,7 +7,7 @@ repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-banks-client"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 borsh = "0.9.1"

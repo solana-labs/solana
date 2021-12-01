@@ -6,7 +6,7 @@ authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/rbpf"
 homepage = "https://solana.com/"
 keywords = ["BPF", "eBPF", "interpreter", "JIT"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 clap = "3.0.0-beta.2"
