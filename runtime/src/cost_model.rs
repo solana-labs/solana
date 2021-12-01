@@ -10,7 +10,10 @@ use {
         execute_cost_table::ExecuteCostTable,
     },
     log::*,
-    solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
+    solana_sdk::{
+        instruction::CompiledInstruction, program_utils::limited_deserialize, pubkey::Pubkey,
+        system_instruction::SystemInstruction, system_program, transaction::SanitizedTransaction,
+    },
     std::collections::HashMap,
 };
 
@@ -208,18 +211,26 @@ impl CostModel {
         instruction: SystemInstruction,
     ) -> u64 {
         match instruction {
-            SystemInstruction::CreateAccount { space, .. }
-            | SystemInstruction::CreateAccountWithSeed { space, .. }
-            | SystemInstruction::Allocate { space }
-            | SystemInstruction::AllocateWithSeed { space, .. } => space,
-            SystemInstruction::Assign { .. }
-            | SystemInstruction::InitializeNonceAccount(_)
-            | SystemInstruction::WithdrawNonceAccount(_)
-            | SystemInstruction::AuthorizeNonceAccount(_)
-            | SystemInstruction::AssignWithSeed { .. }
-            | SystemInstruction::TransferWithSeed { .. }
-            | SystemInstruction::Transfer { .. }
-            | SystemInstruction::AdvanceNonceAccount => 0,
+            SystemInstruction::CreateAccount {
+                lamports: _lamports,
+                space,
+                owner: _owner,
+            } => space,
+            SystemInstruction::CreateAccountWithSeed {
+                base: _base,
+                seed: _seed,
+                lamports: _lamports,
+                space,
+                owner: _owner,
+            } => space,
+            SystemInstruction::Allocate { space } => space,
+            SystemInstruction::AllocateWithSeed {
+                base: _base,
+                seed: _seed,
+                space,
+                owner: _owner,
+            } => space,
+            _ => 0,
         }
     }
 
