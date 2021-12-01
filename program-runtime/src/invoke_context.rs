@@ -199,7 +199,7 @@ impl<'a> ThisInvokeContext<'a> {
             accounts,
             builtin_programs,
             sysvars,
-            None,
+            Some(LogCollector::new_ref()),
             ComputeBudget::default(),
             ComputeMeter::new_ref(std::i64::MAX as u64),
             Rc::new(RefCell::new(Executors::default())),
