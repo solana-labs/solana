@@ -4402,9 +4402,12 @@ dependencies = [
  "curve25519-dalek 3.0.0",
  "libsecp256k1",
  "log 0.4.14",
+<<<<<<< HEAD
  "num-derive",
  "num-traits",
  "openssl",
+=======
+>>>>>>> 0212a71d3 (Remove unused bpfloader openssl dependency)
  "rand 0.7.3",
  "rand_core 0.6.2",
  "rustversion",
