@@ -3043,6 +3043,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "postgres-derive"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c857dd221cb0e7d8414b894a0ce29eae44d453dda0baa132447878e75e701477"
+dependencies = [
+ "proc-macro2 1.0.32",
+ "quote 1.0.10",
+ "syn 1.0.81",
+]
+
+[[package]]
 name = "postgres-protocol"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3069,6 +3080,7 @@ dependencies = [
  "bytes 1.1.0",
  "chrono",
  "fallible-iterator",
+ "postgres-derive",
  "postgres-protocol",
 ]
 
@@ -4310,14 +4322,18 @@ dependencies = [
  "crossbeam-channel",
  "log 0.4.14",
  "postgres",
+ "postgres-types",
  "serde",
  "serde_derive",
  "serde_json",
+ "solana-account-decoder",
  "solana-accountsdb-plugin-interface",
  "solana-logger 1.9.0",
  "solana-measure",
  "solana-metrics",
+ "solana-runtime",
  "solana-sdk",
+ "solana-transaction-status",
  "thiserror",
  "tokio-postgres",
 ]
