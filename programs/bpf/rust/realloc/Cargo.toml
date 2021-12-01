@@ -7,7 +7,7 @@ repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-bpf-rust-realloc"
-edition = "2018"
+edition = "2021"
 
 [features]
 default = ["program"]

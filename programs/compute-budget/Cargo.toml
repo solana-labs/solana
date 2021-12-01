@@ -7,7 +7,7 @@ documentation = "https://docs.rs/solana-compute-budget-program"
 repository = "https://github.com/solana-labs/solana"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 license = "Apache-2.0"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 solana-program-runtime = { path = "../../program-runtime", version = "=1.9.0" }

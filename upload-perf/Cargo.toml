@@ -5,7 +5,7 @@ description = "Metrics Upload Utility"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
-edition = "2018"
+edition = "2021"
 homepage = "https://solana.com/"
 publish = false
 

@@ -1,6 +1,6 @@
 [package]
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-edition = "2018"
+edition = "2021"
 name = "solana-remote-wallet"
 description = "Blockchain, Rebuilt for Scale"
 version = "1.9.0"

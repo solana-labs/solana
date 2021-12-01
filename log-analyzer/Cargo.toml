@@ -1,6 +1,6 @@
 [package]
 authors = ["Solana Maintainers <maintainers@solana.com>"]
-edition = "2018"
+edition = "2021"
 name = "solana-log-analyzer"
 description = "The solana cluster network analysis tool"
 version = "1.9.0"
