@@ -203,12 +203,7 @@ fn bench_create_vm(bencher: &mut Bencher) {
     let loader_id = bpf_loader::id();
     with_mock_invoke_context(loader_id, 10000001, |invoke_context| {
         const BUDGET: u64 = 200_000;
-        let compute_meter = invoke_context.get_compute_meter();
-        {
-            let mut compute_meter = compute_meter.borrow_mut();
-            let to_consume = compute_meter.get_remaining() - BUDGET;
-            compute_meter.consume(to_consume).unwrap();
-        }
+        invoke_context.get_compute_meter().borrow_mut().mock_set_remaining(BUDGET);
 
         // Serialize account data
         let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
@@ -247,12 +242,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     let loader_id = bpf_loader::id();
     with_mock_invoke_context(loader_id, 10000001, |invoke_context| {
         const BUDGET: u64 = 200_000;
-        let compute_meter = invoke_context.get_compute_meter();
-        {
-            let mut compute_meter = compute_meter.borrow_mut();
-            let to_consume = compute_meter.get_remaining() - BUDGET;
-            compute_meter.consume(to_consume).unwrap();
-        }
+        invoke_context.get_compute_meter().borrow_mut().mock_set_remaining(BUDGET);
 
         // Serialize account data
         let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
@@ -271,6 +261,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
             register_syscalls(invoke_context).unwrap(),
         )
         .unwrap();
+        let compute_meter = invoke_context.get_compute_meter();
         let mut instruction_meter = ThisInstructionMeter { compute_meter };
         let mut vm = create_vm(
             &loader_id,

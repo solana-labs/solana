@@ -92,6 +92,12 @@ impl ComputeMeter {
     pub fn get_remaining(&self) -> u64 {
         self.remaining
     }
+    /// Set compute units
+    ///
+    /// Only use for tests and benchmarks
+    pub fn mock_set_remaining(&mut self, remaining: u64) {
+        self.remaining = remaining;
+    }
     /// Construct a new one with the given remaining units
     pub fn new_ref(remaining: u64) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self { remaining }))
