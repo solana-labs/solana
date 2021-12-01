@@ -12,7 +12,10 @@ use solana_bpf_loader_program::{
 };
 use solana_measure::measure::Measure;
 use solana_program_runtime::invoke_context::{with_mock_invoke_context, InvokeContext};
-use solana_rbpf::{elf::Executable, vm::{Config, InstructionMeter, SyscallRegistry}};
+use solana_rbpf::{
+    elf::Executable,
+    vm::{Config, InstructionMeter, SyscallRegistry},
+};
 use solana_runtime::{
     bank::Bank,
     bank_client::BankClient,
