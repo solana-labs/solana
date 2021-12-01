@@ -2003,7 +2003,7 @@ where
     let demote_program_write_locks =
         invoke_context.is_feature_active(&demote_program_write_locks::id());
     let keyed_accounts = invoke_context
-        .get_keyed_accounts()
+        .get_instruction_keyed_accounts()
         .map_err(SyscallError::InstructionError)?;
     let mut account_indices = Vec::with_capacity(message.account_keys.len());
     let mut accounts = Vec::with_capacity(message.account_keys.len());
