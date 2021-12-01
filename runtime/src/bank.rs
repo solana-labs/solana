@@ -3877,16 +3877,8 @@ impl Bank {
 
                         let compute_meter = ComputeMeter::new_ref(compute_budget.max_units);
 
-                        let (blockhash, lamports_per_signature) = {
-                            let blockhash_queue = self.blockhash_queue.read().unwrap();
-                            let blockhash = blockhash_queue.last_hash();
-                            (
-                                blockhash,
-                                blockhash_queue
-                                    .get_lamports_per_signature(&blockhash)
-                                    .unwrap_or(self.fee_rate_governor.lamports_per_signature),
-                            )
-                        };
+                        let (blockhash, lamports_per_signature) =
+                            self.last_blockhash_and_lamports_per_signature();
 
                         if let Some(legacy_message) = tx.message().legacy_message() {
                             process_result = MessageProcessor::process_message(
