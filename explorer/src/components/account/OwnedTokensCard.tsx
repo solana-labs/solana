@@ -196,7 +196,7 @@ function HoldingsSummaryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
           </td>
         )}
         <td>
-          <Address pubkey={new PublicKey(mintAddress)} link />
+          <Address pubkey={new PublicKey(mintAddress)} link useMetadata />
         </td>
         <td>
           {totalByMint} {tokenDetails && tokenDetails.symbol}
