@@ -895,7 +895,6 @@ pub mod tests {
             // assert_eq! thinks *executable_bool is equal to false but the if condition thinks it's not, contradictorily.
             assert!(!*executable_bool);
             const FALSE: bool = false; // keep clippy happy
-            #[allow(clippy::if_then_panic)]
             if *executable_bool == FALSE {
                 panic!("This didn't occur if this test passed.");
             }

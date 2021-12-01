@@ -1431,7 +1431,7 @@ pub fn process_ping(
             if print_timestamp {
                 format!("[{}.{:06}] ", micros / 1_000_000, micros % 1_000_000)
             } else {
-                format!("")
+                String::new()
             }
         };
 

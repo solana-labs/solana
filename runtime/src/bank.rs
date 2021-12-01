@@ -8151,7 +8151,7 @@ pub(crate) mod tests {
     #[should_panic(expected = "range start is greater than range end in BTreeMap")]
     fn test_rent_eager_bad_range() {
         let test_map = map_to_test_bad_range();
-        test_map.range(
+        let _ = test_map.range(
             Pubkey::new_from_array([
                 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -8183,7 +8183,7 @@ pub(crate) mod tests {
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff
                 ])
         );
-        test_map.range(range);
+        let _ = test_map.range(range);
 
         let range = Bank::pubkey_range_from_partition((1, 1, 3));
         assert_eq!(
@@ -8199,7 +8199,7 @@ pub(crate) mod tests {
                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00
                 ])
         );
-        test_map.range(range);
+        let _ = test_map.range(range);
 
         let range = Bank::pubkey_range_from_partition((2, 2, 3));
         assert_eq!(
@@ -8215,7 +8215,7 @@ pub(crate) mod tests {
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff
                 ])
         );
-        test_map.range(range);
+        let _ = test_map.range(range);
     }
 
     #[test]
@@ -8236,7 +8236,7 @@ pub(crate) mod tests {
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff
                 ])
         );
-        test_map.range(range);
+        let _ = test_map.range(range);
 
         let range = Bank::pubkey_range_from_partition((0, 1, 2));
         assert_eq!(
@@ -8252,7 +8252,7 @@ pub(crate) mod tests {
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff
                 ])
         );
-        test_map.range(range);
+        let _ = test_map.range(range);
     }
 
     #[test]
@@ -8274,7 +8274,7 @@ pub(crate) mod tests {
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff
                 ])
         );
-        test_map.range(range);
+        let _ = test_map.range(range);
 
         let range = Bank::pubkey_range_from_partition((0, 1, 3));
         assert_eq!(
@@ -8290,7 +8290,7 @@ pub(crate) mod tests {
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff
                 ])
         );
-        test_map.range(range);
+        let _ = test_map.range(range);
 
         let range = Bank::pubkey_range_from_partition((1, 2, 3));
         assert_eq!(
@@ -8306,7 +8306,7 @@ pub(crate) mod tests {
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff
                 ])
         );
-        test_map.range(range);
+        let _ = test_map.range(range);
     }
 
     #[test]
@@ -8328,7 +8328,7 @@ pub(crate) mod tests {
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff
                 ])
         );
-        test_map.range(range);
+        let _ = test_map.range(range);
     }
 
     impl Bank {
