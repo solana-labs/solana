@@ -487,20 +487,6 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         self.stats().count_in_bucket(self.bin)
     }
 
-    fn insert_returner(
-        existing: &AccountMapEntry<T>,
-        pubkey: &Pubkey,
-        new_entry: PreAllocatedAccountMapEntry<T>,
-    ) -> (AccountMapEntry<T>, T, Pubkey) {
-        let (_slot, info): (Slot, T) = new_entry.into();
-        (
-            Arc::clone(existing),
-            // extract the new account_info from the unused 'new_entry'
-            info,
-            *pubkey,
-        )
-    }
-
     pub fn insert_new_entry_if_missing_with_lock(
         &self,
         pubkey: Pubkey,
