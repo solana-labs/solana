@@ -5,6 +5,16 @@ title: Mobile App Wallets
 Solana is supported by multiple third-party apps which should provide a familiar
 experience for most people who are new or experienced with using crypto wallets.
 
+## Solflare
+
+[Solflare Wallet](https://solflare.com/), has mobile applications available for both 
+iOS and Android. These Mobile apps have support for sending Solana and SPL tokens, 
+staking, and NFT management in a fully-featured NFT gallery.
+
+Security is a top priority for Solflare - the mobile wallet is non-custodial, 
+meaning keys are managed by the user who retains total control of their own funds. 
+The app supports biometric protection alongside passwords for maximum security.
+
 ## Exodus
 
 Send, receive & exchange cryptocurrency with ease on the world's leading Desktop, Mobile and Hardware crypto wallets.
