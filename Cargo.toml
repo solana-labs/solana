@@ -87,6 +87,3 @@ exclude = [
 # dependency is supported on Apple M1. v2 of the feature resolver is needed to
 # specify arch-specific features.
 resolver = "2"
-
-[profile.dev]
-split-debuginfo = "unpacked"
