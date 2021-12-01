@@ -2174,7 +2174,7 @@ impl Bank {
             .fetch_add(validator_rewards_paid, Relaxed);
 
         let active_stake = if let Some(stake_history_entry) =
-            self.stakes.read().unwrap().history().get(&prev_epoch)
+            self.stakes.read().unwrap().history().get(prev_epoch)
         {
             stake_history_entry.effective
         } else {
@@ -2274,7 +2274,7 @@ impl Bank {
             .fetch_add(validator_rewards_paid, Relaxed);
 
         let active_stake = if let Some(stake_history_entry) =
-            self.stakes.read().unwrap().history().get(&prev_epoch)
+            self.stakes.read().unwrap().history().get(prev_epoch)
         {
             stake_history_entry.effective
         } else {

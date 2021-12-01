@@ -404,7 +404,7 @@ impl Delegation {
         } else if let Some((history, mut prev_epoch, mut prev_cluster_stake)) =
             history.and_then(|history| {
                 history
-                    .get(&self.deactivation_epoch)
+                    .get(self.deactivation_epoch)
                     .map(|cluster_stake_at_deactivation_epoch| {
                         (
                             history,
@@ -448,7 +448,7 @@ impl Delegation {
                 if current_epoch >= target_epoch {
                     break;
                 }
-                if let Some(current_cluster_stake) = history.get(&current_epoch) {
+                if let Some(current_cluster_stake) = history.get(current_epoch) {
                     prev_epoch = current_epoch;
                     prev_cluster_stake = current_cluster_stake;
                 } else {
@@ -488,7 +488,7 @@ impl Delegation {
         } else if let Some((history, mut prev_epoch, mut prev_cluster_stake)) =
             history.and_then(|history| {
                 history
-                    .get(&self.activation_epoch)
+                    .get(self.activation_epoch)
                     .map(|cluster_stake_at_activation_epoch| {
                         (
                             history,
@@ -533,7 +533,7 @@ impl Delegation {
                 if current_epoch >= target_epoch || current_epoch >= self.deactivation_epoch {
                     break;
                 }
-                if let Some(current_cluster_stake) = history.get(&current_epoch) {
+                if let Some(current_cluster_stake) = history.get(current_epoch) {
                     prev_epoch = current_epoch;
                     prev_cluster_stake = current_cluster_stake;
                 } else {
