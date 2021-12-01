@@ -2,6 +2,19 @@
 title: Web Wallets
 ---
 
+## BitKeep
+
+[BitKeep](https://bitkeep.com) is an digital currency wallet and can send and receive SOL/SPL tokens.
+BitKeep also support Solana DApps with BitKeep Browser and BitKeep Chrome.
+
+## MathWallet
+
+[MathWallet](https://mathwallet.org/) supports wallet
+addresses for sending and receiving SOL and SPL Tokens through its
+browser extension and web wallet interface.
+
+Note: The MathWallet iOS and Android app do not yet support SOL and SPL Tokens_
+
 ## Phantom
 
 [Phantom](https://phantom.app/) is a friendly non-custodial, browser
@@ -37,15 +50,3 @@ Check out our [guide for using SolFlare](solflare.md).
 [sollet.io](https://www.sollet.io/) is a non-custodial web wallet created by the
 [Project Serum](https://projectserum.com/) team. sollet.io can be used to send
 and receive SOL and any SPL Token.
-
-## MathWallet
-
-[MathWallet](https://mathwallet.org/) supports wallet
-addresses for sending and receiving SOL and SPL Tokens through its
-browser extension and web wallet interface.
-
-_Note: The MathWallet iOS and Android app do not yet support SOL and SPL Tokens_
-
-## BitKeep
-[BitKeep](https://bitkeep.com) is an digital currency wallet and can send and receive SOL/SPL tokens.
-BitKeep also support Solana DApps with BitKeep Browser and BitKeep Chrome.
