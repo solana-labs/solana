@@ -218,7 +218,7 @@ pub enum SystemInstruction {
     /// account balance above the rent exempt reserve or at zero.
     WithdrawNonceAccount(u64),
 
-    /// Drive state of Uninitalized nonce account to Initialized, setting the nonce value
+    /// Drive state of Uninitialized nonce account to Initialized, setting the nonce value
     ///
     /// # Account references
     ///   0. `[WRITE]` Nonce account
