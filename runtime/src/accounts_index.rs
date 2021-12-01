@@ -97,9 +97,7 @@ impl ScanConfig {
 
 pub(crate) type AccountMapEntry<T> = Arc<AccountMapEntryInner<T>>;
 
-pub trait IsCached:
-    'static + Clone + Debug + PartialEq + ZeroLamport + Copy + Default + Sync + Send
-{
+pub trait IsCached {
     fn is_cached(&self) -> bool;
 }
 
