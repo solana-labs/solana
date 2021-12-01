@@ -15,11 +15,11 @@ use solana_sdk::{
     hash::Hash,
     instruction::{AccountMeta, Instruction, InstructionError},
     keyed_account::{from_keyed_account, get_signers, keyed_account_at_index, KeyedAccount},
-    process_instruction::{get_sysvar, InvokeContext},
+    process_instruction::InvokeContext,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     system_instruction,
-    sysvar::{self, clock::Clock, slot_hashes::SlotHashes, slot_history::SlotHistory},
+    sysvar::{self, clock::Clock, slot_hashes::SlotHashes},
 };
 use std::collections::HashSet;
 use thiserror::Error;
@@ -360,16 +360,9 @@ pub fn process_instruction(
                 &from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 2)?)?,
                 &vote,
                 &signers,
-                // xxx bji -- this seems to be necessary to get the slot number of the slot in which
-                // this vote transaction appears.
-//                if invoke_context.is_feature_active(&feature_set::vote_credits_timeliness::id()) {
-//                    get_sysvar::<SlotHistory>(invoke_context, &sysvar::slot_history::id())?.next_slot
-//                }
-//                else {
-//                    0
-//                },
                 // xxx bji -- testing, bypass feature check
-                get_sysvar::<SlotHistory>(invoke_context, &sysvar::slot_history::id())?.next_slot,
+                //invoke_context.is_feature_active(&feature_set::vote_credits_timeliness::id()),
+                true,
             )
         }
         VoteInstruction::Withdraw(lamports) => {

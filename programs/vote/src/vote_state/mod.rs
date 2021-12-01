@@ -8,7 +8,7 @@ use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::State,
-    clock::{Epoch, Slot, UnixTimestamp, NUM_CONSECUTIVE_LEADER_SLOTS},
+    clock::{Epoch, Slot, UnixTimestamp},
     epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
     hash::Hash,
     instruction::InstructionError,
@@ -38,9 +38,6 @@ const DEFAULT_PRIOR_VOTERS_OFFSET: usize = 82;
 
 // Number of leader slots over which to linearly reduce the value of votes
 const VOTE_CREDITS_REDUCTION_DISTANCE: u32 = 64;
-
-// Maximum number of credits to award for any vote
-const MAX_VOTE_CREDITS_PER_VOTE: u32  = VOTE_CREDITS_REDUCTION_DISTANCE / (NUM_CONSECUTIVE_LEADER_SLOTS as u32);
 
 #[frozen_abi(digest = "Ch2vVEwos2EjAVqSHCyJjnN2MNX1yrpapZTGhMSCjWUH")]
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
@@ -356,20 +353,12 @@ impl VoteState {
         vote: &Vote,
         slot_hashes: &[SlotHash],
         epoch: Epoch,
-        voted_in_slot: Slot,
+        voted_in_slot: Option<Slot>,
     ) -> Result<(), VoteError> {
         if vote.slots.is_empty() {
             return Err(VoteError::EmptySlots);
         }
         self.check_slots_are_valid(vote, slot_hashes)?;
-
-        // The following doesn't seem to produce the most voted-in slot consistently
-//        let voted_in_slot = slot_hashes
-//            .first()
-//            .map(|(slot, _)| slot)
-//            .cloned()
-//            .unwrap_or_default()
-//            + 1;
 
         vote.slots
             .iter()
@@ -381,7 +370,7 @@ impl VoteState {
         &mut self,
         next_vote_slot: Slot,
         epoch: Epoch,
-        voted_in_slot: Slot,
+        voted_in_slot: Option<Slot>,
     ) {
         // Ignore votes for slots earlier than we already have votes for
         if self
@@ -400,41 +389,40 @@ impl VoteState {
             let vote = self.votes.pop_front().unwrap();
             self.root_slot = Some(vote.slot);
             
-            // Compute credits which should be awarded when this vote reaches Lockout  Credits to award are based on
-            // a schedule that makes votes worth more when they land closer to the slot being voted for.  This provides
-            // incentives for validators to vote as early as possible, to earn maximum credits for the vote.  In order
-            // to prevent leaders from deferring votes to their last possible slot in a group of slots (for the purpose
-            // of decreasing credits awarded to other validators' votes, thus increasing the value of their own), count
-            // all votes landing within the same group of leader slots as having the same credits score.
-            let credits = if voted_in_slot == 0 { 1 } else
-                {
-                    // Compute the voted_in_slot_group as the first leader slot of this leader slot group so that votes
-                    // landing in any slot for a given leader group are given the same credits
-                    let voted_in_slot_group = (voted_in_slot / NUM_CONSECUTIVE_LEADER_SLOTS) as u32;
-                    // Compute next_voted_for_group as the first leader slot of the leader group containing the voted
-                    // for slot
-                    let next_vote_slot_group = (next_vote_slot / NUM_CONSECUTIVE_LEADER_SLOTS) as u32;
-                    if voted_in_slot_group >= next_vote_slot_group {
-                        let group_distance = (voted_in_slot_group - next_vote_slot_group) as u32;
-                        if group_distance < MAX_VOTE_CREDITS_PER_VOTE {
-                            MAX_VOTE_CREDITS_PER_VOTE - group_distance
+            // Compute credits which should be awarded for this vote.  Votes earn credits when they are popped,
+            // and the number of credits they earn depends on the timeliness of the vote that pops them off.
+            // This gives incentive for validators to vote as soon as possible, so that their votes land in a slot
+            // as close to the slot being voted on as possible.
+            let credits =
+                if let Some(voted_in_slot) = voted_in_slot {
+                    if voted_in_slot > next_vote_slot {
+                        let distance = (voted_in_slot - next_vote_slot) as u32;
+                        if distance < VOTE_CREDITS_REDUCTION_DISTANCE {
+                            // Add 1 because the best vote credits is achieved 1 slot after the slot being voted for,
+                            // not in the slot being voted for itself
+                            (VOTE_CREDITS_REDUCTION_DISTANCE - distance) + 1
                         }
                         else {
-                            // The vote is beyond the maximum distance, so use credits of 1, since all accepted votes
-                            // earn at least 1 credit (otherwise there would be no incentive for casting old votes,
-                            // which would disincentivize voting on old slots that are not confirmed yet)
+                            // The vote is at or beyond the maximum distance, so use credits of 1, since all accepted
+                            // votes earn at least 1 credit (otherwise there would be no incentive for casting old
+                            // votes, which would disincentivize voting on old slots that are not confirmed yet)
                             1
                         }
                     }
                     else {
-                        // This is not possible -- how can a vote land before the slot it is voting for?  But just in
-                        // case some kind of bug allows this, use the minimum of 1 credit for this vote
+                        // This is not possible -- how can a vote land in or before the slot it is voting for?  But
+                        // just in case some kind of bug or exploit allows this, use the minimum of 1 credit for this
+                        // vote
                         1
                     }
+                }
+                else {
+                    // When the voted_in_slot is not provided, 1 credit is used
+                    1
                 };
 
             // xxx bji -- remove this, it's only for testing purposes
-            warn!("Vote by {} for slot {} in slot {} gets {} credits", self.node_pubkey, next_vote_slot,
+            warn!("Vote by {} for slot {} in slot {:?} gets {} credits", self.node_pubkey, next_vote_slot,
                   voted_in_slot, credits);
 
             // xxx bji - testing - use credits of 1 so as not to get out of sync with network
@@ -478,7 +466,7 @@ impl VoteState {
         let slot_hashes: Vec<_> = vote.slots.iter().rev().map(|x| (*x, vote.hash)).collect();
         // voted_in_slot doesn't matter here because the Tower only uses the VoteState instance to track votes
         // to cast, it doesn't care about how credits are calculated
-        let _ignored = self.process_vote(vote, &slot_hashes, self.current_epoch(), 0);
+        let _ignored = self.process_vote(vote, &slot_hashes, self.current_epoch(), None);
     }
     pub fn process_slot_vote_unchecked(&mut self, slot: Slot) {
         self.process_vote_unchecked(&Vote::new(vec![slot], Hash::default()));
@@ -795,7 +783,7 @@ pub fn process_vote<S: std::hash::BuildHasher>(
     clock: &Clock,
     vote: &Vote,
     signers: &HashSet<Pubkey, S>,
-    voted_in_slot: Slot,
+    vote_credits_timeliness_feature_enabled: bool
 ) -> Result<(), InstructionError> {
     let versioned = State::<VoteStateVersions>::state(vote_account)?;
 
@@ -807,7 +795,7 @@ pub fn process_vote<S: std::hash::BuildHasher>(
     let authorized_voter = vote_state.get_and_update_authorized_voter(clock.epoch)?;
     verify_authorized_signer(&authorized_voter, signers)?;
 
-    vote_state.process_vote(vote, slot_hashes, clock.epoch, voted_in_slot)?;
+    vote_state.process_vote(vote, slot_hashes, clock.epoch, if vote_credits_timeliness_feature_enabled { Some(clock.slot) } else { None })?;
     if let Some(timestamp) = vote.timestamp {
         vote.slots
             .iter()
