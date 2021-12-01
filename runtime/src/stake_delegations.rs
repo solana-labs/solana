@@ -12,7 +12,7 @@ use {
 };
 
 /// A map of pubkey-to-stake-delegation with clone-on-write semantics
-#[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize)]
+#[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize, AbiExample)]
 pub struct StakeDelegations(Arc<StakeDelegationsInner>);
 
 impl Deref for StakeDelegations {
