@@ -1,10 +1,20 @@
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::collections::HashSet;
+
+#[derive(Clone, Default)]
+pub struct ThresholdConfirmedBlock {
+    pub slot: Slot,
+    pub hash: Hash,
+    pub replay_stake: u64,
+    pub gossip_stake: u64,
+}
 
 #[derive(Default)]
 pub struct VoteStakeTracker {
     voted: HashSet<Pubkey>,
     stake: u64,
+    gossip_stake: u64,
+    replay_stake: u64,
 }
 
 impl VoteStakeTracker {
@@ -14,27 +24,45 @@ impl VoteStakeTracker {
     // `is_new` is true if the vote has not been seen before
     pub fn add_vote_pubkey(
         &mut self,
+        slot: Slot,
+        hash: Hash,
         vote_pubkey: Pubkey,
         stake: u64,
         total_stake: u64,
+        is_gossip: bool,
         thresholds_to_check: &[f64],
-    ) -> (Vec<bool>, bool) {
+    ) -> (Vec<Option<ThresholdConfirmedBlock>>, bool) {
         let is_new = !self.voted.contains(&vote_pubkey);
         if is_new {
             self.voted.insert(vote_pubkey);
             let old_stake = self.stake;
             let new_stake = self.stake + stake;
             self.stake = new_stake;
-            let reached_threshold_results: Vec<bool> = thresholds_to_check
-                .iter()
-                .map(|threshold| {
-                    let threshold_stake = (total_stake as f64 * threshold) as u64;
-                    old_stake <= threshold_stake && threshold_stake < new_stake
-                })
-                .collect();
+            if is_gossip {
+                self.gossip_stake += stake;
+            } else {
+                self.replay_stake += stake;
+            }
+            let reached_threshold_results: Vec<Option<ThresholdConfirmedBlock>> =
+                thresholds_to_check
+                    .iter()
+                    .map(|threshold| {
+                        let threshold_stake = (total_stake as f64 * threshold) as u64;
+                        if old_stake <= threshold_stake && threshold_stake < new_stake {
+                            Some(ThresholdConfirmedBlock {
+                                slot,
+                                hash,
+                                replay_stake: self.replay_stake,
+                                gossip_stake: self.gossip_stake,
+                            })
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
             (reached_threshold_results, is_new)
         } else {
-            (vec![false; thresholds_to_check.len()], is_new)
+            (vec![None; thresholds_to_check.len()], is_new)
         }
     }
 

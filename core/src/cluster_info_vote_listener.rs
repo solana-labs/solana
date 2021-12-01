@@ -6,7 +6,7 @@ use crate::{
     verified_vote_packets::{
         ValidatorGossipVotesIterator, VerifiedVoteMetadata, VerifiedVotePackets,
     },
-    vote_stake_tracker::VoteStakeTracker,
+    vote_stake_tracker::{ThresholdConfirmedBlock, VoteStakeTracker},
 };
 use crossbeam_channel::{
     unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Select, Sender as CrossbeamSender,
@@ -54,7 +54,6 @@ use std::{
 };
 
 // Map from a vote account to the authorized voter for an epoch
-pub type ThresholdConfirmedSlots = Vec<(Slot, Hash)>;
 pub type VotedHashUpdates = HashMap<Hash, Vec<Pubkey>>;
 pub type VerifiedLabelVotePacketsSender = CrossbeamSender<Vec<VerifiedVoteMetadata>>;
 pub type VerifiedLabelVotePacketsReceiver = CrossbeamReceiver<Vec<VerifiedVoteMetadata>>;
@@ -64,10 +63,10 @@ pub type VerifiedVoteSender = CrossbeamSender<(Pubkey, Vec<Slot>)>;
 pub type VerifiedVoteReceiver = CrossbeamReceiver<(Pubkey, Vec<Slot>)>;
 pub type GossipVerifiedVoteHashSender = CrossbeamSender<(Pubkey, Slot, Hash)>;
 pub type GossipVerifiedVoteHashReceiver = CrossbeamReceiver<(Pubkey, Slot, Hash)>;
-pub type GossipDuplicateConfirmedSlotsSender = CrossbeamSender<ThresholdConfirmedSlots>;
-pub type GossipDuplicateConfirmedSlotsReceiver = CrossbeamReceiver<ThresholdConfirmedSlots>;
+pub type GossipDuplicateConfirmedSlotsSender = CrossbeamSender<Vec<(Slot, Hash)>>;
+pub type GossipDuplicateConfirmedSlotsReceiver = CrossbeamReceiver<Vec<(Slot, Hash)>>;
 
-const NEW_OPTIMISTIC_CONF_THRESHOLD: f64 = 0.70;
+const NEW_OPTIMISTIC_CONF_THRESHOLD: f64 = 0.80;
 const THRESHOLDS_TO_CHECK: [f64; 3] = [
     DUPLICATE_THRESHOLD,
     VOTE_THRESHOLD_SIZE,
@@ -77,8 +76,8 @@ const BANK_SEND_VOTES_LOOP_SLEEP_MS: u128 = 10;
 
 #[derive(Default)]
 pub struct OptimisticConfirmedSlots {
-    pub confirmed_slots: ThresholdConfirmedSlots,
-    pub higher_threshold_confirmed_slots: ThresholdConfirmedSlots,
+    pub confirmed_slots: Vec<ThresholdConfirmedBlock>,
+    pub higher_threshold_confirmed_slots: Vec<ThresholdConfirmedBlock>,
 }
 
 #[derive(Default)]
@@ -615,7 +614,7 @@ impl ClusterInfoVoteListener {
         gossip_verified_vote_hash_sender: &GossipVerifiedVoteHashSender,
         verified_vote_sender: &VerifiedVoteSender,
         replay_votes_receiver: &ReplayVoteReceiver,
-    ) -> Result<ThresholdConfirmedSlots> {
+    ) -> Result<ThresholdConfirmedBlocks> {
         Self::listen_and_confirm_votes(
             gossip_vote_txs_receiver,
             vote_tracker,
@@ -728,14 +727,16 @@ impl ClusterInfoVoteListener {
                 // Fast track processing of the last slot in a vote transactions
                 // so that notifications for optimistic confirmation can be sent
                 // as soon as possible.
-                let (reached_threshold_results, is_new) = Self::track_optimistic_confirmation_vote(
-                    vote_tracker,
-                    last_vote_slot,
-                    last_vote_hash,
-                    *vote_pubkey,
-                    stake,
-                    total_stake,
-                );
+                let (mut reached_threshold_results, is_new) =
+                    Self::track_optimistic_confirmation_vote(
+                        vote_tracker,
+                        last_vote_slot,
+                        last_vote_hash,
+                        *vote_pubkey,
+                        stake,
+                        total_stake,
+                        is_gossip_vote,
+                    );
 
                 if is_gossip_vote && is_new && stake > 0 {
                     let _ = gossip_verified_vote_hash_sender.send((
@@ -745,15 +746,16 @@ impl ClusterInfoVoteListener {
                     ));
                 }
 
-                if reached_threshold_results[0] {
-                    if let Some(sender) = cluster_confirmed_slot_sender {
-                        let _ = sender.send(vec![(last_vote_slot, last_vote_hash)]);
-                    }
+                if let Some(reached_threshold_block) = reached_threshold_results.pop().unwrap() {
+                    new_optimistic_confirmed_slots
+                        .higher_threshold_confirmed_slots
+                        .push(reached_threshold_block);
                 }
-                if reached_threshold_results[1] {
+
+                if let Some(reached_threshold_block) = reached_threshold_results.pop().unwrap() {
                     new_optimistic_confirmed_slots
                         .confirmed_slots
-                        .push((last_vote_slot, last_vote_hash));
+                        .push(reached_threshold_block);
                     // Notify subscribers about new optimistic confirmation
                     if let Some(sender) = bank_notification_sender {
                         sender
@@ -763,10 +765,11 @@ impl ClusterInfoVoteListener {
                             });
                     }
                 }
-                if reached_threshold_results[2] {
-                    new_optimistic_confirmed_slots
-                        .higher_threshold_confirmed_slots
-                        .push((last_vote_slot, last_vote_hash));
+
+                if reached_threshold_results.pop().is_some() {
+                    if let Some(sender) = cluster_confirmed_slot_sender {
+                        let _ = sender.send(vec![(last_vote_slot, last_vote_hash)]);
+                    }
                 }
 
                 if !is_new && !is_gossip_vote {
@@ -935,14 +938,23 @@ impl ClusterInfoVoteListener {
         pubkey: Pubkey,
         stake: u64,
         total_epoch_stake: u64,
-    ) -> (Vec<bool>, bool) {
+        is_gossip: bool,
+    ) -> (Vec<Option<ThresholdConfirmedBlock>>, bool) {
         let slot_tracker = vote_tracker.get_or_insert_slot_tracker(slot);
         // Insert vote and check for optimistic confirmation
         let mut w_slot_tracker = slot_tracker.write().unwrap();
 
         w_slot_tracker
             .get_or_insert_optimistic_votes_tracker(hash)
-            .add_vote_pubkey(pubkey, stake, total_epoch_stake, &THRESHOLDS_TO_CHECK)
+            .add_vote_pubkey(
+                slot,
+                hash,
+                pubkey,
+                stake,
+                total_epoch_stake,
+                is_gossip,
+                &THRESHOLDS_TO_CHECK,
+            )
     }
 
     fn sum_stake(sum: &mut u64, epoch_stakes: Option<&EpochStakes>, pubkey: &Pubkey) {

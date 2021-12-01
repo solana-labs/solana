@@ -1,4 +1,7 @@
-use crate::cluster_info_vote_listener::{OptimisticConfirmedSlots, VoteTracker};
+use crate::{
+    cluster_info_vote_listener::{OptimisticConfirmedSlots, VoteTracker},
+    vote_stake_tracker::ThresholdConfirmedBlock,
+};
 use solana_ledger::blockstore::Blockstore;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
@@ -76,9 +79,21 @@ impl OptimisticConfirmationVerifier {
         // We don't have any information about ancestors before the snapshot root,
         // so ignore those slots
         let mut new_optimistic_slot_found = false;
-        for (new_optimistic_slot, hash) in new_optimistic_slots.confirmed_slots {
+        for reached_threshold_block in new_optimistic_slots.confirmed_slots {
+            let ThresholdConfirmedBlock {
+                slot: new_optimistic_slot,
+                hash,
+                replay_stake,
+                gossip_stake,
+            } = reached_threshold_block;
             if new_optimistic_slot > self.snapshot_start_slot {
-                datapoint_info!("optimistic_slot", ("slot", new_optimistic_slot, i64),);
+                datapoint_info!(
+                    "optimistic_slot",
+                    ("slot", new_optimistic_slot, i64),
+                    ("replay_stake", replay_stake, i64),
+                    ("gossip_stake", gossip_stake, i64),
+                    ("pct", gossip_stake as f64 / replay_stake as f64, f64),
+                );
                 self.unchecked_slots
                     .insert((new_optimistic_slot, hash), Instant::now());
                 new_optimistic_slot_found = true;
@@ -98,13 +113,20 @@ impl OptimisticConfirmationVerifier {
         }
 
         let mut new_higher_optimistic_slot_found = false;
-        for (new_higher_optimistic_slot, hash) in
-            new_optimistic_slots.higher_threshold_confirmed_slots
-        {
+        for reached_threshold_block in new_optimistic_slots.higher_threshold_confirmed_slots {
+            let ThresholdConfirmedBlock {
+                slot: new_higher_optimistic_slot,
+                hash,
+                replay_stake,
+                gossip_stake,
+            } = reached_threshold_block;
             if new_higher_optimistic_slot > self.snapshot_start_slot {
                 datapoint_info!(
                     "optimistic_slot_higher_threshold",
                     ("slot", new_higher_optimistic_slot, i64),
+                    ("replay_stake", replay_stake, i64),
+                    ("gossip_stake", gossip_stake, i64),
+                    ("pct", gossip_stake as f64 / replay_stake as f64, f64),
                 );
                 new_higher_optimistic_slot_found = true;
                 let old_timestamp = self
