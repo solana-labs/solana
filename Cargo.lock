@@ -4421,7 +4421,6 @@ dependencies = [
  "byteorder",
  "libsecp256k1 0.6.0",
  "log 0.4.14",
- "openssl",
  "rand 0.7.3",
  "regex",
  "solana-measure",
