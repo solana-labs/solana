@@ -5675,7 +5675,12 @@ name = "solana-storage-proto"
 version = "1.8.7"
 dependencies = [
  "bincode",
+<<<<<<< HEAD
  "bs58 0.3.1",
+=======
+ "bs58 0.4.0",
+ "enum-iterator",
+>>>>>>> 0fc1c2e1f (Add missing InstructionError::IllegalOwner conversion (#21524))
  "prost",
  "serde",
  "serde_derive",
