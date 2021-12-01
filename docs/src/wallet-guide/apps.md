@@ -5,15 +5,12 @@ title: Mobile App Wallets
 Solana is supported by multiple third-party apps which should provide a familiar
 experience for most people who are new or experienced with using crypto wallets.
 
-## Solflare
+## Coin98
 
-[Solflare Wallet](https://solflare.com/), has mobile applications available for both 
-iOS and Android. These Mobile apps have support for sending Solana and SPL tokens, 
-staking, and NFT management in a fully-featured NFT gallery.
+[Coin98](https://coin98.app/) is an app available for iOS and Android and can
+be used to send and receive SOL tokens.
 
-Security is a top priority for Solflare - the mobile wallet is non-custodial, 
-meaning keys are managed by the user who retains total control of their own funds. 
-The app supports biometric protection alongside passwords for maximum security.
+Note: Coin98 does not support stake accounts or staking operations_
 
 ## Exodus
 
@@ -23,12 +20,22 @@ Download [Exodus](https://exodus.com/) to easily and securely manage your Solana
 
 Exodus includes live charts, a built-in exchange, and 24/7 human support.
 
+## Solflare
+
+[Solflare Wallet](https://solflare.com/) has mobile applications available for both 
+iOS and Android. These Mobile apps have support for sending Solana and SPL tokens, 
+staking, and NFT management in a fully-featured NFT gallery.
+
+Security is a top priority for Solflare - the mobile wallet is non-custodial, 
+meaning keys are managed by the user who retains total control of their own funds. 
+The app supports biometric protection alongside passwords for maximum security.
+
 ## Trust Wallet
 
 [Trust Wallet](https://trustwallet.com/) is an app available for iOS and Android
 and can be used to send and receive SOL tokens.
 
-_Note: Trust Wallet does not support stake accounts or staking operations_
+Note: Trust Wallet does not support stake accounts or staking operations_
 
 ### Trust Wallet Security
 
@@ -49,13 +56,6 @@ viewed at any later time in the app by following these steps:
 
 - Go to Setting -> Wallets
 - Under the Options menu for a particular wallet tap "Show Recovery Phrase"
-
-## Coin98
-
-[Coin98](https://coin98.app/) is an app available for iOS and Android and can
-be used to send and receive SOL tokens.
-
-_Note: Coin98 does not support stake accounts or staking operations_
 
 ## Zelcore
 
