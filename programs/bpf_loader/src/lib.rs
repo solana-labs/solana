@@ -151,7 +151,6 @@ fn check_loader_id(id: &Pubkey) -> bool {
 
 /// Create the BPF virtual machine
 pub fn create_vm<'a>(
-    loader_id: &'a Pubkey,
     program: &'a Executable<BpfError, ThisInstructionMeter>,
     parameter_bytes: &mut [u8],
     invoke_context: &'a mut dyn InvokeContext,
@@ -168,13 +167,7 @@ pub fn create_vm<'a>(
     let mut heap =
         AlignedMemory::new_with_size(compute_budget.heap_size.unwrap_or(HEAP_LENGTH), HOST_ALIGN);
     let mut vm = EbpfVm::new(program, heap.as_slice_mut(), parameter_bytes)?;
-    syscalls::bind_syscall_context_objects(
-        loader_id,
-        &mut vm,
-        invoke_context,
-        heap,
-        orig_data_lens,
-    )?;
+    syscalls::bind_syscall_context_objects(&mut vm, invoke_context, heap, orig_data_lens)?;
     Ok(vm)
 }
 
@@ -984,7 +977,6 @@ impl Executor for BpfExecutor {
             let program_id = &invoke_context.get_caller()?.clone();
             let compute_meter = invoke_context.get_compute_meter();
             let mut vm = match create_vm(
-                loader_id,
                 &self.executable,
                 parameter_bytes.as_slice_mut(),
                 invoke_context,

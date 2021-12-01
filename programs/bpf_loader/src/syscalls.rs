@@ -207,7 +207,6 @@ macro_rules! bind_feature_gated_syscall_context_object {
 }
 
 pub fn bind_syscall_context_objects<'a>(
-    _loader_id: &'a Pubkey,
     vm: &mut EbpfVm<'a, BpfError, crate::ThisInstructionMeter>,
     invoke_context: &'a mut dyn InvokeContext,
     heap: AlignedMemory,

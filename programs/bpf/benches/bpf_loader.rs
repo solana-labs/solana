@@ -110,7 +110,6 @@ fn bench_program_alu(bencher: &mut Bencher) {
         let compute_meter = invoke_context.get_compute_meter();
         let mut instruction_meter = ThisInstructionMeter { compute_meter };
         let mut vm = create_vm(
-            &loader_id,
             &executable,
             &mut inner_iter,
             invoke_context,
@@ -228,7 +227,6 @@ fn bench_create_vm(bencher: &mut Bencher) {
 
         bencher.iter(|| {
             let _ = create_vm(
-                &loader_id,
                 &executable,
                 serialized.as_slice_mut(),
                 invoke_context,
@@ -267,7 +265,6 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
         let compute_meter = invoke_context.get_compute_meter();
         let mut instruction_meter = ThisInstructionMeter { compute_meter };
         let mut vm = create_vm(
-            &loader_id,
             &executable,
             serialized.as_slice_mut(),
             invoke_context,
