@@ -523,6 +523,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
                     46 => InstructionError::InvalidAccountOwner,
                     47 => InstructionError::ArithmeticOverflow,
                     48 => InstructionError::UnsupportedSysvar,
+                    49 => InstructionError::IllegalOwner,
                     _ => return Err("Invalid InstructionError"),
                 };
 
@@ -852,7 +853,7 @@ impl TryFrom<tx_by_addr::TransactionByAddr> for Vec<TransactionByAddrInfo> {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use {super::*, enum_iterator::IntoEnumIterator};
 
     #[test]
     fn test_reward_type_encode() {
@@ -1448,5 +1449,56 @@ mod test {
             transaction_error,
             tx_by_addr_transaction_error.try_into().unwrap()
         );
+    }
+
+    #[test]
+    fn test_error_enums() {
+        let ix_index = 1;
+        let custom_error = 42;
+        for error in tx_by_addr::TransactionErrorType::into_enum_iter() {
+            if error != tx_by_addr::TransactionErrorType::InstructionError {
+                let tx_by_addr_error = tx_by_addr::TransactionError {
+                    transaction_error: error as i32,
+                    instruction_error: None,
+                };
+                let transaction_error: TransactionError = tx_by_addr_error
+                    .clone()
+                    .try_into()
+                    .unwrap_or_else(|_| panic!("{:?} conversion implemented?", error));
+                assert_eq!(tx_by_addr_error, transaction_error.into());
+            } else {
+                for ix_error in tx_by_addr::InstructionErrorType::into_enum_iter() {
+                    if ix_error != tx_by_addr::InstructionErrorType::Custom {
+                        let tx_by_addr_error = tx_by_addr::TransactionError {
+                            transaction_error: error as i32,
+                            instruction_error: Some(tx_by_addr::InstructionError {
+                                index: ix_index,
+                                error: ix_error as i32,
+                                custom: None,
+                            }),
+                        };
+                        let transaction_error: TransactionError = tx_by_addr_error
+                            .clone()
+                            .try_into()
+                            .unwrap_or_else(|_| panic!("{:?} conversion implemented?", ix_error));
+                        assert_eq!(tx_by_addr_error, transaction_error.into());
+                    } else {
+                        let tx_by_addr_error = tx_by_addr::TransactionError {
+                            transaction_error: error as i32,
+                            instruction_error: Some(tx_by_addr::InstructionError {
+                                index: ix_index,
+                                error: ix_error as i32,
+                                custom: Some(tx_by_addr::CustomError {
+                                    custom: custom_error,
+                                }),
+                            }),
+                        };
+                        let transaction_error: TransactionError =
+                            tx_by_addr_error.clone().try_into().unwrap();
+                        assert_eq!(tx_by_addr_error, transaction_error.into());
+                    }
+                }
+            }
+        }
     }
 }
