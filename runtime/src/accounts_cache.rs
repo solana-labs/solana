@@ -289,26 +289,21 @@ impl AccountsCache {
         removed_slots
     }
 
-    pub fn find_older_frozen_slots(&self, num_to_retain: usize) -> Vec<Slot> {
-        if self.cache.len() > num_to_retain {
-            let mut slots: Vec<_> = self
-                .cache
-                .iter()
-                .filter_map(|item| {
-                    let (slot, slot_cache) = item.pair();
-                    if slot_cache.is_frozen() {
-                        Some(*slot)
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            slots.sort_unstable();
-            slots.truncate(slots.len().saturating_sub(num_to_retain));
-            slots
-        } else {
-            vec![]
-        }
+    pub fn cached_frozen_slots(&self) -> Vec<Slot> {
+        let mut slots: Vec<_> = self
+            .cache
+            .iter()
+            .filter_map(|item| {
+                let (slot, slot_cache) = item.pair();
+                if slot_cache.is_frozen() {
+                    Some(*slot)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        slots.sort_unstable();
+        slots
     }
 
     pub fn num_slots(&self) -> usize {
@@ -347,10 +342,10 @@ pub mod tests {
     }
 
     #[test]
-    fn test_find_older_frozen_slots() {
+    fn test_cached_frozen_slots() {
         let cache = AccountsCache::default();
         // Cache is empty, should return nothing
-        assert!(cache.find_older_frozen_slots(0).is_empty());
+        assert!(cache.cached_frozen_slots().is_empty());
         let inserted_slot = 0;
         cache.store(
             inserted_slot,
@@ -359,14 +354,11 @@ pub mod tests {
             Some(&Hash::default()),
         );
 
-        // If the cache is told the size limit is 0, it should return nothing because there's only
-        // one cached slot
-        assert!(cache.find_older_frozen_slots(1).is_empty());
         // If the cache is told the size limit is 0, it should return nothing, because there's no
         // frozen slots
-        assert!(cache.find_older_frozen_slots(0).is_empty());
+        assert!(cache.cached_frozen_slots().is_empty());
         cache.slot_cache(inserted_slot).unwrap().mark_slot_frozen();
         // If the cache is told the size limit is 0, it should return the one frozen slot
-        assert_eq!(cache.find_older_frozen_slots(0), vec![inserted_slot]);
+        assert_eq!(cache.cached_frozen_slots(), vec![inserted_slot]);
     }
 }

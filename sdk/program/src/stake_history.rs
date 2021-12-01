@@ -56,8 +56,7 @@ impl std::ops::Add for StakeHistoryEntry {
 pub struct StakeHistory(Vec<(Epoch, StakeHistoryEntry)>);
 
 impl StakeHistory {
-    #[allow(clippy::trivially_copy_pass_by_ref)]
-    pub fn get(&self, epoch: &Epoch) -> Option<&StakeHistoryEntry> {
+    pub fn get(&self, epoch: Epoch) -> Option<&StakeHistoryEntry> {
         self.binary_search_by(|probe| epoch.cmp(&probe.0))
             .ok()
             .map(|index| &self[index].1)
@@ -98,9 +97,9 @@ mod tests {
         }
         assert_eq!(stake_history.len(), MAX_ENTRIES);
         assert_eq!(stake_history.iter().map(|entry| entry.0).min().unwrap(), 1);
-        assert_eq!(stake_history.get(&0), None);
+        assert_eq!(stake_history.get(0), None);
         assert_eq!(
-            stake_history.get(&1),
+            stake_history.get(1),
             Some(&StakeHistoryEntry {
                 activating: 1,
                 ..StakeHistoryEntry::default()

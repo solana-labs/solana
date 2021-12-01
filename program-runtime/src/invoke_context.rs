@@ -277,6 +277,8 @@ pub trait InvokeContext {
     fn remove_first_keyed_account(&mut self) -> Result<(), InstructionError>;
     /// Get the list of keyed accounts
     fn get_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError>;
+    /// Get the list of keyed accounts skipping `first_instruction_account` many entries
+    fn get_instruction_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError>;
     /// Get this invocation's LogCollector
     fn get_log_collector(&self) -> Option<Rc<RefCell<LogCollector>>>;
     /// Get this invocation's ComputeMeter
@@ -621,7 +623,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         let message = Message::new(&[instruction.clone()], None);
 
         // Gather keyed_accounts in the order of message.account_keys
-        let caller_keyed_accounts = self.get_keyed_accounts()?;
+        let caller_keyed_accounts = self.get_instruction_keyed_accounts()?;
         let callee_keyed_accounts = message
             .account_keys
             .iter()
@@ -814,6 +816,17 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             .last()
             .map(|frame| &frame.keyed_accounts[frame.keyed_accounts_range.clone()])
             .ok_or(InstructionError::CallDepth)
+    }
+    fn get_instruction_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError> {
+        let frame = self
+            .invoke_stack
+            .last()
+            .ok_or(InstructionError::CallDepth)?;
+        let first_instruction_account = frame
+            .number_of_program_accounts
+            .checked_sub(1)
+            .ok_or(InstructionError::CallDepth)?;
+        Ok(&frame.keyed_accounts[first_instruction_account..])
     }
     fn get_log_collector(&self) -> Option<Rc<RefCell<LogCollector>>> {
         self.log_collector.clone()

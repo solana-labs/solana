@@ -2174,7 +2174,7 @@ impl Bank {
             .fetch_add(validator_rewards_paid, Relaxed);
 
         let active_stake = if let Some(stake_history_entry) =
-            self.stakes.read().unwrap().history().get(&prev_epoch)
+            self.stakes.read().unwrap().history().get(prev_epoch)
         {
             stake_history_entry.effective
         } else {
@@ -2274,7 +2274,7 @@ impl Bank {
             .fetch_add(validator_rewards_paid, Relaxed);
 
         let active_stake = if let Some(stake_history_entry) =
-            self.stakes.read().unwrap().history().get(&prev_epoch)
+            self.stakes.read().unwrap().history().get(prev_epoch)
         {
             stake_history_entry.effective
         } else {
@@ -3168,6 +3168,15 @@ impl Bank {
         self.blockhash_queue.read().unwrap().last_hash()
     }
 
+    pub fn last_blockhash_and_lamports_per_signature(&self) -> (Hash, u64) {
+        let blockhash_queue = self.blockhash_queue.read().unwrap();
+        let last_hash = blockhash_queue.last_hash();
+        let last_lamports_per_signature = blockhash_queue
+            .get_lamports_per_signature(&last_hash)
+            .unwrap(); // safe so long as the BlockhashQueue is consistent
+        (last_hash, last_lamports_per_signature)
+    }
+
     pub fn is_blockhash_valid(&self, hash: &Hash) -> bool {
         let blockhash_queue = self.blockhash_queue.read().unwrap();
         blockhash_queue.check_hash(hash)
@@ -3868,16 +3877,8 @@ impl Bank {
 
                         let compute_meter = ComputeMeter::new_ref(compute_budget.max_units);
 
-                        let (blockhash, lamports_per_signature) = {
-                            let blockhash_queue = self.blockhash_queue.read().unwrap();
-                            let blockhash = blockhash_queue.last_hash();
-                            (
-                                blockhash,
-                                blockhash_queue
-                                    .get_lamports_per_signature(&blockhash)
-                                    .unwrap_or(self.fee_rate_governor.lamports_per_signature),
-                            )
-                        };
+                        let (blockhash, lamports_per_signature) =
+                            self.last_blockhash_and_lamports_per_signature();
 
                         if let Some(legacy_message) = tx.message().legacy_message() {
                             process_result = MessageProcessor::process_message(
@@ -4164,6 +4165,7 @@ impl Bank {
             self.is_delta.store(true, Relaxed);
         }
 
+        let (blockhash, lamports_per_signature) = self.last_blockhash_and_lamports_per_signature();
         let mut write_time = Measure::start("write_time");
         self.rc.accounts.store_cached(
             self.slot(),
@@ -4171,8 +4173,8 @@ impl Bank {
             executed_results,
             loaded_txs,
             &self.rent_collector,
-            &self.last_blockhash(),
-            self.get_lamports_per_signature(),
+            &blockhash,
+            lamports_per_signature,
             self.rent_for_sysvars(),
             self.merge_nonce_error_into_system_error(),
             self.demote_program_write_locks(),

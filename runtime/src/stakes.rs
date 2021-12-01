@@ -154,35 +154,33 @@ impl Stakes {
         });
     }
 
-    // sum the stakes that point to the given voter_pubkey
+    /// Sum the stakes that point to the given voter_pubkey
     fn calculate_stake(
         &self,
         voter_pubkey: &Pubkey,
         epoch: Epoch,
         stake_history: Option<&StakeHistory>,
     ) -> u64 {
+        let matches_voter_pubkey = |(_, stake_delegation): &(&_, &Delegation)| {
+            &stake_delegation.voter_pubkey == voter_pubkey
+        };
+        let get_stake =
+            |(_, stake_delegation): (_, &Delegation)| stake_delegation.stake(epoch, stake_history);
+
         self.stake_delegations
             .iter()
-            .map(|(_, stake_delegation)| {
-                if &stake_delegation.voter_pubkey == voter_pubkey {
-                    stake_delegation.stake(epoch, stake_history)
-                } else {
-                    0
-                }
-            })
+            .filter(matches_voter_pubkey)
+            .map(get_stake)
             .sum()
     }
 
+    /// Sum the lamports of the vote accounts and the delegated stake
     pub fn vote_balance_and_staked(&self) -> u64 {
-        self.stake_delegations
-            .iter()
-            .map(|(_, stake_delegation)| stake_delegation.stake)
-            .sum::<u64>()
-            + self
-                .vote_accounts
-                .iter()
-                .map(|(_pubkey, (_staked, vote_account))| vote_account.lamports())
-                .sum::<u64>()
+        let get_stake = |(_, stake_delegation): (_, &Delegation)| stake_delegation.stake;
+        let get_lamports = |(_, (_, vote_account)): (_, &(_, VoteAccount))| vote_account.lamports();
+
+        self.stake_delegations.iter().map(get_stake).sum::<u64>()
+            + self.vote_accounts.iter().map(get_lamports).sum::<u64>()
     }
 
     pub fn is_stake(account: &AccountSharedData) -> bool {

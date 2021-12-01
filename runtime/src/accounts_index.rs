@@ -97,9 +97,7 @@ impl ScanConfig {
 
 pub(crate) type AccountMapEntry<T> = Arc<AccountMapEntryInner<T>>;
 
-pub trait IsCached:
-    'static + Clone + Debug + PartialEq + ZeroLamport + Copy + Default + Sync + Send
-{
+pub trait IsCached {
     fn is_cached(&self) -> bool;
 }
 
@@ -290,6 +288,17 @@ impl<T: IndexValue> ReadAccountMapEntry<T> {
 pub enum PreAllocatedAccountMapEntry<T: IndexValue> {
     Entry(AccountMapEntry<T>),
     Raw((Slot, T)),
+}
+
+impl<T: IndexValue> ZeroLamport for PreAllocatedAccountMapEntry<T> {
+    fn is_zero_lamport(&self) -> bool {
+        match self {
+            PreAllocatedAccountMapEntry::Entry(entry) => {
+                entry.slot_list.read().unwrap()[0].1.is_zero_lamport()
+            }
+            PreAllocatedAccountMapEntry::Raw(raw) => raw.1.is_zero_lamport(),
+        }
+    }
 }
 
 impl<T: IndexValue> From<PreAllocatedAccountMapEntry<T>> for (Slot, T) {
