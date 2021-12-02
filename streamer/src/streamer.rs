@@ -1,19 +1,28 @@
 //! The `streamer` module defines a set of services for efficiently pulling data from UDP sockets.
 //!
 
-use crate::{
-    packet::{self, send_to, Packets, PacketsRecycler, PACKETS_PER_BATCH},
-    recvmmsg::NUM_RCVMMSGS,
-    socket::SocketAddrSpace,
+use {
+    crate::{
+        packet::{self, send_to, Packets, PacketsRecycler, PACKETS_PER_BATCH},
+        recvmmsg::NUM_RCVMMSGS,
+        socket::SocketAddrSpace,
+    },
+    histogram::Histogram,
+    solana_sdk::{packet::Packet, timing::timestamp},
+    std::{
+        cmp::Reverse,
+        collections::HashMap,
+        net::UdpSocket,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            mpsc::{Receiver, RecvTimeoutError, SendError, Sender},
+            Arc,
+        },
+        thread::{Builder, JoinHandle},
+        time::{Duration, Instant},
+    },
+    thiserror::Error,
 };
-use solana_sdk::timing::timestamp;
-use std::net::UdpSocket;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, RecvTimeoutError, SendError, Sender};
-use std::sync::Arc;
-use std::thread::{Builder, JoinHandle};
-use std::time::{Duration, Instant};
-use thiserror::Error;
 
 pub type PacketReceiver = Receiver<Packets>;
 pub type PacketSender = Sender<Packets>;
@@ -113,13 +122,111 @@ pub fn receiver(
         .unwrap()
 }
 
+#[derive(Debug, Default)]
+struct SendStats {
+    bytes: u64,
+    count: u64,
+}
+
+#[derive(Default)]
+struct StreamerSendStats {
+    host_map: HashMap<[u16; 8], SendStats>,
+    since: Option<Instant>,
+}
+
+impl StreamerSendStats {
+    fn maybe_submit(&mut self, name: &'static str) {
+        const SUBMIT_CADENCE: Duration = Duration::from_secs(10);
+        const MAX_REPORT_ENTRIES: usize = 5;
+        let elapsed = self.since.as_ref().map(Instant::elapsed);
+        if elapsed.map(|e| e < SUBMIT_CADENCE).unwrap_or_default() {
+            return;
+        }
+
+        let mut hist = Histogram::default();
+        let mut byte_sum = 0;
+        let mut pkt_count = 0;
+        self.host_map.iter().for_each(|(_addr, host_stats)| {
+            hist.increment(host_stats.bytes).unwrap();
+            byte_sum += host_stats.bytes;
+            pkt_count += host_stats.count;
+        });
+
+        datapoint_info!(
+            name,
+            ("streamer-send-host_count", self.host_map.len(), i64),
+            ("streamer-send-bytes_total", byte_sum, i64),
+            ("streamer-send-pkt_count_total", pkt_count, i64),
+            (
+                "streamer-send-host_bytes_min",
+                hist.minimum().unwrap_or_default(),
+                i64
+            ),
+            (
+                "streamer-send-host_bytes_max",
+                hist.maximum().unwrap_or_default(),
+                i64
+            ),
+            (
+                "streamer-send-host_bytes_mean",
+                hist.mean().unwrap_or_default(),
+                i64
+            ),
+            (
+                "streamer-send-host_bytes_90pct",
+                hist.percentile(90.0).unwrap_or_default(),
+                i64
+            ),
+            (
+                "streamer-send-host_bytes_50pct",
+                hist.percentile(50.0).unwrap_or_default(),
+                i64
+            ),
+            (
+                "streamer-send-host_bytes_10pct",
+                hist.percentile(10.0).unwrap_or_default(),
+                i64
+            ),
+        );
+
+        let num_entries = self.host_map.len();
+        let mut entries: Vec<_> = std::mem::take(&mut self.host_map).into_iter().collect();
+        if entries.len() > MAX_REPORT_ENTRIES {
+            entries.select_nth_unstable_by_key(MAX_REPORT_ENTRIES, |(_addr, stats)| {
+                Reverse(stats.bytes)
+            });
+            entries.truncate(MAX_REPORT_ENTRIES);
+        }
+        info!(
+            "streamer send {} hosts: count:{} {:?}",
+            name, num_entries, entries,
+        );
+
+        *self = Self {
+            since: Some(Instant::now()),
+            ..Self::default()
+        }
+    }
+
+    fn record(&mut self, pkt: &Packet) {
+        let ent = self
+            .host_map
+            .entry(pkt.meta.addr)
+            .or_insert_with(SendStats::default);
+        ent.count += 1;
+        ent.bytes += pkt.data.len() as u64;
+    }
+}
+
 fn recv_send(
     sock: &UdpSocket,
     r: &PacketReceiver,
     socket_addr_space: &SocketAddrSpace,
+    stats: &mut StreamerSendStats,
 ) -> Result<()> {
     let timer = Duration::new(1, 0);
     let msgs = r.recv_timeout(timer)?;
+    msgs.packets.iter().for_each(|p| stats.record(p));
     send_to(&msgs, sock, socket_addr_space)?;
     Ok(())
 }
@@ -153,8 +260,9 @@ pub fn responder(
             let mut errors = 0;
             let mut last_error = None;
             let mut last_print = 0;
+            let mut stats = StreamerSendStats::default();
             loop {
-                if let Err(e) = recv_send(&sock, &r, &socket_addr_space) {
+                if let Err(e) = recv_send(&sock, &r, &socket_addr_space, &mut stats) {
                     match e {
                         StreamerError::RecvTimeout(RecvTimeoutError::Disconnected) => break,
                         StreamerError::RecvTimeout(RecvTimeoutError::Timeout) => (),
@@ -171,6 +279,7 @@ pub fn responder(
                     last_print = now;
                     errors = 0;
                 }
+                stats.maybe_submit(name);
             }
         })
         .unwrap()

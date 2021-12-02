@@ -5782,6 +5782,7 @@ dependencies = [
 name = "solana-streamer"
 version = "1.9.0"
 dependencies = [
+ "histogram",
  "itertools 0.10.1",
  "libc",
  "log 0.4.14",
