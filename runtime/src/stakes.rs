@@ -68,11 +68,8 @@ impl Stakes {
                 .vote_accounts
                 .iter()
                 .map(|(pubkey, (_ /*stake*/, account))| {
-                    let stake = self.calculate_stake(
-                        pubkey,
-                        next_epoch,
-                        Some(&stake_history_upto_prev_epoch),
-                    );
+                    let stake =
+                        self.calculate_stake(pubkey, next_epoch, &stake_history_upto_prev_epoch);
                     (*pubkey, (stake, account.clone()))
                 })
                 .collect();
@@ -159,13 +156,14 @@ impl Stakes {
         &self,
         voter_pubkey: &Pubkey,
         epoch: Epoch,
-        stake_history: Option<&StakeHistory>,
+        stake_history: &StakeHistory,
     ) -> u64 {
         let matches_voter_pubkey = |(_, stake_delegation): &(&_, &Delegation)| {
             &stake_delegation.voter_pubkey == voter_pubkey
         };
-        let get_stake =
-            |(_, stake_delegation): (_, &Delegation)| stake_delegation.stake(epoch, stake_history);
+        let get_stake = |(_, stake_delegation): (_, &Delegation)| {
+            stake_delegation.stake(epoch, Some(stake_history))
+        };
 
         self.stake_delegations
             .iter()
@@ -205,7 +203,7 @@ impl Stakes {
             if account.lamports() != 0 && VoteState::is_correct_size_and_initialized(account.data())
             {
                 let stake = old.as_ref().map_or_else(
-                    || self.calculate_stake(pubkey, self.epoch, Some(&self.stake_history)),
+                    || self.calculate_stake(pubkey, self.epoch, &self.stake_history),
                     |v| v.0,
                 );
 
