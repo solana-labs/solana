@@ -3,6 +3,7 @@
 use {
     crate::{
         stake_delegations::StakeDelegations,
+        stake_history::StakeHistory,
         vote_account::{VoteAccount, VoteAccounts, VoteAccountsHashMap},
     },
     rayon::{
@@ -17,7 +18,6 @@ use {
             self,
             state::{Delegation, StakeActivationStatus, StakeState},
         },
-        stake_history::StakeHistory,
     },
     solana_stake_program::stake_state,
     solana_vote_program::vote_state::VoteState,
