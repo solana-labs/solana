@@ -781,20 +781,6 @@ impl<'a> InvokeContext<'a> {
         None
     }
 
-    /// Update timing
-    pub fn update_timing(
-        &mut self,
-        serialize_us: u64,
-        create_vm_us: u64,
-        execute_us: u64,
-        deserialize_us: u64,
-    ) {
-        self.timings.serialize_us = self.timings.serialize_us.saturating_add(serialize_us);
-        self.timings.create_vm_us = self.timings.create_vm_us.saturating_add(create_vm_us);
-        self.timings.execute_us = self.timings.execute_us.saturating_add(execute_us);
-        self.timings.deserialize_us = self.timings.deserialize_us.saturating_add(deserialize_us);
-    }
-
     /// Get this invocation's compute budget
     pub fn get_compute_budget(&self) -> &ComputeBudget {
         &self.current_compute_budget

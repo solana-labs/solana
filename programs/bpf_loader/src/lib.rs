@@ -1061,12 +1061,13 @@ impl Executor for BpfExecutor {
                 .is_active(&do_support_realloc::id()),
         )?;
         deserialize_time.stop();
-        invoke_context.update_timing(
-            serialize_time.as_us(),
-            create_vm_time.as_us(),
-            execute_time.as_us(),
-            deserialize_time.as_us(),
-        );
+        let timings = &mut invoke_context.timings;
+        timings.serialize_us = timings.serialize_us.saturating_add(serialize_time.as_us());
+        timings.create_vm_us = timings.create_vm_us.saturating_add(create_vm_time.as_us());
+        timings.execute_us = timings.execute_us.saturating_add(execute_time.as_us());
+        timings.deserialize_us = timings
+            .deserialize_us
+            .saturating_add(deserialize_time.as_us());
         stable_log::program_success(&log_collector, &program_id);
         Ok(())
     }
