@@ -123,7 +123,11 @@ impl NativeLoader {
     fn library_open(path: &Path) -> Result<Library, libloading::Error> {
         unsafe {
             // Linux tls bug can cause crash on dlclose(), workaround by never unloading
-            Library::open(Some(path), libc::RTLD_NODELETE | libc::RTLD_NOW)
+            #[cfg(target_os = "android")]
+            let flags = libc::RTLD_NOW;
+            #[cfg(not(target_os = "android"))]
+            let flags = libc::RTLD_NODELETE | libc::RTLD_NOW;
+            Library::open(Some(path), flags)
         }
     }
 
