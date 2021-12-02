@@ -15,6 +15,7 @@ use solana_sdk::{
 };
 use std::{
     borrow::Borrow,
+    convert::TryFrom,
     fs::{remove_file, OpenOptions},
     io,
     io::{Seek, SeekFrom, Write},
@@ -33,10 +34,7 @@ macro_rules! u64_align {
     };
 }
 
-#[cfg(target_pointer_width = "64")]
-const MAXIMUM_APPEND_VEC_FILE_SIZE: usize = 16 * 1024 * 1024 * 1024; // 16 GiB
-#[cfg(target_pointer_width = "32")]
-const MAXIMUM_APPEND_VEC_FILE_SIZE: usize = 2 * 1024 * 1024 * 1024; // 2 GiB
+const MAXIMUM_APPEND_VEC_FILE_SIZE: u64 = 16 * 1024 * 1024 * 1024; // 16 GiB
 
 pub type StoredMetaWriteVersion = u64;
 
@@ -259,7 +257,10 @@ impl AppendVec {
                 std::io::ErrorKind::Other,
                 format!("too small file size {} for AppendVec", file_size),
             ))
-        } else if file_size > MAXIMUM_APPEND_VEC_FILE_SIZE {
+        } else if usize::try_from(MAXIMUM_APPEND_VEC_FILE_SIZE)
+            .map(|max| file_size > max)
+            .unwrap_or(true)
+        {
             Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 format!("too large file size {} for AppendVec", file_size),
