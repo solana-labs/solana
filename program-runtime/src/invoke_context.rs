@@ -136,7 +136,7 @@ pub struct InvokeContext<'a> {
     pre_accounts: Vec<PreAccount>,
     accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
     builtin_programs: &'a [BuiltinProgram],
-    sysvars: &'a [(Pubkey, Vec<u8>)],
+    pub sysvars: &'a [(Pubkey, Vec<u8>)],
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     compute_budget: ComputeBudget,
     current_compute_budget: ComputeBudget,
@@ -811,37 +811,27 @@ impl<'a> InvokeContext<'a> {
         self.timings.deserialize_us = self.timings.deserialize_us.saturating_add(deserialize_us);
     }
 
-    /// Get cached sysvars
-    pub fn get_sysvars(&self) -> &[(Pubkey, Vec<u8>)] {
-        self.sysvars
-    }
-
     /// Get this invocation's compute budget
     pub fn get_compute_budget(&self) -> &ComputeBudget {
         &self.current_compute_budget
     }
-}
 
-// This method which has a generic parameter is outside of the InvokeContext,
-// because the InvokeContext is a dyn Trait.
-pub fn get_sysvar<T: Sysvar>(
-    invoke_context: &InvokeContext,
-    id: &Pubkey,
-) -> Result<T, InstructionError> {
-    invoke_context
-        .get_sysvars()
-        .iter()
-        .find_map(|(key, data)| {
-            if id == key {
-                bincode::deserialize(data).ok()
-            } else {
-                None
-            }
-        })
-        .ok_or_else(|| {
-            ic_msg!(invoke_context, "Unable to get sysvar {}", id);
-            InstructionError::UnsupportedSysvar
-        })
+    /// Get the value of a sysvar by its id
+    pub fn get_sysvar<T: Sysvar>(&self, id: &Pubkey) -> Result<T, InstructionError> {
+        self.sysvars
+            .iter()
+            .find_map(|(key, data)| {
+                if id == key {
+                    bincode::deserialize(data).ok()
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| {
+                ic_msg!(self, "Unable to get sysvar {}", id);
+                InstructionError::UnsupportedSysvar
+            })
+    }
 }
 
 pub struct MockInvokeContextPreparation {

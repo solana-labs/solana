@@ -1,7 +1,7 @@
 use {
     crate::{config, stake_state::StakeAccount},
     log::*,
-    solana_program_runtime::invoke_context::{get_sysvar, InvokeContext},
+    solana_program_runtime::invoke_context::InvokeContext,
     solana_sdk::{
         feature_set,
         instruction::InstructionError,
@@ -205,7 +205,7 @@ pub fn process_instruction(
                 .feature_set
                 .is_active(&feature_set::stake_program_v4::id())
             {
-                Some(get_sysvar::<Clock>(invoke_context, &sysvar::clock::id())?)
+                Some(invoke_context.get_sysvar::<Clock>(&sysvar::clock::id())?)
             } else {
                 None
             };
@@ -327,7 +327,7 @@ pub fn process_instruction(
                     epoch: lockup_checked.epoch,
                     custodian,
                 };
-                let clock = Some(get_sysvar::<Clock>(invoke_context, &sysvar::clock::id())?);
+                let clock = Some(invoke_context.get_sysvar::<Clock>(&sysvar::clock::id())?);
                 me.set_lockup(&lockup, &signers, clock.as_ref())
             } else {
                 Err(InstructionError::InvalidInstructionData)

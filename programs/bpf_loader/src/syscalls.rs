@@ -1025,18 +1025,15 @@ fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId>(
     var_addr: u64,
     loader_id: &Pubkey,
     memory_mapping: &MemoryMapping,
-    invoke_context: Rc<RefCell<&mut InvokeContext>>,
+    invoke_context: &mut InvokeContext,
 ) -> Result<u64, EbpfError<BpfError>> {
-    let invoke_context = invoke_context
-        .try_borrow()
-        .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
-
     invoke_context
         .get_compute_meter()
         .consume(invoke_context.get_compute_budget().sysvar_base_cost + size_of::<T>() as u64)?;
     let var = translate_type_mut::<T>(memory_mapping, var_addr, loader_id)?;
 
-    *var = solana_program_runtime::invoke_context::get_sysvar::<T>(*invoke_context, id)
+    *var = invoke_context
+        .get_sysvar::<T>(id)
         .map_err(SyscallError::InstructionError)?;
 
     Ok(SUCCESS)
@@ -1057,9 +1054,9 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetClockSysvar<'a, 'b> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        let invoke_context = question_mark!(
+        let mut invoke_context = question_mark!(
             self.invoke_context
-                .try_borrow()
+                .try_borrow_mut()
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
@@ -1074,7 +1071,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetClockSysvar<'a, 'b> {
             var_addr,
             &loader_id,
             memory_mapping,
-            self.invoke_context.clone(),
+            &mut invoke_context,
         );
     }
 }
@@ -1093,9 +1090,9 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetEpochScheduleSysvar<'a, 'b> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        let invoke_context = question_mark!(
+        let mut invoke_context = question_mark!(
             self.invoke_context
-                .try_borrow()
+                .try_borrow_mut()
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
@@ -1110,7 +1107,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetEpochScheduleSysvar<'a, 'b> {
             var_addr,
             &loader_id,
             memory_mapping,
-            self.invoke_context.clone(),
+            &mut invoke_context,
         );
     }
 }
@@ -1130,9 +1127,9 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetFeesSysvar<'a, 'b> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        let invoke_context = question_mark!(
+        let mut invoke_context = question_mark!(
             self.invoke_context
-                .try_borrow()
+                .try_borrow_mut()
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
@@ -1147,7 +1144,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetFeesSysvar<'a, 'b> {
             var_addr,
             &loader_id,
             memory_mapping,
-            self.invoke_context.clone(),
+            &mut invoke_context,
         );
     }
 }
@@ -1166,9 +1163,9 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetRentSysvar<'a, 'b> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        let invoke_context = question_mark!(
+        let mut invoke_context = question_mark!(
             self.invoke_context
-                .try_borrow()
+                .try_borrow_mut()
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
@@ -1183,7 +1180,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetRentSysvar<'a, 'b> {
             var_addr,
             &loader_id,
             memory_mapping,
-            self.invoke_context.clone(),
+            &mut invoke_context,
         );
     }
 }
