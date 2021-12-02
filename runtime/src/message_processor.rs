@@ -65,7 +65,6 @@ impl MessageProcessor {
             compute_budget,
             compute_meter,
             executors,
-            instruction_recorders,
             feature_set,
             blockhash,
             lamports_per_signature,
@@ -101,7 +100,10 @@ impl MessageProcessor {
                 }
             }
 
-            invoke_context.set_instruction_index(instruction_index);
+            if let Some(instruction_recorders) = instruction_recorders {
+                invoke_context.instruction_recorder =
+                    Some(&instruction_recorders[instruction_index]);
+            }
             let result = invoke_context
                 .push(message, instruction, program_indices, None)
                 .and_then(|_| {

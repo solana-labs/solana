@@ -318,7 +318,9 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             }
         }
 
-        invoke_context.record_instruction(instruction);
+        if let Some(instruction_recorder) = &invoke_context.instruction_recorder {
+            instruction_recorder.record_instruction(instruction.clone());
+        }
 
         invoke_context
             .process_cross_program_instruction(

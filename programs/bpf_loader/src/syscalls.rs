@@ -2363,7 +2363,9 @@ fn call<'a, 'b: 'a>(
     )?;
 
     // Record the instruction
-    invoke_context.record_instruction(&instruction);
+    if let Some(instruction_recorder) = &invoke_context.instruction_recorder {
+        instruction_recorder.record_instruction(instruction);
+    }
 
     // Process instruction
     invoke_context

@@ -131,7 +131,6 @@ impl<'a> StackFrame<'a> {
 }
 
 pub struct InvokeContext<'a> {
-    instruction_index: usize,
     invoke_stack: Vec<StackFrame<'a>>,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
@@ -143,7 +142,7 @@ pub struct InvokeContext<'a> {
     current_compute_budget: ComputeBudget,
     compute_meter: Rc<RefCell<ComputeMeter>>,
     executors: Rc<RefCell<Executors>>,
-    instruction_recorders: Option<&'a [InstructionRecorder]>,
+    pub instruction_recorder: Option<&'a InstructionRecorder>,
     pub feature_set: Arc<FeatureSet>,
     pub timings: ExecuteDetailsTimings,
     pub blockhash: Hash,
@@ -162,13 +161,11 @@ impl<'a> InvokeContext<'a> {
         compute_budget: ComputeBudget,
         compute_meter: Rc<RefCell<ComputeMeter>>,
         executors: Rc<RefCell<Executors>>,
-        instruction_recorders: Option<&'a [InstructionRecorder]>,
         feature_set: Arc<FeatureSet>,
         blockhash: Hash,
         lamports_per_signature: u64,
     ) -> Self {
         Self {
-            instruction_index: 0,
             invoke_stack: Vec::with_capacity(compute_budget.max_invoke_depth),
             rent,
             pre_accounts: Vec::new(),
@@ -180,7 +177,7 @@ impl<'a> InvokeContext<'a> {
             compute_budget,
             compute_meter,
             executors,
-            instruction_recorders,
+            instruction_recorder: None,
             feature_set,
             timings: ExecuteDetailsTimings::default(),
             blockhash,
@@ -204,7 +201,6 @@ impl<'a> InvokeContext<'a> {
             ComputeBudget::default(),
             ComputeMeter::new_ref(std::i64::MAX as u64),
             Rc::new(RefCell::new(Executors::default())),
-            None,
             feature_set,
             Hash::default(),
             0,
@@ -503,7 +499,9 @@ impl<'a> InvokeContext<'a> {
             prev_account_sizes.push((account, account_length));
         }
 
-        self.record_instruction(&instruction);
+        if let Some(instruction_recorder) = &self.instruction_recorder {
+            instruction_recorder.record_instruction(instruction);
+        }
         self.process_cross_program_instruction(
             &message,
             &program_indices,
@@ -787,18 +785,6 @@ impl<'a> InvokeContext<'a> {
     /// Get the completed loader work that can be re-used across execution
     pub fn get_executor(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
         self.executors.borrow().get(pubkey)
-    }
-
-    /// Set which instruction in the message is currently being recorded
-    pub fn set_instruction_index(&mut self, instruction_index: usize) {
-        self.instruction_index = instruction_index;
-    }
-
-    /// Record invoked instruction
-    pub fn record_instruction(&self, instruction: &Instruction) {
-        if let Some(instruction_recorders) = &self.instruction_recorders {
-            instruction_recorders[self.instruction_index].record_instruction(instruction.clone());
-        }
     }
 
     /// Find an account_index and account by its key
