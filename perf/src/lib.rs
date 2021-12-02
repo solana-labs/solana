@@ -54,7 +54,10 @@ pub fn report_target_features() {
     // when run on machines without AVX causing a non-obvious process abort.  Instead detect
     // the mismatch and error cleanly.
     if !is_rosetta_emulated() {
-        #[cfg(build_target_feature_avx)]
+        #[cfg(all(
+            any(target_arch = "x86", target_arch = "x86_64"),
+            build_target_feature_avx
+        ))]
         {
             if is_x86_feature_detected!("avx") {
                 info!("AVX detected");
@@ -66,7 +69,10 @@ pub fn report_target_features() {
             }
         }
 
-        #[cfg(build_target_feature_avx2)]
+        #[cfg(all(
+            any(target_arch = "x86", target_arch = "x86_64"),
+            build_target_feature_avx2
+        ))]
         {
             if is_x86_feature_detected!("avx2") {
                 info!("AVX2 detected");
