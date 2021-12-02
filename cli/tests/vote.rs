@@ -49,7 +49,13 @@ fn test_vote_authorize_and_withdraw() {
         authorized_voter: None,
         authorized_withdrawer: config.signers[0].pubkey(),
         commission: 0,
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+        nonce_account: None,
+        nonce_authority: 0,
         memo: None,
+        fee_payer: 0,
     };
     process_command(&config).unwrap();
     let vote_account = rpc_client

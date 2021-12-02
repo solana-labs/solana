@@ -59,7 +59,13 @@ fn test_stake_delegation_force() {
         authorized_voter: None,
         authorized_withdrawer,
         commission: 0,
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+        nonce_account: None,
+        nonce_authority: 0,
         memo: None,
+        fee_payer: 0,
     };
     process_command(&config).unwrap();
 

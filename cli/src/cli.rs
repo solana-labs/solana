@@ -298,7 +298,13 @@ pub enum CliCommand {
         authorized_voter: Option<Pubkey>,
         authorized_withdrawer: Pubkey,
         commission: u8,
+        sign_only: bool,
+        dump_transaction_message: bool,
+        blockhash_query: BlockhashQuery,
+        nonce_account: Option<Pubkey>,
+        nonce_authority: SignerIndex,
         memo: Option<String>,
+        fee_payer: SignerIndex,
     },
     ShowVoteAccount {
         pubkey: Pubkey,
@@ -1384,7 +1390,13 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             authorized_voter,
             authorized_withdrawer,
             commission,
+            sign_only,
+            dump_transaction_message,
+            blockhash_query,
+            ref nonce_account,
+            nonce_authority,
             memo,
+            fee_payer,
         } => process_create_vote_account(
             &rpc_client,
             config,
@@ -1394,7 +1406,13 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             authorized_voter,
             *authorized_withdrawer,
             *commission,
+            *sign_only,
+            *dump_transaction_message,
+            blockhash_query,
+            nonce_account.as_ref(),
+            *nonce_authority,
             memo.as_ref(),
+            *fee_payer,
         ),
         CliCommand::ShowVoteAccount {
             pubkey: vote_account_pubkey,
@@ -1975,7 +1993,13 @@ mod tests {
             authorized_voter: Some(bob_pubkey),
             authorized_withdrawer: bob_pubkey,
             commission: 0,
+            sign_only: false,
+            dump_transaction_message: false,
+            blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+            nonce_account: None,
+            nonce_authority: 0,
             memo: None,
+            fee_payer: 0,
         };
         config.signers = vec![&keypair, &bob_keypair, &identity_keypair];
         let result = process_command(&config);
@@ -2195,7 +2219,13 @@ mod tests {
             authorized_voter: Some(bob_pubkey),
             authorized_withdrawer: bob_pubkey,
             commission: 0,
+            sign_only: false,
+            dump_transaction_message: false,
+            blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+            nonce_account: None,
+            nonce_authority: 0,
             memo: None,
+            fee_payer: 0,
         };
         config.signers = vec![&keypair, &bob_keypair, &identity_keypair];
         assert!(process_command(&config).is_err());
