@@ -5554,7 +5554,14 @@ pub mod tests {
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         let slot = 1;
-        let (shred, coding) = Shredder::new_coding_shred_header(slot, 11, 11, 11, 11, 0);
+        let (shred, coding) = Shredder::new_coding_shred_header(
+            slot, 11, // index
+            11, // fec_set_index
+            11, // num_data_shreds
+            11, // num_coding_shreds
+            8,  // position
+            0,  // version
+        );
         let coding_shred = Shred::new_empty_from_header(shred, DataShredHeader::default(), coding);
 
         let mut erasure_metas = HashMap::new();
@@ -5604,7 +5611,14 @@ pub mod tests {
         let last_root = RwLock::new(0);
 
         let slot = 1;
-        let (mut shred, coding) = Shredder::new_coding_shred_header(slot, 11, 11, 11, 11, 0);
+        let (mut shred, coding) = Shredder::new_coding_shred_header(
+            slot, 11, // index
+            11, // fec_set_index
+            11, // num_data_shreds
+            11, // num_coding_shreds
+            8,  // position
+            0,  // version
+        );
         let coding_shred =
             Shred::new_empty_from_header(shred.clone(), DataShredHeader::default(), coding.clone());
 
