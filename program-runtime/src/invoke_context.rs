@@ -146,7 +146,7 @@ pub struct InvokeContext<'a> {
     instruction_recorders: Option<&'a [InstructionRecorder]>,
     feature_set: Arc<FeatureSet>,
     pub timings: ExecuteDetailsTimings,
-    blockhash: Hash,
+    pub blockhash: Hash,
     lamports_per_signature: u64,
     return_data: (Pubkey, Vec<u8>),
 }
@@ -835,16 +835,6 @@ impl<'a> InvokeContext<'a> {
     /// Get this invocation's compute budget
     pub fn get_compute_budget(&self) -> &ComputeBudget {
         &self.current_compute_budget
-    }
-
-    /// Set this invocation's blockhash
-    pub fn set_blockhash(&mut self, hash: Hash) {
-        self.blockhash = hash;
-    }
-
-    /// Get this invocation's blockhash
-    pub fn get_blockhash(&self) -> &Hash {
-        &self.blockhash
     }
 
     /// Set this invocation's lamports_per_signature value

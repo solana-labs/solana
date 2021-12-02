@@ -1575,7 +1575,7 @@ mod tests {
                 |first_instruction_account: usize,
                  instruction_data: &[u8],
                  invoke_context: &mut InvokeContext| {
-                    invoke_context.set_blockhash(hash(&serialize(&0).unwrap()));
+                    invoke_context.blockhash = hash(&serialize(&0).unwrap());
                     super::process_instruction(
                         first_instruction_account,
                         instruction_data,
@@ -1991,7 +1991,7 @@ mod tests {
                 |first_instruction_account: usize,
                  instruction_data: &[u8],
                  invoke_context: &mut InvokeContext| {
-                    invoke_context.set_blockhash(hash(&serialize(&0).unwrap()));
+                    invoke_context.blockhash = hash(&serialize(&0).unwrap());
                     super::process_instruction(
                         first_instruction_account,
                         instruction_data,

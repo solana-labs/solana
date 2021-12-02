@@ -69,7 +69,7 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
                     );
                     return Err(InstructionError::MissingRequiredSignature);
                 }
-                let recent_blockhash = *invoke_context.get_blockhash();
+                let recent_blockhash = invoke_context.blockhash;
                 if data.blockhash == recent_blockhash {
                     ic_msg!(
                         invoke_context,
@@ -137,7 +137,7 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
             }
             State::Initialized(ref data) => {
                 if lamports == self.lamports()? {
-                    if data.blockhash == *invoke_context.get_blockhash() {
+                    if data.blockhash == invoke_context.blockhash {
                         ic_msg!(
                             invoke_context,
                             "Withdraw nonce account: nonce can only advance once per slot"
@@ -222,7 +222,7 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
                 }
                 let data = nonce::state::Data::new(
                     *nonce_authority,
-                    *invoke_context.get_blockhash(),
+                    invoke_context.blockhash,
                     invoke_context.get_lamports_per_signature(),
                 );
                 self.set_state(&Versions::new_current(State::Initialized(data)))
@@ -325,7 +325,7 @@ mod test {
     fn create_invoke_context_with_blockhash<'a>(seed: usize) -> InvokeContext<'a> {
         let mut invoke_context = InvokeContext::new_mock(&[], &[]);
         let (blockhash, lamports_per_signature) = create_test_blockhash(seed);
-        invoke_context.set_blockhash(blockhash);
+        invoke_context.blockhash = blockhash;
         invoke_context.set_lamports_per_signature(lamports_per_signature);
         invoke_context
     }
@@ -364,7 +364,7 @@ mod test {
                 .convert_to_current();
             let data = nonce::state::Data::new(
                 data.authority,
-                *invoke_context.get_blockhash(),
+                invoke_context.blockhash,
                 invoke_context.get_lamports_per_signature(),
             );
             // First nonce instruction drives state from Uninitialized to Initialized
@@ -378,7 +378,7 @@ mod test {
                 .convert_to_current();
             let data = nonce::state::Data::new(
                 data.authority,
-                *invoke_context.get_blockhash(),
+                invoke_context.blockhash,
                 invoke_context.get_lamports_per_signature(),
             );
             // Second nonce instruction consumes and replaces stored nonce
@@ -392,7 +392,7 @@ mod test {
                 .convert_to_current();
             let data = nonce::state::Data::new(
                 data.authority,
-                *invoke_context.get_blockhash(),
+                invoke_context.blockhash,
                 invoke_context.get_lamports_per_signature(),
             );
             // Third nonce instruction for fun and profit
@@ -448,7 +448,7 @@ mod test {
                 .convert_to_current();
             let data = nonce::state::Data::new(
                 authority,
-                *invoke_context.get_blockhash(),
+                invoke_context.blockhash,
                 invoke_context.get_lamports_per_signature(),
             );
             assert_eq!(state, State::Initialized(data));
@@ -726,7 +726,7 @@ mod test {
                 .convert_to_current();
             let data = nonce::state::Data::new(
                 authority,
-                *invoke_context.get_blockhash(),
+                invoke_context.blockhash,
                 invoke_context.get_lamports_per_signature(),
             );
             assert_eq!(state, State::Initialized(data.clone()));
@@ -749,7 +749,7 @@ mod test {
                     .convert_to_current();
                 let data = nonce::state::Data::new(
                     data.authority,
-                    *invoke_context.get_blockhash(),
+                    invoke_context.blockhash,
                     invoke_context.get_lamports_per_signature(),
                 );
                 assert_eq!(state, State::Initialized(data));
@@ -923,7 +923,7 @@ mod test {
             let result = keyed_account.initialize_nonce_account(&authority, &rent, &invoke_context);
             let data = nonce::state::Data::new(
                 authority,
-                *invoke_context.get_blockhash(),
+                invoke_context.blockhash,
                 invoke_context.get_lamports_per_signature(),
             );
             assert_eq!(result, Ok(()));
@@ -988,7 +988,7 @@ mod test {
             let authority = Pubkey::default();
             let data = nonce::state::Data::new(
                 authority,
-                *invoke_context.get_blockhash(),
+                invoke_context.blockhash,
                 invoke_context.get_lamports_per_signature(),
             );
             let result = nonce_account.authorize_nonce_account(
@@ -1062,7 +1062,7 @@ mod test {
                 .unwrap();
             assert!(verify_nonce_account(
                 &nonce_account.account.borrow(),
-                invoke_context.get_blockhash(),
+                &invoke_context.blockhash,
             ));
         });
     }
@@ -1093,7 +1093,7 @@ mod test {
             let invoke_context = create_invoke_context_with_blockhash(1);
             assert!(!verify_nonce_account(
                 &nonce_account.account.borrow(),
-                invoke_context.get_blockhash(),
+                &invoke_context.blockhash,
             ));
         });
     }
