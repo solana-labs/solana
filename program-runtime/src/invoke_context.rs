@@ -147,7 +147,7 @@ pub struct InvokeContext<'a> {
     feature_set: Arc<FeatureSet>,
     pub timings: ExecuteDetailsTimings,
     pub blockhash: Hash,
-    lamports_per_signature: u64,
+    pub lamports_per_signature: u64,
     return_data: (Pubkey, Vec<u8>),
 }
 
@@ -835,16 +835,6 @@ impl<'a> InvokeContext<'a> {
     /// Get this invocation's compute budget
     pub fn get_compute_budget(&self) -> &ComputeBudget {
         &self.current_compute_budget
-    }
-
-    /// Set this invocation's lamports_per_signature value
-    pub fn set_lamports_per_signature(&mut self, lamports_per_signature: u64) {
-        self.lamports_per_signature = lamports_per_signature;
-    }
-
-    /// Get this invocation's lamports_per_signature value
-    pub fn get_lamports_per_signature(&self) -> u64 {
-        self.lamports_per_signature
     }
 
     /// Set the return data

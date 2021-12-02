@@ -84,7 +84,7 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
                 let new_data = nonce::state::Data::new(
                     data.authority,
                     recent_blockhash,
-                    invoke_context.get_lamports_per_signature(),
+                    invoke_context.lamports_per_signature,
                 );
                 self.set_state(&Versions::new_current(State::Initialized(new_data)))
             }
@@ -223,7 +223,7 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
                 let data = nonce::state::Data::new(
                     *nonce_authority,
                     invoke_context.blockhash,
-                    invoke_context.get_lamports_per_signature(),
+                    invoke_context.lamports_per_signature,
                 );
                 self.set_state(&Versions::new_current(State::Initialized(data)))
             }
@@ -326,7 +326,7 @@ mod test {
         let mut invoke_context = InvokeContext::new_mock(&[], &[]);
         let (blockhash, lamports_per_signature) = create_test_blockhash(seed);
         invoke_context.blockhash = blockhash;
-        invoke_context.set_lamports_per_signature(lamports_per_signature);
+        invoke_context.lamports_per_signature = lamports_per_signature;
         invoke_context
     }
 
@@ -365,7 +365,7 @@ mod test {
             let data = nonce::state::Data::new(
                 data.authority,
                 invoke_context.blockhash,
-                invoke_context.get_lamports_per_signature(),
+                invoke_context.lamports_per_signature,
             );
             // First nonce instruction drives state from Uninitialized to Initialized
             assert_eq!(state, State::Initialized(data.clone()));
@@ -379,7 +379,7 @@ mod test {
             let data = nonce::state::Data::new(
                 data.authority,
                 invoke_context.blockhash,
-                invoke_context.get_lamports_per_signature(),
+                invoke_context.lamports_per_signature,
             );
             // Second nonce instruction consumes and replaces stored nonce
             assert_eq!(state, State::Initialized(data.clone()));
@@ -393,7 +393,7 @@ mod test {
             let data = nonce::state::Data::new(
                 data.authority,
                 invoke_context.blockhash,
-                invoke_context.get_lamports_per_signature(),
+                invoke_context.lamports_per_signature,
             );
             // Third nonce instruction for fun and profit
             assert_eq!(state, State::Initialized(data));
@@ -449,7 +449,7 @@ mod test {
             let data = nonce::state::Data::new(
                 authority,
                 invoke_context.blockhash,
-                invoke_context.get_lamports_per_signature(),
+                invoke_context.lamports_per_signature,
             );
             assert_eq!(state, State::Initialized(data));
             let signers = HashSet::new();
@@ -727,7 +727,7 @@ mod test {
             let data = nonce::state::Data::new(
                 authority,
                 invoke_context.blockhash,
-                invoke_context.get_lamports_per_signature(),
+                invoke_context.lamports_per_signature,
             );
             assert_eq!(state, State::Initialized(data.clone()));
             with_test_keyed_account(42, false, |to_keyed| {
@@ -750,7 +750,7 @@ mod test {
                 let data = nonce::state::Data::new(
                     data.authority,
                     invoke_context.blockhash,
-                    invoke_context.get_lamports_per_signature(),
+                    invoke_context.lamports_per_signature,
                 );
                 assert_eq!(state, State::Initialized(data));
                 assert_eq!(
@@ -924,7 +924,7 @@ mod test {
             let data = nonce::state::Data::new(
                 authority,
                 invoke_context.blockhash,
-                invoke_context.get_lamports_per_signature(),
+                invoke_context.lamports_per_signature,
             );
             assert_eq!(result, Ok(()));
             let state = AccountUtilsState::<Versions>::state(keyed_account)
@@ -989,7 +989,7 @@ mod test {
             let data = nonce::state::Data::new(
                 authority,
                 invoke_context.blockhash,
-                invoke_context.get_lamports_per_signature(),
+                invoke_context.lamports_per_signature,
             );
             let result = nonce_account.authorize_nonce_account(
                 &Pubkey::default(),
