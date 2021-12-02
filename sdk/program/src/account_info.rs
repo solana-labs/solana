@@ -32,12 +32,19 @@ pub struct AccountInfo<'a> {
 
 impl<'a> fmt::Debug for AccountInfo<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use fmt::Write;
+
         let data_len = cmp::min(64, self.data_len());
         let data_str = if data_len > 0 {
-            format!(
-                " data: {} ...",
-                hex::encode(self.data.borrow()[..data_len].to_vec())
-            )
+            let mut s = " data: ".to_owned();
+
+            for &byte in &self.data.borrow()[..data_len] {
+                write!(s, "{:02x}", byte)?;
+            }
+
+            s.push_str(" ...");
+
+            s
         } else {
             "".to_string()
         };

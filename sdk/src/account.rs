@@ -280,9 +280,17 @@ impl ReadableAccount for Ref<'_, Account> {
 }
 
 fn debug_fmt<T: ReadableAccount>(item: &T, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    use fmt::Write;
+
     let data_len = cmp::min(64, item.data().len());
     let data_str = if data_len > 0 {
-        format!(" data: {}", hex::encode(item.data()[..data_len].to_vec()))
+        let mut s = " data: ".to_owned();
+
+        for &byte in &item.data()[..data_len] {
+            write!(s, "{:02x}", byte)?;
+        }
+
+        s
     } else {
         "".to_string()
     };
