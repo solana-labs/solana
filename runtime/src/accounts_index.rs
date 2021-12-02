@@ -3509,9 +3509,10 @@ pub mod tests {
         let index = AccountsIndex::<bool>::default_for_tests();
         let ancestors = vec![(0, 0)].into_iter().collect();
         let mut gc = Vec::new();
+        let key = &key.pubkey();
         index.upsert(
             0,
-            &key.pubkey(),
+            key,
             &Pubkey::default(),
             &[],
             &AccountSecondaryIndexes::default(),
@@ -3520,14 +3521,14 @@ pub mod tests {
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         assert!(gc.is_empty());
-        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors), None).unwrap();
+        let (list, idx) = index.get(key, Some(&ancestors), None).unwrap();
         assert_eq!(list.slot_list()[idx], (0, true));
         drop(list);
 
         let mut gc = Vec::new();
         index.upsert(
             0,
-            &key.pubkey(),
+            key,
             &Pubkey::default(),
             &[],
             &AccountSecondaryIndexes::default(),
@@ -3536,7 +3537,7 @@ pub mod tests {
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         assert_eq!(gc, vec![(0, true)]);
-        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors), None).unwrap();
+        let (list, idx) = index.get(key, Some(&ancestors), None).unwrap();
         assert_eq!(list.slot_list()[idx], (0, false));
     }
 
@@ -3547,9 +3548,10 @@ pub mod tests {
         let index = AccountsIndex::<bool>::default_for_tests();
         let ancestors = vec![(0, 0)].into_iter().collect();
         let mut gc = Vec::new();
+        let key = &key.pubkey();
         index.upsert(
             0,
-            &key.pubkey(),
+            key,
             &Pubkey::default(),
             &[],
             &AccountSecondaryIndexes::default(),
@@ -3560,7 +3562,7 @@ pub mod tests {
         assert!(gc.is_empty());
         index.upsert(
             1,
-            &key.pubkey(),
+            key,
             &Pubkey::default(),
             &[],
             &AccountSecondaryIndexes::default(),
@@ -3569,10 +3571,10 @@ pub mod tests {
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         assert!(gc.is_empty());
-        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors), None).unwrap();
+        let (list, idx) = index.get(key, Some(&ancestors), None).unwrap();
         assert_eq!(list.slot_list()[idx], (0, true));
         let ancestors = vec![(1, 0)].into_iter().collect();
-        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors), None).unwrap();
+        let (list, idx) = index.get(key, Some(&ancestors), None).unwrap();
         assert_eq!(list.slot_list()[idx], (1, false));
     }
 
@@ -3581,9 +3583,10 @@ pub mod tests {
         let key = Keypair::new();
         let index = AccountsIndex::<bool>::default_for_tests();
         let mut gc = Vec::new();
+        let key = &key.pubkey();
         index.upsert(
             0,
-            &key.pubkey(),
+            key,
             &Pubkey::default(),
             &[],
             &AccountSecondaryIndexes::default(),
@@ -3594,7 +3597,7 @@ pub mod tests {
         assert!(gc.is_empty());
         index.upsert(
             1,
-            &key.pubkey(),
+            key,
             &Pubkey::default(),
             &[],
             &AccountSecondaryIndexes::default(),
@@ -3604,7 +3607,7 @@ pub mod tests {
         );
         index.upsert(
             2,
-            &key.pubkey(),
+            key,
             &Pubkey::default(),
             &[],
             &AccountSecondaryIndexes::default(),
@@ -3614,7 +3617,7 @@ pub mod tests {
         );
         index.upsert(
             3,
-            &key.pubkey(),
+            key,
             &Pubkey::default(),
             &[],
             &AccountSecondaryIndexes::default(),
@@ -3627,7 +3630,7 @@ pub mod tests {
         index.add_root(3, false);
         index.upsert(
             4,
-            &key.pubkey(),
+            key,
             &Pubkey::default(),
             &[],
             &AccountSecondaryIndexes::default(),
@@ -3639,7 +3642,7 @@ pub mod tests {
         // Updating index should not purge older roots, only purges
         // previous updates within the same slot
         assert_eq!(gc, vec![]);
-        let (list, idx) = index.get(&key.pubkey(), None, None).unwrap();
+        let (list, idx) = index.get(key, None, None).unwrap();
         assert_eq!(list.slot_list()[idx], (3, true));
 
         let mut num = 0;
@@ -3648,7 +3651,7 @@ pub mod tests {
             "",
             &Ancestors::default(),
             |pubkey, _index| {
-                if pubkey == &key.pubkey() {
+                if pubkey == key {
                     found_key = true;
                     assert_eq!(_index, (&true, 3));
                 };
@@ -3670,9 +3673,10 @@ pub mod tests {
         let index = AccountsIndex::<u64>::default_for_tests();
         let mut gc = Vec::new();
         assert_eq!(0, account_maps_stats_len(&index));
+        let key = &key.pubkey();
         index.upsert(
             1,
-            &key.pubkey(),
+            key,
             &Pubkey::default(),
             &[],
             &AccountSecondaryIndexes::default(),
@@ -3684,7 +3688,7 @@ pub mod tests {
 
         index.upsert(
             1,
-            &key.pubkey(),
+            key,
             &Pubkey::default(),
             &[],
             &AccountSecondaryIndexes::default(),
@@ -3694,17 +3698,17 @@ pub mod tests {
         );
         assert_eq!(1, account_maps_stats_len(&index));
 
-        let purges = index.purge_roots(&key.pubkey());
+        let purges = index.purge_roots(key);
         assert_eq!(purges, (vec![], false));
         index.add_root(1, false);
 
-        let purges = index.purge_roots(&key.pubkey());
+        let purges = index.purge_roots(key);
         assert_eq!(purges, (vec![(1, 10)], true));
 
         assert_eq!(1, account_maps_stats_len(&index));
         index.upsert(
             1,
-            &key.pubkey(),
+            key,
             &Pubkey::default(),
             &[],
             &AccountSecondaryIndexes::default(),
