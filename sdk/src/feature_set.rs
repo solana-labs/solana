@@ -245,6 +245,10 @@ pub mod spl_token_v3_3_0_release {
     solana_sdk::declare_id!("Ftok2jhqAqxUWEiCVRrfRs9DPppWP8cgTB7NQNKL88mS");
 }
 
+pub mod leave_nonce_on_success {
+    solana_sdk::declare_id!("E8MkiWZNNPGU6n55jkGzyj8ghUmjCHRmDFdYYFYHxWhQ");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -301,6 +305,7 @@ lazy_static! {
         (reject_deployment_of_unresolved_syscalls::id(), "Reject deployment of programs with unresolved syscall symbols"),
         (nonce_must_be_writable::id(), "nonce must be writable"),
         (spl_token_v3_3_0_release::id(), "spl-token v3.3.0 release"),
+        (leave_nonce_on_success::id(), "leave nonce as is on success"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

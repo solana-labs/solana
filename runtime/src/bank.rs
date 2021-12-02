@@ -669,17 +669,13 @@ impl NonceFull {
 
             let nonce_address = *partial.address();
             if *fee_payer_address == nonce_address {
-                Ok(Self {
-                    address: nonce_address,
-                    account: fee_payer_account,
-                    fee_payer_account: None,
-                })
+                Ok(Self::new(nonce_address, fee_payer_account, None))
             } else {
-                Ok(Self {
-                    address: nonce_address,
-                    account: partial.account().clone(),
-                    fee_payer_account: Some(fee_payer_account),
-                })
+                Ok(Self::new(
+                    nonce_address,
+                    partial.account().clone(),
+                    Some(fee_payer_account),
+                ))
             }
         } else {
             Err(TransactionError::AccountNotFound)
@@ -3935,15 +3931,14 @@ impl Bank {
                         inner_instructions.push(None);
                     }
 
-                    let nonce =
-                        if let Err(TransactionError::InstructionError(_, _)) = &process_result {
+                    let nonce = match &process_result {
+                        Ok(_) => nonce.clone(), // May need to calculate the fee based on the nonce
+                        Err(TransactionError::InstructionError(_, _)) => {
                             error_counters.instruction_error += 1;
-                            nonce.clone()
-                        } else if process_result.is_err() {
-                            None
-                        } else {
-                            nonce.clone()
-                        };
+                            nonce.clone() // May need to advance the nonce
+                        }
+                        _ => None,
+                    };
 
                     (process_result, nonce)
                 }
@@ -4176,8 +4171,8 @@ impl Bank {
             &blockhash,
             lamports_per_signature,
             self.rent_for_sysvars(),
-            self.merge_nonce_error_into_system_error(),
             self.demote_program_write_locks(),
+            self.leave_nonce_on_success(),
         );
         let rent_debits = self.collect_rent(executed_results, loaded_txs);
 
@@ -6038,11 +6033,6 @@ impl Bank {
             .is_active(&feature_set::verify_tx_signatures_len::id())
     }
 
-    pub fn merge_nonce_error_into_system_error(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::merge_nonce_error_into_system_error::id())
-    }
-
     pub fn versioned_tx_message_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::versioned_tx_message_enabled::id())
@@ -6056,6 +6046,11 @@ impl Bank {
     pub fn demote_program_write_locks(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::demote_program_write_locks::id())
+    }
+
+    pub fn leave_nonce_on_success(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::leave_nonce_on_success::id())
     }
 
     pub fn stakes_remove_delegation_if_inactive_enabled(&self) -> bool {
@@ -11367,9 +11362,6 @@ pub(crate) mod tests {
         debug!("cust: {:?}", custodian_account);
         let nonce_hash = get_nonce_blockhash(&bank, &nonce_pubkey).unwrap();
 
-        Arc::get_mut(&mut bank)
-            .unwrap()
-            .activate_feature(&feature_set::merge_nonce_error_into_system_error::id());
         for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
             goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
             bank = Arc::new(new_from_parent(&bank));
@@ -11403,7 +11395,7 @@ pub(crate) mod tests {
                     .get_fee_for_message(&recent_message.try_into().unwrap())
                     .unwrap()
         );
-        assert_eq!(
+        assert_ne!(
             nonce_hash,
             get_nonce_blockhash(&bank, &nonce_pubkey).unwrap()
         );
