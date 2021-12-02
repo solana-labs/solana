@@ -957,16 +957,17 @@ impl Executor for BpfExecutor {
         use_jit: bool,
     ) -> Result<(), InstructionError> {
         let log_collector = invoke_context.get_log_collector();
+        let compute_meter = invoke_context.get_compute_meter();
         let invoke_depth = invoke_context.invoke_depth();
 
         let mut serialize_time = Measure::start("serialize");
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
         let program = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-        let loader_id = &program.owner()?;
-        let program_id = invoke_context.get_caller()?;
+        let loader_id = program.owner()?;
+        let program_id = *program.unsigned_key();
         let (mut parameter_bytes, account_lengths) = serialize_parameters(
-            loader_id,
-            program_id,
+            &loader_id,
+            &program_id,
             &keyed_accounts[first_instruction_account + 1..],
             instruction_data,
         )?;
@@ -974,8 +975,6 @@ impl Executor for BpfExecutor {
         let mut create_vm_time = Measure::start("create_vm");
         let mut execute_time;
         {
-            let program_id = &invoke_context.get_caller()?.clone();
-            let compute_meter = invoke_context.get_compute_meter();
             let mut vm = match create_vm(
                 &self.executable,
                 parameter_bytes.as_slice_mut(),
@@ -991,7 +990,7 @@ impl Executor for BpfExecutor {
             create_vm_time.stop();
 
             execute_time = Measure::start("execute");
-            stable_log::program_invoke(&log_collector, program_id, invoke_depth);
+            stable_log::program_invoke(&log_collector, &program_id, invoke_depth);
             let mut instruction_meter = ThisInstructionMeter::new(compute_meter.clone());
             let before = compute_meter.borrow().get_remaining();
             let result = if use_jit {
@@ -1003,7 +1002,7 @@ impl Executor for BpfExecutor {
             ic_logger_msg!(
                 log_collector,
                 "Program {} consumed {} of {} compute units",
-                program_id,
+                &program_id,
                 before - after,
                 before
             );
@@ -1015,7 +1014,7 @@ impl Executor for BpfExecutor {
                 trace!("BPF Program Instruction Trace:\n{}", trace_string);
             }
             drop(vm);
-            let (program_id, return_data) = invoke_context.get_return_data();
+            let (_returned_from_program_id, return_data) = invoke_context.get_return_data();
             if !return_data.is_empty() {
                 stable_log::program_return(&log_collector, &program_id, return_data);
             }
@@ -1046,7 +1045,7 @@ impl Executor for BpfExecutor {
         let mut deserialize_time = Measure::start("deserialize");
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
         deserialize_parameters(
-            loader_id,
+            &loader_id,
             &keyed_accounts[first_instruction_account + 1..],
             parameter_bytes.as_slice(),
             &account_lengths,
@@ -1059,8 +1058,7 @@ impl Executor for BpfExecutor {
             execute_time.as_us(),
             deserialize_time.as_us(),
         );
-        let program_id = invoke_context.get_caller()?;
-        stable_log::program_success(&log_collector, program_id);
+        stable_log::program_success(&log_collector, &program_id);
         Ok(())
     }
 }
