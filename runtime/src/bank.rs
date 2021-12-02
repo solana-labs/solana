@@ -8074,18 +8074,20 @@ pub(crate) mod tests {
 
     impl Bank {
         fn slots_by_pubkey(&self, pubkey: &Pubkey, ancestors: &Ancestors) -> Vec<Slot> {
-            let (locked_entry, _) = self
-                .rc
-                .accounts
-                .accounts_db
-                .accounts_index
-                .get(pubkey, Some(ancestors), None)
-                .unwrap();
-            locked_entry
-                .slot_list()
-                .iter()
-                .map(|(slot, _)| *slot)
-                .collect::<Vec<Slot>>()
+            self.rc.accounts.accounts_db.accounts_index.get(
+                pubkey,
+                Some(ancestors),
+                None,
+                |entry| {
+                    entry
+                        .unwrap()
+                        .0
+                        .slot_list()
+                        .iter()
+                        .map(|(slot, _)| *slot)
+                        .collect::<Vec<Slot>>()
+                },
+            )
         }
 
         fn first_slot_in_next_epoch(&self) -> Slot {
