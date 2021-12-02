@@ -223,7 +223,7 @@ fn run_program(name: &str) -> u64 {
         let mut instruction_count = 0;
         let mut tracer = None;
         for i in 0..2 {
-            invoke_context.set_return_data(Vec::new()).unwrap();
+            invoke_context.return_data = (*invoke_context.get_caller().unwrap(), Vec::new());
             let mut parameter_bytes = parameter_bytes.clone();
             {
                 let mut vm = create_vm(

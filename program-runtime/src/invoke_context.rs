@@ -148,7 +148,7 @@ pub struct InvokeContext<'a> {
     pub timings: ExecuteDetailsTimings,
     pub blockhash: Hash,
     pub lamports_per_signature: u64,
-    return_data: (Pubkey, Vec<u8>),
+    pub return_data: (Pubkey, Vec<u8>),
 }
 
 impl<'a> InvokeContext<'a> {
@@ -657,7 +657,7 @@ impl<'a> InvokeContext<'a> {
         // Verify the calling program hasn't misbehaved
         self.verify_and_update(instruction, account_indices, caller_write_privileges)?;
 
-        self.set_return_data(Vec::new())?;
+        self.return_data = (*self.get_caller()?, Vec::new());
         self.push(message, instruction, program_indices, Some(account_indices))?;
         let result = self.process_instruction(&instruction.data).and_then(|_| {
             // Verify the called program has not misbehaved
@@ -835,17 +835,6 @@ impl<'a> InvokeContext<'a> {
     /// Get this invocation's compute budget
     pub fn get_compute_budget(&self) -> &ComputeBudget {
         &self.current_compute_budget
-    }
-
-    /// Set the return data
-    pub fn set_return_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError> {
-        self.return_data = (*self.get_caller()?, data);
-        Ok(())
-    }
-
-    /// Get the return data
-    pub fn get_return_data(&self) -> (Pubkey, &[u8]) {
-        (self.return_data.0, &self.return_data.1)
     }
 }
 

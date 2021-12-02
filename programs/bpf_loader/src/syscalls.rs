@@ -2453,12 +2453,13 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSetReturnData<'a, 'b> {
             )
             .to_vec()
         };
-        question_mark!(
+        let program_id = question_mark!(
             invoke_context
-                .set_return_data(return_data)
+                .get_caller()
                 .map_err(SyscallError::InstructionError),
             result
         );
+        invoke_context.return_data = (*program_id, return_data);
 
         *result = Ok(0);
     }
@@ -2500,7 +2501,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetReturnData<'a, 'b> {
             result
         );
 
-        let (program_id, return_data) = invoke_context.get_return_data();
+        let (program_id, return_data) = &invoke_context.return_data;
         length = length.min(return_data.len() as u64);
         if length != 0 {
             question_mark!(
@@ -2522,7 +2523,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetReturnData<'a, 'b> {
                 result
             );
 
-            program_id_result[0] = program_id;
+            program_id_result[0] = *program_id;
         }
 
         // Return the actual length, rather the length returned
