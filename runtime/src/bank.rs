@@ -71,9 +71,7 @@ use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
 use solana_program_runtime::{
     instruction_recorder::InstructionRecorder,
-    invoke_context::{
-        BuiltinProgram, ComputeMeter, Executor, Executors, ProcessInstructionWithContext,
-    },
+    invoke_context::{BuiltinProgram, Executor, Executors, ProcessInstructionWithContext},
     log_collector::LogCollector,
     timings::ExecuteDetailsTimings,
 };
@@ -3871,8 +3869,6 @@ impl Bank {
                             None
                         };
 
-                        let compute_meter = ComputeMeter::new_ref(compute_budget.max_units);
-
                         let (blockhash, lamports_per_signature) =
                             self.last_blockhash_and_lamports_per_signature();
 
@@ -3888,7 +3884,6 @@ impl Bank {
                                 instruction_recorders.as_deref(),
                                 feature_set,
                                 compute_budget,
-                                compute_meter,
                                 &mut timings.details,
                                 &*self.sysvar_cache.read().unwrap(),
                                 blockhash,

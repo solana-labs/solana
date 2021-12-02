@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
 use solana_program_runtime::{
     instruction_recorder::InstructionRecorder,
-    invoke_context::{BuiltinProgram, ComputeMeter, Executors, InvokeContext},
+    invoke_context::{BuiltinProgram, Executors, InvokeContext},
     log_collector::LogCollector,
     timings::ExecuteDetailsTimings,
 };
@@ -50,7 +50,6 @@ impl MessageProcessor {
         instruction_recorders: Option<&[InstructionRecorder]>,
         feature_set: Arc<FeatureSet>,
         compute_budget: ComputeBudget,
-        compute_meter: Rc<RefCell<ComputeMeter>>,
         timings: &mut ExecuteDetailsTimings,
         sysvars: &[(Pubkey, Vec<u8>)],
         blockhash: Hash,
@@ -63,7 +62,6 @@ impl MessageProcessor {
             sysvars,
             log_collector,
             compute_budget,
-            compute_meter,
             executors,
             feature_set,
             blockhash,
@@ -138,7 +136,6 @@ impl MessageProcessor {
 mod tests {
     use super::*;
     use crate::rent_collector::RentCollector;
-    use solana_program_runtime::invoke_context::ComputeMeter;
     use solana_sdk::{
         account::ReadableAccount,
         instruction::{AccountMeta, Instruction, InstructionError},
@@ -250,7 +247,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
@@ -280,7 +276,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
@@ -314,7 +309,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
@@ -459,7 +453,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
@@ -493,7 +486,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
@@ -524,7 +516,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
@@ -582,7 +573,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),

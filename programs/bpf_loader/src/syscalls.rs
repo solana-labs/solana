@@ -3977,9 +3977,14 @@ mod tests {
             .get_compute_budget()
             .create_program_address_units;
         let address = bpf_loader_upgradeable::id();
+        let max_tries = 256; // one per seed
 
         for _ in 0..1_000 {
             let address = Pubkey::new_unique();
+            invoke_context
+                .get_compute_meter()
+                .borrow_mut()
+                .mock_set_remaining(cost * max_tries);
             let (found_address, bump_seed) =
                 try_find_program_address(&mut invoke_context, &[b"Lil'", b"Bits"], &address)
                     .unwrap();
@@ -3994,7 +3999,6 @@ mod tests {
             );
         }
 
-        let max_tries = 256; // one per seed
         let seeds: &[&[u8]] = &[b""];
         invoke_context
             .get_compute_meter()
