@@ -307,6 +307,12 @@ impl ZeroLamport for AccountInfo {
     }
 }
 
+impl ZeroLamport for AccountSharedData {
+    fn is_zero_lamport(&self) -> bool {
+        self.lamports() == 0
+    }
+}
+
 struct MultiThreadProgress<'a> {
     last_update: Instant,
     my_last_report_count: u64,
@@ -828,8 +834,8 @@ pub struct BankHashStats {
 }
 
 impl BankHashStats {
-    pub fn update<T: ReadableAccount>(&mut self, account: &T) {
-        if account.lamports() == 0 {
+    pub fn update<T: ReadableAccount + ZeroLamport>(&mut self, account: &T) {
+        if account.is_zero_lamport() {
             self.num_removed_accounts += 1;
         } else {
             self.num_updated_accounts += 1;
@@ -1468,6 +1474,12 @@ impl solana_frozen_abi::abi_example::AbiExample for AccountsDb {
         accounts_db.add_root(0);
 
         accounts_db
+    }
+}
+
+impl<'a> ZeroLamport for StoredAccountMeta<'a> {
+    fn is_zero_lamport(&self) -> bool {
+        self.lamports() == 0
     }
 }
 
@@ -4863,7 +4875,7 @@ impl AccountsDb {
     >(
         &self,
         slot: Slot,
-        accounts: &[(&Pubkey, &impl ReadableAccount)],
+        accounts: &[(&Pubkey, &(impl ReadableAccount + ZeroLamport))],
         hashes: Option<&[impl Borrow<Hash>]>,
         storage_finder: F,
         mut write_version_producer: P,
@@ -4877,7 +4889,7 @@ impl AccountsDb {
                 // this is the source of Some(Account) or None.
                 // Some(Account) = store 'Account'
                 // None = store a default/empty account with 0 lamports
-                let (account, data_len) = if account.lamports() == 0 {
+                let (account, data_len) = if account.is_zero_lamport() {
                     (None, 0)
                 } else {
                     (Some(*account), account.data().len() as u64)
@@ -6351,7 +6363,7 @@ impl AccountsDb {
         );
     }
 
-    fn store_accounts_frozen<'a, T: ReadableAccount + Sync>(
+    fn store_accounts_frozen<'a, T: ReadableAccount + Sync + ZeroLamport>(
         &'a self,
         slot: Slot,
         accounts: &[(&Pubkey, &T)],
@@ -6375,7 +6387,7 @@ impl AccountsDb {
         )
     }
 
-    fn store_accounts_custom<'a, T: ReadableAccount + Sync>(
+    fn store_accounts_custom<'a, T: ReadableAccount + Sync + ZeroLamport>(
         &'a self,
         slot: Slot,
         accounts: &[(&Pubkey, &T)],
@@ -8319,7 +8331,7 @@ pub mod tests {
             {
                 account.checked_add_lamports(1).unwrap();
                 accounts.store_uncached(slot, &[(&pubkeys[idx], &account)]);
-                if account.lamports() == 0 {
+                if account.is_zero_lamport() {
                     let ancestors = vec![(slot, 0)].into_iter().collect();
                     assert!(accounts
                         .load_without_fixed_root(&ancestors, &pubkeys[idx])
