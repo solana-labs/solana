@@ -185,35 +185,21 @@ impl<'a> InvokeContext<'a> {
         }
     }
 
-    pub fn new_mock_with_sysvars_and_features(
+    pub fn new_mock(
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         builtin_programs: &'a [BuiltinProgram],
-        sysvars: &'a [(Pubkey, Vec<u8>)],
-        feature_set: Arc<FeatureSet>,
     ) -> Self {
         Self::new(
             Rent::default(),
             accounts,
             builtin_programs,
-            sysvars,
+            &[],
             Some(LogCollector::new_ref()),
             ComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
-            feature_set,
+            Arc::new(FeatureSet::all_enabled()),
             Hash::default(),
             0,
-        )
-    }
-
-    pub fn new_mock(
-        accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        builtin_programs: &'a [BuiltinProgram],
-    ) -> Self {
-        Self::new_mock_with_sysvars_and_features(
-            accounts,
-            builtin_programs,
-            &[],
-            Arc::new(FeatureSet::all_enabled()),
         )
     }
 
@@ -1451,12 +1437,8 @@ mod tests {
         let mut feature_set = FeatureSet::all_enabled();
         feature_set.deactivate(&tx_wide_compute_cap::id());
         feature_set.deactivate(&requestable_heap_size::id());
-        let mut invoke_context = InvokeContext::new_mock_with_sysvars_and_features(
-            &accounts,
-            &[],
-            &[],
-            Arc::new(feature_set),
-        );
+        let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
+        invoke_context.feature_set = Arc::new(feature_set);
 
         invoke_context
             .push(&noop_message, &noop_message.instructions[0], &[0], None)

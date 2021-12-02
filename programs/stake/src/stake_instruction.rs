@@ -346,7 +346,6 @@ mod tests {
     };
     use solana_sdk::{
         account::{self, AccountSharedData},
-        feature_set::FeatureSet,
         instruction::{AccountMeta, Instruction},
         pubkey::Pubkey,
         rent::Rent,
@@ -357,7 +356,7 @@ mod tests {
         },
         sysvar::{stake_history::StakeHistory, Sysvar},
     };
-    use std::{cell::RefCell, rc::Rc, str::FromStr, sync::Arc};
+    use std::{cell::RefCell, rc::Rc, str::FromStr};
 
     fn create_default_account() -> Rc<RefCell<AccountSharedData>> {
         AccountSharedData::new_ref(0, 0, &Pubkey::new_unique())
@@ -430,13 +429,9 @@ mod tests {
         preparation.accounts.push((id(), processor_account));
         let mut data = Vec::with_capacity(sysvar::clock::Clock::size_of());
         bincode::serialize_into(&mut data, &sysvar::clock::Clock::default()).unwrap();
+        let mut invoke_context = InvokeContext::new_mock(&preparation.accounts, &[]);
         let sysvars = [(sysvar::clock::id(), data)];
-        let mut invoke_context = InvokeContext::new_mock_with_sysvars_and_features(
-            &preparation.accounts,
-            &[],
-            &sysvars,
-            Arc::new(FeatureSet::all_enabled()),
-        );
+        invoke_context.sysvars = &sysvars;
         invoke_context.push(
             &preparation.message,
             &preparation.message.instructions[0],
@@ -1080,13 +1075,9 @@ mod tests {
         preparation.accounts.push((id(), processor_account));
         let mut data = Vec::with_capacity(sysvar::clock::Clock::size_of());
         bincode::serialize_into(&mut data, &sysvar::clock::Clock::default()).unwrap();
+        let mut invoke_context = InvokeContext::new_mock(&preparation.accounts, &[]);
         let sysvars = [(sysvar::clock::id(), data)];
-        let mut invoke_context = InvokeContext::new_mock_with_sysvars_and_features(
-            &preparation.accounts,
-            &[],
-            &sysvars,
-            Arc::new(FeatureSet::all_enabled()),
-        );
+        invoke_context.sysvars = &sysvars;
         invoke_context
             .push(
                 &preparation.message,

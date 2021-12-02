@@ -950,8 +950,8 @@ mod tests {
         feature_set
             .inactive
             .insert(feature_set::rent_for_sysvars::id());
-        let invoke_context =
-            InvokeContext::new_mock_with_sysvars_and_features(&[], &[], &[], Arc::new(feature_set));
+        let mut invoke_context = InvokeContext::new_mock(&[], &[]);
+        invoke_context.feature_set = Arc::new(feature_set);
         // Attempt to create system account in account already owned by another program
         let from = Pubkey::new_unique();
         let from_account = AccountSharedData::new_ref(100, 0, &system_program::id());
@@ -1113,8 +1113,8 @@ mod tests {
         feature_set
             .inactive
             .insert(feature_set::rent_for_sysvars::id());
-        let invoke_context =
-            InvokeContext::new_mock_with_sysvars_and_features(&[], &[], &[], Arc::new(feature_set));
+        let mut invoke_context = InvokeContext::new_mock(&[], &[]);
+        invoke_context.feature_set = Arc::new(feature_set);
         let new_owner = sysvar::id();
         let from = Pubkey::new_unique();
         let mut from_account = AccountSharedData::new(100, 0, &system_program::id());

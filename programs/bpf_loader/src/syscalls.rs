@@ -2646,10 +2646,8 @@ mod tests {
     use solana_rbpf::{
         ebpf::HOST_ALIGN, memory_region::MemoryRegion, user_error::UserError, vm::Config,
     };
-    use solana_sdk::{
-        bpf_loader, feature_set::FeatureSet, fee_calculator::FeeCalculator, hash::hashv,
-    };
-    use std::{str::FromStr, sync::Arc};
+    use solana_sdk::{bpf_loader, fee_calculator::FeeCalculator, hash::hashv};
+    use std::str::FromStr;
 
     macro_rules! assert_access_violation {
         ($result:expr, $va:expr, $len:expr) => {
@@ -3557,13 +3555,9 @@ mod tests {
             };
             let mut data = vec![];
             bincode::serialize_into(&mut data, &src_clock).unwrap();
+            let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
             let sysvars = [(sysvar::clock::id(), data)];
-            let mut invoke_context = InvokeContext::new_mock_with_sysvars_and_features(
-                &accounts,
-                &[],
-                &sysvars,
-                Arc::new(FeatureSet::all_enabled()),
-            );
+            invoke_context.sysvars = &sysvars;
             invoke_context
                 .push(&message, &message.instructions[0], &[0], None)
                 .unwrap();
@@ -3606,13 +3600,9 @@ mod tests {
             };
             let mut data = vec![];
             bincode::serialize_into(&mut data, &src_epochschedule).unwrap();
+            let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
             let sysvars = [(sysvar::epoch_schedule::id(), data)];
-            let mut invoke_context = InvokeContext::new_mock_with_sysvars_and_features(
-                &accounts,
-                &[],
-                &sysvars,
-                Arc::new(FeatureSet::all_enabled()),
-            );
+            invoke_context.sysvars = &sysvars;
             invoke_context
                 .push(&message, &message.instructions[0], &[0], None)
                 .unwrap();
@@ -3662,13 +3652,9 @@ mod tests {
             };
             let mut data = vec![];
             bincode::serialize_into(&mut data, &src_fees).unwrap();
+            let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
             let sysvars = [(sysvar::fees::id(), data)];
-            let mut invoke_context = InvokeContext::new_mock_with_sysvars_and_features(
-                &accounts,
-                &[],
-                &sysvars,
-                Arc::new(FeatureSet::all_enabled()),
-            );
+            invoke_context.sysvars = &sysvars;
             invoke_context
                 .push(&message, &message.instructions[0], &[0], None)
                 .unwrap();
@@ -3709,13 +3695,9 @@ mod tests {
             };
             let mut data = vec![];
             bincode::serialize_into(&mut data, &src_rent).unwrap();
+            let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
             let sysvars = [(sysvar::rent::id(), data)];
-            let mut invoke_context = InvokeContext::new_mock_with_sysvars_and_features(
-                &accounts,
-                &[],
-                &sysvars,
-                Arc::new(FeatureSet::all_enabled()),
-            );
+            invoke_context.sysvars = &sysvars;
             invoke_context
                 .push(&message, &message.instructions[0], &[0], None)
                 .unwrap();
