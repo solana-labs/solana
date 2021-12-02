@@ -33,7 +33,7 @@ use thiserror::Error;
 pub type LoaderEntrypoint = unsafe extern "C" fn(
     program_id: &Pubkey,
     instruction_data: &[u8],
-    invoke_context: &dyn InvokeContext,
+    invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError>;
 
 // Prototype of a native program entry point
@@ -165,7 +165,7 @@ impl NativeLoader {
         &self,
         first_instruction_account: usize,
         instruction_data: &[u8],
-        invoke_context: &mut dyn InvokeContext,
+        invoke_context: &mut InvokeContext,
     ) -> Result<(), InstructionError> {
         let (program_id, name_vec) = {
             let program_id = invoke_context.get_caller()?;

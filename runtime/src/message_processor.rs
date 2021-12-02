@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
 use solana_program_runtime::{
     instruction_recorder::InstructionRecorder,
-    invoke_context::{BuiltinProgram, ComputeMeter, Executors, InvokeContext, ThisInvokeContext},
+    invoke_context::{BuiltinProgram, ComputeMeter, Executors, InvokeContext},
     log_collector::LogCollector,
     timings::ExecuteDetailsTimings,
 };
@@ -56,7 +56,7 @@ impl MessageProcessor {
         blockhash: Hash,
         lamports_per_signature: u64,
     ) -> Result<(), TransactionError> {
-        let mut invoke_context = ThisInvokeContext::new(
+        let mut invoke_context = InvokeContext::new(
             rent,
             accounts,
             builtin_programs,
@@ -165,7 +165,7 @@ mod tests {
         fn mock_system_process_instruction(
             first_instruction_account: usize,
             data: &[u8],
-            invoke_context: &mut dyn InvokeContext,
+            invoke_context: &mut InvokeContext,
         ) -> Result<(), InstructionError> {
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             if let Ok(instruction) = bincode::deserialize(data) {
@@ -336,7 +336,7 @@ mod tests {
         fn mock_system_process_instruction(
             first_instruction_account: usize,
             data: &[u8],
-            invoke_context: &mut dyn InvokeContext,
+            invoke_context: &mut InvokeContext,
         ) -> Result<(), InstructionError> {
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             if let Ok(instruction) = bincode::deserialize(data) {
@@ -537,7 +537,7 @@ mod tests {
         fn mock_process_instruction(
             _first_instruction_account: usize,
             _data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
+            _invoke_context: &mut InvokeContext,
         ) -> Result<(), InstructionError> {
             Err(InstructionError::Custom(0xbabb1e))
         }
