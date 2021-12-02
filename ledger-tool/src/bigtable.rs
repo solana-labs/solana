@@ -1,4 +1,5 @@
 /// The `bigtable` subcommand
+use crate::ledger_path::canonicalize_ledger_path;
 use clap::{
     value_t, value_t_or_exit, values_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand,
 };
@@ -426,8 +427,11 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
             let ending_slot = value_t!(arg_matches, "ending_slot", Slot).ok();
             let allow_missing_metadata = arg_matches.is_present("allow_missing_metadata");
             let force_reupload = arg_matches.is_present("force_reupload");
-            let blockstore =
-                crate::open_blockstore(ledger_path, AccessType::TryPrimaryThenSecondary, None);
+            let blockstore = crate::open_blockstore(
+                &canonicalize_ledger_path(ledger_path),
+                AccessType::TryPrimaryThenSecondary,
+                None,
+            );
 
             runtime.block_on(upload(
                 blockstore,
