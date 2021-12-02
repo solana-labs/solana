@@ -372,13 +372,13 @@ pub fn is_host_port(string: String) -> Result<(), String> {
     parse_host_port(&string).map(|_| ())
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "ios"))]
 fn udp_socket(_reuseaddr: bool) -> io::Result<Socket> {
     let sock = Socket::new(Domain::IPV4, Type::DGRAM, None)?;
     Ok(sock)
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "ios")))]
 fn udp_socket(reuseaddr: bool) -> io::Result<Socket> {
     use nix::sys::socket::setsockopt;
     use nix::sys::socket::sockopt::{ReuseAddr, ReusePort};
