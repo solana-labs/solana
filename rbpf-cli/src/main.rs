@@ -5,9 +5,7 @@ use solana_bpf_loader_program::{
     create_vm, serialization::serialize_parameters, syscalls::register_syscalls, BpfError,
     ThisInstructionMeter,
 };
-use solana_program_runtime::invoke_context::{
-    prepare_mock_invoke_context, InvokeContext, ThisInvokeContext,
-};
+use solana_program_runtime::invoke_context::{prepare_mock_invoke_context, InvokeContext};
 use solana_rbpf::{
     assembler::assemble,
     elf::Executable,
@@ -202,7 +200,7 @@ native machine code before execting it in the virtual machine.",
     };
     let program_indices = [0, 1];
     let preparation = prepare_mock_invoke_context(&program_indices, &[], &keyed_accounts);
-    let mut invoke_context = ThisInvokeContext::new_mock(&preparation.accounts, &[]);
+    let mut invoke_context = InvokeContext::new_mock(&preparation.accounts, &[]);
     invoke_context
         .push(
             &preparation.message,

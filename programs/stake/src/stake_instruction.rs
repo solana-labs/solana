@@ -25,7 +25,7 @@ pub use solana_sdk::stake::instruction::*;
 pub fn process_instruction(
     first_instruction_account: usize,
     data: &[u8],
-    invoke_context: &mut dyn InvokeContext,
+    invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
@@ -327,7 +327,7 @@ mod tests {
     use crate::stake_state::{Meta, StakeState};
     use bincode::serialize;
     use solana_program_runtime::invoke_context::{
-        mock_process_instruction, prepare_mock_invoke_context, ThisInvokeContext,
+        mock_process_instruction, prepare_mock_invoke_context, InvokeContext,
     };
     use solana_sdk::{
         account::{self, AccountSharedData},
@@ -416,7 +416,7 @@ mod tests {
         let mut data = Vec::with_capacity(sysvar::clock::Clock::size_of());
         bincode::serialize_into(&mut data, &sysvar::clock::Clock::default()).unwrap();
         let sysvars = [(sysvar::clock::id(), data)];
-        let mut invoke_context = ThisInvokeContext::new_mock_with_sysvars_and_features(
+        let mut invoke_context = InvokeContext::new_mock_with_sysvars_and_features(
             &preparation.accounts,
             &[],
             &sysvars,
@@ -1066,7 +1066,7 @@ mod tests {
         let mut data = Vec::with_capacity(sysvar::clock::Clock::size_of());
         bincode::serialize_into(&mut data, &sysvar::clock::Clock::default()).unwrap();
         let sysvars = [(sysvar::clock::id(), data)];
-        let mut invoke_context = ThisInvokeContext::new_mock_with_sysvars_and_features(
+        let mut invoke_context = InvokeContext::new_mock_with_sysvars_and_features(
             &preparation.accounts,
             &[],
             &sysvars,

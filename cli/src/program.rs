@@ -24,7 +24,7 @@ use solana_client::{
     rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
     tpu_client::{TpuClient, TpuClientConfig},
 };
-use solana_program_runtime::invoke_context::ThisInvokeContext;
+use solana_program_runtime::invoke_context::InvokeContext;
 use solana_rbpf::{elf::Executable, verifier, vm::Config};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
@@ -1991,7 +1991,7 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     let mut program_data = Vec::new();
     file.read_to_end(&mut program_data)
         .map_err(|err| format!("Unable to read program file: {}", err))?;
-    let mut invoke_context = ThisInvokeContext::new_mock(&[], &[]);
+    let mut invoke_context = InvokeContext::new_mock(&[], &[]);
 
     // Verify the program
     Executable::<BpfError, ThisInstructionMeter>::from_elf(

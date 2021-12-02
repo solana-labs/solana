@@ -11,7 +11,7 @@ use solana_bpf_loader_program::{
     ThisInstructionMeter,
 };
 use solana_measure::measure::Measure;
-use solana_program_runtime::invoke_context::{with_mock_invoke_context, InvokeContext};
+use solana_program_runtime::invoke_context::with_mock_invoke_context;
 use solana_rbpf::{
     elf::Executable,
     vm::{Config, InstructionMeter, SyscallRegistry},
