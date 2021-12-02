@@ -79,8 +79,10 @@ impl MessageProcessor {
             .enumerate()
         {
             let program_id = instruction.program_id(&message.account_keys);
-            if invoke_context.is_feature_active(&prevent_calling_precompiles_as_programs::id())
-                && is_precompile(program_id, |id| invoke_context.is_feature_active(id))
+            if invoke_context
+                .feature_set
+                .is_active(&prevent_calling_precompiles_as_programs::id())
+                && is_precompile(program_id, |id| invoke_context.feature_set.is_active(id))
             {
                 // Precompiled programs don't have an instruction processor
                 continue;

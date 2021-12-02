@@ -91,9 +91,12 @@ pub fn create_executor(
         stack_frame_size: compute_budget.stack_frame_size,
         enable_instruction_tracing: log_enabled!(Trace),
         reject_unresolved_syscalls: reject_unresolved_syscalls
-            && invoke_context.is_feature_active(&reject_deployment_of_unresolved_syscalls::id()),
+            && invoke_context
+                .feature_set
+                .is_active(&reject_deployment_of_unresolved_syscalls::id()),
         verify_mul64_imm_nonzero: !invoke_context
-            .is_feature_active(&stop_verify_mul64_imm_nonzero::id()), // TODO: Feature gate and then remove me
+            .feature_set
+            .is_active(&stop_verify_mul64_imm_nonzero::id()), // TODO: Feature gate and then remove me
         ..Config::default()
     };
     let mut executable = {
@@ -158,7 +161,10 @@ pub fn create_vm<'a, 'b>(
 ) -> Result<EbpfVm<'a, BpfError, ThisInstructionMeter>, EbpfError<BpfError>> {
     let compute_budget = invoke_context.get_compute_budget();
     let heap_size = compute_budget.heap_size.unwrap_or(HEAP_LENGTH);
-    if invoke_context.is_feature_active(&requestable_heap_size::id()) {
+    if invoke_context
+        .feature_set
+        .is_active(&requestable_heap_size::id())
+    {
         let _ = invoke_context
             .get_compute_meter()
             .borrow_mut()
@@ -450,8 +456,9 @@ fn process_loader_upgradeable_instruction(
                 return Err(InstructionError::InvalidArgument);
             }
 
-            let predrain_buffer =
-                invoke_context.is_feature_active(&reduce_required_deploy_balance::id());
+            let predrain_buffer = invoke_context
+                .feature_set
+                .is_active(&reduce_required_deploy_balance::id());
             if predrain_buffer {
                 // Drain the Buffer account to payer before paying for programdata account
                 payer
@@ -1049,7 +1056,9 @@ impl Executor for BpfExecutor {
             &keyed_accounts[first_instruction_account + 1..],
             parameter_bytes.as_slice(),
             &account_lengths,
-            invoke_context.is_feature_active(&do_support_realloc::id()),
+            invoke_context
+                .feature_set
+                .is_active(&do_support_realloc::id()),
         )?;
         deserialize_time.stop();
         invoke_context.update_timing(

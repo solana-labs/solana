@@ -978,7 +978,8 @@ impl MergeKind {
             .zip(source.active_stake())
             .map(|(stake, source)| {
                 if invoke_context
-                    .is_feature_active(&stake_merge_with_unmatched_credits_observed::id())
+                    .feature_set
+                    .is_active(&stake_merge_with_unmatched_credits_observed::id())
                 {
                     Self::active_delegations_can_merge(
                         invoke_context,
@@ -1038,7 +1039,10 @@ fn merge_delegation_stake_and_credits_observed(
     absorbed_lamports: u64,
     absorbed_credits_observed: u64,
 ) -> Result<(), InstructionError> {
-    if invoke_context.is_feature_active(&stake_merge_with_unmatched_credits_observed::id()) {
+    if invoke_context
+        .feature_set
+        .is_active(&stake_merge_with_unmatched_credits_observed::id())
+    {
         stake.credits_observed =
             stake_weighted_credits_observed(stake, absorbed_lamports, absorbed_credits_observed)
                 .ok_or(InstructionError::ArithmeticOverflow)?;

@@ -144,7 +144,7 @@ pub struct InvokeContext<'a> {
     compute_meter: Rc<RefCell<ComputeMeter>>,
     executors: Rc<RefCell<Executors>>,
     instruction_recorders: Option<&'a [InstructionRecorder]>,
-    feature_set: Arc<FeatureSet>,
+    pub feature_set: Arc<FeatureSet>,
     pub timings: ExecuteDetailsTimings,
     pub blockhash: Hash,
     pub lamports_per_signature: u64,
@@ -240,15 +240,15 @@ impl<'a> InvokeContext<'a> {
             .map(|index_of_program_id| &self.accounts[*index_of_program_id].0);
         if self.invoke_stack.is_empty() {
             let mut compute_budget = self.compute_budget;
-            if !self.is_feature_active(&tx_wide_compute_cap::id())
-                && self.is_feature_active(&neon_evm_compute_budget::id())
+            if !self.feature_set.is_active(&tx_wide_compute_cap::id())
+                && self.feature_set.is_active(&neon_evm_compute_budget::id())
                 && program_id == Some(&crate::neon_evm_program::id())
             {
                 // Bump the compute budget for neon_evm
                 compute_budget.max_units = compute_budget.max_units.max(500_000);
             }
-            if !self.is_feature_active(&requestable_heap_size::id())
-                && self.is_feature_active(&neon_evm_compute_budget::id())
+            if !self.feature_set.is_active(&requestable_heap_size::id())
+                && self.feature_set.is_active(&neon_evm_compute_budget::id())
                 && program_id == Some(&crate::neon_evm_program::id())
             {
                 // Bump the compute budget for neon_evm
@@ -342,8 +342,10 @@ impl<'a> InvokeContext<'a> {
         program_indices: &[usize],
     ) -> Result<(), InstructionError> {
         let program_id = instruction.program_id(&message.account_keys);
-        let demote_program_write_locks = self.is_feature_active(&demote_program_write_locks::id());
-        let do_support_realloc = self.is_feature_active(&do_support_realloc::id());
+        let demote_program_write_locks = self
+            .feature_set
+            .is_active(&demote_program_write_locks::id());
+        let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
 
         // Verify all executable accounts have zero outstanding refs
         for account_index in program_indices.iter() {
@@ -510,7 +512,7 @@ impl<'a> InvokeContext<'a> {
         )?;
 
         // Verify the called program has not misbehaved
-        let do_support_realloc = self.is_feature_active(&do_support_realloc::id());
+        let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
         for (account, prev_size) in prev_account_sizes.iter() {
             if !do_support_realloc && *prev_size != account.borrow().data().len() && *prev_size != 0
             {
@@ -661,8 +663,9 @@ impl<'a> InvokeContext<'a> {
         self.push(message, instruction, program_indices, Some(account_indices))?;
         let result = self.process_instruction(&instruction.data).and_then(|_| {
             // Verify the called program has not misbehaved
-            let demote_program_write_locks =
-                self.is_feature_active(&demote_program_write_locks::id());
+            let demote_program_write_locks = self
+                .feature_set
+                .is_active(&demote_program_write_locks::id());
             let write_privileges: Vec<bool> = (0..message.account_keys.len())
                 .map(|i| message.is_writable(i, demote_program_write_locks))
                 .collect();
@@ -692,7 +695,7 @@ impl<'a> InvokeContext<'a> {
                     );
                 }
             }
-            if !self.is_feature_active(&remove_native_loader::id()) {
+            if !self.feature_set.is_active(&remove_native_loader::id()) {
                 let native_loader = NativeLoader::default();
                 // Call the program via the native loader
                 return native_loader.process_instruction(0, instruction_data, self);
@@ -733,7 +736,7 @@ impl<'a> InvokeContext<'a> {
         note = "To be removed together with remove_native_loader"
     )]
     pub fn remove_first_keyed_account(&mut self) -> Result<(), InstructionError> {
-        if !self.is_feature_active(&remove_native_loader::id()) {
+        if !self.feature_set.is_active(&remove_native_loader::id()) {
             let stack_frame = &mut self
                 .invoke_stack
                 .last_mut()
@@ -796,11 +799,6 @@ impl<'a> InvokeContext<'a> {
         if let Some(instruction_recorders) = &self.instruction_recorders {
             instruction_recorders[self.instruction_index].record_instruction(instruction.clone());
         }
-    }
-
-    /// Get the bank's active feature set
-    pub fn is_feature_active(&self, feature_id: &Pubkey) -> bool {
-        self.feature_set.is_active(feature_id)
     }
 
     /// Find an account_index and account by its key
@@ -1269,8 +1267,9 @@ mod tests {
             .unwrap();
 
         // not owned account modified by the caller (before the invoke)
-        let demote_program_write_locks =
-            invoke_context.is_feature_active(&demote_program_write_locks::id());
+        let demote_program_write_locks = invoke_context
+            .feature_set
+            .is_active(&demote_program_write_locks::id());
         let caller_write_privileges = message
             .account_keys
             .iter()

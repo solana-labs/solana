@@ -47,9 +47,14 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
         invoke_context: &InvokeContext,
     ) -> Result<(), InstructionError> {
         let merge_nonce_error_into_system_error = invoke_context
-            .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
+            .feature_set
+            .is_active(&feature_set::merge_nonce_error_into_system_error::id());
 
-        if invoke_context.is_feature_active(&nonce_must_be_writable::id()) && !self.is_writable() {
+        if invoke_context
+            .feature_set
+            .is_active(&nonce_must_be_writable::id())
+            && !self.is_writable()
+        {
             ic_msg!(
                 invoke_context,
                 "Advance nonce account: Account {} must be writeable",
@@ -111,9 +116,14 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
         invoke_context: &InvokeContext,
     ) -> Result<(), InstructionError> {
         let merge_nonce_error_into_system_error = invoke_context
-            .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
+            .feature_set
+            .is_active(&feature_set::merge_nonce_error_into_system_error::id());
 
-        if invoke_context.is_feature_active(&nonce_must_be_writable::id()) && !self.is_writable() {
+        if invoke_context
+            .feature_set
+            .is_active(&nonce_must_be_writable::id())
+            && !self.is_writable()
+        {
             ic_msg!(
                 invoke_context,
                 "Withdraw nonce account: Account {} must be writeable",
@@ -197,9 +207,14 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
         invoke_context: &InvokeContext,
     ) -> Result<(), InstructionError> {
         let merge_nonce_error_into_system_error = invoke_context
-            .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
+            .feature_set
+            .is_active(&feature_set::merge_nonce_error_into_system_error::id());
 
-        if invoke_context.is_feature_active(&nonce_must_be_writable::id()) && !self.is_writable() {
+        if invoke_context
+            .feature_set
+            .is_active(&nonce_must_be_writable::id())
+            && !self.is_writable()
+        {
             ic_msg!(
                 invoke_context,
                 "Initialize nonce account: Account {} must be writeable",
@@ -248,9 +263,14 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
         invoke_context: &InvokeContext,
     ) -> Result<(), InstructionError> {
         let merge_nonce_error_into_system_error = invoke_context
-            .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
+            .feature_set
+            .is_active(&feature_set::merge_nonce_error_into_system_error::id());
 
-        if invoke_context.is_feature_active(&nonce_must_be_writable::id()) && !self.is_writable() {
+        if invoke_context
+            .feature_set
+            .is_active(&nonce_must_be_writable::id())
+            && !self.is_writable()
+        {
             ic_msg!(
                 invoke_context,
                 "Authorize nonce account: Account {} must be writeable",

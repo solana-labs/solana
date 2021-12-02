@@ -141,12 +141,18 @@ pub fn register_syscalls(
     syscall_registry.register_syscall_by_name(b"sol_sha256", SyscallSha256::call)?;
     syscall_registry.register_syscall_by_name(b"sol_keccak256", SyscallKeccak256::call)?;
 
-    if invoke_context.is_feature_active(&secp256k1_recover_syscall_enabled::id()) {
+    if invoke_context
+        .feature_set
+        .is_active(&secp256k1_recover_syscall_enabled::id())
+    {
         syscall_registry
             .register_syscall_by_name(b"sol_secp256k1_recover", SyscallSecp256k1Recover::call)?;
     }
 
-    if invoke_context.is_feature_active(&blake3_syscall_enabled::id()) {
+    if invoke_context
+        .feature_set
+        .is_active(&blake3_syscall_enabled::id())
+    {
         syscall_registry.register_syscall_by_name(b"sol_blake3", SyscallBlake3::call)?;
     }
 
@@ -156,7 +162,10 @@ pub fn register_syscalls(
         b"sol_get_epoch_schedule_sysvar",
         SyscallGetEpochScheduleSysvar::call,
     )?;
-    if !invoke_context.is_feature_active(&disable_fees_sysvar::id()) {
+    if !invoke_context
+        .feature_set
+        .is_active(&disable_fees_sysvar::id())
+    {
         syscall_registry
             .register_syscall_by_name(b"sol_get_fees_sysvar", SyscallGetFeesSysvar::call)?;
     }
@@ -178,7 +187,10 @@ pub fn register_syscalls(
     syscall_registry.register_syscall_by_name(b"sol_alloc_free_", SyscallAllocFree::call)?;
 
     // Return data
-    if invoke_context.is_feature_active(&return_data_syscall_enabled::id()) {
+    if invoke_context
+        .feature_set
+        .is_active(&return_data_syscall_enabled::id())
+    {
         syscall_registry
             .register_syscall_by_name(b"sol_set_return_data", SyscallSetReturnData::call)?;
         syscall_registry
@@ -186,7 +198,10 @@ pub fn register_syscalls(
     }
 
     // Log data
-    if invoke_context.is_feature_active(&sol_log_data_syscall_enabled::id()) {
+    if invoke_context
+        .feature_set
+        .is_active(&sol_log_data_syscall_enabled::id())
+    {
         syscall_registry.register_syscall_by_name(b"sol_log_data", SyscallLogData::call)?;
     }
 
@@ -212,15 +227,21 @@ pub fn bind_syscall_context_objects<'a, 'b>(
     heap: AlignedMemory,
     orig_data_lens: &'a [usize],
 ) -> Result<(), EbpfError<BpfError>> {
-    let is_blake3_syscall_active = invoke_context.is_feature_active(&blake3_syscall_enabled::id());
-    let is_secp256k1_recover_syscall_active =
-        invoke_context.is_feature_active(&secp256k1_recover_syscall_enabled::id());
-    let is_fee_sysvar_via_syscall_active =
-        !invoke_context.is_feature_active(&disable_fees_sysvar::id());
-    let is_return_data_syscall_active =
-        invoke_context.is_feature_active(&return_data_syscall_enabled::id());
-    let is_sol_log_data_syscall_active =
-        invoke_context.is_feature_active(&sol_log_data_syscall_enabled::id());
+    let is_blake3_syscall_active = invoke_context
+        .feature_set
+        .is_active(&blake3_syscall_enabled::id());
+    let is_secp256k1_recover_syscall_active = invoke_context
+        .feature_set
+        .is_active(&secp256k1_recover_syscall_enabled::id());
+    let is_fee_sysvar_via_syscall_active = !invoke_context
+        .feature_set
+        .is_active(&disable_fees_sysvar::id());
+    let is_return_data_syscall_active = invoke_context
+        .feature_set
+        .is_active(&return_data_syscall_enabled::id());
+    let is_sol_log_data_syscall_active = invoke_context
+        .feature_set
+        .is_active(&sol_log_data_syscall_enabled::id());
 
     let loader_id = invoke_context
         .get_loader()
@@ -1509,12 +1530,14 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSecp256k1Recover<'a, 'b> {
                 return;
             }
         };
-        let sig_parse_result =
-            if invoke_context.is_feature_active(&libsecp256k1_0_5_upgrade_enabled::id()) {
-                libsecp256k1::Signature::parse_standard_slice(signature)
-            } else {
-                libsecp256k1::Signature::parse_overflowing_slice(signature)
-            };
+        let sig_parse_result = if invoke_context
+            .feature_set
+            .is_active(&libsecp256k1_0_5_upgrade_enabled::id())
+        {
+            libsecp256k1::Signature::parse_standard_slice(signature)
+        } else {
+            libsecp256k1::Signature::parse_overflowing_slice(signature)
+        };
 
         let signature = match sig_parse_result {
             Ok(sig) => sig,
@@ -2157,8 +2180,9 @@ fn get_translated_accounts<'a, T, F>(
 where
     F: Fn(&T, &InvokeContext) -> Result<CallerAccount<'a>, EbpfError<BpfError>>,
 {
-    let demote_program_write_locks =
-        invoke_context.is_feature_active(&demote_program_write_locks::id());
+    let demote_program_write_locks = invoke_context
+        .feature_set
+        .is_active(&demote_program_write_locks::id());
     let keyed_accounts = invoke_context
         .get_instruction_keyed_accounts()
         .map_err(SyscallError::InstructionError)?;
@@ -2275,9 +2299,11 @@ fn check_authorized_program(
             && !(bpf_loader_upgradeable::is_upgrade_instruction(instruction_data)
                 || bpf_loader_upgradeable::is_set_authority_instruction(instruction_data)
                 || bpf_loader_upgradeable::is_close_instruction(instruction_data)))
-        || (invoke_context.is_feature_active(&prevent_calling_precompiles_as_programs::id())
+        || (invoke_context
+            .feature_set
+            .is_active(&prevent_calling_precompiles_as_programs::id())
             && is_precompile(program_id, |feature_id: &Pubkey| {
-                invoke_context.is_feature_active(feature_id)
+                invoke_context.feature_set.is_active(feature_id)
             }))
     {
         return Err(SyscallError::ProgramNotSupported(*program_id).into());
@@ -2299,7 +2325,9 @@ fn call<'a, 'b: 'a>(
     invoke_context
         .get_compute_meter()
         .consume(invoke_context.get_compute_budget().invoke_units)?;
-    let do_support_realloc = invoke_context.is_feature_active(&do_support_realloc::id());
+    let do_support_realloc = invoke_context
+        .feature_set
+        .is_active(&do_support_realloc::id());
 
     // Translate and verify caller's data
     let loader_id = invoke_context

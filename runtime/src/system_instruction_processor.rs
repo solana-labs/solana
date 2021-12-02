@@ -124,7 +124,9 @@ fn assign(
     // Thus, we're starting to remove this restriction from system instruction
     // processor for consistency and fewer special casing by piggybacking onto
     // the related feature gate..
-    let rent_for_sysvars = invoke_context.is_feature_active(&feature_set::rent_for_sysvars::id());
+    let rent_for_sysvars = invoke_context
+        .feature_set
+        .is_active(&feature_set::rent_for_sysvars::id());
     if !rent_for_sysvars && sysvar::check_id(owner) {
         // guard against sysvars being made
         ic_msg!(invoke_context, "Assign: cannot assign to sysvar, {}", owner);
@@ -205,7 +207,9 @@ fn transfer(
     lamports: u64,
     invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
-    if !invoke_context.is_feature_active(&feature_set::system_transfer_zero_check::id())
+    if !invoke_context
+        .feature_set
+        .is_active(&feature_set::system_transfer_zero_check::id())
         && lamports == 0
     {
         return Ok(());
@@ -232,7 +236,9 @@ fn transfer_with_seed(
     lamports: u64,
     invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
-    if !invoke_context.is_feature_active(&feature_set::system_transfer_zero_check::id())
+    if !invoke_context
+        .feature_set
+        .is_active(&feature_set::system_transfer_zero_check::id())
         && lamports == 0
     {
         return Ok(());
