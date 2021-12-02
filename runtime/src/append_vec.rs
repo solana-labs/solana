@@ -33,7 +33,10 @@ macro_rules! u64_align {
     };
 }
 
+#[cfg(target_pointer_width = "64")]
 const MAXIMUM_APPEND_VEC_FILE_SIZE: usize = 16 * 1024 * 1024 * 1024; // 16 GiB
+#[cfg(target_pointer_width = "32")]
+const MAXIMUM_APPEND_VEC_FILE_SIZE: usize = 2 * 1024 * 1024 * 1024; // 2 GiB
 
 pub type StoredMetaWriteVersion = u64;
 
