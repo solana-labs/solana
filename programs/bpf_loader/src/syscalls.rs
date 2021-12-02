@@ -1284,9 +1284,13 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcpy<'a, 'b> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        let use_fixed_nonoverlapping_check = self
-            .invoke_context
-            .borrow()
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+        let use_fixed_nonoverlapping_check = invoke_context
             .feature_set
             .is_active(&fixed_memcpy_nonoverlapping_check::id());
 
