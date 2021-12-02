@@ -92,19 +92,25 @@ impl ComputeMeter {
     pub fn get_remaining(&self) -> u64 {
         self.remaining
     }
+    /// Set compute units
+    ///
+    /// Only use for tests and benchmarks
+    pub fn mock_set_remaining(&mut self, remaining: u64) {
+        self.remaining = remaining;
+    }
     /// Construct a new one with the given remaining units
     pub fn new_ref(remaining: u64) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self { remaining }))
     }
 }
 
-pub struct InvokeContextStackFrame<'a> {
+pub struct StackFrame<'a> {
     pub number_of_program_accounts: usize,
     pub keyed_accounts: Vec<KeyedAccount<'a>>,
     pub keyed_accounts_range: std::ops::Range<usize>,
 }
 
-impl<'a> InvokeContextStackFrame<'a> {
+impl<'a> StackFrame<'a> {
     pub fn new(number_of_program_accounts: usize, keyed_accounts: Vec<KeyedAccount<'a>>) -> Self {
         let keyed_accounts_range = std::ops::Range {
             start: 0,
@@ -126,7 +132,7 @@ impl<'a> InvokeContextStackFrame<'a> {
 
 pub struct ThisInvokeContext<'a> {
     instruction_index: usize,
-    invoke_stack: Vec<InvokeContextStackFrame<'a>>,
+    invoke_stack: Vec<StackFrame<'a>>,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
     accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
@@ -193,7 +199,7 @@ impl<'a> ThisInvokeContext<'a> {
             accounts,
             builtin_programs,
             sysvars,
-            None,
+            Some(LogCollector::new_ref()),
             ComputeBudget::default(),
             ComputeMeter::new_ref(std::i64::MAX as u64),
             Rc::new(RefCell::new(Executors::default())),
@@ -269,6 +275,8 @@ pub trait InvokeContext {
     fn process_instruction(&mut self, instruction_data: &[u8]) -> Result<(), InstructionError>;
     /// Get the program ID of the currently executing program
     fn get_caller(&self) -> Result<&Pubkey, InstructionError>;
+    /// Get the owner of the currently executing program
+    fn get_loader(&self) -> Result<Pubkey, InstructionError>;
     /// Removes the first keyed account
     #[deprecated(
         since = "1.9.0",
@@ -416,7 +424,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             }))
             .collect::<Vec<_>>();
 
-        self.invoke_stack.push(InvokeContextStackFrame::new(
+        self.invoke_stack.push(StackFrame::new(
             program_indices.len(),
             create_keyed_accounts_unified(keyed_accounts.as_slice()),
         ));
@@ -799,6 +807,11 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             .last()
             .and_then(|frame| frame.program_id())
             .ok_or(InstructionError::CallDepth)
+    }
+    fn get_loader(&self) -> Result<Pubkey, InstructionError> {
+        self.get_instruction_keyed_accounts()
+            .and_then(|keyed_accounts| keyed_accounts.first().ok_or(InstructionError::CallDepth))
+            .and_then(|keyed_account| keyed_account.owner())
     }
     fn remove_first_keyed_account(&mut self) -> Result<(), InstructionError> {
         if !self.is_feature_active(&remove_native_loader::id()) {

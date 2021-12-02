@@ -269,9 +269,7 @@ native machine code before execting it in the virtual machine.",
         _ => {}
     }
 
-    let id = bpf_loader::id();
     let mut vm = create_vm(
-        &id,
         &executable,
         parameter_bytes.as_slice_mut(),
         &mut invoke_context,

@@ -227,7 +227,6 @@ fn run_program(name: &str) -> u64 {
             let mut parameter_bytes = parameter_bytes.clone();
             {
                 let mut vm = create_vm(
-                    &loader_id,
                     &executable,
                     parameter_bytes.as_slice_mut(),
                     invoke_context,
