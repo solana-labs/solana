@@ -1,24 +1,26 @@
 /// The `bigtable` subcommand
-use crate::ledger_path::canonicalize_ledger_path;
-use clap::{
-    value_t, value_t_or_exit, values_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand,
-};
-use solana_clap_utils::{
-    input_parsers::pubkey_of,
-    input_validators::{is_slot, is_valid_pubkey},
-};
-use solana_cli_output::{
-    display::println_transaction, CliBlock, CliTransaction, CliTransactionConfirmation,
-    OutputFormat,
-};
-use solana_ledger::{blockstore::Blockstore, blockstore_db::AccessType};
-use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
-use solana_transaction_status::{ConfirmedBlock, EncodedTransaction, UiTransactionEncoding};
-use std::{
-    path::Path,
-    process::exit,
-    result::Result,
-    sync::{atomic::AtomicBool, Arc},
+use {
+    crate::ledger_path::canonicalize_ledger_path,
+    clap::{
+        value_t, value_t_or_exit, values_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand,
+    },
+    solana_clap_utils::{
+        input_parsers::pubkey_of,
+        input_validators::{is_slot, is_valid_pubkey},
+    },
+    solana_cli_output::{
+        display::println_transaction, CliBlock, CliTransaction, CliTransactionConfirmation,
+        OutputFormat,
+    },
+    solana_ledger::{blockstore::Blockstore, blockstore_db::AccessType},
+    solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
+    solana_transaction_status::{ConfirmedBlock, EncodedTransaction, UiTransactionEncoding},
+    std::{
+        path::Path,
+        process::exit,
+        result::Result,
+        sync::{atomic::AtomicBool, Arc},
+    },
 };
 
 async fn upload(
