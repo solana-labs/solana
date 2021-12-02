@@ -5676,6 +5676,7 @@ version = "1.8.7"
 dependencies = [
  "bincode",
  "bs58 0.3.1",
+ "enum-iterator",
  "prost",
  "serde",
  "serde_derive",
