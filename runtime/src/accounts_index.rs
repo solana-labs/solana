@@ -2929,7 +2929,7 @@ pub mod tests {
                     to_raw_first,
                 )
                 .into_account_map_entry(&index.storage.storage);
-                assert_eq!(new_entry.ref_count.load(Ordering::Relaxed), 0);
+                assert_eq!(new_entry.ref_count(), 0);
                 assert_eq!(new_entry.slot_list.read().unwrap().capacity(), 1);
                 assert_eq!(
                     new_entry.slot_list.read().unwrap().to_vec(),
@@ -2948,7 +2948,7 @@ pub mod tests {
                     to_raw_first,
                 )
                 .into_account_map_entry(&index.storage.storage);
-                assert_eq!(new_entry.ref_count.load(Ordering::Relaxed), 1);
+                assert_eq!(new_entry.ref_count(), 1);
                 assert_eq!(new_entry.slot_list.read().unwrap().capacity(), 1);
                 assert_eq!(
                     new_entry.slot_list.read().unwrap().to_vec(),
