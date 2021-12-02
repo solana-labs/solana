@@ -70,7 +70,6 @@ impl MessageProcessor {
             blockhash,
             lamports_per_signature,
         );
-        let compute_meter = invoke_context.get_compute_meter();
 
         debug_assert_eq!(program_indices.len(), message.instructions.len());
         for (instruction_index, (instruction, program_indices)) in message
@@ -86,9 +85,6 @@ impl MessageProcessor {
                 // Precompiled programs don't have an instruction processor
                 continue;
             }
-
-            let mut time = Measure::start("execute_instruction");
-            let pre_remaining_units = compute_meter.borrow().get_remaining();
 
             // Fixup the special instructions key if present
             // before the account pre-values are taken care of
@@ -107,21 +103,26 @@ impl MessageProcessor {
             let result = invoke_context
                 .push(message, instruction, program_indices, None)
                 .and_then(|_| {
+                    let pre_remaining_units =
+                        invoke_context.get_compute_meter().borrow().get_remaining();
+                    let mut time = Measure::start("execute_instruction");
+
                     invoke_context.process_instruction(&instruction.data)?;
                     invoke_context.verify(message, instruction, program_indices)?;
+
+                    time.stop();
+                    let post_remaining_units =
+                        invoke_context.get_compute_meter().borrow().get_remaining();
+                    timings.accumulate_program(
+                        instruction.program_id(&message.account_keys),
+                        time.as_us(),
+                        pre_remaining_units - post_remaining_units,
+                    );
                     timings.accumulate(&invoke_context.timings);
                     Ok(())
                 })
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err));
             invoke_context.pop();
-
-            time.stop();
-            let post_remaining_units = compute_meter.borrow().get_remaining();
-            timings.accumulate_program(
-                instruction.program_id(&message.account_keys),
-                time.as_us(),
-                pre_remaining_units - post_remaining_units,
-            );
 
             result?;
         }
