@@ -1,7 +1,10 @@
 //! Stakes serve as a cache of stake and vote accounts to derive
 //! node stakes
 use {
-    crate::vote_account::{VoteAccount, VoteAccounts, VoteAccountsHashMap},
+    crate::{
+        stake_delegations::StakeDelegations,
+        vote_account::{VoteAccount, VoteAccounts, VoteAccountsHashMap},
+    },
     rayon::{
         iter::{IntoParallelRefIterator, ParallelIterator},
         ThreadPool,
@@ -27,7 +30,7 @@ pub struct Stakes {
     vote_accounts: VoteAccounts,
 
     /// stake_delegations
-    stake_delegations: HashMap<Pubkey, Delegation>,
+    stake_delegations: StakeDelegations,
 
     /// unused
     unused: u64,
@@ -271,7 +274,7 @@ impl Stakes {
         &self.vote_accounts
     }
 
-    pub fn stake_delegations(&self) -> &HashMap<Pubkey, Delegation> {
+    pub fn stake_delegations(&self) -> &StakeDelegations {
         &self.stake_delegations
     }
 

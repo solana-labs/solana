@@ -125,7 +125,7 @@ use solana_sdk::{
     },
 };
 use solana_stake_program::stake_state::{
-    self, Delegation, InflationPointCalculationEvent, PointValue, StakeState,
+    self, InflationPointCalculationEvent, PointValue, StakeState,
 };
 use solana_vote_program::{
     vote_instruction::VoteInstruction,
@@ -5784,11 +5784,6 @@ impl Bank {
         }
     }
 
-    /// current stake delegations for this bank
-    pub fn cloned_stake_delegations(&self) -> HashMap<Pubkey, Delegation> {
-        self.stakes.read().unwrap().stake_delegations().clone()
-    }
-
     pub fn staked_nodes(&self) -> Arc<HashMap<Pubkey, u64>> {
         self.stakes.read().unwrap().staked_nodes()
     }
@@ -6494,6 +6489,7 @@ pub(crate) mod tests {
             create_genesis_config_with_leader, create_genesis_config_with_vote_accounts,
             GenesisConfigInfo, ValidatorVoteKeypairs,
         },
+        stake_delegations::StakeDelegations,
         status_cache::MAX_CACHE_ENTRIES,
     };
     use crossbeam_channel::{bounded, unbounded};
@@ -6532,6 +6528,12 @@ pub(crate) mod tests {
         },
     };
     use std::{result, thread::Builder, time::Duration};
+
+    impl Bank {
+        fn cloned_stake_delegations(&self) -> StakeDelegations {
+            self.stakes.read().unwrap().stake_delegations().clone()
+        }
+    }
 
     fn new_sanitized_message(
         instructions: &[Instruction],
