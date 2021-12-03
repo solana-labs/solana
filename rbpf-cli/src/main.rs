@@ -147,6 +147,7 @@ native machine code before execting it in the virtual machine.",
 
     let config = Config {
         enable_instruction_tracing: matches.is_present("trace") || matches.is_present("profile"),
+        enable_symbol_and_section_labels: true,
         ..Config::default()
     };
     let mut accounts = Vec::new();
