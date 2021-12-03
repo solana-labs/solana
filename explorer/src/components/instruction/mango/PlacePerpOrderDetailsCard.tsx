@@ -95,6 +95,7 @@ export function PlacePerpOrderDetailsCard(props: {
         <td>Order type</td>
         <td className="text-lg-end">{info.orderType}</td>
       </tr>
+      
       <tr>
         <td>side</td>
         <td className="text-lg-end">{info.side}</td>
@@ -113,6 +114,11 @@ export function PlacePerpOrderDetailsCard(props: {
           <td className="text-lg-end">{orderLotDetails?.size}</td>
         </tr>
       )}
+
+      <tr>
+        <td>Reduce only</td>
+        <td className="text-lg-end">{info.reduceOnly}</td>
+      </tr>
     </InstructionCard>
   );
 }
