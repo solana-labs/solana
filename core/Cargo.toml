@@ -31,7 +31,7 @@ rand = "0.7.0"
 rand_chacha = "0.2.2"
 raptorq = "1.6.4"
 rayon = "1.5.1"
-retain_mut = "0.1.4"
+retain_mut = "0.1.5"
 serde = "1.0.130"
 serde_derive = "1.0.103"
 solana-accountsdb-plugin-manager = { path = "../accountsdb-plugin-manager", version = "=1.9.0" }
