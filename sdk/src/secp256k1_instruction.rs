@@ -1,8 +1,10 @@
 #![cfg(feature = "full")]
 
-use crate::instruction::Instruction;
-use digest::Digest;
-use serde_derive::{Deserialize, Serialize};
+use {
+    crate::instruction::Instruction,
+    digest::Digest,
+    serde_derive::{Deserialize, Serialize},
+};
 
 #[derive(Debug, PartialEq)]
 pub enum Secp256k1Error {

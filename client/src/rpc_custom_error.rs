@@ -1,9 +1,9 @@
 //! Implementation defined RPC server errors
-use thiserror::Error;
 use {
     crate::rpc_response::RpcSimulateTransactionResult,
     jsonrpc_core::{Error, ErrorCode},
     solana_sdk::clock::Slot,
+    thiserror::Error,
 };
 
 pub const JSON_RPC_SERVER_ERROR_BLOCK_CLEANED_UP: i64 = -32001;

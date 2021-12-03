@@ -13,15 +13,14 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signer},
     },
-    solana_streamer::socket::SocketAddrSpace,
-    solana_streamer::streamer,
+    solana_streamer::{socket::SocketAddrSpace, streamer},
     std::{
         collections::HashSet,
         net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
         sync::{
             atomic::{AtomicBool, Ordering},
             mpsc::channel,
-            {Arc, RwLock},
+            Arc, RwLock,
         },
         thread::{self, sleep, JoinHandle},
         time::{Duration, Instant},

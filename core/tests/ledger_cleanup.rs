@@ -3,20 +3,28 @@
 
 #[cfg(test)]
 mod tests {
-    use log::*;
-    use solana_core::ledger_cleanup_service::LedgerCleanupService;
-    use solana_ledger::blockstore::{make_many_slot_entries, Blockstore};
-    use solana_ledger::get_tmp_ledger_path;
-    use solana_ledger::shred::Shred;
-    use solana_measure::measure::Measure;
-    use std::collections::VecDeque;
-    use std::str::FromStr;
-    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-    use std::sync::mpsc::channel;
-    use std::sync::{Arc, Mutex, RwLock};
-    use std::thread::{self, Builder, JoinHandle};
-    use std::time::{Duration, Instant};
-    use systemstat::{CPULoad, Platform, System};
+    use {
+        log::*,
+        solana_core::ledger_cleanup_service::LedgerCleanupService,
+        solana_ledger::{
+            blockstore::{make_many_slot_entries, Blockstore},
+            get_tmp_ledger_path,
+            shred::Shred,
+        },
+        solana_measure::measure::Measure,
+        std::{
+            collections::VecDeque,
+            str::FromStr,
+            sync::{
+                atomic::{AtomicBool, AtomicU64, Ordering},
+                mpsc::channel,
+                Arc, Mutex, RwLock,
+            },
+            thread::{self, Builder, JoinHandle},
+            time::{Duration, Instant},
+        },
+        systemstat::{CPULoad, Platform, System},
+    };
 
     const DEFAULT_BENCHMARK_SLOTS: u64 = 50;
     const DEFAULT_BATCH_SIZE: u64 = 1;

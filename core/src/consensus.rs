@@ -1,40 +1,42 @@
-use crate::{
-    heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
-    latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
-    progress_map::{LockoutIntervals, ProgressMap},
-};
-use chrono::prelude::*;
-use solana_ledger::{ancestor_iterator::AncestorIterator, blockstore::Blockstore, blockstore_db};
-use solana_measure::measure::Measure;
-use solana_runtime::{
-    bank::Bank, bank_forks::BankForks, commitment::VOTE_THRESHOLD_SIZE,
-    vote_account::ArcVoteAccount,
-};
-use solana_sdk::{
-    clock::{Slot, UnixTimestamp},
-    hash::Hash,
-    instruction::Instruction,
-    pubkey::Pubkey,
-    signature::{Keypair, Signature, Signer},
-    slot_history::{Check, SlotHistory},
-};
-use solana_vote_program::{
-    vote_instruction,
-    vote_state::{BlockTimestamp, Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY},
-};
-use std::{
-    cmp::Ordering,
-    collections::{HashMap, HashSet},
-    fs::{self, File},
-    io::BufReader,
-    ops::{
-        Bound::{Included, Unbounded},
-        Deref,
+use {
+    crate::{
+        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
+        latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
+        progress_map::{LockoutIntervals, ProgressMap},
     },
-    path::{Path, PathBuf},
-    sync::Arc,
+    chrono::prelude::*,
+    solana_ledger::{ancestor_iterator::AncestorIterator, blockstore::Blockstore, blockstore_db},
+    solana_measure::measure::Measure,
+    solana_runtime::{
+        bank::Bank, bank_forks::BankForks, commitment::VOTE_THRESHOLD_SIZE,
+        vote_account::ArcVoteAccount,
+    },
+    solana_sdk::{
+        clock::{Slot, UnixTimestamp},
+        hash::Hash,
+        instruction::Instruction,
+        pubkey::Pubkey,
+        signature::{Keypair, Signature, Signer},
+        slot_history::{Check, SlotHistory},
+    },
+    solana_vote_program::{
+        vote_instruction,
+        vote_state::{BlockTimestamp, Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY},
+    },
+    std::{
+        cmp::Ordering,
+        collections::{HashMap, HashSet},
+        fs::{self, File},
+        io::BufReader,
+        ops::{
+            Bound::{Included, Unbounded},
+            Deref,
+        },
+        path::{Path, PathBuf},
+        sync::Arc,
+    },
+    thiserror::Error,
 };
-use thiserror::Error;
 
 #[derive(PartialEq, Clone, Debug, AbiExample)]
 pub enum SwitchForkDecision {
@@ -1355,46 +1357,48 @@ pub fn reconcile_blockstore_roots_with_tower(
 
 #[cfg(test)]
 pub mod test {
-    use super::*;
-    use crate::{
-        cluster_info_vote_listener::VoteTracker,
-        cluster_slot_state_verifier::{DuplicateSlotsTracker, GossipDuplicateConfirmedSlots},
-        cluster_slots::ClusterSlots,
-        fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
-        heaviest_subtree_fork_choice::SlotHashKey,
-        progress_map::ForkProgress,
-        replay_stage::{HeaviestForkFailures, ReplayStage},
-        unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
-    };
-    use solana_ledger::{blockstore::make_slot_entries, get_tmp_ledger_path};
-    use solana_runtime::{
-        accounts_background_service::AbsRequestSender,
-        bank::Bank,
-        bank_forks::BankForks,
-        genesis_utils::{
-            create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
+    use {
+        super::*,
+        crate::{
+            cluster_info_vote_listener::VoteTracker,
+            cluster_slot_state_verifier::{DuplicateSlotsTracker, GossipDuplicateConfirmedSlots},
+            cluster_slots::ClusterSlots,
+            fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
+            heaviest_subtree_fork_choice::SlotHashKey,
+            progress_map::ForkProgress,
+            replay_stage::{HeaviestForkFailures, ReplayStage},
+            unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
         },
+        solana_ledger::{blockstore::make_slot_entries, get_tmp_ledger_path},
+        solana_runtime::{
+            accounts_background_service::AbsRequestSender,
+            bank::Bank,
+            bank_forks::BankForks,
+            genesis_utils::{
+                create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
+            },
+        },
+        solana_sdk::{
+            account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
+            clock::Slot,
+            hash::Hash,
+            pubkey::Pubkey,
+            signature::Signer,
+            slot_history::SlotHistory,
+        },
+        solana_vote_program::{
+            vote_state::{Vote, VoteStateVersions, MAX_LOCKOUT_HISTORY},
+            vote_transaction,
+        },
+        std::{
+            collections::HashMap,
+            fs::{remove_file, OpenOptions},
+            io::{Read, Seek, SeekFrom, Write},
+            sync::RwLock,
+        },
+        tempfile::TempDir,
+        trees::{tr, Tree, TreeWalk},
     };
-    use solana_sdk::{
-        account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
-        clock::Slot,
-        hash::Hash,
-        pubkey::Pubkey,
-        signature::Signer,
-        slot_history::SlotHistory,
-    };
-    use solana_vote_program::{
-        vote_state::{Vote, VoteStateVersions, MAX_LOCKOUT_HISTORY},
-        vote_transaction,
-    };
-    use std::{
-        collections::HashMap,
-        fs::{remove_file, OpenOptions},
-        io::{Read, Seek, SeekFrom, Write},
-        sync::RwLock,
-    };
-    use tempfile::TempDir;
-    use trees::{tr, Tree, TreeWalk};
 
     pub(crate) struct VoteSimulator {
         pub validator_keypairs: HashMap<Pubkey, ValidatorVoteKeypairs>,

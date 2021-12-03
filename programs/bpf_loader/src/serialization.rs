@@ -1,14 +1,16 @@
-use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
-use solana_rbpf::{aligned_memory::AlignedMemory, ebpf::HOST_ALIGN};
-use solana_sdk::{
-    account::{ReadableAccount, WritableAccount},
-    bpf_loader_deprecated,
-    entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE},
-    instruction::InstructionError,
-    keyed_account::KeyedAccount,
-    pubkey::Pubkey,
+use {
+    byteorder::{ByteOrder, LittleEndian, WriteBytesExt},
+    solana_rbpf::{aligned_memory::AlignedMemory, ebpf::HOST_ALIGN},
+    solana_sdk::{
+        account::{ReadableAccount, WritableAccount},
+        bpf_loader_deprecated,
+        entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE},
+        instruction::InstructionError,
+        keyed_account::KeyedAccount,
+        pubkey::Pubkey,
+    },
+    std::{io::prelude::*, mem::size_of},
 };
-use std::{io::prelude::*, mem::size_of};
 
 /// Look for a duplicate account and return its position if found
 pub fn is_dup(accounts: &[KeyedAccount], keyed_account: &KeyedAccount) -> (bool, usize) {
@@ -283,18 +285,19 @@ pub fn deserialize_parameters_aligned(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_sdk::{
-        account::{Account, AccountSharedData},
-        account_info::AccountInfo,
-        bpf_loader,
-        entrypoint::deserialize,
-    };
-    use std::{
-        cell::RefCell,
-        rc::Rc,
-        // Hide Result from bindgen gets confused about generics in non-generic type declarations
-        slice::{from_raw_parts, from_raw_parts_mut},
+    use {
+        super::*,
+        solana_sdk::{
+            account::{Account, AccountSharedData},
+            account_info::AccountInfo,
+            bpf_loader,
+            entrypoint::deserialize,
+        },
+        std::{
+            cell::RefCell,
+            rc::Rc,
+            slice::{from_raw_parts, from_raw_parts_mut},
+        },
     };
 
     #[test]

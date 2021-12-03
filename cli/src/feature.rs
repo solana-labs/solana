@@ -1,28 +1,30 @@
-use crate::{
-    cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
-    spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
-};
-use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
-use console::style;
-use serde::{Deserialize, Serialize};
-use solana_clap_utils::{input_parsers::*, input_validators::*, keypair::*};
-use solana_cli_output::{QuietDisplay, VerboseDisplay};
-use solana_client::{client_error::ClientError, rpc_client::RpcClient};
-use solana_remote_wallet::remote_wallet::RemoteWalletManager;
-use solana_sdk::{
-    account::Account,
-    clock::Slot,
-    feature::{self, Feature},
-    feature_set::FEATURE_NAMES,
-    message::Message,
-    pubkey::Pubkey,
-    transaction::Transaction,
-};
-use std::{
-    cmp::Ordering,
-    collections::{HashMap, HashSet},
-    fmt,
-    sync::Arc,
+use {
+    crate::{
+        cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
+        spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
+    },
+    clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
+    console::style,
+    serde::{Deserialize, Serialize},
+    solana_clap_utils::{input_parsers::*, input_validators::*, keypair::*},
+    solana_cli_output::{QuietDisplay, VerboseDisplay},
+    solana_client::{client_error::ClientError, rpc_client::RpcClient},
+    solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_sdk::{
+        account::Account,
+        clock::Slot,
+        feature::{self, Feature},
+        feature_set::FEATURE_NAMES,
+        message::Message,
+        pubkey::Pubkey,
+        transaction::Transaction,
+    },
+    std::{
+        cmp::Ordering,
+        collections::{HashMap, HashSet},
+        fmt,
+        sync::Arc,
+    },
 };
 
 #[derive(Copy, Clone, Debug, PartialEq)]

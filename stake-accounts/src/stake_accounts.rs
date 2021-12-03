@@ -281,16 +281,18 @@ pub(crate) fn move_stake_accounts(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_runtime::{bank::Bank, bank_client::BankClient};
-    use solana_sdk::{
-        account::{AccountSharedData, ReadableAccount},
-        client::SyncClient,
-        genesis_config::create_genesis_config,
-        signature::{Keypair, Signer},
-        stake::state::StakeState,
+    use {
+        super::*,
+        solana_runtime::{bank::Bank, bank_client::BankClient},
+        solana_sdk::{
+            account::{AccountSharedData, ReadableAccount},
+            client::SyncClient,
+            genesis_config::create_genesis_config,
+            signature::{Keypair, Signer},
+            stake::state::StakeState,
+        },
+        solana_stake_program::stake_state,
     };
-    use solana_stake_program::stake_state;
 
     fn create_bank(lamports: u64) -> (Bank, Keypair, u64) {
         let (genesis_config, mint_keypair) = create_genesis_config(lamports);

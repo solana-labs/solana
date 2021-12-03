@@ -5,17 +5,21 @@
 //! transaction. All processing is done on the CPU by default and on a GPU
 //! if perf-libs are available
 
-use crate::sigverify;
-use crossbeam_channel::{SendError, Sender as CrossbeamSender};
-use solana_measure::measure::Measure;
-use solana_perf::packet::Packets;
-use solana_sdk::timing;
-use solana_streamer::streamer::{self, PacketReceiver, StreamerError};
-use std::collections::HashMap;
-use std::sync::mpsc::{Receiver, RecvTimeoutError};
-use std::thread::{self, Builder, JoinHandle};
-use std::time::Instant;
-use thiserror::Error;
+use {
+    crate::sigverify,
+    crossbeam_channel::{SendError, Sender as CrossbeamSender},
+    solana_measure::measure::Measure,
+    solana_perf::packet::Packets,
+    solana_sdk::timing,
+    solana_streamer::streamer::{self, PacketReceiver, StreamerError},
+    std::{
+        collections::HashMap,
+        sync::mpsc::{Receiver, RecvTimeoutError},
+        thread::{self, Builder, JoinHandle},
+        time::Instant,
+    },
+    thiserror::Error,
+};
 
 const MAX_SIGVERIFY_BATCH: usize = 10_000;
 
@@ -265,8 +269,7 @@ impl SigVerifyStage {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_perf::packet::Packet;
+    use {super::*, solana_perf::packet::Packet};
 
     fn count_non_discard(packets: &[Packets]) -> usize {
         packets

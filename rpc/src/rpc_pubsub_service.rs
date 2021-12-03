@@ -187,9 +187,13 @@ pub struct TestBroadcastReceiver {
 #[cfg(test)]
 impl TestBroadcastReceiver {
     pub fn recv(&mut self) -> String {
-        use std::thread::sleep;
-        use std::time::{Duration, Instant};
-        use tokio::sync::broadcast::error::TryRecvError;
+        use {
+            std::{
+                thread::sleep,
+                time::{Duration, Instant},
+            },
+            tokio::sync::broadcast::error::TryRecvError,
+        };
 
         let timeout = Duration::from_secs(5);
         let started = Instant::now();

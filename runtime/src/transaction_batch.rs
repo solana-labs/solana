@@ -1,7 +1,8 @@
-use crate::bank::Bank;
-use crate::hashed_transaction::HashedTransaction;
-use solana_sdk::transaction::{Result, Transaction};
-use std::borrow::Cow;
+use {
+    crate::{bank::Bank, hashed_transaction::HashedTransaction},
+    solana_sdk::transaction::{Result, Transaction},
+    std::borrow::Cow,
+};
 
 // Represents the results of trying to lock a set of accounts
 pub struct TransactionBatch<'a, 'b> {
@@ -52,9 +53,11 @@ impl<'a, 'b> Drop for TransactionBatch<'a, 'b> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo};
-    use solana_sdk::{signature::Keypair, system_transaction};
+    use {
+        super::*,
+        crate::genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
+        solana_sdk::{signature::Keypair, system_transaction},
+    };
 
     #[test]
     fn test_transaction_batch() {

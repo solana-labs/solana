@@ -1,9 +1,11 @@
 #![cfg(feature = "full")]
 
-use crate::{decode_error::DecodeError, instruction::Instruction};
-use bytemuck::{bytes_of, Pod, Zeroable};
-use ed25519_dalek::{ed25519::signature::Signature, Signer, Verifier};
-use thiserror::Error;
+use {
+    crate::{decode_error::DecodeError, instruction::Instruction},
+    bytemuck::{bytes_of, Pod, Zeroable},
+    ed25519_dalek::{ed25519::signature::Signature, Signer, Verifier},
+    thiserror::Error,
+};
 
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum Ed25519Error {

@@ -1,15 +1,16 @@
-use solana_sdk::{
-    clock::Slot,
-    hash::Hash,
-    program_utils::limited_deserialize,
-    pubkey::Pubkey,
-    signature::{Keypair, Signer},
-    transaction::Transaction,
-};
-
-use crate::{
-    vote_instruction::{self, VoteInstruction},
-    vote_state::Vote,
+use {
+    crate::{
+        vote_instruction::{self, VoteInstruction},
+        vote_state::Vote,
+    },
+    solana_sdk::{
+        clock::Slot,
+        hash::Hash,
+        program_utils::limited_deserialize,
+        pubkey::Pubkey,
+        signature::{Keypair, Signer},
+        transaction::Transaction,
+    },
 };
 
 pub fn parse_vote_transaction(tx: &Transaction) -> Option<(Pubkey, Vote, Option<Hash>)> {
@@ -82,8 +83,7 @@ pub fn new_vote_transaction(
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use solana_sdk::hash::hash;
+    use {super::*, solana_sdk::hash::hash};
 
     fn run_test_parse_vote_transaction(input_hash: Option<Hash>) {
         let node_keypair = Keypair::new();

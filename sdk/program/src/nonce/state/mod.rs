@@ -1,6 +1,5 @@
 mod current;
 pub use current::{Data, State};
-
 use serde_derive::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]

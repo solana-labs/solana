@@ -1123,14 +1123,14 @@ fn sanitize_seed_phrase(seed_phrase: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::offline::OfflineArgs;
-    use clap::{value_t_or_exit, App, Arg};
-    use solana_remote_wallet::locator::Manufacturer;
-    use solana_remote_wallet::remote_wallet::initialize_wallet_manager;
-    use solana_sdk::signer::keypair::write_keypair_file;
-    use solana_sdk::system_instruction;
-    use tempfile::{NamedTempFile, TempDir};
+    use {
+        super::*,
+        crate::offline::OfflineArgs,
+        clap::{value_t_or_exit, App, Arg},
+        solana_remote_wallet::{locator::Manufacturer, remote_wallet::initialize_wallet_manager},
+        solana_sdk::{signer::keypair::write_keypair_file, system_instruction},
+        tempfile::{NamedTempFile, TempDir},
+    };
 
     #[test]
     fn test_sanitize_seed_phrase() {
