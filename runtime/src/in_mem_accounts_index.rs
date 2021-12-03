@@ -156,7 +156,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     fn get_only_in_mem<RT>(
         &self,
         pubkey: &K,
-        callback: impl for<'a> FnOnce(Option<&'a Arc<AccountMapEntryInner<T>>>) -> RT,
+        callback: impl for<'a> FnOnce(Option<&'a AccountMapEntry<T>>) -> RT,
     ) -> RT {
         let m = Measure::start("get");
         let map = self.map().read().unwrap();
@@ -190,7 +190,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         &self,
         pubkey: &K,
         // return true if item should be added to in_mem cache
-        callback: impl for<'a> FnOnce(Option<&Arc<AccountMapEntryInner<T>>>) -> (bool, RT),
+        callback: impl for<'a> FnOnce(Option<&AccountMapEntry<T>>) -> (bool, RT),
     ) -> RT {
         self.get_only_in_mem(pubkey, |entry| {
             if let Some(entry) = entry {

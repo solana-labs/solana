@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
 use solana_program_runtime::{
     instruction_recorder::InstructionRecorder,
-    invoke_context::{BuiltinProgram, ComputeMeter, Executors, InvokeContext, ThisInvokeContext},
+    invoke_context::{BuiltinProgram, Executors, InvokeContext},
     log_collector::LogCollector,
     timings::ExecuteDetailsTimings,
 };
@@ -50,27 +50,23 @@ impl MessageProcessor {
         instruction_recorders: Option<&[InstructionRecorder]>,
         feature_set: Arc<FeatureSet>,
         compute_budget: ComputeBudget,
-        compute_meter: Rc<RefCell<ComputeMeter>>,
         timings: &mut ExecuteDetailsTimings,
         sysvars: &[(Pubkey, Vec<u8>)],
         blockhash: Hash,
         lamports_per_signature: u64,
     ) -> Result<(), TransactionError> {
-        let mut invoke_context = ThisInvokeContext::new(
+        let mut invoke_context = InvokeContext::new(
             rent,
             accounts,
             builtin_programs,
             sysvars,
             log_collector,
             compute_budget,
-            compute_meter,
             executors,
-            instruction_recorders,
             feature_set,
             blockhash,
             lamports_per_signature,
         );
-        let compute_meter = invoke_context.get_compute_meter();
 
         debug_assert_eq!(program_indices.len(), message.instructions.len());
         for (instruction_index, (instruction, program_indices)) in message
@@ -80,15 +76,14 @@ impl MessageProcessor {
             .enumerate()
         {
             let program_id = instruction.program_id(&message.account_keys);
-            if invoke_context.is_feature_active(&prevent_calling_precompiles_as_programs::id())
-                && is_precompile(program_id, |id| invoke_context.is_feature_active(id))
+            if invoke_context
+                .feature_set
+                .is_active(&prevent_calling_precompiles_as_programs::id())
+                && is_precompile(program_id, |id| invoke_context.feature_set.is_active(id))
             {
                 // Precompiled programs don't have an instruction processor
                 continue;
             }
-
-            let mut time = Measure::start("execute_instruction");
-            let pre_remaining_units = compute_meter.borrow().get_remaining();
 
             // Fixup the special instructions key if present
             // before the account pre-values are taken care of
@@ -103,25 +98,33 @@ impl MessageProcessor {
                 }
             }
 
-            invoke_context.set_instruction_index(instruction_index);
+            if let Some(instruction_recorders) = instruction_recorders {
+                invoke_context.instruction_recorder =
+                    Some(&instruction_recorders[instruction_index]);
+            }
             let result = invoke_context
                 .push(message, instruction, program_indices, None)
                 .and_then(|_| {
+                    let pre_remaining_units =
+                        invoke_context.get_compute_meter().borrow().get_remaining();
+                    let mut time = Measure::start("execute_instruction");
+
                     invoke_context.process_instruction(&instruction.data)?;
                     invoke_context.verify(message, instruction, program_indices)?;
+
+                    time.stop();
+                    let post_remaining_units =
+                        invoke_context.get_compute_meter().borrow().get_remaining();
+                    timings.accumulate_program(
+                        instruction.program_id(&message.account_keys),
+                        time.as_us(),
+                        pre_remaining_units - post_remaining_units,
+                    );
                     timings.accumulate(&invoke_context.timings);
                     Ok(())
                 })
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err));
             invoke_context.pop();
-
-            time.stop();
-            let post_remaining_units = compute_meter.borrow().get_remaining();
-            timings.accumulate_program(
-                instruction.program_id(&message.account_keys),
-                time.as_us(),
-                pre_remaining_units - post_remaining_units,
-            );
 
             result?;
         }
@@ -133,7 +136,6 @@ impl MessageProcessor {
 mod tests {
     use super::*;
     use crate::rent_collector::RentCollector;
-    use solana_program_runtime::invoke_context::ComputeMeter;
     use solana_sdk::{
         account::ReadableAccount,
         instruction::{AccountMeta, Instruction, InstructionError},
@@ -165,7 +167,7 @@ mod tests {
         fn mock_system_process_instruction(
             first_instruction_account: usize,
             data: &[u8],
-            invoke_context: &mut dyn InvokeContext,
+            invoke_context: &mut InvokeContext,
         ) -> Result<(), InstructionError> {
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             if let Ok(instruction) = bincode::deserialize(data) {
@@ -245,7 +247,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
@@ -275,7 +276,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
@@ -309,7 +309,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
@@ -336,7 +335,7 @@ mod tests {
         fn mock_system_process_instruction(
             first_instruction_account: usize,
             data: &[u8],
-            invoke_context: &mut dyn InvokeContext,
+            invoke_context: &mut InvokeContext,
         ) -> Result<(), InstructionError> {
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             if let Ok(instruction) = bincode::deserialize(data) {
@@ -454,7 +453,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
@@ -488,7 +486,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
@@ -519,7 +516,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
@@ -537,7 +533,7 @@ mod tests {
         fn mock_process_instruction(
             _first_instruction_account: usize,
             _data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
+            _invoke_context: &mut InvokeContext,
         ) -> Result<(), InstructionError> {
             Err(InstructionError::Custom(0xbabb1e))
         }
@@ -577,7 +573,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),

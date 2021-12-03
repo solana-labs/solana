@@ -71,9 +71,7 @@ use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
 use solana_program_runtime::{
     instruction_recorder::InstructionRecorder,
-    invoke_context::{
-        BuiltinProgram, ComputeMeter, Executor, Executors, ProcessInstructionWithContext,
-    },
+    invoke_context::{BuiltinProgram, Executor, Executors, ProcessInstructionWithContext},
     log_collector::LogCollector,
     timings::ExecuteDetailsTimings,
 };
@@ -127,7 +125,7 @@ use solana_sdk::{
     },
 };
 use solana_stake_program::stake_state::{
-    self, Delegation, InflationPointCalculationEvent, PointValue, StakeState,
+    self, InflationPointCalculationEvent, PointValue, StakeState,
 };
 use solana_vote_program::{
     vote_instruction::VoteInstruction,
@@ -669,17 +667,13 @@ impl NonceFull {
 
             let nonce_address = *partial.address();
             if *fee_payer_address == nonce_address {
-                Ok(Self {
-                    address: nonce_address,
-                    account: fee_payer_account,
-                    fee_payer_account: None,
-                })
+                Ok(Self::new(nonce_address, fee_payer_account, None))
             } else {
-                Ok(Self {
-                    address: nonce_address,
-                    account: partial.account().clone(),
-                    fee_payer_account: Some(fee_payer_account),
-                })
+                Ok(Self::new(
+                    nonce_address,
+                    partial.account().clone(),
+                    Some(fee_payer_account),
+                ))
             }
         } else {
             Err(TransactionError::AccountNotFound)
@@ -3875,8 +3869,6 @@ impl Bank {
                             None
                         };
 
-                        let compute_meter = ComputeMeter::new_ref(compute_budget.max_units);
-
                         let (blockhash, lamports_per_signature) =
                             self.last_blockhash_and_lamports_per_signature();
 
@@ -3892,7 +3884,6 @@ impl Bank {
                                 instruction_recorders.as_deref(),
                                 feature_set,
                                 compute_budget,
-                                compute_meter,
                                 &mut timings.details,
                                 &*self.sysvar_cache.read().unwrap(),
                                 blockhash,
@@ -3935,15 +3926,14 @@ impl Bank {
                         inner_instructions.push(None);
                     }
 
-                    let nonce =
-                        if let Err(TransactionError::InstructionError(_, _)) = &process_result {
+                    let nonce = match &process_result {
+                        Ok(_) => nonce.clone(), // May need to calculate the fee based on the nonce
+                        Err(TransactionError::InstructionError(_, _)) => {
                             error_counters.instruction_error += 1;
-                            nonce.clone()
-                        } else if process_result.is_err() {
-                            None
-                        } else {
-                            nonce.clone()
-                        };
+                            nonce.clone() // May need to advance the nonce
+                        }
+                        _ => None,
+                    };
 
                     (process_result, nonce)
                 }
@@ -4176,8 +4166,8 @@ impl Bank {
             &blockhash,
             lamports_per_signature,
             self.rent_for_sysvars(),
-            self.merge_nonce_error_into_system_error(),
             self.demote_program_write_locks(),
+            self.leave_nonce_on_success(),
         );
         let rent_debits = self.collect_rent(executed_results, loaded_txs);
 
@@ -5794,11 +5784,6 @@ impl Bank {
         }
     }
 
-    /// current stake delegations for this bank
-    pub fn cloned_stake_delegations(&self) -> HashMap<Pubkey, Delegation> {
-        self.stakes.read().unwrap().stake_delegations().clone()
-    }
-
     pub fn staked_nodes(&self) -> Arc<HashMap<Pubkey, u64>> {
         self.stakes.read().unwrap().staked_nodes()
     }
@@ -6038,11 +6023,6 @@ impl Bank {
             .is_active(&feature_set::verify_tx_signatures_len::id())
     }
 
-    pub fn merge_nonce_error_into_system_error(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::merge_nonce_error_into_system_error::id())
-    }
-
     pub fn versioned_tx_message_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::versioned_tx_message_enabled::id())
@@ -6056,6 +6036,11 @@ impl Bank {
     pub fn demote_program_write_locks(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::demote_program_write_locks::id())
+    }
+
+    pub fn leave_nonce_on_success(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::leave_nonce_on_success::id())
     }
 
     pub fn stakes_remove_delegation_if_inactive_enabled(&self) -> bool {
@@ -6504,6 +6489,7 @@ pub(crate) mod tests {
             create_genesis_config_with_leader, create_genesis_config_with_vote_accounts,
             GenesisConfigInfo, ValidatorVoteKeypairs,
         },
+        stake_delegations::StakeDelegations,
         status_cache::MAX_CACHE_ENTRIES,
     };
     use crossbeam_channel::{bounded, unbounded};
@@ -6516,6 +6502,7 @@ pub(crate) mod tests {
         compute_budget::ComputeBudgetInstruction,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         feature::Feature,
+        feature_set::reject_empty_instruction_without_program,
         genesis_config::create_genesis_config,
         hash,
         instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
@@ -6541,6 +6528,12 @@ pub(crate) mod tests {
         },
     };
     use std::{result, thread::Builder, time::Duration};
+
+    impl Bank {
+        fn cloned_stake_delegations(&self) -> StakeDelegations {
+            self.stakes.read().unwrap().stake_delegations().clone()
+        }
+    }
 
     fn new_sanitized_message(
         instructions: &[Instruction],
@@ -6958,7 +6951,7 @@ pub(crate) mod tests {
     fn mock_process_instruction(
         first_instruction_account: usize,
         data: &[u8],
-        invoke_context: &mut dyn InvokeContext,
+        invoke_context: &mut InvokeContext,
     ) -> result::Result<(), InstructionError> {
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
         if let Ok(instruction) = bincode::deserialize(data) {
@@ -10709,7 +10702,7 @@ pub(crate) mod tests {
         fn mock_vote_processor(
             _first_instruction_account: usize,
             _instruction_data: &[u8],
-            invoke_context: &mut dyn InvokeContext,
+            invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             let program_id = invoke_context.get_caller()?;
             if mock_vote_program_id() != *program_id {
@@ -10767,7 +10760,7 @@ pub(crate) mod tests {
         fn mock_vote_processor(
             _first_instruction_account: usize,
             _data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
+            _invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Err(InstructionError::Custom(42))
         }
@@ -10817,7 +10810,7 @@ pub(crate) mod tests {
         fn mock_ix_processor(
             _first_instruction_account: usize,
             _data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
+            _invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Err(InstructionError::Custom(42))
         }
@@ -11367,9 +11360,6 @@ pub(crate) mod tests {
         debug!("cust: {:?}", custodian_account);
         let nonce_hash = get_nonce_blockhash(&bank, &nonce_pubkey).unwrap();
 
-        Arc::get_mut(&mut bank)
-            .unwrap()
-            .activate_feature(&feature_set::merge_nonce_error_into_system_error::id());
         for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
             goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
             bank = Arc::new(new_from_parent(&bank));
@@ -11403,7 +11393,7 @@ pub(crate) mod tests {
                     .get_fee_for_message(&recent_message.try_into().unwrap())
                     .unwrap()
         );
-        assert_eq!(
+        assert_ne!(
             nonce_hash,
             get_nonce_blockhash(&bank, &nonce_pubkey).unwrap()
         );
@@ -11705,7 +11695,7 @@ pub(crate) mod tests {
         fn mock_process_instruction(
             first_instruction_account: usize,
             data: &[u8],
-            invoke_context: &mut dyn InvokeContext,
+            invoke_context: &mut InvokeContext,
         ) -> result::Result<(), InstructionError> {
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let lamports = data[0] as u64;
@@ -11763,7 +11753,7 @@ pub(crate) mod tests {
         fn mock_process_instruction(
             _first_instruction_account: usize,
             _data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
+            _invoke_context: &mut InvokeContext,
         ) -> result::Result<(), InstructionError> {
             Ok(())
         }
@@ -11949,7 +11939,7 @@ pub(crate) mod tests {
     fn mock_ok_vote_processor(
         _first_instruction_account: usize,
         _data: &[u8],
-        _invoke_context: &mut dyn InvokeContext,
+        _invoke_context: &mut InvokeContext,
     ) -> std::result::Result<(), InstructionError> {
         Ok(())
     }
@@ -12199,7 +12189,7 @@ pub(crate) mod tests {
         fn nested_processor(
             first_instruction_account: usize,
             _data: &[u8],
-            invoke_context: &mut dyn InvokeContext,
+            invoke_context: &mut InvokeContext,
         ) -> result::Result<(), InstructionError> {
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
@@ -12473,7 +12463,7 @@ pub(crate) mod tests {
         fn mock_ix_processor(
             _first_instruction_account: usize,
             _data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
+            _invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Ok(())
         }
@@ -12522,7 +12512,7 @@ pub(crate) mod tests {
         fn mock_ix_processor(
             _first_instruction_account: usize,
             _data: &[u8],
-            _context: &mut dyn InvokeContext,
+            _context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Ok(())
         }
@@ -12899,11 +12889,11 @@ pub(crate) mod tests {
     #[derive(Debug)]
     struct TestExecutor {}
     impl Executor for TestExecutor {
-        fn execute(
+        fn execute<'a, 'b>(
             &self,
             _first_instruction_account: usize,
             _instruction_data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
+            _invoke_context: &'a mut InvokeContext<'b>,
             _use_jit: bool,
         ) -> std::result::Result<(), InstructionError> {
             Ok(())
@@ -13422,7 +13412,7 @@ pub(crate) mod tests {
         fn mock_process_instruction(
             _first_instruction_account: usize,
             _data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
+            _invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), solana_sdk::instruction::InstructionError> {
             Ok(())
         }
@@ -14923,7 +14913,7 @@ pub(crate) mod tests {
         fn mock_ix_processor(
             first_instruction_account: usize,
             _data: &[u8],
-            invoke_context: &mut dyn InvokeContext,
+            invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             use solana_sdk::account::WritableAccount;
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
@@ -15135,7 +15125,7 @@ pub(crate) mod tests {
         fn mock_ix_processor(
             _first_instruction_account: usize,
             _data: &[u8],
-            invoke_context: &mut dyn InvokeContext,
+            invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             let compute_budget = invoke_context.get_compute_budget();
             assert_eq!(
@@ -15180,7 +15170,7 @@ pub(crate) mod tests {
         fn mock_ix_processor(
             _first_instruction_account: usize,
             _data: &[u8],
-            invoke_context: &mut dyn InvokeContext,
+            invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             let compute_budget = invoke_context.get_compute_budget();
             assert_eq!(
@@ -15458,17 +15448,23 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_an_empty_transaction_without_program() {
+    fn test_an_empty_instruction_without_program() {
         let (genesis_config, mint_keypair) = create_genesis_config(1);
-        let bank = Bank::new_for_tests(&genesis_config);
-
         let destination = solana_sdk::pubkey::new_rand();
         let mut ix = system_instruction::transfer(&mint_keypair.pubkey(), &destination, 0);
         ix.program_id = native_loader::id(); // Empty executable account chain
-
         let message = Message::new(&[ix], Some(&mint_keypair.pubkey()));
         let tx = Transaction::new(&[&mint_keypair], message, genesis_config.hash());
+
+        let bank = Bank::new_for_tests(&genesis_config);
         bank.process_transaction(&tx).unwrap();
+
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.activate_feature(&reject_empty_instruction_without_program::id());
+        assert_eq!(
+            bank.process_transaction(&tx).unwrap_err(),
+            TransactionError::InstructionError(0, InstructionError::UnsupportedProgramId),
+        );
     }
 
     #[test]

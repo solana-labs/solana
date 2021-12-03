@@ -139,6 +139,10 @@ pub mod stop_verify_mul64_imm_nonzero {
     solana_sdk::declare_id!("EHFwHg2vhwUb7ifm7BuY9RMbsyt1rS1rUii7yeDJtGnN");
 }
 
+pub mod start_verify_shift32_imm {
+    solana_sdk::declare_id!("CqvdhqAYMc6Eq6tjW3H42Qg39TK2SCsL8ydMsC363PRp");
+}
+
 pub mod merge_nonce_error_into_system_error {
     solana_sdk::declare_id!("21AWDosvp3pBamFW91KB35pNoaoZVTM7ess8nr2nt53B");
 }
@@ -237,12 +241,24 @@ pub mod reject_deployment_of_unresolved_syscalls {
     solana_sdk::declare_id!("DqniU3MfvdpU3yhmNF1RKeaM5TZQELZuyFGosASRVUoy");
 }
 
+pub mod reject_section_virtual_address_file_offset_mismatch {
+    solana_sdk::declare_id!("5N4NikcJLEiZNqwndhNyvZw15LvFXp1oF7AJQTNTZY5k");
+}
+
 pub mod nonce_must_be_writable {
     solana_sdk::declare_id!("BiCU7M5w8ZCMykVSyhZ7Q3m2SWoR2qrEQ86ERcDX77ME");
 }
 
 pub mod spl_token_v3_3_0_release {
     solana_sdk::declare_id!("Ftok2jhqAqxUWEiCVRrfRs9DPppWP8cgTB7NQNKL88mS");
+}
+
+pub mod leave_nonce_on_success {
+    solana_sdk::declare_id!("E8MkiWZNNPGU6n55jkGzyj8ghUmjCHRmDFdYYFYHxWhQ");
+}
+
+pub mod reject_empty_instruction_without_program {
+    solana_sdk::declare_id!("9kdtFSrXHQg3hKkbXkQ6trJ3Ja1xpJ22CTFSNAciEwmL");
 }
 
 lazy_static! {
@@ -275,6 +291,7 @@ lazy_static! {
         (tx_wide_compute_cap::id(), "transaction wide compute cap"),
         (spl_token_v2_set_authority_fix::id(), "spl-token set_authority fix"),
         (stop_verify_mul64_imm_nonzero::id(), "sets rbpf vm config verify_mul64_imm_nonzero to false"),
+        (start_verify_shift32_imm::id(), "sets rbpf vm config verify_shift32_imm to true"),
         (merge_nonce_error_into_system_error::id(), "merge NonceError into SystemError"),
         (disable_fees_sysvar::id(), "disable fees sysvar"),
         (stake_merge_with_unmatched_credits_observed::id(), "allow merging active stakes with unmatched credits_observed #18985"),
@@ -299,8 +316,11 @@ lazy_static! {
         (disable_fee_calculator::id(), "deprecate fee calculator"),
         (add_compute_budget_program::id(), "Add compute_budget_program"),
         (reject_deployment_of_unresolved_syscalls::id(), "Reject deployment of programs with unresolved syscall symbols"),
+        (reject_section_virtual_address_file_offset_mismatch::id(), "enforce section virtual addresses and file offsets in ELF to be equal"),
         (nonce_must_be_writable::id(), "nonce must be writable"),
         (spl_token_v3_3_0_release::id(), "spl-token v3.3.0 release"),
+        (leave_nonce_on_success::id(), "leave nonce as is on success"),
+        (reject_empty_instruction_without_program::id(), "fail instructions which have native_loader as program_id directly"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

@@ -9,7 +9,8 @@ use solana_sdk::{
     compute_budget::ComputeBudget,
     feature_set::{
         demote_program_write_locks, do_support_realloc, neon_evm_compute_budget,
-        remove_native_loader, requestable_heap_size, tx_wide_compute_cap, FeatureSet,
+        reject_empty_instruction_without_program, remove_native_loader, requestable_heap_size,
+        tx_wide_compute_cap, FeatureSet,
     },
     hash::Hash,
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
@@ -22,7 +23,7 @@ use solana_sdk::{
 use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, sync::Arc};
 
 pub type ProcessInstructionWithContext =
-    fn(usize, &[u8], &mut dyn InvokeContext) -> Result<(), InstructionError>;
+    fn(usize, &[u8], &mut InvokeContext) -> Result<(), InstructionError>;
 
 #[derive(Clone)]
 pub struct BuiltinProgram {
@@ -36,7 +37,7 @@ impl std::fmt::Debug for BuiltinProgram {
         type ErasedProcessInstructionWithContext = fn(
             usize,
             &'static [u8],
-            &'static mut dyn InvokeContext,
+            &'static mut InvokeContext<'static>,
         ) -> Result<(), InstructionError>;
 
         // rustc doesn't compile due to bug without this work around
@@ -50,11 +51,11 @@ impl std::fmt::Debug for BuiltinProgram {
 /// Program executor
 pub trait Executor: Debug + Send + Sync {
     /// Execute the program
-    fn execute(
+    fn execute<'a, 'b>(
         &self,
         first_instruction_account: usize,
         instruction_data: &[u8],
-        invoke_context: &mut dyn InvokeContext,
+        invoke_context: &'a mut InvokeContext<'b>,
         use_jit: bool,
     ) -> Result<(), InstructionError>;
 }
@@ -92,19 +93,25 @@ impl ComputeMeter {
     pub fn get_remaining(&self) -> u64 {
         self.remaining
     }
+    /// Set compute units
+    ///
+    /// Only use for tests and benchmarks
+    pub fn mock_set_remaining(&mut self, remaining: u64) {
+        self.remaining = remaining;
+    }
     /// Construct a new one with the given remaining units
     pub fn new_ref(remaining: u64) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self { remaining }))
     }
 }
 
-pub struct InvokeContextStackFrame<'a> {
+pub struct StackFrame<'a> {
     pub number_of_program_accounts: usize,
     pub keyed_accounts: Vec<KeyedAccount<'a>>,
     pub keyed_accounts_range: std::ops::Range<usize>,
 }
 
-impl<'a> InvokeContextStackFrame<'a> {
+impl<'a> StackFrame<'a> {
     pub fn new(number_of_program_accounts: usize, keyed_accounts: Vec<KeyedAccount<'a>>) -> Self {
         let keyed_accounts_range = std::ops::Range {
             start: 0,
@@ -124,27 +131,27 @@ impl<'a> InvokeContextStackFrame<'a> {
     }
 }
 
-pub struct ThisInvokeContext<'a> {
-    instruction_index: usize,
-    invoke_stack: Vec<InvokeContextStackFrame<'a>>,
+pub struct InvokeContext<'a> {
+    invoke_stack: Vec<StackFrame<'a>>,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
     accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
     builtin_programs: &'a [BuiltinProgram],
-    sysvars: &'a [(Pubkey, Vec<u8>)],
+    pub sysvars: &'a [(Pubkey, Vec<u8>)],
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     compute_budget: ComputeBudget,
     current_compute_budget: ComputeBudget,
     compute_meter: Rc<RefCell<ComputeMeter>>,
     executors: Rc<RefCell<Executors>>,
-    instruction_recorders: Option<&'a [InstructionRecorder]>,
-    feature_set: Arc<FeatureSet>,
+    pub instruction_recorder: Option<&'a InstructionRecorder>,
+    pub feature_set: Arc<FeatureSet>,
     pub timings: ExecuteDetailsTimings,
-    blockhash: Hash,
-    lamports_per_signature: u64,
-    return_data: (Pubkey, Vec<u8>),
+    pub blockhash: Hash,
+    pub lamports_per_signature: u64,
+    pub return_data: (Pubkey, Vec<u8>),
 }
-impl<'a> ThisInvokeContext<'a> {
+
+impl<'a> InvokeContext<'a> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         rent: Rent,
@@ -153,15 +160,12 @@ impl<'a> ThisInvokeContext<'a> {
         sysvars: &'a [(Pubkey, Vec<u8>)],
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         compute_budget: ComputeBudget,
-        compute_meter: Rc<RefCell<ComputeMeter>>,
         executors: Rc<RefCell<Executors>>,
-        instruction_recorders: Option<&'a [InstructionRecorder]>,
         feature_set: Arc<FeatureSet>,
         blockhash: Hash,
         lamports_per_signature: u64,
     ) -> Self {
         Self {
-            instruction_index: 0,
             invoke_stack: Vec::with_capacity(compute_budget.max_invoke_depth),
             rent,
             pre_accounts: Vec::new(),
@@ -171,9 +175,9 @@ impl<'a> ThisInvokeContext<'a> {
             log_collector,
             current_compute_budget: compute_budget,
             compute_budget,
-            compute_meter,
+            compute_meter: ComputeMeter::new_ref(compute_budget.max_units),
             executors,
-            instruction_recorders,
+            instruction_recorder: None,
             feature_set,
             timings: ExecuteDetailsTimings::default(),
             blockhash,
@@ -182,148 +186,26 @@ impl<'a> ThisInvokeContext<'a> {
         }
     }
 
-    pub fn new_mock_with_sysvars_and_features(
+    pub fn new_mock(
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         builtin_programs: &'a [BuiltinProgram],
-        sysvars: &'a [(Pubkey, Vec<u8>)],
-        feature_set: Arc<FeatureSet>,
     ) -> Self {
         Self::new(
             Rent::default(),
             accounts,
             builtin_programs,
-            sysvars,
-            None,
+            &[],
+            Some(LogCollector::new_ref()),
             ComputeBudget::default(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             Rc::new(RefCell::new(Executors::default())),
-            None,
-            feature_set,
+            Arc::new(FeatureSet::all_enabled()),
             Hash::default(),
             0,
         )
     }
 
-    pub fn new_mock(
-        accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        builtin_programs: &'a [BuiltinProgram],
-    ) -> Self {
-        Self::new_mock_with_sysvars_and_features(
-            accounts,
-            builtin_programs,
-            &[],
-            Arc::new(FeatureSet::all_enabled()),
-        )
-    }
-}
-
-/// Invocation context passed to loaders
-pub trait InvokeContext {
     /// Push a stack frame onto the invocation stack
-    fn push(
-        &mut self,
-        message: &Message,
-        instruction: &CompiledInstruction,
-        program_indices: &[usize],
-        account_indices: Option<&[usize]>,
-    ) -> Result<(), InstructionError>;
-    /// Pop a stack frame from the invocation stack
-    fn pop(&mut self);
-    /// Current depth of the invocation stake
-    fn invoke_depth(&self) -> usize;
-    /// Verify the results of an instruction
-    fn verify(
-        &mut self,
-        message: &Message,
-        instruction: &CompiledInstruction,
-        program_indices: &[usize],
-    ) -> Result<(), InstructionError>;
-    /// Verify and update PreAccount state based on program execution
-    fn verify_and_update(
-        &mut self,
-        instruction: &CompiledInstruction,
-        account_indices: &[usize],
-        write_privileges: &[bool],
-    ) -> Result<(), InstructionError>;
-    /// Entrypoint for a cross-program invocation from a native program
-    fn native_invoke(
-        &mut self,
-        instruction: Instruction,
-        signers: &[Pubkey],
-    ) -> Result<(), InstructionError>;
-    /// Helper to prepare for process_cross_program_instruction()
-    fn create_message(
-        &mut self,
-        instruction: &Instruction,
-        signers: &[Pubkey],
-    ) -> Result<(Message, Vec<bool>, Vec<usize>), InstructionError>;
-    /// Process a cross-program instruction
-    fn process_cross_program_instruction(
-        &mut self,
-        message: &Message,
-        program_indices: &[usize],
-        account_indices: &[usize],
-        caller_write_privileges: &[bool],
-    ) -> Result<(), InstructionError>;
-    /// Calls the instruction's program entrypoint method
-    fn process_instruction(&mut self, instruction_data: &[u8]) -> Result<(), InstructionError>;
-    /// Get the program ID of the currently executing program
-    fn get_caller(&self) -> Result<&Pubkey, InstructionError>;
-    /// Removes the first keyed account
-    #[deprecated(
-        since = "1.9.0",
-        note = "To be removed together with remove_native_loader"
-    )]
-    fn remove_first_keyed_account(&mut self) -> Result<(), InstructionError>;
-    /// Get the list of keyed accounts
-    fn get_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError>;
-    /// Get the list of keyed accounts skipping `first_instruction_account` many entries
-    fn get_instruction_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError>;
-    /// Get this invocation's LogCollector
-    fn get_log_collector(&self) -> Option<Rc<RefCell<LogCollector>>>;
-    /// Get this invocation's ComputeMeter
-    fn get_compute_meter(&self) -> Rc<RefCell<ComputeMeter>>;
-    /// Loaders may need to do work in order to execute a program.  Cache
-    /// the work that can be re-used across executions
-    fn add_executor(&self, pubkey: &Pubkey, executor: Arc<dyn Executor>);
-    /// Get the completed loader work that can be re-used across executions
-    fn get_executor(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>>;
-    /// Set which instruction in the message is currently being recorded
-    fn set_instruction_index(&mut self, instruction_index: usize);
-    /// Record invoked instruction
-    fn record_instruction(&self, instruction: &Instruction);
-    /// Get the bank's active feature set
-    fn is_feature_active(&self, feature_id: &Pubkey) -> bool;
-    /// Find an account_index and account by its key
-    fn get_account(&self, pubkey: &Pubkey) -> Option<(usize, Rc<RefCell<AccountSharedData>>)>;
-    /// Update timing
-    fn update_timing(
-        &mut self,
-        serialize_us: u64,
-        create_vm_us: u64,
-        execute_us: u64,
-        deserialize_us: u64,
-    );
-    /// Get sysvars
-    fn get_sysvars(&self) -> &[(Pubkey, Vec<u8>)];
-    /// Get this invocation's compute budget
-    fn get_compute_budget(&self) -> &ComputeBudget;
-    /// Set this invocation's blockhash
-    fn set_blockhash(&mut self, hash: Hash);
-    /// Get this invocation's blockhash
-    fn get_blockhash(&self) -> &Hash;
-    /// Set this invocation's lamports_per_signature value
-    fn set_lamports_per_signature(&mut self, lamports_per_signature: u64);
-    /// Get this invocation's lamports_per_signature value
-    fn get_lamports_per_signature(&self) -> u64;
-    /// Set the return data
-    fn set_return_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError>;
-    /// Get the return data
-    fn get_return_data(&self) -> (Pubkey, &[u8]);
-}
-
-impl<'a> InvokeContext for ThisInvokeContext<'a> {
-    fn push(
+    pub fn push(
         &mut self,
         message: &Message,
         instruction: &CompiledInstruction,
@@ -337,17 +219,24 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         let program_id = program_indices
             .last()
             .map(|index_of_program_id| &self.accounts[*index_of_program_id].0);
+        if program_id.is_none()
+            && self
+                .feature_set
+                .is_active(&reject_empty_instruction_without_program::id())
+        {
+            return Err(InstructionError::UnsupportedProgramId);
+        }
         if self.invoke_stack.is_empty() {
             let mut compute_budget = self.compute_budget;
-            if !self.is_feature_active(&tx_wide_compute_cap::id())
-                && self.is_feature_active(&neon_evm_compute_budget::id())
+            if !self.feature_set.is_active(&tx_wide_compute_cap::id())
+                && self.feature_set.is_active(&neon_evm_compute_budget::id())
                 && program_id == Some(&crate::neon_evm_program::id())
             {
                 // Bump the compute budget for neon_evm
                 compute_budget.max_units = compute_budget.max_units.max(500_000);
             }
-            if !self.is_feature_active(&requestable_heap_size::id())
-                && self.is_feature_active(&neon_evm_compute_budget::id())
+            if !self.feature_set.is_active(&requestable_heap_size::id())
+                && self.feature_set.is_active(&neon_evm_compute_budget::id())
                 && program_id == Some(&crate::neon_evm_program::id())
             {
                 // Bump the compute budget for neon_evm
@@ -416,27 +305,35 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             }))
             .collect::<Vec<_>>();
 
-        self.invoke_stack.push(InvokeContextStackFrame::new(
+        self.invoke_stack.push(StackFrame::new(
             program_indices.len(),
             create_keyed_accounts_unified(keyed_accounts.as_slice()),
         ));
         Ok(())
     }
-    fn pop(&mut self) {
+
+    /// Pop a stack frame from the invocation stack
+    pub fn pop(&mut self) {
         self.invoke_stack.pop();
     }
-    fn invoke_depth(&self) -> usize {
+
+    /// Current depth of the invocation stack
+    pub fn invoke_depth(&self) -> usize {
         self.invoke_stack.len()
     }
-    fn verify(
+
+    /// Verify the results of an instruction
+    pub fn verify(
         &mut self,
         message: &Message,
         instruction: &CompiledInstruction,
         program_indices: &[usize],
     ) -> Result<(), InstructionError> {
         let program_id = instruction.program_id(&message.account_keys);
-        let demote_program_write_locks = self.is_feature_active(&demote_program_write_locks::id());
-        let do_support_realloc = self.is_feature_active(&do_support_realloc::id());
+        let demote_program_write_locks = self
+            .feature_set
+            .is_active(&demote_program_write_locks::id());
+        let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
 
         // Verify all executable accounts have zero outstanding refs
         for account_index in program_indices.iter() {
@@ -493,7 +390,9 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         }
         Ok(())
     }
-    fn verify_and_update(
+
+    /// Verify and update PreAccount state based on program execution
+    pub fn verify_and_update(
         &mut self,
         instruction: &CompiledInstruction,
         account_indices: &[usize],
@@ -572,7 +471,9 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         }
         Ok(())
     }
-    fn native_invoke(
+
+    /// Entrypoint for a cross-program invocation from a builtin program
+    pub fn native_invoke(
         &mut self,
         instruction: Instruction,
         signers: &[Pubkey],
@@ -590,7 +491,9 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             prev_account_sizes.push((account, account_length));
         }
 
-        self.record_instruction(&instruction);
+        if let Some(instruction_recorder) = &self.instruction_recorder {
+            instruction_recorder.record_instruction(instruction);
+        }
         self.process_cross_program_instruction(
             &message,
             &program_indices,
@@ -599,7 +502,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         )?;
 
         // Verify the called program has not misbehaved
-        let do_support_realloc = self.is_feature_active(&do_support_realloc::id());
+        let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
         for (account, prev_size) in prev_account_sizes.iter() {
             if !do_support_realloc && *prev_size != account.borrow().data().len() && *prev_size != 0
             {
@@ -615,7 +518,9 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
 
         Ok(())
     }
-    fn create_message(
+
+    /// Helper to prepare for process_cross_program_instruction()
+    pub fn create_message(
         &mut self,
         instruction: &Instruction,
         signers: &[Pubkey],
@@ -726,7 +631,9 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
 
         Ok((message, caller_write_privileges, program_indices))
     }
-    fn process_cross_program_instruction(
+
+    /// Process a cross-program instruction
+    pub fn process_cross_program_instruction(
         &mut self,
         message: &Message,
         program_indices: &[usize],
@@ -742,12 +649,13 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         // Verify the calling program hasn't misbehaved
         self.verify_and_update(instruction, account_indices, caller_write_privileges)?;
 
-        self.set_return_data(Vec::new())?;
+        self.return_data = (*self.get_caller()?, Vec::new());
         self.push(message, instruction, program_indices, Some(account_indices))?;
         let result = self.process_instruction(&instruction.data).and_then(|_| {
             // Verify the called program has not misbehaved
-            let demote_program_write_locks =
-                self.is_feature_active(&demote_program_write_locks::id());
+            let demote_program_write_locks = self
+                .feature_set
+                .is_active(&demote_program_write_locks::id());
             let write_privileges: Vec<bool> = (0..message.account_keys.len())
                 .map(|i| message.is_writable(i, demote_program_write_locks))
                 .collect();
@@ -758,7 +666,9 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         self.pop();
         result
     }
-    fn process_instruction(&mut self, instruction_data: &[u8]) -> Result<(), InstructionError> {
+
+    /// Calls the instruction's program entrypoint method
+    pub fn process_instruction(&mut self, instruction_data: &[u8]) -> Result<(), InstructionError> {
         let keyed_accounts = self.get_keyed_accounts()?;
         let root_account = keyed_account_at_index(keyed_accounts, 0)
             .map_err(|_| InstructionError::UnsupportedProgramId)?;
@@ -775,7 +685,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                     );
                 }
             }
-            if !self.is_feature_active(&remove_native_loader::id()) {
+            if !self.feature_set.is_active(&remove_native_loader::id()) {
                 let native_loader = NativeLoader::default();
                 // Call the program via the native loader
                 return native_loader.process_instruction(0, instruction_data, self);
@@ -794,14 +704,29 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         }
         Err(InstructionError::UnsupportedProgramId)
     }
-    fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
+
+    /// Get the program ID of the currently executing program
+    pub fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
         self.invoke_stack
             .last()
             .and_then(|frame| frame.program_id())
             .ok_or(InstructionError::CallDepth)
     }
-    fn remove_first_keyed_account(&mut self) -> Result<(), InstructionError> {
-        if !self.is_feature_active(&remove_native_loader::id()) {
+
+    /// Get the owner of the currently executing program
+    pub fn get_loader(&self) -> Result<Pubkey, InstructionError> {
+        self.get_instruction_keyed_accounts()
+            .and_then(|keyed_accounts| keyed_accounts.first().ok_or(InstructionError::CallDepth))
+            .and_then(|keyed_account| keyed_account.owner())
+    }
+
+    /// Removes the first keyed account
+    #[deprecated(
+        since = "1.9.0",
+        note = "To be removed together with remove_native_loader"
+    )]
+    pub fn remove_first_keyed_account(&mut self) -> Result<(), InstructionError> {
+        if !self.feature_set.is_active(&remove_native_loader::id()) {
             let stack_frame = &mut self
                 .invoke_stack
                 .last_mut()
@@ -811,13 +736,17 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         }
         Ok(())
     }
-    fn get_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError> {
+
+    /// Get the list of keyed accounts
+    pub fn get_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError> {
         self.invoke_stack
             .last()
             .map(|frame| &frame.keyed_accounts[frame.keyed_accounts_range.clone()])
             .ok_or(InstructionError::CallDepth)
     }
-    fn get_instruction_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError> {
+
+    /// Get the list of keyed accounts skipping `first_instruction_account` many entries
+    pub fn get_instruction_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError> {
         let frame = self
             .invoke_stack
             .last()
@@ -828,30 +757,30 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             .ok_or(InstructionError::CallDepth)?;
         Ok(&frame.keyed_accounts[first_instruction_account..])
     }
-    fn get_log_collector(&self) -> Option<Rc<RefCell<LogCollector>>> {
+
+    /// Get this invocation's LogCollector
+    pub fn get_log_collector(&self) -> Option<Rc<RefCell<LogCollector>>> {
         self.log_collector.clone()
     }
-    fn get_compute_meter(&self) -> Rc<RefCell<ComputeMeter>> {
+
+    /// Get this invocation's ComputeMeter
+    pub fn get_compute_meter(&self) -> Rc<RefCell<ComputeMeter>> {
         self.compute_meter.clone()
     }
-    fn add_executor(&self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {
+
+    /// Loaders may need to do work in order to execute a program. Cache
+    /// the work that can be re-used across executions
+    pub fn add_executor(&self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {
         self.executors.borrow_mut().insert(*pubkey, executor);
     }
-    fn get_executor(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
+
+    /// Get the completed loader work that can be re-used across execution
+    pub fn get_executor(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
         self.executors.borrow().get(pubkey)
     }
-    fn set_instruction_index(&mut self, instruction_index: usize) {
-        self.instruction_index = instruction_index;
-    }
-    fn record_instruction(&self, instruction: &Instruction) {
-        if let Some(instruction_recorders) = &self.instruction_recorders {
-            instruction_recorders[self.instruction_index].record_instruction(instruction.clone());
-        }
-    }
-    fn is_feature_active(&self, feature_id: &Pubkey) -> bool {
-        self.feature_set.is_active(feature_id)
-    }
-    fn get_account(&self, pubkey: &Pubkey) -> Option<(usize, Rc<RefCell<AccountSharedData>>)> {
+
+    /// Find an account_index and account by its key
+    pub fn get_account(&self, pubkey: &Pubkey) -> Option<(usize, Rc<RefCell<AccountSharedData>>)> {
         for (index, (key, account)) in self.accounts.iter().enumerate().rev() {
             if key == pubkey {
                 return Some((index, account.clone()));
@@ -859,65 +788,28 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         }
         None
     }
-    fn update_timing(
-        &mut self,
-        serialize_us: u64,
-        create_vm_us: u64,
-        execute_us: u64,
-        deserialize_us: u64,
-    ) {
-        self.timings.serialize_us = self.timings.serialize_us.saturating_add(serialize_us);
-        self.timings.create_vm_us = self.timings.create_vm_us.saturating_add(create_vm_us);
-        self.timings.execute_us = self.timings.execute_us.saturating_add(execute_us);
-        self.timings.deserialize_us = self.timings.deserialize_us.saturating_add(deserialize_us);
-    }
-    fn get_sysvars(&self) -> &[(Pubkey, Vec<u8>)] {
-        self.sysvars
-    }
-    fn get_compute_budget(&self) -> &ComputeBudget {
+
+    /// Get this invocation's compute budget
+    pub fn get_compute_budget(&self) -> &ComputeBudget {
         &self.current_compute_budget
     }
-    fn set_blockhash(&mut self, hash: Hash) {
-        self.blockhash = hash;
-    }
-    fn get_blockhash(&self) -> &Hash {
-        &self.blockhash
-    }
-    fn set_lamports_per_signature(&mut self, lamports_per_signature: u64) {
-        self.lamports_per_signature = lamports_per_signature;
-    }
-    fn get_lamports_per_signature(&self) -> u64 {
-        self.lamports_per_signature
-    }
-    fn set_return_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError> {
-        self.return_data = (*self.get_caller()?, data);
-        Ok(())
-    }
-    fn get_return_data(&self) -> (Pubkey, &[u8]) {
-        (self.return_data.0, &self.return_data.1)
-    }
-}
 
-// This method which has a generic parameter is outside of the InvokeContext,
-// because the InvokeContext is a dyn Trait.
-pub fn get_sysvar<T: Sysvar>(
-    invoke_context: &dyn InvokeContext,
-    id: &Pubkey,
-) -> Result<T, InstructionError> {
-    invoke_context
-        .get_sysvars()
-        .iter()
-        .find_map(|(key, data)| {
-            if id == key {
-                bincode::deserialize(data).ok()
-            } else {
-                None
-            }
-        })
-        .ok_or_else(|| {
-            ic_msg!(invoke_context, "Unable to get sysvar {}", id);
-            InstructionError::UnsupportedSysvar
-        })
+    /// Get the value of a sysvar by its id
+    pub fn get_sysvar<T: Sysvar>(&self, id: &Pubkey) -> Result<T, InstructionError> {
+        self.sysvars
+            .iter()
+            .find_map(|(key, data)| {
+                if id == key {
+                    bincode::deserialize(data).ok()
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| {
+                ic_msg!(self, "Unable to get sysvar {}", id);
+                InstructionError::UnsupportedSysvar
+            })
+    }
 }
 
 pub struct MockInvokeContextPreparation {
@@ -981,7 +873,7 @@ pub fn prepare_mock_invoke_context(
     }
 }
 
-pub fn with_mock_invoke_context<R, F: FnMut(&mut ThisInvokeContext) -> R>(
+pub fn with_mock_invoke_context<R, F: FnMut(&mut InvokeContext) -> R>(
     loader_id: Pubkey,
     account_size: usize,
     mut callback: F,
@@ -1008,7 +900,7 @@ pub fn with_mock_invoke_context<R, F: FnMut(&mut ThisInvokeContext) -> R>(
         ),
     ];
     let preparation = prepare_mock_invoke_context(&program_indices, &[], &keyed_accounts);
-    let mut invoke_context = ThisInvokeContext::new_mock(&preparation.accounts, &[]);
+    let mut invoke_context = InvokeContext::new_mock(&preparation.accounts, &[]);
     invoke_context
         .push(
             &preparation.message,
@@ -1032,7 +924,7 @@ pub fn mock_process_instruction(
     let processor_account = AccountSharedData::new_ref(0, 0, &solana_sdk::native_loader::id());
     program_indices.insert(0, preparation.accounts.len());
     preparation.accounts.push((*loader_id, processor_account));
-    let mut invoke_context = ThisInvokeContext::new_mock(&preparation.accounts, &[]);
+    let mut invoke_context = InvokeContext::new_mock(&preparation.accounts, &[]);
     invoke_context.push(
         &preparation.message,
         &preparation.message.instructions[0],
@@ -1068,7 +960,7 @@ mod tests {
         fn mock_process_instruction(
             _first_instruction_account: usize,
             _data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
+            _invoke_context: &mut InvokeContext,
         ) -> Result<(), InstructionError> {
             Ok(())
         }
@@ -1076,7 +968,7 @@ mod tests {
         fn mock_ix_processor(
             _first_instruction_account: usize,
             _data: &[u8],
-            _context: &mut dyn InvokeContext,
+            _context: &mut InvokeContext,
         ) -> Result<(), InstructionError> {
             Ok(())
         }
@@ -1097,7 +989,7 @@ mod tests {
     fn mock_process_instruction(
         first_instruction_account: usize,
         data: &[u8],
-        invoke_context: &mut dyn InvokeContext,
+        invoke_context: &mut InvokeContext,
     ) -> Result<(), InstructionError> {
         let program_id = invoke_context.get_caller()?;
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
@@ -1171,7 +1063,7 @@ mod tests {
             &[Instruction::new_with_bytes(invoke_stack[0], &[0], metas)],
             None,
         );
-        let mut invoke_context = ThisInvokeContext::new_mock(&accounts, &[]);
+        let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
 
         // Check call depth increases and has a limit
         let mut depth_reached = 0;
@@ -1258,7 +1150,7 @@ mod tests {
             )],
             None,
         );
-        let mut invoke_context = ThisInvokeContext::new_mock(&accounts, &[]);
+        let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
         invoke_context
             .push(&message, &message.instructions[0], &[0], None)
             .unwrap();
@@ -1323,14 +1215,15 @@ mod tests {
             program_id: callee_program_id,
             process_instruction: mock_process_instruction,
         }];
-        let mut invoke_context = ThisInvokeContext::new_mock(&accounts, builtin_programs);
+        let mut invoke_context = InvokeContext::new_mock(&accounts, builtin_programs);
         invoke_context
             .push(&message, &caller_instruction, &program_indices[..1], None)
             .unwrap();
 
         // not owned account modified by the caller (before the invoke)
-        let demote_program_write_locks =
-            invoke_context.is_feature_active(&demote_program_write_locks::id());
+        let demote_program_write_locks = invoke_context
+            .feature_set
+            .is_active(&demote_program_write_locks::id());
         let caller_write_privileges = message
             .account_keys
             .iter()
@@ -1450,7 +1343,7 @@ mod tests {
             program_id: callee_program_id,
             process_instruction: mock_process_instruction,
         }];
-        let mut invoke_context = ThisInvokeContext::new_mock(&accounts, builtin_programs);
+        let mut invoke_context = InvokeContext::new_mock(&accounts, builtin_programs);
         invoke_context
             .push(&message, &caller_instruction, &program_indices, None)
             .unwrap();
@@ -1538,12 +1431,8 @@ mod tests {
         let mut feature_set = FeatureSet::all_enabled();
         feature_set.deactivate(&tx_wide_compute_cap::id());
         feature_set.deactivate(&requestable_heap_size::id());
-        let mut invoke_context = ThisInvokeContext::new_mock_with_sysvars_and_features(
-            &accounts,
-            &[],
-            &[],
-            Arc::new(feature_set),
-        );
+        let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
+        invoke_context.feature_set = Arc::new(feature_set);
 
         invoke_context
             .push(&noop_message, &noop_message.instructions[0], &[0], None)

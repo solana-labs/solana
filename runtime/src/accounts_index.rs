@@ -1213,10 +1213,8 @@ impl<T: IndexValue> AccountsIndex<T> {
             if let AccountIndexGetResult::Found(list_r, index) =
                 self.get(&pubkey, Some(ancestors), max_root)
             {
-                func(
-                    &pubkey,
-                    (&list_r.slot_list()[index].1, list_r.slot_list()[index].0),
-                );
+                let entry = &list_r.slot_list()[index];
+                func(&pubkey, (&entry.1, entry.0));
             }
             if config.is_aborted() {
                 break;
@@ -2931,7 +2929,7 @@ pub mod tests {
                     to_raw_first,
                 )
                 .into_account_map_entry(&index.storage.storage);
-                assert_eq!(new_entry.ref_count.load(Ordering::Relaxed), 0);
+                assert_eq!(new_entry.ref_count(), 0);
                 assert_eq!(new_entry.slot_list.read().unwrap().capacity(), 1);
                 assert_eq!(
                     new_entry.slot_list.read().unwrap().to_vec(),
@@ -2950,7 +2948,7 @@ pub mod tests {
                     to_raw_first,
                 )
                 .into_account_map_entry(&index.storage.storage);
-                assert_eq!(new_entry.ref_count.load(Ordering::Relaxed), 1);
+                assert_eq!(new_entry.ref_count(), 1);
                 assert_eq!(new_entry.slot_list.read().unwrap().capacity(), 1);
                 assert_eq!(
                     new_entry.slot_list.read().unwrap().to_vec(),

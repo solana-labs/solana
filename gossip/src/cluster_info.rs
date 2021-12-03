@@ -381,8 +381,9 @@ fn retain_staked(values: &mut Vec<CrdsValue>, stakes: &HashMap<Pubkey, u64>) {
             // the various dashboards.
             CrdsData::Version(_) => true,
             CrdsData::NodeInstance(_) => true,
+            // getHealth fails if account hashes are not propagated.
+            CrdsData::AccountsHashes(_) => true,
             CrdsData::LowestSlot(_, _)
-            | CrdsData::AccountsHashes(_)
             | CrdsData::LegacyVersion(_)
             | CrdsData::DuplicateShred(_, _) => {
                 let stake = stakes.get(&value.pubkey()).copied();

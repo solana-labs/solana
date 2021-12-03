@@ -84,26 +84,25 @@ pub enum ProgramTestError {
 }
 
 thread_local! {
-    static INVOKE_CONTEXT: RefCell<Option<(usize, usize)>> = RefCell::new(None);
+    static INVOKE_CONTEXT: RefCell<Option<usize>> = RefCell::new(None);
 }
-fn set_invoke_context(new: &mut dyn InvokeContext) {
-    INVOKE_CONTEXT.with(|invoke_context| unsafe {
-        invoke_context.replace(Some(transmute::<_, (usize, usize)>(new)))
-    });
+fn set_invoke_context(new: &mut InvokeContext) {
+    INVOKE_CONTEXT
+        .with(|invoke_context| unsafe { invoke_context.replace(Some(transmute::<_, usize>(new))) });
 }
-fn get_invoke_context<'a>() -> &'a mut dyn InvokeContext {
-    let fat = INVOKE_CONTEXT.with(|invoke_context| match *invoke_context.borrow() {
+fn get_invoke_context<'a, 'b>() -> &'a mut InvokeContext<'b> {
+    let ptr = INVOKE_CONTEXT.with(|invoke_context| match *invoke_context.borrow() {
         Some(val) => val,
         None => panic!("Invoke context not set!"),
     });
-    unsafe { transmute::<(usize, usize), &mut dyn InvokeContext>(fat) }
+    unsafe { transmute::<usize, &mut InvokeContext>(ptr) }
 }
 
 pub fn builtin_process_instruction(
     process_instruction: solana_sdk::entrypoint::ProcessInstruction,
     _first_instruction_account: usize,
     input: &[u8],
-    invoke_context: &mut dyn InvokeContext,
+    invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     set_invoke_context(invoke_context);
 
@@ -187,7 +186,7 @@ macro_rules! processor {
         Some(
             |first_instruction_account: usize,
              input: &[u8],
-             invoke_context: &mut dyn solana_program_test::InvokeContext| {
+             invoke_context: &mut solana_program_test::InvokeContext| {
                 $crate::builtin_process_instruction(
                     $process_instruction,
                     first_instruction_account,
@@ -215,7 +214,7 @@ fn get_sysvar<T: Default + Sysvar + Sized + serde::de::DeserializeOwned>(
         panic!("Exceeded compute budget");
     }
 
-    match solana_program_runtime::invoke_context::get_sysvar::<T>(invoke_context, id) {
+    match invoke_context.get_sysvar::<T>(id) {
         Ok(sysvar_data) => unsafe {
             *(var_addr as *mut _ as *mut T) = sysvar_data;
             SUCCESS
@@ -249,8 +248,9 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         let message = Message::new(&[instruction.clone()], None);
         let program_id_index = message.instructions[0].program_id_index as usize;
         let program_id = message.account_keys[program_id_index];
-        let demote_program_write_locks =
-            invoke_context.is_feature_active(&demote_program_write_locks::id());
+        let demote_program_write_locks = invoke_context
+            .feature_set
+            .is_active(&demote_program_write_locks::id());
         // TODO don't have the caller's keyed_accounts so can't validate writer or signer escalation or deescalation yet
         let caller_privileges = message
             .account_keys
@@ -318,7 +318,9 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             }
         }
 
-        invoke_context.record_instruction(instruction);
+        if let Some(instruction_recorder) = &invoke_context.instruction_recorder {
+            instruction_recorder.record_instruction(instruction.clone());
+        }
 
         invoke_context
             .process_cross_program_instruction(

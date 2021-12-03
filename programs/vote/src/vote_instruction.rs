@@ -310,7 +310,7 @@ fn verify_rent_exemption(
 pub fn process_instruction(
     first_instruction_account: usize,
     data: &[u8],
-    invoke_context: &mut dyn InvokeContext,
+    invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
@@ -378,7 +378,9 @@ pub fn process_instruction(
             vote_state::withdraw(me, lamports, to, &signers)
         }
         VoteInstruction::AuthorizeChecked(vote_authorize) => {
-            if invoke_context.is_feature_active(&feature_set::vote_stake_checked_instructions::id())
+            if invoke_context
+                .feature_set
+                .is_active(&feature_set::vote_stake_checked_instructions::id())
             {
                 let voter_pubkey =
                     &keyed_account_at_index(keyed_accounts, first_instruction_account + 3)?

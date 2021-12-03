@@ -16,7 +16,7 @@ use std::collections::BTreeSet;
 pub fn process_instruction(
     first_instruction_account: usize,
     data: &[u8],
-    invoke_context: &mut dyn InvokeContext,
+    invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
@@ -100,7 +100,10 @@ pub fn process_instruction(
         }
     }
 
-    if invoke_context.is_feature_active(&feature_set::dedupe_config_program_signers::id()) {
+    if invoke_context
+        .feature_set
+        .is_active(&feature_set::dedupe_config_program_signers::id())
+    {
         let total_new_keys = key_list.keys.len();
         let unique_new_keys = key_list.keys.into_iter().collect::<BTreeSet<_>>();
         if unique_new_keys.len() != total_new_keys {

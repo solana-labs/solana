@@ -394,10 +394,10 @@ The result field will be an object with the following fields:
       - `fee: <u64>` - fee this transaction was charged, as u64 integer
       - `preBalances: <array>` - array of u64 account balances from before the transaction was processed
       - `postBalances: <array>` - array of u64 account balances after the transaction was processed
-      - `innerInstructions: <array|undefined>` - List of [inner instructions](#inner-instructions-structure) or omitted if inner instruction recording was not yet enabled during this transaction
+      - `innerInstructions: <array|null>` - List of [inner instructions](#inner-instructions-structure) or `null` if inner instruction recording was not enabled during this transaction
       - `preTokenBalances: <array|undefined>` - List of [token balances](#token-balances-structure) from before the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
       - `postTokenBalances: <array|undefined>` - List of [token balances](#token-balances-structure) from after the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
-      - `logMessages: <array>` - array of string log messages or omitted if log message recording was not yet enabled during this transaction
+      - `logMessages: <array|null>` - array of string log messages or `null` if log message recording was not enabled during this transaction
       - DEPRECATED: `status: <object>` - Transaction status
         - `"Ok": <null>` - Transaction was successful
         - `"Err": <ERR>` - Transaction failed with TransactionError
@@ -520,8 +520,8 @@ Result:
         "meta": {
           "err": null,
           "fee": 5000,
-          "innerInstructions": [],
-          "logMessages": [],
+          "innerInstructions": null,
+          "logMessages": null,
           "postBalances": [
             499998932500,
             26858640,
@@ -2752,10 +2752,10 @@ Returns transaction details for a confirmed transaction
     - `fee: <u64>` - fee this transaction was charged, as u64 integer
     - `preBalances: <array>` - array of u64 account balances from before the transaction was processed
     - `postBalances: <array>` - array of u64 account balances after the transaction was processed
-    - `innerInstructions: <array|undefined>` - List of [inner instructions](#inner-instructions-structure) or omitted if inner instruction recording was not yet enabled during this transaction
+    - `innerInstructions: <array|null>` - List of [inner instructions](#inner-instructions-structure) or `null` if inner instruction recording was not enabled during this transaction
     - `preTokenBalances: <array|undefined>` - List of  [token balances](#token-balances-structure) from before the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
     - `postTokenBalances: <array|undefined>` - List of [token balances](#token-balances-structure) from after the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
-    - `logMessages: <array>` - array of string log messages or omitted if log message recording was not yet enabled during this transaction
+    - `logMessages: <array|null>` - array of string log messages or `null` if log message recording was not enabled during this transaction
     - DEPRECATED: `status: <object>` - Transaction status
       - `"Ok": <null>` - Transaction was successful
       - `"Err": <ERR>` - Transaction failed with TransactionError
@@ -4144,10 +4144,10 @@ The result field will be an object with the following fields:
       - `fee: <u64>` - fee this transaction was charged, as u64 integer
       - `preBalances: <array>` - array of u64 account balances from before the transaction was processed
       - `postBalances: <array>` - array of u64 account balances after the transaction was processed
-      - `innerInstructions: <array|undefined>` - List of [inner instructions](#inner-instructions-structure) or omitted if inner instruction recording was not yet enabled during this transaction
+      - `innerInstructions: <array|null>` - List of [inner instructions](#inner-instructions-structure) or `null` if inner instruction recording was not enabled during this transaction
       - `preTokenBalances: <array|undefined>` - List of [token balances](#token-balances-structure) from before the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
       - `postTokenBalances: <array|undefined>` - List of [token balances](#token-balances-structure) from after the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
-      - `logMessages: <array>` - array of string log messages or omitted if log message recording was not yet enabled during this transaction
+      - `logMessages: <array|null>` - array of string log messages or `null` if log message recording was not enabled during this transaction
       - DEPRECATED: `status: <object>` - Transaction status
         - `"Ok": <null>` - Transaction was successful
         - `"Err": <ERR>` - Transaction failed with TransactionError
@@ -4460,10 +4460,10 @@ Returns transaction details for a confirmed transaction
     - `fee: <u64>` - fee this transaction was charged, as u64 integer
     - `preBalances: <array>` - array of u64 account balances from before the transaction was processed
     - `postBalances: <array>` - array of u64 account balances after the transaction was processed
-    - `innerInstructions: <array|undefined>` - List of [inner instructions](#inner-instructions-structure) or omitted if inner instruction recording was not yet enabled during this transaction
+    - `innerInstructions: <array|null>` - List of [inner instructions](#inner-instructions-structure) or `null` if inner instruction recording was not enabled during this transaction
     - `preTokenBalances: <array|undefined>` - List of  [token balances](#token-balances-structure) from before the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
     - `postTokenBalances: <array|undefined>` - List of [token balances](#token-balances-structure) from after the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
-    - `logMessages: <array>` - array of string log messages or omitted if log message recording was not yet enabled during this transaction
+    - `logMessages: <array|null>` - array of string log messages or `null` if log message recording was not enabled during this transaction
     - DEPRECATED: `status: <object>` - Transaction status
       - `"Ok": <null>` - Transaction was successful
       - `"Err": <ERR>` - Transaction failed with TransactionError

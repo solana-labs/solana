@@ -283,11 +283,13 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
                 err: bincode::serialize(&err).expect("transaction error to serialize to bytes"),
             }),
         };
+        let inner_instructions_none = inner_instructions.is_none();
         let inner_instructions = inner_instructions
             .unwrap_or_default()
             .into_iter()
             .map(|ii| ii.into())
             .collect();
+        let log_messages_none = log_messages.is_none();
         let log_messages = log_messages.unwrap_or_default();
         let pre_token_balances = pre_token_balances
             .unwrap_or_default()
@@ -311,7 +313,9 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
             pre_balances,
             post_balances,
             inner_instructions,
+            inner_instructions_none,
             log_messages,
+            log_messages_none,
             pre_token_balances,
             post_token_balances,
             rewards,
@@ -336,7 +340,9 @@ impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
             pre_balances,
             post_balances,
             inner_instructions,
+            inner_instructions_none,
             log_messages,
+            log_messages_none,
             pre_token_balances,
             post_token_balances,
             rewards,
@@ -345,13 +351,21 @@ impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
             None => Ok(()),
             Some(tx_error) => Err(bincode::deserialize(&tx_error.err)?),
         };
-        let inner_instructions = Some(
-            inner_instructions
-                .into_iter()
-                .map(|inner| inner.into())
-                .collect(),
-        );
-        let log_messages = Some(log_messages);
+        let inner_instructions = if inner_instructions_none {
+            None
+        } else {
+            Some(
+                inner_instructions
+                    .into_iter()
+                    .map(|inner| inner.into())
+                    .collect(),
+            )
+        };
+        let log_messages = if log_messages_none {
+            None
+        } else {
+            Some(log_messages)
+        };
         let pre_token_balances = Some(
             pre_token_balances
                 .into_iter()

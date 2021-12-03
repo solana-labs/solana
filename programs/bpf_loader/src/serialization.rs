@@ -313,9 +313,7 @@ pub fn deserialize_parameters_aligned(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_program_runtime::invoke_context::{
-        prepare_mock_invoke_context, InvokeContext, ThisInvokeContext,
-    };
+    use solana_program_runtime::invoke_context::{prepare_mock_invoke_context, InvokeContext};
     use solana_sdk::{
         account::{Account, AccountSharedData},
         account_info::AccountInfo,
@@ -448,7 +446,7 @@ mod tests {
         let program_indices = [0];
         let preparation =
             prepare_mock_invoke_context(&program_indices, &instruction_data, &keyed_accounts);
-        let mut invoke_context = ThisInvokeContext::new_mock(&preparation.accounts, &[]);
+        let mut invoke_context = InvokeContext::new_mock(&preparation.accounts, &[]);
         invoke_context
             .push(
                 &preparation.message,

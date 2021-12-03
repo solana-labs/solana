@@ -15,7 +15,7 @@ fn process_instruction_with_program_logging(
     process_instruction: ProcessInstructionWithContext,
     first_instruction_account: usize,
     instruction_data: &[u8],
-    invoke_context: &mut dyn InvokeContext,
+    invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let logger = invoke_context.get_log_collector();
     let program_id = invoke_context.get_caller()?;
@@ -35,7 +35,7 @@ macro_rules! with_program_logging {
     ($process_instruction:expr) => {
         |first_instruction_account: usize,
          instruction_data: &[u8],
-         invoke_context: &mut dyn InvokeContext| {
+         invoke_context: &mut InvokeContext| {
             process_instruction_with_program_logging(
                 $process_instruction,
                 first_instruction_account,
@@ -135,7 +135,7 @@ fn genesis_builtins() -> Vec<Builtin> {
 fn dummy_process_instruction(
     _first_instruction_account: usize,
     _data: &[u8],
-    _invoke_context: &mut dyn InvokeContext,
+    _invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     Ok(())
 }
