@@ -19,7 +19,7 @@ bs58 = "0.4.0"
 bytemuck = { version = "1.7.2", features = ["derive"] }
 bv = { version = "0.11.1", features = ["serde"] }
 hex = "0.4.2"
-itertools =  "0.10.1"
+itertools = "0.10.1"
 lazy_static = "1.4.0"
 log = "0.4.14"
 num-derive = "0.3"
@@ -43,6 +43,9 @@ libsecp256k1 = "0.6.0"
 rand = "0.7.0"
 solana-logger = { path = "../../logger", version = "=1.9.0" }
 itertools = "0.10.1"
+
+[target.'cfg(not(target_pointer_width = "64"))'.dependencies]
+parking_lot = "0.11"
 
 [dev-dependencies]
 static_assertions = "1.1.0"

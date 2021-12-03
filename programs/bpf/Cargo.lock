@@ -3188,6 +3188,7 @@ dependencies = [
  "log",
  "num-derive",
  "num-traits",
+ "parking_lot",
  "rand 0.7.3",
  "rustc_version 0.4.0",
  "rustversion",

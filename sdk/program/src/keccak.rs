@@ -104,11 +104,11 @@ impl Hash {
 
     /// unique Hash for tests and benchmarks.
     pub fn new_unique() -> Self {
-        use std::sync::atomic::{AtomicU64, Ordering};
+        use crate::atomic_u64::AtomicU64;
         static I: AtomicU64 = AtomicU64::new(1);
 
         let mut b = [0u8; HASH_BYTES];
-        let i = I.fetch_add(1, Ordering::Relaxed);
+        let i = I.fetch_add(1);
         b[0..8].copy_from_slice(&i.to_le_bytes());
         Self::new(&b)
     }
