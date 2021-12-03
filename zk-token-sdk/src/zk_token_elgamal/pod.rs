@@ -1,6 +1,5 @@
-use std::fmt;
-
 pub use bytemuck::{Pod, Zeroable};
+use std::fmt;
 
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
 #[repr(transparent)]

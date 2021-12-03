@@ -7,8 +7,9 @@ use {
 };
 use {
     crate::{
-        encryption::pedersen::PedersenBase, errors::ProofError,
-        range_proof::generators::BulletproofGens, range_proof::inner_product::InnerProductProof,
+        encryption::pedersen::PedersenBase,
+        errors::ProofError,
+        range_proof::{generators::BulletproofGens, inner_product::InnerProductProof},
         transcript::TranscriptProtocol,
     },
     core::iter,

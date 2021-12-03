@@ -1,6 +1,5 @@
 ///! Instructions provided by the ZkToken Proof program
 pub use crate::instruction::*;
-
 use {
     bytemuck::{bytes_of, Pod},
     num_derive::{FromPrimitive, ToPrimitive},

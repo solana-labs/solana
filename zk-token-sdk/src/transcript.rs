@@ -1,10 +1,8 @@
-use curve25519_dalek::ristretto::CompressedRistretto;
-use curve25519_dalek::scalar::Scalar;
-use curve25519_dalek::traits::IsIdentity;
-
-use merlin::Transcript;
-
-use crate::errors::ProofError;
+use {
+    crate::errors::ProofError,
+    curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar, traits::IsIdentity},
+    merlin::Transcript,
+};
 
 pub trait TranscriptProtocol {
     /// Append a domain separator for an `n`-bit rangeproof for ElGamalKeypair
