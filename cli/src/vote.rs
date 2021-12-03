@@ -1382,7 +1382,11 @@ mod tests {
         super::*,
         crate::{clap_app::get_clap_app, cli::parse_command},
         solana_client::blockhash_query,
-        solana_sdk::signature::{read_keypair_file, write_keypair, Keypair, Signer},
+        solana_sdk::{
+            hash::Hash,
+            signature::{read_keypair_file, write_keypair, Keypair, Signer},
+            signer::presigner::Presigner,
+        },
         tempfile::NamedTempFile,
     };
 
@@ -1400,12 +1404,19 @@ mod tests {
         let keypair2 = Keypair::new();
         let pubkey2 = keypair2.pubkey();
         let pubkey2_string = pubkey2.to_string();
+        let sig2 = keypair2.sign_message(&[0u8]);
+        let signer2 = format!("{}={}", keypair2.pubkey(), sig2);
 
         let default_keypair = Keypair::new();
         let (default_keypair_file, mut tmp_file) = make_tmp_file();
         write_keypair(&default_keypair, tmp_file.as_file_mut()).unwrap();
         let default_signer = DefaultSigner::new("", &default_keypair_file);
 
+        let blockhash = Hash::default();
+        let blockhash_string = format!("{}", blockhash);
+        let nonce_account = Pubkey::new_unique();
+
+        // Test VoteAuthorize SubCommand
         let test_authorize_voter = test_commands.clone().get_matches_from(vec![
             "test",
             "vote-authorize-voter",
@@ -1469,6 +1480,89 @@ mod tests {
             }
         );
 
+        let test_authorize_voter = test_commands.clone().get_matches_from(vec![
+            "test",
+            "vote-authorize-voter",
+            &pubkey_string,
+            &authorized_keypair_file,
+            &pubkey2_string,
+            "--blockhash",
+            &blockhash_string,
+            "--sign-only",
+        ]);
+        assert_eq!(
+            parse_command(&test_authorize_voter, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::VoteAuthorize {
+                    vote_account_pubkey: pubkey,
+                    new_authorized_pubkey: pubkey2,
+                    vote_authorize: VoteAuthorize::Voter,
+                    sign_only: true,
+                    dump_transaction_message: false,
+                    blockhash_query: BlockhashQuery::None(blockhash),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    memo: None,
+                    fee_payer: 0,
+                    authorized: 1,
+                    new_authorized: None,
+                },
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&authorized_keypair_file).unwrap().into(),
+                ],
+            }
+        );
+
+        let authorized_sig = authorized_keypair.sign_message(&[0u8]);
+        let authorized_signer = format!("{}={}", authorized_keypair.pubkey(), authorized_sig);
+        let test_authorize_voter = test_commands.clone().get_matches_from(vec![
+            "test",
+            "vote-authorize-voter",
+            &pubkey_string,
+            &authorized_keypair.pubkey().to_string(),
+            &pubkey2_string,
+            "--blockhash",
+            &blockhash_string,
+            "--signer",
+            &authorized_signer,
+            "--signer",
+            &signer2,
+            "--fee-payer",
+            &pubkey2_string,
+            "--nonce",
+            &nonce_account.to_string(),
+            "--nonce-authority",
+            &pubkey2_string,
+        ]);
+        assert_eq!(
+            parse_command(&test_authorize_voter, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::VoteAuthorize {
+                    vote_account_pubkey: pubkey,
+                    new_authorized_pubkey: pubkey2,
+                    vote_authorize: VoteAuthorize::Voter,
+                    sign_only: false,
+                    dump_transaction_message: false,
+                    blockhash_query: BlockhashQuery::FeeCalculator(
+                        blockhash_query::Source::NonceAccount(nonce_account),
+                        blockhash
+                    ),
+                    nonce_account: Some(nonce_account),
+                    nonce_authority: 0,
+                    memo: None,
+                    fee_payer: 0,
+                    authorized: 1,
+                    new_authorized: None,
+                },
+                signers: vec![
+                    Presigner::new(&pubkey2, &sig2).into(),
+                    Presigner::new(&authorized_keypair.pubkey(), &authorized_sig).into(),
+                ],
+            }
+        );
+
+        // Test checked VoteAuthorize SubCommand
         let (voter_keypair_file, mut tmp_file) = make_tmp_file();
         let voter_keypair = Keypair::new();
         write_keypair(&voter_keypair, tmp_file.as_file_mut()).unwrap();
@@ -1545,14 +1639,15 @@ mod tests {
         ]);
         assert!(parse_command(&test_authorize_voter, &default_signer, &mut None).is_err());
 
-        let (keypair_file, mut tmp_file) = make_tmp_file();
-        let keypair = Keypair::new();
-        write_keypair(&keypair, tmp_file.as_file_mut()).unwrap();
         // Test CreateVoteAccount SubCommand
         let (identity_keypair_file, mut tmp_file) = make_tmp_file();
         let identity_keypair = Keypair::new();
         let authorized_withdrawer = Keypair::new().pubkey();
         write_keypair(&identity_keypair, tmp_file.as_file_mut()).unwrap();
+        let (keypair_file, mut tmp_file) = make_tmp_file();
+        let keypair = Keypair::new();
+        write_keypair(&keypair, tmp_file.as_file_mut()).unwrap();
+
         let test_create_vote_account = test_commands.clone().get_matches_from(vec![
             "test",
             "create-vote-account",
@@ -1582,15 +1677,11 @@ mod tests {
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Box::new(keypair),
+                    read_keypair_file(&keypair_file).unwrap().into(),
                     read_keypair_file(&identity_keypair_file).unwrap().into(),
                 ],
             }
         );
-
-        let (keypair_file, mut tmp_file) = make_tmp_file();
-        let keypair = Keypair::new();
-        write_keypair(&keypair, tmp_file.as_file_mut()).unwrap();
 
         let test_create_vote_account2 = test_commands.clone().get_matches_from(vec![
             "test",
@@ -1619,8 +1710,101 @@ mod tests {
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Box::new(keypair),
+                    read_keypair_file(&keypair_file).unwrap().into(),
                     read_keypair_file(&identity_keypair_file).unwrap().into(),
+                ],
+            }
+        );
+
+        let test_create_vote_account = test_commands.clone().get_matches_from(vec![
+            "test",
+            "create-vote-account",
+            &keypair_file,
+            &identity_keypair_file,
+            &authorized_withdrawer.to_string(),
+            "--commission",
+            "10",
+            "--blockhash",
+            &blockhash_string,
+            "--sign-only",
+            "--fee-payer",
+            &default_keypair.pubkey().to_string(),
+        ]);
+        assert_eq!(
+            parse_command(&test_create_vote_account, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::CreateVoteAccount {
+                    vote_account: 1,
+                    seed: None,
+                    identity_account: 2,
+                    authorized_voter: None,
+                    authorized_withdrawer,
+                    commission: 10,
+                    sign_only: true,
+                    dump_transaction_message: false,
+                    blockhash_query: BlockhashQuery::None(blockhash),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    memo: None,
+                    fee_payer: 0,
+                },
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&keypair_file).unwrap().into(),
+                    read_keypair_file(&identity_keypair_file).unwrap().into(),
+                ],
+            }
+        );
+
+        let identity_sig = identity_keypair.sign_message(&[0u8]);
+        let identity_signer = format!("{}={}", identity_keypair.pubkey(), identity_sig);
+        let test_create_vote_account = test_commands.clone().get_matches_from(vec![
+            "test",
+            "create-vote-account",
+            &keypair_file,
+            &identity_keypair.pubkey().to_string(),
+            &authorized_withdrawer.to_string(),
+            "--commission",
+            "10",
+            "--blockhash",
+            &blockhash_string,
+            "--signer",
+            &identity_signer,
+            "--signer",
+            &signer2,
+            "--fee-payer",
+            &default_keypair_file,
+            "--nonce",
+            &nonce_account.to_string(),
+            "--nonce-authority",
+            &pubkey2_string,
+        ]);
+        assert_eq!(
+            parse_command(&test_create_vote_account, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::CreateVoteAccount {
+                    vote_account: 1,
+                    seed: None,
+                    identity_account: 2,
+                    authorized_voter: None,
+                    authorized_withdrawer,
+                    commission: 10,
+                    sign_only: false,
+                    dump_transaction_message: false,
+                    blockhash_query: BlockhashQuery::FeeCalculator(
+                        blockhash_query::Source::NonceAccount(nonce_account),
+                        blockhash
+                    ),
+                    nonce_account: Some(nonce_account),
+                    nonce_authority: 3,
+                    memo: None,
+                    fee_payer: 0,
+                },
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&keypair_file).unwrap().into(),
+                    Presigner::new(&identity_keypair.pubkey(), &identity_sig).into(),
+                    Presigner::new(&pubkey2, &sig2).into(),
                 ],
             }
         );
@@ -1698,7 +1882,7 @@ mod tests {
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Box::new(keypair),
+                    read_keypair_file(&keypair_file).unwrap().into(),
                     read_keypair_file(&identity_keypair_file).unwrap().into(),
                 ],
             }
@@ -1852,6 +2036,81 @@ mod tests {
                     read_keypair_file(&default_keypair_file).unwrap().into(),
                     read_keypair_file(&withdraw_authority_file).unwrap().into()
                 ],
+            }
+        );
+
+        // Test WithdrawFromVoteAccount subcommand with offline authority
+        let test_withdraw_from_vote_account = test_commands.clone().get_matches_from(vec![
+            "test",
+            "withdraw-from-vote-account",
+            &keypair.pubkey().to_string(),
+            &pubkey_string,
+            "42",
+            "--authorized-withdrawer",
+            &withdraw_authority_file,
+            "--blockhash",
+            &blockhash_string,
+            "--sign-only",
+            "--fee-payer",
+            &withdraw_authority_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_withdraw_from_vote_account, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::WithdrawFromVoteAccount {
+                    vote_account_pubkey: keypair.pubkey(),
+                    destination_account_pubkey: pubkey,
+                    withdraw_authority: 0,
+                    withdraw_amount: SpendAmount::Some(42_000_000_000),
+                    sign_only: true,
+                    dump_transaction_message: false,
+                    blockhash_query: BlockhashQuery::None(blockhash),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    memo: None,
+                    fee_payer: 0,
+                },
+                signers: vec![read_keypair_file(&withdraw_authority_file).unwrap().into()],
+            }
+        );
+
+        let authorized_sig = withdraw_authority.sign_message(&[0u8]);
+        let authorized_signer = format!("{}={}", withdraw_authority.pubkey(), authorized_sig);
+        let test_withdraw_from_vote_account = test_commands.clone().get_matches_from(vec![
+            "test",
+            "withdraw-from-vote-account",
+            &keypair.pubkey().to_string(),
+            &pubkey_string,
+            "42",
+            "--authorized-withdrawer",
+            &withdraw_authority.pubkey().to_string(),
+            "--blockhash",
+            &blockhash_string,
+            "--signer",
+            &authorized_signer,
+            "--fee-payer",
+            &withdraw_authority.pubkey().to_string(),
+        ]);
+        assert_eq!(
+            parse_command(&test_withdraw_from_vote_account, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::WithdrawFromVoteAccount {
+                    vote_account_pubkey: keypair.pubkey(),
+                    destination_account_pubkey: pubkey,
+                    withdraw_authority: 0,
+                    withdraw_amount: SpendAmount::Some(42_000_000_000),
+                    sign_only: false,
+                    dump_transaction_message: false,
+                    blockhash_query: BlockhashQuery::FeeCalculator(
+                        blockhash_query::Source::Cluster,
+                        blockhash
+                    ),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    memo: None,
+                    fee_payer: 0,
+                },
+                signers: vec![Presigner::new(&withdraw_authority.pubkey(), &authorized_sig).into(),],
             }
         );
 
