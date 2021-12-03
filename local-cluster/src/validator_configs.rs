@@ -60,7 +60,11 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         poh_hashes_per_batch: config.poh_hashes_per_batch,
         no_wait_for_vote_to_start_leader: config.no_wait_for_vote_to_start_leader,
         accounts_shrink_ratio: config.accounts_shrink_ratio,
+<<<<<<< HEAD
         disable_epoch_boundary_optimization: config.disable_epoch_boundary_optimization,
+=======
+        accounts_db_config: config.accounts_db_config.clone(),
+>>>>>>> 1430b58a6 (Remove deprecated slow epoch boundary methods (#21568))
     }
 }
 

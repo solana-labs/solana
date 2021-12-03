@@ -44,6 +44,7 @@ impl Stakes {
         &self.stake_history
     }
 
+<<<<<<< HEAD
     #[deprecated(note = "remove after optimize_epoch_boundary_updates feature is active")]
     pub fn clone_with_epoch(&self, next_epoch: Epoch) -> Self {
         let prev_epoch = self.epoch;
@@ -87,6 +88,8 @@ impl Stakes {
         }
     }
 
+=======
+>>>>>>> 1430b58a6 (Remove deprecated slow epoch boundary methods (#21568))
     pub fn activate_epoch(&mut self, next_epoch: Epoch, thread_pool: &ThreadPool) {
         let prev_epoch = self.epoch;
         self.epoch = next_epoch;
@@ -581,35 +584,6 @@ pub mod tests {
             let vote_accounts = stakes.vote_accounts();
             assert!(vote_accounts.get(&vote_pubkey).is_some());
             assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 20);
-        }
-    }
-
-    #[test]
-    fn test_clone_with_epoch() {
-        let mut stakes = Stakes::default();
-
-        let ((vote_pubkey, vote_account), (stake_pubkey, stake_account)) =
-            create_staked_node_accounts(10);
-
-        stakes.store(&vote_pubkey, &vote_account, true);
-        stakes.store(&stake_pubkey, &stake_account, true);
-        let stake = stake_state::stake_from(&stake_account).unwrap();
-
-        {
-            let vote_accounts = stakes.vote_accounts();
-            assert_eq!(
-                vote_accounts.get(&vote_pubkey).unwrap().0,
-                stake.stake(stakes.epoch, Some(&stakes.stake_history))
-            );
-        }
-        #[allow(deprecated)]
-        let stakes = stakes.clone_with_epoch(3);
-        {
-            let vote_accounts = stakes.vote_accounts();
-            assert_eq!(
-                vote_accounts.get(&vote_pubkey).unwrap().0,
-                stake.stake(stakes.epoch, Some(&stakes.stake_history))
-            );
         }
     }
 

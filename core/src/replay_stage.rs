@@ -132,7 +132,12 @@ pub struct ReplayStageConfig {
     pub cache_block_meta_sender: Option<CacheBlockMetaSender>,
     pub bank_notification_sender: Option<BankNotificationSender>,
     pub wait_for_vote_to_start_leader: bool,
+<<<<<<< HEAD
     pub disable_epoch_boundary_optimization: bool,
+=======
+    pub ancestor_hashes_replay_update_sender: AncestorHashesReplayUpdateSender,
+    pub tower_storage: Arc<dyn TowerStorage>,
+>>>>>>> 1430b58a6 (Remove deprecated slow epoch boundary methods (#21568))
 }
 
 #[derive(Default)]
@@ -334,7 +339,12 @@ impl ReplayStage {
             cache_block_meta_sender,
             bank_notification_sender,
             wait_for_vote_to_start_leader,
+<<<<<<< HEAD
             disable_epoch_boundary_optimization,
+=======
+            ancestor_hashes_replay_update_sender,
+            tower_storage,
+>>>>>>> 1430b58a6 (Remove deprecated slow epoch boundary methods (#21568))
         } = config;
 
         trace!("replay stage");
@@ -699,7 +709,6 @@ impl ReplayStage {
                             &retransmit_slots_sender,
                             &mut skipped_slots_info,
                             has_new_vote_been_rooted,
-                            disable_epoch_boundary_optimization,
                         );
 
                         let poh_bank = poh_recorder.lock().unwrap().bank();
@@ -1090,7 +1099,6 @@ impl ReplayStage {
         retransmit_slots_sender: &RetransmitSlotsSender,
         skipped_slots_info: &mut SkippedSlotsInfo,
         has_new_vote_been_rooted: bool,
-        disable_epoch_boundary_optimization: bool,
     ) {
         // all the individual calls to poh_recorder.lock() are designed to
         // increase granularity, decrease contention
@@ -1208,10 +1216,7 @@ impl ReplayStage {
                 root_slot,
                 my_pubkey,
                 rpc_subscriptions,
-                NewBankOptions {
-                    vote_only_bank,
-                    disable_epoch_boundary_optimization,
-                },
+                NewBankOptions { vote_only_bank },
             );
 
             let tpu_bank = bank_forks.write().unwrap().insert(tpu_bank);
