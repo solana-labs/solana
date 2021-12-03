@@ -837,7 +837,6 @@ impl Blockstore {
                         shred,
                         &mut erasure_metas,
                         &mut index_working_set,
-                        &mut write_batch,
                         &mut just_inserted_coding_shreds,
                         &mut index_meta_time,
                         handle_duplicate,
@@ -914,11 +913,6 @@ impl Blockstore {
         }
         start.stop();
         metrics.shred_recovery_elapsed += start.as_us();
-
-        metrics.num_inserted += just_inserted_coding_shreds.len() as u64;
-        for shred in just_inserted_coding_shreds.into_values() {
-            self.check_insert_coding_shred(shred, &mut index_working_set, &mut index_meta_time);
-        }
 
         self.shred_wal
             .lock()
@@ -5505,12 +5499,11 @@ pub mod tests {
         let mut erasure_metas = HashMap::new();
         let mut index_working_set = HashMap::new();
         let mut just_received_coding_shreds = HashMap::new();
-        let mut write_batch = blockstore.db.batch().unwrap();
         let mut index_meta_time = 0;
         assert!(blockstore.check_insert_coding_shred(
             coding_shred.clone(),
             &mut erasure_metas,
-            &mut write_batch,
+            &mut index_working_set,
             &mut just_received_coding_shreds,
             &mut index_meta_time,
             &|_shred| {

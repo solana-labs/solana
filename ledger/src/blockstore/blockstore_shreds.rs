@@ -674,7 +674,7 @@ pub mod tests {
     fn test_shred_file_header_constant() {
         solana_logger::setup();
         // ShredFileHeader is a fixed size, so values of new() parameters don't matter
-        let header = ShredFileHeader::new(ShredType(DATA_SHRED), 0, 0, 0, 0);
+        let header = ShredFileHeader::new(ShredType::Data, 0, 0, 0, 0);
         let serialized_header = bincode::serialize(&header).unwrap();
         assert_eq!(serialized_header.len(), SIZE_OF_SHRED_FILE_HEADER);
     }
