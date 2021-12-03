@@ -17,9 +17,8 @@ use {
     solana_measure::measure::Measure,
     solana_rbpf::{
         aligned_memory::AlignedMemory,
-        ebpf::{HOST_ALIGN, MM_HEAP_START},
+        ebpf::HOST_ALIGN,
         error::{EbpfError, UserDefinedError},
-        memory_region::MemoryRegion,
         static_analysis::Analysis,
         verifier::{self, VerifierError},
         vm::{Config, EbpfVm, Executable, InstructionMeter},
@@ -35,7 +34,7 @@ use {
         feature_set::{
             add_missing_program_error_mappings, close_upgradeable_program_accounts,
             fix_write_privs, reduce_required_deploy_balance, requestable_heap_size,
-            upgradeable_close_instruction,
+            stop_verify_mul64_imm_nonzero, upgradeable_close_instruction,
         },
         ic_logger_msg, ic_msg,
         instruction::{AccountMeta, InstructionError},
@@ -89,6 +88,8 @@ pub fn create_executor(
         max_call_depth: bpf_compute_budget.max_call_depth,
         stack_frame_size: bpf_compute_budget.stack_frame_size,
         enable_instruction_tracing: log_enabled!(Trace),
+        verify_mul64_imm_nonzero: !invoke_context
+            .is_feature_active(&stop_verify_mul64_imm_nonzero::id()), // TODO: Feature gate and then remove me
         ..Config::default()
     };
     let mut executable = {
@@ -104,10 +105,8 @@ pub fn create_executor(
         )
     }
     .map_err(|e| map_ebpf_error(invoke_context, e))?;
-    let (_, elf_bytes) = executable
-        .get_text_bytes()
-        .map_err(|e| map_ebpf_error(invoke_context, e))?;
-    verifier::check(elf_bytes)
+    let text_bytes = executable.get_text_bytes().1;
+    verifier::check(text_bytes, &config)
         .map_err(|e| map_ebpf_error(invoke_context, EbpfError::UserError(e.into())))?;
     if use_jit {
         if let Err(err) = executable.jit_compile() {
@@ -156,18 +155,11 @@ pub fn create_vm<'a>(
     invoke_context: &'a mut dyn InvokeContext,
 ) -> Result<EbpfVm<'a, BpfError, ThisInstructionMeter>, EbpfError<BpfError>> {
     let bpf_compute_budget = invoke_context.get_bpf_compute_budget();
-    let heap_size = bpf_compute_budget.heap_size.unwrap_or(HEAP_LENGTH);
-    if invoke_context.is_feature_active(&requestable_heap_size::id()) {
-        let _ = invoke_context.get_compute_meter().borrow_mut().consume(
-            (heap_size as u64 / (32 * 1024)).saturating_sub(1) * bpf_compute_budget.heap_cost,
-        );
-    }
-    let heap = AlignedMemory::new_with_size(
+    let mut heap = AlignedMemory::new_with_size(
         bpf_compute_budget.heap_size.unwrap_or(HEAP_LENGTH),
         HOST_ALIGN,
     );
-    let heap_region = MemoryRegion::new_from_slice(heap.as_slice(), MM_HEAP_START, 0, true);
-    let mut vm = EbpfVm::new(program, parameter_bytes, &[heap_region])?;
+    let mut vm = EbpfVm::new(program, heap.as_slice_mut(), parameter_bytes)?;
     syscalls::bind_syscall_context_objects(loader_id, &mut vm, invoke_context, heap)?;
     Ok(vm)
 }
@@ -1069,7 +1061,8 @@ mod tests {
         )
         .unwrap();
         let mut vm =
-            EbpfVm::<BpfError, TestInstructionMeter>::new(program.as_ref(), input, &[]).unwrap();
+            EbpfVm::<BpfError, TestInstructionMeter>::new(program.as_ref(), &mut [], input)
+                .unwrap();
         let mut instruction_meter = TestInstructionMeter { remaining: 10 };
         vm.execute_program_interpreted(&mut instruction_meter)
             .unwrap();
@@ -1081,7 +1074,7 @@ mod tests {
         let prog = &[
             0x18, 0x00, 0x00, 0x00, 0x88, 0x77, 0x66, 0x55, // first half of lddw
         ];
-        verifier::check(prog).unwrap();
+        verifier::check(prog, &Config::default()).unwrap();
     }
 
     #[test]
