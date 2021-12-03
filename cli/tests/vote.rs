@@ -184,7 +184,13 @@ fn test_vote_authorize_and_withdraw() {
         vote_account_pubkey,
         new_identity_account: 2,
         withdraw_authority: 1,
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+        nonce_account: None,
+        nonce_authority: 0,
         memo: None,
+        fee_payer: 0,
     };
     process_command(&config).unwrap();
 

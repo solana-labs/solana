@@ -263,6 +263,9 @@ impl VoteSubCommands for App<'_, '_> {
                         .validator(is_valid_signer)
                         .help("Authorized withdrawer keypair"),
                 )
+                .offline_args()
+                .nonce_args(false)
+                .arg(fee_payer_arg())
                 .arg(memo_arg())
         )
         .subcommand(
@@ -293,6 +296,9 @@ impl VoteSubCommands for App<'_, '_> {
                         .validator(is_valid_signer)
                         .help("Authorized withdrawer keypair"),
                 )
+                .offline_args()
+                .nonce_args(false)
+                .arg(fee_payer_arg())
                 .arg(memo_arg())
         )
         .subcommand(
@@ -535,20 +541,34 @@ pub fn parse_vote_update_validator(
     let (authorized_withdrawer, authorized_withdrawer_pubkey) =
         signer_of(matches, "authorized_withdrawer", wallet_manager)?;
 
-    let payer_provided = None;
-    let signer_info = default_signer.generate_unique_signers(
-        vec![payer_provided, authorized_withdrawer, new_identity_account],
-        matches,
-        wallet_manager,
-    )?;
+    let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
+    let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
+    let blockhash_query = BlockhashQuery::new_from_matches(matches);
+    let nonce_account = pubkey_of(matches, NONCE_ARG.name);
     let memo = matches.value_of(MEMO_ARG.name).map(String::from);
+    let (nonce_authority, nonce_authority_pubkey) =
+        signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
+    let (fee_payer, fee_payer_pubkey) = signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
+
+    let mut bulk_signers = vec![fee_payer, authorized_withdrawer, new_identity_account];
+    if nonce_account.is_some() {
+        bulk_signers.push(nonce_authority);
+    }
+    let signer_info =
+        default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
 
     Ok(CliCommandInfo {
         command: CliCommand::VoteUpdateValidator {
             vote_account_pubkey,
             new_identity_account: signer_info.index_of(new_identity_pubkey).unwrap(),
             withdraw_authority: signer_info.index_of(authorized_withdrawer_pubkey).unwrap(),
+            sign_only,
+            dump_transaction_message,
+            blockhash_query,
+            nonce_account,
+            nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
             memo,
+            fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
         },
         signers: signer_info.signers,
     })
@@ -565,20 +585,34 @@ pub fn parse_vote_update_commission(
         signer_of(matches, "authorized_withdrawer", wallet_manager)?;
     let commission = value_t_or_exit!(matches, "commission", u8);
 
-    let payer_provided = None;
-    let signer_info = default_signer.generate_unique_signers(
-        vec![payer_provided, authorized_withdrawer],
-        matches,
-        wallet_manager,
-    )?;
+    let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
+    let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
+    let blockhash_query = BlockhashQuery::new_from_matches(matches);
+    let nonce_account = pubkey_of(matches, NONCE_ARG.name);
     let memo = matches.value_of(MEMO_ARG.name).map(String::from);
+    let (nonce_authority, nonce_authority_pubkey) =
+        signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
+    let (fee_payer, fee_payer_pubkey) = signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
+
+    let mut bulk_signers = vec![fee_payer, authorized_withdrawer];
+    if nonce_account.is_some() {
+        bulk_signers.push(nonce_authority);
+    }
+    let signer_info =
+        default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
 
     Ok(CliCommandInfo {
         command: CliCommand::VoteUpdateCommission {
             vote_account_pubkey,
             commission,
             withdraw_authority: signer_info.index_of(authorized_withdrawer_pubkey).unwrap(),
+            sign_only,
+            dump_transaction_message,
+            blockhash_query,
+            nonce_account,
+            nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
             memo,
+            fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
         },
         signers: signer_info.signers,
     })
@@ -940,7 +974,13 @@ pub fn process_vote_update_validator(
     vote_account_pubkey: &Pubkey,
     new_identity_account: SignerIndex,
     withdraw_authority: SignerIndex,
+    sign_only: bool,
+    dump_transaction_message: bool,
+    blockhash_query: &BlockhashQuery,
+    nonce_account: Option<Pubkey>,
+    nonce_authority: SignerIndex,
     memo: Option<&String>,
+    fee_payer: SignerIndex,
 ) -> ProcessResult {
     let authorized_withdrawer = config.signers[withdraw_authority];
     let new_identity_account = config.signers[new_identity_account];
@@ -949,25 +989,56 @@ pub fn process_vote_update_validator(
         (vote_account_pubkey, "vote_account_pubkey".to_string()),
         (&new_identity_pubkey, "new_identity_account".to_string()),
     )?;
-    let latest_blockhash = rpc_client.get_latest_blockhash()?;
+    let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
     let ixs = vec![vote_instruction::update_validator_identity(
         vote_account_pubkey,
         &authorized_withdrawer.pubkey(),
         &new_identity_pubkey,
     )]
     .with_memo(memo);
+    let nonce_authority = config.signers[nonce_authority];
+    let fee_payer = config.signers[fee_payer];
 
-    let message = Message::new(&ixs, Some(&config.signers[0].pubkey()));
+    let message = if let Some(nonce_account) = &nonce_account {
+        Message::new_with_nonce(
+            ixs,
+            Some(&fee_payer.pubkey()),
+            nonce_account,
+            &nonce_authority.pubkey(),
+        )
+    } else {
+        Message::new(&ixs, Some(&fee_payer.pubkey()))
+    };
     let mut tx = Transaction::new_unsigned(message);
-    tx.try_sign(&config.signers, latest_blockhash)?;
-    check_account_for_fee_with_commitment(
-        rpc_client,
-        &config.signers[0].pubkey(),
-        &tx.message,
-        config.commitment,
-    )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
-    log_instruction_custom_error::<VoteError>(result, config)
+
+    if sign_only {
+        tx.try_partial_sign(&config.signers, recent_blockhash)?;
+        return_signers_with_config(
+            &tx,
+            &config.output_format,
+            &ReturnSignersConfig {
+                dump_transaction_message,
+            },
+        )
+    } else {
+        tx.try_sign(&config.signers, recent_blockhash)?;
+        if let Some(nonce_account) = &nonce_account {
+            let nonce_account = nonce_utils::get_account_with_commitment(
+                rpc_client,
+                nonce_account,
+                config.commitment,
+            )?;
+            check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
+        }
+        check_account_for_fee_with_commitment(
+            rpc_client,
+            &config.signers[0].pubkey(),
+            &tx.message,
+            config.commitment,
+        )?;
+        let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+        log_instruction_custom_error::<VoteError>(result, config)
+    }
 }
 
 pub fn process_vote_update_commission(
@@ -976,28 +1047,64 @@ pub fn process_vote_update_commission(
     vote_account_pubkey: &Pubkey,
     commission: u8,
     withdraw_authority: SignerIndex,
+    sign_only: bool,
+    dump_transaction_message: bool,
+    blockhash_query: &BlockhashQuery,
+    nonce_account: Option<Pubkey>,
+    nonce_authority: SignerIndex,
     memo: Option<&String>,
+    fee_payer: SignerIndex,
 ) -> ProcessResult {
     let authorized_withdrawer = config.signers[withdraw_authority];
-    let latest_blockhash = rpc_client.get_latest_blockhash()?;
+    let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
     let ixs = vec![vote_instruction::update_commission(
         vote_account_pubkey,
         &authorized_withdrawer.pubkey(),
         commission,
     )]
     .with_memo(memo);
+    let nonce_authority = config.signers[nonce_authority];
+    let fee_payer = config.signers[fee_payer];
 
-    let message = Message::new(&ixs, Some(&config.signers[0].pubkey()));
+    let message = if let Some(nonce_account) = &nonce_account {
+        Message::new_with_nonce(
+            ixs,
+            Some(&fee_payer.pubkey()),
+            nonce_account,
+            &nonce_authority.pubkey(),
+        )
+    } else {
+        Message::new(&ixs, Some(&fee_payer.pubkey()))
+    };
     let mut tx = Transaction::new_unsigned(message);
-    tx.try_sign(&config.signers, latest_blockhash)?;
-    check_account_for_fee_with_commitment(
-        rpc_client,
-        &config.signers[0].pubkey(),
-        &tx.message,
-        config.commitment,
-    )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
-    log_instruction_custom_error::<VoteError>(result, config)
+    if sign_only {
+        tx.try_partial_sign(&config.signers, recent_blockhash)?;
+        return_signers_with_config(
+            &tx,
+            &config.output_format,
+            &ReturnSignersConfig {
+                dump_transaction_message,
+            },
+        )
+    } else {
+        tx.try_sign(&config.signers, recent_blockhash)?;
+        if let Some(nonce_account) = &nonce_account {
+            let nonce_account = nonce_utils::get_account_with_commitment(
+                rpc_client,
+                nonce_account,
+                config.commitment,
+            )?;
+            check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
+        }
+        check_account_for_fee_with_commitment(
+            rpc_client,
+            &config.signers[0].pubkey(),
+            &tx.message,
+            config.commitment,
+        )?;
+        let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+        log_instruction_custom_error::<VoteError>(result, config)
+    }
 }
 
 fn get_vote_account(
@@ -1534,7 +1641,13 @@ mod tests {
                     vote_account_pubkey: pubkey,
                     new_identity_account: 2,
                     withdraw_authority: 1,
+                    sign_only: false,
+                    dump_transaction_message: false,
+                    blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+                    nonce_account: None,
+                    nonce_authority: 0,
                     memo: None,
+                    fee_payer: 0,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -1558,7 +1671,13 @@ mod tests {
                     vote_account_pubkey: pubkey,
                     commission: 42,
                     withdraw_authority: 1,
+                    sign_only: false,
+                    dump_transaction_message: false,
+                    blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+                    nonce_account: None,
+                    nonce_authority: 0,
                     memo: None,
+                    fee_payer: 0,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
