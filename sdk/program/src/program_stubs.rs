@@ -2,12 +2,14 @@
 
 #![cfg(not(target_arch = "bpf"))]
 
-use crate::{
-    account_info::AccountInfo, entrypoint::ProgramResult, instruction::Instruction,
-    program_error::UNSUPPORTED_SYSVAR, pubkey::Pubkey,
+use {
+    crate::{
+        account_info::AccountInfo, entrypoint::ProgramResult, instruction::Instruction,
+        program_error::UNSUPPORTED_SYSVAR, pubkey::Pubkey,
+    },
+    itertools::Itertools,
+    std::sync::{Arc, RwLock},
 };
-use itertools::Itertools;
-use std::sync::{Arc, RwLock};
 
 lazy_static::lazy_static! {
     static ref SYSCALL_STUBS: Arc<RwLock<Box<dyn SyscallStubs>>> = Arc::new(RwLock::new(Box::new(DefaultSyscallStubs {})));

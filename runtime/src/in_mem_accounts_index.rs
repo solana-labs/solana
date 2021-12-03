@@ -1,23 +1,29 @@
-use crate::accounts_index::{
-    AccountMapEntry, AccountMapEntryInner, AccountMapEntryMeta, IndexValue,
-    PreAllocatedAccountMapEntry, RefCount, SlotList, SlotSlice, ZeroLamport,
+use {
+    crate::{
+        accounts_index::{
+            AccountMapEntry, AccountMapEntryInner, AccountMapEntryMeta, IndexValue,
+            PreAllocatedAccountMapEntry, RefCount, SlotList, SlotSlice, ZeroLamport,
+        },
+        bucket_map_holder::{Age, BucketMapHolder},
+        bucket_map_holder_stats::BucketMapHolderStats,
+    },
+    rand::{thread_rng, Rng},
+    solana_bucket_map::bucket_api::BucketApi,
+    solana_measure::measure::Measure,
+    solana_sdk::{clock::Slot, pubkey::Pubkey},
+    std::{
+        collections::{
+            hash_map::{Entry, VacantEntry},
+            HashMap,
+        },
+        fmt::Debug,
+        ops::{Bound, RangeBounds, RangeInclusive},
+        sync::{
+            atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering},
+            Arc, RwLock, RwLockWriteGuard,
+        },
+    },
 };
-use crate::bucket_map_holder::{Age, BucketMapHolder};
-use crate::bucket_map_holder_stats::BucketMapHolderStats;
-use rand::thread_rng;
-use rand::Rng;
-use solana_bucket_map::bucket_api::BucketApi;
-use solana_measure::measure::Measure;
-use solana_sdk::{clock::Slot, pubkey::Pubkey};
-use std::collections::{
-    hash_map::{Entry, VacantEntry},
-    HashMap,
-};
-use std::ops::{Bound, RangeBounds, RangeInclusive};
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
-use std::sync::{Arc, RwLock, RwLockWriteGuard};
-
-use std::fmt::Debug;
 type K = Pubkey;
 type CacheRangesHeld = RwLock<Vec<Option<RangeInclusive<Pubkey>>>>;
 pub type SlotT<T> = (Slot, T);
@@ -918,8 +924,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::accounts_index::{AccountsIndexConfig, BINS_FOR_TESTING};
+    use {
+        super::*,
+        crate::accounts_index::{AccountsIndexConfig, BINS_FOR_TESTING},
+    };
 
     fn new_for_test<T: IndexValue>() -> InMemAccountsIndex<T> {
         let holder = Arc::new(BucketMapHolder::new(

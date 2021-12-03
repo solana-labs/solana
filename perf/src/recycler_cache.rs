@@ -1,6 +1,4 @@
-use crate::cuda_runtime::PinnedVec;
-use crate::recycler::Recycler;
-use crate::sigverify::TxOffset;
+use crate::{cuda_runtime::PinnedVec, recycler::Recycler, sigverify::TxOffset};
 
 #[derive(Default, Clone)]
 pub struct RecyclerCache {

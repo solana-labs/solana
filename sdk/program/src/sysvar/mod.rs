@@ -1,7 +1,9 @@
 //! named accounts for synthesized data accounts for bank state, etc.
 //!
-use crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
-use lazy_static::lazy_static;
+use {
+    crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey},
+    lazy_static::lazy_static,
+};
 
 pub mod clock;
 pub mod epoch_schedule;
@@ -140,9 +142,11 @@ macro_rules! impl_sysvar_get {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{clock::Epoch, program_error::ProgramError, pubkey::Pubkey};
-    use std::{cell::RefCell, rc::Rc};
+    use {
+        super::*,
+        crate::{clock::Epoch, program_error::ProgramError, pubkey::Pubkey},
+        std::{cell::RefCell, rc::Rc},
+    };
 
     #[repr(C)]
     #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]

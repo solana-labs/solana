@@ -1,6 +1,8 @@
-use solana_core::validator::ValidatorConfig;
-use solana_sdk::exit::Exit;
-use std::sync::{Arc, RwLock};
+use {
+    solana_core::validator::ValidatorConfig,
+    solana_sdk::exit::Exit,
+    std::sync::{Arc, RwLock},
+};
 
 pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
     ValidatorConfig {

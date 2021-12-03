@@ -44,10 +44,12 @@ use {
         bind_common, bind_common_in_range, bind_in_range, find_available_port_in_range,
         multi_bind_in_range, PortRange,
     },
-    solana_perf::data_budget::DataBudget,
-    solana_perf::packet::{
-        limited_deserialize, to_packets_with_destination, Packet, Packets, PacketsRecycler,
-        PACKET_DATA_SIZE,
+    solana_perf::{
+        data_budget::DataBudget,
+        packet::{
+            limited_deserialize, to_packets_with_destination, Packet, Packets, PacketsRecycler,
+            PACKET_DATA_SIZE,
+        },
     },
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::bank_forks::BankForks,
@@ -84,7 +86,7 @@ use {
         sync::{
             atomic::{AtomicBool, Ordering},
             mpsc::{Receiver, RecvTimeoutError, Sender},
-            {Arc, Mutex, RwLock, RwLockReadGuard},
+            Arc, Mutex, RwLock, RwLockReadGuard,
         },
         thread::{sleep, Builder, JoinHandle},
         time::{Duration, Instant},

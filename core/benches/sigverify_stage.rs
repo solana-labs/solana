@@ -3,20 +3,24 @@
 extern crate solana_core;
 extern crate test;
 
-use crossbeam_channel::unbounded;
-use log::*;
-use rand::{thread_rng, Rng};
-use solana_core::sigverify::TransactionSigVerifier;
-use solana_core::sigverify_stage::SigVerifyStage;
-use solana_perf::packet::to_packets_chunked;
-use solana_perf::test_tx::test_tx;
-use solana_sdk::hash::Hash;
-use solana_sdk::signature::{Keypair, Signer};
-use solana_sdk::system_transaction;
-use solana_sdk::timing::duration_as_ms;
-use std::sync::mpsc::channel;
-use std::time::{Duration, Instant};
-use test::Bencher;
+use {
+    crossbeam_channel::unbounded,
+    log::*,
+    rand::{thread_rng, Rng},
+    solana_core::{sigverify::TransactionSigVerifier, sigverify_stage::SigVerifyStage},
+    solana_perf::{packet::to_packets_chunked, test_tx::test_tx},
+    solana_sdk::{
+        hash::Hash,
+        signature::{Keypair, Signer},
+        system_transaction,
+        timing::duration_as_ms,
+    },
+    std::{
+        sync::mpsc::channel,
+        time::{Duration, Instant},
+    },
+    test::Bencher,
+};
 
 #[bench]
 fn bench_packet_discard(bencher: &mut Bencher) {

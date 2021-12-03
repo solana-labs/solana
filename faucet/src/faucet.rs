@@ -492,9 +492,7 @@ impl LimitByTime for Pubkey {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_sdk::system_instruction::SystemInstruction;
-    use std::time::Duration;
+    use {super::*, solana_sdk::system_instruction::SystemInstruction, std::time::Duration};
 
     #[test]
     fn test_check_time_request_limit() {

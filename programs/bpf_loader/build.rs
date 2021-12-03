@@ -1,10 +1,12 @@
-use regex::Regex;
-use std::{
-    fs::File,
-    io::{prelude::*, BufWriter, Read},
-    path::PathBuf,
-    process::exit,
-    str,
+use {
+    regex::Regex,
+    std::{
+        fs::File,
+        io::{prelude::*, BufWriter, Read},
+        path::PathBuf,
+        process::exit,
+        str,
+    },
 };
 
 /**

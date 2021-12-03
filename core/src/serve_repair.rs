@@ -1,41 +1,45 @@
-use crate::{
-    cluster_slots::ClusterSlots,
-    duplicate_repair_status::ANCESTOR_HASH_REPAIR_SAMPLE_SIZE,
-    repair_response,
-    repair_service::{OutstandingShredRepairs, RepairStats},
-    request_response::RequestResponse,
-    result::{Error, Result},
-};
-use bincode::serialize;
-use lru::LruCache;
-use rand::{
-    distributions::{Distribution, WeightedError, WeightedIndex},
-    Rng,
-};
-use solana_gossip::{
-    cluster_info::{ClusterInfo, ClusterInfoError},
-    contact_info::ContactInfo,
-    weighted_shuffle::{weighted_best, weighted_shuffle},
-};
-use solana_ledger::{
-    ancestor_iterator::{AncestorIterator, AncestorIteratorWithHash},
-    blockstore::Blockstore,
-    shred::{Nonce, Shred, SIZE_OF_NONCE},
-};
-use solana_measure::measure::Measure;
-use solana_metrics::inc_new_counter_debug;
-use solana_perf::packet::{limited_deserialize, Packets, PacketsRecycler};
-use solana_sdk::{
-    clock::Slot, hash::Hash, packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::duration_as_ms,
-};
-use solana_streamer::streamer::{PacketReceiver, PacketSender};
-use std::{
-    collections::HashSet,
-    net::SocketAddr,
-    sync::atomic::{AtomicBool, Ordering},
-    sync::{Arc, RwLock},
-    thread::{Builder, JoinHandle},
-    time::{Duration, Instant},
+use {
+    crate::{
+        cluster_slots::ClusterSlots,
+        duplicate_repair_status::ANCESTOR_HASH_REPAIR_SAMPLE_SIZE,
+        repair_response,
+        repair_service::{OutstandingShredRepairs, RepairStats},
+        request_response::RequestResponse,
+        result::{Error, Result},
+    },
+    bincode::serialize,
+    lru::LruCache,
+    rand::{
+        distributions::{Distribution, WeightedError, WeightedIndex},
+        Rng,
+    },
+    solana_gossip::{
+        cluster_info::{ClusterInfo, ClusterInfoError},
+        contact_info::ContactInfo,
+        weighted_shuffle::{weighted_best, weighted_shuffle},
+    },
+    solana_ledger::{
+        ancestor_iterator::{AncestorIterator, AncestorIteratorWithHash},
+        blockstore::Blockstore,
+        shred::{Nonce, Shred, SIZE_OF_NONCE},
+    },
+    solana_measure::measure::Measure,
+    solana_metrics::inc_new_counter_debug,
+    solana_perf::packet::{limited_deserialize, Packets, PacketsRecycler},
+    solana_sdk::{
+        clock::Slot, hash::Hash, packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::duration_as_ms,
+    },
+    solana_streamer::streamer::{PacketReceiver, PacketSender},
+    std::{
+        collections::HashSet,
+        net::SocketAddr,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
+        thread::{Builder, JoinHandle},
+        time::{Duration, Instant},
+    },
 };
 
 type SlotHash = (Slot, Hash);
@@ -752,18 +756,20 @@ impl ServeRepair {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{repair_response, result::Error};
-    use solana_gossip::{socketaddr, socketaddr_any};
-    use solana_ledger::get_tmp_ledger_path;
-    use solana_ledger::{
-        blockstore::make_many_slot_entries,
-        blockstore_processor::fill_blockstore_slot_with_ticks,
-        shred::{max_ticks_per_n_shreds, Shred},
+    use {
+        super::*,
+        crate::{repair_response, result::Error},
+        solana_gossip::{socketaddr, socketaddr_any},
+        solana_ledger::{
+            blockstore::make_many_slot_entries,
+            blockstore_processor::fill_blockstore_slot_with_ticks,
+            get_tmp_ledger_path,
+            shred::{max_ticks_per_n_shreds, Shred},
+        },
+        solana_perf::packet::Packet,
+        solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Keypair, timing::timestamp},
+        solana_streamer::socket::SocketAddrSpace,
     };
-    use solana_perf::packet::Packet;
-    use solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Keypair, timing::timestamp};
-    use solana_streamer::socket::SocketAddrSpace;
 
     #[test]
     fn test_run_highest_window_request() {

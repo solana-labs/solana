@@ -1,45 +1,47 @@
-use crate::{
-    cli::{
-        log_instruction_custom_error, request_and_confirm_airdrop, CliCommand, CliCommandInfo,
-        CliConfig, CliError, ProcessResult,
+use {
+    crate::{
+        cli::{
+            log_instruction_custom_error, request_and_confirm_airdrop, CliCommand, CliCommandInfo,
+            CliConfig, CliError, ProcessResult,
+        },
+        memo::WithMemo,
+        nonce::check_nonce_account,
+        spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
     },
-    memo::WithMemo,
-    nonce::check_nonce_account,
-    spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
+    clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand},
+    solana_account_decoder::{UiAccount, UiAccountEncoding},
+    solana_clap_utils::{
+        fee_payer::*,
+        input_parsers::*,
+        input_validators::*,
+        keypair::{DefaultSigner, SignerIndex},
+        memo::*,
+        nonce::*,
+        offline::*,
+    },
+    solana_cli_output::{
+        display::build_balance_message, return_signers_with_config, CliAccount,
+        CliSignatureVerificationStatus, CliTransaction, CliTransactionConfirmation, OutputFormat,
+        ReturnSignersConfig,
+    },
+    solana_client::{
+        blockhash_query::BlockhashQuery, nonce_utils, rpc_client::RpcClient,
+        rpc_config::RpcTransactionConfig, rpc_response::RpcKeyedAccount,
+    },
+    solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_sdk::{
+        commitment_config::CommitmentConfig,
+        message::Message,
+        pubkey::Pubkey,
+        signature::Signature,
+        stake,
+        system_instruction::{self, SystemError},
+        system_program,
+        transaction::Transaction,
+    },
+    solana_transaction_status::{EncodedTransaction, UiTransactionEncoding},
+    std::{fmt::Write as FmtWrite, fs::File, io::Write, sync::Arc},
 };
-use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
-use solana_account_decoder::{UiAccount, UiAccountEncoding};
-use solana_clap_utils::{
-    fee_payer::*,
-    input_parsers::*,
-    input_validators::*,
-    keypair::{DefaultSigner, SignerIndex},
-    memo::*,
-    nonce::*,
-    offline::*,
-};
-use solana_cli_output::{
-    display::build_balance_message, return_signers_with_config, CliAccount,
-    CliSignatureVerificationStatus, CliTransaction, CliTransactionConfirmation, OutputFormat,
-    ReturnSignersConfig,
-};
-use solana_client::{
-    blockhash_query::BlockhashQuery, nonce_utils, rpc_client::RpcClient,
-    rpc_config::RpcTransactionConfig, rpc_response::RpcKeyedAccount,
-};
-use solana_remote_wallet::remote_wallet::RemoteWalletManager;
-use solana_sdk::{
-    commitment_config::CommitmentConfig,
-    message::Message,
-    pubkey::Pubkey,
-    signature::Signature,
-    stake,
-    system_instruction::{self, SystemError},
-    system_program,
-    transaction::Transaction,
-};
-use solana_transaction_status::{EncodedTransaction, UiTransactionEncoding};
-use std::{fmt::Write as FmtWrite, fs::File, io::Write, sync::Arc};
 
 pub trait WalletSubCommands {
     fn wallet_subcommands(self) -> Self;

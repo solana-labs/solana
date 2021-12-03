@@ -1,19 +1,21 @@
-use crate::{
-    blockstore::Blockstore,
-    leader_schedule::{FixedSchedule, LeaderSchedule},
-    leader_schedule_utils,
-};
-use itertools::Itertools;
-use log::*;
-use solana_runtime::bank::Bank;
-use solana_sdk::{
-    clock::{Epoch, Slot},
-    epoch_schedule::EpochSchedule,
-    pubkey::Pubkey,
-};
-use std::{
-    collections::{hash_map::Entry, HashMap, VecDeque},
-    sync::{Arc, RwLock},
+use {
+    crate::{
+        blockstore::Blockstore,
+        leader_schedule::{FixedSchedule, LeaderSchedule},
+        leader_schedule_utils,
+    },
+    itertools::Itertools,
+    log::*,
+    solana_runtime::bank::Bank,
+    solana_sdk::{
+        clock::{Epoch, Slot},
+        epoch_schedule::EpochSchedule,
+        pubkey::Pubkey,
+    },
+    std::{
+        collections::{hash_map::Entry, HashMap, VecDeque},
+        sync::{Arc, RwLock},
+    },
 };
 
 type CachedSchedules = (HashMap<Epoch, Arc<LeaderSchedule>>, VecDeque<u64>);
@@ -248,24 +250,31 @@ impl LeaderScheduleCache {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{
-        blockstore::make_slot_entries,
-        genesis_utils::{
-            bootstrap_validator_stake_lamports, create_genesis_config,
-            create_genesis_config_with_leader, GenesisConfigInfo,
+    use {
+        super::*,
+        crate::{
+            blockstore::make_slot_entries,
+            genesis_utils::{
+                bootstrap_validator_stake_lamports, create_genesis_config,
+                create_genesis_config_with_leader, GenesisConfigInfo,
+            },
+            get_tmp_ledger_path_auto_delete,
+            staking_utils::tests::setup_vote_and_stake_accounts,
         },
-        get_tmp_ledger_path_auto_delete,
-        staking_utils::tests::setup_vote_and_stake_accounts,
+        solana_runtime::bank::Bank,
+        solana_sdk::{
+            clock::NUM_CONSECUTIVE_LEADER_SLOTS,
+            epoch_schedule::{
+                EpochSchedule, DEFAULT_LEADER_SCHEDULE_SLOT_OFFSET, DEFAULT_SLOTS_PER_EPOCH,
+                MINIMUM_SLOTS_PER_EPOCH,
+            },
+            signature::{Keypair, Signer},
+        },
+        std::{
+            sync::{mpsc::channel, Arc},
+            thread::Builder,
+        },
     };
-    use solana_runtime::bank::Bank;
-    use solana_sdk::clock::NUM_CONSECUTIVE_LEADER_SLOTS;
-    use solana_sdk::epoch_schedule::{
-        EpochSchedule, DEFAULT_LEADER_SCHEDULE_SLOT_OFFSET, DEFAULT_SLOTS_PER_EPOCH,
-        MINIMUM_SLOTS_PER_EPOCH,
-    };
-    use solana_sdk::signature::{Keypair, Signer};
-    use std::{sync::mpsc::channel, sync::Arc, thread::Builder};
 
     #[test]
     fn test_new_cache() {

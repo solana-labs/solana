@@ -621,14 +621,16 @@ fn main() {
 
 #[cfg(test)]
 pub mod test {
-    use super::*;
-    use solana_core::validator::ValidatorConfig;
-    use solana_local_cluster::{
-        local_cluster::{ClusterConfig, LocalCluster},
-        validator_configs::make_identical_validator_configs,
+    use {
+        super::*,
+        solana_core::validator::ValidatorConfig,
+        solana_local_cluster::{
+            local_cluster::{ClusterConfig, LocalCluster},
+            validator_configs::make_identical_validator_configs,
+        },
+        solana_measure::measure::Measure,
+        solana_sdk::poh_config::PohConfig,
     };
-    use solana_measure::measure::Measure;
-    use solana_sdk::poh_config::PohConfig;
 
     #[test]
     fn test_tx_size() {

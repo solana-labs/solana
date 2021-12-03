@@ -1,12 +1,14 @@
-use solana_cli::cli::{process_command, CliCommand, CliConfig};
-use solana_client::rpc_client::RpcClient;
-use solana_faucet::faucet::run_local_faucet;
-use solana_sdk::{
-    commitment_config::CommitmentConfig,
-    signature::{Keypair, Signer},
+use {
+    solana_cli::cli::{process_command, CliCommand, CliConfig},
+    solana_client::rpc_client::RpcClient,
+    solana_faucet::faucet::run_local_faucet,
+    solana_sdk::{
+        commitment_config::CommitmentConfig,
+        signature::{Keypair, Signer},
+    },
+    solana_streamer::socket::SocketAddrSpace,
+    solana_test_validator::TestValidator,
 };
-use solana_streamer::socket::SocketAddrSpace;
-use solana_test_validator::TestValidator;
 
 #[test]
 fn test_cli_request_airdrop() {

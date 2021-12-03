@@ -1,5 +1,3 @@
-use solana_sdk::feature_set::FeatureSet;
-
 use {
     bincode::{deserialize, serialize},
     futures::{future, prelude::stream::StreamExt},
@@ -11,6 +9,7 @@ use {
         account::Account,
         clock::Slot,
         commitment_config::CommitmentLevel,
+        feature_set::FeatureSet,
         fee_calculator::FeeCalculator,
         hash::Hash,
         message::{Message, SanitizedMessage},

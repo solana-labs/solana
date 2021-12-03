@@ -380,9 +380,13 @@ fn udp_socket(_reuseaddr: bool) -> io::Result<Socket> {
 
 #[cfg(not(any(windows, target_os = "ios")))]
 fn udp_socket(reuseaddr: bool) -> io::Result<Socket> {
-    use nix::sys::socket::setsockopt;
-    use nix::sys::socket::sockopt::{ReuseAddr, ReusePort};
-    use std::os::unix::io::AsRawFd;
+    use {
+        nix::sys::socket::{
+            setsockopt,
+            sockopt::{ReuseAddr, ReusePort},
+        },
+        std::os::unix::io::AsRawFd,
+    };
 
     let sock = Socket::new(Domain::IPV4, Type::DGRAM, None)?;
     let sock_fd = sock.as_raw_fd();
@@ -524,8 +528,7 @@ pub fn find_available_port_in_range(ip_addr: IpAddr, range: PortRange) -> io::Re
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::net::Ipv4Addr;
+    use {super::*, std::net::Ipv4Addr};
 
     #[test]
     fn test_response_length() {

@@ -196,10 +196,12 @@ pub fn commitment_of(matches: &ArgMatches<'_>, name: &str) -> Option<CommitmentC
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use clap::{App, Arg};
-    use solana_sdk::signature::write_keypair_file;
-    use std::fs;
+    use {
+        super::*,
+        clap::{App, Arg},
+        solana_sdk::signature::write_keypair_file,
+        std::fs,
+    };
 
     fn app<'ab, 'v>() -> App<'ab, 'v> {
         App::new("test")

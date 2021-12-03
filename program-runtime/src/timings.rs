@@ -1,5 +1,4 @@
-use solana_sdk::pubkey::Pubkey;
-use std::collections::HashMap;
+use {solana_sdk::pubkey::Pubkey, std::collections::HashMap};
 
 #[derive(Default, Debug)]
 pub struct ProgramTiming {

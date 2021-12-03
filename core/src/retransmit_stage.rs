@@ -22,8 +22,9 @@ use {
         contact_info::ContactInfo,
     },
     solana_ledger::{
+        blockstore::Blockstore,
+        leader_schedule_cache::LeaderScheduleCache,
         shred::{Shred, ShredType},
-        {blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache},
     },
     solana_measure::measure::Measure,
     solana_perf::packet::Packets,

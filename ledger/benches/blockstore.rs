@@ -3,15 +3,17 @@
 extern crate solana_ledger;
 extern crate test;
 
-use rand::Rng;
-use solana_entry::entry::{create_ticks, Entry};
-use solana_ledger::{
-    blockstore::{entries_to_test_shreds, Blockstore},
-    get_tmp_ledger_path,
+use {
+    rand::Rng,
+    solana_entry::entry::{create_ticks, Entry},
+    solana_ledger::{
+        blockstore::{entries_to_test_shreds, Blockstore},
+        get_tmp_ledger_path,
+    },
+    solana_sdk::{clock::Slot, hash::Hash},
+    std::path::Path,
+    test::Bencher,
 };
-use solana_sdk::{clock::Slot, hash::Hash};
-use std::path::Path;
-use test::Bencher;
 
 // Given some shreds and a ledger at ledger_path, benchmark writing the shreds to the ledger
 fn bench_write_shreds(bench: &mut Bencher, entries: Vec<Entry>, ledger_path: &Path) {

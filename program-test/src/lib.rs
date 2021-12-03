@@ -3,6 +3,8 @@
 
 #[allow(deprecated)]
 use solana_sdk::sysvar::fees::Fees;
+// Export tokio for test clients
+pub use tokio;
 use {
     async_trait::async_trait,
     chrono_humanize::{Accuracy, HumanTime, Tense},
@@ -28,8 +30,7 @@ use {
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
-        instruction::Instruction,
-        instruction::InstructionError,
+        instruction::{Instruction, InstructionError},
         message::Message,
         native_token::sol_to_lamports,
         poh_config::PohConfig,
@@ -62,13 +63,8 @@ use {
     thiserror::Error,
     tokio::task::JoinHandle,
 };
-
 // Export types so test clients can limit their solana crate dependencies
-pub use solana_banks_client::BanksClient;
-pub use solana_program_runtime::invoke_context::InvokeContext;
-
-// Export tokio for test clients
-pub use tokio;
+pub use {solana_banks_client::BanksClient, solana_program_runtime::invoke_context::InvokeContext};
 
 pub mod programs;
 

@@ -10,7 +10,7 @@ use {
     serde::{
         de::{self, Deserializer, SeqAccess, Visitor},
         ser::{SerializeTuple, Serializer},
-        {Deserialize, Serialize},
+        Deserialize, Serialize,
     },
     std::fmt,
 };
@@ -243,10 +243,12 @@ impl<'de> Deserialize<'de> for VersionedMessage {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{
-        instruction::{AccountMeta, Instruction},
-        message::v0::AddressMapIndexes,
+    use {
+        super::*,
+        crate::{
+            instruction::{AccountMeta, Instruction},
+            message::v0::AddressMapIndexes,
+        },
     };
 
     #[test]

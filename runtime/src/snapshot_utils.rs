@@ -1852,17 +1852,19 @@ pub fn should_take_incremental_snapshot(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING;
-    use assert_matches::assert_matches;
-    use bincode::{deserialize_from, serialize_into};
-    use solana_sdk::{
-        genesis_config::create_genesis_config,
-        signature::{Keypair, Signer},
-        system_transaction,
-        transaction::SanitizedTransaction,
+    use {
+        super::*,
+        crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING,
+        assert_matches::assert_matches,
+        bincode::{deserialize_from, serialize_into},
+        solana_sdk::{
+            genesis_config::create_genesis_config,
+            signature::{Keypair, Signer},
+            system_transaction,
+            transaction::SanitizedTransaction,
+        },
+        std::mem::size_of,
     };
-    use std::mem::size_of;
 
     #[test]
     fn test_serialize_snapshot_data_file_under_limit() {

@@ -18,8 +18,7 @@ where
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
-    use bincode::deserialize;
+    use {super::*, bincode::deserialize};
 
     #[test]
     fn test_default_on_eof() {

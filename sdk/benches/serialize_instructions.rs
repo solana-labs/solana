@@ -1,13 +1,17 @@
 #![feature(test)]
 
 extern crate test;
-use bincode::{deserialize, serialize};
-use solana_sdk::instruction::{AccountMeta, Instruction};
-use solana_sdk::message::{Message, SanitizedMessage};
-use solana_sdk::pubkey::{self, Pubkey};
-use solana_sdk::sysvar::instructions;
-use std::convert::TryFrom;
-use test::Bencher;
+use {
+    bincode::{deserialize, serialize},
+    solana_sdk::{
+        instruction::{AccountMeta, Instruction},
+        message::{Message, SanitizedMessage},
+        pubkey::{self, Pubkey},
+        sysvar::instructions,
+    },
+    std::convert::TryFrom,
+    test::Bencher,
+};
 
 fn make_instructions() -> Vec<Instruction> {
     let meta = AccountMeta::new(pubkey::new_rand(), false);
