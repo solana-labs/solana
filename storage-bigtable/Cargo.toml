@@ -32,8 +32,13 @@ zstd = "0.9.0"
 
 # openssl is a dependency of the goauth and smpl_jwt crates, but explicitly
 # declare it here as well to activate the "vendored" feature that builds OpenSSL
-# statically
+# statically...
+[target."cfg(not(windows))".dependencies]
 openssl = { version = "0.10", features = ["vendored"] }
+# ...except on Windows to avoid having to deal with getting CI past a build-time
+# Perl dependency
+[target."cfg(windows)".dependencies]
+openssl = { version = "0.10", features = [] }
 
 [lib]
 crate-type = ["lib"]
