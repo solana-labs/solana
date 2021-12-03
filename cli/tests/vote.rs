@@ -170,7 +170,13 @@ fn test_vote_authorize_and_withdraw() {
         withdraw_authority: 1,
         withdraw_amount: SpendAmount::Some(100),
         destination_account_pubkey: destination_account,
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+        nonce_account: None,
+        nonce_authority: 0,
         memo: None,
+        fee_payer: 0,
     };
     process_command(&config).unwrap();
     let expected_balance = expected_balance - 100;
