@@ -1,7 +1,9 @@
 // Wallet settings that can be configured for long-term use
-use serde_derive::{Deserialize, Serialize};
-use std::{collections::HashMap, io, path::Path};
-use url::Url;
+use {
+    serde_derive::{Deserialize, Serialize},
+    std::{collections::HashMap, io, path::Path},
+    url::Url,
+};
 
 lazy_static! {
     /// The default path to the CLI configuration file.

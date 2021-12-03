@@ -1,14 +1,18 @@
-use crate::accounts_index::{AccountsIndexConfig, IndexValue};
-use crate::bucket_map_holder::BucketMapHolder;
-use crate::in_mem_accounts_index::InMemAccountsIndex;
-use crate::waitable_condvar::WaitableCondvar;
-use std::fmt::Debug;
-use std::{
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
+use {
+    crate::{
+        accounts_index::{AccountsIndexConfig, IndexValue},
+        bucket_map_holder::BucketMapHolder,
+        in_mem_accounts_index::InMemAccountsIndex,
+        waitable_condvar::WaitableCondvar,
     },
-    thread::{Builder, JoinHandle},
+    std::{
+        fmt::Debug,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, Mutex,
+        },
+        thread::{Builder, JoinHandle},
+    },
 };
 
 /// Manages the lifetime of the background processing threads.

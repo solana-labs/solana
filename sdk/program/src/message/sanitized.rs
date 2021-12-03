@@ -300,10 +300,12 @@ impl SanitizedMessage {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{
-        instruction::{AccountMeta, Instruction},
-        message::v0,
+    use {
+        super::*,
+        crate::{
+            instruction::{AccountMeta, Instruction},
+            message::v0,
+        },
     };
 
     #[test]

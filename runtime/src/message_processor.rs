@@ -1,24 +1,26 @@
-use serde::{Deserialize, Serialize};
-use solana_measure::measure::Measure;
-use solana_program_runtime::{
-    instruction_recorder::InstructionRecorder,
-    invoke_context::{BuiltinProgram, Executors, InvokeContext},
-    log_collector::LogCollector,
-    timings::ExecuteDetailsTimings,
+use {
+    serde::{Deserialize, Serialize},
+    solana_measure::measure::Measure,
+    solana_program_runtime::{
+        instruction_recorder::InstructionRecorder,
+        invoke_context::{BuiltinProgram, Executors, InvokeContext},
+        log_collector::LogCollector,
+        timings::ExecuteDetailsTimings,
+    },
+    solana_sdk::{
+        account::{AccountSharedData, WritableAccount},
+        compute_budget::ComputeBudget,
+        feature_set::{prevent_calling_precompiles_as_programs, FeatureSet},
+        hash::Hash,
+        message::Message,
+        precompiles::is_precompile,
+        pubkey::Pubkey,
+        rent::Rent,
+        sysvar::instructions,
+        transaction::TransactionError,
+    },
+    std::{cell::RefCell, rc::Rc, sync::Arc},
 };
-use solana_sdk::{
-    account::{AccountSharedData, WritableAccount},
-    compute_budget::ComputeBudget,
-    feature_set::{prevent_calling_precompiles_as_programs, FeatureSet},
-    hash::Hash,
-    message::Message,
-    precompiles::is_precompile,
-    pubkey::Pubkey,
-    rent::Rent,
-    sysvar::instructions,
-    transaction::TransactionError,
-};
-use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct MessageProcessor {}
@@ -134,16 +136,18 @@ impl MessageProcessor {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::rent_collector::RentCollector;
-    use solana_sdk::{
-        account::ReadableAccount,
-        instruction::{AccountMeta, Instruction, InstructionError},
-        keyed_account::keyed_account_at_index,
-        message::Message,
-        native_loader::{self, create_loadable_account_for_test},
-        secp256k1_instruction::new_secp256k1_instruction,
-        secp256k1_program,
+    use {
+        super::*,
+        crate::rent_collector::RentCollector,
+        solana_sdk::{
+            account::ReadableAccount,
+            instruction::{AccountMeta, Instruction, InstructionError},
+            keyed_account::keyed_account_at_index,
+            message::Message,
+            native_loader::{self, create_loadable_account_for_test},
+            secp256k1_instruction::new_secp256k1_instruction,
+            secp256k1_program,
+        },
     };
 
     #[derive(Debug, Serialize, Deserialize)]

@@ -3,8 +3,10 @@ use {
     solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{
         collections::HashSet,
-        sync::atomic::{AtomicBool, Ordering},
-        sync::Arc,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
     },
 };
 

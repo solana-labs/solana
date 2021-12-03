@@ -1,12 +1,13 @@
 #![allow(clippy::integer_arithmetic)]
 //! Defines a composable Instruction type and a memory-efficient CompiledInstruction.
 
-use crate::sanitize::Sanitize;
-use crate::{pubkey::Pubkey, short_vec};
-use bincode::serialize;
-use borsh::BorshSerialize;
-use serde::Serialize;
-use thiserror::Error;
+use {
+    crate::{pubkey::Pubkey, sanitize::Sanitize, short_vec},
+    bincode::serialize,
+    borsh::BorshSerialize,
+    serde::Serialize,
+    thiserror::Error,
+};
 
 /// Reasons the runtime might have rejected an instruction.
 ///

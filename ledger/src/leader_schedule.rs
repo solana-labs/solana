@@ -1,11 +1,10 @@
-use itertools::Itertools;
-use rand::distributions::{Distribution, WeightedIndex};
-use rand_chacha::{rand_core::SeedableRng, ChaChaRng};
-use solana_sdk::pubkey::Pubkey;
-use std::collections::HashMap;
-use std::convert::identity;
-use std::ops::Index;
-use std::sync::Arc;
+use {
+    itertools::Itertools,
+    rand::distributions::{Distribution, WeightedIndex},
+    rand_chacha::{rand_core::SeedableRng, ChaChaRng},
+    solana_sdk::pubkey::Pubkey,
+    std::{collections::HashMap, convert::identity, ops::Index, sync::Arc},
+};
 
 // Used for testing
 #[derive(Clone, Debug)]
@@ -101,9 +100,7 @@ impl Index<u64> for LeaderSchedule {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use rand::Rng;
-    use std::iter::repeat_with;
+    use {super::*, rand::Rng, std::iter::repeat_with};
 
     #[test]
     fn test_leader_schedule_index() {

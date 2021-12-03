@@ -1,8 +1,11 @@
-use crate::accounts_index::IndexValue;
-use crate::bucket_map_holder::BucketMapHolder;
-use solana_sdk::timing::AtomicInterval;
-use std::fmt::Debug;
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering};
+use {
+    crate::{accounts_index::IndexValue, bucket_map_holder::BucketMapHolder},
+    solana_sdk::timing::AtomicInterval,
+    std::{
+        fmt::Debug,
+        sync::atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering},
+    },
+};
 
 // stats logged every 10 s
 const STATS_INTERVAL_MS: u64 = 10_000;

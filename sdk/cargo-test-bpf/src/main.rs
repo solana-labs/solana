@@ -1,14 +1,15 @@
-use clap::{
-    crate_description, crate_name, crate_version, value_t, values_t, App, AppSettings, Arg,
-};
-use std::{
-    env,
-    ffi::OsStr,
-    fs::File,
-    io::{prelude::*, BufWriter},
-    path::{Path, PathBuf},
-    process::exit,
-    process::Command,
+use {
+    clap::{
+        crate_description, crate_name, crate_version, value_t, values_t, App, AppSettings, Arg,
+    },
+    std::{
+        env,
+        ffi::OsStr,
+        fs::File,
+        io::{prelude::*, BufWriter},
+        path::{Path, PathBuf},
+        process::{exit, Command},
+    },
 };
 
 struct Config {

@@ -1,20 +1,21 @@
 //! config for staking
 //!  carries variables that the stake program cares about
-use bincode::deserialize;
-use solana_config_program::{create_config_account, get_config_data};
-use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount, WritableAccount},
-    genesis_config::GenesisConfig,
-    instruction::InstructionError,
-    keyed_account::KeyedAccount,
-    stake::config::{self, Config},
-};
-
 #[deprecated(
     since = "1.8.0",
     note = "Please use `solana_sdk::stake::config` or `solana_program::stake::config` instead"
 )]
 pub use solana_sdk::stake::config::*;
+use {
+    bincode::deserialize,
+    solana_config_program::{create_config_account, get_config_data},
+    solana_sdk::{
+        account::{AccountSharedData, ReadableAccount, WritableAccount},
+        genesis_config::GenesisConfig,
+        instruction::InstructionError,
+        keyed_account::KeyedAccount,
+        stake::config::{self, Config},
+    },
+};
 
 pub fn from<T: ReadableAccount>(account: &T) -> Option<Config> {
     get_config_data(account.data())
@@ -46,9 +47,7 @@ pub fn add_genesis_account(genesis_config: &mut GenesisConfig) -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_sdk::pubkey::Pubkey;
-    use std::cell::RefCell;
+    use {super::*, solana_sdk::pubkey::Pubkey, std::cell::RefCell};
 
     #[test]
     fn test() {

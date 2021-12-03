@@ -158,10 +158,12 @@ impl ComputeBudget {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{
-        hash::Hash, message::Message, pubkey::Pubkey, signature::Keypair, signer::Signer,
-        transaction::Transaction,
+    use {
+        super::*,
+        crate::{
+            hash::Hash, message::Message, pubkey::Pubkey, signature::Keypair, signer::Signer,
+            transaction::Transaction,
+        },
     };
 
     macro_rules! test {

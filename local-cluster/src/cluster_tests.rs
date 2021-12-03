@@ -3,42 +3,44 @@
 /// All tests must start from an entry point and a funding keypair and
 /// discover the rest of the network.
 use log::*;
-use rand::{thread_rng, Rng};
-use rayon::prelude::*;
-use solana_client::thin_client::create_client;
-use solana_core::consensus::VOTE_THRESHOLD_DEPTH;
-use solana_entry::entry::{Entry, EntrySlice};
-use solana_gossip::{
-    cluster_info::{self, VALIDATOR_PORT_RANGE},
-    contact_info::ContactInfo,
-    crds_value::{self, CrdsData, CrdsValue},
-    gossip_error::GossipError,
-    gossip_service::discover_cluster,
-};
-use solana_ledger::blockstore::Blockstore;
-use solana_sdk::{
-    client::SyncClient,
-    clock::{self, Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
-    commitment_config::CommitmentConfig,
-    epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
-    exit::Exit,
-    hash::Hash,
-    poh_config::PohConfig,
-    pubkey::Pubkey,
-    signature::{Keypair, Signature, Signer},
-    system_transaction,
-    timing::{duration_as_ms, timestamp},
-    transport::TransportError,
-};
-use solana_streamer::socket::SocketAddrSpace;
-use solana_vote_program::vote_transaction;
-use std::{
-    collections::{HashMap, HashSet},
-    net::SocketAddr,
-    path::Path,
-    sync::{Arc, RwLock},
-    thread::sleep,
-    time::{Duration, Instant},
+use {
+    rand::{thread_rng, Rng},
+    rayon::prelude::*,
+    solana_client::thin_client::create_client,
+    solana_core::consensus::VOTE_THRESHOLD_DEPTH,
+    solana_entry::entry::{Entry, EntrySlice},
+    solana_gossip::{
+        cluster_info::{self, VALIDATOR_PORT_RANGE},
+        contact_info::ContactInfo,
+        crds_value::{self, CrdsData, CrdsValue},
+        gossip_error::GossipError,
+        gossip_service::discover_cluster,
+    },
+    solana_ledger::blockstore::Blockstore,
+    solana_sdk::{
+        client::SyncClient,
+        clock::{self, Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
+        commitment_config::CommitmentConfig,
+        epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
+        exit::Exit,
+        hash::Hash,
+        poh_config::PohConfig,
+        pubkey::Pubkey,
+        signature::{Keypair, Signature, Signer},
+        system_transaction,
+        timing::{duration_as_ms, timestamp},
+        transport::TransportError,
+    },
+    solana_streamer::socket::SocketAddrSpace,
+    solana_vote_program::vote_transaction,
+    std::{
+        collections::{HashMap, HashSet},
+        net::SocketAddr,
+        path::Path,
+        sync::{Arc, RwLock},
+        thread::sleep,
+        time::{Duration, Instant},
+    },
 };
 
 /// Spend and verify from every node in the network

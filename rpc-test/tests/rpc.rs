@@ -1,40 +1,40 @@
-use bincode::serialize;
-use jsonrpc_core::futures::StreamExt;
-use jsonrpc_core_client::transports::ws;
-
-use log::*;
-use reqwest::{self, header::CONTENT_TYPE};
-use serde_json::{json, Value};
-use solana_account_decoder::UiAccount;
-use solana_client::{
-    client_error::{ClientErrorKind, Result as ClientResult},
-    rpc_client::RpcClient,
-    rpc_config::{RpcAccountInfoConfig, RpcSignatureSubscribeConfig},
-    rpc_request::RpcError,
-    rpc_response::{Response as RpcResponse, RpcSignatureResult, SlotUpdate},
-    tpu_client::{TpuClient, TpuClientConfig},
+use {
+    bincode::serialize,
+    jsonrpc_core::futures::StreamExt,
+    jsonrpc_core_client::transports::ws,
+    log::*,
+    reqwest::{self, header::CONTENT_TYPE},
+    serde_json::{json, Value},
+    solana_account_decoder::UiAccount,
+    solana_client::{
+        client_error::{ClientErrorKind, Result as ClientResult},
+        rpc_client::RpcClient,
+        rpc_config::{RpcAccountInfoConfig, RpcSignatureSubscribeConfig},
+        rpc_request::RpcError,
+        rpc_response::{Response as RpcResponse, RpcSignatureResult, SlotUpdate},
+        tpu_client::{TpuClient, TpuClientConfig},
+    },
+    solana_rpc::rpc_pubsub::gen_client::Client as PubsubClient,
+    solana_sdk::{
+        commitment_config::CommitmentConfig,
+        hash::Hash,
+        pubkey::Pubkey,
+        signature::{Keypair, Signer},
+        system_transaction,
+        transaction::Transaction,
+    },
+    solana_streamer::socket::SocketAddrSpace,
+    solana_test_validator::TestValidator,
+    solana_transaction_status::TransactionStatus,
+    std::{
+        collections::HashSet,
+        net::UdpSocket,
+        sync::{mpsc::channel, Arc},
+        thread::sleep,
+        time::{Duration, Instant},
+    },
+    tokio::runtime::Runtime,
 };
-use solana_rpc::rpc_pubsub::gen_client::Client as PubsubClient;
-use solana_test_validator::TestValidator;
-
-use solana_sdk::{
-    commitment_config::CommitmentConfig,
-    hash::Hash,
-    pubkey::Pubkey,
-    signature::{Keypair, Signer},
-    system_transaction,
-    transaction::Transaction,
-};
-use solana_streamer::socket::SocketAddrSpace;
-use solana_transaction_status::TransactionStatus;
-use std::{
-    collections::HashSet,
-    net::UdpSocket,
-    sync::{mpsc::channel, Arc},
-    thread::sleep,
-    time::{Duration, Instant},
-};
-use tokio::runtime::Runtime;
 
 macro_rules! json_req {
     ($method: expr, $params: expr) => {{
@@ -108,8 +108,9 @@ fn test_rpc_send_tx() {
 
     assert!(confirmed_tx);
 
-    use solana_account_decoder::UiAccountEncoding;
-    use solana_client::rpc_config::RpcAccountInfoConfig;
+    use {
+        solana_account_decoder::UiAccountEncoding, solana_client::rpc_config::RpcAccountInfoConfig,
+    };
     let config = RpcAccountInfoConfig {
         encoding: Some(UiAccountEncoding::Base64),
         commitment: None,

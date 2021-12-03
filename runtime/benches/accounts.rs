@@ -3,30 +3,32 @@
 
 extern crate test;
 
-use dashmap::DashMap;
-use rand::Rng;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use solana_runtime::{
-    accounts::{create_test_accounts, AccountAddressFilter, Accounts},
-    accounts_db::AccountShrinkThreshold,
-    accounts_index::{AccountSecondaryIndexes, ScanConfig},
-    ancestors::Ancestors,
-    bank::*,
+use {
+    dashmap::DashMap,
+    rand::Rng,
+    rayon::iter::{IntoParallelRefIterator, ParallelIterator},
+    solana_runtime::{
+        accounts::{create_test_accounts, AccountAddressFilter, Accounts},
+        accounts_db::AccountShrinkThreshold,
+        accounts_index::{AccountSecondaryIndexes, ScanConfig},
+        ancestors::Ancestors,
+        bank::*,
+    },
+    solana_sdk::{
+        account::{AccountSharedData, ReadableAccount},
+        genesis_config::{create_genesis_config, ClusterType},
+        hash::Hash,
+        lamports::LamportsError,
+        pubkey::Pubkey,
+    },
+    std::{
+        collections::{HashMap, HashSet},
+        path::PathBuf,
+        sync::{Arc, RwLock},
+        thread::Builder,
+    },
+    test::Bencher,
 };
-use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount},
-    genesis_config::{create_genesis_config, ClusterType},
-    hash::Hash,
-    lamports::LamportsError,
-    pubkey::Pubkey,
-};
-use std::{
-    collections::{HashMap, HashSet},
-    path::PathBuf,
-    sync::{Arc, RwLock},
-    thread::Builder,
-};
-use test::Bencher;
 
 fn deposit_many(bank: &Bank, pubkeys: &mut Vec<Pubkey>, num: usize) -> Result<(), LamportsError> {
     for t in 0..num {

@@ -1,35 +1,37 @@
 #![allow(clippy::integer_arithmetic)]
-use clap::{crate_description, crate_name, value_t, values_t_or_exit, App, Arg};
-use log::*;
-use rand::{thread_rng, Rng};
-use rayon::prelude::*;
-use solana_account_decoder::parse_token::spl_token_pubkey;
-use solana_clap_utils::input_parsers::pubkey_of;
-use solana_client::{rpc_client::RpcClient, transaction_executor::TransactionExecutor};
-use solana_faucet::faucet::{request_airdrop_transaction, FAUCET_PORT};
-use solana_gossip::gossip_service::discover;
-use solana_runtime::inline_spl_token;
-use solana_sdk::{
-    commitment_config::CommitmentConfig,
-    instruction::{AccountMeta, Instruction},
-    message::Message,
-    pubkey::Pubkey,
-    rpc_port::DEFAULT_RPC_PORT,
-    signature::{read_keypair_file, Keypair, Signer},
-    system_instruction, system_program,
-    transaction::Transaction,
-};
-use solana_streamer::socket::SocketAddrSpace;
-use solana_transaction_status::parse_token::spl_token_instruction;
-use std::{
-    net::SocketAddr,
-    process::exit,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
+use {
+    clap::{crate_description, crate_name, value_t, values_t_or_exit, App, Arg},
+    log::*,
+    rand::{thread_rng, Rng},
+    rayon::prelude::*,
+    solana_account_decoder::parse_token::spl_token_pubkey,
+    solana_clap_utils::input_parsers::pubkey_of,
+    solana_client::{rpc_client::RpcClient, transaction_executor::TransactionExecutor},
+    solana_faucet::faucet::{request_airdrop_transaction, FAUCET_PORT},
+    solana_gossip::gossip_service::discover,
+    solana_runtime::inline_spl_token,
+    solana_sdk::{
+        commitment_config::CommitmentConfig,
+        instruction::{AccountMeta, Instruction},
+        message::Message,
+        pubkey::Pubkey,
+        rpc_port::DEFAULT_RPC_PORT,
+        signature::{read_keypair_file, Keypair, Signer},
+        system_instruction, system_program,
+        transaction::Transaction,
     },
-    thread::sleep,
-    time::{Duration, Instant},
+    solana_streamer::socket::SocketAddrSpace,
+    solana_transaction_status::parse_token::spl_token_instruction,
+    std::{
+        net::SocketAddr,
+        process::exit,
+        sync::{
+            atomic::{AtomicU64, Ordering},
+            Arc,
+        },
+        thread::sleep,
+        time::{Duration, Instant},
+    },
 };
 
 pub fn airdrop_lamports(
@@ -559,14 +561,16 @@ fn main() {
 
 #[cfg(test)]
 pub mod test {
-    use super::*;
-    use solana_core::validator::ValidatorConfig;
-    use solana_local_cluster::{
-        local_cluster::{ClusterConfig, LocalCluster},
-        validator_configs::make_identical_validator_configs,
+    use {
+        super::*,
+        solana_core::validator::ValidatorConfig,
+        solana_local_cluster::{
+            local_cluster::{ClusterConfig, LocalCluster},
+            validator_configs::make_identical_validator_configs,
+        },
+        solana_measure::measure::Measure,
+        solana_sdk::poh_config::PohConfig,
     };
-    use solana_measure::measure::Measure;
-    use solana_sdk::poh_config::PohConfig;
 
     #[test]
     fn test_accounts_cluster_bench() {

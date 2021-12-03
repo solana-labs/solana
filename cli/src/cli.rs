@@ -1,37 +1,41 @@
-use crate::{
-    clap_app::*, cluster_query::*, feature::*, inflation::*, nonce::*, program::*, spend_utils::*,
-    stake::*, validator_info::*, vote::*, wallet::*,
+use {
+    crate::{
+        clap_app::*, cluster_query::*, feature::*, inflation::*, nonce::*, program::*,
+        spend_utils::*, stake::*, validator_info::*, vote::*, wallet::*,
+    },
+    clap::{crate_description, crate_name, value_t_or_exit, ArgMatches, Shell},
+    log::*,
+    num_traits::FromPrimitive,
+    serde_json::{self, Value},
+    solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*},
+    solana_cli_output::{
+        display::println_name_value, CliSignature, CliValidatorsSortOrder, OutputFormat,
+    },
+    solana_client::{
+        blockhash_query::BlockhashQuery,
+        client_error::{ClientError, Result as ClientResult},
+        nonce_utils,
+        rpc_client::RpcClient,
+        rpc_config::{
+            RpcLargestAccountsFilter, RpcSendTransactionConfig, RpcTransactionLogsFilter,
+        },
+    },
+    solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_sdk::{
+        clock::{Epoch, Slot},
+        commitment_config::CommitmentConfig,
+        decode_error::DecodeError,
+        hash::Hash,
+        instruction::InstructionError,
+        pubkey::Pubkey,
+        signature::{Signature, Signer, SignerError},
+        stake::{instruction::LockupArgs, state::Lockup},
+        transaction::{Transaction, TransactionError},
+    },
+    solana_vote_program::vote_state::VoteAuthorize,
+    std::{collections::HashMap, error, io::stdout, str::FromStr, sync::Arc, time::Duration},
+    thiserror::Error,
 };
-use clap::{crate_description, crate_name, value_t_or_exit, ArgMatches, Shell};
-use log::*;
-use num_traits::FromPrimitive;
-use serde_json::{self, Value};
-use solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*};
-use solana_cli_output::{
-    display::println_name_value, CliSignature, CliValidatorsSortOrder, OutputFormat,
-};
-use solana_client::{
-    blockhash_query::BlockhashQuery,
-    client_error::{ClientError, Result as ClientResult},
-    nonce_utils,
-    rpc_client::RpcClient,
-    rpc_config::{RpcLargestAccountsFilter, RpcSendTransactionConfig, RpcTransactionLogsFilter},
-};
-use solana_remote_wallet::remote_wallet::RemoteWalletManager;
-use solana_sdk::{
-    clock::{Epoch, Slot},
-    commitment_config::CommitmentConfig,
-    decode_error::DecodeError,
-    hash::Hash,
-    instruction::InstructionError,
-    pubkey::Pubkey,
-    signature::{Signature, Signer, SignerError},
-    stake::{instruction::LockupArgs, state::Lockup},
-    transaction::{Transaction, TransactionError},
-};
-use solana_vote_program::vote_state::VoteAuthorize;
-use std::{collections::HashMap, error, io::stdout, str::FromStr, sync::Arc, time::Duration};
-use thiserror::Error;
 
 pub const DEFAULT_RPC_TIMEOUT_SECONDS: &str = "30";
 pub const DEFAULT_CONFIRM_TX_TIMEOUT_SECONDS: &str = "5";
@@ -1607,22 +1611,26 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use serde_json::{json, Value};
-    use solana_client::{
-        blockhash_query,
-        mock_sender::SIGNATURE,
-        rpc_request::RpcRequest,
-        rpc_response::{Response, RpcResponseContext},
+    use {
+        super::*,
+        serde_json::{json, Value},
+        solana_client::{
+            blockhash_query,
+            mock_sender::SIGNATURE,
+            rpc_request::RpcRequest,
+            rpc_response::{Response, RpcResponseContext},
+        },
+        solana_sdk::{
+            pubkey::Pubkey,
+            signature::{
+                keypair_from_seed, read_keypair_file, write_keypair_file, Keypair, Presigner,
+            },
+            stake, system_program,
+            transaction::TransactionError,
+        },
+        solana_transaction_status::TransactionConfirmationStatus,
+        std::path::PathBuf,
     };
-    use solana_sdk::{
-        pubkey::Pubkey,
-        signature::{keypair_from_seed, read_keypair_file, write_keypair_file, Keypair, Presigner},
-        stake, system_program,
-        transaction::TransactionError,
-    };
-    use solana_transaction_status::TransactionConfirmationStatus;
-    use std::path::PathBuf;
 
     fn make_tmp_path(name: &str) -> String {
         let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());

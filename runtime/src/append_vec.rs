@@ -4,25 +4,28 @@
 //!
 //! <https://docs.solana.com/implemented-proposals/persistent-account-storage>
 
-use log::*;
-use memmap2::MmapMut;
-use serde::{Deserialize, Serialize};
-use solana_sdk::{
-    account::{Account, AccountSharedData, ReadableAccount},
-    clock::{Epoch, Slot},
-    hash::Hash,
-    pubkey::Pubkey,
-};
-use std::{
-    borrow::Borrow,
-    convert::TryFrom,
-    fs::{remove_file, OpenOptions},
-    io,
-    io::{Seek, SeekFrom, Write},
-    mem,
-    path::{Path, PathBuf},
-    sync::atomic::{AtomicUsize, Ordering},
-    sync::Mutex,
+use {
+    log::*,
+    memmap2::MmapMut,
+    serde::{Deserialize, Serialize},
+    solana_sdk::{
+        account::{Account, AccountSharedData, ReadableAccount},
+        clock::{Epoch, Slot},
+        hash::Hash,
+        pubkey::Pubkey,
+    },
+    std::{
+        borrow::Borrow,
+        convert::TryFrom,
+        fs::{remove_file, OpenOptions},
+        io::{self, Seek, SeekFrom, Write},
+        mem,
+        path::{Path, PathBuf},
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Mutex,
+        },
+    },
 };
 
 // Data placement should be aligned at the next boundary. Without alignment accessing the memory may
@@ -533,13 +536,12 @@ impl AppendVec {
 }
 
 pub mod test_utils {
-    use super::StoredMeta;
-    use rand::distributions::Alphanumeric;
-    use rand::{thread_rng, Rng};
-    use solana_sdk::account::AccountSharedData;
-    use solana_sdk::pubkey::Pubkey;
-    use std::fs::create_dir_all;
-    use std::path::PathBuf;
+    use {
+        super::StoredMeta,
+        rand::{distributions::Alphanumeric, thread_rng, Rng},
+        solana_sdk::{account::AccountSharedData, pubkey::Pubkey},
+        std::{fs::create_dir_all, path::PathBuf},
+    };
 
     pub struct TempFile {
         pub path: PathBuf,
@@ -582,12 +584,13 @@ pub mod test_utils {
 
 #[cfg(test)]
 pub mod tests {
-    use super::test_utils::*;
-    use super::*;
-    use assert_matches::assert_matches;
-    use rand::{thread_rng, Rng};
-    use solana_sdk::{account::WritableAccount, timing::duration_as_ms};
-    use std::time::Instant;
+    use {
+        super::{test_utils::*, *},
+        assert_matches::assert_matches,
+        rand::{thread_rng, Rng},
+        solana_sdk::{account::WritableAccount, timing::duration_as_ms},
+        std::time::Instant,
+    };
 
     impl AppendVec {
         fn append_account_test(&self, data: &(StoredMeta, AccountSharedData)) -> Option<usize> {

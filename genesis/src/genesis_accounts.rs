@@ -1,8 +1,10 @@
-use crate::{
-    stakes::{create_and_add_stakes, StakerInfo},
-    unlocks::UnlockInfo,
+use {
+    crate::{
+        stakes::{create_and_add_stakes, StakerInfo},
+        unlocks::UnlockInfo,
+    },
+    solana_sdk::{genesis_config::GenesisConfig, native_token::LAMPORTS_PER_SOL},
 };
-use solana_sdk::{genesis_config::GenesisConfig, native_token::LAMPORTS_PER_SOL};
 
 // 9 month schedule is 100% after 9 months
 const UNLOCKS_ALL_AT_9_MONTHS: UnlockInfo = UnlockInfo {

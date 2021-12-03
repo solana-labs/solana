@@ -1119,15 +1119,17 @@ pub fn verify_test_data_shred(
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
-    use bincode::serialized_size;
-    use matches::assert_matches;
-    use rand::{seq::SliceRandom, Rng};
-    use solana_sdk::{
-        hash::{self, hash},
-        shred_version, system_transaction,
+    use {
+        super::*,
+        bincode::serialized_size,
+        matches::assert_matches,
+        rand::{seq::SliceRandom, Rng},
+        solana_sdk::{
+            hash::{self, hash},
+            shred_version, system_transaction,
+        },
+        std::{collections::HashSet, convert::TryInto, iter::repeat_with, sync::Arc},
     };
-    use std::{collections::HashSet, convert::TryInto, iter::repeat_with, sync::Arc};
 
     #[test]
     fn test_shred_constants() {

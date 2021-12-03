@@ -1,26 +1,29 @@
-use crate::{
-    ic_logger_msg, ic_msg, instruction_recorder::InstructionRecorder, log_collector::LogCollector,
-    native_loader::NativeLoader, pre_account::PreAccount, timings::ExecuteDetailsTimings,
-};
-use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount},
-    account_utils::StateMut,
-    bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    compute_budget::ComputeBudget,
-    feature_set::{
-        demote_program_write_locks, do_support_realloc, neon_evm_compute_budget,
-        reject_empty_instruction_without_program, remove_native_loader, requestable_heap_size,
-        tx_wide_compute_cap, FeatureSet,
+use {
+    crate::{
+        ic_logger_msg, ic_msg, instruction_recorder::InstructionRecorder,
+        log_collector::LogCollector, native_loader::NativeLoader, pre_account::PreAccount,
+        timings::ExecuteDetailsTimings,
     },
-    hash::Hash,
-    instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
-    keyed_account::{create_keyed_accounts_unified, keyed_account_at_index, KeyedAccount},
-    message::Message,
-    pubkey::Pubkey,
-    rent::Rent,
-    sysvar::Sysvar,
+    solana_sdk::{
+        account::{AccountSharedData, ReadableAccount},
+        account_utils::StateMut,
+        bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+        compute_budget::ComputeBudget,
+        feature_set::{
+            demote_program_write_locks, do_support_realloc, neon_evm_compute_budget,
+            reject_empty_instruction_without_program, remove_native_loader, requestable_heap_size,
+            tx_wide_compute_cap, FeatureSet,
+        },
+        hash::Hash,
+        instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
+        keyed_account::{create_keyed_accounts_unified, keyed_account_at_index, KeyedAccount},
+        message::Message,
+        pubkey::Pubkey,
+        rent::Rent,
+        sysvar::Sysvar,
+    },
+    std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, sync::Arc},
 };
-use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, sync::Arc};
 
 pub type ProcessInstructionWithContext =
     fn(usize, &[u8], &mut InvokeContext) -> Result<(), InstructionError>;
@@ -936,13 +939,15 @@ pub fn mock_process_instruction(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use serde::{Deserialize, Serialize};
-    use solana_sdk::{
-        account::{ReadableAccount, WritableAccount},
-        instruction::{AccountMeta, Instruction, InstructionError},
-        message::Message,
-        native_loader,
+    use {
+        super::*,
+        serde::{Deserialize, Serialize},
+        solana_sdk::{
+            account::{ReadableAccount, WritableAccount},
+            instruction::{AccountMeta, Instruction, InstructionError},
+            message::Message,
+            native_loader,
+        },
     };
 
     #[derive(Debug, Serialize, Deserialize)]

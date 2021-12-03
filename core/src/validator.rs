@@ -1740,11 +1740,12 @@ pub fn is_snapshot_config_valid(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader};
-    use solana_sdk::genesis_config::create_genesis_config;
-    use solana_sdk::poh_config::PohConfig;
-    use std::fs::remove_dir_all;
+    use {
+        super::*,
+        solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
+        solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
+        std::fs::remove_dir_all,
+    };
 
     #[test]
     fn validator_exit() {
@@ -1789,8 +1790,10 @@ mod tests {
     fn test_backup_and_clear_blockstore() {
         use std::time::Instant;
         solana_logger::setup();
-        use solana_entry::entry;
-        use solana_ledger::{blockstore, get_tmp_ledger_path};
+        use {
+            solana_entry::entry,
+            solana_ledger::{blockstore, get_tmp_ledger_path},
+        };
         let blockstore_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();

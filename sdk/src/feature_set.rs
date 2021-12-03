@@ -18,13 +18,15 @@
 //!
 //! For more information on how features are picked up, see comments for `Feature`.
 
-use lazy_static::lazy_static;
-use solana_sdk::{
-    clock::Slot,
-    hash::{Hash, Hasher},
-    pubkey::Pubkey,
+use {
+    lazy_static::lazy_static,
+    solana_sdk::{
+        clock::Slot,
+        hash::{Hash, Hasher},
+        pubkey::Pubkey,
+    },
+    std::collections::{HashMap, HashSet},
 };
-use std::collections::{HashMap, HashSet};
 
 pub mod deprecate_rewards_sysvar {
     solana_sdk::declare_id!("GaBtBJvmS4Arjj5W1NmFcyvPjsHN38UGYDq2MDwbs9Qu");

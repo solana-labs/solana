@@ -8,8 +8,7 @@ use {
         program_utils::limited_deserialize, pubkey::Pubkey, stake, transaction::Transaction,
     },
     solana_transaction_status::UiTransactionStatusMeta,
-    spl_memo::id as spl_memo_id,
-    spl_memo::v1::id as spl_memo_v1_id,
+    spl_memo::{id as spl_memo_id, v1::id as spl_memo_v1_id},
     std::{collections::HashMap, fmt, io},
 };
 
@@ -428,8 +427,7 @@ pub fn unix_timestamp_to_string(unix_timestamp: UnixTimestamp) -> String {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use solana_sdk::pubkey::Pubkey;
+    use {super::*, solana_sdk::pubkey::Pubkey};
 
     #[test]
     fn test_format_labeled_address() {

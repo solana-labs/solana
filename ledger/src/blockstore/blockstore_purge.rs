@@ -1,5 +1,4 @@
-use super::*;
-use std::time::Instant;
+use {super::*, std::time::Instant};
 
 #[derive(Default)]
 pub struct PurgeStats {
@@ -392,16 +391,18 @@ impl Blockstore {
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
-    use crate::{
-        blockstore::tests::make_slot_entries_with_transactions, get_tmp_ledger_path_auto_delete,
-    };
-    use bincode::serialize;
-    use solana_entry::entry::next_entry_mut;
-    use solana_sdk::{
-        hash::{hash, Hash},
-        message::Message,
-        transaction::Transaction,
+    use {
+        super::*,
+        crate::{
+            blockstore::tests::make_slot_entries_with_transactions, get_tmp_ledger_path_auto_delete,
+        },
+        bincode::serialize,
+        solana_entry::entry::next_entry_mut,
+        solana_sdk::{
+            hash::{hash, Hash},
+            message::Message,
+            transaction::Transaction,
+        },
     };
 
     // check that all columns are either empty or start at `min_slot`

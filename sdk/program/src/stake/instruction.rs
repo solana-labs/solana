@@ -1,14 +1,14 @@
 use {
-    crate::stake::{
-        config,
-        program::id,
-        state::{Authorized, Lockup, StakeAuthorize, StakeState},
-    },
     crate::{
         clock::{Epoch, UnixTimestamp},
         decode_error::DecodeError,
         instruction::{AccountMeta, Instruction},
         pubkey::Pubkey,
+        stake::{
+            config,
+            program::id,
+            state::{Authorized, Lockup, StakeAuthorize, StakeState},
+        },
         system_instruction, sysvar,
     },
     log::*,
@@ -680,8 +680,7 @@ pub fn set_lockup_checked(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::instruction::InstructionError;
+    use {super::*, crate::instruction::InstructionError};
 
     #[test]
     fn test_custom_error_decode() {
