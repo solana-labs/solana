@@ -58,7 +58,7 @@ if [[ $CI_BASE_BRANCH = "$EDGE_CHANNEL" ]]; then
   fi
 
   # Ensure nightly and --benches
-  _ scripts/cargo-for-all-lock-files.sh nightly check --locked --all-targets -- --deny=rust_2018_idioms
+  _ scripts/cargo-for-all-lock-files.sh nightly check --locked --all-targets
 else
   echo "Note: cargo-for-all-lock-files.sh skipped because $CI_BASE_BRANCH != $EDGE_CHANNEL"
 fi
