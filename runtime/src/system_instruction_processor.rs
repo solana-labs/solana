@@ -124,7 +124,9 @@ fn assign(
     // Thus, we're starting to remove this restriction from system instruction
     // processor for consistency and fewer special casing by piggybacking onto
     // the related feature gate..
-    let rent_for_sysvars = invoke_context.is_feature_active(&feature_set::rent_for_sysvars::id());
+    let rent_for_sysvars = invoke_context
+        .feature_set
+        .is_active(&feature_set::rent_for_sysvars::id());
     if !rent_for_sysvars && sysvar::check_id(owner) {
         // guard against sysvars being made
         ic_msg!(invoke_context, "Assign: cannot assign to sysvar, {}", owner);
@@ -205,7 +207,9 @@ fn transfer(
     lamports: u64,
     invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
-    if !invoke_context.is_feature_active(&feature_set::system_transfer_zero_check::id())
+    if !invoke_context
+        .feature_set
+        .is_active(&feature_set::system_transfer_zero_check::id())
         && lamports == 0
     {
         return Ok(());
@@ -232,7 +236,9 @@ fn transfer_with_seed(
     lamports: u64,
     invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
-    if !invoke_context.is_feature_active(&feature_set::system_transfer_zero_check::id())
+    if !invoke_context
+        .feature_set
+        .is_active(&feature_set::system_transfer_zero_check::id())
         && lamports == 0
     {
         return Ok(());
@@ -944,8 +950,8 @@ mod tests {
         feature_set
             .inactive
             .insert(feature_set::rent_for_sysvars::id());
-        let invoke_context =
-            InvokeContext::new_mock_with_sysvars_and_features(&[], &[], &[], Arc::new(feature_set));
+        let mut invoke_context = InvokeContext::new_mock(&[], &[]);
+        invoke_context.feature_set = Arc::new(feature_set);
         // Attempt to create system account in account already owned by another program
         let from = Pubkey::new_unique();
         let from_account = AccountSharedData::new_ref(100, 0, &system_program::id());
@@ -1107,8 +1113,8 @@ mod tests {
         feature_set
             .inactive
             .insert(feature_set::rent_for_sysvars::id());
-        let invoke_context =
-            InvokeContext::new_mock_with_sysvars_and_features(&[], &[], &[], Arc::new(feature_set));
+        let mut invoke_context = InvokeContext::new_mock(&[], &[]);
+        invoke_context.feature_set = Arc::new(feature_set);
         let new_owner = sysvar::id();
         let from = Pubkey::new_unique();
         let mut from_account = AccountSharedData::new(100, 0, &system_program::id());
@@ -1575,7 +1581,7 @@ mod tests {
                 |first_instruction_account: usize,
                  instruction_data: &[u8],
                  invoke_context: &mut InvokeContext| {
-                    invoke_context.set_blockhash(hash(&serialize(&0).unwrap()));
+                    invoke_context.blockhash = hash(&serialize(&0).unwrap());
                     super::process_instruction(
                         first_instruction_account,
                         instruction_data,
@@ -1991,7 +1997,7 @@ mod tests {
                 |first_instruction_account: usize,
                  instruction_data: &[u8],
                  invoke_context: &mut InvokeContext| {
-                    invoke_context.set_blockhash(hash(&serialize(&0).unwrap()));
+                    invoke_context.blockhash = hash(&serialize(&0).unwrap());
                     super::process_instruction(
                         first_instruction_account,
                         instruction_data,

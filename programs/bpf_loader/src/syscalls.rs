@@ -141,12 +141,18 @@ pub fn register_syscalls(
     syscall_registry.register_syscall_by_name(b"sol_sha256", SyscallSha256::call)?;
     syscall_registry.register_syscall_by_name(b"sol_keccak256", SyscallKeccak256::call)?;
 
-    if invoke_context.is_feature_active(&secp256k1_recover_syscall_enabled::id()) {
+    if invoke_context
+        .feature_set
+        .is_active(&secp256k1_recover_syscall_enabled::id())
+    {
         syscall_registry
             .register_syscall_by_name(b"sol_secp256k1_recover", SyscallSecp256k1Recover::call)?;
     }
 
-    if invoke_context.is_feature_active(&blake3_syscall_enabled::id()) {
+    if invoke_context
+        .feature_set
+        .is_active(&blake3_syscall_enabled::id())
+    {
         syscall_registry.register_syscall_by_name(b"sol_blake3", SyscallBlake3::call)?;
     }
 
@@ -156,7 +162,10 @@ pub fn register_syscalls(
         b"sol_get_epoch_schedule_sysvar",
         SyscallGetEpochScheduleSysvar::call,
     )?;
-    if !invoke_context.is_feature_active(&disable_fees_sysvar::id()) {
+    if !invoke_context
+        .feature_set
+        .is_active(&disable_fees_sysvar::id())
+    {
         syscall_registry
             .register_syscall_by_name(b"sol_get_fees_sysvar", SyscallGetFeesSysvar::call)?;
     }
@@ -178,7 +187,10 @@ pub fn register_syscalls(
     syscall_registry.register_syscall_by_name(b"sol_alloc_free_", SyscallAllocFree::call)?;
 
     // Return data
-    if invoke_context.is_feature_active(&return_data_syscall_enabled::id()) {
+    if invoke_context
+        .feature_set
+        .is_active(&return_data_syscall_enabled::id())
+    {
         syscall_registry
             .register_syscall_by_name(b"sol_set_return_data", SyscallSetReturnData::call)?;
         syscall_registry
@@ -186,7 +198,10 @@ pub fn register_syscalls(
     }
 
     // Log data
-    if invoke_context.is_feature_active(&sol_log_data_syscall_enabled::id()) {
+    if invoke_context
+        .feature_set
+        .is_active(&sol_log_data_syscall_enabled::id())
+    {
         syscall_registry.register_syscall_by_name(b"sol_log_data", SyscallLogData::call)?;
     }
 
@@ -212,15 +227,21 @@ pub fn bind_syscall_context_objects<'a, 'b>(
     heap: AlignedMemory,
     orig_data_lens: &'a [usize],
 ) -> Result<(), EbpfError<BpfError>> {
-    let is_blake3_syscall_active = invoke_context.is_feature_active(&blake3_syscall_enabled::id());
-    let is_secp256k1_recover_syscall_active =
-        invoke_context.is_feature_active(&secp256k1_recover_syscall_enabled::id());
-    let is_fee_sysvar_via_syscall_active =
-        !invoke_context.is_feature_active(&disable_fees_sysvar::id());
-    let is_return_data_syscall_active =
-        invoke_context.is_feature_active(&return_data_syscall_enabled::id());
-    let is_sol_log_data_syscall_active =
-        invoke_context.is_feature_active(&sol_log_data_syscall_enabled::id());
+    let is_blake3_syscall_active = invoke_context
+        .feature_set
+        .is_active(&blake3_syscall_enabled::id());
+    let is_secp256k1_recover_syscall_active = invoke_context
+        .feature_set
+        .is_active(&secp256k1_recover_syscall_enabled::id());
+    let is_fee_sysvar_via_syscall_active = !invoke_context
+        .feature_set
+        .is_active(&disable_fees_sysvar::id());
+    let is_return_data_syscall_active = invoke_context
+        .feature_set
+        .is_active(&return_data_syscall_enabled::id());
+    let is_sol_log_data_syscall_active = invoke_context
+        .feature_set
+        .is_active(&sol_log_data_syscall_enabled::id());
 
     let loader_id = invoke_context
         .get_loader()
@@ -1004,18 +1025,15 @@ fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId>(
     var_addr: u64,
     loader_id: &Pubkey,
     memory_mapping: &MemoryMapping,
-    invoke_context: Rc<RefCell<&mut InvokeContext>>,
+    invoke_context: &mut InvokeContext,
 ) -> Result<u64, EbpfError<BpfError>> {
-    let invoke_context = invoke_context
-        .try_borrow()
-        .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
-
     invoke_context
         .get_compute_meter()
         .consume(invoke_context.get_compute_budget().sysvar_base_cost + size_of::<T>() as u64)?;
     let var = translate_type_mut::<T>(memory_mapping, var_addr, loader_id)?;
 
-    *var = solana_program_runtime::invoke_context::get_sysvar::<T>(*invoke_context, id)
+    *var = invoke_context
+        .get_sysvar::<T>(id)
         .map_err(SyscallError::InstructionError)?;
 
     Ok(SUCCESS)
@@ -1036,9 +1054,9 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetClockSysvar<'a, 'b> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        let invoke_context = question_mark!(
+        let mut invoke_context = question_mark!(
             self.invoke_context
-                .try_borrow()
+                .try_borrow_mut()
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
@@ -1053,7 +1071,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetClockSysvar<'a, 'b> {
             var_addr,
             &loader_id,
             memory_mapping,
-            self.invoke_context.clone(),
+            &mut invoke_context,
         );
     }
 }
@@ -1072,9 +1090,9 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetEpochScheduleSysvar<'a, 'b> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        let invoke_context = question_mark!(
+        let mut invoke_context = question_mark!(
             self.invoke_context
-                .try_borrow()
+                .try_borrow_mut()
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
@@ -1089,7 +1107,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetEpochScheduleSysvar<'a, 'b> {
             var_addr,
             &loader_id,
             memory_mapping,
-            self.invoke_context.clone(),
+            &mut invoke_context,
         );
     }
 }
@@ -1109,9 +1127,9 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetFeesSysvar<'a, 'b> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        let invoke_context = question_mark!(
+        let mut invoke_context = question_mark!(
             self.invoke_context
-                .try_borrow()
+                .try_borrow_mut()
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
@@ -1126,7 +1144,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetFeesSysvar<'a, 'b> {
             var_addr,
             &loader_id,
             memory_mapping,
-            self.invoke_context.clone(),
+            &mut invoke_context,
         );
     }
 }
@@ -1145,9 +1163,9 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetRentSysvar<'a, 'b> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        let invoke_context = question_mark!(
+        let mut invoke_context = question_mark!(
             self.invoke_context
-                .try_borrow()
+                .try_borrow_mut()
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
@@ -1162,7 +1180,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetRentSysvar<'a, 'b> {
             var_addr,
             &loader_id,
             memory_mapping,
-            self.invoke_context.clone(),
+            &mut invoke_context,
         );
     }
 }
@@ -1509,12 +1527,14 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSecp256k1Recover<'a, 'b> {
                 return;
             }
         };
-        let sig_parse_result =
-            if invoke_context.is_feature_active(&libsecp256k1_0_5_upgrade_enabled::id()) {
-                libsecp256k1::Signature::parse_standard_slice(signature)
-            } else {
-                libsecp256k1::Signature::parse_overflowing_slice(signature)
-            };
+        let sig_parse_result = if invoke_context
+            .feature_set
+            .is_active(&libsecp256k1_0_5_upgrade_enabled::id())
+        {
+            libsecp256k1::Signature::parse_standard_slice(signature)
+        } else {
+            libsecp256k1::Signature::parse_overflowing_slice(signature)
+        };
 
         let signature = match sig_parse_result {
             Ok(sig) => sig,
@@ -2157,8 +2177,9 @@ fn get_translated_accounts<'a, T, F>(
 where
     F: Fn(&T, &InvokeContext) -> Result<CallerAccount<'a>, EbpfError<BpfError>>,
 {
-    let demote_program_write_locks =
-        invoke_context.is_feature_active(&demote_program_write_locks::id());
+    let demote_program_write_locks = invoke_context
+        .feature_set
+        .is_active(&demote_program_write_locks::id());
     let keyed_accounts = invoke_context
         .get_instruction_keyed_accounts()
         .map_err(SyscallError::InstructionError)?;
@@ -2275,9 +2296,11 @@ fn check_authorized_program(
             && !(bpf_loader_upgradeable::is_upgrade_instruction(instruction_data)
                 || bpf_loader_upgradeable::is_set_authority_instruction(instruction_data)
                 || bpf_loader_upgradeable::is_close_instruction(instruction_data)))
-        || (invoke_context.is_feature_active(&prevent_calling_precompiles_as_programs::id())
+        || (invoke_context
+            .feature_set
+            .is_active(&prevent_calling_precompiles_as_programs::id())
             && is_precompile(program_id, |feature_id: &Pubkey| {
-                invoke_context.is_feature_active(feature_id)
+                invoke_context.feature_set.is_active(feature_id)
             }))
     {
         return Err(SyscallError::ProgramNotSupported(*program_id).into());
@@ -2299,7 +2322,9 @@ fn call<'a, 'b: 'a>(
     invoke_context
         .get_compute_meter()
         .consume(invoke_context.get_compute_budget().invoke_units)?;
-    let do_support_realloc = invoke_context.is_feature_active(&do_support_realloc::id());
+    let do_support_realloc = invoke_context
+        .feature_set
+        .is_active(&do_support_realloc::id());
 
     // Translate and verify caller's data
     let loader_id = invoke_context
@@ -2335,7 +2360,9 @@ fn call<'a, 'b: 'a>(
     )?;
 
     // Record the instruction
-    invoke_context.record_instruction(&instruction);
+    if let Some(instruction_recorder) = &invoke_context.instruction_recorder {
+        instruction_recorder.record_instruction(instruction);
+    }
 
     // Process instruction
     invoke_context
@@ -2453,12 +2480,13 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSetReturnData<'a, 'b> {
             )
             .to_vec()
         };
-        question_mark!(
+        let program_id = question_mark!(
             invoke_context
-                .set_return_data(return_data)
+                .get_caller()
                 .map_err(SyscallError::InstructionError),
             result
         );
+        invoke_context.return_data = (*program_id, return_data);
 
         *result = Ok(0);
     }
@@ -2500,7 +2528,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetReturnData<'a, 'b> {
             result
         );
 
-        let (program_id, return_data) = invoke_context.get_return_data();
+        let (program_id, return_data) = &invoke_context.return_data;
         length = length.min(return_data.len() as u64);
         if length != 0 {
             question_mark!(
@@ -2522,7 +2550,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetReturnData<'a, 'b> {
                 result
             );
 
-            program_id_result[0] = program_id;
+            program_id_result[0] = *program_id;
         }
 
         // Return the actual length, rather the length returned
@@ -2618,10 +2646,8 @@ mod tests {
     use solana_rbpf::{
         ebpf::HOST_ALIGN, memory_region::MemoryRegion, user_error::UserError, vm::Config,
     };
-    use solana_sdk::{
-        bpf_loader, feature_set::FeatureSet, fee_calculator::FeeCalculator, hash::hashv,
-    };
-    use std::{str::FromStr, sync::Arc};
+    use solana_sdk::{bpf_loader, fee_calculator::FeeCalculator, hash::hashv};
+    use std::str::FromStr;
 
     macro_rules! assert_access_violation {
         ($result:expr, $va:expr, $len:expr) => {
@@ -3529,13 +3555,9 @@ mod tests {
             };
             let mut data = vec![];
             bincode::serialize_into(&mut data, &src_clock).unwrap();
+            let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
             let sysvars = [(sysvar::clock::id(), data)];
-            let mut invoke_context = InvokeContext::new_mock_with_sysvars_and_features(
-                &accounts,
-                &[],
-                &sysvars,
-                Arc::new(FeatureSet::all_enabled()),
-            );
+            invoke_context.sysvars = &sysvars;
             invoke_context
                 .push(&message, &message.instructions[0], &[0], None)
                 .unwrap();
@@ -3578,13 +3600,9 @@ mod tests {
             };
             let mut data = vec![];
             bincode::serialize_into(&mut data, &src_epochschedule).unwrap();
+            let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
             let sysvars = [(sysvar::epoch_schedule::id(), data)];
-            let mut invoke_context = InvokeContext::new_mock_with_sysvars_and_features(
-                &accounts,
-                &[],
-                &sysvars,
-                Arc::new(FeatureSet::all_enabled()),
-            );
+            invoke_context.sysvars = &sysvars;
             invoke_context
                 .push(&message, &message.instructions[0], &[0], None)
                 .unwrap();
@@ -3634,13 +3652,9 @@ mod tests {
             };
             let mut data = vec![];
             bincode::serialize_into(&mut data, &src_fees).unwrap();
+            let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
             let sysvars = [(sysvar::fees::id(), data)];
-            let mut invoke_context = InvokeContext::new_mock_with_sysvars_and_features(
-                &accounts,
-                &[],
-                &sysvars,
-                Arc::new(FeatureSet::all_enabled()),
-            );
+            invoke_context.sysvars = &sysvars;
             invoke_context
                 .push(&message, &message.instructions[0], &[0], None)
                 .unwrap();
@@ -3681,13 +3695,9 @@ mod tests {
             };
             let mut data = vec![];
             bincode::serialize_into(&mut data, &src_rent).unwrap();
+            let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
             let sysvars = [(sysvar::rent::id(), data)];
-            let mut invoke_context = InvokeContext::new_mock_with_sysvars_and_features(
-                &accounts,
-                &[],
-                &sysvars,
-                Arc::new(FeatureSet::all_enabled()),
-            );
+            invoke_context.sysvars = &sysvars;
             invoke_context
                 .push(&message, &message.instructions[0], &[0], None)
                 .unwrap();
@@ -3949,9 +3959,14 @@ mod tests {
             .get_compute_budget()
             .create_program_address_units;
         let address = bpf_loader_upgradeable::id();
+        let max_tries = 256; // one per seed
 
         for _ in 0..1_000 {
             let address = Pubkey::new_unique();
+            invoke_context
+                .get_compute_meter()
+                .borrow_mut()
+                .mock_set_remaining(cost * max_tries);
             let (found_address, bump_seed) =
                 try_find_program_address(&mut invoke_context, &[b"Lil'", b"Bits"], &address)
                     .unwrap();
@@ -3966,7 +3981,6 @@ mod tests {
             );
         }
 
-        let max_tries = 256; // one per seed
         let seeds: &[&[u8]] = &[b""];
         invoke_context
             .get_compute_meter()

@@ -47,9 +47,14 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
         invoke_context: &InvokeContext,
     ) -> Result<(), InstructionError> {
         let merge_nonce_error_into_system_error = invoke_context
-            .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
+            .feature_set
+            .is_active(&feature_set::merge_nonce_error_into_system_error::id());
 
-        if invoke_context.is_feature_active(&nonce_must_be_writable::id()) && !self.is_writable() {
+        if invoke_context
+            .feature_set
+            .is_active(&nonce_must_be_writable::id())
+            && !self.is_writable()
+        {
             ic_msg!(
                 invoke_context,
                 "Advance nonce account: Account {} must be writeable",
@@ -69,7 +74,7 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
                     );
                     return Err(InstructionError::MissingRequiredSignature);
                 }
-                let recent_blockhash = *invoke_context.get_blockhash();
+                let recent_blockhash = invoke_context.blockhash;
                 if data.blockhash == recent_blockhash {
                     ic_msg!(
                         invoke_context,
@@ -84,7 +89,7 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
                 let new_data = nonce::state::Data::new(
                     data.authority,
                     recent_blockhash,
-                    invoke_context.get_lamports_per_signature(),
+                    invoke_context.lamports_per_signature,
                 );
                 self.set_state(&Versions::new_current(State::Initialized(new_data)))
             }
@@ -111,9 +116,14 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
         invoke_context: &InvokeContext,
     ) -> Result<(), InstructionError> {
         let merge_nonce_error_into_system_error = invoke_context
-            .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
+            .feature_set
+            .is_active(&feature_set::merge_nonce_error_into_system_error::id());
 
-        if invoke_context.is_feature_active(&nonce_must_be_writable::id()) && !self.is_writable() {
+        if invoke_context
+            .feature_set
+            .is_active(&nonce_must_be_writable::id())
+            && !self.is_writable()
+        {
             ic_msg!(
                 invoke_context,
                 "Withdraw nonce account: Account {} must be writeable",
@@ -137,7 +147,7 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
             }
             State::Initialized(ref data) => {
                 if lamports == self.lamports()? {
-                    if data.blockhash == *invoke_context.get_blockhash() {
+                    if data.blockhash == invoke_context.blockhash {
                         ic_msg!(
                             invoke_context,
                             "Withdraw nonce account: nonce can only advance once per slot"
@@ -197,9 +207,14 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
         invoke_context: &InvokeContext,
     ) -> Result<(), InstructionError> {
         let merge_nonce_error_into_system_error = invoke_context
-            .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
+            .feature_set
+            .is_active(&feature_set::merge_nonce_error_into_system_error::id());
 
-        if invoke_context.is_feature_active(&nonce_must_be_writable::id()) && !self.is_writable() {
+        if invoke_context
+            .feature_set
+            .is_active(&nonce_must_be_writable::id())
+            && !self.is_writable()
+        {
             ic_msg!(
                 invoke_context,
                 "Initialize nonce account: Account {} must be writeable",
@@ -222,8 +237,8 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
                 }
                 let data = nonce::state::Data::new(
                     *nonce_authority,
-                    *invoke_context.get_blockhash(),
-                    invoke_context.get_lamports_per_signature(),
+                    invoke_context.blockhash,
+                    invoke_context.lamports_per_signature,
                 );
                 self.set_state(&Versions::new_current(State::Initialized(data)))
             }
@@ -248,9 +263,14 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
         invoke_context: &InvokeContext,
     ) -> Result<(), InstructionError> {
         let merge_nonce_error_into_system_error = invoke_context
-            .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
+            .feature_set
+            .is_active(&feature_set::merge_nonce_error_into_system_error::id());
 
-        if invoke_context.is_feature_active(&nonce_must_be_writable::id()) && !self.is_writable() {
+        if invoke_context
+            .feature_set
+            .is_active(&nonce_must_be_writable::id())
+            && !self.is_writable()
+        {
             ic_msg!(
                 invoke_context,
                 "Authorize nonce account: Account {} must be writeable",
@@ -325,8 +345,8 @@ mod test {
     fn create_invoke_context_with_blockhash<'a>(seed: usize) -> InvokeContext<'a> {
         let mut invoke_context = InvokeContext::new_mock(&[], &[]);
         let (blockhash, lamports_per_signature) = create_test_blockhash(seed);
-        invoke_context.set_blockhash(blockhash);
-        invoke_context.set_lamports_per_signature(lamports_per_signature);
+        invoke_context.blockhash = blockhash;
+        invoke_context.lamports_per_signature = lamports_per_signature;
         invoke_context
     }
 
@@ -364,8 +384,8 @@ mod test {
                 .convert_to_current();
             let data = nonce::state::Data::new(
                 data.authority,
-                *invoke_context.get_blockhash(),
-                invoke_context.get_lamports_per_signature(),
+                invoke_context.blockhash,
+                invoke_context.lamports_per_signature,
             );
             // First nonce instruction drives state from Uninitialized to Initialized
             assert_eq!(state, State::Initialized(data.clone()));
@@ -378,8 +398,8 @@ mod test {
                 .convert_to_current();
             let data = nonce::state::Data::new(
                 data.authority,
-                *invoke_context.get_blockhash(),
-                invoke_context.get_lamports_per_signature(),
+                invoke_context.blockhash,
+                invoke_context.lamports_per_signature,
             );
             // Second nonce instruction consumes and replaces stored nonce
             assert_eq!(state, State::Initialized(data.clone()));
@@ -392,8 +412,8 @@ mod test {
                 .convert_to_current();
             let data = nonce::state::Data::new(
                 data.authority,
-                *invoke_context.get_blockhash(),
-                invoke_context.get_lamports_per_signature(),
+                invoke_context.blockhash,
+                invoke_context.lamports_per_signature,
             );
             // Third nonce instruction for fun and profit
             assert_eq!(state, State::Initialized(data));
@@ -448,8 +468,8 @@ mod test {
                 .convert_to_current();
             let data = nonce::state::Data::new(
                 authority,
-                *invoke_context.get_blockhash(),
-                invoke_context.get_lamports_per_signature(),
+                invoke_context.blockhash,
+                invoke_context.lamports_per_signature,
             );
             assert_eq!(state, State::Initialized(data));
             let signers = HashSet::new();
@@ -726,8 +746,8 @@ mod test {
                 .convert_to_current();
             let data = nonce::state::Data::new(
                 authority,
-                *invoke_context.get_blockhash(),
-                invoke_context.get_lamports_per_signature(),
+                invoke_context.blockhash,
+                invoke_context.lamports_per_signature,
             );
             assert_eq!(state, State::Initialized(data.clone()));
             with_test_keyed_account(42, false, |to_keyed| {
@@ -749,8 +769,8 @@ mod test {
                     .convert_to_current();
                 let data = nonce::state::Data::new(
                     data.authority,
-                    *invoke_context.get_blockhash(),
-                    invoke_context.get_lamports_per_signature(),
+                    invoke_context.blockhash,
+                    invoke_context.lamports_per_signature,
                 );
                 assert_eq!(state, State::Initialized(data));
                 assert_eq!(
@@ -923,8 +943,8 @@ mod test {
             let result = keyed_account.initialize_nonce_account(&authority, &rent, &invoke_context);
             let data = nonce::state::Data::new(
                 authority,
-                *invoke_context.get_blockhash(),
-                invoke_context.get_lamports_per_signature(),
+                invoke_context.blockhash,
+                invoke_context.lamports_per_signature,
             );
             assert_eq!(result, Ok(()));
             let state = AccountUtilsState::<Versions>::state(keyed_account)
@@ -988,8 +1008,8 @@ mod test {
             let authority = Pubkey::default();
             let data = nonce::state::Data::new(
                 authority,
-                *invoke_context.get_blockhash(),
-                invoke_context.get_lamports_per_signature(),
+                invoke_context.blockhash,
+                invoke_context.lamports_per_signature,
             );
             let result = nonce_account.authorize_nonce_account(
                 &Pubkey::default(),
@@ -1062,7 +1082,7 @@ mod test {
                 .unwrap();
             assert!(verify_nonce_account(
                 &nonce_account.account.borrow(),
-                invoke_context.get_blockhash(),
+                &invoke_context.blockhash,
             ));
         });
     }
@@ -1093,7 +1113,7 @@ mod test {
             let invoke_context = create_invoke_context_with_blockhash(1);
             assert!(!verify_nonce_account(
                 &nonce_account.account.borrow(),
-                invoke_context.get_blockhash(),
+                &invoke_context.blockhash,
             ));
         });
     }

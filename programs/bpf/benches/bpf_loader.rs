@@ -99,6 +99,10 @@ fn bench_program_alu(bencher: &mut Bencher) {
     let elf = load_elf("bench_alu").unwrap();
     let loader_id = bpf_loader::id();
     with_mock_invoke_context(loader_id, 10000001, |invoke_context| {
+        invoke_context
+            .get_compute_meter()
+            .borrow_mut()
+            .mock_set_remaining(std::i64::MAX as u64);
         let mut executable = Executable::<BpfError, ThisInstructionMeter>::from_elf(
             &elf,
             None,
@@ -109,13 +113,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
         executable.jit_compile().unwrap();
         let compute_meter = invoke_context.get_compute_meter();
         let mut instruction_meter = ThisInstructionMeter { compute_meter };
-        let mut vm = create_vm(
-            &executable,
-            &mut inner_iter,
-            invoke_context,
-            &[],
-        )
-        .unwrap();
+        let mut vm = create_vm(&executable, &mut inner_iter, invoke_context, &[]).unwrap();
 
         println!("Interpreted:");
         assert_eq!(
@@ -205,7 +203,10 @@ fn bench_create_vm(bencher: &mut Bencher) {
     let loader_id = bpf_loader::id();
     with_mock_invoke_context(loader_id, 10000001, |invoke_context| {
         const BUDGET: u64 = 200_000;
-        invoke_context.get_compute_meter().borrow_mut().mock_set_remaining(BUDGET);
+        invoke_context
+            .get_compute_meter()
+            .borrow_mut()
+            .mock_set_remaining(BUDGET);
 
         // Serialize account data
         let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
@@ -243,7 +244,10 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     let loader_id = bpf_loader::id();
     with_mock_invoke_context(loader_id, 10000001, |invoke_context| {
         const BUDGET: u64 = 200_000;
-        invoke_context.get_compute_meter().borrow_mut().mock_set_remaining(BUDGET);
+        invoke_context
+            .get_compute_meter()
+            .borrow_mut()
+            .mock_set_remaining(BUDGET);
 
         // Serialize account data
         let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();

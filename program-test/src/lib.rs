@@ -214,7 +214,7 @@ fn get_sysvar<T: Default + Sysvar + Sized + serde::de::DeserializeOwned>(
         panic!("Exceeded compute budget");
     }
 
-    match solana_program_runtime::invoke_context::get_sysvar::<T>(invoke_context, id) {
+    match invoke_context.get_sysvar::<T>(id) {
         Ok(sysvar_data) => unsafe {
             *(var_addr as *mut _ as *mut T) = sysvar_data;
             SUCCESS
@@ -248,8 +248,9 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         let message = Message::new(&[instruction.clone()], None);
         let program_id_index = message.instructions[0].program_id_index as usize;
         let program_id = message.account_keys[program_id_index];
-        let demote_program_write_locks =
-            invoke_context.is_feature_active(&demote_program_write_locks::id());
+        let demote_program_write_locks = invoke_context
+            .feature_set
+            .is_active(&demote_program_write_locks::id());
         // TODO don't have the caller's keyed_accounts so can't validate writer or signer escalation or deescalation yet
         let caller_privileges = message
             .account_keys
@@ -317,7 +318,9 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             }
         }
 
-        invoke_context.record_instruction(instruction);
+        if let Some(instruction_recorder) = &invoke_context.instruction_recorder {
+            instruction_recorder.record_instruction(instruction.clone());
+        }
 
         invoke_context
             .process_cross_program_instruction(

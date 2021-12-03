@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
 use solana_program_runtime::{
     instruction_recorder::InstructionRecorder,
-    invoke_context::{BuiltinProgram, ComputeMeter, Executors, InvokeContext},
+    invoke_context::{BuiltinProgram, Executors, InvokeContext},
     log_collector::LogCollector,
     timings::ExecuteDetailsTimings,
 };
@@ -50,7 +50,6 @@ impl MessageProcessor {
         instruction_recorders: Option<&[InstructionRecorder]>,
         feature_set: Arc<FeatureSet>,
         compute_budget: ComputeBudget,
-        compute_meter: Rc<RefCell<ComputeMeter>>,
         timings: &mut ExecuteDetailsTimings,
         sysvars: &[(Pubkey, Vec<u8>)],
         blockhash: Hash,
@@ -63,9 +62,7 @@ impl MessageProcessor {
             sysvars,
             log_collector,
             compute_budget,
-            compute_meter,
             executors,
-            instruction_recorders,
             feature_set,
             blockhash,
             lamports_per_signature,
@@ -79,8 +76,10 @@ impl MessageProcessor {
             .enumerate()
         {
             let program_id = instruction.program_id(&message.account_keys);
-            if invoke_context.is_feature_active(&prevent_calling_precompiles_as_programs::id())
-                && is_precompile(program_id, |id| invoke_context.is_feature_active(id))
+            if invoke_context
+                .feature_set
+                .is_active(&prevent_calling_precompiles_as_programs::id())
+                && is_precompile(program_id, |id| invoke_context.feature_set.is_active(id))
             {
                 // Precompiled programs don't have an instruction processor
                 continue;
@@ -99,7 +98,10 @@ impl MessageProcessor {
                 }
             }
 
-            invoke_context.set_instruction_index(instruction_index);
+            if let Some(instruction_recorders) = instruction_recorders {
+                invoke_context.instruction_recorder =
+                    Some(&instruction_recorders[instruction_index]);
+            }
             let result = invoke_context
                 .push(message, instruction, program_indices, None)
                 .and_then(|_| {
@@ -134,7 +136,6 @@ impl MessageProcessor {
 mod tests {
     use super::*;
     use crate::rent_collector::RentCollector;
-    use solana_program_runtime::invoke_context::ComputeMeter;
     use solana_sdk::{
         account::ReadableAccount,
         instruction::{AccountMeta, Instruction, InstructionError},
@@ -246,7 +247,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
@@ -276,7 +276,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
@@ -310,7 +309,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
@@ -455,7 +453,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
@@ -489,7 +486,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
@@ -520,7 +516,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
@@ -578,7 +573,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),

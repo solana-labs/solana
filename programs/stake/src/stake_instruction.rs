@@ -1,7 +1,7 @@
 use {
     crate::{config, stake_state::StakeAccount},
     log::*,
-    solana_program_runtime::invoke_context::{get_sysvar, InvokeContext},
+    solana_program_runtime::invoke_context::InvokeContext,
     solana_sdk::{
         feature_set,
         instruction::InstructionError,
@@ -48,9 +48,9 @@ pub fn process_instruction(
             )?)?,
         ),
         StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {
-            let require_custodian_for_locked_stake_authorize = invoke_context.is_feature_active(
-                &feature_set::require_custodian_for_locked_stake_authorize::id(),
-            );
+            let require_custodian_for_locked_stake_authorize = invoke_context
+                .feature_set
+                .is_active(&feature_set::require_custodian_for_locked_stake_authorize::id());
 
             if require_custodian_for_locked_stake_authorize {
                 let clock = from_keyed_account::<Clock>(keyed_account_at_index(
@@ -86,9 +86,9 @@ pub fn process_instruction(
         StakeInstruction::AuthorizeWithSeed(args) => {
             let authority_base =
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
-            let require_custodian_for_locked_stake_authorize = invoke_context.is_feature_active(
-                &feature_set::require_custodian_for_locked_stake_authorize::id(),
-            );
+            let require_custodian_for_locked_stake_authorize = invoke_context
+                .feature_set
+                .is_active(&feature_set::require_custodian_for_locked_stake_authorize::id());
 
             if require_custodian_for_locked_stake_authorize {
                 let clock = from_keyed_account::<Clock>(keyed_account_at_index(
@@ -124,8 +124,9 @@ pub fn process_instruction(
             }
         }
         StakeInstruction::DelegateStake => {
-            let can_reverse_deactivation =
-                invoke_context.is_feature_active(&feature_set::stake_program_v4::id());
+            let can_reverse_deactivation = invoke_context
+                .feature_set
+                .is_active(&feature_set::stake_program_v4::id());
             let vote = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
 
             me.delegate(
@@ -154,8 +155,9 @@ pub fn process_instruction(
         StakeInstruction::Merge => {
             let source_stake =
                 &keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
-            let can_merge_expired_lockups =
-                invoke_context.is_feature_active(&feature_set::stake_program_v4::id());
+            let can_merge_expired_lockups = invoke_context
+                .feature_set
+                .is_active(&feature_set::stake_program_v4::id());
             me.merge(
                 invoke_context,
                 source_stake,
@@ -186,7 +188,9 @@ pub fn process_instruction(
                 )?)?,
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 4)?,
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 5).ok(),
-                invoke_context.is_feature_active(&feature_set::stake_program_v4::id()),
+                invoke_context
+                    .feature_set
+                    .is_active(&feature_set::stake_program_v4::id()),
             )
         }
         StakeInstruction::Deactivate => me.deactivate(
@@ -197,15 +201,20 @@ pub fn process_instruction(
             &signers,
         ),
         StakeInstruction::SetLockup(lockup) => {
-            let clock = if invoke_context.is_feature_active(&feature_set::stake_program_v4::id()) {
-                Some(get_sysvar::<Clock>(invoke_context, &sysvar::clock::id())?)
+            let clock = if invoke_context
+                .feature_set
+                .is_active(&feature_set::stake_program_v4::id())
+            {
+                Some(invoke_context.get_sysvar::<Clock>(&sysvar::clock::id())?)
             } else {
                 None
             };
             me.set_lockup(&lockup, &signers, clock.as_ref())
         }
         StakeInstruction::InitializeChecked => {
-            if invoke_context.is_feature_active(&feature_set::vote_stake_checked_instructions::id())
+            if invoke_context
+                .feature_set
+                .is_active(&feature_set::vote_stake_checked_instructions::id())
             {
                 let authorized = Authorized {
                     staker: *keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?
@@ -231,7 +240,9 @@ pub fn process_instruction(
             }
         }
         StakeInstruction::AuthorizeChecked(stake_authorize) => {
-            if invoke_context.is_feature_active(&feature_set::vote_stake_checked_instructions::id())
+            if invoke_context
+                .feature_set
+                .is_active(&feature_set::vote_stake_checked_instructions::id())
             {
                 let clock = from_keyed_account::<Clock>(keyed_account_at_index(
                     keyed_accounts,
@@ -261,7 +272,9 @@ pub fn process_instruction(
             }
         }
         StakeInstruction::AuthorizeCheckedWithSeed(args) => {
-            if invoke_context.is_feature_active(&feature_set::vote_stake_checked_instructions::id())
+            if invoke_context
+                .feature_set
+                .is_active(&feature_set::vote_stake_checked_instructions::id())
             {
                 let authority_base =
                     keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
@@ -293,7 +306,9 @@ pub fn process_instruction(
             }
         }
         StakeInstruction::SetLockupChecked(lockup_checked) => {
-            if invoke_context.is_feature_active(&feature_set::vote_stake_checked_instructions::id())
+            if invoke_context
+                .feature_set
+                .is_active(&feature_set::vote_stake_checked_instructions::id())
             {
                 let custodian = if let Ok(custodian) =
                     keyed_account_at_index(keyed_accounts, first_instruction_account + 2)
@@ -312,7 +327,7 @@ pub fn process_instruction(
                     epoch: lockup_checked.epoch,
                     custodian,
                 };
-                let clock = Some(get_sysvar::<Clock>(invoke_context, &sysvar::clock::id())?);
+                let clock = Some(invoke_context.get_sysvar::<Clock>(&sysvar::clock::id())?);
                 me.set_lockup(&lockup, &signers, clock.as_ref())
             } else {
                 Err(InstructionError::InvalidInstructionData)
@@ -331,7 +346,6 @@ mod tests {
     };
     use solana_sdk::{
         account::{self, AccountSharedData},
-        feature_set::FeatureSet,
         instruction::{AccountMeta, Instruction},
         pubkey::Pubkey,
         rent::Rent,
@@ -342,7 +356,7 @@ mod tests {
         },
         sysvar::{stake_history::StakeHistory, Sysvar},
     };
-    use std::{cell::RefCell, rc::Rc, str::FromStr, sync::Arc};
+    use std::{cell::RefCell, rc::Rc, str::FromStr};
 
     fn create_default_account() -> Rc<RefCell<AccountSharedData>> {
         AccountSharedData::new_ref(0, 0, &Pubkey::new_unique())
@@ -415,13 +429,9 @@ mod tests {
         preparation.accounts.push((id(), processor_account));
         let mut data = Vec::with_capacity(sysvar::clock::Clock::size_of());
         bincode::serialize_into(&mut data, &sysvar::clock::Clock::default()).unwrap();
+        let mut invoke_context = InvokeContext::new_mock(&preparation.accounts, &[]);
         let sysvars = [(sysvar::clock::id(), data)];
-        let mut invoke_context = InvokeContext::new_mock_with_sysvars_and_features(
-            &preparation.accounts,
-            &[],
-            &sysvars,
-            Arc::new(FeatureSet::all_enabled()),
-        );
+        invoke_context.sysvars = &sysvars;
         invoke_context.push(
             &preparation.message,
             &preparation.message.instructions[0],
@@ -1065,13 +1075,9 @@ mod tests {
         preparation.accounts.push((id(), processor_account));
         let mut data = Vec::with_capacity(sysvar::clock::Clock::size_of());
         bincode::serialize_into(&mut data, &sysvar::clock::Clock::default()).unwrap();
+        let mut invoke_context = InvokeContext::new_mock(&preparation.accounts, &[]);
         let sysvars = [(sysvar::clock::id(), data)];
-        let mut invoke_context = InvokeContext::new_mock_with_sysvars_and_features(
-            &preparation.accounts,
-            &[],
-            &sysvars,
-            Arc::new(FeatureSet::all_enabled()),
-        );
+        invoke_context.sysvars = &sysvars;
         invoke_context
             .push(
                 &preparation.message,
