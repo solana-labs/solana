@@ -11,7 +11,7 @@ entrypoint!(process_instruction);
 #[allow(clippy::cognitive_complexity)]
 fn process_instruction(
     _program_id: &Pubkey,
-    _accounts: &[AccountInfo],
+    _accounts: &[AccountInfo<'_>],
     instruction_data: &[u8],
 ) -> ProgramResult {
     let fields: Vec<&[u8]> = instruction_data.split(|e| *e == 0).collect();

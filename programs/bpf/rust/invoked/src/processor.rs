@@ -18,7 +18,7 @@ entrypoint!(process_instruction);
 #[allow(clippy::cognitive_complexity)]
 fn process_instruction(
     program_id: &Pubkey,
-    accounts: &[AccountInfo],
+    accounts: &[AccountInfo<'_>],
     instruction_data: &[u8],
 ) -> ProgramResult {
     msg!("Invoked program");

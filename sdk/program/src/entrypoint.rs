@@ -49,7 +49,7 @@ pub const HEAP_LENGTH: usize = 32 * 1024;
 /// ```ignore
 /// fn process_instruction(
 ///     program_id: &Pubkey,      // Public key of the account the program was loaded into
-///     accounts: &[AccountInfo], // All accounts required to process the instruction
+///     accounts: &[AccountInfo<'_>], // All accounts required to process the instruction
 ///     instruction_data: &[u8],  // Serialized instruction-specific data
 /// ) -> ProgramResult;
 /// ```
@@ -101,7 +101,7 @@ pub const HEAP_LENGTH: usize = 32 * 1024;
 ///
 ///     pub fn process_instruction(
 ///         program_id: &Pubkey,
-///         accounts: &[AccountInfo],
+///         accounts: &[AccountInfo<'_>],
 ///         instruction_data: &[u8],
 ///     ) -> ProgramResult {
 ///         msg!("Hello world");

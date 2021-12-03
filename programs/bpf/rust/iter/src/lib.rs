@@ -1,6 +1,5 @@
 //! Example Rust-based BPF program tests loop iteration
 
-extern crate solana_program;
 use solana_program::{custom_panic_default, entrypoint::SUCCESS, msg};
 
 #[no_mangle]

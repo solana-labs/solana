@@ -6,7 +6,7 @@ entrypoint!(process_instruction);
 #[allow(clippy::unnecessary_wraps)]
 fn process_instruction(
     _program_id: &Pubkey,
-    accounts: &[AccountInfo],
+    accounts: &[AccountInfo<'_>],
     _instruction_data: &[u8],
 ) -> ProgramResult {
     let from = &accounts[0];

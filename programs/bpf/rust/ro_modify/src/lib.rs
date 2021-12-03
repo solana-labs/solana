@@ -94,7 +94,7 @@ const PUBKEY: Pubkey = Pubkey::new_from_array([
 ]);
 
 fn check_preconditions(
-    in_infos: &[AccountInfo],
+    in_infos: &[AccountInfo<'_>],
     static_infos: &[SolAccountInfo],
 ) -> Result<(), ProgramError> {
     for (in_info, static_info) in in_infos.iter().zip(static_infos) {
@@ -119,7 +119,7 @@ fn check_preconditions(
 entrypoint!(process_instruction);
 fn process_instruction(
     program_id: &Pubkey,
-    accounts: &[AccountInfo],
+    accounts: &[AccountInfo<'_>],
     instruction_data: &[u8],
 ) -> ProgramResult {
     check_preconditions(accounts, READONLY_ACCOUNTS)?;

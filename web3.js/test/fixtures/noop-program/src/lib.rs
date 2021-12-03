@@ -20,7 +20,7 @@ fn return_sstruct() -> SStruct {
 entrypoint!(process_instruction);
 fn process_instruction(
     program_id: &Pubkey,
-    accounts: &[AccountInfo],
+    accounts: &[AccountInfo<'_>],
     instruction_data: &[u8],
 ) -> ProgramResult {
     msg!("Program identifier:");

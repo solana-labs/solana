@@ -270,7 +270,7 @@ impl<'a, T: Account> IntoAccountInfo<'a> for &'a mut (Pubkey, T) {
 ///
 /// pub fn process_instruction(
 ///     program_id: &Pubkey,
-///     accounts: &[AccountInfo],
+///     accounts: &[AccountInfo<'_>],
 ///     instruction_data: &[u8],
 /// ) -> ProgramResult {
 ///     let accounts_iter = &mut accounts.iter();
@@ -321,7 +321,7 @@ pub fn next_account_info<'a, 'b, I: Iterator<Item = &'a AccountInfo<'b>>>(
 ///
 /// pub fn process_instruction(
 ///     program_id: &Pubkey,
-///     accounts: &[AccountInfo],
+///     accounts: &[AccountInfo<'_>],
 ///     instruction_data: &[u8],
 /// ) -> ProgramResult {
 ///     let accounts_iter = &mut accounts.iter();

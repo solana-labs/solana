@@ -1,6 +1,5 @@
 //! Example Rust-based BPF program that exercises error handling
 
-extern crate solana_program;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use solana_program::{
@@ -47,7 +46,7 @@ impl PrintProgramError for MyError {
 entrypoint!(process_instruction);
 fn process_instruction(
     _program_id: &Pubkey,
-    accounts: &[AccountInfo],
+    accounts: &[AccountInfo<'_>],
     instruction_data: &[u8],
 ) -> ProgramResult {
     match instruction_data[0] {

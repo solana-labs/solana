@@ -13,7 +13,7 @@ entrypoint!(process_instruction);
 #[allow(clippy::unnecessary_wraps)]
 pub fn process_instruction(
     _program_id: &Pubkey,
-    _accounts: &[AccountInfo],
+    _accounts: &[AccountInfo<'_>],
     _instruction_data: &[u8],
 ) -> ProgramResult {
     // Via syscalls

@@ -1,6 +1,5 @@
 //! Example Rust-based BPF program that tests sysvar use
 
-extern crate solana_program;
 #[allow(deprecated)]
 use solana_program::sysvar::recent_blockhashes::RecentBlockhashes;
 use solana_program::{
@@ -21,7 +20,7 @@ entrypoint!(process_instruction);
 #[allow(clippy::unnecessary_wraps)]
 pub fn process_instruction(
     program_id: &Pubkey,
-    accounts: &[AccountInfo],
+    accounts: &[AccountInfo<'_>],
     _instruction_data: &[u8],
 ) -> ProgramResult {
     // Clock

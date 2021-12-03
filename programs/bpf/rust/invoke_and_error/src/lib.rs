@@ -9,7 +9,7 @@ use solana_program::{
 entrypoint!(process_instruction);
 fn process_instruction(
     _program_id: &Pubkey,
-    accounts: &[AccountInfo],
+    accounts: &[AccountInfo<'_>],
     instruction_data: &[u8],
 ) -> ProgramResult {
     let to_call = accounts[0].key;

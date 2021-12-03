@@ -1,6 +1,5 @@
 //! Example Rust-based BPF upgraded program
 
-extern crate solana_program;
 use solana_program::{
     account_info::AccountInfo, entrypoint, entrypoint::ProgramResult, msg, pubkey::Pubkey,
     sysvar::clock,
@@ -9,7 +8,7 @@ use solana_program::{
 entrypoint!(process_instruction);
 fn process_instruction(
     program_id: &Pubkey,
-    accounts: &[AccountInfo],
+    accounts: &[AccountInfo<'_>],
     _instruction_data: &[u8],
 ) -> ProgramResult {
     msg!("Upgraded program");

@@ -17,7 +17,7 @@ use solana_program::{
     system_instruction,
 };
 
-fn do_nested_invokes(num_nested_invokes: u64, accounts: &[AccountInfo]) -> ProgramResult {
+fn do_nested_invokes(num_nested_invokes: u64, accounts: &[AccountInfo<'_>]) -> ProgramResult {
     assert!(accounts[ARGUMENT_INDEX].is_signer);
 
     let pre_argument_lamports = accounts[ARGUMENT_INDEX].lamports();
@@ -53,7 +53,7 @@ fn do_nested_invokes(num_nested_invokes: u64, accounts: &[AccountInfo]) -> Progr
 entrypoint!(process_instruction);
 fn process_instruction(
     program_id: &Pubkey,
-    accounts: &[AccountInfo],
+    accounts: &[AccountInfo<'_>],
     instruction_data: &[u8],
 ) -> ProgramResult {
     msg!("invoke Rust program");

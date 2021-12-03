@@ -1,6 +1,5 @@
 //! Example Rust-based BPF program that tests duplicate accounts passed via accounts
 
-extern crate solana_program;
 use solana_program::{
     account_info::AccountInfo,
     entrypoint,
@@ -15,7 +14,7 @@ use solana_program::{
 entrypoint!(process_instruction);
 fn process_instruction(
     program_id: &Pubkey,
-    accounts: &[AccountInfo],
+    accounts: &[AccountInfo<'_>],
     instruction_data: &[u8],
 ) -> ProgramResult {
     match instruction_data[0] {

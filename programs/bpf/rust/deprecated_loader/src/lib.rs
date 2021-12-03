@@ -2,7 +2,6 @@
 
 #![allow(unreachable_code)]
 
-extern crate solana_program;
 use solana_program::{
     account_info::AccountInfo, bpf_loader, entrypoint_deprecated,
     entrypoint_deprecated::ProgramResult, log::*, msg, pubkey::Pubkey,
@@ -30,7 +29,7 @@ entrypoint_deprecated!(process_instruction);
 #[allow(clippy::unnecessary_wraps)]
 fn process_instruction(
     program_id: &Pubkey,
-    accounts: &[AccountInfo],
+    accounts: &[AccountInfo<'_>],
     instruction_data: &[u8],
 ) -> ProgramResult {
     msg!("Program identifier:");

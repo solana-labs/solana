@@ -1,6 +1,5 @@
 //! Example Rust-based BPF program that moves a lamport from one account to another
 
-extern crate solana_program;
 use solana_program::{
     account_info::AccountInfo, entrypoint, entrypoint::ProgramResult, pubkey::Pubkey,
 };
@@ -9,7 +8,7 @@ entrypoint!(process_instruction);
 #[allow(clippy::unnecessary_wraps)]
 fn process_instruction(
     _program_id: &Pubkey,
-    accounts: &[AccountInfo],
+    accounts: &[AccountInfo<'_>],
     _instruction_data: &[u8],
 ) -> ProgramResult {
     // account 0 is the mint and not owned by this program, any debit of its lamports

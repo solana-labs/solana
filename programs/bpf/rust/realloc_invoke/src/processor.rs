@@ -2,7 +2,6 @@
 
 #![cfg(feature = "program")]
 
-extern crate solana_program;
 use crate::instructions::*;
 use solana_bpf_rust_realloc::instructions::*;
 use solana_program::{
@@ -22,7 +21,7 @@ entrypoint!(process_instruction);
 #[allow(clippy::unnecessary_wraps)]
 fn process_instruction(
     program_id: &Pubkey,
-    accounts: &[AccountInfo],
+    accounts: &[AccountInfo<'_>],
     instruction_data: &[u8],
 ) -> ProgramResult {
     let account = &accounts[0];

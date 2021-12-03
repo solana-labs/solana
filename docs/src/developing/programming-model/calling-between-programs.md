@@ -39,11 +39,11 @@ invocation:
 mod acme {
     use token_instruction;
 
-    fn launch_missiles(accounts: &[AccountInfo]) -> Result<()> {
+    fn launch_missiles(accounts: &[AccountInfo<'_>]) -> Result<()> {
         ...
     }
 
-    fn pay_and_launch_missiles(accounts: &[AccountInfo]) -> Result<()> {
+    fn pay_and_launch_missiles(accounts: &[AccountInfo<'_>]) -> Result<()> {
         let alice_pubkey = accounts[1].key;
         let instruction = token_instruction::pay(&alice_pubkey);
         invoke(&instruction, accounts)?;
@@ -265,7 +265,7 @@ as if it had the private key to sign the transaction.
 ```rust,ignore
 fn transfer_one_token_from_escrow(
     program_id: &Pubkey,
-    accounts: &[AccountInfo],
+    accounts: &[AccountInfo<'_>],
 ) -> ProgramResult {
     // User supplies the destination
     let alice_pubkey = keyed_accounts[1].unsigned_key();
@@ -310,7 +310,7 @@ Within the program, this becomes:
 ```rust,ignore
 fn transfer_one_token_from_escrow2(
     program_id: &Pubkey,
-    accounts: &[AccountInfo],
+    accounts: &[AccountInfo<'_>],
 ) -> ProgramResult {
     // User supplies the destination
     let alice_pubkey = keyed_accounts[1].unsigned_key();

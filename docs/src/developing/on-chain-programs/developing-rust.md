@@ -145,7 +145,7 @@ call must be of this form:
 
 ```rust
 pub type ProcessInstruction =
-    fn(program_id: &Pubkey, accounts: &[AccountInfo], instruction_data: &[u8]) -> ProgramResult;
+    fn(program_id: &Pubkey, accounts: &[AccountInfo<'_>], instruction_data: &[u8]) -> ProgramResult;
 ```
 
 Refer to [helloworld's use of the
@@ -182,7 +182,7 @@ function with the following parameters:
 
 ```rust
 program_id: &Pubkey,
-accounts: &[AccountInfo],
+accounts: &[AccountInfo<'_>],
 instruction_data: &[u8]
 ```
 
