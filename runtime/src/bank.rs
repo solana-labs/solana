@@ -1057,7 +1057,6 @@ struct VoteWithStakeDelegations {
 #[derive(Debug, Default)]
 pub struct NewBankOptions {
     pub vote_only_bank: bool,
-    pub disable_epoch_boundary_optimization: bool,
 }
 
 impl Bank {
@@ -1322,10 +1321,7 @@ impl Bank {
         new_bank_options: NewBankOptions,
     ) -> Self {
         let mut time = Measure::start("bank::new_from_parent");
-        let NewBankOptions {
-            vote_only_bank,
-            disable_epoch_boundary_optimization,
-        } = new_bank_options;
+        let NewBankOptions { vote_only_bank } = new_bank_options;
 
         parent.freeze();
         assert_ne!(slot, parent.slot());
@@ -1437,56 +1433,32 @@ impl Bank {
         // Following code may touch AccountsDb, requiring proper ancestors
         let parent_epoch = parent.epoch();
         if parent_epoch < new.epoch() {
+            let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+
             new.apply_feature_activations(false, false);
+
+            // Add new entry to stakes.stake_history, set appropriate epoch and
+            //   update vote accounts with warmed up stakes before saving a
+            //   snapshot of stakes in epoch stakes
+            new.stakes
+                .write()
+                .unwrap()
+                .activate_epoch(epoch, &thread_pool);
+
+            // Save a snapshot of stakes for use in consensus and stake weighted networking
+            let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
+            new.update_epoch_stakes(leader_schedule_epoch);
+
+            // After saving a snapshot of stakes, apply stake rewards and commission
+            new.update_rewards_with_thread_pool(parent_epoch, reward_calc_tracer, &thread_pool);
+        } else {
+            // Save a snapshot of stakes for use in consensus and stake weighted networking
+            let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
+            new.update_epoch_stakes(leader_schedule_epoch);
         }
 
-        let optimize_epoch_boundary_updates = !disable_epoch_boundary_optimization
-            && new
-                .feature_set
-                .is_active(&feature_set::optimize_epoch_boundary_updates::id());
-
-        if optimize_epoch_boundary_updates {
-            if parent_epoch < new.epoch() {
-                let thread_pool = ThreadPoolBuilder::new().build().unwrap();
-
-                // Add new entry to stakes.stake_history, set appropriate epoch and
-                //   update vote accounts with warmed up stakes before saving a
-                //   snapshot of stakes in epoch stakes
-                new.stakes
-                    .write()
-                    .unwrap()
-                    .activate_epoch(epoch, &thread_pool);
-
-                // Save a snapshot of stakes for use in consensus and stake weighted networking
-                let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
-                new.update_epoch_stakes(leader_schedule_epoch);
-
-                // After saving a snapshot of stakes, apply stake rewards and commission
-                new.update_rewards_with_thread_pool(parent_epoch, reward_calc_tracer, &thread_pool);
-            } else {
-                // Save a snapshot of stakes for use in consensus and stake weighted networking
-                let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
-                new.update_epoch_stakes(leader_schedule_epoch);
-            }
-
-            // Update sysvars before processing transactions
-            new.update_slot_hashes();
-            new.update_stake_history(Some(parent_epoch));
-            new.update_clock(Some(parent_epoch));
-            new.update_fees();
-            new.fill_sysvar_cache();
-
-            return new;
-        }
-
-        #[allow(deprecated)]
-        let cloned = new.stakes.read().unwrap().clone_with_epoch(epoch);
-        *new.stakes.write().unwrap() = cloned;
-
-        let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
-        new.update_epoch_stakes(leader_schedule_epoch);
+        // Update sysvars before processing transactions
         new.update_slot_hashes();
-        new.update_rewards(parent_epoch, reward_calc_tracer);
         new.update_stake_history(Some(parent_epoch));
         new.update_clock(Some(parent_epoch));
         new.update_fees();
@@ -2088,111 +2060,6 @@ impl Bank {
     }
 
     // update rewards based on the previous epoch
-    fn update_rewards(
-        &mut self,
-        prev_epoch: Epoch,
-        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
-    ) {
-        if prev_epoch == self.epoch() {
-            return;
-        }
-        let mut timing = Measure::start("epoch_rewards");
-        // if I'm the first Bank in an epoch, count, claim, disburse rewards from Inflation
-
-        let slot_in_year = self.slot_in_year_for_inflation();
-        let epoch_duration_in_years = self.epoch_duration_in_years(prev_epoch);
-
-        let (validator_rate, foundation_rate) = {
-            let inflation = self.inflation.read().unwrap();
-            (
-                (*inflation).validator(slot_in_year),
-                (*inflation).foundation(slot_in_year),
-            )
-        };
-
-        let capitalization = self.capitalization();
-        let validator_rewards =
-            (validator_rate * capitalization as f64 * epoch_duration_in_years) as u64;
-
-        let old_vote_balance_and_staked = self.stakes.read().unwrap().vote_balance_and_staked();
-
-        #[allow(deprecated)]
-        let validator_point_value = self.pay_validator_rewards(
-            prev_epoch,
-            validator_rewards,
-            reward_calc_tracer,
-            self.stake_program_advance_activating_credits_observed(),
-        );
-
-        if !self
-            .feature_set
-            .is_active(&feature_set::deprecate_rewards_sysvar::id())
-        {
-            // this sysvar can be retired once `pico_inflation` is enabled on all clusters
-            self.update_sysvar_account(&sysvar::rewards::id(), |account| {
-                create_account(
-                    &sysvar::rewards::Rewards::new(validator_point_value),
-                    self.inherit_specially_retained_account_fields(account),
-                )
-            });
-        }
-
-        let new_vote_balance_and_staked = self.stakes.read().unwrap().vote_balance_and_staked();
-        let validator_rewards_paid = new_vote_balance_and_staked - old_vote_balance_and_staked;
-        assert_eq!(
-            validator_rewards_paid,
-            u64::try_from(
-                self.rewards
-                    .read()
-                    .unwrap()
-                    .iter()
-                    .map(|(_address, reward_info)| {
-                        match reward_info.reward_type {
-                            RewardType::Voting | RewardType::Staking => reward_info.lamports,
-                            _ => 0,
-                        }
-                    })
-                    .sum::<i64>()
-            )
-            .unwrap()
-        );
-
-        // verify that we didn't pay any more than we expected to
-        assert!(validator_rewards >= validator_rewards_paid);
-
-        info!(
-            "distributed inflation: {} (rounded from: {})",
-            validator_rewards_paid, validator_rewards
-        );
-
-        self.capitalization
-            .fetch_add(validator_rewards_paid, Relaxed);
-
-        let active_stake = if let Some(stake_history_entry) =
-            self.stakes.read().unwrap().history().get(prev_epoch)
-        {
-            stake_history_entry.effective
-        } else {
-            0
-        };
-        timing.stop();
-
-        datapoint_warn!(
-            "epoch_rewards",
-            ("slot", self.slot, i64),
-            ("epoch", prev_epoch, i64),
-            ("validator_rate", validator_rate, f64),
-            ("foundation_rate", foundation_rate, f64),
-            ("epoch_duration_in_years", epoch_duration_in_years, f64),
-            ("validator_rewards", validator_rewards_paid, i64),
-            ("active_stake", active_stake, i64),
-            ("pre_capitalization", capitalization, i64),
-            ("post_capitalization", self.capitalization(), i64),
-            ("time_us", timing.as_us(), i64)
-        );
-    }
-
-    // update rewards based on the previous epoch
     fn update_rewards_with_thread_pool(
         &mut self,
         prev_epoch: Epoch,
@@ -2288,69 +2155,6 @@ impl Bank {
             ("pre_capitalization", capitalization, i64),
             ("post_capitalization", self.capitalization(), i64)
         );
-    }
-
-    /// map stake delegations into resolved (pubkey, account) pairs
-    ///  returns a map (has to be copied) of loaded
-    ///   ( Vec<(staker info)> (voter account) ) keyed by voter pubkey
-    ///
-    /// Filters out invalid pairs
-    #[deprecated(note = "remove after optimize_epoch_boundary_updates feature is active")]
-    fn stake_delegation_accounts(
-        &self,
-        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
-    ) -> HashMap<Pubkey, (Vec<(Pubkey, AccountSharedData)>, AccountSharedData)> {
-        let mut accounts = HashMap::new();
-
-        self.stakes
-            .read()
-            .unwrap()
-            .stake_delegations()
-            .iter()
-            .for_each(|(stake_pubkey, delegation)| {
-                match (
-                    self.get_account_with_fixed_root(stake_pubkey),
-                    self.get_account_with_fixed_root(&delegation.voter_pubkey),
-                ) {
-                    (Some(stake_account), Some(vote_account)) => {
-                        // call tracer to catch any illegal data if any
-                        if let Some(reward_calc_tracer) = reward_calc_tracer.as_ref() {
-                            reward_calc_tracer(&RewardCalculationEvent::Staking(
-                                stake_pubkey,
-                                &InflationPointCalculationEvent::Delegation(
-                                    *delegation,
-                                    *vote_account.owner(),
-                                ),
-                            ));
-                        }
-                        if self
-                            .feature_set
-                            .is_active(&feature_set::filter_stake_delegation_accounts::id())
-                            && (stake_account.owner() != &solana_stake_program::id()
-                                || vote_account.owner() != &solana_vote_program::id())
-                        {
-                            datapoint_warn!(
-                                "bank-stake_delegation_accounts-invalid-account",
-                                ("slot", self.slot() as i64, i64),
-                                ("stake-address", format!("{:?}", stake_pubkey), String),
-                                (
-                                    "vote-address",
-                                    format!("{:?}", delegation.voter_pubkey),
-                                    String
-                                ),
-                            );
-                            return;
-                        }
-                        let entry = accounts
-                            .entry(delegation.voter_pubkey)
-                            .or_insert((Vec::new(), vote_account));
-                        entry.0.push((*stake_pubkey, stake_account));
-                    }
-                    (_, _) => {}
-                }
-            });
-
-        accounts
     }
 
     /// map stake delegations into resolved (pubkey, account) pairs
@@ -2458,128 +2262,6 @@ impl Bank {
         });
 
         accounts
-    }
-
-    /// iterate over all stakes, redeem vote credits for each stake we can
-    ///   successfully load and parse, return the lamport value of one point
-    #[deprecated(note = "remove after optimize_epoch_boundary_updates feature is active")]
-    fn pay_validator_rewards(
-        &mut self,
-        rewarded_epoch: Epoch,
-        rewards: u64,
-        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
-        fix_activating_credits_observed: bool,
-    ) -> f64 {
-        let stake_history = self.stakes.read().unwrap().history().clone();
-
-        #[allow(deprecated)]
-        let mut stake_delegation_accounts =
-            self.stake_delegation_accounts(reward_calc_tracer.as_ref());
-
-        let points: u128 = stake_delegation_accounts
-            .iter()
-            .flat_map(|(_vote_pubkey, (stake_group, vote_account))| {
-                stake_group
-                    .iter()
-                    .map(move |(_stake_pubkey, stake_account)| (stake_account, vote_account))
-            })
-            .map(|(stake_account, vote_account)| {
-                #[allow(deprecated)]
-                stake_state::calculate_points_slow(
-                    stake_account,
-                    vote_account,
-                    Some(&stake_history),
-                )
-                .unwrap_or(0)
-            })
-            .sum();
-
-        if points == 0 {
-            return 0.0;
-        }
-
-        let point_value = PointValue { rewards, points };
-
-        let mut rewards = vec![];
-        // pay according to point value
-        for (vote_pubkey, (stake_group, vote_account)) in stake_delegation_accounts.iter_mut() {
-            let mut vote_account_changed = false;
-            let voters_account_pre_balance = vote_account.lamports();
-            let vote_state: VoteState = match StateMut::<VoteStateVersions>::state(vote_account) {
-                Ok(vote_state) => vote_state.convert_to_current(),
-                Err(err) => {
-                    debug!(
-                        "failed to deserialize vote account {}: {}",
-                        vote_pubkey, err
-                    );
-                    continue;
-                }
-            };
-            let commission = Some(vote_state.commission);
-
-            for (stake_pubkey, stake_account) in stake_group.iter_mut() {
-                // curry closure to add the contextual stake_pubkey
-                let reward_calc_tracer = reward_calc_tracer.as_ref().map(|outer| {
-                    let stake_pubkey = *stake_pubkey;
-                    // inner
-                    move |inner_event: &_| {
-                        outer(&RewardCalculationEvent::Staking(&stake_pubkey, inner_event))
-                    }
-                });
-                #[allow(deprecated)]
-                let redeemed = stake_state::redeem_rewards_slow(
-                    rewarded_epoch,
-                    stake_account,
-                    vote_account,
-                    &vote_state,
-                    &point_value,
-                    Some(&stake_history),
-                    reward_calc_tracer,
-                    fix_activating_credits_observed,
-                );
-                if let Ok((stakers_reward, _voters_reward)) = redeemed {
-                    self.store_account(stake_pubkey, stake_account);
-                    vote_account_changed = true;
-
-                    if stakers_reward > 0 {
-                        rewards.push((
-                            *stake_pubkey,
-                            RewardInfo {
-                                reward_type: RewardType::Staking,
-                                lamports: stakers_reward as i64,
-                                post_balance: stake_account.lamports(),
-                                commission,
-                            },
-                        ));
-                    }
-                } else {
-                    debug!(
-                        "stake_state::redeem_rewards() failed for {}: {:?}",
-                        stake_pubkey, redeemed
-                    );
-                }
-            }
-
-            if vote_account_changed {
-                let post_balance = vote_account.lamports();
-                let lamports = (post_balance - voters_account_pre_balance) as i64;
-                if lamports != 0 {
-                    rewards.push((
-                        *vote_pubkey,
-                        RewardInfo {
-                            reward_type: RewardType::Voting,
-                            lamports,
-                            post_balance,
-                            commission,
-                        },
-                    ));
-                }
-                self.store_account(vote_pubkey, vote_account);
-            }
-        }
-        self.rewards.write().unwrap().append(&mut rewards);
-
-        point_value.rewards as f64 / point_value.points as f64
     }
 
     /// iterate over all stakes, redeem vote credits for each stake we can

@@ -134,7 +134,6 @@ pub struct ReplayStageConfig {
     pub wait_for_vote_to_start_leader: bool,
     pub ancestor_hashes_replay_update_sender: AncestorHashesReplayUpdateSender,
     pub tower_storage: Arc<dyn TowerStorage>,
-    pub disable_epoch_boundary_optimization: bool,
 }
 
 #[derive(Default)]
@@ -345,7 +344,6 @@ impl ReplayStage {
             wait_for_vote_to_start_leader,
             ancestor_hashes_replay_update_sender,
             tower_storage,
-            disable_epoch_boundary_optimization,
         } = config;
 
         trace!("replay stage");
@@ -775,7 +773,6 @@ impl ReplayStage {
                             &retransmit_slots_sender,
                             &mut skipped_slots_info,
                             has_new_vote_been_rooted,
-                            disable_epoch_boundary_optimization,
                         );
 
                         let poh_bank = poh_recorder.lock().unwrap().bank();
@@ -1359,7 +1356,6 @@ impl ReplayStage {
         retransmit_slots_sender: &RetransmitSlotsSender,
         skipped_slots_info: &mut SkippedSlotsInfo,
         has_new_vote_been_rooted: bool,
-        disable_epoch_boundary_optimization: bool,
     ) {
         // all the individual calls to poh_recorder.lock() are designed to
         // increase granularity, decrease contention
@@ -1477,10 +1473,7 @@ impl ReplayStage {
                 root_slot,
                 my_pubkey,
                 rpc_subscriptions,
-                NewBankOptions {
-                    vote_only_bank,
-                    disable_epoch_boundary_optimization,
-                },
+                NewBankOptions { vote_only_bank },
             );
 
             let tpu_bank = bank_forks.write().unwrap().insert(tpu_bank);

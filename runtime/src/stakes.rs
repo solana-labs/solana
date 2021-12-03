@@ -47,46 +47,6 @@ impl Stakes {
         &self.stake_history
     }
 
-    #[deprecated(note = "remove after optimize_epoch_boundary_updates feature is active")]
-    pub fn clone_with_epoch(&self, next_epoch: Epoch) -> Self {
-        let prev_epoch = self.epoch;
-        if prev_epoch == next_epoch {
-            self.clone()
-        } else {
-            // wrap up the prev epoch by adding new stake history entry for the prev epoch
-            let mut stake_history_upto_prev_epoch = self.stake_history.clone();
-            stake_history_upto_prev_epoch.add(
-                prev_epoch,
-                stake_state::new_stake_history_entry(
-                    prev_epoch,
-                    self.stake_delegations
-                        .iter()
-                        .map(|(_pubkey, stake_delegation)| stake_delegation),
-                    Some(&self.stake_history),
-                ),
-            );
-
-            // refresh the stake distribution of vote accounts for the next epoch, using new stake history
-            let vote_accounts_for_next_epoch = self
-                .vote_accounts
-                .iter()
-                .map(|(pubkey, (_ /*stake*/, account))| {
-                    let stake =
-                        self.calculate_stake(pubkey, next_epoch, &stake_history_upto_prev_epoch);
-                    (*pubkey, (stake, account.clone()))
-                })
-                .collect();
-
-            Stakes {
-                stake_delegations: self.stake_delegations.clone(),
-                unused: self.unused,
-                epoch: next_epoch,
-                stake_history: stake_history_upto_prev_epoch,
-                vote_accounts: vote_accounts_for_next_epoch,
-            }
-        }
-    }
-
     pub fn activate_epoch(&mut self, next_epoch: Epoch, thread_pool: &ThreadPool) {
         let prev_epoch = self.epoch;
         self.epoch = next_epoch;
@@ -580,35 +540,6 @@ pub mod tests {
             let vote_accounts = stakes.vote_accounts();
             assert!(vote_accounts.get(&vote_pubkey).is_some());
             assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 20);
-        }
-    }
-
-    #[test]
-    fn test_clone_with_epoch() {
-        let mut stakes = Stakes::default();
-
-        let ((vote_pubkey, vote_account), (stake_pubkey, stake_account)) =
-            create_staked_node_accounts(10);
-
-        stakes.store(&vote_pubkey, &vote_account, true);
-        stakes.store(&stake_pubkey, &stake_account, true);
-        let stake = stake_state::stake_from(&stake_account).unwrap();
-
-        {
-            let vote_accounts = stakes.vote_accounts();
-            assert_eq!(
-                vote_accounts.get(&vote_pubkey).unwrap().0,
-                stake.stake(stakes.epoch, Some(&stakes.stake_history))
-            );
-        }
-        #[allow(deprecated)]
-        let stakes = stakes.clone_with_epoch(3);
-        {
-            let vote_accounts = stakes.vote_accounts();
-            assert_eq!(
-                vote_accounts.get(&vote_pubkey).unwrap().0,
-                stake.stake(stakes.epoch, Some(&stakes.stake_history))
-            );
         }
     }
 
