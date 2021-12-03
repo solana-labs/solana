@@ -9,7 +9,8 @@ use solana_sdk::{
     compute_budget::ComputeBudget,
     feature_set::{
         demote_program_write_locks, do_support_realloc, neon_evm_compute_budget,
-        remove_native_loader, requestable_heap_size, tx_wide_compute_cap, FeatureSet,
+        reject_empty_instruction_without_program, remove_native_loader, requestable_heap_size,
+        tx_wide_compute_cap, FeatureSet,
     },
     hash::Hash,
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
@@ -218,6 +219,13 @@ impl<'a> InvokeContext<'a> {
         let program_id = program_indices
             .last()
             .map(|index_of_program_id| &self.accounts[*index_of_program_id].0);
+        if program_id.is_none()
+            && self
+                .feature_set
+                .is_active(&reject_empty_instruction_without_program::id())
+        {
+            return Err(InstructionError::UnsupportedProgramId);
+        }
         if self.invoke_stack.is_empty() {
             let mut compute_budget = self.compute_budget;
             if !self.feature_set.is_active(&tx_wide_compute_cap::id())
