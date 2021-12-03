@@ -208,6 +208,7 @@ fn test_vote_authorize_and_withdraw() {
         withdraw_authority: 1,
         destination_account_pubkey: destination_account,
         memo: None,
+        fee_payer: 0,
     };
     process_command(&config).unwrap();
     check_recent_balance(0, &rpc_client, &vote_account_pubkey);

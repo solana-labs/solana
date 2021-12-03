@@ -329,6 +329,7 @@ pub enum CliCommand {
         destination_account_pubkey: Pubkey,
         withdraw_authority: SignerIndex,
         memo: Option<String>,
+        fee_payer: SignerIndex,
     },
     VoteAuthorize {
         vote_account_pubkey: Pubkey,
@@ -1481,6 +1482,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             withdraw_authority,
             destination_account_pubkey,
             memo,
+            fee_payer,
         } => process_close_vote_account(
             &rpc_client,
             config,
@@ -1488,6 +1490,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *withdraw_authority,
             destination_account_pubkey,
             memo.as_ref(),
+            *fee_payer,
         ),
         CliCommand::VoteAuthorize {
             vote_account_pubkey,
