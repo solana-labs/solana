@@ -38,8 +38,9 @@ use solana_sdk::{
     entrypoint::{HEAP_LENGTH, SUCCESS},
     feature_set::{
         do_support_realloc, reduce_required_deploy_balance,
-        reject_deployment_of_unresolved_syscalls, requestable_heap_size,
-        stop_verify_mul64_imm_nonzero,
+        reject_deployment_of_unresolved_syscalls,
+        reject_section_virtual_address_file_offset_mismatch, requestable_heap_size,
+        start_verify_shift32_imm, stop_verify_mul64_imm_nonzero,
     },
     instruction::{AccountMeta, InstructionError},
     keyed_account::{from_keyed_account, keyed_account_at_index, KeyedAccount},
@@ -79,7 +80,7 @@ pub fn create_executor(
     programdata_offset: usize,
     invoke_context: &mut InvokeContext,
     use_jit: bool,
-    reject_unresolved_syscalls: bool,
+    reject_deployment_of_broken_elfs: bool,
 ) -> Result<Arc<BpfExecutor>, InstructionError> {
     let syscall_registry = syscalls::register_syscalls(invoke_context).map_err(|e| {
         ic_msg!(invoke_context, "Failed to register syscalls: {}", e);
@@ -90,13 +91,20 @@ pub fn create_executor(
         max_call_depth: compute_budget.max_call_depth,
         stack_frame_size: compute_budget.stack_frame_size,
         enable_instruction_tracing: log_enabled!(Trace),
-        reject_unresolved_syscalls: reject_unresolved_syscalls
+        reject_unresolved_syscalls: reject_deployment_of_broken_elfs
             && invoke_context
                 .feature_set
                 .is_active(&reject_deployment_of_unresolved_syscalls::id()),
+        reject_section_virtual_address_file_offset_mismatch: reject_deployment_of_broken_elfs
+            && invoke_context
+                .feature_set
+                .is_active(&reject_section_virtual_address_file_offset_mismatch::id()),
         verify_mul64_imm_nonzero: !invoke_context
             .feature_set
-            .is_active(&stop_verify_mul64_imm_nonzero::id()), // TODO: Feature gate and then remove me
+            .is_active(&stop_verify_mul64_imm_nonzero::id()),
+        verify_shift32_imm: invoke_context
+            .feature_set
+            .is_active(&start_verify_shift32_imm::id()),
         ..Config::default()
     };
     let mut executable = {
