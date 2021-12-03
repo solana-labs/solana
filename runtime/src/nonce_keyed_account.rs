@@ -16,27 +16,27 @@ pub trait NonceKeyedAccount {
     fn advance_nonce_account(
         &self,
         signers: &HashSet<Pubkey>,
-        invoke_context: &InvokeContext,
+        invoke_context: &InvokeContext<'_>,
     ) -> Result<(), InstructionError>;
     fn withdraw_nonce_account(
         &self,
         lamports: u64,
-        to: &KeyedAccount,
+        to: &KeyedAccount<'_>,
         rent: &Rent,
         signers: &HashSet<Pubkey>,
-        invoke_context: &InvokeContext,
+        invoke_context: &InvokeContext<'_>,
     ) -> Result<(), InstructionError>;
     fn initialize_nonce_account(
         &self,
         nonce_authority: &Pubkey,
         rent: &Rent,
-        invoke_context: &InvokeContext,
+        invoke_context: &InvokeContext<'_>,
     ) -> Result<(), InstructionError>;
     fn authorize_nonce_account(
         &self,
         nonce_authority: &Pubkey,
         signers: &HashSet<Pubkey>,
-        invoke_context: &InvokeContext,
+        invoke_context: &InvokeContext<'_>,
     ) -> Result<(), InstructionError>;
 }
 
@@ -44,7 +44,7 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
     fn advance_nonce_account(
         &self,
         signers: &HashSet<Pubkey>,
-        invoke_context: &InvokeContext,
+        invoke_context: &InvokeContext<'_>,
     ) -> Result<(), InstructionError> {
         let merge_nonce_error_into_system_error = invoke_context
             .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
@@ -105,10 +105,10 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
     fn withdraw_nonce_account(
         &self,
         lamports: u64,
-        to: &KeyedAccount,
+        to: &KeyedAccount<'_>,
         rent: &Rent,
         signers: &HashSet<Pubkey>,
-        invoke_context: &InvokeContext,
+        invoke_context: &InvokeContext<'_>,
     ) -> Result<(), InstructionError> {
         let merge_nonce_error_into_system_error = invoke_context
             .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
@@ -194,7 +194,7 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
         &self,
         nonce_authority: &Pubkey,
         rent: &Rent,
-        invoke_context: &InvokeContext,
+        invoke_context: &InvokeContext<'_>,
     ) -> Result<(), InstructionError> {
         let merge_nonce_error_into_system_error = invoke_context
             .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
@@ -245,7 +245,7 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
         &self,
         nonce_authority: &Pubkey,
         signers: &HashSet<Pubkey>,
-        invoke_context: &InvokeContext,
+        invoke_context: &InvokeContext<'_>,
     ) -> Result<(), InstructionError> {
         let merge_nonce_error_into_system_error = invoke_context
             .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
@@ -307,7 +307,7 @@ mod test {
 
     fn with_test_keyed_account<F>(lamports: u64, signer: bool, f: F)
     where
-        F: Fn(&KeyedAccount),
+        F: Fn(&KeyedAccount<'_>),
     {
         let pubkey = Pubkey::new_unique();
         let account = create_account(lamports);

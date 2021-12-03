@@ -239,7 +239,7 @@ pub fn parse_get_validator_info_command(
 
 pub fn process_set_validator_info(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     validator_info: &Value,
     force_keybase: bool,
     info_pubkey: Option<Pubkey>,
@@ -366,7 +366,7 @@ pub fn process_set_validator_info(
 
 pub fn process_get_validator_info(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     pubkey: Option<Pubkey>,
 ) -> ProcessResult {
     let validator_info: Vec<(Pubkey, Account)> = if let Some(validator_info_pubkey) = pubkey {

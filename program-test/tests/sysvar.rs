@@ -10,7 +10,7 @@ use {
 // Process instruction to invoke into another program
 fn sysvar_getter_process_instruction(
     _program_id: &Pubkey,
-    _accounts: &[AccountInfo],
+    _accounts: &[AccountInfo<'_>],
     _input: &[u8],
 ) -> ProgramResult {
     msg!("sysvar_getter");

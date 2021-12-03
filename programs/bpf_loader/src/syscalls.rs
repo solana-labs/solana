@@ -115,7 +115,7 @@ impl SyscallConsume for Rc<RefCell<ComputeMeter>> {
 use crate::allocator_bump::BpfAllocator;
 
 pub fn register_syscalls(
-    invoke_context: &mut InvokeContext,
+    invoke_context: &mut InvokeContext<'_>,
 ) -> Result<SyscallRegistry, EbpfError<BpfError>> {
     let mut syscall_registry = SyscallRegistry::default();
 
@@ -409,7 +409,7 @@ pub fn bind_syscall_context_objects<'a, 'b>(
 }
 
 fn translate(
-    memory_mapping: &MemoryMapping,
+    memory_mapping: &MemoryMapping<'_>,
     access_type: AccessType,
     vm_addr: u64,
     len: u64,
@@ -418,7 +418,7 @@ fn translate(
 }
 
 fn translate_type_inner<'a, T>(
-    memory_mapping: &MemoryMapping,
+    memory_mapping: &MemoryMapping<'_>,
     access_type: AccessType,
     vm_addr: u64,
     loader_id: &Pubkey,
@@ -433,14 +433,14 @@ fn translate_type_inner<'a, T>(
     Ok(unsafe { &mut *(host_addr as *mut T) })
 }
 fn translate_type_mut<'a, T>(
-    memory_mapping: &MemoryMapping,
+    memory_mapping: &MemoryMapping<'_>,
     vm_addr: u64,
     loader_id: &Pubkey,
 ) -> Result<&'a mut T, EbpfError<BpfError>> {
     translate_type_inner::<T>(memory_mapping, AccessType::Store, vm_addr, loader_id)
 }
 fn translate_type<'a, T>(
-    memory_mapping: &MemoryMapping,
+    memory_mapping: &MemoryMapping<'_>,
     vm_addr: u64,
     loader_id: &Pubkey,
 ) -> Result<&'a T, EbpfError<BpfError>> {
@@ -449,7 +449,7 @@ fn translate_type<'a, T>(
 }
 
 fn translate_slice_inner<'a, T>(
-    memory_mapping: &MemoryMapping,
+    memory_mapping: &MemoryMapping<'_>,
     access_type: AccessType,
     vm_addr: u64,
     len: u64,
@@ -474,7 +474,7 @@ fn translate_slice_inner<'a, T>(
     Ok(unsafe { from_raw_parts_mut(host_addr as *mut T, len as usize) })
 }
 fn translate_slice_mut<'a, T>(
-    memory_mapping: &MemoryMapping,
+    memory_mapping: &MemoryMapping<'_>,
     vm_addr: u64,
     len: u64,
     loader_id: &Pubkey,
@@ -482,7 +482,7 @@ fn translate_slice_mut<'a, T>(
     translate_slice_inner::<T>(memory_mapping, AccessType::Store, vm_addr, len, loader_id)
 }
 fn translate_slice<'a, T>(
-    memory_mapping: &MemoryMapping,
+    memory_mapping: &MemoryMapping<'_>,
     vm_addr: u64,
     len: u64,
     loader_id: &Pubkey,
@@ -494,7 +494,7 @@ fn translate_slice<'a, T>(
 /// Take a virtual pointer to a string (points to BPF VM memory space), translate it
 /// pass it to a user-defined work function
 fn translate_string_and_do(
-    memory_mapping: &MemoryMapping,
+    memory_mapping: &MemoryMapping<'_>,
     addr: u64,
     len: u64,
     loader_id: &Pubkey,
@@ -524,7 +524,7 @@ impl SyscallObject<BpfError> for SyscallAbort {
         _arg3: u64,
         _arg4: u64,
         _arg5: u64,
-        _memory_mapping: &MemoryMapping,
+        _memory_mapping: &MemoryMapping<'_>,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         *result = Err(SyscallError::Abort.into());
@@ -545,7 +545,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallPanic<'a, 'b> {
         line: u64,
         column: u64,
         _arg5: u64,
-        memory_mapping: &MemoryMapping,
+        memory_mapping: &MemoryMapping<'_>,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         let invoke_context = question_mark!(
@@ -584,7 +584,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallLog<'a, 'b> {
         _arg3: u64,
         _arg4: u64,
         _arg5: u64,
-        memory_mapping: &MemoryMapping,
+        memory_mapping: &MemoryMapping<'_>,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         let invoke_context = question_mark!(
@@ -630,7 +630,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallLogU64<'a, 'b> {
         arg3: u64,
         arg4: u64,
         arg5: u64,
-        _memory_mapping: &MemoryMapping,
+        _memory_mapping: &MemoryMapping<'_>,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         let invoke_context = question_mark!(
@@ -665,7 +665,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallLogBpfComputeUnits<'a, 'b> {
         _arg3: u64,
         _arg4: u64,
         _arg5: u64,
-        _memory_mapping: &MemoryMapping,
+        _memory_mapping: &MemoryMapping<'_>,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         let invoke_context = question_mark!(
@@ -697,7 +697,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallLogPubkey<'a, 'b> {
         _arg3: u64,
         _arg4: u64,
         _arg5: u64,
-        memory_mapping: &MemoryMapping,
+        memory_mapping: &MemoryMapping<'_>,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         let invoke_context = question_mark!(
@@ -742,7 +742,7 @@ impl SyscallObject<BpfError> for SyscallAllocFree {
         _arg3: u64,
         _arg4: u64,
         _arg5: u64,
-        _memory_mapping: &MemoryMapping,
+        _memory_mapping: &MemoryMapping<'_>,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         let align = if self.aligned {
@@ -773,7 +773,7 @@ fn translate_and_check_program_address_inputs<'a>(
     seeds_addr: u64,
     seeds_len: u64,
     program_id_addr: u64,
-    memory_mapping: &MemoryMapping,
+    memory_mapping: &MemoryMapping<'_>,
     loader_id: &Pubkey,
 ) -> Result<(Vec<&'a [u8]>, &'a Pubkey), EbpfError<BpfError>> {
     let untranslated_seeds =
@@ -811,7 +811,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallCreateProgramAddress<'a, 'b> {
         program_id_addr: u64,
         address_addr: u64,
         _arg5: u64,
-        memory_mapping: &MemoryMapping,
+        memory_mapping: &MemoryMapping<'_>,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         let invoke_context = question_mark!(
@@ -870,7 +870,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallTryFindProgramAddress<'a, 'b> {
         program_id_addr: u64,
         address_addr: u64,
         bump_seed_addr: u64,
-        memory_mapping: &MemoryMapping,
+        memory_mapping: &MemoryMapping<'_>,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         let invoke_context = question_mark!(
@@ -943,7 +943,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSha256<'a, 'b> {
         result_addr: u64,
         _arg4: u64,
         _arg5: u64,
-        memory_mapping: &MemoryMapping,
+        memory_mapping: &MemoryMapping<'_>,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         let invoke_context = question_mark!(
@@ -1003,8 +1003,8 @@ fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId>(
     id: &Pubkey,
     var_addr: u64,
     loader_id: &Pubkey,
-    memory_mapping: &MemoryMapping,
-    invoke_context: Rc<RefCell<&mut InvokeContext>>,
+    memory_mapping: &MemoryMapping<'_>,
+    invoke_context: Rc<RefCell<&mut InvokeContext<'_>>>,
 ) -> Result<u64, EbpfError<BpfError>> {
     let invoke_context = invoke_context
         .try_borrow()
@@ -1033,7 +1033,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetClockSysvar<'a, 'b> {
         _arg3: u64,
         _arg4: u64,
         _arg5: u64,
-        memory_mapping: &MemoryMapping,
+        memory_mapping: &MemoryMapping<'_>,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         let invoke_context = question_mark!(
@@ -1069,7 +1069,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetEpochScheduleSysvar<'a, 'b> {
         _arg3: u64,
         _arg4: u64,
         _arg5: u64,
-        memory_mapping: &MemoryMapping,
+        memory_mapping: &MemoryMapping<'_>,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         let invoke_context = question_mark!(
@@ -1106,7 +1106,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetFeesSysvar<'a, 'b> {
         _arg3: u64,
         _arg4: u64,
         _arg5: u64,
-        memory_mapping: &MemoryMapping,
+        memory_mapping: &MemoryMapping<'_>,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         let invoke_context = question_mark!(
@@ -1142,7 +1142,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetRentSysvar<'a, 'b> {
         _arg3: u64,
         _arg4: u64,
         _arg5: u64,
-        memory_mapping: &MemoryMapping,
+        memory_mapping: &MemoryMapping<'_>,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         let invoke_context = question_mark!(
@@ -1179,7 +1179,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallKeccak256<'a, 'b> {
         result_addr: u64,
         _arg4: u64,
         _arg5: u64,
-        memory_mapping: &MemoryMapping,
+        memory_mapping: &MemoryMapping<'_>,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         let invoke_context = question_mark!(
@@ -1257,7 +1257,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcpy<'a, 'b> {
         n: u64,
         _arg4: u64,
         _arg5: u64,
-        memory_mapping: &MemoryMapping,
+        memory_mapping: &MemoryMapping<'_>,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         if check_overlapping(src_addr, dst_addr, n) {
@@ -1306,7 +1306,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemmove<'a, 'b> {
         n: u64,
         _arg4: u64,
         _arg5: u64,
-        memory_mapping: &MemoryMapping,
+        memory_mapping: &MemoryMapping<'_>,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         let invoke_context = question_mark!(
@@ -1350,7 +1350,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcmp<'a, 'b> {
         n: u64,
         cmp_result_addr: u64,
         _arg5: u64,
-        memory_mapping: &MemoryMapping,
+        memory_mapping: &MemoryMapping<'_>,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         let invoke_context = question_mark!(
@@ -1407,7 +1407,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemset<'a, 'b> {
         n: u64,
         _arg4: u64,
         _arg5: u64,
-        memory_mapping: &MemoryMapping,
+        memory_mapping: &MemoryMapping<'_>,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         let invoke_context = question_mark!(
@@ -1449,7 +1449,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSecp256k1Recover<'a, 'b> {
         signature_addr: u64,
         result_addr: u64,
         _arg5: u64,
-        memory_mapping: &MemoryMapping,
+        memory_mapping: &MemoryMapping<'_>,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         let invoke_context = question_mark!(
@@ -1549,7 +1549,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallBlake3<'a, 'b> {
         result_addr: u64,
         _arg4: u64,
         _arg5: u64,
-        memory_mapping: &MemoryMapping,
+        memory_mapping: &MemoryMapping<'_>,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         let invoke_context = question_mark!(
@@ -1630,13 +1630,14 @@ type TranslatedAccounts<'a> = (
 
 /// Implemented by language specific data structure translators
 trait SyscallInvokeSigned<'a, 'b> {
-    fn get_context_mut(&self) -> Result<RefMut<&'a mut InvokeContext<'b>>, EbpfError<BpfError>>;
+    fn get_context_mut(&self)
+        -> Result<RefMut<'_, &'a mut InvokeContext<'b>>, EbpfError<BpfError>>;
     fn translate_instruction(
         &self,
         loader_id: &Pubkey,
         addr: u64,
-        memory_mapping: &MemoryMapping,
-        invoke_context: &mut InvokeContext,
+        memory_mapping: &MemoryMapping<'_>,
+        invoke_context: &mut InvokeContext<'_>,
     ) -> Result<Instruction, EbpfError<BpfError>>;
     fn translate_accounts<'c>(
         &'c self,
@@ -1644,8 +1645,8 @@ trait SyscallInvokeSigned<'a, 'b> {
         message: &Message,
         account_infos_addr: u64,
         account_infos_len: u64,
-        memory_mapping: &MemoryMapping,
-        invoke_context: &mut InvokeContext,
+        memory_mapping: &MemoryMapping<'_>,
+        invoke_context: &mut InvokeContext<'_>,
     ) -> Result<TranslatedAccounts<'c>, EbpfError<BpfError>>;
     fn translate_signers(
         &self,
@@ -1653,7 +1654,7 @@ trait SyscallInvokeSigned<'a, 'b> {
         program_id: &Pubkey,
         signers_seeds_addr: u64,
         signers_seeds_len: u64,
-        memory_mapping: &MemoryMapping,
+        memory_mapping: &MemoryMapping<'_>,
     ) -> Result<Vec<Pubkey>, EbpfError<BpfError>>;
 }
 
@@ -1663,7 +1664,9 @@ pub struct SyscallInvokeSignedRust<'a, 'b> {
     orig_data_lens: &'a [usize],
 }
 impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
-    fn get_context_mut(&self) -> Result<RefMut<&'a mut InvokeContext<'b>>, EbpfError<BpfError>> {
+    fn get_context_mut(
+        &self,
+    ) -> Result<RefMut<'_, &'a mut InvokeContext<'b>>, EbpfError<BpfError>> {
         self.invoke_context
             .try_borrow_mut()
             .map_err(|_| SyscallError::InvokeContextBorrowFailed.into())
@@ -1673,8 +1676,8 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
         &self,
         loader_id: &Pubkey,
         addr: u64,
-        memory_mapping: &MemoryMapping,
-        invoke_context: &mut InvokeContext,
+        memory_mapping: &MemoryMapping<'_>,
+        invoke_context: &mut InvokeContext<'_>,
     ) -> Result<Instruction, EbpfError<BpfError>> {
         let ix = translate_type::<Instruction>(memory_mapping, addr, loader_id)?;
 
@@ -1707,10 +1710,10 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
         message: &Message,
         account_infos_addr: u64,
         account_infos_len: u64,
-        memory_mapping: &MemoryMapping,
-        invoke_context: &mut InvokeContext,
+        memory_mapping: &MemoryMapping<'_>,
+        invoke_context: &mut InvokeContext<'_>,
     ) -> Result<TranslatedAccounts<'c>, EbpfError<BpfError>> {
-        let account_infos = translate_slice::<AccountInfo>(
+        let account_infos = translate_slice::<AccountInfo<'_>>(
             memory_mapping,
             account_infos_addr,
             account_infos_len,
@@ -1728,7 +1731,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
             })
             .collect::<Result<Vec<_>, EbpfError<BpfError>>>()?;
 
-        let translate = |account_info: &AccountInfo, invoke_context: &InvokeContext| {
+        let translate = |account_info: &AccountInfo<'_>, invoke_context: &InvokeContext<'_>| {
             // Translate the account from user space
 
             let lamports = {
@@ -1814,7 +1817,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
         program_id: &Pubkey,
         signers_seeds_addr: u64,
         signers_seeds_len: u64,
-        memory_mapping: &MemoryMapping,
+        memory_mapping: &MemoryMapping<'_>,
     ) -> Result<Vec<Pubkey>, EbpfError<BpfError>> {
         let mut signers = Vec::new();
         if signers_seeds_len > 0 {
@@ -1869,7 +1872,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallInvokeSignedRust<'a, 'b> {
         account_infos_len: u64,
         signers_seeds_addr: u64,
         signers_seeds_len: u64,
-        memory_mapping: &MemoryMapping,
+        memory_mapping: &MemoryMapping<'_>,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         *result = call(
@@ -1940,7 +1943,9 @@ pub struct SyscallInvokeSignedC<'a, 'b> {
     orig_data_lens: &'a [usize],
 }
 impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
-    fn get_context_mut(&self) -> Result<RefMut<&'a mut InvokeContext<'b>>, EbpfError<BpfError>> {
+    fn get_context_mut(
+        &self,
+    ) -> Result<RefMut<'_, &'a mut InvokeContext<'b>>, EbpfError<BpfError>> {
         self.invoke_context
             .try_borrow_mut()
             .map_err(|_| SyscallError::InvokeContextBorrowFailed.into())
@@ -1950,8 +1955,8 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
         &self,
         loader_id: &Pubkey,
         addr: u64,
-        memory_mapping: &MemoryMapping,
-        invoke_context: &mut InvokeContext,
+        memory_mapping: &MemoryMapping<'_>,
+        invoke_context: &mut InvokeContext<'_>,
     ) -> Result<Instruction, EbpfError<BpfError>> {
         let ix_c = translate_type::<SolInstruction>(memory_mapping, addr, loader_id)?;
 
@@ -1996,8 +2001,8 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
         message: &Message,
         account_infos_addr: u64,
         account_infos_len: u64,
-        memory_mapping: &MemoryMapping,
-        invoke_context: &mut InvokeContext,
+        memory_mapping: &MemoryMapping<'_>,
+        invoke_context: &mut InvokeContext<'_>,
     ) -> Result<TranslatedAccounts<'c>, EbpfError<BpfError>> {
         let account_infos = translate_slice::<SolAccountInfo>(
             memory_mapping,
@@ -2013,7 +2018,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
             })
             .collect::<Result<Vec<_>, EbpfError<BpfError>>>()?;
 
-        let translate = |account_info: &SolAccountInfo, invoke_context: &InvokeContext| {
+        let translate = |account_info: &SolAccountInfo, invoke_context: &InvokeContext<'_>| {
             // Translate the account from user space
 
             let lamports =
@@ -2081,7 +2086,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
         program_id: &Pubkey,
         signers_seeds_addr: u64,
         signers_seeds_len: u64,
-        memory_mapping: &MemoryMapping,
+        memory_mapping: &MemoryMapping<'_>,
     ) -> Result<Vec<Pubkey>, EbpfError<BpfError>> {
         if signers_seeds_len > 0 {
             let signers_seeds = translate_slice::<SolSignerSeedC>(
@@ -2131,7 +2136,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallInvokeSignedC<'a, 'b> {
         account_infos_len: u64,
         signers_seeds_addr: u64,
         signers_seeds_len: u64,
-        memory_mapping: &MemoryMapping,
+        memory_mapping: &MemoryMapping<'_>,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         *result = call(
@@ -2150,12 +2155,12 @@ fn get_translated_accounts<'a, T, F>(
     message: &Message,
     account_info_keys: &[&Pubkey],
     account_infos: &[T],
-    invoke_context: &mut InvokeContext,
+    invoke_context: &mut InvokeContext<'_>,
     orig_data_lens: &[usize],
     do_translate: F,
 ) -> Result<TranslatedAccounts<'a>, EbpfError<BpfError>>
 where
-    F: Fn(&T, &InvokeContext) -> Result<CallerAccount<'a>, EbpfError<BpfError>>,
+    F: Fn(&T, &InvokeContext<'_>) -> Result<CallerAccount<'a>, EbpfError<BpfError>>,
 {
     let demote_program_write_locks =
         invoke_context.is_feature_active(&demote_program_write_locks::id());
@@ -2238,7 +2243,7 @@ where
 fn check_instruction_size(
     num_accounts: usize,
     data_len: usize,
-    invoke_context: &mut InvokeContext,
+    invoke_context: &mut InvokeContext<'_>,
 ) -> Result<(), EbpfError<BpfError>> {
     let size = num_accounts
         .saturating_mul(size_of::<AccountMeta>())
@@ -2252,7 +2257,7 @@ fn check_instruction_size(
 
 fn check_account_infos(
     len: usize,
-    invoke_context: &mut InvokeContext,
+    invoke_context: &mut InvokeContext<'_>,
 ) -> Result<(), EbpfError<BpfError>> {
     if len * size_of::<Pubkey>() > invoke_context.get_compute_budget().max_cpi_instruction_size {
         // Cap the number of account_infos a caller can pass to approximate
@@ -2265,7 +2270,7 @@ fn check_account_infos(
 fn check_authorized_program(
     program_id: &Pubkey,
     instruction_data: &[u8],
-    invoke_context: &InvokeContext,
+    invoke_context: &InvokeContext<'_>,
 ) -> Result<(), EbpfError<BpfError>> {
     #[allow(clippy::blocks_in_if_conditions)]
     if native_loader::check_id(program_id)
@@ -2293,7 +2298,7 @@ fn call<'a, 'b: 'a>(
     account_infos_len: u64,
     signers_seeds_addr: u64,
     signers_seeds_len: u64,
-    memory_mapping: &MemoryMapping,
+    memory_mapping: &MemoryMapping<'_>,
 ) -> Result<u64, EbpfError<BpfError>> {
     let mut invoke_context = syscall.get_context_mut()?;
     invoke_context
@@ -2414,7 +2419,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSetReturnData<'a, 'b> {
         _arg3: u64,
         _arg4: u64,
         _arg5: u64,
-        memory_mapping: &MemoryMapping,
+        memory_mapping: &MemoryMapping<'_>,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         let mut invoke_context = question_mark!(
@@ -2475,7 +2480,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetReturnData<'a, 'b> {
         program_id_addr: u64,
         _arg4: u64,
         _arg5: u64,
-        memory_mapping: &MemoryMapping,
+        memory_mapping: &MemoryMapping<'_>,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         let invoke_context = question_mark!(
@@ -2542,7 +2547,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallLogData<'a, 'b> {
         _arg3: u64,
         _arg4: u64,
         _arg5: u64,
-        memory_mapping: &MemoryMapping,
+        memory_mapping: &MemoryMapping<'_>,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         let invoke_context = question_mark!(
@@ -3792,7 +3797,7 @@ mod tests {
     }
 
     fn create_program_address(
-        invoke_context: &mut InvokeContext,
+        invoke_context: &mut InvokeContext<'_>,
         seeds: &[&[u8]],
         address: &Pubkey,
     ) -> Result<Pubkey, EbpfError<BpfError>> {
@@ -3804,7 +3809,7 @@ mod tests {
     }
 
     fn try_find_program_address(
-        invoke_context: &mut InvokeContext,
+        invoke_context: &mut InvokeContext<'_>,
         seeds: &[&[u8]],
         address: &Pubkey,
     ) -> Result<(Pubkey, u8), EbpfError<BpfError>> {

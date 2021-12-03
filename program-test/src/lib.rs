@@ -86,7 +86,7 @@ pub enum ProgramTestError {
 thread_local! {
     static INVOKE_CONTEXT: RefCell<Option<usize>> = RefCell::new(None);
 }
-fn set_invoke_context(new: &mut InvokeContext) {
+fn set_invoke_context(new: &mut InvokeContext<'_>) {
     INVOKE_CONTEXT
         .with(|invoke_context| unsafe { invoke_context.replace(Some(transmute::<_, usize>(new))) });
 }
@@ -95,14 +95,14 @@ fn get_invoke_context<'a, 'b>() -> &'a mut InvokeContext<'b> {
         Some(val) => val,
         None => panic!("Invoke context not set!"),
     });
-    unsafe { transmute::<usize, &mut InvokeContext>(ptr) }
+    unsafe { transmute::<usize, &mut InvokeContext<'_>>(ptr) }
 }
 
 pub fn builtin_process_instruction(
     process_instruction: solana_sdk::entrypoint::ProcessInstruction,
     _first_instruction_account: usize,
     input: &[u8],
-    invoke_context: &mut InvokeContext,
+    invoke_context: &mut InvokeContext<'_>,
 ) -> Result<(), InstructionError> {
     set_invoke_context(invoke_context);
 
@@ -140,7 +140,7 @@ pub fn builtin_process_instruction(
         .collect();
 
     // Create AccountInfos
-    let account_infos: Vec<AccountInfo> = keyed_accounts
+    let account_infos: Vec<AccountInfo<'_>> = keyed_accounts
         .iter()
         .map(|keyed_account| {
             let key = keyed_account.unsigned_key();
@@ -233,7 +233,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
     fn sol_invoke_signed(
         &self,
         instruction: &Instruction,
-        account_infos: &[AccountInfo],
+        account_infos: &[AccountInfo<'_>],
         signers_seeds: &[&[&[u8]]],
     ) -> ProgramResult {
         //

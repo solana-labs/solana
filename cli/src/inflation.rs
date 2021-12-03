@@ -72,7 +72,7 @@ pub fn parse_inflation_subcommand(
 
 pub fn process_inflation_subcommand(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     inflation_subcommand: &InflationCliCommand,
 ) -> ProcessResult {
     match inflation_subcommand {
@@ -83,7 +83,7 @@ pub fn process_inflation_subcommand(
     }
 }
 
-fn process_show(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
+fn process_show(rpc_client: &RpcClient, config: &CliConfig<'_>) -> ProcessResult {
     let governor = rpc_client.get_inflation_governor()?;
     let current_rate = rpc_client.get_inflation_rate()?;
 
@@ -97,7 +97,7 @@ fn process_show(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
 
 fn process_rewards(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     addresses: &[Pubkey],
     rewards_epoch: Option<Epoch>,
 ) -> ProcessResult {

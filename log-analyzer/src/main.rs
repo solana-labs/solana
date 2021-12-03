@@ -1,5 +1,4 @@
 #![allow(clippy::integer_arithmetic)]
-extern crate byte_unit;
 
 use byte_unit::Byte;
 use clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches, SubCommand};
@@ -97,7 +96,7 @@ fn map_ip_address(mappings: &[IpAddrMapping], target: String) -> String {
     target
 }
 
-fn process_iftop_logs(matches: &ArgMatches) {
+fn process_iftop_logs(matches: &ArgMatches<'_>) {
     let mut map_list: Vec<IpAddrMapping> = vec![];
     if let ("map-IP", Some(args_matches)) = matches.subcommand() {
         let mut list = args_matches
@@ -149,7 +148,7 @@ fn process_iftop_logs(matches: &ArgMatches) {
     println!("{}", serde_json::to_string(&output).unwrap());
 }
 
-fn analyze_logs(matches: &ArgMatches) {
+fn analyze_logs(matches: &ArgMatches<'_>) {
     let dir_path = PathBuf::from(value_t_or_exit!(matches, "folder", String));
     assert!(
         dir_path.is_dir(),

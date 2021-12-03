@@ -72,8 +72,8 @@ use std::{
 };
 use thiserror::Error;
 
-static CHECK_MARK: Emoji = Emoji("✅ ", "");
-static CROSS_MARK: Emoji = Emoji("❌ ", "");
+static CHECK_MARK: Emoji<'_, '_> = Emoji("✅ ", "");
+static CROSS_MARK: Emoji<'_, '_> = Emoji("❌ ", "");
 
 pub trait ClusterQuerySubCommands {
     fn cluster_query_subcommands(self) -> Self;
@@ -705,7 +705,7 @@ pub fn parse_transaction_history(
 
 pub fn process_catchup(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     node_pubkey: Option<Pubkey>,
     mut node_json_rpc_url: Option<String>,
     follow: bool,
@@ -918,7 +918,7 @@ pub fn process_catchup(
     }
 }
 
-pub fn process_cluster_date(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
+pub fn process_cluster_date(rpc_client: &RpcClient, config: &CliConfig<'_>) -> ProcessResult {
     let result = rpc_client.get_account_with_commitment(&sysvar::clock::id(), config.commitment)?;
     if let Some(clock_account) = result.value {
         let clock: Clock = from_account(&clock_account).ok_or_else(|| {
@@ -934,7 +934,7 @@ pub fn process_cluster_date(rpc_client: &RpcClient, config: &CliConfig) -> Proce
     }
 }
 
-pub fn process_cluster_version(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
+pub fn process_cluster_version(rpc_client: &RpcClient, config: &CliConfig<'_>) -> ProcessResult {
     let remote_version = rpc_client.get_version()?;
 
     if config.verbose {
@@ -946,7 +946,7 @@ pub fn process_cluster_version(rpc_client: &RpcClient, config: &CliConfig) -> Pr
 
 pub fn process_fees(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     blockhash: Option<&Hash>,
 ) -> ProcessResult {
     let fees = if let Some(recent_blockhash) = blockhash {
@@ -995,7 +995,7 @@ pub fn parse_leader_schedule(matches: &ArgMatches<'_>) -> Result<CliCommandInfo,
 
 pub fn process_leader_schedule(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     epoch: Option<Epoch>,
 ) -> ProcessResult {
     let epoch_info = rpc_client.get_epoch_info()?;
@@ -1043,7 +1043,7 @@ pub fn process_leader_schedule(
 
 pub fn process_get_block(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     slot: Option<Slot>,
 ) -> ProcessResult {
     let slot = if let Some(slot) = slot {
@@ -1071,7 +1071,7 @@ pub fn process_get_block(
 
 pub fn process_get_block_time(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     slot: Option<Slot>,
 ) -> ProcessResult {
     let slot = if let Some(slot) = slot {
@@ -1084,12 +1084,12 @@ pub fn process_get_block_time(
     Ok(config.output_format.formatted_string(&block_time))
 }
 
-pub fn process_get_epoch(rpc_client: &RpcClient, _config: &CliConfig) -> ProcessResult {
+pub fn process_get_epoch(rpc_client: &RpcClient, _config: &CliConfig<'_>) -> ProcessResult {
     let epoch_info = rpc_client.get_epoch_info()?;
     Ok(epoch_info.epoch.to_string())
 }
 
-pub fn process_get_epoch_info(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
+pub fn process_get_epoch_info(rpc_client: &RpcClient, config: &CliConfig<'_>) -> ProcessResult {
     let epoch_info = rpc_client.get_epoch_info()?;
     let average_slot_time_ms = rpc_client
         .get_recent_performance_samples(Some(60))
@@ -1119,12 +1119,12 @@ pub fn process_get_genesis_hash(rpc_client: &RpcClient) -> ProcessResult {
     Ok(genesis_hash.to_string())
 }
 
-pub fn process_get_slot(rpc_client: &RpcClient, _config: &CliConfig) -> ProcessResult {
+pub fn process_get_slot(rpc_client: &RpcClient, _config: &CliConfig<'_>) -> ProcessResult {
     let slot = rpc_client.get_slot()?;
     Ok(slot.to_string())
 }
 
-pub fn process_get_block_height(rpc_client: &RpcClient, _config: &CliConfig) -> ProcessResult {
+pub fn process_get_block_height(rpc_client: &RpcClient, _config: &CliConfig<'_>) -> ProcessResult {
     let block_height = rpc_client.get_block_height()?;
     Ok(block_height.to_string())
 }
@@ -1141,7 +1141,7 @@ pub fn parse_show_block_production(matches: &ArgMatches<'_>) -> Result<CliComman
 
 pub fn process_show_block_production(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     epoch: Option<Epoch>,
     slot_limit: Option<u64>,
 ) -> ProcessResult {
@@ -1319,7 +1319,7 @@ pub fn process_show_block_production(
 
 pub fn process_largest_accounts(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     filter: Option<RpcLargestAccountsFilter>,
 ) -> ProcessResult {
     let accounts = rpc_client
@@ -1334,7 +1334,7 @@ pub fn process_largest_accounts(
 
 pub fn process_supply(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     print_accounts: bool,
 ) -> ProcessResult {
     let supply_response = rpc_client.supply()?;
@@ -1343,19 +1343,22 @@ pub fn process_supply(
     Ok(config.output_format.formatted_string(&supply))
 }
 
-pub fn process_total_supply(rpc_client: &RpcClient, _config: &CliConfig) -> ProcessResult {
+pub fn process_total_supply(rpc_client: &RpcClient, _config: &CliConfig<'_>) -> ProcessResult {
     let supply = rpc_client.supply()?.value;
     Ok(format!("{} SOL", lamports_to_sol(supply.total)))
 }
 
-pub fn process_get_transaction_count(rpc_client: &RpcClient, _config: &CliConfig) -> ProcessResult {
+pub fn process_get_transaction_count(
+    rpc_client: &RpcClient,
+    _config: &CliConfig<'_>,
+) -> ProcessResult {
     let transaction_count = rpc_client.get_transaction_count()?;
     Ok(transaction_count.to_string())
 }
 
 pub fn process_ping(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     lamports: u64,
     interval: &Duration,
     count: &Option<u64>,
@@ -1552,7 +1555,7 @@ pub fn parse_logs(
     })
 }
 
-pub fn process_logs(config: &CliConfig, filter: &RpcTransactionLogsFilter) -> ProcessResult {
+pub fn process_logs(config: &CliConfig<'_>, filter: &RpcTransactionLogsFilter) -> ProcessResult {
     println!(
         "Streaming transaction logs{}. {:?} commitment",
         match filter {
@@ -1596,7 +1599,7 @@ pub fn process_logs(config: &CliConfig, filter: &RpcTransactionLogsFilter) -> Pr
     }
 }
 
-pub fn process_live_slots(config: &CliConfig) -> ProcessResult {
+pub fn process_live_slots(config: &CliConfig<'_>) -> ProcessResult {
     let exit = Arc::new(AtomicBool::new(false));
 
     let mut current: Option<SlotInfo> = None;
@@ -1681,7 +1684,7 @@ pub fn process_live_slots(config: &CliConfig) -> ProcessResult {
     Ok("".to_string())
 }
 
-pub fn process_show_gossip(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
+pub fn process_show_gossip(rpc_client: &RpcClient, config: &CliConfig<'_>) -> ProcessResult {
     let cluster_nodes = rpc_client.get_cluster_nodes()?;
 
     let nodes: Vec<_> = cluster_nodes
@@ -1696,7 +1699,7 @@ pub fn process_show_gossip(rpc_client: &RpcClient, config: &CliConfig) -> Proces
 
 pub fn process_show_stakes(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     use_lamports_unit: bool,
     vote_account_pubkeys: Option<&[Pubkey]>,
 ) -> ProcessResult {
@@ -1796,7 +1799,7 @@ pub fn process_show_stakes(
 
 pub fn process_wait_for_max_stake(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     max_stake_percent: f32,
 ) -> ProcessResult {
     let now = std::time::Instant::now();
@@ -1806,7 +1809,7 @@ pub fn process_wait_for_max_stake(
 
 pub fn process_show_validators(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     use_lamports_unit: bool,
     validators_sort_order: CliValidatorsSortOrder,
     validators_reverse_sort: bool,
@@ -1965,7 +1968,7 @@ pub fn process_show_validators(
 
 pub fn process_transaction_history(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     address: &Pubkey,
     before: Option<Signature>,
     until: Option<Signature>,
@@ -2057,7 +2060,7 @@ impl CliRentCalculation {
 }
 
 impl fmt::Display for CliRentCalculation {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let per_byte_year = self.build_balance_message(self.lamports_per_byte_year);
         let per_epoch = self.build_balance_message(self.lamports_per_epoch);
         let exempt_minimum = self.build_balance_message(self.rent_exempt_minimum_lamports);
@@ -2113,7 +2116,7 @@ impl FromStr for RentLengthValue {
 
 pub fn process_calculate_rent(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     data_length: usize,
     use_lamports_unit: bool,
 ) -> ProcessResult {

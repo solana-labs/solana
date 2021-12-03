@@ -618,7 +618,7 @@ pub fn parse_close_vote_account(
 
 pub fn process_create_vote_account(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     vote_account: SignerIndex,
     seed: &Option<String>,
     identity_account: SignerIndex,
@@ -716,7 +716,7 @@ pub fn process_create_vote_account(
 
 pub fn process_vote_authorize(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     vote_account_pubkey: &Pubkey,
     new_authorized_pubkey: &Pubkey,
     vote_authorize: VoteAuthorize,
@@ -791,7 +791,7 @@ pub fn process_vote_authorize(
 
 pub fn process_vote_update_validator(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     vote_account_pubkey: &Pubkey,
     new_identity_account: SignerIndex,
     withdraw_authority: SignerIndex,
@@ -827,7 +827,7 @@ pub fn process_vote_update_validator(
 
 pub fn process_vote_update_commission(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     vote_account_pubkey: &Pubkey,
     commission: u8,
     withdraw_authority: SignerIndex,
@@ -885,7 +885,7 @@ fn get_vote_account(
 
 pub fn process_show_vote_account(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     vote_account_address: &Pubkey,
     use_lamports_unit: bool,
     with_rewards: Option<usize>,
@@ -945,7 +945,7 @@ pub fn process_show_vote_account(
 
 pub fn process_withdraw_from_vote_account(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     vote_account_pubkey: &Pubkey,
     withdraw_authority: SignerIndex,
     withdraw_amount: SpendAmount,
@@ -994,7 +994,7 @@ pub fn process_withdraw_from_vote_account(
 
 pub fn process_close_vote_account(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     vote_account_pubkey: &Pubkey,
     withdraw_authority: SignerIndex,
     destination_account_pubkey: &Pubkey,

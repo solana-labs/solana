@@ -166,7 +166,7 @@ mod tests {
         fn mock_system_process_instruction(
             first_instruction_account: usize,
             data: &[u8],
-            invoke_context: &mut InvokeContext,
+            invoke_context: &mut InvokeContext<'_>,
         ) -> Result<(), InstructionError> {
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             if let Ok(instruction) = bincode::deserialize(data) {
@@ -337,7 +337,7 @@ mod tests {
         fn mock_system_process_instruction(
             first_instruction_account: usize,
             data: &[u8],
-            invoke_context: &mut InvokeContext,
+            invoke_context: &mut InvokeContext<'_>,
         ) -> Result<(), InstructionError> {
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             if let Ok(instruction) = bincode::deserialize(data) {
@@ -538,7 +538,7 @@ mod tests {
         fn mock_process_instruction(
             _first_instruction_account: usize,
             _data: &[u8],
-            _invoke_context: &mut InvokeContext,
+            _invoke_context: &mut InvokeContext<'_>,
         ) -> Result<(), InstructionError> {
             Err(InstructionError::Custom(0xbabb1e))
         }

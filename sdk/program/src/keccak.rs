@@ -56,13 +56,13 @@ impl AsRef<[u8]> for Hash {
 }
 
 impl fmt::Debug for Hash {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", bs58::encode(self.0).into_string())
     }
 }
 
 impl fmt::Display for Hash {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", bs58::encode(self.0).into_string())
     }
 }

@@ -2,8 +2,6 @@
 //!
 //! Input: a single literal base58 string representation of a program's id
 
-extern crate proc_macro;
-
 use proc_macro::TokenStream;
 use proc_macro2::{Delimiter, Span, TokenTree};
 use quote::{quote, ToTokens};
@@ -18,7 +16,7 @@ use syn::{
 };
 
 fn parse_id(
-    input: ParseStream,
+    input: ParseStream<'_>,
     pubkey_type: proc_macro2::TokenStream,
 ) -> Result<proc_macro2::TokenStream> {
     let id = if input.peek(syn::LitStr) {
@@ -96,7 +94,7 @@ fn deprecated_id_to_tokens(
 struct SdkPubkey(proc_macro2::TokenStream);
 
 impl Parse for SdkPubkey {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
         parse_id(input, quote! { ::solana_sdk::pubkey::Pubkey }).map(Self)
     }
 }
@@ -111,7 +109,7 @@ impl ToTokens for SdkPubkey {
 struct ProgramSdkPubkey(proc_macro2::TokenStream);
 
 impl Parse for ProgramSdkPubkey {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
         parse_id(input, quote! { ::solana_program::pubkey::Pubkey }).map(Self)
     }
 }
@@ -126,7 +124,7 @@ impl ToTokens for ProgramSdkPubkey {
 struct Id(proc_macro2::TokenStream);
 
 impl Parse for Id {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
         parse_id(input, quote! { ::solana_sdk::pubkey::Pubkey }).map(Self)
     }
 }
@@ -140,7 +138,7 @@ impl ToTokens for Id {
 struct IdDeprecated(proc_macro2::TokenStream);
 
 impl Parse for IdDeprecated {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
         parse_id(input, quote! { ::solana_sdk::pubkey::Pubkey }).map(Self)
     }
 }
@@ -153,7 +151,7 @@ impl ToTokens for IdDeprecated {
 
 struct ProgramSdkId(proc_macro2::TokenStream);
 impl Parse for ProgramSdkId {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
         parse_id(input, quote! { ::solana_program::pubkey::Pubkey }).map(Self)
     }
 }
@@ -166,7 +164,7 @@ impl ToTokens for ProgramSdkId {
 
 struct ProgramSdkIdDeprecated(proc_macro2::TokenStream);
 impl Parse for ProgramSdkIdDeprecated {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
         parse_id(input, quote! { ::solana_program::pubkey::Pubkey }).map(Self)
     }
 }
@@ -184,7 +182,7 @@ struct RespanInput {
 }
 
 impl Parse for RespanInput {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
         let to_respan: Path = input.parse()?;
         let _comma: Token![,] = input.parse()?;
         let respan_tree: TokenTree = input.parse()?;
@@ -306,7 +304,7 @@ struct Pubkeys {
     pubkeys: proc_macro2::TokenStream,
 }
 impl Parse for Pubkeys {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
         let pubkey_type = quote! {
             ::solana_sdk::pubkey::Pubkey
         };

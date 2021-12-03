@@ -86,7 +86,7 @@ impl<T: Serialize> Signable for Ping<T> {
         self.from
     }
 
-    fn signable_data(&self) -> Cow<[u8]> {
+    fn signable_data(&self) -> Cow<'_, [u8]> {
         Cow::Owned(serialize(&self.token).unwrap())
     }
 
@@ -124,7 +124,7 @@ impl Signable for Pong {
         self.from
     }
 
-    fn signable_data(&self) -> Cow<[u8]> {
+    fn signable_data(&self) -> Cow<'_, [u8]> {
         Cow::Owned(self.hash.as_ref().into())
     }
 

@@ -655,7 +655,7 @@ pub fn parse_program_subcommand(
 
 pub fn process_program_subcommand(
     rpc_client: Arc<RpcClient>,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     program_subcommand: &ProgramCliCommand,
 ) -> ProcessResult {
     match program_subcommand {
@@ -783,7 +783,7 @@ fn get_default_program_keypair(program_location: &Option<String>) -> Keypair {
 #[allow(clippy::too_many_arguments)]
 fn process_program_deploy(
     rpc_client: Arc<RpcClient>,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     program_location: &Option<String>,
     program_signer_index: Option<SignerIndex>,
     program_pubkey: Option<Pubkey>,
@@ -977,7 +977,7 @@ fn process_program_deploy(
 
 fn process_write_buffer(
     rpc_client: Arc<RpcClient>,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     program_location: &str,
     buffer_signer_index: Option<SignerIndex>,
     buffer_pubkey: Option<Pubkey>,
@@ -1060,7 +1060,7 @@ fn process_write_buffer(
 
 fn process_set_authority(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     program_pubkey: Option<Pubkey>,
     buffer_pubkey: Option<Pubkey>,
     authority: Option<SignerIndex>,
@@ -1286,7 +1286,7 @@ fn get_accounts_with_filter(
 
 fn process_show(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     account_pubkey: Option<Pubkey>,
     authority_pubkey: Pubkey,
     programs: bool,
@@ -1383,7 +1383,7 @@ fn process_show(
 
 fn process_dump(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     account_pubkey: Option<Pubkey>,
     output_location: &str,
 ) -> ProcessResult {
@@ -1446,7 +1446,7 @@ fn process_dump(
 
 fn close(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     account_pubkey: &Pubkey,
     recipient_pubkey: &Pubkey,
     authority_signer: &dyn Signer,
@@ -1496,7 +1496,7 @@ fn close(
 
 fn process_close(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     account_pubkey: Option<Pubkey>,
     recipient_pubkey: Pubkey,
     authority_index: SignerIndex,
@@ -1631,7 +1631,7 @@ fn process_close(
 /// Deploy using non-upgradeable loader
 pub fn process_deploy(
     rpc_client: Arc<RpcClient>,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     program_location: &str,
     buffer_signer_index: Option<SignerIndex>,
     use_deprecated_loader: bool,
@@ -1693,7 +1693,7 @@ where
 #[allow(clippy::too_many_arguments)]
 fn do_process_program_write_and_deploy(
     rpc_client: Arc<RpcClient>,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     program_data: &[u8],
     buffer_data_len: usize,
     programdata_len: usize,
@@ -1862,7 +1862,7 @@ fn do_process_program_write_and_deploy(
 
 fn do_process_program_upgrade(
     rpc_client: Arc<RpcClient>,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     program_data: &[u8],
     program_id: &Pubkey,
     upgrade_authority: &dyn Signer,
@@ -2063,7 +2063,7 @@ fn complete_partial_program_init(
 
 fn check_payer(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     balance_needed: u64,
     messages: &[&Message],
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -2080,7 +2080,7 @@ fn check_payer(
 
 fn send_deploy_messages(
     rpc_client: Arc<RpcClient>,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     initial_message: &Option<Message>,
     write_messages: &Option<Vec<Message>>,
     final_message: &Option<Message>,

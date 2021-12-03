@@ -59,20 +59,22 @@ impl<'a> KeyedAccount<'a> {
         Ok(self.try_borrow()?.rent_epoch())
     }
 
-    pub fn try_account_ref(&'a self) -> Result<Ref<AccountSharedData>, InstructionError> {
+    pub fn try_account_ref(&'a self) -> Result<Ref<'_, AccountSharedData>, InstructionError> {
         self.try_borrow()
     }
 
-    pub fn try_account_ref_mut(&'a self) -> Result<RefMut<AccountSharedData>, InstructionError> {
+    pub fn try_account_ref_mut(
+        &'a self,
+    ) -> Result<RefMut<'_, AccountSharedData>, InstructionError> {
         self.try_borrow_mut()
     }
 
-    fn try_borrow(&self) -> Result<Ref<AccountSharedData>, InstructionError> {
+    fn try_borrow(&self) -> Result<Ref<'_, AccountSharedData>, InstructionError> {
         self.account
             .try_borrow()
             .map_err(|_| InstructionError::AccountBorrowFailed)
     }
-    fn try_borrow_mut(&self) -> Result<RefMut<AccountSharedData>, InstructionError> {
+    fn try_borrow_mut(&self) -> Result<RefMut<'_, AccountSharedData>, InstructionError> {
         self.account
             .try_borrow_mut()
             .map_err(|_| InstructionError::AccountBorrowFailed)
@@ -170,7 +172,7 @@ pub fn create_keyed_is_signer_accounts<'a>(
 )]
 pub fn create_keyed_readonly_accounts(
     accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
-) -> Vec<KeyedAccount> {
+) -> Vec<KeyedAccount<'_>> {
     accounts
         .iter()
         .map(|(key, account)| KeyedAccount {
@@ -197,7 +199,7 @@ pub fn create_keyed_accounts_unified<'a>(
 }
 
 /// Return all the signers from a set of KeyedAccounts
-pub fn get_signers<A>(keyed_accounts: &[KeyedAccount]) -> A
+pub fn get_signers<A>(keyed_accounts: &[KeyedAccount<'_>]) -> A
 where
     A: FromIterator<Pubkey>,
 {
@@ -220,7 +222,7 @@ pub fn next_keyed_account<'a, 'b, I: Iterator<Item = &'a KeyedAccount<'b>>>(
 ///
 /// Index zero starts at the chain of program accounts, followed by the instruction accounts.
 pub fn keyed_account_at_index<'a>(
-    keyed_accounts: &'a [KeyedAccount],
+    keyed_accounts: &'a [KeyedAccount<'_>],
     index: usize,
 ) -> Result<&'a KeyedAccount<'a>, InstructionError> {
     keyed_accounts
@@ -230,7 +232,7 @@ pub fn keyed_account_at_index<'a>(
 
 /// Return true if the first keyed_account is executable, used to determine if
 /// the loader should call a program's 'main'
-pub fn is_executable(keyed_accounts: &[KeyedAccount]) -> Result<bool, InstructionError> {
+pub fn is_executable(keyed_accounts: &[KeyedAccount<'_>]) -> Result<bool, InstructionError> {
     Ok(!keyed_accounts.is_empty() && keyed_accounts[0].executable()?)
 }
 
@@ -247,7 +249,7 @@ where
 }
 
 pub fn from_keyed_account<S: Sysvar>(
-    keyed_account: &crate::keyed_account::KeyedAccount,
+    keyed_account: &crate::keyed_account::KeyedAccount<'_>,
 ) -> Result<S, InstructionError> {
     if !S::check_id(keyed_account.unsigned_key()) {
         return Err(InstructionError::InvalidArgument);

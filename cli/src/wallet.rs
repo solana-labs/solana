@@ -437,7 +437,7 @@ pub fn parse_transfer(
 
 pub fn process_show_account(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     account_pubkey: &Pubkey,
     output_file: &Option<String>,
     use_lamports_unit: bool,
@@ -479,7 +479,7 @@ pub fn process_show_account(
 
 pub fn process_airdrop(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     pubkey: &Option<Pubkey>,
     lamports: u64,
 ) -> ProcessResult {
@@ -516,7 +516,7 @@ pub fn process_airdrop(
 
 pub fn process_balance(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     pubkey: &Option<Pubkey>,
     use_lamports_unit: bool,
 ) -> ProcessResult {
@@ -531,7 +531,7 @@ pub fn process_balance(
 
 pub fn process_confirm(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     signature: &Signature,
 ) -> ProcessResult {
     match rpc_client.get_signature_statuses_with_history(&[*signature]) {
@@ -594,7 +594,10 @@ pub fn process_confirm(
 }
 
 #[allow(clippy::unnecessary_wraps)]
-pub fn process_decode_transaction(config: &CliConfig, transaction: &Transaction) -> ProcessResult {
+pub fn process_decode_transaction(
+    config: &CliConfig<'_>,
+    transaction: &Transaction,
+) -> ProcessResult {
     let sigverify_status = CliSignatureVerificationStatus::verify_transaction(transaction);
     let decode_transaction = CliTransaction {
         decoded_transaction: transaction.clone(),
@@ -609,7 +612,7 @@ pub fn process_decode_transaction(config: &CliConfig, transaction: &Transaction)
 }
 
 pub fn process_create_address_with_seed(
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     from_pubkey: Option<&Pubkey>,
     seed: &str,
     program_id: &Pubkey,
@@ -626,7 +629,7 @@ pub fn process_create_address_with_seed(
 #[allow(clippy::too_many_arguments)]
 pub fn process_transfer(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     amount: SpendAmount,
     to: &Pubkey,
     from: SignerIndex,

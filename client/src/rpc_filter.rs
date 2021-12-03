@@ -124,7 +124,7 @@ pub struct Memcmp {
 }
 
 impl Memcmp {
-    pub fn bytes(&self) -> Option<Cow<Vec<u8>>> {
+    pub fn bytes(&self) -> Option<Cow<'_, Vec<u8>>> {
         use MemcmpEncodedBytes::*;
         match &self.bytes {
             Binary(bytes) | Base58(bytes) => bs58::decode(bytes).into_vec().ok().map(Cow::Owned),

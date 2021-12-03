@@ -1185,7 +1185,7 @@ pub fn parse_show_stake_history(matches: &ArgMatches<'_>) -> Result<CliCommandIn
 #[allow(clippy::too_many_arguments)]
 pub fn process_create_stake_account(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     stake_account: SignerIndex,
     seed: &Option<String>,
     staker: &Option<Pubkey>,
@@ -1337,7 +1337,7 @@ pub fn process_create_stake_account(
 #[allow(clippy::too_many_arguments)]
 pub fn process_stake_authorize(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     stake_account_pubkey: &Pubkey,
     new_authorizations: &[StakeAuthorizationIndexed],
     custodian: Option<SignerIndex>,
@@ -1470,7 +1470,7 @@ pub fn process_stake_authorize(
 #[allow(clippy::too_many_arguments)]
 pub fn process_deactivate_stake_account(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     stake_account_pubkey: &Pubkey,
     stake_authority: SignerIndex,
     sign_only: bool,
@@ -1544,7 +1544,7 @@ pub fn process_deactivate_stake_account(
 #[allow(clippy::too_many_arguments)]
 pub fn process_withdraw_stake(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     stake_account_pubkey: &Pubkey,
     destination_account_pubkey: &Pubkey,
     amount: SpendAmount,
@@ -1641,7 +1641,7 @@ pub fn process_withdraw_stake(
 #[allow(clippy::too_many_arguments)]
 pub fn process_split_stake(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     stake_account_pubkey: &Pubkey,
     stake_authority: SignerIndex,
     sign_only: bool,
@@ -1784,7 +1784,7 @@ pub fn process_split_stake(
 #[allow(clippy::too_many_arguments)]
 pub fn process_merge_stake(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     stake_account_pubkey: &Pubkey,
     source_stake_account_pubkey: &Pubkey,
     stake_authority: SignerIndex,
@@ -1893,7 +1893,7 @@ pub fn process_merge_stake(
 #[allow(clippy::too_many_arguments)]
 pub fn process_stake_set_lockup(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     stake_account_pubkey: &Pubkey,
     lockup: &LockupArgs,
     new_custodian_signer: Option<SignerIndex>,
@@ -2211,7 +2211,7 @@ pub(crate) fn fetch_epoch_rewards(
 
 pub fn process_show_stake_account(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     stake_account_address: &Pubkey,
     use_lamports_unit: bool,
     with_rewards: Option<usize>,
@@ -2267,7 +2267,7 @@ pub fn process_show_stake_account(
 
 pub fn process_show_stake_history(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     use_lamports_unit: bool,
     limit_results: usize,
 ) -> ProcessResult {
@@ -2301,7 +2301,7 @@ pub fn process_show_stake_history(
 #[allow(clippy::too_many_arguments)]
 pub fn process_delegate_stake(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     stake_account_pubkey: &Pubkey,
     vote_account_pubkey: &Pubkey,
     stake_authority: SignerIndex,

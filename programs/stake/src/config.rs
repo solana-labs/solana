@@ -22,7 +22,7 @@ pub fn from<T: ReadableAccount>(account: &T) -> Option<Config> {
         .and_then(|data| deserialize(data).ok())
 }
 
-pub fn from_keyed_account(account: &KeyedAccount) -> Result<Config, InstructionError> {
+pub fn from_keyed_account(account: &KeyedAccount<'_>) -> Result<Config, InstructionError> {
     if !config::check_id(account.unsigned_key()) {
         return Err(InstructionError::InvalidArgument);
     }

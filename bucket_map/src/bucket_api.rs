@@ -85,7 +85,7 @@ impl<T: Clone + Copy> BucketApi<T> {
         }
     }
 
-    fn get_write_bucket(&self) -> RwLockWriteGuard<Option<Bucket<T>>> {
+    fn get_write_bucket(&self) -> RwLockWriteGuard<'_, Option<Bucket<T>>> {
         let mut bucket = self.bucket.write().unwrap();
         if bucket.is_none() {
             *bucket = Some(Bucket::new(

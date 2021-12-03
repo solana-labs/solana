@@ -543,7 +543,11 @@ impl Rocks {
         Ok(())
     }
 
-    fn iterator_cf<C>(&self, cf: &ColumnFamily, iterator_mode: IteratorMode<C::Index>) -> DBIterator
+    fn iterator_cf<C>(
+        &self,
+        cf: &ColumnFamily,
+        iterator_mode: IteratorMode<C::Index>,
+    ) -> DBIterator<'_>
     where
         C: Column,
     {
@@ -559,7 +563,7 @@ impl Rocks {
         self.0.iterator_cf(cf, iterator_mode)
     }
 
-    fn raw_iterator_cf(&self, cf: &ColumnFamily) -> DBRawIterator {
+    fn raw_iterator_cf(&self, cf: &ColumnFamily) -> DBRawIterator<'_> {
         self.0.raw_iterator_cf(cf)
     }
 
@@ -1080,11 +1084,11 @@ impl Database {
     }
 
     #[inline]
-    pub fn raw_iterator_cf(&self, cf: &ColumnFamily) -> Result<DBRawIterator> {
+    pub fn raw_iterator_cf(&self, cf: &ColumnFamily) -> Result<DBRawIterator<'_>> {
         Ok(self.backend.raw_iterator_cf(cf))
     }
 
-    pub fn batch(&self) -> Result<WriteBatch> {
+    pub fn batch(&self) -> Result<WriteBatch<'_>> {
         let write_batch = self.backend.batch();
         let map = self
             .backend
@@ -1096,7 +1100,7 @@ impl Database {
         Ok(WriteBatch { write_batch, map })
     }
 
-    pub fn write(&self, batch: WriteBatch) -> Result<()> {
+    pub fn write(&self, batch: WriteBatch<'_>) -> Result<()> {
         self.backend.write(batch.write_batch)
     }
 
@@ -1105,7 +1109,7 @@ impl Database {
     }
 
     // Adds a range to delete to the given write batch
-    pub fn delete_range_cf<C>(&self, batch: &mut WriteBatch, from: Slot, to: Slot) -> Result<()>
+    pub fn delete_range_cf<C>(&self, batch: &mut WriteBatch<'_>, from: Slot, to: Slot) -> Result<()>
     where
         C: Column + ColumnName,
     {
@@ -1143,7 +1147,7 @@ where
 
     pub fn delete_slot(
         &self,
-        batch: &mut WriteBatch,
+        batch: &mut WriteBatch<'_>,
         from: Option<Slot>,
         to: Option<Slot>,
     ) -> Result<bool>

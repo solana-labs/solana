@@ -10,7 +10,7 @@ pub trait AccountsUpdateNotifierInterface: std::fmt::Debug {
 
     /// Notified when the AccountsDb is initialized at start when restored
     /// from a snapshot.
-    fn notify_account_restore_from_snapshot(&self, slot: Slot, account: &StoredAccountMeta);
+    fn notify_account_restore_from_snapshot(&self, slot: Slot, account: &StoredAccountMeta<'_>);
 
     /// Notified when all accounts have been notified when restoring from a snapshot.
     fn notify_end_of_restore_from_snapshot(&self);

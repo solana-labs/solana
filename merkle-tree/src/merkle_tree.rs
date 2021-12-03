@@ -139,7 +139,7 @@ impl MerkleTree {
         self.nodes.iter().last()
     }
 
-    pub fn find_path(&self, index: usize) -> Option<Proof> {
+    pub fn find_path(&self, index: usize) -> Option<Proof<'_>> {
         if index >= self.leaf_count {
             return None;
         }

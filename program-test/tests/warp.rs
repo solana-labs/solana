@@ -107,7 +107,7 @@ async fn setup_vote(context: &mut ProgramTestContext) -> Pubkey {
 
 fn process_instruction(
     _program_id: &Pubkey,
-    accounts: &[AccountInfo],
+    accounts: &[AccountInfo<'_>],
     input: &[u8],
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();

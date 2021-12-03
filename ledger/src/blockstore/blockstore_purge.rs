@@ -320,7 +320,7 @@ impl Blockstore {
     /// records. **This method is very slow.**
     fn purge_special_columns_exact(
         &self,
-        batch: &mut WriteBatch,
+        batch: &mut WriteBatch<'_>,
         from_slot: Slot,
         to_slot: Slot, // Exclusive
     ) -> Result<()> {
@@ -359,7 +359,7 @@ impl Blockstore {
     /// primary index has a max-slot less than the highest slot being purged.
     fn purge_special_columns_with_primary_index(
         &self,
-        write_batch: &mut WriteBatch,
+        write_batch: &mut WriteBatch<'_>,
         columns_purged: &mut bool,
         w_active_transaction_status_index: &mut u64,
         to_slot: Slot,

@@ -35,7 +35,7 @@ impl Address {
     fn create(
         address: &Pubkey,
         with_seed: Option<(&Pubkey, &str, &Pubkey)>,
-        invoke_context: &InvokeContext,
+        invoke_context: &InvokeContext<'_>,
     ) -> Result<Self, InstructionError> {
         let base = if let Some((base, seed, owner)) = with_seed {
             let address_with_seed = Pubkey::create_with_seed(base, seed, owner)?;
@@ -66,7 +66,7 @@ fn allocate(
     address: &Address,
     space: u64,
     signers: &HashSet<Pubkey>,
-    invoke_context: &InvokeContext,
+    invoke_context: &InvokeContext<'_>,
 ) -> Result<(), InstructionError> {
     if !address.is_signer(signers) {
         ic_msg!(
@@ -108,7 +108,7 @@ fn assign(
     address: &Address,
     owner: &Pubkey,
     signers: &HashSet<Pubkey>,
-    invoke_context: &InvokeContext,
+    invoke_context: &InvokeContext<'_>,
 ) -> Result<(), InstructionError> {
     // no work to do, just return
     if account.owner() == owner {
@@ -141,21 +141,21 @@ fn allocate_and_assign(
     space: u64,
     owner: &Pubkey,
     signers: &HashSet<Pubkey>,
-    invoke_context: &InvokeContext,
+    invoke_context: &InvokeContext<'_>,
 ) -> Result<(), InstructionError> {
     allocate(to, to_address, space, signers, invoke_context)?;
     assign(to, to_address, owner, signers, invoke_context)
 }
 
 fn create_account(
-    from: &KeyedAccount,
-    to: &KeyedAccount,
+    from: &KeyedAccount<'_>,
+    to: &KeyedAccount<'_>,
     to_address: &Address,
     lamports: u64,
     space: u64,
     owner: &Pubkey,
     signers: &HashSet<Pubkey>,
-    invoke_context: &InvokeContext,
+    invoke_context: &InvokeContext<'_>,
 ) -> Result<(), InstructionError> {
     // if it looks like the `to` account is already in use, bail
     {
@@ -175,10 +175,10 @@ fn create_account(
 }
 
 fn transfer_verified(
-    from: &KeyedAccount,
-    to: &KeyedAccount,
+    from: &KeyedAccount<'_>,
+    to: &KeyedAccount<'_>,
     lamports: u64,
-    invoke_context: &InvokeContext,
+    invoke_context: &InvokeContext<'_>,
 ) -> Result<(), InstructionError> {
     if !from.data_is_empty()? {
         ic_msg!(invoke_context, "Transfer: `from` must not carry data");
@@ -200,10 +200,10 @@ fn transfer_verified(
 }
 
 fn transfer(
-    from: &KeyedAccount,
-    to: &KeyedAccount,
+    from: &KeyedAccount<'_>,
+    to: &KeyedAccount<'_>,
     lamports: u64,
-    invoke_context: &InvokeContext,
+    invoke_context: &InvokeContext<'_>,
 ) -> Result<(), InstructionError> {
     if !invoke_context.is_feature_active(&feature_set::system_transfer_zero_check::id())
         && lamports == 0
@@ -224,13 +224,13 @@ fn transfer(
 }
 
 fn transfer_with_seed(
-    from: &KeyedAccount,
-    from_base: &KeyedAccount,
+    from: &KeyedAccount<'_>,
+    from_base: &KeyedAccount<'_>,
     from_seed: &str,
     from_owner: &Pubkey,
-    to: &KeyedAccount,
+    to: &KeyedAccount<'_>,
     lamports: u64,
-    invoke_context: &InvokeContext,
+    invoke_context: &InvokeContext<'_>,
 ) -> Result<(), InstructionError> {
     if !invoke_context.is_feature_active(&feature_set::system_transfer_zero_check::id())
         && lamports == 0
@@ -265,7 +265,7 @@ fn transfer_with_seed(
 pub fn process_instruction(
     first_instruction_account: usize,
     instruction_data: &[u8],
-    invoke_context: &mut InvokeContext,
+    invoke_context: &mut InvokeContext<'_>,
 ) -> Result<(), InstructionError> {
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
     let instruction = limited_deserialize(instruction_data)?;
@@ -1574,7 +1574,7 @@ mod tests {
                 &keyed_accounts,
                 |first_instruction_account: usize,
                  instruction_data: &[u8],
-                 invoke_context: &mut InvokeContext| {
+                 invoke_context: &mut InvokeContext<'_>| {
                     invoke_context.set_blockhash(hash(&serialize(&0).unwrap()));
                     super::process_instruction(
                         first_instruction_account,
@@ -1990,7 +1990,7 @@ mod tests {
                 &keyed_accounts,
                 |first_instruction_account: usize,
                  instruction_data: &[u8],
-                 invoke_context: &mut InvokeContext| {
+                 invoke_context: &mut InvokeContext<'_>| {
                     invoke_context.set_blockhash(hash(&serialize(&0).unwrap()));
                     super::process_instruction(
                         first_instruction_account,

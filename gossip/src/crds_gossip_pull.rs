@@ -657,7 +657,9 @@ impl CrdsGossipPull {
     }
 
     #[cfg(test)]
-    pub(crate) fn pull_request_time(&self) -> std::sync::RwLockReadGuard<LruCache<Pubkey, u64>> {
+    pub(crate) fn pull_request_time(
+        &self,
+    ) -> std::sync::RwLockReadGuard<'_, LruCache<Pubkey, u64>> {
         self.pull_request_time.read().unwrap()
     }
 }

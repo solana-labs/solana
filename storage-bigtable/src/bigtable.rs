@@ -720,7 +720,7 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
 }
 
 pub(crate) fn deserialize_protobuf_or_bincode_cell_data<B, P>(
-    row_data: RowDataSlice,
+    row_data: RowDataSlice<'_>,
     table: &str,
     key: RowKey,
 ) -> Result<CellData<B, P>>
@@ -739,7 +739,7 @@ where
 }
 
 pub(crate) fn deserialize_protobuf_cell_data<T>(
-    row_data: RowDataSlice,
+    row_data: RowDataSlice<'_>,
     table: &str,
     key: RowKey,
 ) -> Result<T>
@@ -760,7 +760,7 @@ where
 }
 
 pub(crate) fn deserialize_bincode_cell_data<T>(
-    row_data: RowDataSlice,
+    row_data: RowDataSlice<'_>,
     table: &str,
     key: RowKey,
 ) -> Result<T>

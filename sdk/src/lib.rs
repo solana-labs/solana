@@ -104,8 +104,7 @@ macro_rules! program_stubs {
 
 #[macro_use]
 extern crate serde_derive;
-pub extern crate bs58;
-extern crate log as logger;
+pub use bs58;
 
 #[macro_use]
 extern crate solana_frozen_abi_macro;

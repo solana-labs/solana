@@ -166,7 +166,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
 
     fn update_account(
         &mut self,
-        account: ReplicaAccountInfoVersions,
+        account: ReplicaAccountInfoVersions<'_>,
         slot: u64,
         is_startup: bool,
     ) -> Result<()> {
@@ -297,7 +297,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
 
     fn notify_transaction(
         &mut self,
-        transaction_info: ReplicaTransactionInfoVersions,
+        transaction_info: ReplicaTransactionInfoVersions<'_>,
         slot: u64,
     ) -> Result<()> {
         match &mut self.client {

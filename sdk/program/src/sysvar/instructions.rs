@@ -40,7 +40,7 @@ pub fn load_current_index(data: &[u8]) -> u16 {
 /// Load the current `Instruction`'s index in the currently executing
 /// `Transaction`
 pub fn load_current_index_checked(
-    instruction_sysvar_account_info: &AccountInfo,
+    instruction_sysvar_account_info: &AccountInfo<'_>,
 ) -> Result<u16, ProgramError> {
     if !check_id(instruction_sysvar_account_info.key) {
         return Err(ProgramError::UnsupportedSysvar);
@@ -73,7 +73,7 @@ pub fn load_instruction_at(index: usize, data: &[u8]) -> Result<Instruction, San
 /// specified index
 pub fn load_instruction_at_checked(
     index: usize,
-    instruction_sysvar_account_info: &AccountInfo,
+    instruction_sysvar_account_info: &AccountInfo<'_>,
 ) -> Result<Instruction, ProgramError> {
     if !check_id(instruction_sysvar_account_info.key) {
         return Err(ProgramError::UnsupportedSysvar);
@@ -92,7 +92,7 @@ pub fn load_instruction_at_checked(
 /// currently executing `Transaction`
 pub fn get_instruction_relative(
     index_relative_to_current: i64,
-    instruction_sysvar_account_info: &AccountInfo,
+    instruction_sysvar_account_info: &AccountInfo<'_>,
 ) -> Result<Instruction, ProgramError> {
     if !check_id(instruction_sysvar_account_info.key) {
         return Err(ProgramError::UnsupportedSysvar);

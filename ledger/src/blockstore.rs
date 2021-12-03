@@ -1024,7 +1024,7 @@ impl Blockstore {
         shred: Shred,
         erasure_metas: &mut HashMap<(Slot, /*fec set index:*/ u64), ErasureMeta>,
         index_working_set: &mut HashMap<u64, IndexMetaWorkingSetEntry>,
-        write_batch: &mut WriteBatch,
+        write_batch: &mut WriteBatch<'_>,
         just_received_coding_shreds: &mut HashMap<(Slot, /*shred index:*/ u64), Shred>,
         index_meta_time: &mut u64,
         handle_duplicate: &F,
@@ -1165,7 +1165,7 @@ impl Blockstore {
         erasure_metas: &mut HashMap<(Slot, /*fec set index:*/ u64), ErasureMeta>,
         index_working_set: &mut HashMap<u64, IndexMetaWorkingSetEntry>,
         slot_meta_working_set: &mut HashMap<u64, SlotMetaWorkingSetEntry>,
-        write_batch: &mut WriteBatch,
+        write_batch: &mut WriteBatch<'_>,
         just_inserted_data_shreds: &mut HashMap<(Slot, /*shred index:*/ u64), Shred>,
         index_meta_time: &mut u64,
         is_trusted: bool,
@@ -1260,7 +1260,7 @@ impl Blockstore {
         &self,
         index_meta: &mut Index,
         shred: &Shred,
-        write_batch: &mut WriteBatch,
+        write_batch: &mut WriteBatch<'_>,
     ) -> Result<()> {
         let slot = shred.slot();
         let shred_index = u64::from(shred.index());
@@ -1358,7 +1358,7 @@ impl Blockstore {
             let leader_pubkey = leader_schedule
                 .and_then(|leader_schedule| leader_schedule.slot_leader_at(slot, None));
 
-            let ending_shred: Cow<Vec<u8>> = self.get_data_shred_from_just_inserted_or_db(
+            let ending_shred: Cow<'_, Vec<u8>> = self.get_data_shred_from_just_inserted_or_db(
                 just_inserted_data_shreds,
                 slot,
                 last_index,
@@ -1394,7 +1394,7 @@ impl Blockstore {
             let leader_pubkey = leader_schedule
                 .and_then(|leader_schedule| leader_schedule.slot_leader_at(slot, None));
 
-            let ending_shred: Cow<Vec<u8>> = self.get_data_shred_from_just_inserted_or_db(
+            let ending_shred: Cow<'_, Vec<u8>> = self.get_data_shred_from_just_inserted_or_db(
                 just_inserted_data_shreds,
                 slot,
                 slot_meta.received - 1,
@@ -1434,7 +1434,7 @@ impl Blockstore {
         slot_meta: &mut SlotMeta,
         data_index: &mut ShredIndex,
         shred: &Shred,
-        write_batch: &mut WriteBatch,
+        write_batch: &mut WriteBatch<'_>,
         shred_source: ShredSource,
     ) -> Result<Vec<CompletedDataSetInfo>> {
         let slot = shred.slot();
@@ -1695,7 +1695,7 @@ impl Blockstore {
     // indexes in the ledger in the range [start_index, end_index)
     // for the slot with the specified slot
     fn find_missing_indexes<C>(
-        db_iterator: &mut DBRawIterator,
+        db_iterator: &mut DBRawIterator<'_>,
         slot: Slot,
         first_timestamp: u64,
         start_index: u64,
@@ -1964,7 +1964,7 @@ impl Blockstore {
     /// frozen index in preparation for pruning.
     fn toggle_transaction_status_index(
         &self,
-        batch: &mut WriteBatch,
+        batch: &mut WriteBatch<'_>,
         w_active_transaction_status_index: &mut u64,
         to_slot: Slot,
     ) -> Result<Option<u64>> {
@@ -2019,7 +2019,7 @@ impl Blockstore {
         &self,
         slot: Slot,
         // take WriteGuard to require critical section semantics at call site
-        w_active_transaction_status_index: &RwLockWriteGuard<Slot>,
+        w_active_transaction_status_index: &RwLockWriteGuard<'_, Slot>,
     ) -> Result<u64> {
         let i = **w_active_transaction_status_index;
         let mut index_meta = self.transaction_status_index_cf.get(i)?.unwrap();
@@ -2089,7 +2089,10 @@ impl Blockstore {
         self.transaction_memos_cf.put(*signature, &memos)
     }
 
-    fn check_lowest_cleanup_slot(&self, slot: Slot) -> Result<std::sync::RwLockReadGuard<Slot>> {
+    fn check_lowest_cleanup_slot(
+        &self,
+        slot: Slot,
+    ) -> Result<std::sync::RwLockReadGuard<'_, Slot>> {
         // lowest_cleanup_slot is the last slot that was not cleaned up by LedgerCleanupService
         let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
         if *lowest_cleanup_slot > 0 && *lowest_cleanup_slot >= slot {
@@ -2100,7 +2103,7 @@ impl Blockstore {
         Ok(lowest_cleanup_slot)
     }
 
-    fn ensure_lowest_cleanup_slot(&self) -> (std::sync::RwLockReadGuard<Slot>, Slot) {
+    fn ensure_lowest_cleanup_slot(&self) -> (std::sync::RwLockReadGuard<'_, Slot>, Slot) {
         // Ensures consistent result by using lowest_cleanup_slot as the lower bound
         // for reading columns that do not employ strong read consistency with slot-based
         // delete_range
@@ -3308,7 +3311,7 @@ fn send_signals(
 fn commit_slot_meta_working_set(
     slot_meta_working_set: &HashMap<u64, SlotMetaWorkingSetEntry>,
     completed_slots_senders: &[SyncSender<Vec<u64>>],
-    write_batch: &mut WriteBatch,
+    write_batch: &mut WriteBatch<'_>,
 ) -> Result<(bool, Vec<u64>)> {
     let mut should_signal = false;
     let mut newly_completed_slots = vec![];
@@ -3385,7 +3388,7 @@ fn find_slot_meta_in_cached_state<'a>(
 // Chaining based on latest discussion here: https://github.com/solana-labs/solana/pull/2253
 fn handle_chaining(
     db: &Database,
-    write_batch: &mut WriteBatch,
+    write_batch: &mut WriteBatch<'_>,
     working_set: &mut HashMap<u64, SlotMetaWorkingSetEntry>,
 ) -> Result<()> {
     // Handle chaining for all the SlotMetas that were inserted into
@@ -3406,7 +3409,7 @@ fn handle_chaining(
 
 fn handle_chaining_for_slot(
     db: &Database,
-    write_batch: &mut WriteBatch,
+    write_batch: &mut WriteBatch<'_>,
     working_set: &HashMap<u64, SlotMetaWorkingSetEntry>,
     new_chained_slots: &mut HashMap<u64, Rc<RefCell<SlotMeta>>>,
     slot: Slot,

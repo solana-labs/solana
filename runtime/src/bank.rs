@@ -297,10 +297,10 @@ impl CowCachedExecutors {
             executors,
         }
     }
-    fn read(&self) -> LockResult<RwLockReadGuard<CachedExecutors>> {
+    fn read(&self) -> LockResult<RwLockReadGuard<'_, CachedExecutors>> {
         self.executors.read()
     }
-    fn write(&mut self) -> LockResult<RwLockWriteGuard<CachedExecutors>> {
+    fn write(&mut self) -> LockResult<RwLockWriteGuard<'_, CachedExecutors>> {
         if self.shared {
             self.shared = false;
             let local_cache = (*self.executors.read().unwrap()).clone();
@@ -828,8 +828,8 @@ pub enum RewardCalculationEvent<'a, 'b> {
     Staking(&'a Pubkey, &'b InflationPointCalculationEvent),
 }
 
-fn null_tracer() -> Option<impl Fn(&RewardCalculationEvent) + Send + Sync> {
-    None::<fn(&RewardCalculationEvent)>
+fn null_tracer() -> Option<impl Fn(&RewardCalculationEvent<'_, '_>) + Send + Sync> {
+    None::<fn(&RewardCalculationEvent<'_, '_>)>
 }
 
 impl fmt::Display for RewardType {
@@ -1304,7 +1304,7 @@ impl Bank {
         parent: &Arc<Bank>,
         collector_id: &Pubkey,
         slot: Slot,
-        reward_calc_tracer: impl Fn(&RewardCalculationEvent) + Send + Sync,
+        reward_calc_tracer: impl Fn(&RewardCalculationEvent<'_, '_>) + Send + Sync,
     ) -> Self {
         Self::_new_from_parent(
             parent,
@@ -1319,7 +1319,7 @@ impl Bank {
         parent: &Arc<Bank>,
         collector_id: &Pubkey,
         slot: Slot,
-        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
+        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent<'_, '_>) + Send + Sync>,
         new_bank_options: NewBankOptions,
     ) -> Self {
         let mut time = Measure::start("bank::new_from_parent");
@@ -1736,7 +1736,7 @@ impl Bank {
         self.epoch_schedule.first_normal_epoch
     }
 
-    pub fn freeze_lock(&self) -> RwLockReadGuard<Hash> {
+    pub fn freeze_lock(&self) -> RwLockReadGuard<'_, Hash> {
         self.hash.read().unwrap()
     }
 
@@ -2092,7 +2092,7 @@ impl Bank {
     fn update_rewards(
         &mut self,
         prev_epoch: Epoch,
-        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
+        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent<'_, '_>) + Send + Sync>,
     ) {
         if prev_epoch == self.epoch() {
             return;
@@ -2197,7 +2197,7 @@ impl Bank {
     fn update_rewards_with_thread_pool(
         &mut self,
         prev_epoch: Epoch,
-        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
+        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent<'_, '_>) + Send + Sync>,
         thread_pool: &ThreadPool,
     ) {
         let slot_in_year = self.slot_in_year_for_inflation();
@@ -2299,7 +2299,7 @@ impl Bank {
     #[deprecated(note = "remove after optimize_epoch_boundary_updates feature is active")]
     fn stake_delegation_accounts(
         &self,
-        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
+        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent<'_, '_>) + Send + Sync>,
     ) -> HashMap<Pubkey, (Vec<(Pubkey, AccountSharedData)>, AccountSharedData)> {
         let mut accounts = HashMap::new();
 
@@ -2362,7 +2362,7 @@ impl Bank {
     fn load_vote_and_stake_accounts_with_thread_pool(
         &self,
         thread_pool: &ThreadPool,
-        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
+        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent<'_, '_>) + Send + Sync>,
     ) -> DashMap<Pubkey, VoteWithStakeDelegations> {
         let filter_stake_delegation_accounts = self
             .feature_set
@@ -2468,7 +2468,7 @@ impl Bank {
         &mut self,
         rewarded_epoch: Epoch,
         rewards: u64,
-        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
+        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent<'_, '_>) + Send + Sync>,
         fix_activating_credits_observed: bool,
     ) -> f64 {
         let stake_history = self.stakes.read().unwrap().history().clone();
@@ -2589,7 +2589,7 @@ impl Bank {
         &mut self,
         rewarded_epoch: Epoch,
         rewards: u64,
-        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
+        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent<'_, '_>) + Send + Sync>,
         fix_activating_credits_observed: bool,
         thread_pool: &ThreadPool,
     ) -> f64 {
@@ -3328,7 +3328,7 @@ impl Bank {
     }
 
     /// Prepare a transaction batch from a list of legacy transactions. Used for tests only.
-    pub fn prepare_batch_for_tests(&self, txs: Vec<Transaction>) -> TransactionBatch {
+    pub fn prepare_batch_for_tests(&self, txs: Vec<Transaction>) -> TransactionBatch<'_, '_> {
         let sanitized_txs = txs
             .into_iter()
             .map(SanitizedTransaction::from_transaction_for_tests)
@@ -3342,7 +3342,10 @@ impl Bank {
 
     /// Prepare a transaction batch from a list of versioned transactions from
     /// an entry. Used for tests only.
-    pub fn prepare_entry_batch(&self, txs: Vec<VersionedTransaction>) -> Result<TransactionBatch> {
+    pub fn prepare_entry_batch(
+        &self,
+        txs: Vec<VersionedTransaction>,
+    ) -> Result<TransactionBatch<'_, '_>> {
         let sanitized_txs = txs
             .into_iter()
             .map(|tx| {
@@ -3466,7 +3469,7 @@ impl Bank {
         }
     }
 
-    pub fn unlock_accounts(&self, batch: &mut TransactionBatch) {
+    pub fn unlock_accounts(&self, batch: &mut TransactionBatch<'_, '_>) {
         if batch.needs_unlock {
             batch.needs_unlock = false;
             self.rc.accounts.unlock_accounts(
@@ -3583,7 +3586,7 @@ impl Bank {
         self.check_status_cache(sanitized_txs, age_results, error_counters)
     }
 
-    pub fn collect_balances(&self, batch: &TransactionBatch) -> TransactionBalances {
+    pub fn collect_balances(&self, batch: &TransactionBatch<'_, '_>) -> TransactionBalances {
         let mut balances: TransactionBalances = vec![];
         for transaction in batch.sanitized_transactions() {
             let mut transaction_balances: Vec<u64> = vec![];
@@ -3762,7 +3765,7 @@ impl Bank {
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
-        batch: &TransactionBatch,
+        batch: &TransactionBatch<'_, '_>,
         max_age: usize,
         enable_cpi_recording: bool,
         enable_log_recording: bool,
@@ -4864,7 +4867,7 @@ impl Bank {
     #[must_use]
     pub fn load_execute_and_commit_transactions(
         &self,
-        batch: &TransactionBatch,
+        batch: &TransactionBatch<'_, '_>,
         max_age: usize,
         collect_balances: bool,
         enable_cpi_recording: bool,
@@ -4974,7 +4977,7 @@ impl Bank {
     }
 
     #[must_use]
-    fn process_transaction_batch(&self, batch: &TransactionBatch) -> Vec<Result<()>> {
+    fn process_transaction_batch(&self, batch: &TransactionBatch<'_, '_>) -> Vec<Result<()>> {
         self.load_execute_and_commit_transactions(
             batch,
             MAX_PROCESSING_AGE,
@@ -6063,11 +6066,11 @@ impl Bank {
             .is_active(&feature_set::send_to_tpu_vote_port::id())
     }
 
-    pub fn read_cost_tracker(&self) -> LockResult<RwLockReadGuard<CostTracker>> {
+    pub fn read_cost_tracker(&self) -> LockResult<RwLockReadGuard<'_, CostTracker>> {
         self.cost_tracker.read()
     }
 
-    pub fn write_cost_tracker(&self) -> LockResult<RwLockWriteGuard<CostTracker>> {
+    pub fn write_cost_tracker(&self) -> LockResult<RwLockWriteGuard<'_, CostTracker>> {
         self.cost_tracker.write()
     }
 
@@ -6953,7 +6956,7 @@ pub(crate) mod tests {
     fn mock_process_instruction(
         first_instruction_account: usize,
         data: &[u8],
-        invoke_context: &mut InvokeContext,
+        invoke_context: &mut InvokeContext<'_>,
     ) -> result::Result<(), InstructionError> {
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
         if let Ok(instruction) = bincode::deserialize(data) {
@@ -10704,7 +10707,7 @@ pub(crate) mod tests {
         fn mock_vote_processor(
             _first_instruction_account: usize,
             _instruction_data: &[u8],
-            invoke_context: &mut InvokeContext,
+            invoke_context: &mut InvokeContext<'_>,
         ) -> std::result::Result<(), InstructionError> {
             let program_id = invoke_context.get_caller()?;
             if mock_vote_program_id() != *program_id {
@@ -10762,7 +10765,7 @@ pub(crate) mod tests {
         fn mock_vote_processor(
             _first_instruction_account: usize,
             _data: &[u8],
-            _invoke_context: &mut InvokeContext,
+            _invoke_context: &mut InvokeContext<'_>,
         ) -> std::result::Result<(), InstructionError> {
             Err(InstructionError::Custom(42))
         }
@@ -10812,7 +10815,7 @@ pub(crate) mod tests {
         fn mock_ix_processor(
             _first_instruction_account: usize,
             _data: &[u8],
-            _invoke_context: &mut InvokeContext,
+            _invoke_context: &mut InvokeContext<'_>,
         ) -> std::result::Result<(), InstructionError> {
             Err(InstructionError::Custom(42))
         }
@@ -11697,7 +11700,7 @@ pub(crate) mod tests {
         fn mock_process_instruction(
             first_instruction_account: usize,
             data: &[u8],
-            invoke_context: &mut InvokeContext,
+            invoke_context: &mut InvokeContext<'_>,
         ) -> result::Result<(), InstructionError> {
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let lamports = data[0] as u64;
@@ -11755,7 +11758,7 @@ pub(crate) mod tests {
         fn mock_process_instruction(
             _first_instruction_account: usize,
             _data: &[u8],
-            _invoke_context: &mut InvokeContext,
+            _invoke_context: &mut InvokeContext<'_>,
         ) -> result::Result<(), InstructionError> {
             Ok(())
         }
@@ -11941,7 +11944,7 @@ pub(crate) mod tests {
     fn mock_ok_vote_processor(
         _first_instruction_account: usize,
         _data: &[u8],
-        _invoke_context: &mut InvokeContext,
+        _invoke_context: &mut InvokeContext<'_>,
     ) -> std::result::Result<(), InstructionError> {
         Ok(())
     }
@@ -12191,7 +12194,7 @@ pub(crate) mod tests {
         fn nested_processor(
             first_instruction_account: usize,
             _data: &[u8],
-            invoke_context: &mut InvokeContext,
+            invoke_context: &mut InvokeContext<'_>,
         ) -> result::Result<(), InstructionError> {
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
@@ -12465,7 +12468,7 @@ pub(crate) mod tests {
         fn mock_ix_processor(
             _first_instruction_account: usize,
             _data: &[u8],
-            _invoke_context: &mut InvokeContext,
+            _invoke_context: &mut InvokeContext<'_>,
         ) -> std::result::Result<(), InstructionError> {
             Ok(())
         }
@@ -12514,7 +12517,7 @@ pub(crate) mod tests {
         fn mock_ix_processor(
             _first_instruction_account: usize,
             _data: &[u8],
-            _context: &mut InvokeContext,
+            _context: &mut InvokeContext<'_>,
         ) -> std::result::Result<(), InstructionError> {
             Ok(())
         }
@@ -13414,7 +13417,7 @@ pub(crate) mod tests {
         fn mock_process_instruction(
             _first_instruction_account: usize,
             _data: &[u8],
-            _invoke_context: &mut InvokeContext,
+            _invoke_context: &mut InvokeContext<'_>,
         ) -> std::result::Result<(), solana_sdk::instruction::InstructionError> {
             Ok(())
         }
@@ -14915,7 +14918,7 @@ pub(crate) mod tests {
         fn mock_ix_processor(
             first_instruction_account: usize,
             _data: &[u8],
-            invoke_context: &mut InvokeContext,
+            invoke_context: &mut InvokeContext<'_>,
         ) -> std::result::Result<(), InstructionError> {
             use solana_sdk::account::WritableAccount;
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
@@ -15127,7 +15130,7 @@ pub(crate) mod tests {
         fn mock_ix_processor(
             _first_instruction_account: usize,
             _data: &[u8],
-            invoke_context: &mut InvokeContext,
+            invoke_context: &mut InvokeContext<'_>,
         ) -> std::result::Result<(), InstructionError> {
             let compute_budget = invoke_context.get_compute_budget();
             assert_eq!(
@@ -15172,7 +15175,7 @@ pub(crate) mod tests {
         fn mock_ix_processor(
             _first_instruction_account: usize,
             _data: &[u8],
-            invoke_context: &mut InvokeContext,
+            invoke_context: &mut InvokeContext<'_>,
         ) -> std::result::Result<(), InstructionError> {
             let compute_budget = invoke_context.get_compute_budget();
             assert_eq!(

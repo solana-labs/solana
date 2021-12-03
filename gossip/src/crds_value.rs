@@ -57,7 +57,7 @@ impl Signable for CrdsValue {
         self.pubkey()
     }
 
-    fn signable_data(&self) -> Cow<[u8]> {
+    fn signable_data(&self) -> Cow<'_, [u8]> {
         Cow::Owned(serialize(&self.data).expect("failed to serialize CrdsData"))
     }
 

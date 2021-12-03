@@ -22,7 +22,7 @@ use solana_sdk::{
 use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, sync::Arc};
 
 pub type ProcessInstructionWithContext =
-    fn(usize, &[u8], &mut InvokeContext) -> Result<(), InstructionError>;
+    fn(usize, &[u8], &mut InvokeContext<'_>) -> Result<(), InstructionError>;
 
 #[derive(Clone)]
 pub struct BuiltinProgram {
@@ -31,7 +31,7 @@ pub struct BuiltinProgram {
 }
 
 impl std::fmt::Debug for BuiltinProgram {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // These are just type aliases for work around of Debug-ing above pointers
         type ErasedProcessInstructionWithContext = fn(
             usize,
@@ -745,7 +745,7 @@ impl<'a> InvokeContext<'a> {
     }
 
     /// Get the list of keyed accounts
-    pub fn get_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError> {
+    pub fn get_keyed_accounts(&self) -> Result<&[KeyedAccount<'_>], InstructionError> {
         self.invoke_stack
             .last()
             .map(|frame| &frame.keyed_accounts[frame.keyed_accounts_range.clone()])
@@ -753,7 +753,7 @@ impl<'a> InvokeContext<'a> {
     }
 
     /// Get the list of keyed accounts skipping `first_instruction_account` many entries
-    pub fn get_instruction_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError> {
+    pub fn get_instruction_keyed_accounts(&self) -> Result<&[KeyedAccount<'_>], InstructionError> {
         let frame = self
             .invoke_stack
             .last()
@@ -872,7 +872,7 @@ impl<'a> InvokeContext<'a> {
 // This method which has a generic parameter is outside of the InvokeContext,
 // because the InvokeContext is a dyn Trait.
 pub fn get_sysvar<T: Sysvar>(
-    invoke_context: &InvokeContext,
+    invoke_context: &InvokeContext<'_>,
     id: &Pubkey,
 ) -> Result<T, InstructionError> {
     invoke_context
@@ -952,7 +952,7 @@ pub fn prepare_mock_invoke_context(
     }
 }
 
-pub fn with_mock_invoke_context<R, F: FnMut(&mut InvokeContext) -> R>(
+pub fn with_mock_invoke_context<R, F: FnMut(&mut InvokeContext<'_>) -> R>(
     loader_id: Pubkey,
     account_size: usize,
     mut callback: F,
@@ -1039,7 +1039,7 @@ mod tests {
         fn mock_process_instruction(
             _first_instruction_account: usize,
             _data: &[u8],
-            _invoke_context: &mut InvokeContext,
+            _invoke_context: &mut InvokeContext<'_>,
         ) -> Result<(), InstructionError> {
             Ok(())
         }
@@ -1047,7 +1047,7 @@ mod tests {
         fn mock_ix_processor(
             _first_instruction_account: usize,
             _data: &[u8],
-            _context: &mut InvokeContext,
+            _context: &mut InvokeContext<'_>,
         ) -> Result<(), InstructionError> {
             Ok(())
         }
@@ -1068,7 +1068,7 @@ mod tests {
     fn mock_process_instruction(
         first_instruction_account: usize,
         data: &[u8],
-        invoke_context: &mut InvokeContext,
+        invoke_context: &mut InvokeContext<'_>,
     ) -> Result<(), InstructionError> {
         let program_id = invoke_context.get_caller()?;
         let keyed_accounts = invoke_context.get_keyed_accounts()?;

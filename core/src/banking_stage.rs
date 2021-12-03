@@ -810,7 +810,7 @@ impl BankingStage {
     fn process_and_record_transactions_locked(
         bank: &Arc<Bank>,
         poh: &TransactionRecorder,
-        batch: &TransactionBatch,
+        batch: &TransactionBatch<'_, '_>,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
     ) -> (Result<usize, PohRecorderError>, Vec<usize>) {

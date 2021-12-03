@@ -117,7 +117,7 @@ pub fn sol_log_slice(slice: &[u8]) {
 /// @param ka - A pointer to an array of `AccountInfo` to print
 /// @param data - A pointer to the instruction data to print
 #[allow(dead_code)]
-pub fn sol_log_params(accounts: &[AccountInfo], data: &[u8]) {
+pub fn sol_log_params(accounts: &[AccountInfo<'_>], data: &[u8]) {
     for (i, account) in accounts.iter().enumerate() {
         msg!("AccountInfo");
         msg!(0, 0, 0, 0, i);

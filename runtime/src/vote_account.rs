@@ -56,7 +56,7 @@ impl VoteAccount {
         self.account().lamports
     }
 
-    pub fn vote_state(&self) -> RwLockReadGuard<Result<VoteState, InstructionError>> {
+    pub fn vote_state(&self) -> RwLockReadGuard<'_, Result<VoteState, InstructionError>> {
         let inner = &self.0;
         inner.vote_state_once.call_once(|| {
             let vote_state = VoteState::deserialize(&inner.account.data);

@@ -70,7 +70,7 @@ pub struct CliFeatures {
 }
 
 impl fmt::Display for CliFeatures {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.features.len() > 1 {
             writeln!(
                 f,
@@ -216,7 +216,7 @@ pub fn parse_feature_subcommand(
 
 pub fn process_feature_subcommand(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     feature_subcommand: &FeatureCliCommand,
 ) -> ProcessResult {
     match feature_subcommand {
@@ -518,7 +518,7 @@ pub fn get_feature_is_active(
 
 fn process_status(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     feature_ids: &[Pubkey],
 ) -> ProcessResult {
     let mut features: Vec<CliFeature> = vec![];
@@ -559,7 +559,7 @@ fn process_status(
 
 fn process_activate(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     feature_id: Pubkey,
     force: ForceActivation,
 ) -> ProcessResult {

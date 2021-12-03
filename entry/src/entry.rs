@@ -46,7 +46,7 @@ thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::
 pub type EntrySender = Sender<Vec<Entry>>;
 pub type EntryReceiver = Receiver<Vec<Entry>>;
 
-static mut API: Option<Container<Api>> = None;
+static mut API: Option<Container<Api<'_>>> = None;
 
 pub fn init_poh() {
     init(OsStr::new("libpoh-simd.so"));

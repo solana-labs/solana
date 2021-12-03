@@ -96,7 +96,7 @@ pub trait AccountsDbPlugin: Any + Send + Sync + std::fmt::Debug {
     #[allow(unused_variables)]
     fn update_account(
         &mut self,
-        account: ReplicaAccountInfoVersions,
+        account: ReplicaAccountInfoVersions<'_>,
         slot: u64,
         is_startup: bool,
     ) -> Result<()> {
@@ -123,7 +123,7 @@ pub trait AccountsDbPlugin: Any + Send + Sync + std::fmt::Debug {
     #[allow(unused_variables)]
     fn notify_transaction(
         &mut self,
-        transaction: ReplicaTransactionInfoVersions,
+        transaction: ReplicaTransactionInfoVersions<'_>,
         slot: u64,
     ) -> Result<()> {
         Ok(())

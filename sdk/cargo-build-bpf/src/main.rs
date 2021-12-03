@@ -114,7 +114,7 @@ where
 
 // Check whether a package is installed and install it if missing.
 fn install_if_missing(
-    config: &Config,
+    config: &Config<'_>,
     package: &str,
     version: &str,
     url: &str,
@@ -292,7 +292,7 @@ fn postprocess_dump(program_dump: &Path) {
 
 // Check whether the built .so file contains undefined symbols that are
 // not known to the runtime and warn about them if any.
-fn check_undefined_symbols(config: &Config, program: &Path) {
+fn check_undefined_symbols(config: &Config<'_>, program: &Path) {
     let syscalls_txt = config.bpf_sdk.join("syscalls.txt");
     let file = match File::open(syscalls_txt) {
         Ok(x) => x,
@@ -345,7 +345,7 @@ fn check_undefined_symbols(config: &Config, program: &Path) {
 }
 
 // check whether custom BPF toolchain is linked, and link it if it is not.
-fn link_bpf_toolchain(config: &Config) {
+fn link_bpf_toolchain(config: &Config<'_>) {
     let toolchain_path = config
         .bpf_sdk
         .join("dependencies")
@@ -396,7 +396,11 @@ fn link_bpf_toolchain(config: &Config) {
     }
 }
 
-fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_metadata::Package) {
+fn build_bpf_package(
+    config: &Config<'_>,
+    target_directory: &Path,
+    package: &cargo_metadata::Package,
+) {
     let program_name = {
         let cdylib_targets = package
             .targets
@@ -638,7 +642,7 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     }
 }
 
-fn build_bpf(config: Config, manifest_path: Option<PathBuf>) {
+fn build_bpf(config: Config<'_>, manifest_path: Option<PathBuf>) {
     let mut metadata_command = cargo_metadata::MetadataCommand::new();
     if let Some(manifest_path) = manifest_path {
         metadata_command.manifest_path(manifest_path);

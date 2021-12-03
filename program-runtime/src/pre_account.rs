@@ -168,7 +168,7 @@ impl PreAccount {
         &self.key
     }
 
-    pub fn data(&self) -> Ref<[u8]> {
+    pub fn data(&self) -> Ref<'_, [u8]> {
         Ref::map(self.account.borrow(), |account| account.data())
     }
 

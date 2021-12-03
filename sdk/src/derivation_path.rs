@@ -234,7 +234,7 @@ impl AsRef<str> for QueryKey {
 }
 
 impl std::fmt::Display for QueryKey {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s: &str = self.as_ref();
         write!(f, "{}", s)
     }

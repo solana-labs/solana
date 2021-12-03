@@ -606,7 +606,7 @@ pub enum UiTransactionEncoding {
 }
 
 impl fmt::Display for UiTransactionEncoding {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let v = serde_json::to_value(self).map_err(|_| fmt::Error)?;
         let s = v.as_str().ok_or(fmt::Error)?;
         write!(f, "{}", s)

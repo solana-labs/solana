@@ -80,7 +80,7 @@ impl AccountsDb {
         let slot_stores = self.storage.get_slot_stores(slot).unwrap();
 
         let slot_stores = slot_stores.read().unwrap();
-        let mut accounts_to_stream: HashMap<Pubkey, StoredAccountMeta> = HashMap::default();
+        let mut accounts_to_stream: HashMap<Pubkey, StoredAccountMeta<'_>> = HashMap::default();
         let mut measure_filter = Measure::start("accountsdb-plugin-filtering-accounts");
         for (_, storage_entry) in slot_stores.iter() {
             let mut accounts = storage_entry.all_accounts();
@@ -116,7 +116,7 @@ impl AccountsDb {
         &self,
         slot: Slot,
         notified_accounts: &mut HashSet<Pubkey>,
-        accounts_to_stream: &HashMap<Pubkey, StoredAccountMeta>,
+        accounts_to_stream: &HashMap<Pubkey, StoredAccountMeta<'_>>,
         notify_stats: &mut AccountsDbPluginNotifyAtSnapshotRestoreStats,
     ) {
         let notifier = self
@@ -195,7 +195,11 @@ pub mod tests {
 
         /// Notified when the AccountsDb is initialized at start when restored
         /// from a snapshot.
-        fn notify_account_restore_from_snapshot(&self, slot: Slot, account: &StoredAccountMeta) {
+        fn notify_account_restore_from_snapshot(
+            &self,
+            slot: Slot,
+            account: &StoredAccountMeta<'_>,
+        ) {
             self.accounts_notified
                 .entry(account.meta.pubkey)
                 .or_insert(Vec::default())

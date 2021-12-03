@@ -70,7 +70,7 @@ impl Default for SnapshotVersion {
 }
 
 impl fmt::Display for SnapshotVersion {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(From::from(*self))
     }
 }
@@ -464,7 +464,7 @@ pub fn deserialize_snapshot_data_file<T: Sized>(
     data_file_path: &Path,
     deserializer: impl FnOnce(&mut BufReader<File>) -> Result<T>,
 ) -> Result<T> {
-    let wrapped_deserializer = move |streams: &mut SnapshotStreams<File>| -> Result<T> {
+    let wrapped_deserializer = move |streams: &mut SnapshotStreams<'_, File>| -> Result<T> {
         deserializer(streams.full_snapshot_stream)
     };
 
@@ -482,7 +482,7 @@ pub fn deserialize_snapshot_data_file<T: Sized>(
 
 fn deserialize_snapshot_data_files<T: Sized>(
     snapshot_root_paths: &SnapshotRootPaths,
-    deserializer: impl FnOnce(&mut SnapshotStreams<File>) -> Result<T>,
+    deserializer: impl FnOnce(&mut SnapshotStreams<'_, File>) -> Result<T>,
 ) -> Result<T> {
     deserialize_snapshot_data_files_capped(
         snapshot_root_paths,
@@ -518,7 +518,7 @@ where
 fn deserialize_snapshot_data_files_capped<T: Sized>(
     snapshot_root_paths: &SnapshotRootPaths,
     maximum_file_size: u64,
-    deserializer: impl FnOnce(&mut SnapshotStreams<File>) -> Result<T>,
+    deserializer: impl FnOnce(&mut SnapshotStreams<'_, File>) -> Result<T>,
 ) -> Result<T> {
     let (full_snapshot_file_size, mut full_snapshot_data_file_stream) =
         create_snapshot_data_file_stream(

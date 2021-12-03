@@ -216,7 +216,7 @@ impl Signable for PruneData {
         self.pubkey
     }
 
-    fn signable_data(&self) -> Cow<[u8]> {
+    fn signable_data(&self) -> Cow<'_, [u8]> {
         #[derive(Serialize)]
         struct SignData {
             pubkey: Pubkey,
@@ -620,7 +620,7 @@ impl ClusterInfo {
         self.my_contact_info.read().unwrap().id
     }
 
-    pub fn keypair(&self) -> RwLockReadGuard<Arc<Keypair>> {
+    pub fn keypair(&self) -> RwLockReadGuard<'_, Arc<Keypair>> {
         self.keypair.read().unwrap()
     }
 
@@ -920,7 +920,7 @@ impl ClusterInfo {
         &'a self,
         label: &'static str,
         counter: &'a Counter,
-    ) -> TimedGuard<'a, RwLockReadGuard<Crds>> {
+    ) -> TimedGuard<'a, RwLockReadGuard<'_, Crds>> {
         TimedGuard::new(self.gossip.crds.read().unwrap(), label, counter)
     }
 

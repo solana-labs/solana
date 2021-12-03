@@ -35,14 +35,14 @@ pub struct ReleaseVersion {
     channel: String,
 }
 
-static TRUCK: Emoji = Emoji("🚚 ", "");
-static LOOKING_GLASS: Emoji = Emoji("🔍 ", "");
-static BULLET: Emoji = Emoji("• ", "* ");
-static SPARKLE: Emoji = Emoji("✨ ", "");
-static WRAPPED_PRESENT: Emoji = Emoji("🎁 ", "");
-static PACKAGE: Emoji = Emoji("📦 ", "");
-static INFORMATION: Emoji = Emoji("ℹ️  ", "");
-static RECYCLING: Emoji = Emoji("♻️  ", "");
+static TRUCK: Emoji<'_, '_> = Emoji("🚚 ", "");
+static LOOKING_GLASS: Emoji<'_, '_> = Emoji("🔍 ", "");
+static BULLET: Emoji<'_, '_> = Emoji("• ", "* ");
+static SPARKLE: Emoji<'_, '_> = Emoji("✨ ", "");
+static WRAPPED_PRESENT: Emoji<'_, '_> = Emoji("🎁 ", "");
+static PACKAGE: Emoji<'_, '_> = Emoji("📦 ", "");
+static INFORMATION: Emoji<'_, '_> = Emoji("ℹ️  ", "");
+static RECYCLING: Emoji<'_, '_> = Emoji("♻️  ", "");
 
 /// Creates a new process bar for processing that will take an unknown amount of time
 fn new_spinner_progress_bar() -> ProgressBar {

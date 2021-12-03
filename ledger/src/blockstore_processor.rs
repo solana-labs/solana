@@ -111,7 +111,7 @@ fn first_err(results: &[Result<()>]) -> Result<()> {
 
 // Includes transaction signature for unit-testing
 fn get_first_error(
-    batch: &TransactionBatch,
+    batch: &TransactionBatch<'_, '_>,
     fee_collection_results: Vec<Result<()>>,
 ) -> Option<(Result<()>, Signature)> {
     let mut first_err = None;
@@ -154,7 +154,7 @@ fn aggregate_total_execution_units(execute_timings: &ExecuteTimings) -> u64 {
 }
 
 fn execute_batch(
-    batch: &TransactionBatch,
+    batch: &TransactionBatch<'_, '_>,
     bank: &Arc<Bank>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
@@ -248,7 +248,7 @@ fn execute_batch(
 
 fn execute_batches(
     bank: &Arc<Bank>,
-    batches: &[TransactionBatch],
+    batches: &[TransactionBatch<'_, '_>],
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,

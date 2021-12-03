@@ -303,7 +303,7 @@ impl DefaultSigner {
     /// ```
     pub fn signer_from_path(
         &self,
-        matches: &ArgMatches,
+        matches: &ArgMatches<'_>,
         wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
     ) -> Result<Box<dyn Signer>, Box<dyn std::error::Error>> {
         signer_from_path(matches, self.path()?, &self.arg_name, wallet_manager)
@@ -356,7 +356,7 @@ impl DefaultSigner {
     /// ```
     pub fn signer_from_path_with_config(
         &self,
-        matches: &ArgMatches,
+        matches: &ArgMatches<'_>,
         wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
         config: &SignerFromPathConfig,
     ) -> Result<Box<dyn Signer>, Box<dyn std::error::Error>> {
@@ -421,7 +421,7 @@ impl AsRef<str> for SignerSourceKind {
 }
 
 impl std::fmt::Debug for SignerSourceKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s: &str = self.as_ref();
         write!(f, "{}", s)
     }
@@ -683,7 +683,7 @@ pub struct SignerFromPathConfig {
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub fn signer_from_path(
-    matches: &ArgMatches,
+    matches: &ArgMatches<'_>,
     path: &str,
     keypair_name: &str,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
@@ -750,7 +750,7 @@ pub fn signer_from_path(
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub fn signer_from_path_with_config(
-    matches: &ArgMatches,
+    matches: &ArgMatches<'_>,
     path: &str,
     keypair_name: &str,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
@@ -857,7 +857,7 @@ pub fn signer_from_path_with_config(
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub fn pubkey_from_path(
-    matches: &ArgMatches,
+    matches: &ArgMatches<'_>,
     path: &str,
     keypair_name: &str,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
@@ -870,7 +870,7 @@ pub fn pubkey_from_path(
 }
 
 pub fn resolve_signer_from_path(
-    matches: &ArgMatches,
+    matches: &ArgMatches<'_>,
     path: &str,
     keypair_name: &str,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
@@ -996,7 +996,7 @@ pub fn prompt_passphrase(prompt: &str) -> Result<String, Box<dyn error::Error>> 
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub fn keypair_from_path(
-    matches: &ArgMatches,
+    matches: &ArgMatches<'_>,
     path: &str,
     keypair_name: &str,
     confirm_pubkey: bool,

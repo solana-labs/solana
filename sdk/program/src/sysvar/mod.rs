@@ -99,13 +99,13 @@ pub trait Sysvar:
     fn size_of() -> usize {
         bincode::serialized_size(&Self::default()).unwrap() as usize
     }
-    fn from_account_info(account_info: &AccountInfo) -> Result<Self, ProgramError> {
+    fn from_account_info(account_info: &AccountInfo<'_>) -> Result<Self, ProgramError> {
         if !Self::check_id(account_info.unsigned_key()) {
             return Err(ProgramError::InvalidArgument);
         }
         bincode::deserialize(&account_info.data.borrow()).map_err(|_| ProgramError::InvalidArgument)
     }
-    fn to_account_info(&self, account_info: &mut AccountInfo) -> Option<()> {
+    fn to_account_info(&self, account_info: &mut AccountInfo<'_>) -> Option<()> {
         bincode::serialize_into(&mut account_info.data.borrow_mut()[..], self).ok()
     }
     fn get() -> Result<Self, ProgramError> {

@@ -20,7 +20,7 @@ pub struct Token {
 }
 
 impl Token {
-    fn write_with_symbol(&self, f: &mut Formatter) -> Result {
+    fn write_with_symbol(&self, f: &mut Formatter<'_>) -> Result {
         match &self.token_type {
             TokenType::Sol => {
                 let amount = lamports_to_sol(self.amount);
@@ -51,13 +51,13 @@ impl Token {
 }
 
 impl Display for Token {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         self.write_with_symbol(f)
     }
 }
 
 impl Debug for Token {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         self.write_with_symbol(f)
     }
 }

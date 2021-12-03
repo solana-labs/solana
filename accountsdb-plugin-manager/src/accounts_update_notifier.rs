@@ -29,7 +29,7 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
         }
     }
 
-    fn notify_account_restore_from_snapshot(&self, slot: Slot, account: &StoredAccountMeta) {
+    fn notify_account_restore_from_snapshot(&self, slot: Slot, account: &StoredAccountMeta<'_>) {
         let mut measure_all = Measure::start("accountsdb-plugin-notify-account-restore-all");
         let mut measure_copy = Measure::start("accountsdb-plugin-copy-stored-account-info");
 
@@ -111,7 +111,7 @@ impl AccountsUpdateNotifierImpl {
 
     fn accountinfo_from_stored_account_meta<'a>(
         &self,
-        stored_account_meta: &'a StoredAccountMeta,
+        stored_account_meta: &'a StoredAccountMeta<'_>,
     ) -> Option<ReplicaAccountInfo<'a>> {
         Some(ReplicaAccountInfo {
             pubkey: stored_account_meta.meta.pubkey.as_ref(),
@@ -126,7 +126,7 @@ impl AccountsUpdateNotifierImpl {
 
     fn notify_plugins_of_account_update(
         &self,
-        account: ReplicaAccountInfo,
+        account: ReplicaAccountInfo<'_>,
         slot: Slot,
         is_startup: bool,
     ) {

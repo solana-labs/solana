@@ -79,7 +79,7 @@ pub struct Api<'a> {
         Symbol<'a, unsafe extern "C" fn(packed_ge: *const u8) -> c_int>,
 }
 
-static mut API: Option<Container<Api>> = None;
+static mut API: Option<Container<Api<'_>>> = None;
 
 fn init(name: &OsStr) {
     static INIT_HOOK: Once = Once::new();

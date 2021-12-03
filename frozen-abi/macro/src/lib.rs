@@ -1,5 +1,3 @@
-extern crate proc_macro;
-
 // This file littered with these essential cfgs so ensure them.
 #[cfg(not(any(RUSTC_WITH_SPECIALIZATION, RUSTC_WITHOUT_SPECIALIZATION)))]
 compile_error!("rustc_version is missing in build dependency and build.rs is not specified");
@@ -338,7 +336,7 @@ fn frozen_abi_struct_type(input: ItemStruct, expected_digest: &str) -> TokenStre
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 fn quote_sample_variant(
     type_name: &Ident,
-    ty_generics: &syn::TypeGenerics,
+    ty_generics: &syn::TypeGenerics<'_>,
     variant: &Variant,
 ) -> TokenStream2 {
     let variant_name = &variant.ident;

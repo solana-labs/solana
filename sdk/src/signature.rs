@@ -63,7 +63,7 @@ pub trait Signable {
     }
 
     fn pubkey(&self) -> Pubkey;
-    fn signable_data(&self) -> Cow<[u8]>;
+    fn signable_data(&self) -> Cow<'_, [u8]>;
     fn get_signature(&self) -> Signature;
     fn set_signature(&mut self, signature: Signature);
 }
@@ -75,13 +75,13 @@ impl AsRef<[u8]> for Signature {
 }
 
 impl fmt::Debug for Signature {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", bs58::encode(self.0).into_string())
     }
 }
 
 impl fmt::Display for Signature {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", bs58::encode(self.0).into_string())
     }
 }

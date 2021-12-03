@@ -147,7 +147,7 @@ impl<'de> Deserialize<'de> for MessagePrefix {
         impl<'de> Visitor<'de> for PrefixVisitor {
             type Value = MessagePrefix;
 
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
                 formatter.write_str("message prefix byte")
             }
 
@@ -174,7 +174,7 @@ impl<'de> Deserialize<'de> for VersionedMessage {
         impl<'de> Visitor<'de> for MessageVisitor {
             type Value = VersionedMessage;
 
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
                 formatter.write_str("message bytes")
             }
 

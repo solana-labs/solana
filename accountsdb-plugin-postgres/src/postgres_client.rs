@@ -794,7 +794,7 @@ impl ParallelPostgresClient {
 
     pub fn update_account(
         &mut self,
-        account: &ReplicaAccountInfo,
+        account: &ReplicaAccountInfo<'_>,
         slot: u64,
         is_startup: bool,
     ) -> Result<(), AccountsDbPluginError> {

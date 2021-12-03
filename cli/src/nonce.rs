@@ -345,7 +345,7 @@ pub fn check_nonce_account(
 
 pub fn process_authorize_nonce_account(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     nonce_account: &Pubkey,
     nonce_authority: SignerIndex,
     memo: Option<&String>,
@@ -389,7 +389,7 @@ pub fn process_authorize_nonce_account(
 
 pub fn process_create_nonce_account(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     nonce_account: SignerIndex,
     seed: Option<String>,
     nonce_authority: Option<Pubkey>,
@@ -506,7 +506,7 @@ pub fn process_create_nonce_account(
 
 pub fn process_get_nonce(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     nonce_account_pubkey: &Pubkey,
 ) -> ProcessResult {
     #[allow(clippy::redundant_closure)]
@@ -520,7 +520,7 @@ pub fn process_get_nonce(
 
 pub fn process_new_nonce(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     nonce_account: &Pubkey,
     nonce_authority: SignerIndex,
     memo: Option<&String>,
@@ -573,7 +573,7 @@ pub fn process_new_nonce(
 
 pub fn process_show_nonce_account(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     nonce_account_pubkey: &Pubkey,
     use_lamports_unit: bool,
 ) -> ProcessResult {
@@ -603,7 +603,7 @@ pub fn process_show_nonce_account(
 
 pub fn process_withdraw_from_nonce_account(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     nonce_account: &Pubkey,
     nonce_authority: SignerIndex,
     memo: Option<&String>,

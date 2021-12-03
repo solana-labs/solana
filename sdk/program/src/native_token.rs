@@ -16,7 +16,7 @@ use std::fmt::{Debug, Display, Formatter, Result};
 pub struct Sol(pub u64);
 
 impl Sol {
-    fn write_in_sol(&self, f: &mut Formatter) -> Result {
+    fn write_in_sol(&self, f: &mut Formatter<'_>) -> Result {
         write!(
             f,
             "◎{}.{:09}",
@@ -27,13 +27,13 @@ impl Sol {
 }
 
 impl Display for Sol {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         self.write_in_sol(f)
     }
 }
 
 impl Debug for Sol {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         self.write_in_sol(f)
     }
 }

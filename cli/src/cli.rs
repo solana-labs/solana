@@ -860,7 +860,7 @@ pub fn parse_command(
 
 pub type ProcessResult = Result<String, Box<dyn std::error::Error>>;
 
-pub fn process_command(config: &CliConfig) -> ProcessResult {
+pub fn process_command(config: &CliConfig<'_>) -> ProcessResult {
     if config.verbose && config.output_format == OutputFormat::DisplayVerbose {
         println_name_value("RPC URL:", &config.json_rpc_url);
         println_name_value("Default Signer Path:", &config.keypair_path);
@@ -1541,7 +1541,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
 
 pub fn request_and_confirm_airdrop(
     rpc_client: &RpcClient,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     to_pubkey: &Pubkey,
     lamports: u64,
 ) -> ClientResult<Signature> {
@@ -1569,7 +1569,7 @@ where
 
 pub fn log_instruction_custom_error<E>(
     result: ClientResult<Signature>,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
 ) -> ProcessResult
 where
     E: 'static + std::error::Error + DecodeError<E> + FromPrimitive,
@@ -1579,7 +1579,7 @@ where
 
 pub fn log_instruction_custom_error_ex<E, F>(
     result: ClientResult<Signature>,
-    config: &CliConfig,
+    config: &CliConfig<'_>,
     error_adapter: F,
 ) -> ProcessResult
 where

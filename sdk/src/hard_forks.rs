@@ -27,7 +27,7 @@ impl HardForks {
     }
 
     // Returns a sorted-by-slot iterator over the registered hark forks
-    pub fn iter(&self) -> std::slice::Iter<(Slot, usize)> {
+    pub fn iter(&self) -> std::slice::Iter<'_, (Slot, usize)> {
         self.hard_forks.iter()
     }
 

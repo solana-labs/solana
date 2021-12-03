@@ -15,7 +15,7 @@ use {
 // Process instruction to invoke into another program
 fn invoker_process_instruction(
     _program_id: &Pubkey,
-    accounts: &[AccountInfo],
+    accounts: &[AccountInfo<'_>],
     _input: &[u8],
 ) -> ProgramResult {
     // if we can call `msg!` successfully, then InvokeContext exists as required
@@ -34,7 +34,7 @@ fn invoker_process_instruction(
 #[allow(clippy::unnecessary_wraps)]
 fn invoked_process_instruction(
     _program_id: &Pubkey,
-    _accounts: &[AccountInfo],
+    _accounts: &[AccountInfo<'_>],
     _input: &[u8],
 ) -> ProgramResult {
     // if we can call `msg!` successfully, then InvokeContext exists as required

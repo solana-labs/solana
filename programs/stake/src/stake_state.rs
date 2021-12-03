@@ -362,7 +362,7 @@ pub trait StakeAccount {
     ) -> Result<(), InstructionError>;
     fn authorize_with_seed(
         &self,
-        authority_base: &KeyedAccount,
+        authority_base: &KeyedAccount<'_>,
         authority_seed: &str,
         authority_owner: &Pubkey,
         new_authority: &Pubkey,
@@ -373,7 +373,7 @@ pub trait StakeAccount {
     ) -> Result<(), InstructionError>;
     fn delegate(
         &self,
-        vote_account: &KeyedAccount,
+        vote_account: &KeyedAccount<'_>,
         clock: &Clock,
         stake_history: &StakeHistory,
         config: &Config,
@@ -390,13 +390,13 @@ pub trait StakeAccount {
     fn split(
         &self,
         lamports: u64,
-        split_stake: &KeyedAccount,
+        split_stake: &KeyedAccount<'_>,
         signers: &HashSet<Pubkey>,
     ) -> Result<(), InstructionError>;
     fn merge(
         &self,
-        invoke_context: &InvokeContext,
-        source_stake: &KeyedAccount,
+        invoke_context: &InvokeContext<'_>,
+        source_stake: &KeyedAccount<'_>,
         clock: &Clock,
         stake_history: &StakeHistory,
         signers: &HashSet<Pubkey>,
@@ -405,11 +405,11 @@ pub trait StakeAccount {
     fn withdraw(
         &self,
         lamports: u64,
-        to: &KeyedAccount,
+        to: &KeyedAccount<'_>,
         clock: &Clock,
         stake_history: &StakeHistory,
-        withdraw_authority: &KeyedAccount,
-        custodian: Option<&KeyedAccount>,
+        withdraw_authority: &KeyedAccount<'_>,
+        custodian: Option<&KeyedAccount<'_>>,
         prevent_withdraw_to_zero: bool,
     ) -> Result<(), InstructionError>;
 }
@@ -485,7 +485,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
     }
     fn authorize_with_seed(
         &self,
-        authority_base: &KeyedAccount,
+        authority_base: &KeyedAccount<'_>,
         authority_seed: &str,
         authority_owner: &Pubkey,
         new_authority: &Pubkey,
@@ -513,7 +513,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
     }
     fn delegate(
         &self,
-        vote_account: &KeyedAccount,
+        vote_account: &KeyedAccount<'_>,
         clock: &Clock,
         stake_history: &StakeHistory,
         config: &Config,
@@ -585,7 +585,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
     fn split(
         &self,
         lamports: u64,
-        split: &KeyedAccount,
+        split: &KeyedAccount<'_>,
         signers: &HashSet<Pubkey>,
     ) -> Result<(), InstructionError> {
         if split.owner()? != id() {
@@ -701,8 +701,8 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
 
     fn merge(
         &self,
-        invoke_context: &InvokeContext,
-        source_account: &KeyedAccount,
+        invoke_context: &InvokeContext<'_>,
+        source_account: &KeyedAccount<'_>,
         clock: &Clock,
         stake_history: &StakeHistory,
         signers: &HashSet<Pubkey>,
@@ -757,11 +757,11 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
     fn withdraw(
         &self,
         lamports: u64,
-        to: &KeyedAccount,
+        to: &KeyedAccount<'_>,
         clock: &Clock,
         stake_history: &StakeHistory,
-        withdraw_authority: &KeyedAccount,
-        custodian: Option<&KeyedAccount>,
+        withdraw_authority: &KeyedAccount<'_>,
+        custodian: Option<&KeyedAccount<'_>>,
         prevent_withdraw_to_zero: bool,
     ) -> Result<(), InstructionError> {
         let mut signers = HashSet::new();
@@ -865,8 +865,8 @@ impl MergeKind {
     }
 
     fn get_if_mergeable(
-        invoke_context: &InvokeContext,
-        stake_keyed_account: &KeyedAccount,
+        invoke_context: &InvokeContext<'_>,
+        stake_keyed_account: &KeyedAccount<'_>,
         clock: &Clock,
         stake_history: &StakeHistory,
     ) -> Result<Self, InstructionError> {
@@ -897,7 +897,7 @@ impl MergeKind {
     }
 
     fn metas_can_merge(
-        invoke_context: &InvokeContext,
+        invoke_context: &InvokeContext<'_>,
         stake: &Meta,
         source: &Meta,
         clock: Option<&Clock>,
@@ -926,7 +926,7 @@ impl MergeKind {
     }
 
     fn active_delegations_can_merge(
-        invoke_context: &InvokeContext,
+        invoke_context: &InvokeContext<'_>,
         stake: &Delegation,
         source: &Delegation,
     ) -> Result<(), InstructionError> {
@@ -946,7 +946,7 @@ impl MergeKind {
 
     // Remove this when the `stake_merge_with_unmatched_credits_observed` feature is removed
     fn active_stakes_can_merge(
-        invoke_context: &InvokeContext,
+        invoke_context: &InvokeContext<'_>,
         stake: &Stake,
         source: &Stake,
     ) -> Result<(), InstructionError> {
@@ -969,7 +969,7 @@ impl MergeKind {
 
     fn merge(
         self,
-        invoke_context: &InvokeContext,
+        invoke_context: &InvokeContext<'_>,
         source: Self,
         clock: Option<&Clock>,
     ) -> Result<Option<StakeState>, InstructionError> {
@@ -1033,7 +1033,7 @@ impl MergeKind {
 }
 
 fn merge_delegation_stake_and_credits_observed(
-    invoke_context: &InvokeContext,
+    invoke_context: &InvokeContext<'_>,
     stake: &mut Stake,
     absorbed_lamports: u64,
     absorbed_credits_observed: u64,
@@ -5453,9 +5453,9 @@ mod tests {
         );
 
         fn try_merge(
-            invoke_context: &InvokeContext,
-            stake_account: &KeyedAccount,
-            source_account: &KeyedAccount,
+            invoke_context: &InvokeContext<'_>,
+            stake_account: &KeyedAccount<'_>,
+            source_account: &KeyedAccount<'_>,
             clock: &Clock,
             stake_history: &StakeHistory,
             signers: &HashSet<Pubkey>,

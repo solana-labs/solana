@@ -1,6 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 #![feature(test)]
-extern crate solana_ledger;
+
 extern crate test;
 
 use rand::Rng;

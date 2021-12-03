@@ -12,7 +12,7 @@ use solana_sdk::{
 use std::{io::prelude::*, mem::size_of};
 
 /// Look for a duplicate account and return its position if found
-pub fn is_dup(accounts: &[KeyedAccount], keyed_account: &KeyedAccount) -> (bool, usize) {
+pub fn is_dup(accounts: &[KeyedAccount<'_>], keyed_account: &KeyedAccount<'_>) -> (bool, usize) {
     for (i, account) in accounts.iter().enumerate() {
         if account == keyed_account {
             return (true, i);
@@ -24,7 +24,7 @@ pub fn is_dup(accounts: &[KeyedAccount], keyed_account: &KeyedAccount) -> (bool,
 pub fn serialize_parameters(
     loader_id: &Pubkey,
     program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount],
+    keyed_accounts: &[KeyedAccount<'_>],
     data: &[u8],
 ) -> Result<(AlignedMemory, Vec<usize>), InstructionError> {
     if *loader_id == bpf_loader_deprecated::id() {
@@ -43,7 +43,7 @@ pub fn serialize_parameters(
 
 pub fn deserialize_parameters(
     loader_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount],
+    keyed_accounts: &[KeyedAccount<'_>],
     buffer: &[u8],
     account_lengths: &[usize],
     do_support_realloc: bool,
@@ -56,7 +56,7 @@ pub fn deserialize_parameters(
 }
 
 pub fn get_serialized_account_size_unaligned(
-    keyed_account: &KeyedAccount,
+    keyed_account: &KeyedAccount<'_>,
 ) -> Result<usize, InstructionError> {
     let data_len = keyed_account.data_len()?;
     Ok(
@@ -74,7 +74,7 @@ pub fn get_serialized_account_size_unaligned(
 
 pub fn serialize_parameters_unaligned(
     program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount],
+    keyed_accounts: &[KeyedAccount<'_>],
     instruction_data: &[u8],
 ) -> Result<AlignedMemory, InstructionError> {
     // Calculate size in order to alloc once
@@ -131,7 +131,7 @@ pub fn serialize_parameters_unaligned(
 }
 
 pub fn deserialize_parameters_unaligned(
-    keyed_accounts: &[KeyedAccount],
+    keyed_accounts: &[KeyedAccount<'_>],
     buffer: &[u8],
     account_lengths: &[usize],
 ) -> Result<(), InstructionError> {
@@ -166,7 +166,7 @@ pub fn deserialize_parameters_unaligned(
 }
 
 pub fn get_serialized_account_size_aligned(
-    keyed_account: &KeyedAccount,
+    keyed_account: &KeyedAccount<'_>,
 ) -> Result<usize, InstructionError> {
     let data_len = keyed_account.data_len()?;
     Ok(
@@ -187,7 +187,7 @@ pub fn get_serialized_account_size_aligned(
 
 pub fn serialize_parameters_aligned(
     program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount],
+    keyed_accounts: &[KeyedAccount<'_>],
     instruction_data: &[u8],
 ) -> Result<AlignedMemory, InstructionError> {
     // Calculate size in order to alloc once
@@ -257,7 +257,7 @@ pub fn serialize_parameters_aligned(
 }
 
 pub fn deserialize_parameters_aligned(
-    keyed_accounts: &[KeyedAccount],
+    keyed_accounts: &[KeyedAccount<'_>],
     buffer: &[u8],
     account_lengths: &[usize],
     do_support_realloc: bool,

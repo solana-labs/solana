@@ -14,7 +14,7 @@ impl Sysvar for SlotHashes {
         // hard-coded so that we don't have to construct an empty
         20_488 // golden, update if MAX_ENTRIES changes
     }
-    fn from_account_info(_account_info: &AccountInfo) -> Result<Self, ProgramError> {
+    fn from_account_info(_account_info: &AccountInfo<'_>) -> Result<Self, ProgramError> {
         // This sysvar is too large to bincode::deserialize in-program
         Err(ProgramError::UnsupportedSysvar)
     }

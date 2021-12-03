@@ -137,7 +137,10 @@ impl SanitizedTransaction {
     }
 
     /// Return the list of accounts that must be locked during processing this transaction.
-    pub fn get_account_locks(&self, demote_program_write_locks: bool) -> TransactionAccountLocks {
+    pub fn get_account_locks(
+        &self,
+        demote_program_write_locks: bool,
+    ) -> TransactionAccountLocks<'_> {
         let message = &self.message;
         let num_readonly_accounts = message.num_readonly_accounts();
         let num_writable_accounts = message

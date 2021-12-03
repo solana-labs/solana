@@ -2661,7 +2661,7 @@ pub fn main() {
     info!("Validator exiting..");
 }
 
-fn process_account_indexes(matches: &ArgMatches) -> AccountSecondaryIndexes {
+fn process_account_indexes(matches: &ArgMatches<'_>) -> AccountSecondaryIndexes {
     let account_indexes: HashSet<AccountIndex> = matches
         .values_of("account_indexes")
         .unwrap_or_default()

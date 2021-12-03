@@ -253,7 +253,7 @@ pub struct ReadAccountMapEntry<T: IndexValue> {
 }
 
 impl<T: IndexValue> Debug for ReadAccountMapEntry<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.borrow_owned_entry())
     }
 }
@@ -652,7 +652,7 @@ pub struct AccountsIndexIterator<'a, T: IndexValue> {
 
 impl<'a, T: IndexValue> AccountsIndexIterator<'a, T> {
     fn range<R>(
-        map: &AccountMapsReadLock<T>,
+        map: &AccountMapsReadLock<'_, T>,
         range: R,
         collect_all_unsorted: bool,
     ) -> Vec<(Pubkey, AccountMapEntry<T>)>
@@ -888,7 +888,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         (account_maps, bin_calculator, storage)
     }
 
-    fn iter<R>(&self, range: Option<&R>, collect_all_unsorted: bool) -> AccountsIndexIterator<T>
+    fn iter<R>(&self, range: Option<&R>, collect_all_unsorted: bool) -> AccountsIndexIterator<'_, T>
     where
         R: RangeBounds<Pubkey>,
     {
@@ -1344,7 +1344,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         )
     }
 
-    pub fn get_rooted_entries(&self, slice: SlotSlice<T>, max: Option<Slot>) -> SlotList<T> {
+    pub fn get_rooted_entries(&self, slice: SlotSlice<'_, T>, max: Option<Slot>) -> SlotList<T> {
         let max = max.unwrap_or(Slot::MAX);
         let lock = &self.roots_tracker.read().unwrap().roots;
         slice
@@ -1404,7 +1404,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     fn latest_slot(
         &self,
         ancestors: Option<&Ancestors>,
-        slice: SlotSlice<T>,
+        slice: SlotSlice<'_, T>,
         max_root: Option<Slot>,
     ) -> Option<usize> {
         let mut current_max = 0;
@@ -1527,7 +1527,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     // Get the maximum root <= `max_allowed_root` from the given `slice`
     fn get_newest_root_in_slot_list(
         roots: &RollingBitField,
-        slice: SlotSlice<T>,
+        slice: SlotSlice<'_, T>,
         max_allowed_root: Option<Slot>,
     ) -> Slot {
         let mut max_root = 0;
@@ -1598,13 +1598,13 @@ impl<T: IndexValue> AccountsIndex<T> {
         }
     }
 
-    fn get_account_maps_write_lock(&self, pubkey: &Pubkey) -> AccountMapsWriteLock<T> {
+    fn get_account_maps_write_lock(&self, pubkey: &Pubkey) -> AccountMapsWriteLock<'_, T> {
         self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)]
             .write()
             .unwrap()
     }
 
-    pub(crate) fn get_account_maps_read_lock(&self, pubkey: &Pubkey) -> AccountMapsReadLock<T> {
+    pub(crate) fn get_account_maps_read_lock(&self, pubkey: &Pubkey) -> AccountMapsReadLock<'_, T> {
         self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)]
             .read()
             .unwrap()

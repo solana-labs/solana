@@ -55,7 +55,7 @@ fn get_mint_decimals(bank: &Bank, mint: &Pubkey) -> Option<u8> {
 
 pub fn collect_token_balances(
     bank: &Bank,
-    batch: &TransactionBatch,
+    batch: &TransactionBatch<'_, '_>,
     mint_decimals: &mut HashMap<Pubkey, u8>,
 ) -> TransactionTokenBalances {
     let mut balances: TransactionTokenBalances = vec![];

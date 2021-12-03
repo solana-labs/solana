@@ -368,7 +368,7 @@ fn partition_id_to_tos(partition: usize) -> u8 {
     }
 }
 
-fn shape_network(matches: &ArgMatches) {
+fn shape_network(matches: &ArgMatches<'_>) {
     let config_path = PathBuf::from(value_t_or_exit!(matches, "file", String));
     let config = fs::read_to_string(&config_path).expect("Unable to read config file");
     let topology: NetworkTopology =
@@ -467,7 +467,7 @@ fn cleanup_network(interface: &str) {
     flush_iptables_rule();
 }
 
-fn configure(matches: &ArgMatches) {
+fn configure(matches: &ArgMatches<'_>) {
     let config = if !matches.is_present("random") {
         NetworkTopology::new_from_stdin()
     } else {

@@ -380,13 +380,13 @@ impl AsMut<[u8]> for Pubkey {
 }
 
 impl fmt::Debug for Pubkey {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", bs58::encode(self.0).into_string())
     }
 }
 
 impl fmt::Display for Pubkey {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", bs58::encode(self.0).into_string())
     }
 }

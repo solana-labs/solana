@@ -21,8 +21,6 @@ macro_rules! pubkey {
 #[macro_use]
 extern crate const_format;
 
-extern crate serde_derive;
-
 pub mod checks;
 pub mod clap_app;
 pub mod cli;

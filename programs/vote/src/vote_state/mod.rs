@@ -597,7 +597,7 @@ impl VoteState {
 /// but will implicitly withdraw authorization from the previously authorized
 /// key
 pub fn authorize<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
+    vote_account: &KeyedAccount<'_>,
     authorized: &Pubkey,
     vote_authorize: VoteAuthorize,
     signers: &HashSet<Pubkey, S>,
@@ -627,7 +627,7 @@ pub fn authorize<S: std::hash::BuildHasher>(
 
 /// Update the node_pubkey, requires signature of the authorized voter
 pub fn update_validator_identity<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
+    vote_account: &KeyedAccount<'_>,
     node_pubkey: &Pubkey,
     signers: &HashSet<Pubkey, S>,
 ) -> Result<(), InstructionError> {
@@ -647,7 +647,7 @@ pub fn update_validator_identity<S: std::hash::BuildHasher>(
 
 /// Update the vote account's commission
 pub fn update_commission<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
+    vote_account: &KeyedAccount<'_>,
     commission: u8,
     signers: &HashSet<Pubkey, S>,
 ) -> Result<(), InstructionError> {
@@ -675,9 +675,9 @@ fn verify_authorized_signer<S: std::hash::BuildHasher>(
 
 /// Withdraw funds from the vote account
 pub fn withdraw<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
+    vote_account: &KeyedAccount<'_>,
     lamports: u64,
-    to_account: &KeyedAccount,
+    to_account: &KeyedAccount<'_>,
     signers: &HashSet<Pubkey, S>,
 ) -> Result<(), InstructionError> {
     let vote_state: VoteState =
@@ -706,7 +706,7 @@ pub fn withdraw<S: std::hash::BuildHasher>(
 /// Assumes that the account is being init as part of a account creation or balance transfer and
 /// that the transaction must be signed by the staker's keys
 pub fn initialize_account<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
+    vote_account: &KeyedAccount<'_>,
     vote_init: &VoteInit,
     signers: &HashSet<Pubkey, S>,
     clock: &Clock,
@@ -729,7 +729,7 @@ pub fn initialize_account<S: std::hash::BuildHasher>(
 }
 
 pub fn process_vote<S: std::hash::BuildHasher>(
-    vote_account: &KeyedAccount,
+    vote_account: &KeyedAccount<'_>,
     slot_hashes: &[SlotHash],
     clock: &Clock,
     vote: &Vote,

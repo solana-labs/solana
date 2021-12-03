@@ -14,8 +14,8 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-static TRUCK: Emoji = Emoji("🚚 ", "");
-static SPARKLE: Emoji = Emoji("✨ ", "");
+static TRUCK: Emoji<'_, '_> = Emoji("🚚 ", "");
+static SPARKLE: Emoji<'_, '_> = Emoji("✨ ", "");
 
 /// Creates a new process bar for processing that will take an unknown amount of time
 fn new_spinner_progress_bar() -> ProgressBar {

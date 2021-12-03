@@ -445,7 +445,7 @@ impl From<&TransactionStatusMeta> for DbTransactionStatusMeta {
     }
 }
 
-fn build_db_transaction(slot: u64, transaction_info: &ReplicaTransactionInfo) -> DbTransaction {
+fn build_db_transaction(slot: u64, transaction_info: &ReplicaTransactionInfo<'_>) -> DbTransaction {
     DbTransaction {
         signature: transaction_info.signature.as_ref().to_vec(),
         is_vote: transaction_info.is_vote,
@@ -545,7 +545,7 @@ impl SimplePostgresClient {
 impl ParallelPostgresClient {
     fn build_transaction_request(
         slot: u64,
-        transaction_info: &ReplicaTransactionInfo,
+        transaction_info: &ReplicaTransactionInfo<'_>,
     ) -> LogTransactionRequest {
         LogTransactionRequest {
             transaction_info: build_db_transaction(slot, transaction_info),
@@ -554,7 +554,7 @@ impl ParallelPostgresClient {
 
     pub fn log_transaction_info(
         &mut self,
-        transaction_info: &ReplicaTransactionInfo,
+        transaction_info: &ReplicaTransactionInfo<'_>,
         slot: u64,
     ) -> Result<(), AccountsDbPluginError> {
         let wrk_item = DbWorkItem::LogTransaction(Box::new(Self::build_transaction_request(
@@ -1213,7 +1213,7 @@ pub(crate) mod tests {
 
     fn check_transaction(
         slot: u64,
-        transaction: &ReplicaTransactionInfo,
+        transaction: &ReplicaTransactionInfo<'_>,
         db_transaction: &DbTransaction,
     ) {
         assert_eq!(transaction.signature.as_ref(), db_transaction.signature);

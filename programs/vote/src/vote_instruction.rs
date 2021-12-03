@@ -296,8 +296,8 @@ pub fn withdraw(
 }
 
 fn verify_rent_exemption(
-    keyed_account: &KeyedAccount,
-    rent_sysvar_account: &KeyedAccount,
+    keyed_account: &KeyedAccount<'_>,
+    rent_sysvar_account: &KeyedAccount<'_>,
 ) -> Result<(), InstructionError> {
     let rent: sysvar::rent::Rent = from_keyed_account(rent_sysvar_account)?;
     if !rent.is_exempt(keyed_account.lamports()?, keyed_account.data_len()?) {
@@ -310,7 +310,7 @@ fn verify_rent_exemption(
 pub fn process_instruction(
     first_instruction_account: usize,
     data: &[u8],
-    invoke_context: &mut InvokeContext,
+    invoke_context: &mut InvokeContext<'_>,
 ) -> Result<(), InstructionError> {
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
 

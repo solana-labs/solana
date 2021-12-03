@@ -31,7 +31,7 @@ impl AccountsDbPluginManager {
     ) -> Result<(), Box<dyn Error>> {
         type PluginConstructor = unsafe fn() -> *mut dyn AccountsDbPlugin;
         let lib = Library::new(libpath)?;
-        let constructor: Symbol<PluginConstructor> = lib.get(b"_create_plugin")?;
+        let constructor: Symbol<'_, PluginConstructor> = lib.get(b"_create_plugin")?;
         let plugin_raw = constructor();
         let mut plugin = Box::from_raw(plugin_raw);
         plugin.on_load(config_file)?;

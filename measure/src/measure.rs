@@ -83,7 +83,7 @@ impl Measure {
 }
 
 impl fmt::Display for Measure {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.duration == 0 {
             write!(f, "{} running", self.name)
         } else if self.as_us() < 1 {

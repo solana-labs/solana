@@ -30,7 +30,7 @@ pub trait SyscallStubs: Sync + Send {
     fn sol_invoke_signed(
         &self,
         _instruction: &Instruction,
-        _account_infos: &[AccountInfo],
+        _account_infos: &[AccountInfo<'_>],
         _signers_seeds: &[&[&[u8]]],
     ) -> ProgramResult {
         sol_log("SyscallStubs: sol_invoke_signed() not available");
@@ -111,7 +111,7 @@ pub(crate) fn sol_log_compute_units() {
 
 pub(crate) fn sol_invoke_signed(
     instruction: &Instruction,
-    account_infos: &[AccountInfo],
+    account_infos: &[AccountInfo<'_>],
     signers_seeds: &[&[&[u8]]],
 ) -> ProgramResult {
     SYSCALL_STUBS

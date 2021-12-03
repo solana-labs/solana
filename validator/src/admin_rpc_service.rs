@@ -186,11 +186,12 @@ pub fn run(ledger_path: &Path, metadata: AdminRpcRequestMetadata) {
             io.extend_with(AdminRpcImpl.to_delegate());
 
             let validator_exit = metadata.validator_exit.clone();
-            let server = ServerBuilder::with_meta_extractor(io, move |_req: &RequestContext| {
-                metadata.clone()
-            })
-            .event_loop_executor(event_loop.handle().clone())
-            .start(&format!("{}", admin_rpc_path.display()));
+            let server =
+                ServerBuilder::with_meta_extractor(io, move |_req: &RequestContext<'_>| {
+                    metadata.clone()
+                })
+                .event_loop_executor(event_loop.handle().clone())
+                .start(&format!("{}", admin_rpc_path.display()));
 
             match server {
                 Err(err) => {

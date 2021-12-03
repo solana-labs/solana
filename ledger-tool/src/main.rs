@@ -705,7 +705,7 @@ fn hardforks_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Slot>> {
 }
 
 fn load_bank_forks(
-    arg_matches: &ArgMatches,
+    arg_matches: &ArgMatches<'_>,
     genesis_config: &GenesisConfig,
     blockstore: &Blockstore,
     process_options: ProcessOptions,
@@ -2686,7 +2686,7 @@ fn main() {
                             let stake_calculation_details: DashMap<Pubkey, CalculationDetail> =
                                 DashMap::new();
                             let last_point_value = Arc::new(RwLock::new(None));
-                            let tracer = |event: &RewardCalculationEvent| {
+                            let tracer = |event: &RewardCalculationEvent<'_, '_>| {
                                 // Currently RewardCalculationEvent enum has only Staking variant
                                 // because only staking tracing is supported!
                                 #[allow(irrefutable_let_patterns)]

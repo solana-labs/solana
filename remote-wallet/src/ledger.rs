@@ -13,7 +13,7 @@ use {
     std::{cmp::min, convert::TryFrom, fmt, sync::Arc},
 };
 
-static CHECK_MARK: Emoji = Emoji("✅ ", "");
+static CHECK_MARK: Emoji<'_, '_> = Emoji("✅ ", "");
 
 const DEPRECATE_VERSION_BEFORE: FirmwareVersion = FirmwareVersion::new(0, 2, 0);
 

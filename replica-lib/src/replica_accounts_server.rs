@@ -21,7 +21,7 @@ pub(crate) struct ReplicaAccountsServerImpl {
 impl Eq for ReplicaAccountInfo {}
 
 impl ReplicaAccountInfo {
-    fn from_stored_account_meta(stored_account_meta: &StoredAccountMeta) -> Self {
+    fn from_stored_account_meta(stored_account_meta: &StoredAccountMeta<'_>) -> Self {
         let account_meta = Some(ReplicaAccountMeta {
             pubkey: stored_account_meta.meta.pubkey.to_bytes().to_vec(),
             lamports: stored_account_meta.account_meta.lamports,

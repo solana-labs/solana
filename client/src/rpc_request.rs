@@ -222,7 +222,7 @@ pub enum RpcResponseErrorData {
 }
 
 impl fmt::Display for RpcResponseErrorData {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             RpcResponseErrorData::SendTransactionPreflightFailure(
                 RpcSimulateTransactionResult {

@@ -127,7 +127,7 @@ impl BlockhashQueue {
         note = "Please do not use, will no longer be available in the future"
     )]
     #[allow(deprecated)]
-    pub fn get_recent_blockhashes(&self) -> impl Iterator<Item = recent_blockhashes::IterItem> {
+    pub fn get_recent_blockhashes(&self) -> impl Iterator<Item = recent_blockhashes::IterItem<'_>> {
         (&self.ages).iter().map(|(k, v)| {
             recent_blockhashes::IterItem(v.hash_height, k, v.fee_calculator.lamports_per_signature)
         })

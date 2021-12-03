@@ -24,7 +24,7 @@ impl Exit {
 }
 
 impl fmt::Debug for Exit {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} exits", self.exits.len())
     }
 }

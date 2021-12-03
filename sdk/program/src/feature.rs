@@ -31,7 +31,7 @@ impl Feature {
         .unwrap() as usize
     }
 
-    pub fn from_account_info(account_info: &AccountInfo) -> Result<Self, ProgramError> {
+    pub fn from_account_info(account_info: &AccountInfo<'_>) -> Result<Self, ProgramError> {
         if *account_info.owner != id() {
             return Err(ProgramError::InvalidArgument);
         }

@@ -121,7 +121,7 @@ impl KeyGenerationCommonArgs for App<'_, '_> {
     }
 }
 
-fn check_for_overwrite(outfile: &str, matches: &ArgMatches) {
+fn check_for_overwrite(outfile: &str, matches: &ArgMatches<'_>) {
     let force = matches.is_present("force");
     if !force && Path::new(outfile).exists() {
         eprintln!("Refusing to overwrite {} without --force flag", outfile);
@@ -130,7 +130,7 @@ fn check_for_overwrite(outfile: &str, matches: &ArgMatches) {
 }
 
 fn get_keypair_from_matches(
-    matches: &ArgMatches,
+    matches: &ArgMatches<'_>,
     config: Config,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<Box<dyn Signer>, Box<dyn error::Error>> {

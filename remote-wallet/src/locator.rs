@@ -61,7 +61,7 @@ impl AsRef<str> for Manufacturer {
 }
 
 impl std::fmt::Display for Manufacturer {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s: &str = self.as_ref();
         write!(f, "{}", s)
     }
@@ -94,7 +94,7 @@ pub struct Locator {
 }
 
 impl std::fmt::Display for Locator {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let maybe_path = self.pubkey.map(|p| p.to_string());
         let path = maybe_path.as_deref().unwrap_or("/");
 

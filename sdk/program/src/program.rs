@@ -9,7 +9,7 @@ use crate::{
 ///   `invoke_unchecked` instead, but at your own risk.
 /// - The program id of the instruction being issued must also be included in
 ///   `account_infos`.
-pub fn invoke(instruction: &Instruction, account_infos: &[AccountInfo]) -> ProgramResult {
+pub fn invoke(instruction: &Instruction, account_infos: &[AccountInfo<'_>]) -> ProgramResult {
     invoke_signed(instruction, account_infos, &[])
 }
 
@@ -21,7 +21,10 @@ pub fn invoke(instruction: &Instruction, account_infos: &[AccountInfo]) -> Progr
 ///   include the checks call `invoke` instead.
 /// - The program id of the instruction being issued must also be included in
 ///   `account_infos`.
-pub fn invoke_unchecked(instruction: &Instruction, account_infos: &[AccountInfo]) -> ProgramResult {
+pub fn invoke_unchecked(
+    instruction: &Instruction,
+    account_infos: &[AccountInfo<'_>],
+) -> ProgramResult {
     invoke_signed_unchecked(instruction, account_infos, &[])
 }
 
@@ -34,7 +37,7 @@ pub fn invoke_unchecked(instruction: &Instruction, account_infos: &[AccountInfo]
 ///   `account_infos`.
 pub fn invoke_signed(
     instruction: &Instruction,
-    account_infos: &[AccountInfo],
+    account_infos: &[AccountInfo<'_>],
     signers_seeds: &[&[&[u8]]],
 ) -> ProgramResult {
     // Check that the account RefCells are consistent with the request
@@ -67,7 +70,7 @@ pub fn invoke_signed(
 ///   `account_infos`.
 pub fn invoke_signed_unchecked(
     instruction: &Instruction,
-    account_infos: &[AccountInfo],
+    account_infos: &[AccountInfo<'_>],
     signers_seeds: &[&[&[u8]]],
 ) -> ProgramResult {
     #[cfg(target_arch = "bpf")]

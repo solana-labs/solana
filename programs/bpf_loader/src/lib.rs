@@ -69,7 +69,7 @@ pub enum BpfError {
 }
 impl UserDefinedError for BpfError {}
 
-fn map_ebpf_error(invoke_context: &InvokeContext, e: EbpfError<BpfError>) -> InstructionError {
+fn map_ebpf_error(invoke_context: &InvokeContext<'_>, e: EbpfError<BpfError>) -> InstructionError {
     ic_msg!(invoke_context, "{}", e);
     InstructionError::InvalidAccountData
 }
@@ -77,7 +77,7 @@ fn map_ebpf_error(invoke_context: &InvokeContext, e: EbpfError<BpfError>) -> Ins
 pub fn create_executor(
     programdata_account_index: usize,
     programdata_offset: usize,
-    invoke_context: &mut InvokeContext,
+    invoke_context: &mut InvokeContext<'_>,
     use_jit: bool,
     reject_unresolved_syscalls: bool,
 ) -> Result<Arc<BpfExecutor>, InstructionError> {
@@ -123,7 +123,7 @@ fn write_program_data(
     program_account_index: usize,
     program_data_offset: usize,
     bytes: &[u8],
-    invoke_context: &mut InvokeContext,
+    invoke_context: &mut InvokeContext<'_>,
 ) -> Result<(), InstructionError> {
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
     let program = keyed_account_at_index(keyed_accounts, program_account_index)?;
@@ -174,7 +174,7 @@ pub fn create_vm<'a, 'b>(
 pub fn process_instruction(
     first_instruction_account: usize,
     instruction_data: &[u8],
-    invoke_context: &mut InvokeContext,
+    invoke_context: &mut InvokeContext<'_>,
 ) -> Result<(), InstructionError> {
     process_instruction_common(
         first_instruction_account,
@@ -187,7 +187,7 @@ pub fn process_instruction(
 pub fn process_instruction_jit(
     first_instruction_account: usize,
     instruction_data: &[u8],
-    invoke_context: &mut InvokeContext,
+    invoke_context: &mut InvokeContext<'_>,
 ) -> Result<(), InstructionError> {
     process_instruction_common(
         first_instruction_account,
@@ -200,7 +200,7 @@ pub fn process_instruction_jit(
 fn process_instruction_common(
     first_instruction_account: usize,
     instruction_data: &[u8],
-    invoke_context: &mut InvokeContext,
+    invoke_context: &mut InvokeContext<'_>,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
     let log_collector = invoke_context.get_log_collector();
@@ -317,7 +317,7 @@ fn process_instruction_common(
 fn process_loader_upgradeable_instruction(
     first_instruction_account: usize,
     instruction_data: &[u8],
-    invoke_context: &mut InvokeContext,
+    invoke_context: &mut InvokeContext<'_>,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
     let log_collector = invoke_context.get_log_collector();
@@ -838,9 +838,9 @@ fn process_loader_upgradeable_instruction(
 
 fn common_close_account(
     authority_address: &Option<Pubkey>,
-    authority_account: &KeyedAccount,
-    close_account: &KeyedAccount,
-    recipient_account: &KeyedAccount,
+    authority_account: &KeyedAccount<'_>,
+    close_account: &KeyedAccount<'_>,
+    recipient_account: &KeyedAccount<'_>,
     log_collector: &Option<Rc<RefCell<LogCollector>>>,
 ) -> Result<(), InstructionError> {
     if authority_address.is_none() {
@@ -867,7 +867,7 @@ fn common_close_account(
 fn process_loader_instruction(
     first_instruction_account: usize,
     instruction_data: &[u8],
-    invoke_context: &mut InvokeContext,
+    invoke_context: &mut InvokeContext<'_>,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
     let program_id = invoke_context.get_caller()?;
@@ -943,7 +943,7 @@ pub struct BpfExecutor {
 
 // Well, implement Debug for solana_rbpf::vm::Executable in solana-rbpf...
 impl Debug for BpfExecutor {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "BpfExecutor({:p})", self)
     }
 }
@@ -1309,7 +1309,7 @@ mod tests {
                 &keyed_accounts,
                 |first_instruction_account: usize,
                  instruction_data: &[u8],
-                 invoke_context: &mut InvokeContext| {
+                 invoke_context: &mut InvokeContext<'_>| {
                     let compute_meter = invoke_context.get_compute_meter();
                     let remaining = compute_meter.borrow_mut().get_remaining();
                     compute_meter.borrow_mut().consume(remaining).unwrap();

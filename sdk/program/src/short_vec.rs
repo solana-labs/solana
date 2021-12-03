@@ -118,7 +118,7 @@ struct ShortU16Visitor;
 impl<'de> Visitor<'de> for ShortU16Visitor {
     type Value = ShortU16;
 
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str("a ShortU16")
     }
 
@@ -190,7 +190,7 @@ where
 {
     type Value = Vec<T>;
 
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str("a Vec with a multi-byte length")
     }
 

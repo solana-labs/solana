@@ -190,7 +190,7 @@ where
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn bank_from_streams<R>(
     serde_style: SerdeStyle,
-    snapshot_streams: &mut SnapshotStreams<R>,
+    snapshot_streams: &mut SnapshotStreams<'_, R>,
     account_paths: &[PathBuf],
     unpacked_append_vec_map: UnpackedAppendVecMap,
     genesis_config: &GenesisConfig,

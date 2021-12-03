@@ -222,7 +222,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         })
     }
 
-    fn remove_if_slot_list_empty_value(&self, slot_list: SlotSlice<T>) -> bool {
+    fn remove_if_slot_list_empty_value(&self, slot_list: SlotSlice<'_, T>) -> bool {
         if slot_list.is_empty() {
             self.stats().insert_or_delete(false, self.bin);
             true
@@ -237,7 +237,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
     }
 
-    fn remove_if_slot_list_empty_entry(&self, entry: Entry<K, AccountMapEntry<T>>) -> bool {
+    fn remove_if_slot_list_empty_entry(&self, entry: Entry<'_, K, AccountMapEntry<T>>) -> bool {
         match entry {
             Entry::Occupied(occupied) => {
                 let result =
@@ -540,7 +540,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     /// true if item already existed in the index
     fn upsert_on_disk(
         &self,
-        vacant: VacantEntry<K, AccountMapEntry<T>>,
+        vacant: VacantEntry<'_, K, AccountMapEntry<T>>,
         new_entry: PreAllocatedAccountMapEntry<T>,
         reclaims: &mut SlotList<T>,
         previous_slot_entry_was_cached: bool,

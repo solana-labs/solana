@@ -463,7 +463,7 @@ impl AppendVec {
     }
 
     /// Return account metadata for each account, starting from `offset`.
-    pub fn accounts(&self, mut offset: usize) -> Vec<StoredAccountMeta> {
+    pub fn accounts(&self, mut offset: usize) -> Vec<StoredAccountMeta<'_>> {
         let mut accounts = vec![];
         while let Some((account, next)) = self.get_account(offset) {
             accounts.push(account);

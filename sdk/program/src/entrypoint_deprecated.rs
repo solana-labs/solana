@@ -23,7 +23,7 @@ pub type ProgramResult = ResultGeneric<(), ProgramError>;
 /// accounts: Accounts passed as part of the instruction
 /// instruction_data: Instruction data
 pub type ProcessInstruction =
-    fn(program_id: &Pubkey, accounts: &[AccountInfo], instruction_data: &[u8]) -> ProgramResult;
+    fn(program_id: &Pubkey, accounts: &[AccountInfo<'_>], instruction_data: &[u8]) -> ProgramResult;
 
 /// Programs indicate success with a return value of 0
 pub const SUCCESS: u64 = 0;

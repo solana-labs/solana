@@ -34,7 +34,7 @@ const NOOP_PROGRAM_ID: [u8; 32] = [
 fn process_instruction(
     _first_instruction_account: usize,
     _data: &[u8],
-    _invoke_context: &mut InvokeContext,
+    _invoke_context: &mut InvokeContext<'_>,
 ) -> Result<(), InstructionError> {
     Ok(())
 }

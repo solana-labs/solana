@@ -153,7 +153,7 @@ fn parse_matches() -> ArgMatches<'static> {
         .get_matches()
 }
 
-fn parse_gossip_host(matches: &ArgMatches, entrypoint_addr: Option<SocketAddr>) -> IpAddr {
+fn parse_gossip_host(matches: &ArgMatches<'_>, entrypoint_addr: Option<SocketAddr>) -> IpAddr {
     matches
         .value_of("gossip_host")
         .map(|gossip_host| {
@@ -217,7 +217,10 @@ fn process_spy_results(
     }
 }
 
-fn process_spy(matches: &ArgMatches, socket_addr_space: SocketAddrSpace) -> std::io::Result<()> {
+fn process_spy(
+    matches: &ArgMatches<'_>,
+    socket_addr_space: SocketAddrSpace,
+) -> std::io::Result<()> {
     let num_nodes_exactly = matches
         .value_of("num_nodes_exactly")
         .map(|num| num.to_string().parse().unwrap());
@@ -266,7 +269,7 @@ fn process_spy(matches: &ArgMatches, socket_addr_space: SocketAddrSpace) -> std:
     Ok(())
 }
 
-fn parse_entrypoint(matches: &ArgMatches) -> Option<SocketAddr> {
+fn parse_entrypoint(matches: &ArgMatches<'_>) -> Option<SocketAddr> {
     matches.value_of("entrypoint").map(|entrypoint| {
         solana_net_utils::parse_host_port(entrypoint).unwrap_or_else(|e| {
             eprintln!("failed to parse entrypoint address: {}", e);
@@ -276,7 +279,7 @@ fn parse_entrypoint(matches: &ArgMatches) -> Option<SocketAddr> {
 }
 
 fn process_rpc_url(
-    matches: &ArgMatches,
+    matches: &ArgMatches<'_>,
     socket_addr_space: SocketAddrSpace,
 ) -> std::io::Result<()> {
     let any = matches.is_present("any");

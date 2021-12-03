@@ -11,11 +11,11 @@ lazy_static! {
 struct LoggerShim {}
 
 impl log::Log for LoggerShim {
-    fn enabled(&self, metadata: &log::Metadata) -> bool {
+    fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
         LOGGER.read().unwrap().enabled(metadata)
     }
 
-    fn log(&self, record: &log::Record) {
+    fn log(&self, record: &log::Record<'_>) {
         LOGGER.read().unwrap().log(record);
     }
 

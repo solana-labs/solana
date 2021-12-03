@@ -25,7 +25,7 @@ pub use solana_sdk::stake::instruction::*;
 pub fn process_instruction(
     first_instruction_account: usize,
     data: &[u8],
-    invoke_context: &mut InvokeContext,
+    invoke_context: &mut InvokeContext<'_>,
 ) -> Result<(), InstructionError> {
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
