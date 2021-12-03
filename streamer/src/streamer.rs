@@ -217,7 +217,7 @@ impl StreamerSendStats {
         let ent = self
             .host_map
             .entry(pkt.meta.addr)
-            .or_insert_with(SendStats::default);
+            .or_default();
         ent.count += 1;
         ent.bytes += pkt.data.len() as u64;
     }
