@@ -32,35 +32,35 @@ pub struct AccountInfo<'a> {
 
 impl<'a> fmt::Debug for AccountInfo<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use fmt::Write;
+        struct Hex<'a>(&'a [u8]);
+        impl fmt::Debug for Hex<'_> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                for &byte in self.0 {
+                    write!(f, "{:02x}", byte)?;
+                }
+
+                Ok(())
+            }
+        }
 
         let data_len = cmp::min(64, self.data_len());
-        let data_str = if data_len > 0 {
-            let mut s = " data: ".to_owned();
 
-            for &byte in &self.data.borrow()[..data_len] {
-                write!(s, "{:02x}", byte)?;
-            }
+        let mut f = f.debug_struct("AccountInfo");
 
-            s.push_str(" ...");
+        f.field("key", &self.key)
+            .field("owner", &self.owner)
+            .field("is_signer", &self.is_signer)
+            .field("is_writable", &self.is_writable)
+            .field("executable", &self.executable)
+            .field("rend_epoch", &self.rent_epoch)
+            .field("lamports", &self.lamports())
+            .field("data.len", &self.data_len());
 
-            s
-        } else {
-            "".to_string()
-        };
-        write!(
-            f,
-            "AccountInfo {{ key: {} owner: {} is_signer: {} is_writable: {} executable: {} rent_epoch: {} lamports: {} data.len: {} {} }}",
-            self.key,
-            self.owner,
-            self.is_signer,
-            self.is_writable,
-            self.executable,
-            self.rent_epoch,
-            self.lamports(),
-            self.data_len(),
-            data_str,
-        )
+        if data_len > 0 {
+            f.field("data", &Hex(&self.data.borrow()[..data_len]));
+        }
+
+        f.finish_non_exhaustive()
     }
 }
 

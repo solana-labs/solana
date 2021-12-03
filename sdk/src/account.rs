@@ -280,30 +280,32 @@ impl ReadableAccount for Ref<'_, Account> {
 }
 
 fn debug_fmt<T: ReadableAccount>(item: &T, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    use fmt::Write;
+    struct Hex<'a>(&'a [u8]);
+    impl fmt::Debug for Hex<'_> {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            for &byte in self.0 {
+                write!(f, "{:02x}", byte)?;
+            }
+
+            Ok(())
+        }
+    }
 
     let data_len = cmp::min(64, item.data().len());
-    let data_str = if data_len > 0 {
-        let mut s = " data: ".to_owned();
 
-        for &byte in &item.data()[..data_len] {
-            write!(s, "{:02x}", byte)?;
-        }
+    let mut f = f.debug_struct("Account");
 
-        s
-    } else {
-        "".to_string()
-    };
-    write!(
-        f,
-        "Account {{ lamports: {} data.len: {} owner: {} executable: {} rent_epoch: {}{} }}",
-        item.lamports(),
-        item.data().len(),
-        item.owner(),
-        item.executable(),
-        item.rent_epoch(),
-        data_str,
-    )
+    f.field("lamports", &item.lamports())
+        .field("data.len", &item.data().len())
+        .field("owner", &item.owner())
+        .field("executable", &item.executable())
+        .field("rent_epoch", &item.rent_epoch());
+
+    if data_len > 0 {
+        f.field("data", &Hex(&item.data()[..data_len]));
+    }
+
+    f.finish()
 }
 
 impl fmt::Debug for Account {
