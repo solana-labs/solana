@@ -172,8 +172,7 @@ impl WithdrawProof {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::encryption::elgamal::ElGamalKeypair;
+    use {super::*, crate::encryption::elgamal::ElGamalKeypair};
 
     #[test]
     #[ignore]

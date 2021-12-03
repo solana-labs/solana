@@ -146,9 +146,13 @@ impl CloseAccountProof {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::encryption::elgamal::ElGamalKeypair;
-    use crate::encryption::pedersen::{Pedersen, PedersenDecryptHandle, PedersenOpening};
+    use {
+        super::*,
+        crate::encryption::{
+            elgamal::ElGamalKeypair,
+            pedersen::{Pedersen, PedersenDecryptHandle, PedersenOpening},
+        },
+    };
 
     #[test]
     fn test_close_account_correctness() {

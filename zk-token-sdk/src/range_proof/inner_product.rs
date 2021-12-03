@@ -1,15 +1,14 @@
-use core::iter;
-use std::borrow::Borrow;
-
-use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
-use curve25519_dalek::scalar::Scalar;
-use curve25519_dalek::traits::VartimeMultiscalarMul;
-
-use crate::errors::ProofError;
-use crate::range_proof::util;
-use crate::transcript::TranscriptProtocol;
-
-use merlin::Transcript;
+use {
+    crate::{errors::ProofError, range_proof::util, transcript::TranscriptProtocol},
+    core::iter,
+    curve25519_dalek::{
+        ristretto::{CompressedRistretto, RistrettoPoint},
+        scalar::Scalar,
+        traits::VartimeMultiscalarMul,
+    },
+    merlin::Transcript,
+    std::borrow::Borrow,
+};
 
 #[allow(non_snake_case)]
 #[derive(Clone)]

@@ -480,8 +480,7 @@ pub fn combine_u32_ciphertexts(ct_lo: ElGamalCiphertext, ct_hi: ElGamalCiphertex
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::encryption::elgamal::ElGamalKeypair;
+    use {super::*, crate::encryption::elgamal::ElGamalKeypair};
 
     #[test]
     fn test_transfer_correctness() {

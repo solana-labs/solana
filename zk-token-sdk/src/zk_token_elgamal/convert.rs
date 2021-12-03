@@ -15,9 +15,11 @@ mod target_arch {
     use {
         super::pod,
         crate::{
-            encryption::aes::AesCiphertext,
-            encryption::elgamal::{ElGamalCiphertext, ElGamalPubkey},
-            encryption::pedersen::{PedersenCommitment, PedersenDecryptHandle},
+            encryption::{
+                aes::AesCiphertext,
+                elgamal::{ElGamalCiphertext, ElGamalPubkey},
+                pedersen::{PedersenCommitment, PedersenDecryptHandle},
+            },
             errors::ProofError,
             range_proof::RangeProof,
         },
