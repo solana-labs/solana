@@ -725,6 +725,7 @@ pub fn parse_close_vote_account(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn process_create_vote_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
@@ -865,6 +866,7 @@ pub fn process_create_vote_account(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn process_vote_authorize(
     rpc_client: &RpcClient,
     config: &CliConfig,
@@ -987,6 +989,7 @@ pub fn process_vote_authorize(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn process_vote_update_validator(
     rpc_client: &RpcClient,
     config: &CliConfig,
@@ -1060,6 +1063,7 @@ pub fn process_vote_update_validator(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn process_vote_update_commission(
     rpc_client: &RpcClient,
     config: &CliConfig,
@@ -1214,6 +1218,7 @@ pub fn process_show_vote_account(
     Ok(config.output_format.formatted_string(&vote_account_data))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn process_withdraw_from_vote_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
@@ -1261,7 +1266,7 @@ pub fn process_withdraw_from_vote_account(
         sign_only,
         withdraw_amount,
         &recent_blockhash,
-        &vote_account_pubkey,
+        vote_account_pubkey,
         &fee_payer.pubkey(),
         build_message,
         config.commitment,
