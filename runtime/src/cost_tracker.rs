@@ -3,9 +3,11 @@
 //! - would_transaction_fit(&tx_cost), immutable function to test if tx with tx_cost would fit into current block
 //! - add_transaction_cost(&tx_cost), mutable function to accumulate tx_cost to tracker.
 //!
-use crate::{block_cost_limits::*, cost_model::TransactionCost};
-use solana_sdk::{clock::Slot, pubkey::Pubkey, transaction::SanitizedTransaction};
-use std::collections::HashMap;
+use {
+    crate::{block_cost_limits::*, cost_model::TransactionCost},
+    solana_sdk::{clock::Slot, pubkey::Pubkey, transaction::SanitizedTransaction},
+    std::collections::HashMap,
+};
 
 const WRITABLE_ACCOUNTS_PER_BLOCK: usize = 512;
 
@@ -156,18 +158,20 @@ impl CostTracker {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{
-        bank::Bank,
-        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+    use {
+        super::*,
+        crate::{
+            bank::Bank,
+            genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        },
+        solana_sdk::{
+            hash::Hash,
+            signature::{Keypair, Signer},
+            system_transaction,
+            transaction::Transaction,
+        },
+        std::{cmp, sync::Arc},
     };
-    use solana_sdk::{
-        hash::Hash,
-        signature::{Keypair, Signer},
-        system_transaction,
-        transaction::Transaction,
-    };
-    use std::{cmp, sync::Arc};
 
     fn test_setup() -> (Keypair, Hash) {
         solana_logger::setup();

@@ -1,18 +1,20 @@
 //! The `bank_forks` module implements BankForks a DAG of checkpointed Banks
 
-use crate::{
-    accounts_background_service::{AbsRequestSender, SnapshotRequest},
-    bank::Bank,
-    snapshot_config::SnapshotConfig,
-};
-use log::*;
-use solana_measure::measure::Measure;
-use solana_sdk::{clock::Slot, hash::Hash, timing};
-use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
-    ops::Index,
-    sync::Arc,
-    time::Instant,
+use {
+    crate::{
+        accounts_background_service::{AbsRequestSender, SnapshotRequest},
+        bank::Bank,
+        snapshot_config::SnapshotConfig,
+    },
+    log::*,
+    solana_measure::measure::Measure,
+    solana_sdk::{clock::Slot, hash::Hash, timing},
+    std::{
+        collections::{hash_map::Entry, HashMap, HashSet},
+        ops::Index,
+        sync::Arc,
+        time::Instant,
+    },
 };
 
 struct SetRootTimings {
@@ -492,21 +494,23 @@ impl BankForks {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{
-        bank::tests::update_vote_account_timestamp,
-        genesis_utils::{
-            create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
+    use {
+        super::*,
+        crate::{
+            bank::tests::update_vote_account_timestamp,
+            genesis_utils::{
+                create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
+            },
         },
+        solana_sdk::{
+            clock::UnixTimestamp,
+            hash::Hash,
+            pubkey::Pubkey,
+            signature::{Keypair, Signer},
+            sysvar::epoch_schedule::EpochSchedule,
+        },
+        solana_vote_program::vote_state::BlockTimestamp,
     };
-    use solana_sdk::hash::Hash;
-    use solana_sdk::{
-        clock::UnixTimestamp,
-        pubkey::Pubkey,
-        signature::{Keypair, Signer},
-        sysvar::epoch_schedule::EpochSchedule,
-    };
-    use solana_vote_program::vote_state::BlockTimestamp;
 
     #[test]
     fn test_bank_forks_new() {

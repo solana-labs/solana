@@ -26,10 +26,9 @@ use {
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{clock::Slot, packet::PACKET_DATA_SIZE, pubkey::Pubkey},
-    std::collections::HashSet,
     std::{
         cmp::Reverse,
-        collections::HashMap,
+        collections::{HashMap, HashSet},
         net::{SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -950,8 +949,10 @@ mod test {
 
     #[test]
     fn test_prune_shreds() {
-        use crate::serve_repair::ShredRepairType;
-        use std::net::{IpAddr, Ipv4Addr};
+        use {
+            crate::serve_repair::ShredRepairType,
+            std::net::{IpAddr, Ipv4Addr},
+        };
         solana_logger::setup();
         let (common, coding) = Shredder::new_coding_shred_header(5, 5, 5, 6, 6, 0);
         let shred = Shred::new_empty_from_header(common, DataShredHeader::default(), coding);

@@ -1,20 +1,24 @@
-use crate::nonce_keyed_account::NonceKeyedAccount;
-use log::*;
-use solana_program_runtime::{ic_msg, invoke_context::InvokeContext};
-use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount, WritableAccount},
-    account_utils::StateMut,
-    feature_set,
-    instruction::InstructionError,
-    keyed_account::{from_keyed_account, get_signers, keyed_account_at_index, KeyedAccount},
-    nonce,
-    program_utils::limited_deserialize,
-    pubkey::Pubkey,
-    system_instruction::{NonceError, SystemError, SystemInstruction, MAX_PERMITTED_DATA_LENGTH},
-    system_program,
-    sysvar::{self, rent::Rent},
+use {
+    crate::nonce_keyed_account::NonceKeyedAccount,
+    log::*,
+    solana_program_runtime::{ic_msg, invoke_context::InvokeContext},
+    solana_sdk::{
+        account::{AccountSharedData, ReadableAccount, WritableAccount},
+        account_utils::StateMut,
+        feature_set,
+        instruction::InstructionError,
+        keyed_account::{from_keyed_account, get_signers, keyed_account_at_index, KeyedAccount},
+        nonce,
+        program_utils::limited_deserialize,
+        pubkey::Pubkey,
+        system_instruction::{
+            NonceError, SystemError, SystemInstruction, MAX_PERMITTED_DATA_LENGTH,
+        },
+        system_program,
+        sysvar::{self, rent::Rent},
+    },
+    std::collections::HashSet,
 };
-use std::collections::HashSet;
 
 // represents an address that may or may not have been generated
 //  from a seed
@@ -484,10 +488,6 @@ pub fn get_system_account_kind(account: &AccountSharedData) -> Option<SystemAcco
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{bank::Bank, bank_client::BankClient};
-    use bincode::serialize;
-    use solana_program_runtime::invoke_context::{mock_process_instruction, InvokeContext};
     #[allow(deprecated)]
     use solana_sdk::{
         account::{self, Account, AccountSharedData},
@@ -503,8 +503,13 @@ mod tests {
         sysvar::recent_blockhashes::IterItem,
         transaction::TransactionError,
     };
-    use std::sync::Arc;
-    use std::{cell::RefCell, rc::Rc};
+    use {
+        super::*,
+        crate::{bank::Bank, bank_client::BankClient},
+        bincode::serialize,
+        solana_program_runtime::invoke_context::{mock_process_instruction, InvokeContext},
+        std::{cell::RefCell, rc::Rc, sync::Arc},
+    };
 
     impl From<Pubkey> for Address {
         fn from(address: Pubkey) -> Self {

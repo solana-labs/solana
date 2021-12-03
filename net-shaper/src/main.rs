@@ -1,13 +1,13 @@
 #![allow(clippy::integer_arithmetic)]
-use clap::{
-    crate_description, crate_name, crate_version, value_t, value_t_or_exit, App, Arg, ArgMatches,
-    SubCommand,
+use {
+    clap::{
+        crate_description, crate_name, crate_version, value_t, value_t_or_exit, App, Arg,
+        ArgMatches, SubCommand,
+    },
+    rand::{thread_rng, Rng},
+    serde::{Deserialize, Serialize},
+    std::{fs, io, path::PathBuf},
 };
-
-use rand::{thread_rng, Rng};
-use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
-use std::{fs, io};
 
 #[derive(Deserialize, Serialize, Debug)]
 struct NetworkInterconnect {

@@ -1,10 +1,12 @@
-use crate::{
-    clock::Epoch, program_error::ProgramError, program_memory::sol_memset, pubkey::Pubkey,
-};
-use std::{
-    cell::{Ref, RefCell, RefMut},
-    cmp, fmt,
-    rc::Rc,
+use {
+    crate::{
+        clock::Epoch, program_error::ProgramError, program_memory::sol_memset, pubkey::Pubkey,
+    },
+    std::{
+        cell::{Ref, RefCell, RefMut},
+        cmp, fmt,
+        rc::Rc,
+    },
 };
 
 /// Account information

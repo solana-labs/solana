@@ -1,10 +1,17 @@
-use crate::{
-    clock::{Epoch, INITIAL_RENT_EPOCH},
-    lamports::LamportsError,
-    pubkey::Pubkey,
+use {
+    crate::{
+        clock::{Epoch, INITIAL_RENT_EPOCH},
+        lamports::LamportsError,
+        pubkey::Pubkey,
+    },
+    solana_program::{account_info::AccountInfo, sysvar::Sysvar},
+    std::{
+        cell::{Ref, RefCell},
+        cmp, fmt,
+        rc::Rc,
+        sync::Arc,
+    },
 };
-use solana_program::{account_info::AccountInfo, sysvar::Sysvar};
-use std::{cell::Ref, cell::RefCell, cmp, fmt, rc::Rc, sync::Arc};
 
 /// An Account with data that is stored on chain
 #[repr(C)]

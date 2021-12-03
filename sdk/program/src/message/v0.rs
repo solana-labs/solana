@@ -127,8 +127,7 @@ impl Message {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::message::VersionedMessage;
+    use {super::*, crate::message::VersionedMessage};
 
     fn simple_message() -> Message {
         Message {

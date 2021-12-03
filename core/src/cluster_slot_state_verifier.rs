@@ -1,11 +1,13 @@
-use crate::{
-    ancestor_hashes_service::{AncestorHashesReplayUpdate, AncestorHashesReplayUpdateSender},
-    fork_choice::ForkChoice,
-    heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
+use {
+    crate::{
+        ancestor_hashes_service::{AncestorHashesReplayUpdate, AncestorHashesReplayUpdateSender},
+        fork_choice::ForkChoice,
+        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
+    },
+    solana_ledger::blockstore::Blockstore,
+    solana_sdk::{clock::Slot, hash::Hash},
+    std::collections::{BTreeMap, BTreeSet, HashMap},
 };
-use solana_ledger::blockstore::Blockstore;
-use solana_sdk::{clock::Slot, hash::Hash};
-use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 pub(crate) type DuplicateSlotsTracker = BTreeSet<Slot>;
 pub(crate) type DuplicateSlotsToRepair = HashMap<Slot, Hash>;
@@ -805,15 +807,17 @@ pub(crate) fn check_slot_agrees_with_cluster(
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::{progress_map::ProgressMap, replay_stage::tests::setup_forks_from_tree};
-    use crossbeam_channel::unbounded;
-    use solana_runtime::bank_forks::BankForks;
-    use std::{
-        collections::{HashMap, HashSet},
-        sync::{Arc, RwLock},
+    use {
+        super::*,
+        crate::{progress_map::ProgressMap, replay_stage::tests::setup_forks_from_tree},
+        crossbeam_channel::unbounded,
+        solana_runtime::bank_forks::BankForks,
+        std::{
+            collections::{HashMap, HashSet},
+            sync::{Arc, RwLock},
+        },
+        trees::tr,
     };
-    use trees::tr;
 
     macro_rules! state_update_tests {
         ($($name:ident: $value:expr,)*) => {

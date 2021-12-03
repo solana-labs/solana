@@ -118,9 +118,11 @@ pub fn get_instruction_relative(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{instruction::AccountMeta, message::Message, pubkey::Pubkey};
-    use std::convert::TryFrom;
+    use {
+        super::*,
+        crate::{instruction::AccountMeta, message::Message, pubkey::Pubkey},
+        std::convert::TryFrom,
+    };
 
     #[test]
     fn test_load_store_instruction() {

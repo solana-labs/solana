@@ -49,9 +49,11 @@ impl<'a, 'b> Drop for TransactionBatch<'a, 'b> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo};
-    use solana_sdk::{signature::Keypair, system_transaction};
+    use {
+        super::*,
+        crate::genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
+        solana_sdk::{signature::Keypair, system_transaction},
+    };
 
     #[test]
     fn test_transaction_batch() {

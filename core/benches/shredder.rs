@@ -3,18 +3,19 @@
 
 extern crate test;
 
-use rand::seq::SliceRandom;
-use raptorq::{Decoder, Encoder};
-use solana_entry::entry::{create_ticks, Entry};
-use solana_ledger::shred::{
-    max_entries_per_n_shred, max_ticks_per_n_shreds, ProcessShredsStats, Shred, Shredder,
-    MAX_DATA_SHREDS_PER_FEC_BLOCK, SHRED_PAYLOAD_SIZE, SIZE_OF_CODING_SHRED_HEADERS,
-    SIZE_OF_DATA_SHRED_PAYLOAD,
+use {
+    rand::seq::SliceRandom,
+    raptorq::{Decoder, Encoder},
+    solana_entry::entry::{create_ticks, Entry},
+    solana_ledger::shred::{
+        max_entries_per_n_shred, max_ticks_per_n_shreds, ProcessShredsStats, Shred, Shredder,
+        MAX_DATA_SHREDS_PER_FEC_BLOCK, SHRED_PAYLOAD_SIZE, SIZE_OF_CODING_SHRED_HEADERS,
+        SIZE_OF_DATA_SHRED_PAYLOAD,
+    },
+    solana_perf::test_tx,
+    solana_sdk::{hash::Hash, signature::Keypair},
+    test::Bencher,
 };
-use solana_perf::test_tx;
-use solana_sdk::hash::Hash;
-use solana_sdk::signature::Keypair;
-use test::Bencher;
 
 fn make_test_entry(txs_per_entry: u64) -> Entry {
     Entry {

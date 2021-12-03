@@ -1,17 +1,24 @@
 //! The `ledger_cleanup_service` drops older ledger data to limit disk space usage
 
-use rand::{thread_rng, Rng};
-use solana_ledger::blockstore::{Blockstore, PurgeType};
-use solana_ledger::blockstore_db::Result as BlockstoreResult;
-use solana_measure::measure::Measure;
-use solana_sdk::clock::{Slot, DEFAULT_TICKS_PER_SLOT, TICKS_PER_DAY};
-use std::string::ToString;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::mpsc::{Receiver, RecvTimeoutError};
-use std::sync::Arc;
-use std::thread;
-use std::thread::{sleep, Builder, JoinHandle};
-use std::time::Duration;
+use {
+    rand::{thread_rng, Rng},
+    solana_ledger::{
+        blockstore::{Blockstore, PurgeType},
+        blockstore_db::Result as BlockstoreResult,
+    },
+    solana_measure::measure::Measure,
+    solana_sdk::clock::{Slot, DEFAULT_TICKS_PER_SLOT, TICKS_PER_DAY},
+    std::{
+        string::ToString,
+        sync::{
+            atomic::{AtomicBool, AtomicU64, Ordering},
+            mpsc::{Receiver, RecvTimeoutError},
+            Arc,
+        },
+        thread::{self, sleep, Builder, JoinHandle},
+        time::Duration,
+    },
+};
 
 // - To try and keep the RocksDB size under 400GB:
 //   Seeing about 1600b/shred, using 2000b/shred for margin, so 200m shreds can be stored in 400gb.
@@ -306,10 +313,11 @@ impl LedgerCleanupService {
 }
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_ledger::blockstore::make_many_slot_entries;
-    use solana_ledger::get_tmp_ledger_path;
-    use std::sync::mpsc::channel;
+    use {
+        super::*,
+        solana_ledger::{blockstore::make_many_slot_entries, get_tmp_ledger_path},
+        std::sync::mpsc::channel,
+    };
 
     #[test]
     fn test_cleanup1() {

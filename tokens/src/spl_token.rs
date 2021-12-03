@@ -1,18 +1,20 @@
-use crate::{
-    args::{DistributeTokensArgs, SplTokenArgs},
-    commands::{Allocation, Error, FundingSource},
-};
-use console::style;
-use solana_account_decoder::parse_token::{
-    pubkey_from_spl_token, real_number_string, real_number_string_trimmed, spl_token_pubkey,
-};
-use solana_client::rpc_client::RpcClient;
-use solana_sdk::{instruction::Instruction, message::Message, native_token::lamports_to_sol};
-use solana_transaction_status::parse_token::spl_token_instruction;
-use spl_associated_token_account::{create_associated_token_account, get_associated_token_address};
-use spl_token::{
-    solana_program::program_pack::Pack,
-    state::{Account as SplTokenAccount, Mint},
+use {
+    crate::{
+        args::{DistributeTokensArgs, SplTokenArgs},
+        commands::{Allocation, Error, FundingSource},
+    },
+    console::style,
+    solana_account_decoder::parse_token::{
+        pubkey_from_spl_token, real_number_string, real_number_string_trimmed, spl_token_pubkey,
+    },
+    solana_client::rpc_client::RpcClient,
+    solana_sdk::{instruction::Instruction, message::Message, native_token::lamports_to_sol},
+    solana_transaction_status::parse_token::spl_token_instruction,
+    spl_associated_token_account::{create_associated_token_account, get_associated_token_address},
+    spl_token::{
+        solana_program::program_pack::Pack,
+        state::{Account as SplTokenAccount, Mint},
+    },
 };
 
 pub fn update_token_args(client: &RpcClient, args: &mut Option<SplTokenArgs>) -> Result<(), Error> {

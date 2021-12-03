@@ -1,76 +1,78 @@
-use crate::{
-    cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
-    spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
-};
-use clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
-use console::{style, Emoji};
-use serde::{Deserialize, Serialize};
-use solana_clap_utils::{
-    input_parsers::*,
-    input_validators::*,
-    keypair::DefaultSigner,
-    offline::{blockhash_arg, BLOCKHASH_ARG},
-};
-use solana_cli_output::{
-    display::{
-        build_balance_message, format_labeled_address, new_spinner_progress_bar,
-        println_name_value, println_transaction, unix_timestamp_to_string, writeln_name_value,
+use {
+    crate::{
+        cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
+        spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
     },
-    *,
-};
-use solana_client::{
-    client_error::ClientErrorKind,
-    pubsub_client::PubsubClient,
-    rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
-    rpc_config::{
-        RpcAccountInfoConfig, RpcBlockConfig, RpcGetVoteAccountsConfig, RpcLargestAccountsConfig,
-        RpcLargestAccountsFilter, RpcProgramAccountsConfig, RpcTransactionConfig,
-        RpcTransactionLogsConfig, RpcTransactionLogsFilter,
+    clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand},
+    console::{style, Emoji},
+    serde::{Deserialize, Serialize},
+    solana_clap_utils::{
+        input_parsers::*,
+        input_validators::*,
+        keypair::DefaultSigner,
+        offline::{blockhash_arg, BLOCKHASH_ARG},
     },
-    rpc_filter,
-    rpc_request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
-    rpc_response::SlotInfo,
-};
-use solana_remote_wallet::remote_wallet::RemoteWalletManager;
-use solana_sdk::{
-    account::from_account,
-    account_utils::StateMut,
-    clock::{self, Clock, Slot},
-    commitment_config::CommitmentConfig,
-    epoch_schedule::Epoch,
-    hash::Hash,
-    message::Message,
-    native_token::lamports_to_sol,
-    nonce::State as NonceState,
-    pubkey::{self, Pubkey},
-    rent::Rent,
-    rpc_port::DEFAULT_RPC_PORT_STR,
-    signature::Signature,
-    slot_history,
-    stake::{self, state::StakeState},
-    system_instruction, system_program,
-    sysvar::{
-        self,
-        slot_history::SlotHistory,
-        stake_history::{self},
+    solana_cli_output::{
+        display::{
+            build_balance_message, format_labeled_address, new_spinner_progress_bar,
+            println_name_value, println_transaction, unix_timestamp_to_string, writeln_name_value,
+        },
+        *,
     },
-    timing,
-    transaction::Transaction,
-};
-use solana_transaction_status::UiTransactionEncoding;
-use solana_vote_program::vote_state::VoteState;
-use std::{
-    collections::{BTreeMap, HashMap, VecDeque},
-    fmt,
-    str::FromStr,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
+    solana_client::{
+        client_error::ClientErrorKind,
+        pubsub_client::PubsubClient,
+        rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
+        rpc_config::{
+            RpcAccountInfoConfig, RpcBlockConfig, RpcGetVoteAccountsConfig,
+            RpcLargestAccountsConfig, RpcLargestAccountsFilter, RpcProgramAccountsConfig,
+            RpcTransactionConfig, RpcTransactionLogsConfig, RpcTransactionLogsFilter,
+        },
+        rpc_filter,
+        rpc_request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
+        rpc_response::SlotInfo,
     },
-    thread::sleep,
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_sdk::{
+        account::from_account,
+        account_utils::StateMut,
+        clock::{self, Clock, Slot},
+        commitment_config::CommitmentConfig,
+        epoch_schedule::Epoch,
+        hash::Hash,
+        message::Message,
+        native_token::lamports_to_sol,
+        nonce::State as NonceState,
+        pubkey::{self, Pubkey},
+        rent::Rent,
+        rpc_port::DEFAULT_RPC_PORT_STR,
+        signature::Signature,
+        slot_history,
+        stake::{self, state::StakeState},
+        system_instruction, system_program,
+        sysvar::{
+            self,
+            slot_history::SlotHistory,
+            stake_history::{self},
+        },
+        timing,
+        transaction::Transaction,
+    },
+    solana_transaction_status::UiTransactionEncoding,
+    solana_vote_program::vote_state::VoteState,
+    std::{
+        collections::{BTreeMap, HashMap, VecDeque},
+        fmt,
+        str::FromStr,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
+        thread::sleep,
+        time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    },
+    thiserror::Error,
 };
-use thiserror::Error;
 
 static CHECK_MARK: Emoji = Emoji("✅ ", "");
 static CROSS_MARK: Emoji = Emoji("❌ ", "");
@@ -2139,11 +2141,13 @@ pub fn process_calculate_rent(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{clap_app::get_clap_app, cli::parse_command};
-    use solana_sdk::signature::{write_keypair, Keypair};
-    use std::str::FromStr;
-    use tempfile::NamedTempFile;
+    use {
+        super::*,
+        crate::{clap_app::get_clap_app, cli::parse_command},
+        solana_sdk::signature::{write_keypair, Keypair},
+        std::str::FromStr,
+        tempfile::NamedTempFile,
+    };
 
     fn make_tmp_file() -> (String, NamedTempFile) {
         let tmp_file = NamedTempFile::new().unwrap();

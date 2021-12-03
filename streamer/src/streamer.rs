@@ -1,19 +1,25 @@
 //! The `streamer` module defines a set of services for efficiently pulling data from UDP sockets.
 //!
 
-use crate::{
-    packet::{self, send_to, Packets, PacketsRecycler, PACKETS_PER_BATCH},
-    recvmmsg::NUM_RCVMMSGS,
-    socket::SocketAddrSpace,
+use {
+    crate::{
+        packet::{self, send_to, Packets, PacketsRecycler, PACKETS_PER_BATCH},
+        recvmmsg::NUM_RCVMMSGS,
+        socket::SocketAddrSpace,
+    },
+    solana_sdk::timing::timestamp,
+    std::{
+        net::UdpSocket,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            mpsc::{Receiver, RecvTimeoutError, SendError, Sender},
+            Arc,
+        },
+        thread::{Builder, JoinHandle},
+        time::{Duration, Instant},
+    },
+    thiserror::Error,
 };
-use solana_sdk::timing::timestamp;
-use std::net::UdpSocket;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, RecvTimeoutError, SendError, Sender};
-use std::sync::Arc;
-use std::thread::{Builder, JoinHandle};
-use std::time::{Duration, Instant};
-use thiserror::Error;
 
 pub type PacketReceiver = Receiver<Packets>;
 pub type PacketSender = Sender<Packets>;
@@ -178,17 +184,25 @@ pub fn responder(
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::packet::{Packet, Packets, PACKET_DATA_SIZE};
-    use crate::streamer::{receiver, responder};
-    use solana_perf::recycler::Recycler;
-    use std::io;
-    use std::io::Write;
-    use std::net::UdpSocket;
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::mpsc::channel;
-    use std::sync::Arc;
-    use std::time::Duration;
+    use {
+        super::*,
+        crate::{
+            packet::{Packet, Packets, PACKET_DATA_SIZE},
+            streamer::{receiver, responder},
+        },
+        solana_perf::recycler::Recycler,
+        std::{
+            io,
+            io::Write,
+            net::UdpSocket,
+            sync::{
+                atomic::{AtomicBool, Ordering},
+                mpsc::channel,
+                Arc,
+            },
+            time::Duration,
+        },
+    };
 
     fn get_msgs(r: PacketReceiver, num: &mut usize) {
         for _ in 0..10 {

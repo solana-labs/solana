@@ -4,17 +4,19 @@
 
 extern crate proc_macro;
 
-use proc_macro::TokenStream;
-use proc_macro2::{Delimiter, Span, TokenTree};
-use quote::{quote, ToTokens};
-use std::convert::TryFrom;
-use syn::{
-    bracketed,
-    parse::{Parse, ParseStream, Result},
-    parse_macro_input,
-    punctuated::Punctuated,
-    token::Bracket,
-    Expr, Ident, LitByte, LitStr, Path, Token,
+use {
+    proc_macro::TokenStream,
+    proc_macro2::{Delimiter, Span, TokenTree},
+    quote::{quote, ToTokens},
+    std::convert::TryFrom,
+    syn::{
+        bracketed,
+        parse::{Parse, ParseStream, Result},
+        parse_macro_input,
+        punctuated::Punctuated,
+        token::Bracket,
+        Expr, Ident, LitByte, LitStr, Path, Token,
+    },
 };
 
 fn parse_id(

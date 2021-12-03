@@ -2,40 +2,46 @@
 //! unique ID that is the hash of the Entry before it, plus the hash of the
 //! transactions within it. Entries cannot be reordered, and its field `num_hashes`
 //! represents an approximate amount of time since the last Entry was created.
-use crate::poh::Poh;
-use dlopen::symbor::{Container, SymBorApi, Symbol};
-use dlopen_derive::SymBorApi;
-use log::*;
-use rand::{thread_rng, Rng};
-use rayon::prelude::*;
-use rayon::ThreadPool;
-use serde::{Deserialize, Serialize};
-use solana_measure::measure::Measure;
-use solana_merkle_tree::MerkleTree;
-use solana_metrics::*;
-use solana_perf::{
-    cuda_runtime::PinnedVec,
-    packet::{Packet, Packets, PacketsRecycler, PACKETS_PER_BATCH},
-    perf_libs,
-    recycler::Recycler,
-    sigverify,
+use {
+    crate::poh::Poh,
+    dlopen::symbor::{Container, SymBorApi, Symbol},
+    dlopen_derive::SymBorApi,
+    log::*,
+    rand::{thread_rng, Rng},
+    rayon::{prelude::*, ThreadPool},
+    serde::{Deserialize, Serialize},
+    solana_measure::measure::Measure,
+    solana_merkle_tree::MerkleTree,
+    solana_metrics::*,
+    solana_perf::{
+        cuda_runtime::PinnedVec,
+        packet::{Packet, Packets, PacketsRecycler, PACKETS_PER_BATCH},
+        perf_libs,
+        recycler::Recycler,
+        sigverify,
+    },
+    solana_rayon_threadlimit::get_thread_count,
+    solana_sdk::{
+        hash::Hash,
+        packet::Meta,
+        timing,
+        transaction::{
+            Result, SanitizedTransaction, Transaction, TransactionError,
+            TransactionVerificationMode, VersionedTransaction,
+        },
+    },
+    std::{
+        cell::RefCell,
+        cmp,
+        ffi::OsStr,
+        sync::{
+            mpsc::{Receiver, Sender},
+            Arc, Mutex, Once,
+        },
+        thread::{self, JoinHandle},
+        time::Instant,
+    },
 };
-use solana_rayon_threadlimit::get_thread_count;
-use solana_sdk::hash::Hash;
-use solana_sdk::packet::Meta;
-use solana_sdk::timing;
-use solana_sdk::transaction::{
-    Result, SanitizedTransaction, Transaction, TransactionError, TransactionVerificationMode,
-    VersionedTransaction,
-};
-use std::cell::RefCell;
-use std::ffi::OsStr;
-use std::sync::mpsc::{Receiver, Sender};
-use std::sync::Once;
-use std::sync::{Arc, Mutex};
-use std::thread::JoinHandle;
-use std::time::Instant;
-use std::{cmp, thread};
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
@@ -905,17 +911,16 @@ pub fn next_entry(prev_hash: &Hash, num_hashes: u64, transactions: Vec<Transacti
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_sdk::{
-        hash::{hash, Hash},
-        pubkey::Pubkey,
-        signature::{Keypair, Signer},
-        system_transaction,
-    };
-
-    use solana_perf::test_tx::{test_invalid_tx, test_tx};
-    use solana_sdk::transaction::{
-        Result, SanitizedTransaction, TransactionError, VersionedTransaction,
+    use {
+        super::*,
+        solana_perf::test_tx::{test_invalid_tx, test_tx},
+        solana_sdk::{
+            hash::{hash, Hash},
+            pubkey::Pubkey,
+            signature::{Keypair, Signer},
+            system_transaction,
+            transaction::{Result, SanitizedTransaction, TransactionError, VersionedTransaction},
+        },
     };
 
     #[test]

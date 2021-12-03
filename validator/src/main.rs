@@ -1,4 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
+#[cfg(not(target_env = "msvc"))]
+use jemallocator::Jemalloc;
 use {
     clap::{
         crate_description, crate_name, value_t, value_t_or_exit, values_t, values_t_or_exit, App,
@@ -78,9 +80,6 @@ use {
         time::{Duration, SystemTime},
     },
 };
-
-#[cfg(not(target_env = "msvc"))]
-use jemallocator::Jemalloc;
 
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
@@ -423,9 +422,7 @@ fn platform_id() -> String {
 
 #[cfg(target_os = "linux")]
 fn check_os_network_limits() {
-    use solana_metrics::datapoint_warn;
-    use std::collections::HashMap;
-    use sysctl::Sysctl;
+    use {solana_metrics::datapoint_warn, std::collections::HashMap, sysctl::Sysctl};
 
     fn sysctl_read(name: &str) -> Result<String, sysctl::SysctlError> {
         let ctl = sysctl::Ctl::new(name)?;

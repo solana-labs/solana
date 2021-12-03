@@ -43,8 +43,10 @@ use {
         rpc_subscriptions::RpcSubscriptions,
     },
     solana_runtime::{
-        accounts_background_service::AbsRequestSender, bank::Bank, bank::ExecuteTimings,
-        bank::NewBankOptions, bank_forks::BankForks, commitment::BlockCommitmentCache,
+        accounts_background_service::AbsRequestSender,
+        bank::{Bank, ExecuteTimings, NewBankOptions},
+        bank_forks::BankForks,
+        commitment::BlockCommitmentCache,
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{
@@ -52,8 +54,7 @@ use {
         genesis_config::ClusterType,
         hash::Hash,
         pubkey::Pubkey,
-        signature::Signature,
-        signature::{Keypair, Signer},
+        signature::{Keypair, Signature, Signer},
         timing::timestamp,
         transaction::Transaction,
     },
@@ -2882,61 +2883,61 @@ impl ReplayStage {
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
-    use crate::{
-        consensus::Tower,
-        progress_map::ValidatorStakeInfo,
-        replay_stage::ReplayStage,
-        tree_diff::TreeDiff,
-        vote_simulator::{self, VoteSimulator},
-    };
-    use crossbeam_channel::unbounded;
-    use solana_entry::entry::{self, Entry};
-    use solana_gossip::{cluster_info::Node, crds::Cursor};
-    use solana_ledger::{
-        blockstore::make_slot_entries,
-        blockstore::{entries_to_test_shreds, BlockstoreError},
-        create_new_tmp_ledger,
-        genesis_utils::{create_genesis_config, create_genesis_config_with_leader},
-        get_tmp_ledger_path,
-        shred::{
-            CodingShredHeader, DataShredHeader, Shred, ShredCommonHeader, DATA_COMPLETE_SHRED,
-            SIZE_OF_COMMON_SHRED_HEADER, SIZE_OF_DATA_SHRED_HEADER, SIZE_OF_DATA_SHRED_PAYLOAD,
+    use {
+        super::*,
+        crate::{
+            consensus::Tower,
+            progress_map::ValidatorStakeInfo,
+            replay_stage::ReplayStage,
+            tree_diff::TreeDiff,
+            vote_simulator::{self, VoteSimulator},
         },
+        crossbeam_channel::unbounded,
+        solana_entry::entry::{self, Entry},
+        solana_gossip::{cluster_info::Node, crds::Cursor},
+        solana_ledger::{
+            blockstore::{entries_to_test_shreds, make_slot_entries, BlockstoreError},
+            create_new_tmp_ledger,
+            genesis_utils::{create_genesis_config, create_genesis_config_with_leader},
+            get_tmp_ledger_path,
+            shred::{
+                CodingShredHeader, DataShredHeader, Shred, ShredCommonHeader, DATA_COMPLETE_SHRED,
+                SIZE_OF_COMMON_SHRED_HEADER, SIZE_OF_DATA_SHRED_HEADER, SIZE_OF_DATA_SHRED_PAYLOAD,
+            },
+        },
+        solana_rpc::{
+            optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
+            rpc::create_test_transactions_and_populate_blockstore,
+        },
+        solana_runtime::{
+            accounts_background_service::AbsRequestSender,
+            commitment::BlockCommitment,
+            genesis_utils::{GenesisConfigInfo, ValidatorVoteKeypairs},
+        },
+        solana_sdk::{
+            clock::NUM_CONSECUTIVE_LEADER_SLOTS,
+            genesis_config,
+            hash::{hash, Hash},
+            instruction::InstructionError,
+            packet::PACKET_DATA_SIZE,
+            poh_config::PohConfig,
+            signature::{Keypair, Signer},
+            system_transaction,
+            transaction::TransactionError,
+        },
+        solana_streamer::socket::SocketAddrSpace,
+        solana_transaction_status::TransactionWithStatusMeta,
+        solana_vote_program::{
+            vote_state::{VoteState, VoteStateVersions},
+            vote_transaction,
+        },
+        std::{
+            fs::remove_dir_all,
+            iter,
+            sync::{atomic::AtomicU64, mpsc::channel, Arc, RwLock},
+        },
+        trees::{tr, Tree},
     };
-    use solana_rpc::{
-        optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
-        rpc::create_test_transactions_and_populate_blockstore,
-    };
-    use solana_runtime::{
-        accounts_background_service::AbsRequestSender,
-        commitment::BlockCommitment,
-        genesis_utils::{GenesisConfigInfo, ValidatorVoteKeypairs},
-    };
-    use solana_sdk::{
-        clock::NUM_CONSECUTIVE_LEADER_SLOTS,
-        genesis_config,
-        hash::{hash, Hash},
-        instruction::InstructionError,
-        packet::PACKET_DATA_SIZE,
-        poh_config::PohConfig,
-        signature::{Keypair, Signer},
-        system_transaction,
-        transaction::TransactionError,
-    };
-    use solana_streamer::socket::SocketAddrSpace;
-    use solana_transaction_status::TransactionWithStatusMeta;
-    use solana_vote_program::{
-        vote_state::{VoteState, VoteStateVersions},
-        vote_transaction,
-    };
-    use std::sync::mpsc::channel;
-    use std::{
-        fs::remove_dir_all,
-        iter,
-        sync::{atomic::AtomicU64, Arc, RwLock},
-    };
-    use trees::{tr, Tree};
 
     #[test]
     fn test_is_partition_detected() {

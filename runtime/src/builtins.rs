@@ -1,15 +1,16 @@
-use crate::system_instruction_processor;
-use solana_program_runtime::{
-    invoke_context::{InvokeContext, ProcessInstructionWithContext},
-    stable_log,
-};
-use solana_sdk::{
-    feature_set, instruction::InstructionError, pubkey::Pubkey, stake, system_program,
-};
-use std::fmt;
-
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
+use {
+    crate::system_instruction_processor,
+    solana_program_runtime::{
+        invoke_context::{InvokeContext, ProcessInstructionWithContext},
+        stable_log,
+    },
+    solana_sdk::{
+        feature_set, instruction::InstructionError, pubkey::Pubkey, stake, system_program,
+    },
+    std::fmt,
+};
 
 fn process_instruction_with_program_logging(
     process_instruction: ProcessInstructionWithContext,
