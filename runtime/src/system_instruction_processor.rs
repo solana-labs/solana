@@ -1,20 +1,22 @@
-use log::*;
-use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount, WritableAccount},
-    account_utils::StateMut,
-    feature_set, ic_msg,
-    instruction::InstructionError,
-    keyed_account::{from_keyed_account, get_signers, keyed_account_at_index, KeyedAccount},
-    nonce,
-    nonce_keyed_account::NonceKeyedAccount,
-    process_instruction::InvokeContext,
-    program_utils::limited_deserialize,
-    pubkey::Pubkey,
-    system_instruction::{SystemError, SystemInstruction, MAX_PERMITTED_DATA_LENGTH},
-    system_program,
-    sysvar::{self, recent_blockhashes::RecentBlockhashes, rent::Rent},
+use {
+    log::*,
+    solana_sdk::{
+        account::{AccountSharedData, ReadableAccount, WritableAccount},
+        account_utils::StateMut,
+        feature_set, ic_msg,
+        instruction::InstructionError,
+        keyed_account::{from_keyed_account, get_signers, keyed_account_at_index, KeyedAccount},
+        nonce,
+        nonce_keyed_account::NonceKeyedAccount,
+        process_instruction::InvokeContext,
+        program_utils::limited_deserialize,
+        pubkey::Pubkey,
+        system_instruction::{SystemError, SystemInstruction, MAX_PERMITTED_DATA_LENGTH},
+        system_program,
+        sysvar::{self, recent_blockhashes::RecentBlockhashes, rent::Rent},
+    },
+    std::collections::HashSet,
 };
-use std::collections::HashSet;
 
 // represents an address that may or may not have been generated
 //  from a seed
@@ -459,27 +461,28 @@ pub fn get_system_account_kind(account: &AccountSharedData) -> Option<SystemAcco
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{bank::Bank, bank_client::BankClient};
-    use bincode::serialize;
-    use solana_sdk::{
-        account::{self, Account, AccountSharedData},
-        client::SyncClient,
-        fee_calculator::FeeCalculator,
-        genesis_config::create_genesis_config,
-        hash::{hash, Hash},
-        instruction::{AccountMeta, Instruction, InstructionError},
-        message::Message,
-        nonce, nonce_account,
-        process_instruction::MockInvokeContext,
-        recent_blockhashes_account,
-        signature::{Keypair, Signer},
-        system_instruction, system_program, sysvar,
-        sysvar::recent_blockhashes::IterItem,
-        transaction::TransactionError,
+    use {
+        super::*,
+        crate::{bank::Bank, bank_client::BankClient},
+        bincode::serialize,
+        solana_sdk::{
+            account::{self, Account, AccountSharedData},
+            client::SyncClient,
+            fee_calculator::FeeCalculator,
+            genesis_config::create_genesis_config,
+            hash::{hash, Hash},
+            instruction::{AccountMeta, Instruction, InstructionError},
+            message::Message,
+            nonce, nonce_account,
+            process_instruction::MockInvokeContext,
+            recent_blockhashes_account,
+            signature::{Keypair, Signer},
+            system_instruction, system_program,
+            sysvar::{self, recent_blockhashes::IterItem},
+            transaction::TransactionError,
+        },
+        std::{cell::RefCell, sync::Arc},
     };
-    use std::cell::RefCell;
-    use std::sync::Arc;
 
     impl From<Pubkey> for Address {
         fn from(address: Pubkey) -> Self {

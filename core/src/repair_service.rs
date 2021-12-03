@@ -1,40 +1,42 @@
 //! The `repair_service` module implements the tools necessary to generate a thread which
 //! regularly finds missing shreds in the ledger and sends repair requests for those shreds
-use crate::{
-    cluster_info_vote_listener::VerifiedVoteReceiver,
-    cluster_slots::ClusterSlots,
-    outstanding_requests::OutstandingRequests,
-    repair_weight::RepairWeight,
-    replay_stage::DUPLICATE_THRESHOLD,
-    result::Result,
-    serve_repair::{RepairType, ServeRepair, REPAIR_PEERS_CACHE_CAPACITY},
-};
-use crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
-use lru::LruCache;
-use solana_gossip::cluster_info::ClusterInfo;
-use solana_ledger::{
-    blockstore::{Blockstore, SlotMeta},
-    shred::Nonce,
-};
-use solana_measure::measure::Measure;
-use solana_runtime::{bank::Bank, bank_forks::BankForks, contains::Contains};
-use solana_sdk::{
-    clock::{BankId, Slot},
-    epoch_schedule::EpochSchedule,
-    pubkey::Pubkey,
-    timing::timestamp,
-};
-use solana_streamer::sendmmsg::{batch_send, SendPktsError};
-use std::{
-    collections::{HashMap, HashSet},
-    iter::Iterator,
-    net::SocketAddr,
-    net::UdpSocket,
-    sync::atomic::{AtomicBool, Ordering},
-    sync::{Arc, RwLock},
-    thread::sleep,
-    thread::{self, Builder, JoinHandle},
-    time::{Duration, Instant},
+use {
+    crate::{
+        cluster_info_vote_listener::VerifiedVoteReceiver,
+        cluster_slots::ClusterSlots,
+        outstanding_requests::OutstandingRequests,
+        repair_weight::RepairWeight,
+        replay_stage::DUPLICATE_THRESHOLD,
+        result::Result,
+        serve_repair::{RepairType, ServeRepair, REPAIR_PEERS_CACHE_CAPACITY},
+    },
+    crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender},
+    lru::LruCache,
+    solana_gossip::cluster_info::ClusterInfo,
+    solana_ledger::{
+        blockstore::{Blockstore, SlotMeta},
+        shred::Nonce,
+    },
+    solana_measure::measure::Measure,
+    solana_runtime::{bank::Bank, bank_forks::BankForks, contains::Contains},
+    solana_sdk::{
+        clock::{BankId, Slot},
+        epoch_schedule::EpochSchedule,
+        pubkey::Pubkey,
+        timing::timestamp,
+    },
+    solana_streamer::sendmmsg::{batch_send, SendPktsError},
+    std::{
+        collections::{HashMap, HashSet},
+        iter::Iterator,
+        net::{SocketAddr, UdpSocket},
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
+        thread::{self, sleep, Builder, JoinHandle},
+        time::{Duration, Instant},
+    },
 };
 
 pub type DuplicateSlotsResetSender = CrossbeamSender<Slot>;
@@ -711,20 +713,23 @@ impl RepairService {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crossbeam_channel::unbounded;
-    use solana_gossip::{cluster_info::Node, contact_info::ContactInfo};
-    use solana_ledger::blockstore::{
-        make_chaining_slot_entries, make_many_slot_entries, make_slot_entries,
+    use {
+        super::*,
+        crossbeam_channel::unbounded,
+        solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
+        solana_ledger::{
+            blockstore::{
+                make_chaining_slot_entries, make_many_slot_entries, make_slot_entries, Blockstore,
+            },
+            get_tmp_ledger_path,
+            shred::max_ticks_per_n_shreds,
+        },
+        solana_runtime::genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs},
+        solana_sdk::signature::{Keypair, Signer},
+        solana_streamer::socket::SocketAddrSpace,
+        solana_vote_program::vote_transaction,
+        std::collections::HashSet,
     };
-    use solana_ledger::shred::max_ticks_per_n_shreds;
-    use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
-    use solana_runtime::genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs};
-    use solana_sdk::signature::Keypair;
-    use solana_sdk::signature::Signer;
-    use solana_streamer::socket::SocketAddrSpace;
-    use solana_vote_program::vote_transaction;
-    use std::collections::HashSet;
 
     fn new_test_cluster_info(contact_info: ContactInfo) -> ClusterInfo {
         ClusterInfo::new(

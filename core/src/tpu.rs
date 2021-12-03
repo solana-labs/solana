@@ -1,38 +1,40 @@
 //! The `tpu` module implements the Transaction Processing Unit, a
 //! multi-stage transaction processing pipeline in software.
 
-use crate::{
-    banking_stage::BankingStage,
-    broadcast_stage::{BroadcastStage, BroadcastStageType, RetransmitSlotsReceiver},
-    cluster_info_vote_listener::{
-        ClusterInfoVoteListener, GossipDuplicateConfirmedSlotsSender, GossipVerifiedVoteHashSender,
-        VerifiedVoteSender, VoteTracker,
+use {
+    crate::{
+        banking_stage::BankingStage,
+        broadcast_stage::{BroadcastStage, BroadcastStageType, RetransmitSlotsReceiver},
+        cluster_info_vote_listener::{
+            ClusterInfoVoteListener, GossipDuplicateConfirmedSlotsSender,
+            GossipVerifiedVoteHashSender, VerifiedVoteSender, VoteTracker,
+        },
+        fetch_stage::FetchStage,
+        sigverify::TransactionSigVerifier,
+        sigverify_stage::SigVerifyStage,
     },
-    fetch_stage::FetchStage,
-    sigverify::TransactionSigVerifier,
-    sigverify_stage::SigVerifyStage,
-};
-use crossbeam_channel::unbounded;
-use solana_gossip::cluster_info::ClusterInfo;
-use solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender};
-use solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry};
-use solana_rpc::{
-    optimistically_confirmed_bank_tracker::BankNotificationSender,
-    rpc_subscriptions::RpcSubscriptions,
-};
-use solana_runtime::{
-    bank_forks::BankForks,
-    cost_model::CostModel,
-    vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
-};
-use std::{
-    net::UdpSocket,
-    sync::{
-        atomic::AtomicBool,
-        mpsc::{channel, Receiver},
-        Arc, Mutex, RwLock,
+    crossbeam_channel::unbounded,
+    solana_gossip::cluster_info::ClusterInfo,
+    solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender},
+    solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
+    solana_rpc::{
+        optimistically_confirmed_bank_tracker::BankNotificationSender,
+        rpc_subscriptions::RpcSubscriptions,
     },
-    thread,
+    solana_runtime::{
+        bank_forks::BankForks,
+        cost_model::CostModel,
+        vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
+    },
+    std::{
+        net::UdpSocket,
+        sync::{
+            atomic::AtomicBool,
+            mpsc::{channel, Receiver},
+            Arc, Mutex, RwLock,
+        },
+        thread,
+    },
 };
 
 pub const DEFAULT_TPU_COALESCE_MS: u64 = 5;

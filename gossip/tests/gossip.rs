@@ -246,11 +246,13 @@ pub fn cluster_info_retransmit() {
 #[test]
 #[ignore]
 pub fn cluster_info_scale() {
-    use solana_measure::measure::Measure;
-    use solana_perf::test_tx::test_tx;
-    use solana_runtime::bank::Bank;
-    use solana_runtime::genesis_utils::{
-        create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
+    use {
+        solana_measure::measure::Measure,
+        solana_perf::test_tx::test_tx,
+        solana_runtime::{
+            bank::Bank,
+            genesis_utils::{create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs},
+        },
     };
     solana_logger::setup();
     let exit = Arc::new(AtomicBool::new(false));

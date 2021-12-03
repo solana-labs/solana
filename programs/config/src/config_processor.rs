@@ -1,17 +1,19 @@
 //! Config program
 
-use crate::ConfigKeys;
-use bincode::deserialize;
-use solana_sdk::{
-    account::{ReadableAccount, WritableAccount},
-    feature_set, ic_msg,
-    instruction::InstructionError,
-    keyed_account::keyed_account_at_index,
-    process_instruction::InvokeContext,
-    program_utils::limited_deserialize,
-    pubkey::Pubkey,
+use {
+    crate::ConfigKeys,
+    bincode::deserialize,
+    solana_sdk::{
+        account::{ReadableAccount, WritableAccount},
+        feature_set, ic_msg,
+        instruction::InstructionError,
+        keyed_account::keyed_account_at_index,
+        process_instruction::InvokeContext,
+        program_utils::limited_deserialize,
+        pubkey::Pubkey,
+    },
+    std::collections::BTreeSet,
 };
-use std::collections::BTreeSet;
 
 pub fn process_instruction(
     _program_id: &Pubkey,
@@ -136,18 +138,20 @@ pub fn process_instruction(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{config_instruction, get_config_data, id, ConfigKeys, ConfigState};
-    use bincode::serialized_size;
-    use serde_derive::{Deserialize, Serialize};
-    use solana_sdk::{
-        account::{Account, AccountSharedData},
-        keyed_account::create_keyed_accounts_unified,
-        process_instruction::MockInvokeContext,
-        signature::{Keypair, Signer},
-        system_instruction::SystemInstruction,
+    use {
+        super::*,
+        crate::{config_instruction, get_config_data, id, ConfigKeys, ConfigState},
+        bincode::serialized_size,
+        serde_derive::{Deserialize, Serialize},
+        solana_sdk::{
+            account::{Account, AccountSharedData},
+            keyed_account::create_keyed_accounts_unified,
+            process_instruction::MockInvokeContext,
+            signature::{Keypair, Signer},
+            system_instruction::SystemInstruction,
+        },
+        std::cell::RefCell,
     };
-    use std::cell::RefCell;
 
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
     struct MyConfig {

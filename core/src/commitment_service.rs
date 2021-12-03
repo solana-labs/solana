@@ -1,21 +1,25 @@
-use crate::consensus::Stake;
-use solana_measure::measure::Measure;
-use solana_metrics::datapoint_info;
-use solana_rpc::rpc_subscriptions::RpcSubscriptions;
-use solana_runtime::{
-    bank::Bank,
-    commitment::{BlockCommitment, BlockCommitmentCache, CommitmentSlots, VOTE_THRESHOLD_SIZE},
-};
-use solana_sdk::clock::Slot;
-use solana_vote_program::vote_state::VoteState;
-use std::{
-    cmp::max,
-    collections::HashMap,
-    sync::atomic::{AtomicBool, Ordering},
-    sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender},
-    sync::{Arc, RwLock},
-    thread::{self, Builder, JoinHandle},
-    time::Duration,
+use {
+    crate::consensus::Stake,
+    solana_measure::measure::Measure,
+    solana_metrics::datapoint_info,
+    solana_rpc::rpc_subscriptions::RpcSubscriptions,
+    solana_runtime::{
+        bank::Bank,
+        commitment::{BlockCommitment, BlockCommitmentCache, CommitmentSlots, VOTE_THRESHOLD_SIZE},
+    },
+    solana_sdk::clock::Slot,
+    solana_vote_program::vote_state::VoteState,
+    std::{
+        cmp::max,
+        collections::HashMap,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            mpsc::{channel, Receiver, RecvTimeoutError, Sender},
+            Arc, RwLock,
+        },
+        thread::{self, Builder, JoinHandle},
+        time::Duration,
+    },
 };
 
 pub struct CommitmentAggregationData {
@@ -247,18 +251,20 @@ impl AggregateCommitmentService {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use solana_runtime::{
-        accounts_background_service::AbsRequestSender,
-        bank_forks::BankForks,
-        genesis_utils::{create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs},
-    };
-    use solana_sdk::{account::Account, pubkey::Pubkey, signature::Signer};
-    use solana_stake_program::stake_state;
-    use solana_vote_program::{
-        vote_state::{self, VoteStateVersions},
-        vote_transaction,
+    use {
+        super::*,
+        solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        solana_runtime::{
+            accounts_background_service::AbsRequestSender,
+            bank_forks::BankForks,
+            genesis_utils::{create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs},
+        },
+        solana_sdk::{account::Account, pubkey::Pubkey, signature::Signer},
+        solana_stake_program::stake_state,
+        solana_vote_program::{
+            vote_state::{self, VoteStateVersions},
+            vote_transaction,
+        },
     };
 
     #[test]

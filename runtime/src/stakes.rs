@@ -1,23 +1,25 @@
 //! Stakes serve as a cache of stake and vote accounts to derive
 //! node stakes
-use crate::vote_account::{ArcVoteAccount, VoteAccounts, VoteAccountsHashMap};
-use rayon::{
-    iter::{IntoParallelRefIterator, ParallelIterator},
-    ThreadPool,
-};
-use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount},
-    clock::Epoch,
-    pubkey::Pubkey,
-    stake::{
-        self,
-        state::{Delegation, StakeActivationStatus, StakeState},
+use {
+    crate::vote_account::{ArcVoteAccount, VoteAccounts, VoteAccountsHashMap},
+    rayon::{
+        iter::{IntoParallelRefIterator, ParallelIterator},
+        ThreadPool,
     },
-    stake_history::StakeHistory,
+    solana_sdk::{
+        account::{AccountSharedData, ReadableAccount},
+        clock::Epoch,
+        pubkey::Pubkey,
+        stake::{
+            self,
+            state::{Delegation, StakeActivationStatus, StakeState},
+        },
+        stake_history::StakeHistory,
+    },
+    solana_stake_program::stake_state,
+    solana_vote_program::vote_state::VoteState,
+    std::collections::HashMap,
 };
-use solana_stake_program::stake_state;
-use solana_vote_program::vote_state::VoteState;
-use std::collections::HashMap;
 
 #[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize, AbiExample)]
 pub struct Stakes {
@@ -293,11 +295,13 @@ impl Stakes {
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
-    use rayon::ThreadPoolBuilder;
-    use solana_sdk::{account::WritableAccount, pubkey::Pubkey, rent::Rent};
-    use solana_stake_program::stake_state;
-    use solana_vote_program::vote_state::{self, VoteState, VoteStateVersions};
+    use {
+        super::*,
+        rayon::ThreadPoolBuilder,
+        solana_sdk::{account::WritableAccount, pubkey::Pubkey, rent::Rent},
+        solana_stake_program::stake_state,
+        solana_vote_program::vote_state::{self, VoteState, VoteStateVersions},
+    };
 
     //  set up some dummies for a staked node     ((     vote      )  (     stake     ))
     pub fn create_staked_node_accounts(

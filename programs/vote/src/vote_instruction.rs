@@ -1,28 +1,30 @@
 //! Vote program
 //! Receive and processes votes from validators
 
-use crate::{
-    id,
-    vote_state::{self, Vote, VoteAuthorize, VoteInit, VoteState},
+use {
+    crate::{
+        id,
+        vote_state::{self, Vote, VoteAuthorize, VoteInit, VoteState},
+    },
+    log::*,
+    num_derive::{FromPrimitive, ToPrimitive},
+    serde_derive::{Deserialize, Serialize},
+    solana_metrics::inc_new_counter_info,
+    solana_sdk::{
+        decode_error::DecodeError,
+        feature_set,
+        hash::Hash,
+        instruction::{AccountMeta, Instruction, InstructionError},
+        keyed_account::{from_keyed_account, get_signers, keyed_account_at_index, KeyedAccount},
+        process_instruction::InvokeContext,
+        program_utils::limited_deserialize,
+        pubkey::Pubkey,
+        system_instruction,
+        sysvar::{self, clock::Clock, slot_hashes::SlotHashes},
+    },
+    std::collections::HashSet,
+    thiserror::Error,
 };
-use log::*;
-use num_derive::{FromPrimitive, ToPrimitive};
-use serde_derive::{Deserialize, Serialize};
-use solana_metrics::inc_new_counter_info;
-use solana_sdk::{
-    decode_error::DecodeError,
-    feature_set,
-    hash::Hash,
-    instruction::{AccountMeta, Instruction, InstructionError},
-    keyed_account::{from_keyed_account, get_signers, keyed_account_at_index, KeyedAccount},
-    process_instruction::InvokeContext,
-    program_utils::limited_deserialize,
-    pubkey::Pubkey,
-    system_instruction,
-    sysvar::{self, clock::Clock, slot_hashes::SlotHashes},
-};
-use std::collections::HashSet;
-use thiserror::Error;
 
 /// Reasons the stake might have had an error
 #[derive(Error, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
@@ -388,15 +390,16 @@ pub fn process_instruction(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use bincode::serialize;
-    use solana_sdk::{
-        account::{self, Account, AccountSharedData},
-        process_instruction::MockInvokeContext,
-        rent::Rent,
+    use {
+        super::*,
+        bincode::serialize,
+        solana_sdk::{
+            account::{self, Account, AccountSharedData},
+            process_instruction::MockInvokeContext,
+            rent::Rent,
+        },
+        std::{cell::RefCell, str::FromStr},
     };
-    use std::cell::RefCell;
-    use std::str::FromStr;
 
     fn create_default_account() -> RefCell<AccountSharedData> {
         RefCell::new(AccountSharedData::default())

@@ -1,9 +1,11 @@
-use solana_runtime::bank::Bank;
-use solana_sdk::{
-    clock::{Epoch, Slot},
-    pubkey::Pubkey,
+use {
+    solana_runtime::bank::Bank,
+    solana_sdk::{
+        clock::{Epoch, Slot},
+        pubkey::Pubkey,
+    },
+    std::collections::HashMap,
 };
-use std::collections::HashMap;
 
 /// Looks through vote accounts, and finds the latest slot that has achieved
 /// supermajority lockout
@@ -61,31 +63,33 @@ where
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use super::*;
-    use crate::genesis_utils::{
-        bootstrap_validator_stake_lamports, create_genesis_config, GenesisConfigInfo,
-    };
-    use rand::Rng;
-    use solana_runtime::vote_account::{ArcVoteAccount, VoteAccounts};
-    use solana_sdk::{
-        account::{from_account, AccountSharedData},
-        clock::Clock,
-        instruction::Instruction,
-        pubkey::Pubkey,
-        signature::{Keypair, Signer},
-        signers::Signers,
-        stake::{
-            instruction as stake_instruction,
-            state::{Authorized, Delegation, Lockup, Stake},
+    use {
+        super::*,
+        crate::genesis_utils::{
+            bootstrap_validator_stake_lamports, create_genesis_config, GenesisConfigInfo,
         },
-        sysvar::stake_history::{self, StakeHistory},
-        transaction::Transaction,
+        rand::Rng,
+        solana_runtime::vote_account::{ArcVoteAccount, VoteAccounts},
+        solana_sdk::{
+            account::{from_account, AccountSharedData},
+            clock::Clock,
+            instruction::Instruction,
+            pubkey::Pubkey,
+            signature::{Keypair, Signer},
+            signers::Signers,
+            stake::{
+                instruction as stake_instruction,
+                state::{Authorized, Delegation, Lockup, Stake},
+            },
+            sysvar::stake_history::{self, StakeHistory},
+            transaction::Transaction,
+        },
+        solana_vote_program::{
+            vote_instruction,
+            vote_state::{VoteInit, VoteState, VoteStateVersions},
+        },
+        std::sync::Arc,
     };
-    use solana_vote_program::{
-        vote_instruction,
-        vote_state::{VoteInit, VoteState, VoteStateVersions},
-    };
-    use std::sync::Arc;
 
     fn new_from_parent(parent: &Arc<Bank>, slot: Slot) -> Bank {
         Bank::new_from_parent(parent, &Pubkey::default(), slot)

@@ -2,10 +2,12 @@
 
 extern crate test;
 
-use log::*;
-use solana_runtime::message_processor::{ExecuteDetailsTimings, PreAccount};
-use solana_sdk::{account::AccountSharedData, pubkey, rent::Rent};
-use test::Bencher;
+use {
+    log::*,
+    solana_runtime::message_processor::{ExecuteDetailsTimings, PreAccount},
+    solana_sdk::{account::AccountSharedData, pubkey, rent::Rent},
+    test::Bencher,
+};
 
 #[bench]
 fn bench_verify_account_changes_data(bencher: &mut Bencher) {

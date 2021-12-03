@@ -1,5 +1,4 @@
-use solana_sdk::pubkey::Pubkey;
-use std::collections::HashSet;
+use {solana_sdk::pubkey::Pubkey, std::collections::HashSet};
 
 #[derive(Default)]
 pub struct VoteStakeTracker {
@@ -49,8 +48,7 @@ impl VoteStakeTracker {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use solana_runtime::commitment::VOTE_THRESHOLD_SIZE;
+    use {super::*, solana_runtime::commitment::VOTE_THRESHOLD_SIZE};
 
     #[test]
     fn test_add_vote_pubkey() {

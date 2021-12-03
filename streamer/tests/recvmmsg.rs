@@ -1,10 +1,12 @@
 #![cfg(target_os = "linux")]
 
-use solana_streamer::packet::Packet;
-use solana_streamer::packet::PACKET_DATA_SIZE;
-use solana_streamer::recvmmsg::*;
-use std::net::UdpSocket;
-use std::time::Instant;
+use {
+    solana_streamer::{
+        packet::{Packet, PACKET_DATA_SIZE},
+        recvmmsg::*,
+    },
+    std::{net::UdpSocket, time::Instant},
+};
 
 #[test]
 pub fn test_recv_mmsg_batch_size() {

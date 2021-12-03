@@ -1,37 +1,39 @@
 #![allow(clippy::integer_arithmetic)]
-use bip39::{Language, Mnemonic, MnemonicType, Seed};
-use clap::{
-    crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App, AppSettings,
-    Arg, ArgMatches, SubCommand,
-};
-use solana_clap_utils::{
-    input_parsers::STDOUT_OUTFILE_TOKEN,
-    input_validators::{is_parsable, is_prompt_signer_source},
-    keypair::{
-        keypair_from_path, keypair_from_seed_phrase, prompt_passphrase, signer_from_path,
-        SKIP_SEED_PHRASE_VALIDATION_ARG,
+use {
+    bip39::{Language, Mnemonic, MnemonicType, Seed},
+    clap::{
+        crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
+        AppSettings, Arg, ArgMatches, SubCommand,
     },
-    ArgConstant, DisplayError,
-};
-use solana_cli_config::{Config, CONFIG_FILE};
-use solana_remote_wallet::remote_wallet::RemoteWalletManager;
-use solana_sdk::{
-    instruction::{AccountMeta, Instruction},
-    message::Message,
-    pubkey::{write_pubkey_file, Pubkey},
-    signature::{keypair_from_seed, write_keypair, write_keypair_file, Keypair, Signer},
-};
-use std::{
-    collections::HashSet,
-    error,
-    path::Path,
-    process::exit,
-    sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
-        Arc,
+    solana_clap_utils::{
+        input_parsers::STDOUT_OUTFILE_TOKEN,
+        input_validators::{is_parsable, is_prompt_signer_source},
+        keypair::{
+            keypair_from_path, keypair_from_seed_phrase, prompt_passphrase, signer_from_path,
+            SKIP_SEED_PHRASE_VALIDATION_ARG,
+        },
+        ArgConstant, DisplayError,
     },
-    thread,
-    time::Instant,
+    solana_cli_config::{Config, CONFIG_FILE},
+    solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_sdk::{
+        instruction::{AccountMeta, Instruction},
+        message::Message,
+        pubkey::{write_pubkey_file, Pubkey},
+        signature::{keypair_from_seed, write_keypair, write_keypair_file, Keypair, Signer},
+    },
+    std::{
+        collections::HashSet,
+        error,
+        path::Path,
+        process::exit,
+        sync::{
+            atomic::{AtomicBool, AtomicU64, Ordering},
+            Arc,
+        },
+        thread,
+        time::Instant,
+    },
 };
 
 const NO_PASSPHRASE: &str = "";

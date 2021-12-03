@@ -13,17 +13,19 @@ pub fn process_instruction(
 
 #[cfg(test)]
 pub mod test {
-    use rand::{thread_rng, Rng};
-    use solana_sdk::{
-        feature_set,
-        hash::Hash,
-        secp256k1_instruction::{
-            new_secp256k1_instruction, SecpSignatureOffsets, SIGNATURE_OFFSETS_SERIALIZED_SIZE,
+    use {
+        rand::{thread_rng, Rng},
+        solana_sdk::{
+            feature_set,
+            hash::Hash,
+            secp256k1_instruction::{
+                new_secp256k1_instruction, SecpSignatureOffsets, SIGNATURE_OFFSETS_SERIALIZED_SIZE,
+            },
+            signature::{Keypair, Signer},
+            transaction::Transaction,
         },
-        signature::{Keypair, Signer},
-        transaction::Transaction,
+        std::sync::Arc,
     };
-    use std::sync::Arc;
 
     #[test]
     fn test_secp256k1() {

@@ -1,7 +1,9 @@
-use crate::{stakes::Stakes, vote_account::ArcVoteAccount};
-use serde::{Deserialize, Serialize};
-use solana_sdk::{clock::Epoch, pubkey::Pubkey};
-use std::{collections::HashMap, sync::Arc};
+use {
+    crate::{stakes::Stakes, vote_account::ArcVoteAccount},
+    serde::{Deserialize, Serialize},
+    solana_sdk::{clock::Epoch, pubkey::Pubkey},
+    std::{collections::HashMap, sync::Arc},
+};
 
 pub type NodeIdToVoteAccounts = HashMap<Pubkey, NodeVoteAccounts>;
 pub type EpochAuthorizedVoters = HashMap<Pubkey, Pubkey>;
@@ -115,10 +117,10 @@ impl EpochStakes {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use super::*;
-    use solana_sdk::account::AccountSharedData;
-    use solana_vote_program::vote_state::create_account_with_authorized;
-    use std::iter;
+    use {
+        super::*, solana_sdk::account::AccountSharedData,
+        solana_vote_program::vote_state::create_account_with_authorized, std::iter,
+    };
 
     struct VoteAccountInfo {
         vote_account: Pubkey,

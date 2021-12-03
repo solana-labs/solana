@@ -511,21 +511,21 @@ impl BroadcastRun for StandardBroadcastRun {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use solana_gossip::cluster_info::{ClusterInfo, Node};
-    use solana_ledger::genesis_utils::create_genesis_config;
-    use solana_ledger::{
-        blockstore::Blockstore, entry::create_ticks, get_tmp_ledger_path,
-        shred::max_ticks_per_n_shreds,
+    use {
+        super::*,
+        solana_gossip::cluster_info::{ClusterInfo, Node},
+        solana_ledger::{
+            blockstore::Blockstore, entry::create_ticks, genesis_utils::create_genesis_config,
+            get_tmp_ledger_path, shred::max_ticks_per_n_shreds,
+        },
+        solana_runtime::bank::Bank,
+        solana_sdk::{
+            genesis_config::GenesisConfig,
+            signature::{Keypair, Signer},
+        },
+        solana_streamer::socket::SocketAddrSpace,
+        std::{sync::Arc, time::Duration},
     };
-    use solana_runtime::bank::Bank;
-    use solana_sdk::{
-        genesis_config::GenesisConfig,
-        signature::{Keypair, Signer},
-    };
-    use solana_streamer::socket::SocketAddrSpace;
-    use std::sync::Arc;
-    use std::time::Duration;
 
     #[allow(clippy::type_complexity)]
     fn setup(

@@ -1,17 +1,19 @@
-use crate::cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult};
-use clap::{App, Arg, ArgMatches, SubCommand};
-use solana_clap_utils::{
-    input_parsers::{pubkeys_of, value_of},
-    input_validators::is_valid_pubkey,
-    keypair::*,
+use {
+    crate::cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
+    clap::{App, Arg, ArgMatches, SubCommand},
+    solana_clap_utils::{
+        input_parsers::{pubkeys_of, value_of},
+        input_validators::is_valid_pubkey,
+        keypair::*,
+    },
+    solana_cli_output::{
+        CliEpochRewardshMetadata, CliInflation, CliKeyedEpochReward, CliKeyedEpochRewards,
+    },
+    solana_client::rpc_client::RpcClient,
+    solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_sdk::{clock::Epoch, pubkey::Pubkey},
+    std::sync::Arc,
 };
-use solana_cli_output::{
-    CliEpochRewardshMetadata, CliInflation, CliKeyedEpochReward, CliKeyedEpochRewards,
-};
-use solana_client::rpc_client::RpcClient;
-use solana_remote_wallet::remote_wallet::RemoteWalletManager;
-use solana_sdk::{clock::Epoch, pubkey::Pubkey};
-use std::sync::Arc;
 
 #[derive(Debug, PartialEq)]
 pub enum InflationCliCommand {

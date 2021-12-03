@@ -1,7 +1,11 @@
 //! The `timing` module provides std::time utility functions.
-use crate::unchecked_div_by_const;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use {
+    crate::unchecked_div_by_const,
+    std::{
+        sync::atomic::{AtomicU64, Ordering},
+        time::{Duration, SystemTime, UNIX_EPOCH},
+    },
+};
 
 pub fn duration_as_ns(d: &Duration) -> u64 {
     d.as_secs()

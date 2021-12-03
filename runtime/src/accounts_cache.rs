@@ -1,17 +1,19 @@
-use dashmap::DashMap;
-use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount},
-    clock::Slot,
-    hash::Hash,
-    pubkey::Pubkey,
-};
-use std::{
-    borrow::Borrow,
-    collections::BTreeSet,
-    ops::Deref,
-    sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
-        Arc, RwLock,
+use {
+    dashmap::DashMap,
+    solana_sdk::{
+        account::{AccountSharedData, ReadableAccount},
+        clock::Slot,
+        hash::Hash,
+        pubkey::Pubkey,
+    },
+    std::{
+        borrow::Borrow,
+        collections::BTreeSet,
+        ops::Deref,
+        sync::{
+            atomic::{AtomicBool, AtomicU64, Ordering},
+            Arc, RwLock,
+        },
     },
 };
 

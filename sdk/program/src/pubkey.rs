@@ -393,8 +393,7 @@ impl fmt::Display for Pubkey {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::str::from_utf8;
+    use {super::*, std::str::from_utf8};
 
     #[test]
     fn test_new_unique() {

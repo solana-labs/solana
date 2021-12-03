@@ -36,8 +36,11 @@ use {
         collections::HashSet,
         net::SocketAddr,
         path::{Path, PathBuf},
-        sync::atomic::{AtomicBool, AtomicU64, Ordering},
-        sync::{mpsc::channel, Arc, Mutex, RwLock},
+        sync::{
+            atomic::{AtomicBool, AtomicU64, Ordering},
+            mpsc::channel,
+            Arc, Mutex, RwLock,
+        },
         thread::{self, Builder, JoinHandle},
     },
     tokio_util::codec::{BytesCodec, FramedRead},
@@ -488,8 +491,9 @@ mod tests {
             get_tmp_ledger_path,
         },
         solana_runtime::{
-            bank::Bank, bank_forks::ArchiveFormat, snapshot_utils::SnapshotVersion,
-            snapshot_utils::DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+            bank::Bank,
+            bank_forks::ArchiveFormat,
+            snapshot_utils::{SnapshotVersion, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
         },
         solana_sdk::{
             genesis_config::{ClusterType, DEFAULT_GENESIS_ARCHIVE},
