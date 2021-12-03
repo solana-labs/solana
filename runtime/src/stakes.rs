@@ -44,52 +44,6 @@ impl Stakes {
         &self.stake_history
     }
 
-<<<<<<< HEAD
-    #[deprecated(note = "remove after optimize_epoch_boundary_updates feature is active")]
-    pub fn clone_with_epoch(&self, next_epoch: Epoch) -> Self {
-        let prev_epoch = self.epoch;
-        if prev_epoch == next_epoch {
-            self.clone()
-        } else {
-            // wrap up the prev epoch by adding new stake history entry for the prev epoch
-            let mut stake_history_upto_prev_epoch = self.stake_history.clone();
-            stake_history_upto_prev_epoch.add(
-                prev_epoch,
-                stake_state::new_stake_history_entry(
-                    prev_epoch,
-                    self.stake_delegations
-                        .iter()
-                        .map(|(_pubkey, stake_delegation)| stake_delegation),
-                    Some(&self.stake_history),
-                ),
-            );
-
-            // refresh the stake distribution of vote accounts for the next epoch, using new stake history
-            let vote_accounts_for_next_epoch = self
-                .vote_accounts
-                .iter()
-                .map(|(pubkey, (_ /*stake*/, account))| {
-                    let stake = self.calculate_stake(
-                        pubkey,
-                        next_epoch,
-                        Some(&stake_history_upto_prev_epoch),
-                    );
-                    (*pubkey, (stake, account.clone()))
-                })
-                .collect();
-
-            Stakes {
-                stake_delegations: self.stake_delegations.clone(),
-                unused: self.unused,
-                epoch: next_epoch,
-                stake_history: stake_history_upto_prev_epoch,
-                vote_accounts: vote_accounts_for_next_epoch,
-            }
-        }
-    }
-
-=======
->>>>>>> 1430b58a6 (Remove deprecated slow epoch boundary methods (#21568))
     pub fn activate_epoch(&mut self, next_epoch: Epoch, thread_pool: &ThreadPool) {
         let prev_epoch = self.epoch;
         self.epoch = next_epoch;

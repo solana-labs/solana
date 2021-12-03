@@ -281,12 +281,6 @@ impl Tvu {
             cache_block_meta_sender,
             bank_notification_sender,
             wait_for_vote_to_start_leader: tvu_config.wait_for_vote_to_start_leader,
-<<<<<<< HEAD
-            disable_epoch_boundary_optimization: tvu_config.disable_epoch_boundary_optimization,
-=======
-            ancestor_hashes_replay_update_sender,
-            tower_storage: tower_storage.clone(),
->>>>>>> 1430b58a6 (Remove deprecated slow epoch boundary methods (#21568))
         };
 
         let (voting_sender, voting_receiver) = channel();

@@ -212,11 +212,6 @@ impl Default for ValidatorConfig {
             validator_exit: Arc::new(RwLock::new(Exit::default())),
             no_wait_for_vote_to_start_leader: true,
             accounts_shrink_ratio: AccountShrinkThreshold::default(),
-<<<<<<< HEAD
-            disable_epoch_boundary_optimization: false,
-=======
-            accounts_db_config: None,
->>>>>>> 1430b58a6 (Remove deprecated slow epoch boundary methods (#21568))
         }
     }
 }
