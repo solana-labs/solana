@@ -214,10 +214,7 @@ impl StreamerSendStats {
     }
 
     fn record(&mut self, pkt: &Packet) {
-        let ent = self
-            .host_map
-            .entry(pkt.meta.addr)
-            .or_default();
+        let ent = self.host_map.entry(pkt.meta.addr).or_default();
         ent.count += 1;
         ent.bytes += pkt.data.len() as u64;
     }
