@@ -19,12 +19,13 @@ macro_rules! DEFINE_NxM_BENCH {
 }
 
 extern crate test;
-use rayon::prelude::*;
-use solana_bucket_map::bucket_map::{BucketMap, BucketMapConfig};
-use solana_sdk::pubkey::Pubkey;
-use std::collections::hash_map::HashMap;
-use std::sync::RwLock;
-use test::Bencher;
+use {
+    rayon::prelude::*,
+    solana_bucket_map::bucket_map::{BucketMap, BucketMapConfig},
+    solana_sdk::pubkey::Pubkey,
+    std::{collections::hash_map::HashMap, sync::RwLock},
+    test::Bencher,
+};
 
 type IndexValue = u64;
 

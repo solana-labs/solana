@@ -1,18 +1,19 @@
 //! The `signature` module provides functionality for public, and private keys.
 #![cfg(feature = "full")]
 
-use crate::pubkey::Pubkey;
-use generic_array::{typenum::U64, GenericArray};
-use std::{
-    borrow::{Borrow, Cow},
-    convert::TryInto,
-    fmt, mem,
-    str::FromStr,
-};
-use thiserror::Error;
-
 // legacy module paths
 pub use crate::signer::{keypair::*, null_signer::*, presigner::*, *};
+use {
+    crate::pubkey::Pubkey,
+    generic_array::{typenum::U64, GenericArray},
+    std::{
+        borrow::{Borrow, Cow},
+        convert::TryInto,
+        fmt, mem,
+        str::FromStr,
+    },
+    thiserror::Error,
+};
 
 /// Number of bytes in a signature
 pub const SIGNATURE_BYTES: usize = 64;

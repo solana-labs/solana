@@ -19,16 +19,14 @@ use {
     serde::Serialize,
     solana_program::{system_instruction::SystemInstruction, system_program},
     solana_sdk::feature_set,
-    std::result,
-    std::sync::Arc,
+    std::{result, sync::Arc},
     thiserror::Error,
 };
 
 mod sanitized;
 mod versioned;
 
-pub use sanitized::*;
-pub use versioned::*;
+pub use {sanitized::*, versioned::*};
 
 /// Reasons a transaction might be rejected.
 #[derive(
@@ -547,15 +545,17 @@ pub fn get_nonce_pubkey_from_instruction<'a>(
 mod tests {
     #![allow(deprecated)]
 
-    use super::*;
-    use crate::{
-        hash::hash,
-        instruction::AccountMeta,
-        signature::{Keypair, Presigner, Signer},
-        system_instruction, sysvar,
+    use {
+        super::*,
+        crate::{
+            hash::hash,
+            instruction::AccountMeta,
+            signature::{Keypair, Presigner, Signer},
+            system_instruction, sysvar,
+        },
+        bincode::{deserialize, serialize, serialized_size},
+        std::mem::size_of,
     };
-    use bincode::{deserialize, serialize, serialized_size};
-    use std::mem::size_of;
 
     fn get_program_id(tx: &Transaction, instruction_index: usize) -> &Pubkey {
         let message = tx.message();

@@ -1,6 +1,8 @@
-use solana_ledger::blockstore::Blockstore;
-use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey, timing::timestamp};
-use std::{collections::HashMap, net::SocketAddr};
+use {
+    solana_ledger::blockstore::Blockstore,
+    solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey, timing::timestamp},
+    std::{collections::HashMap, net::SocketAddr},
+};
 
 // Number of validators to sample for the ancestor repair
 pub const ANCESTOR_HASH_REPAIR_SAMPLE_SIZE: usize = 21;
@@ -350,11 +352,13 @@ impl DeadSlotAncestorRequestStatus {
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
-    use rand::{self, seq::SliceRandom, thread_rng};
-    use solana_ledger::get_tmp_ledger_path_auto_delete;
-    use std::{collections::BTreeMap, net::IpAddr};
-    use tempfile::TempDir;
+    use {
+        super::*,
+        rand::{self, seq::SliceRandom, thread_rng},
+        solana_ledger::get_tmp_ledger_path_auto_delete,
+        std::{collections::BTreeMap, net::IpAddr},
+        tempfile::TempDir,
+    };
 
     struct TestSetup {
         sampled_addresses: Vec<SocketAddr>,

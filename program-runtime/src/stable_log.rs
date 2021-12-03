@@ -2,10 +2,12 @@
 //!
 //! The format of these log messages should not be modified to avoid breaking downstream consumers
 //! of program logging
-use crate::{ic_logger_msg, log_collector::LogCollector};
-use itertools::Itertools;
-use solana_sdk::{instruction::InstructionError, pubkey::Pubkey};
-use std::{cell::RefCell, rc::Rc};
+use {
+    crate::{ic_logger_msg, log_collector::LogCollector},
+    itertools::Itertools,
+    solana_sdk::{instruction::InstructionError, pubkey::Pubkey},
+    std::{cell::RefCell, rc::Rc},
+};
 
 /// Log a program invoke.
 ///

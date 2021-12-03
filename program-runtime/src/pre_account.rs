@@ -1,16 +1,18 @@
-use crate::timings::ExecuteDetailsTimings;
-use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount, WritableAccount},
-    instruction::InstructionError,
-    pubkey::Pubkey,
-    rent::Rent,
-    system_instruction::MAX_PERMITTED_DATA_LENGTH,
-    system_program,
-};
-use std::{
-    cell::{Ref, RefCell},
-    fmt::Debug,
-    rc::Rc,
+use {
+    crate::timings::ExecuteDetailsTimings,
+    solana_sdk::{
+        account::{AccountSharedData, ReadableAccount, WritableAccount},
+        instruction::InstructionError,
+        pubkey::Pubkey,
+        rent::Rent,
+        system_instruction::MAX_PERMITTED_DATA_LENGTH,
+        system_program,
+    },
+    std::{
+        cell::{Ref, RefCell},
+        fmt::Debug,
+        rc::Rc,
+    },
 };
 
 // The relevant state of an account before an Instruction executes, used
@@ -192,8 +194,10 @@ impl PreAccount {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_sdk::{account::Account, instruction::InstructionError, system_program};
+    use {
+        super::*,
+        solana_sdk::{account::Account, instruction::InstructionError, system_program},
+    };
 
     #[test]
     fn test_is_zeroed() {

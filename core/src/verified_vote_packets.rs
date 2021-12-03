@@ -1,16 +1,18 @@
-use crate::{cluster_info_vote_listener::VerifiedLabelVotePacketsReceiver, result::Result};
-use crossbeam_channel::Select;
-use solana_perf::packet::Packets;
-use solana_runtime::bank::Bank;
-use solana_sdk::{
-    account::from_account, clock::Slot, hash::Hash, pubkey::Pubkey, signature::Signature,
-    slot_hashes::SlotHashes, sysvar,
-};
-use solana_vote_program::vote_state::Vote;
-use std::{
-    collections::{BTreeMap, HashMap, HashSet},
-    sync::Arc,
-    time::Duration,
+use {
+    crate::{cluster_info_vote_listener::VerifiedLabelVotePacketsReceiver, result::Result},
+    crossbeam_channel::Select,
+    solana_perf::packet::Packets,
+    solana_runtime::bank::Bank,
+    solana_sdk::{
+        account::from_account, clock::Slot, hash::Hash, pubkey::Pubkey, signature::Signature,
+        slot_hashes::SlotHashes, sysvar,
+    },
+    solana_vote_program::vote_state::Vote,
+    std::{
+        collections::{BTreeMap, HashMap, HashSet},
+        sync::Arc,
+        time::Duration,
+    },
 };
 
 const MAX_VOTES_PER_VALIDATOR: usize = 1000;
@@ -174,11 +176,13 @@ impl VerifiedVotePackets {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{result::Error, vote_simulator::VoteSimulator};
-    use crossbeam_channel::unbounded;
-    use solana_perf::packet::Packet;
-    use solana_sdk::slot_hashes::MAX_ENTRIES;
+    use {
+        super::*,
+        crate::{result::Error, vote_simulator::VoteSimulator},
+        crossbeam_channel::unbounded,
+        solana_perf::packet::Packet,
+        solana_sdk::slot_hashes::MAX_ENTRIES,
+    };
 
     #[test]
     fn test_verified_vote_packets_receive_and_process_vote_packets() {

@@ -1,6 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
-use crate::pubkey::Pubkey;
-use crate::sanitize::SanitizeError;
+use crate::{pubkey::Pubkey, sanitize::SanitizeError};
 
 pub fn append_u16(buf: &mut Vec<u8>, data: u16) {
     let start = buf.len();

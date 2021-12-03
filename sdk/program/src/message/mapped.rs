@@ -114,7 +114,8 @@ impl MappedMessage {
     /// Returns true if the account at the specified index is called as a program by an instruction
     pub fn is_key_called_as_program(&self, key_index: usize) -> bool {
         if let Ok(key_index) = u8::try_from(key_index) {
-            self.message.instructions
+            self.message
+                .instructions
                 .iter()
                 .any(|ix| ix.program_id_index == key_index)
         } else {
@@ -131,9 +132,11 @@ impl MappedMessage {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{instruction::CompiledInstruction, message::MessageHeader, system_program, sysvar};
-    use itertools::Itertools;
+    use {
+        super::*,
+        crate::{instruction::CompiledInstruction, message::MessageHeader, system_program, sysvar},
+        itertools::Itertools,
+    };
 
     fn create_test_mapped_message() -> (MappedMessage, [Pubkey; 6]) {
         let key0 = Pubkey::new_unique();
@@ -279,13 +282,11 @@ mod tests {
                     num_readonly_unsigned_accounts: 0,
                 },
                 account_keys: vec![key0],
-                instructions: vec![
-                    CompiledInstruction {
-                        program_id_index: 2,
-                        accounts: vec![1],
-                        data: vec![],
-                    }
-                ],
+                instructions: vec![CompiledInstruction {
+                    program_id_index: 2,
+                    accounts: vec![1],
+                    data: vec![],
+                }],
                 ..v0::Message::default()
             },
             mapped_addresses: MappedAddresses {

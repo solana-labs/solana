@@ -782,15 +782,17 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::StoredConfirmedBlock;
-    use prost::Message;
-    use solana_sdk::{hash::Hash, signature::Keypair, system_transaction};
-    use solana_storage_proto::convert::generated;
-    use solana_transaction_status::{
-        ConfirmedBlock, TransactionStatusMeta, TransactionWithStatusMeta,
+    use {
+        super::*,
+        crate::StoredConfirmedBlock,
+        prost::Message,
+        solana_sdk::{hash::Hash, signature::Keypair, system_transaction},
+        solana_storage_proto::convert::generated,
+        solana_transaction_status::{
+            ConfirmedBlock, TransactionStatusMeta, TransactionWithStatusMeta,
+        },
+        std::convert::TryInto,
     };
-    use std::convert::TryInto;
 
     #[test]
     fn test_deserialize_protobuf_or_bincode_cell_data() {

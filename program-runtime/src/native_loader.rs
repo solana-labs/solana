@@ -1,28 +1,30 @@
 //! Native loader
-use crate::invoke_context::InvokeContext;
 #[cfg(unix)]
 use libloading::os::unix::*;
 #[cfg(windows)]
 use libloading::os::windows::*;
-use log::*;
-use num_derive::{FromPrimitive, ToPrimitive};
-use serde::Serialize;
-use solana_sdk::{
-    account::ReadableAccount,
-    decode_error::DecodeError,
-    instruction::InstructionError,
-    keyed_account::{keyed_account_at_index, KeyedAccount},
-    native_loader,
-    pubkey::Pubkey,
+use {
+    crate::invoke_context::InvokeContext,
+    log::*,
+    num_derive::{FromPrimitive, ToPrimitive},
+    serde::Serialize,
+    solana_sdk::{
+        account::ReadableAccount,
+        decode_error::DecodeError,
+        instruction::InstructionError,
+        keyed_account::{keyed_account_at_index, KeyedAccount},
+        native_loader,
+        pubkey::Pubkey,
+    },
+    std::{
+        collections::HashMap,
+        env,
+        path::{Path, PathBuf},
+        str,
+        sync::RwLock,
+    },
+    thiserror::Error,
 };
-use std::{
-    collections::HashMap,
-    env,
-    path::{Path, PathBuf},
-    str,
-    sync::RwLock,
-};
-use thiserror::Error;
 
 /// Prototype of a native loader entry point
 ///

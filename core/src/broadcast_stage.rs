@@ -24,8 +24,10 @@ use {
     solana_poh::poh_recorder::WorkingBankEntry,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
+        clock::Slot,
+        pubkey::Pubkey,
+        signature::Keypair,
         timing::{timestamp, AtomicInterval},
-        {clock::Slot, pubkey::Pubkey, signature::Keypair},
     },
     solana_streamer::{
         sendmmsg::{batch_send, SendPktsError},
@@ -452,24 +454,28 @@ pub fn broadcast_shreds(
 
 #[cfg(test)]
 pub mod test {
-    use super::*;
-    use crossbeam_channel::unbounded;
-    use solana_entry::entry::create_ticks;
-    use solana_gossip::cluster_info::{ClusterInfo, Node};
-    use solana_ledger::{
-        blockstore::{make_slot_entries, Blockstore},
-        genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        get_tmp_ledger_path,
-        shred::{max_ticks_per_n_shreds, ProcessShredsStats, Shredder},
-    };
-    use solana_runtime::bank::Bank;
-    use solana_sdk::{
-        hash::Hash,
-        pubkey::Pubkey,
-        signature::{Keypair, Signer},
-    };
-    use std::{
-        path::Path, sync::atomic::AtomicBool, sync::mpsc::channel, sync::Arc, thread::sleep,
+    use {
+        super::*,
+        crossbeam_channel::unbounded,
+        solana_entry::entry::create_ticks,
+        solana_gossip::cluster_info::{ClusterInfo, Node},
+        solana_ledger::{
+            blockstore::{make_slot_entries, Blockstore},
+            genesis_utils::{create_genesis_config, GenesisConfigInfo},
+            get_tmp_ledger_path,
+            shred::{max_ticks_per_n_shreds, ProcessShredsStats, Shredder},
+        },
+        solana_runtime::bank::Bank,
+        solana_sdk::{
+            hash::Hash,
+            pubkey::Pubkey,
+            signature::{Keypair, Signer},
+        },
+        std::{
+            path::Path,
+            sync::{atomic::AtomicBool, mpsc::channel, Arc},
+            thread::sleep,
+        },
     };
 
     #[allow(clippy::implicit_hasher)]

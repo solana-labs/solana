@@ -1,14 +1,12 @@
 #![allow(clippy::integer_arithmetic)]
 extern crate byte_unit;
 
-use byte_unit::Byte;
-use clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches, SubCommand};
-
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::fs;
-use std::ops::Sub;
-use std::path::PathBuf;
+use {
+    byte_unit::Byte,
+    clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches, SubCommand},
+    serde::{Deserialize, Serialize},
+    std::{collections::HashMap, fs, ops::Sub, path::PathBuf},
+};
 
 #[derive(Deserialize, Serialize, Debug)]
 struct IpAddrMapping {

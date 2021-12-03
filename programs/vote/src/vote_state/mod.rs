@@ -1,26 +1,29 @@
 //! Vote state, vote program
 //! Receive and processes votes from validators
-use crate::authorized_voters::AuthorizedVoters;
-use crate::{id, vote_instruction::VoteError};
-use bincode::{deserialize, serialize_into, serialized_size, ErrorKind};
-use log::*;
-use serde_derive::{Deserialize, Serialize};
-use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount, WritableAccount},
-    account_utils::State,
-    clock::{Epoch, Slot, UnixTimestamp},
-    epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
-    hash::Hash,
-    instruction::InstructionError,
-    keyed_account::KeyedAccount,
-    pubkey::Pubkey,
-    rent::Rent,
-    slot_hashes::SlotHash,
-    sysvar::clock::Clock,
+use {
+    crate::{authorized_voters::AuthorizedVoters, id, vote_instruction::VoteError},
+    bincode::{deserialize, serialize_into, serialized_size, ErrorKind},
+    log::*,
+    serde_derive::{Deserialize, Serialize},
+    solana_sdk::{
+        account::{AccountSharedData, ReadableAccount, WritableAccount},
+        account_utils::State,
+        clock::{Epoch, Slot, UnixTimestamp},
+        epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
+        hash::Hash,
+        instruction::InstructionError,
+        keyed_account::KeyedAccount,
+        pubkey::Pubkey,
+        rent::Rent,
+        slot_hashes::SlotHash,
+        sysvar::clock::Clock,
+    },
+    std::{
+        boxed::Box,
+        cmp::Ordering,
+        collections::{HashSet, VecDeque},
+    },
 };
-use std::boxed::Box;
-use std::cmp::Ordering;
-use std::collections::{HashSet, VecDeque};
 
 mod vote_state_0_23_5;
 pub mod vote_state_versions;
@@ -793,15 +796,17 @@ pub fn create_account(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::vote_state;
-    use solana_sdk::{
-        account::AccountSharedData,
-        account_utils::StateMut,
-        hash::hash,
-        keyed_account::{get_signers, keyed_account_at_index},
+    use {
+        super::*,
+        crate::vote_state,
+        solana_sdk::{
+            account::AccountSharedData,
+            account_utils::StateMut,
+            hash::hash,
+            keyed_account::{get_signers, keyed_account_at_index},
+        },
+        std::cell::RefCell,
     };
-    use std::cell::RefCell;
 
     const MAX_RECENT_VOTES: usize = 16;
 

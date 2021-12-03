@@ -1,56 +1,58 @@
-use crate::{alloc, BpfError};
-use alloc::Alloc;
-use solana_program_runtime::{
-    ic_logger_msg, ic_msg,
-    invoke_context::{ComputeMeter, InvokeContext},
-    stable_log,
-};
-use solana_rbpf::{
-    aligned_memory::AlignedMemory,
-    ebpf,
-    error::EbpfError,
-    memory_region::{AccessType, MemoryMapping},
-    question_mark,
-    vm::{EbpfVm, SyscallObject, SyscallRegistry},
-};
 #[allow(deprecated)]
 use solana_sdk::sysvar::fees::Fees;
-use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount, WritableAccount},
-    account_info::AccountInfo,
-    blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
-    clock::Clock,
-    entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
-    epoch_schedule::EpochSchedule,
-    feature_set::{
-        blake3_syscall_enabled, demote_program_write_locks, disable_fees_sysvar,
-        do_support_realloc, libsecp256k1_0_5_upgrade_enabled,
-        prevent_calling_precompiles_as_programs, return_data_syscall_enabled,
-        secp256k1_recover_syscall_enabled, sol_log_data_syscall_enabled,
+use {
+    crate::{alloc, BpfError},
+    alloc::Alloc,
+    solana_program_runtime::{
+        ic_logger_msg, ic_msg,
+        invoke_context::{ComputeMeter, InvokeContext},
+        stable_log,
     },
-    hash::{Hasher, HASH_BYTES},
-    instruction::{AccountMeta, Instruction, InstructionError},
-    keccak,
-    message::Message,
-    native_loader,
-    precompiles::is_precompile,
-    program::MAX_RETURN_DATA,
-    pubkey::{Pubkey, PubkeyError, MAX_SEEDS, MAX_SEED_LEN},
-    rent::Rent,
-    secp256k1_recover::{
-        Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
+    solana_rbpf::{
+        aligned_memory::AlignedMemory,
+        ebpf,
+        error::EbpfError,
+        memory_region::{AccessType, MemoryMapping},
+        question_mark,
+        vm::{EbpfVm, SyscallObject, SyscallRegistry},
     },
-    sysvar::{self, Sysvar, SysvarId},
+    solana_sdk::{
+        account::{AccountSharedData, ReadableAccount, WritableAccount},
+        account_info::AccountInfo,
+        blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
+        clock::Clock,
+        entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
+        epoch_schedule::EpochSchedule,
+        feature_set::{
+            blake3_syscall_enabled, demote_program_write_locks, disable_fees_sysvar,
+            do_support_realloc, libsecp256k1_0_5_upgrade_enabled,
+            prevent_calling_precompiles_as_programs, return_data_syscall_enabled,
+            secp256k1_recover_syscall_enabled, sol_log_data_syscall_enabled,
+        },
+        hash::{Hasher, HASH_BYTES},
+        instruction::{AccountMeta, Instruction, InstructionError},
+        keccak,
+        message::Message,
+        native_loader,
+        precompiles::is_precompile,
+        program::MAX_RETURN_DATA,
+        pubkey::{Pubkey, PubkeyError, MAX_SEEDS, MAX_SEED_LEN},
+        rent::Rent,
+        secp256k1_recover::{
+            Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
+        },
+        sysvar::{self, Sysvar, SysvarId},
+    },
+    std::{
+        alloc::Layout,
+        cell::{RefCell, RefMut},
+        mem::{align_of, size_of},
+        rc::Rc,
+        slice::from_raw_parts_mut,
+        str::{from_utf8, Utf8Error},
+    },
+    thiserror::Error as ThisError,
 };
-use std::{
-    alloc::Layout,
-    cell::{RefCell, RefMut},
-    mem::{align_of, size_of},
-    rc::Rc,
-    slice::from_raw_parts_mut,
-    str::{from_utf8, Utf8Error},
-};
-use thiserror::Error as ThisError;
 
 /// Maximum signers
 pub const MAX_SIGNERS: usize = 16;
@@ -2641,13 +2643,15 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallLogData<'a, 'b> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_program_runtime::invoke_context::InvokeContext;
-    use solana_rbpf::{
-        ebpf::HOST_ALIGN, memory_region::MemoryRegion, user_error::UserError, vm::Config,
+    use {
+        super::*,
+        solana_program_runtime::invoke_context::InvokeContext,
+        solana_rbpf::{
+            ebpf::HOST_ALIGN, memory_region::MemoryRegion, user_error::UserError, vm::Config,
+        },
+        solana_sdk::{bpf_loader, fee_calculator::FeeCalculator, hash::hashv},
+        std::str::FromStr,
     };
-    use solana_sdk::{bpf_loader, fee_calculator::FeeCalculator, hash::hashv};
-    use std::str::FromStr;
 
     macro_rules! assert_access_violation {
         ($result:expr, $va:expr, $len:expr) => {

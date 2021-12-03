@@ -1,13 +1,17 @@
-use crate::account::{
-    create_account_shared_data_with_fields, to_account, AccountSharedData,
-    InheritableAccountFields, DUMMY_INHERITABLE_ACCOUNT_FIELDS,
-};
-use crate::clock::INITIAL_RENT_EPOCH;
 #[allow(deprecated)]
 use solana_program::sysvar::recent_blockhashes::{
     IntoIterSorted, IterItem, RecentBlockhashes, MAX_ENTRIES,
 };
-use std::{collections::BinaryHeap, iter::FromIterator};
+use {
+    crate::{
+        account::{
+            create_account_shared_data_with_fields, to_account, AccountSharedData,
+            InheritableAccountFields, DUMMY_INHERITABLE_ACCOUNT_FIELDS,
+        },
+        clock::INITIAL_RENT_EPOCH,
+    },
+    std::{collections::BinaryHeap, iter::FromIterator},
+};
 
 #[deprecated(
     since = "1.9.0",
@@ -79,12 +83,14 @@ where
 #[cfg(test)]
 mod tests {
     #![allow(deprecated)]
-    use super::*;
-    use crate::account::from_account;
-    use rand::{seq::SliceRandom, thread_rng};
-    use solana_program::{
-        hash::{Hash, HASH_BYTES},
-        sysvar::recent_blockhashes::Entry,
+    use {
+        super::*,
+        crate::account::from_account,
+        rand::{seq::SliceRandom, thread_rng},
+        solana_program::{
+            hash::{Hash, HASH_BYTES},
+            sysvar::recent_blockhashes::Entry,
+        },
     };
 
     #[test]

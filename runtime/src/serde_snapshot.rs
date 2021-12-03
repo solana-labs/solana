@@ -1,3 +1,5 @@
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+use solana_frozen_abi::abi_example::IgnoreAsHelper;
 use {
     crate::{
         accounts::Accounts,
@@ -17,8 +19,7 @@ use {
         serde_snapshot::future::SerializableStorage,
         stakes::Stakes,
     },
-    bincode,
-    bincode::{config::Options, Error},
+    bincode::{self, config::Options, Error},
     log::*,
     rayon::prelude::*,
     serde::{de::DeserializeOwned, Deserialize, Serialize},
@@ -46,23 +47,18 @@ use {
     },
 };
 
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-use solana_frozen_abi::abi_example::IgnoreAsHelper;
-
 mod common;
 mod future;
 mod tests;
 mod utils;
 
-use future::Context as TypeContextFuture;
-#[allow(unused_imports)]
-use utils::{serialize_iter_as_map, serialize_iter_as_seq, serialize_iter_as_tuple};
-
 // a number of test cases in accounts_db use this
 #[cfg(test)]
 pub(crate) use self::tests::reconstruct_accounts_db_via_serialization;
-
 pub(crate) use crate::accounts_db::{SnapshotStorage, SnapshotStorages};
+use future::Context as TypeContextFuture;
+#[allow(unused_imports)]
+use utils::{serialize_iter_as_map, serialize_iter_as_seq, serialize_iter_as_tuple};
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub(crate) enum SerdeStyle {

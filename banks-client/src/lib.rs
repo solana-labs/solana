@@ -379,16 +379,18 @@ pub async fn start_tcp_client<T: ToSocketAddrs>(addr: T) -> io::Result<BanksClie
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_banks_server::banks_server::start_local_server;
-    use solana_runtime::{
-        bank::Bank, bank_forks::BankForks, commitment::BlockCommitmentCache,
-        genesis_utils::create_genesis_config,
+    use {
+        super::*,
+        solana_banks_server::banks_server::start_local_server,
+        solana_runtime::{
+            bank::Bank, bank_forks::BankForks, commitment::BlockCommitmentCache,
+            genesis_utils::create_genesis_config,
+        },
+        solana_sdk::{message::Message, signature::Signer, system_instruction},
+        std::sync::{Arc, RwLock},
+        tarpc::transport,
+        tokio::{runtime::Runtime, time::sleep},
     };
-    use solana_sdk::{message::Message, signature::Signer, system_instruction};
-    use std::sync::{Arc, RwLock};
-    use tarpc::transport;
-    use tokio::{runtime::Runtime, time::sleep};
 
     #[test]
     fn test_banks_client_new() {

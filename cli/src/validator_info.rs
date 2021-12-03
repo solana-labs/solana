@@ -1,31 +1,33 @@
-use crate::{
-    cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
-    spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
+use {
+    crate::{
+        cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
+        spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
+    },
+    bincode::deserialize,
+    clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
+    reqwest::blocking::Client,
+    serde_json::{Map, Value},
+    solana_account_decoder::validator_info::{
+        self, ValidatorInfo, MAX_LONG_FIELD_LENGTH, MAX_SHORT_FIELD_LENGTH,
+    },
+    solana_clap_utils::{
+        input_parsers::pubkey_of,
+        input_validators::{is_pubkey, is_url},
+        keypair::DefaultSigner,
+    },
+    solana_cli_output::{CliValidatorInfo, CliValidatorInfoVec},
+    solana_client::rpc_client::RpcClient,
+    solana_config_program::{config_instruction, get_config_data, ConfigKeys, ConfigState},
+    solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_sdk::{
+        account::Account,
+        message::Message,
+        pubkey::Pubkey,
+        signature::{Keypair, Signer},
+        transaction::Transaction,
+    },
+    std::{error, sync::Arc},
 };
-use bincode::deserialize;
-use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
-use reqwest::blocking::Client;
-use serde_json::{Map, Value};
-use solana_account_decoder::validator_info::{
-    self, ValidatorInfo, MAX_LONG_FIELD_LENGTH, MAX_SHORT_FIELD_LENGTH,
-};
-use solana_clap_utils::{
-    input_parsers::pubkey_of,
-    input_validators::{is_pubkey, is_url},
-    keypair::DefaultSigner,
-};
-use solana_cli_output::{CliValidatorInfo, CliValidatorInfoVec};
-use solana_client::rpc_client::RpcClient;
-use solana_config_program::{config_instruction, get_config_data, ConfigKeys, ConfigState};
-use solana_remote_wallet::remote_wallet::RemoteWalletManager;
-use solana_sdk::{
-    account::Account,
-    message::Message,
-    pubkey::Pubkey,
-    signature::{Keypair, Signer},
-    transaction::Transaction,
-};
-use std::{error, sync::Arc};
 
 // Return an error if a validator details are longer than the max length.
 pub fn check_details_length(string: String) -> Result<(), String> {
@@ -407,10 +409,12 @@ pub fn process_get_validator_info(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::clap_app::get_clap_app;
-    use bincode::{serialize, serialized_size};
-    use serde_json::json;
+    use {
+        super::*,
+        crate::clap_app::get_clap_app,
+        bincode::{serialize, serialized_size},
+        serde_json::json,
+    };
 
     #[test]
     fn test_check_details_length() {

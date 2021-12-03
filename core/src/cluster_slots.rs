@@ -218,8 +218,7 @@ impl ClusterSlots {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_runtime::epoch_stakes::NodeVoteAccounts;
+    use {super::*, solana_runtime::epoch_stakes::NodeVoteAccounts};
 
     #[test]
     fn test_default() {

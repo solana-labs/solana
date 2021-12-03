@@ -1,57 +1,56 @@
-use crate::{
-    checks::*,
-    cli::{
-        log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
-        ProcessResult,
+use {
+    crate::{
+        checks::*,
+        cli::{
+            log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
+            ProcessResult,
+        },
     },
-};
-use bip39::{Language, Mnemonic, MnemonicType, Seed};
-use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
-use log::*;
-use solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig};
-use solana_bpf_loader_program::{syscalls::register_syscalls, BpfError, ThisInstructionMeter};
-use solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*};
-use solana_cli_output::{
-    CliProgram, CliProgramAccountType, CliProgramAuthority, CliProgramBuffer, CliProgramId,
-    CliUpgradeableBuffer, CliUpgradeableBuffers, CliUpgradeableProgram,
-    CliUpgradeableProgramClosed, CliUpgradeablePrograms,
-};
-use solana_client::{
-    client_error::ClientErrorKind,
-    rpc_client::RpcClient,
-    rpc_config::RpcSendTransactionConfig,
-    rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
-    rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
-    tpu_client::{TpuClient, TpuClientConfig},
-};
-use solana_program_runtime::invoke_context::InvokeContext;
-use solana_rbpf::{elf::Executable, verifier, vm::Config};
-use solana_remote_wallet::remote_wallet::RemoteWalletManager;
-use solana_sdk::{
-    account::Account,
-    account_utils::StateMut,
-    bpf_loader, bpf_loader_deprecated,
-    bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    instruction::Instruction,
-    instruction::InstructionError,
-    loader_instruction,
-    message::Message,
-    native_token::Sol,
-    packet::PACKET_DATA_SIZE,
-    pubkey::Pubkey,
-    signature::{keypair_from_seed, read_keypair_file, Keypair, Signature, Signer},
-    system_instruction::{self, SystemError},
-    system_program,
-    transaction::Transaction,
-    transaction::TransactionError,
-};
-use std::{
-    fs::File,
-    io::{Read, Write},
-    mem::size_of,
-    path::PathBuf,
-    str::FromStr,
-    sync::Arc,
+    bip39::{Language, Mnemonic, MnemonicType, Seed},
+    clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
+    log::*,
+    solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
+    solana_bpf_loader_program::{syscalls::register_syscalls, BpfError, ThisInstructionMeter},
+    solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*},
+    solana_cli_output::{
+        CliProgram, CliProgramAccountType, CliProgramAuthority, CliProgramBuffer, CliProgramId,
+        CliUpgradeableBuffer, CliUpgradeableBuffers, CliUpgradeableProgram,
+        CliUpgradeableProgramClosed, CliUpgradeablePrograms,
+    },
+    solana_client::{
+        client_error::ClientErrorKind,
+        rpc_client::RpcClient,
+        rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSendTransactionConfig},
+        rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
+        tpu_client::{TpuClient, TpuClientConfig},
+    },
+    solana_program_runtime::invoke_context::InvokeContext,
+    solana_rbpf::{elf::Executable, verifier, vm::Config},
+    solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_sdk::{
+        account::Account,
+        account_utils::StateMut,
+        bpf_loader, bpf_loader_deprecated,
+        bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+        instruction::{Instruction, InstructionError},
+        loader_instruction,
+        message::Message,
+        native_token::Sol,
+        packet::PACKET_DATA_SIZE,
+        pubkey::Pubkey,
+        signature::{keypair_from_seed, read_keypair_file, Keypair, Signature, Signer},
+        system_instruction::{self, SystemError},
+        system_program,
+        transaction::{Transaction, TransactionError},
+    },
+    std::{
+        fs::File,
+        io::{Read, Write},
+        mem::size_of,
+        path::PathBuf,
+        str::FromStr,
+        sync::Arc,
+    },
 };
 
 #[derive(Debug, PartialEq)]
@@ -2203,14 +2202,16 @@ fn report_ephemeral_mnemonic(words: usize, mnemonic: bip39::Mnemonic) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{
-        clap_app::get_clap_app,
-        cli::{parse_command, process_command},
+    use {
+        super::*,
+        crate::{
+            clap_app::get_clap_app,
+            cli::{parse_command, process_command},
+        },
+        serde_json::Value,
+        solana_cli_output::OutputFormat,
+        solana_sdk::signature::write_keypair_file,
     };
-    use serde_json::Value;
-    use solana_cli_output::OutputFormat;
-    use solana_sdk::signature::write_keypair_file;
 
     fn make_tmp_path(name: &str) -> String {
         let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());

@@ -1,12 +1,14 @@
-use crate::tower_storage::{SavedTower, TowerStorage};
-use solana_gossip::cluster_info::ClusterInfo;
-use solana_measure::measure::Measure;
-use solana_poh::poh_recorder::PohRecorder;
-use solana_runtime::bank_forks::BankForks;
-use solana_sdk::{clock::Slot, transaction::Transaction};
-use std::{
-    sync::{mpsc::Receiver, Arc, Mutex, RwLock},
-    thread::{self, Builder, JoinHandle},
+use {
+    crate::tower_storage::{SavedTower, TowerStorage},
+    solana_gossip::cluster_info::ClusterInfo,
+    solana_measure::measure::Measure,
+    solana_poh::poh_recorder::PohRecorder,
+    solana_runtime::bank_forks::BankForks,
+    solana_sdk::{clock::Slot, transaction::Transaction},
+    std::{
+        sync::{mpsc::Receiver, Arc, Mutex, RwLock},
+        thread::{self, Builder, JoinHandle},
+    },
 };
 
 pub enum VoteOp {

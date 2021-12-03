@@ -1,13 +1,17 @@
 #![allow(clippy::implicit_hasher)]
-use crate::sigverify;
-use crate::sigverify_stage::SigVerifier;
-use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
-use solana_ledger::shred::Shred;
-use solana_ledger::sigverify_shreds::verify_shreds_gpu;
-use solana_perf::{self, packet::Packets, recycler_cache::RecyclerCache};
-use solana_runtime::bank_forks::BankForks;
-use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, RwLock};
+use {
+    crate::{sigverify, sigverify_stage::SigVerifier},
+    solana_ledger::{
+        leader_schedule_cache::LeaderScheduleCache, shred::Shred,
+        sigverify_shreds::verify_shreds_gpu,
+    },
+    solana_perf::{self, packet::Packets, recycler_cache::RecyclerCache},
+    solana_runtime::bank_forks::BankForks,
+    std::{
+        collections::{HashMap, HashSet},
+        sync::{Arc, RwLock},
+    },
+};
 
 #[derive(Clone)]
 pub struct ShredSigVerifier {
@@ -59,12 +63,16 @@ impl SigVerifier for ShredSigVerifier {
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
-    use solana_ledger::genesis_utils::create_genesis_config_with_leader;
-    use solana_ledger::shred::{Shred, Shredder};
-    use solana_perf::packet::Packet;
-    use solana_runtime::bank::Bank;
-    use solana_sdk::signature::{Keypair, Signer};
+    use {
+        super::*,
+        solana_ledger::{
+            genesis_utils::create_genesis_config_with_leader,
+            shred::{Shred, Shredder},
+        },
+        solana_perf::packet::Packet,
+        solana_runtime::bank::Bank,
+        solana_sdk::signature::{Keypair, Signer},
+    };
 
     #[test]
     fn test_sigverify_shreds_read_slots() {

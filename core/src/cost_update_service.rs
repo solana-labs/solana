@@ -3,18 +3,23 @@
 //! packing transactions into block; it also triggers persisting cost
 //! table to blockstore.
 
-use solana_ledger::blockstore::Blockstore;
-use solana_measure::measure::Measure;
-use solana_runtime::{bank::Bank, bank::ExecuteTimings, cost_model::CostModel};
-use solana_sdk::timing::timestamp;
-use std::{
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        mpsc::Receiver,
-        Arc, RwLock,
+use {
+    solana_ledger::blockstore::Blockstore,
+    solana_measure::measure::Measure,
+    solana_runtime::{
+        bank::{Bank, ExecuteTimings},
+        cost_model::CostModel,
     },
-    thread::{self, Builder, JoinHandle},
-    time::Duration,
+    solana_sdk::timing::timestamp,
+    std::{
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            mpsc::Receiver,
+            Arc, RwLock,
+        },
+        thread::{self, Builder, JoinHandle},
+        time::Duration,
+    },
 };
 
 #[derive(Default)]
@@ -203,9 +208,7 @@ impl CostUpdateService {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_program_runtime::timings::ProgramTiming;
-    use solana_sdk::pubkey::Pubkey;
+    use {super::*, solana_program_runtime::timings::ProgramTiming, solana_sdk::pubkey::Pubkey};
 
     #[test]
     fn test_update_cost_model_with_empty_execute_timings() {

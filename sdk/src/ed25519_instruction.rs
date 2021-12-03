@@ -1,9 +1,11 @@
 #![cfg(feature = "full")]
 
-use crate::{feature_set::FeatureSet, instruction::Instruction, precompiles::PrecompileError};
-use bytemuck::{bytes_of, Pod, Zeroable};
-use ed25519_dalek::{ed25519::signature::Signature, Signer, Verifier};
-use std::sync::Arc;
+use {
+    crate::{feature_set::FeatureSet, instruction::Instruction, precompiles::PrecompileError},
+    bytemuck::{bytes_of, Pod, Zeroable},
+    ed25519_dalek::{ed25519::signature::Signature, Signer, Verifier},
+    std::sync::Arc,
+};
 
 pub const PUBKEY_SERIALIZED_SIZE: usize = 32;
 pub const SIGNATURE_SERIALIZED_SIZE: usize = 64;
@@ -173,16 +175,18 @@ fn get_data_slice<'a>(
 
 #[cfg(test)]
 pub mod test {
-    use super::*;
-    use crate::{
-        ed25519_instruction::new_ed25519_instruction,
-        feature_set::FeatureSet,
-        hash::Hash,
-        signature::{Keypair, Signer},
-        transaction::Transaction,
+    use {
+        super::*,
+        crate::{
+            ed25519_instruction::new_ed25519_instruction,
+            feature_set::FeatureSet,
+            hash::Hash,
+            signature::{Keypair, Signer},
+            transaction::Transaction,
+        },
+        rand::{thread_rng, Rng},
+        std::sync::Arc,
     };
-    use rand::{thread_rng, Rng};
-    use std::sync::Arc;
 
     fn test_case(
         num_signatures: u16,

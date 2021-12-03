@@ -22,8 +22,7 @@ use {
         ValidatorVoteKeypairs,
     },
     solana_sdk::{
-        account::Account,
-        account::AccountSharedData,
+        account::{Account, AccountSharedData},
         client::SyncClient,
         clock::{DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
         commitment_config::CommitmentConfig,
@@ -759,8 +758,7 @@ impl Drop for LocalCluster {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use solana_sdk::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH;
+    use {super::*, solana_sdk::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH};
 
     #[test]
     fn test_local_cluster_start_and_exit() {

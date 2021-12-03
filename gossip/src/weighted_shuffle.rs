@@ -224,8 +224,10 @@ pub fn weighted_best(weights_and_indexes: &[(u64, usize)], seed: [u8; 32]) -> us
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::{convert::TryInto, iter::repeat_with};
+    use {
+        super::*,
+        std::{convert::TryInto, iter::repeat_with},
+    };
 
     fn weighted_shuffle_slow<R>(rng: &mut R, mut weights: Vec<u64>) -> Vec<usize>
     where

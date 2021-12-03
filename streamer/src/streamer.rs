@@ -289,17 +289,25 @@ pub fn responder(
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::packet::{Packet, Packets, PACKET_DATA_SIZE};
-    use crate::streamer::{receiver, responder};
-    use solana_perf::recycler::Recycler;
-    use std::io;
-    use std::io::Write;
-    use std::net::UdpSocket;
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::mpsc::channel;
-    use std::sync::Arc;
-    use std::time::Duration;
+    use {
+        super::*,
+        crate::{
+            packet::{Packet, Packets, PACKET_DATA_SIZE},
+            streamer::{receiver, responder},
+        },
+        solana_perf::recycler::Recycler,
+        std::{
+            io,
+            io::Write,
+            net::UdpSocket,
+            sync::{
+                atomic::{AtomicBool, Ordering},
+                mpsc::channel,
+                Arc,
+            },
+            time::Duration,
+        },
+    };
 
     fn get_msgs(r: PacketReceiver, num: &mut usize) {
         for _ in 0..10 {

@@ -2,34 +2,35 @@
 
 #![cfg(feature = "full")]
 
-use crate::{
-    account::Account,
-    account::AccountSharedData,
-    clock::{UnixTimestamp, DEFAULT_TICKS_PER_SLOT},
-    epoch_schedule::EpochSchedule,
-    fee_calculator::FeeRateGovernor,
-    hash::{hash, Hash},
-    inflation::Inflation,
-    native_token::lamports_to_sol,
-    poh_config::PohConfig,
-    pubkey::Pubkey,
-    rent::Rent,
-    shred_version::compute_shred_version,
-    signature::{Keypair, Signer},
-    system_program,
-    timing::years_as_slots,
-};
-use bincode::{deserialize, serialize};
-use chrono::{TimeZone, Utc};
-use memmap2::Mmap;
-use std::{
-    collections::BTreeMap,
-    fmt,
-    fs::{File, OpenOptions},
-    io::Write,
-    path::{Path, PathBuf},
-    str::FromStr,
-    time::{SystemTime, UNIX_EPOCH},
+use {
+    crate::{
+        account::{Account, AccountSharedData},
+        clock::{UnixTimestamp, DEFAULT_TICKS_PER_SLOT},
+        epoch_schedule::EpochSchedule,
+        fee_calculator::FeeRateGovernor,
+        hash::{hash, Hash},
+        inflation::Inflation,
+        native_token::lamports_to_sol,
+        poh_config::PohConfig,
+        pubkey::Pubkey,
+        rent::Rent,
+        shred_version::compute_shred_version,
+        signature::{Keypair, Signer},
+        system_program,
+        timing::years_as_slots,
+    },
+    bincode::{deserialize, serialize},
+    chrono::{TimeZone, Utc},
+    memmap2::Mmap,
+    std::{
+        collections::BTreeMap,
+        fmt,
+        fs::{File, OpenOptions},
+        io::Write,
+        path::{Path, PathBuf},
+        str::FromStr,
+        time::{SystemTime, UNIX_EPOCH},
+    },
 };
 
 pub const DEFAULT_GENESIS_FILE: &str = "genesis.bin";
@@ -291,9 +292,11 @@ impl fmt::Display for GenesisConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::signature::{Keypair, Signer};
-    use std::path::PathBuf;
+    use {
+        super::*,
+        crate::signature::{Keypair, Signer},
+        std::path::PathBuf,
+    };
 
     fn make_tmp_path(name: &str) -> PathBuf {
         let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());

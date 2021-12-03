@@ -1,3 +1,4 @@
+pub use goauth::scopes::Scope;
 /// A module for managing a Google API access token
 use {
     goauth::{
@@ -14,8 +15,6 @@ use {
         time::Instant,
     },
 };
-
-pub use goauth::scopes::Scope;
 
 fn load_credentials() -> Result<Credentials, String> {
     // Use standard GOOGLE_APPLICATION_CREDENTIALS environment variable
