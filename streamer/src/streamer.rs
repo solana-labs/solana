@@ -138,11 +138,15 @@ impl StreamerSendStats {
     fn maybe_submit(&mut self, name: &'static str) {
         const SUBMIT_CADENCE: Duration = Duration::from_secs(10);
         const MAX_REPORT_ENTRIES: usize = 5;
+        const MAP_SIZE_REPORTING_THRESHOLD: usize = 1_000;
         let elapsed = self.since.as_ref().map(Instant::elapsed);
-        if elapsed.map(|e| e < SUBMIT_CADENCE).unwrap_or_default() {
+        if elapsed.map(|e| e < SUBMIT_CADENCE).unwrap_or_default()
+            && self.host_map.len() < MAP_SIZE_REPORTING_THRESHOLD
+        {
             return;
         }
 
+        let sample_ms = elapsed.map(|e| e.as_millis()).unwrap_or_default();
         let mut hist = Histogram::default();
         let mut byte_sum = 0;
         let mut pkt_count = 0;
@@ -154,6 +158,7 @@ impl StreamerSendStats {
 
         datapoint_info!(
             name,
+            ("streamer-send-sample_duration_ms", sample_ms, i64),
             ("streamer-send-host_count", self.host_map.len(), i64),
             ("streamer-send-bytes_total", byte_sum, i64),
             ("streamer-send-pkt_count_total", pkt_count, i64),
