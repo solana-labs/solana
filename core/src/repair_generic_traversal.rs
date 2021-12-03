@@ -126,12 +126,12 @@ pub fn get_closest_completion(
                 let dist = if let Some(shred_index) = shred_index {
                     let shred_count = shred_index.data().num_shreds() as u64;
                     debug_assert!(
-                        last_index + 1 >= shred_count,
+                        last_index.saturating_add(1) >= shred_count,
                         "last_index={} shred_count={}",
                         last_index,
                         shred_count
                     );
-                    (last_index + 1).saturating_sub(shred_count)
+                    last_index.saturating_add(1).saturating_sub(shred_count)
                 } else {
                     debug_assert!(
                         last_index >= slot_meta.consumed,
