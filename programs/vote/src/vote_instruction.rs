@@ -46,6 +46,37 @@ pub enum VoteError {
 
     #[error("authorized voter has already been changed this epoch")]
     TooSoonToReauthorize,
+
+    // TODO: figure out how to migrate these new errors
+    #[error("Old state had vote which should not have been popped off by vote in new state")]
+    LockoutConflict,
+
+    #[error("Proposed state had earlier slot which should have been popped off by later vote")]
+    NewVoteStateLockoutMismatch,
+
+    #[error("Vote slots are not ordered")]
+    SlotsNotOrdered,
+
+    #[error("Confirmations are not ordered")]
+    ConfirmationsNotOrdered,
+
+    #[error("Zero confirmations")]
+    ZeroConfirmations,
+
+    #[error("Confirmation exceeds limit")]
+    ConfirmationTooLarge,
+
+    #[error("Root rolled back")]
+    RootRollBack,
+
+    #[error("Confirmations for same vote were smaller in new proposed state")]
+    ConfirmationRollBack,
+
+    #[error("New state contained a vote slot smaller than the root")]
+    SlotSmallerThanRoot,
+
+    #[error("New state contained too many votes")]
+    TooManyVotes,
 }
 
 impl<E> DecodeError<E> for VoteError {

@@ -192,7 +192,9 @@ export type PlacePerpOrder = {
   clientOrderId: String;
   side: String;
   orderType: String;
+  reduceOnly: String;
 };
+
 export const decodePlacePerpOrder = (
   ix: TransactionInstruction
 ): PlacePerpOrder => {
@@ -203,6 +205,7 @@ export const decodePlacePerpOrder = (
     clientOrderId: decoded.PlacePerpOrder.clientOrderId.toString(),
     side: decoded.PlacePerpOrder.side.toString(),
     orderType: decoded.PlacePerpOrder.orderType.toString(),
+    reduceOnly: decoded.PlacePerpOrder.reduceOnly.toString(),
   };
 
   return placePerpOrder;
