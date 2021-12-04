@@ -127,9 +127,36 @@ pub fn get_closest_completion(
                 let shred_index = blockstore.get_index(slot).unwrap();
                 let dist = if let Some(shred_index) = shred_index {
                     let shred_count = shred_index.data().num_shreds() as u64;
-                    last_index - shred_count
+                    if last_index.saturating_add(1) < shred_count {
+                        datapoint_error!(
+                            "repair_generic_traversal_error",
+                            (
+                                "error",
+                                format!(
+                                    "last_index + 1 < shred_count. last_index={} shred_count={}",
+                                    last_index, shred_count,
+                                ),
+                                String
+                            ),
+                        );
+                    }
+                    last_index.saturating_add(1).saturating_sub(shred_count)
                 } else {
-                    last_index - slot_meta.consumed
+                    if last_index < slot_meta.consumed {
+                        datapoint_error!(
+                            "repair_generic_traversal_error",
+                            (
+                                "error",
+                                format!(
+                                    "last_index < slot_meta.consumed. last_index={} slot_meta.consumed={}",
+                                    last_index,
+                                    slot_meta.consumed,
+                                ),
+                                String
+                            ),
+                        );
+                    }
+                    last_index.saturating_sub(slot_meta.consumed)
                 };
                 v.push((slot, dist));
                 processed_slots.insert(slot);
