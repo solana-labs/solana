@@ -347,30 +347,25 @@ impl LocalCluster {
         let contact_info = validator_node.info.clone();
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&self.genesis_config);
 
-        if validator_config.voting_disabled {
-            // setup as a listener
-            info!("listener {} ", validator_pubkey,);
-        } else {
-            // Give the validator some lamports to setup vote accounts
-            if should_create_vote_pubkey {
-                let validator_balance = Self::transfer_with_client(
-                    &client,
-                    &self.funding_keypair,
-                    &validator_pubkey,
-                    stake * 2 + 2,
-                );
-                info!(
-                    "validator {} balance {}",
-                    validator_pubkey, validator_balance
-                );
-                Self::setup_vote_and_stake_accounts(
-                    &client,
-                    voting_keypair.as_ref().unwrap(),
-                    &validator_keypair,
-                    stake,
-                )
-                .unwrap();
-            }
+        // Give the validator some lamports to setup vote accounts
+        if should_create_vote_pubkey {
+            let validator_balance = Self::transfer_with_client(
+                &client,
+                &self.funding_keypair,
+                &validator_pubkey,
+                stake * 2 + 2,
+            );
+            info!(
+                "validator {} balance {}",
+                validator_pubkey, validator_balance
+            );
+            Self::setup_vote_and_stake_accounts(
+                &client,
+                voting_keypair.as_ref().unwrap(),
+                &validator_keypair,
+                stake,
+            )
+            .unwrap();
         }
 
         let mut config = safe_clone_config(validator_config);
