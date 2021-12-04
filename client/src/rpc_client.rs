@@ -1329,7 +1329,7 @@ impl RpcClient {
     /// # Ok::<(), ClientError>(())
     /// ```
     pub fn get_highest_snapshot_slot(&self) -> ClientResult<RpcSnapshotSlotInfo> {
-        if self.get_node_version()? < semver::Version::new(1, 8, 0) {
+        if self.get_node_version()? < semver::Version::new(1, 9, 0) {
             #[allow(deprecated)]
             self.get_snapshot_slot().map(|full| RpcSnapshotSlotInfo {
                 full,
