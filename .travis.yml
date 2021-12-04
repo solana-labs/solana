@@ -36,7 +36,7 @@ jobs:
         - source ci/rust-version.sh
         - PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
         - readlink -f .
-        - brew install gnu-tar
+        - HOMEBREW_NO_AUTO_UPDATE=1 brew install gnu-tar
         - PATH="/usr/local/opt/gnu-tar/libexec/gnubin:$PATH"
         - tar --version
       script:
