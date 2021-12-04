@@ -1272,7 +1272,8 @@ pub fn process_withdraw_from_vote_account(
         let minimum_balance =
             rpc_client.get_minimum_balance_for_rent_exemption(VoteState::size_of())?;
         if let SpendAmount::Some(withdraw_amount) = withdraw_amount {
-            if current_balance.saturating_sub(withdraw_amount) < minimum_balance {
+            let balance_remaining = current_balance.saturating_sub(withdraw_amount);
+            if balance_remaining < minimum_balance && balance_remaining != 0 {
                 return Err(CliError::BadParameter(format!(
                     "Withdraw amount too large. The vote account balance must be at least {} SOL to remain rent exempt", lamports_to_sol(minimum_balance)
                 ))
