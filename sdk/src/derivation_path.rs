@@ -79,7 +79,7 @@ impl DerivationPath {
         Ok(Self::new_bip44_with_coin(coin, account, change))
     }
 
-    fn from_absolute_path_str(path: &str) -> Result<Self, DerivationPathError> {
+    pub fn from_absolute_path_str(path: &str) -> Result<Self, DerivationPathError> {
         let inner = DerivationPath::_from_absolute_path_insecure_str(path)?
             .into_iter()
             .map(|c| ChildIndex::Hardened(c.to_u32()))
