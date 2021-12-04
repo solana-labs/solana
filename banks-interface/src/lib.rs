@@ -64,8 +64,10 @@ pub trait Banks {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use tarpc::{client, transport};
+    use {
+        super::*,
+        tarpc::{client, transport},
+    };
 
     #[test]
     fn test_banks_client_new() {

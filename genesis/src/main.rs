@@ -1,41 +1,47 @@
 //! A command-line executable for generating the chain's genesis config.
 #![allow(clippy::integer_arithmetic)]
 
-use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches};
-use solana_clap_utils::{
-    input_parsers::{cluster_type_of, pubkey_of, pubkeys_of, unix_timestamp_from_rfc3339_datetime},
-    input_validators::{is_pubkey_or_keypair, is_rfc3339_datetime, is_slot, is_valid_percentage},
-};
-use solana_entry::poh::compute_hashes_per_tick;
-use solana_genesis::{genesis_accounts::add_genesis_accounts, Base64Account};
-use solana_ledger::{blockstore::create_new_ledger, blockstore_db::AccessType};
-use solana_runtime::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE;
-use solana_sdk::{
-    account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
-    clock,
-    epoch_schedule::EpochSchedule,
-    fee_calculator::FeeRateGovernor,
-    genesis_config::{ClusterType, GenesisConfig},
-    inflation::Inflation,
-    native_token::sol_to_lamports,
-    poh_config::PohConfig,
-    pubkey::Pubkey,
-    rent::Rent,
-    signature::{Keypair, Signer},
-    stake::state::StakeState,
-    system_program, timing,
-};
-use solana_stake_program::stake_state;
-use solana_vote_program::vote_state::{self, VoteState};
-use std::{
-    collections::HashMap,
-    error,
-    fs::File,
-    io::{self, Read},
-    path::PathBuf,
-    process,
-    str::FromStr,
-    time::Duration,
+use {
+    clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches},
+    solana_clap_utils::{
+        input_parsers::{
+            cluster_type_of, pubkey_of, pubkeys_of, unix_timestamp_from_rfc3339_datetime,
+        },
+        input_validators::{
+            is_pubkey_or_keypair, is_rfc3339_datetime, is_slot, is_valid_percentage,
+        },
+    },
+    solana_entry::poh::compute_hashes_per_tick,
+    solana_genesis::{genesis_accounts::add_genesis_accounts, Base64Account},
+    solana_ledger::{blockstore::create_new_ledger, blockstore_db::AccessType},
+    solana_runtime::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+    solana_sdk::{
+        account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
+        clock,
+        epoch_schedule::EpochSchedule,
+        fee_calculator::FeeRateGovernor,
+        genesis_config::{ClusterType, GenesisConfig},
+        inflation::Inflation,
+        native_token::sol_to_lamports,
+        poh_config::PohConfig,
+        pubkey::Pubkey,
+        rent::Rent,
+        signature::{Keypair, Signer},
+        stake::state::StakeState,
+        system_program, timing,
+    },
+    solana_stake_program::stake_state,
+    solana_vote_program::vote_state::{self, VoteState},
+    std::{
+        collections::HashMap,
+        error,
+        fs::File,
+        io::{self, Read},
+        path::PathBuf,
+        process,
+        str::FromStr,
+        time::Duration,
+    },
 };
 
 pub enum AccountFileFormat {
@@ -632,12 +638,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_sdk::genesis_config::GenesisConfig;
-    use std::collections::HashMap;
-    use std::fs::remove_file;
-    use std::io::Write;
-    use std::path::Path;
+    use {
+        super::*,
+        solana_sdk::genesis_config::GenesisConfig,
+        std::{collections::HashMap, fs::remove_file, io::Write, path::Path},
+    };
 
     #[test]
     fn test_append_primordial_accounts_to_genesis() {

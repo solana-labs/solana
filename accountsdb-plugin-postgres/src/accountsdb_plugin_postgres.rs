@@ -1,5 +1,4 @@
 use solana_measure::measure::Measure;
-
 /// Main entry for the PostgreSQL plugin
 use {
     crate::{

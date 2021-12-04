@@ -1,15 +1,18 @@
-use crate::bucket_stats::BucketStats;
-use crate::MaxSearch;
-use memmap2::MmapMut;
-use rand::{thread_rng, Rng};
-use solana_measure::measure::Measure;
-use std::fs::{remove_file, OpenOptions};
-use std::io::Seek;
-use std::io::SeekFrom;
-use std::io::Write;
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use {
+    crate::{bucket_stats::BucketStats, MaxSearch},
+    memmap2::MmapMut,
+    rand::{thread_rng, Rng},
+    solana_measure::measure::Measure,
+    std::{
+        fs::{remove_file, OpenOptions},
+        io::{Seek, SeekFrom, Write},
+        path::PathBuf,
+        sync::{
+            atomic::{AtomicU64, Ordering},
+            Arc,
+        },
+    },
+};
 
 /*
 1	2

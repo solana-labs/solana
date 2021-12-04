@@ -1,21 +1,27 @@
-use clap::{crate_version, App, Arg};
-use serde::{Deserialize, Serialize};
-use serde_json::Result;
-use solana_bpf_loader_program::{
-    create_vm, serialization::serialize_parameters, syscalls::register_syscalls, BpfError,
-    ThisInstructionMeter,
+use {
+    clap::{crate_version, App, Arg},
+    serde::{Deserialize, Serialize},
+    serde_json::Result,
+    solana_bpf_loader_program::{
+        create_vm, serialization::serialize_parameters, syscalls::register_syscalls, BpfError,
+        ThisInstructionMeter,
+    },
+    solana_program_runtime::invoke_context::{prepare_mock_invoke_context, InvokeContext},
+    solana_rbpf::{
+        assembler::assemble,
+        elf::Executable,
+        static_analysis::Analysis,
+        verifier::check,
+        vm::{Config, DynamicAnalysis},
+    },
+    solana_sdk::{account::AccountSharedData, bpf_loader, pubkey::Pubkey},
+    std::{
+        fs::File,
+        io::{Read, Seek, SeekFrom},
+        path::Path,
+    },
+    time::Instant,
 };
-use solana_program_runtime::invoke_context::{prepare_mock_invoke_context, InvokeContext};
-use solana_rbpf::{
-    assembler::assemble,
-    elf::Executable,
-    static_analysis::Analysis,
-    verifier::check,
-    vm::{Config, DynamicAnalysis},
-};
-use solana_sdk::{account::AccountSharedData, bpf_loader, pubkey::Pubkey};
-use std::{fs::File, io::Read, io::Seek, io::SeekFrom, path::Path};
-use time::Instant;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Account {

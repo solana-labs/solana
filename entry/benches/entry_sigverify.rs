@@ -1,18 +1,18 @@
 #![feature(test)]
 extern crate test;
-use test::Bencher;
-
-use std::sync::Arc;
-
-use solana_perf::test_tx::test_tx;
-use solana_sdk::transaction::{
-    Result, SanitizedTransaction, TransactionError, TransactionVerificationMode,
-    VersionedTransaction,
+use {
+    solana_entry::entry::{self, VerifyRecyclers},
+    solana_perf::test_tx::test_tx,
+    solana_sdk::{
+        hash::Hash,
+        transaction::{
+            Result, SanitizedTransaction, TransactionError, TransactionVerificationMode,
+            VersionedTransaction,
+        },
+    },
+    std::sync::Arc,
+    test::Bencher,
 };
-
-use solana_entry::entry::{self, VerifyRecyclers};
-
-use solana_sdk::hash::Hash;
 
 #[bench]
 fn bench_gpusigverify(bencher: &mut Bencher) {

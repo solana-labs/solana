@@ -1,8 +1,9 @@
-use super::*;
-use solana_entry::entry::Entry;
-use solana_ledger::shred::Shredder;
-use solana_sdk::hash::Hash;
-use solana_sdk::signature::Keypair;
+use {
+    super::*,
+    solana_entry::entry::Entry,
+    solana_ledger::shred::Shredder,
+    solana_sdk::{hash::Hash, signature::Keypair},
+};
 
 #[derive(Clone)]
 pub(super) struct BroadcastFakeShredsRun {
@@ -139,10 +140,12 @@ impl BroadcastRun for BroadcastFakeShredsRun {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_gossip::contact_info::ContactInfo;
-    use solana_streamer::socket::SocketAddrSpace;
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use {
+        super::*,
+        solana_gossip::contact_info::ContactInfo,
+        solana_streamer::socket::SocketAddrSpace,
+        std::net::{IpAddr, Ipv4Addr, SocketAddr},
+    };
 
     #[test]
     fn test_tvu_peers_ordering() {

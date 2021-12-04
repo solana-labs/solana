@@ -1,31 +1,33 @@
 #![allow(clippy::redundant_closure)]
-use solana_cli::{
-    cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
-    spend_utils::SpendAmount,
-    stake::StakeAuthorizationIndexed,
-    test_utils::{check_ready, check_recent_balance},
-};
-use solana_cli_output::{parse_sign_only_reply_string, OutputFormat};
-use solana_client::{
-    blockhash_query::{self, BlockhashQuery},
-    nonce_utils,
-    rpc_client::RpcClient,
-};
-use solana_faucet::faucet::run_local_faucet;
-use solana_sdk::{
-    account_utils::StateMut,
-    commitment_config::CommitmentConfig,
-    nonce::State as NonceState,
-    pubkey::Pubkey,
-    signature::{keypair_from_seed, Keypair, Signer},
-    stake::{
-        self,
-        instruction::LockupArgs,
-        state::{Lockup, StakeAuthorize, StakeState},
+use {
+    solana_cli::{
+        cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
+        spend_utils::SpendAmount,
+        stake::StakeAuthorizationIndexed,
+        test_utils::{check_ready, check_recent_balance},
     },
+    solana_cli_output::{parse_sign_only_reply_string, OutputFormat},
+    solana_client::{
+        blockhash_query::{self, BlockhashQuery},
+        nonce_utils,
+        rpc_client::RpcClient,
+    },
+    solana_faucet::faucet::run_local_faucet,
+    solana_sdk::{
+        account_utils::StateMut,
+        commitment_config::CommitmentConfig,
+        nonce::State as NonceState,
+        pubkey::Pubkey,
+        signature::{keypair_from_seed, Keypair, Signer},
+        stake::{
+            self,
+            instruction::LockupArgs,
+            state::{Lockup, StakeAuthorize, StakeState},
+        },
+    },
+    solana_streamer::socket::SocketAddrSpace,
+    solana_test_validator::TestValidator,
 };
-use solana_streamer::socket::SocketAddrSpace;
-use solana_test_validator::TestValidator;
 
 #[test]
 fn test_stake_delegation_force() {

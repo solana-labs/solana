@@ -4,22 +4,27 @@
 //! to the GPU.
 //!
 
-use crate::cuda_runtime::PinnedVec;
-use crate::packet::{Packet, Packets};
-use crate::perf_libs;
-use crate::recycler::Recycler;
-use rayon::ThreadPool;
-use solana_metrics::inc_new_counter_debug;
-use solana_rayon_threadlimit::get_thread_count;
-use solana_sdk::hash::Hash;
-use solana_sdk::message::{MESSAGE_HEADER_LENGTH, MESSAGE_VERSION_PREFIX};
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::short_vec::decode_shortu16_len;
-use solana_sdk::signature::Signature;
 #[cfg(test)]
 use solana_sdk::transaction::Transaction;
-use std::convert::TryFrom;
-use std::mem::size_of;
+use {
+    crate::{
+        cuda_runtime::PinnedVec,
+        packet::{Packet, Packets},
+        perf_libs,
+        recycler::Recycler,
+    },
+    rayon::ThreadPool,
+    solana_metrics::inc_new_counter_debug,
+    solana_rayon_threadlimit::get_thread_count,
+    solana_sdk::{
+        hash::Hash,
+        message::{MESSAGE_HEADER_LENGTH, MESSAGE_VERSION_PREFIX},
+        pubkey::Pubkey,
+        short_vec::decode_shortu16_len,
+        signature::Signature,
+    },
+    std::{convert::TryFrom, mem::size_of},
+};
 
 // Representing key tKeYE4wtowRb8yRroZShTipE18YVnqwXjsSAoNsFU6g
 const TRACER_KEY_BYTES: [u8; 32] = [
@@ -587,16 +592,21 @@ pub fn make_packet_from_transaction(tx: Transaction) -> Packet {
 #[cfg(test)]
 #[allow(clippy::integer_arithmetic)]
 mod tests {
-    use super::*;
-    use crate::packet::{Packet, Packets};
-    use crate::sigverify;
-    use crate::sigverify::PacketOffsets;
-    use crate::test_tx::{test_multisig_tx, test_tx, vote_tx};
-    use bincode::{deserialize, serialize};
-    use solana_sdk::instruction::CompiledInstruction;
-    use solana_sdk::message::{Message, MessageHeader};
-    use solana_sdk::signature::{Keypair, Signature};
-    use solana_sdk::transaction::Transaction;
+    use {
+        super::*,
+        crate::{
+            packet::{Packet, Packets},
+            sigverify::{self, PacketOffsets},
+            test_tx::{test_multisig_tx, test_tx, vote_tx},
+        },
+        bincode::{deserialize, serialize},
+        solana_sdk::{
+            instruction::CompiledInstruction,
+            message::{Message, MessageHeader},
+            signature::{Keypair, Signature},
+            transaction::Transaction,
+        },
+    };
 
     const SIG_OFFSET: usize = 1;
 
@@ -1084,10 +1094,12 @@ mod tests {
     #[test]
     fn test_get_checked_scalar() {
         solana_logger::setup();
-        use curve25519_dalek::scalar::Scalar;
-        use rand::{thread_rng, Rng};
-        use rayon::prelude::*;
-        use std::sync::atomic::{AtomicU64, Ordering};
+        use {
+            curve25519_dalek::scalar::Scalar,
+            rand::{thread_rng, Rng},
+            rayon::prelude::*,
+            std::sync::atomic::{AtomicU64, Ordering},
+        };
 
         if perf_libs::api().is_none() {
             return;
@@ -1124,10 +1136,12 @@ mod tests {
     #[test]
     fn test_ge_small_order() {
         solana_logger::setup();
-        use curve25519_dalek::edwards::CompressedEdwardsY;
-        use rand::{thread_rng, Rng};
-        use rayon::prelude::*;
-        use std::sync::atomic::{AtomicU64, Ordering};
+        use {
+            curve25519_dalek::edwards::CompressedEdwardsY,
+            rand::{thread_rng, Rng},
+            rayon::prelude::*,
+            std::sync::atomic::{AtomicU64, Ordering},
+        };
 
         if perf_libs::api().is_none() {
             return;

@@ -1,21 +1,23 @@
-use solana_cli::{
-    cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
-    spend_utils::SpendAmount,
-    test_utils::check_recent_balance,
+use {
+    solana_cli::{
+        cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
+        spend_utils::SpendAmount,
+        test_utils::check_recent_balance,
+    },
+    solana_client::{
+        blockhash_query::{self, BlockhashQuery},
+        rpc_client::RpcClient,
+    },
+    solana_faucet::faucet::run_local_faucet,
+    solana_sdk::{
+        account_utils::StateMut,
+        commitment_config::CommitmentConfig,
+        signature::{Keypair, Signer},
+    },
+    solana_streamer::socket::SocketAddrSpace,
+    solana_test_validator::TestValidator,
+    solana_vote_program::vote_state::{VoteAuthorize, VoteState, VoteStateVersions},
 };
-use solana_client::{
-    blockhash_query::{self, BlockhashQuery},
-    rpc_client::RpcClient,
-};
-use solana_faucet::faucet::run_local_faucet;
-use solana_sdk::{
-    account_utils::StateMut,
-    commitment_config::CommitmentConfig,
-    signature::{Keypair, Signer},
-};
-use solana_streamer::socket::SocketAddrSpace;
-use solana_test_validator::TestValidator;
-use solana_vote_program::vote_state::{VoteAuthorize, VoteState, VoteStateVersions};
 
 #[test]
 fn test_vote_authorize_and_withdraw() {

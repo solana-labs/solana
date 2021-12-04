@@ -507,6 +507,7 @@ fn main() {
 
     let mut genesis = TestValidatorGenesis::default();
     genesis.max_ledger_shreds = value_of(&matches, "limit_ledger_size");
+    genesis.max_genesis_archive_unpacked_size = Some(u64::MAX);
 
     let tower_storage = Arc::new(FileTowerStorage::new(ledger_path.clone()));
 

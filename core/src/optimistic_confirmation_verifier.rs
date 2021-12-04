@@ -1,8 +1,10 @@
-use crate::cluster_info_vote_listener::VoteTracker;
-use solana_ledger::blockstore::Blockstore;
-use solana_runtime::bank::Bank;
-use solana_sdk::{clock::Slot, hash::Hash};
-use std::{collections::BTreeSet, time::Instant};
+use {
+    crate::cluster_info_vote_listener::VoteTracker,
+    solana_ledger::blockstore::Blockstore,
+    solana_runtime::bank::Bank,
+    solana_sdk::{clock::Slot, hash::Hash},
+    std::{collections::BTreeSet, time::Instant},
+};
 
 pub struct OptimisticConfirmationVerifier {
     snapshot_start_slot: Slot,
@@ -139,13 +141,11 @@ impl OptimisticConfirmationVerifier {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::vote_simulator::VoteSimulator;
-    use solana_ledger::get_tmp_ledger_path;
-    use solana_runtime::bank::Bank;
-    use solana_sdk::pubkey::Pubkey;
-    use std::collections::HashMap;
-    use trees::tr;
+    use {
+        super::*, crate::vote_simulator::VoteSimulator, solana_ledger::get_tmp_ledger_path,
+        solana_runtime::bank::Bank, solana_sdk::pubkey::Pubkey, std::collections::HashMap,
+        trees::tr,
+    };
 
     #[test]
     fn test_add_new_optimistic_confirmed_slots() {

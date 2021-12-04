@@ -1,10 +1,12 @@
 //! The `hash` module provides functions for creating SHA-256 hashes.
 
-use crate::sanitize::Sanitize;
-use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
-use sha2::{Digest, Sha256};
-use std::{convert::TryFrom, fmt, mem, str::FromStr};
-use thiserror::Error;
+use {
+    crate::sanitize::Sanitize,
+    borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
+    sha2::{Digest, Sha256},
+    std::{convert::TryFrom, fmt, mem, str::FromStr},
+    thiserror::Error,
+};
 
 pub const HASH_BYTES: usize = 32;
 /// Maximum string length of a base58 encoded hash

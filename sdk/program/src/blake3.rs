@@ -1,8 +1,10 @@
 //! The `blake3` module provides functions for creating hashes.
-use crate::sanitize::Sanitize;
-use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
-use std::{convert::TryFrom, fmt, mem, str::FromStr};
-use thiserror::Error;
+use {
+    crate::sanitize::Sanitize,
+    borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
+    std::{convert::TryFrom, fmt, mem, str::FromStr},
+    thiserror::Error,
+};
 
 /// Size of hash
 pub const HASH_BYTES: usize = 32;

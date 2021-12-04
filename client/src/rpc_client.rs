@@ -16,8 +16,7 @@ use {
         client_error::{ClientError, ClientErrorKind, Result as ClientResult},
         http_sender::HttpSender,
         mock_sender::{MockSender, Mocks},
-        rpc_config::RpcAccountInfoConfig,
-        rpc_config::*,
+        rpc_config::{RpcAccountInfoConfig, *},
         rpc_request::{RpcError, RpcRequest, RpcResponseErrorData, TokenAccountsFilter},
         rpc_response::*,
         rpc_sender::*,
@@ -4937,19 +4936,21 @@ pub fn create_rpc_client_mocks() -> crate::mock_sender::Mocks {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{client_error::ClientErrorKind, mock_sender::PUBKEY};
-    use assert_matches::assert_matches;
-    use jsonrpc_core::{futures::prelude::*, Error, IoHandler, Params};
-    use jsonrpc_http_server::{AccessControlAllowOrigin, DomainsValidation, ServerBuilder};
-    use serde_json::Number;
-    use solana_sdk::{
-        instruction::InstructionError,
-        signature::{Keypair, Signer},
-        system_transaction,
-        transaction::TransactionError,
+    use {
+        super::*,
+        crate::{client_error::ClientErrorKind, mock_sender::PUBKEY},
+        assert_matches::assert_matches,
+        jsonrpc_core::{futures::prelude::*, Error, IoHandler, Params},
+        jsonrpc_http_server::{AccessControlAllowOrigin, DomainsValidation, ServerBuilder},
+        serde_json::Number,
+        solana_sdk::{
+            instruction::InstructionError,
+            signature::{Keypair, Signer},
+            system_transaction,
+            transaction::TransactionError,
+        },
+        std::{io, sync::mpsc::channel, thread},
     };
-    use std::{io, sync::mpsc::channel, thread};
 
     #[test]
     fn test_send() {

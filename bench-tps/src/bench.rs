@@ -1,34 +1,36 @@
-use crate::cli::Config;
-use log::*;
-use rayon::prelude::*;
-use solana_client::perf_utils::{sample_txs, SampleStats};
-use solana_core::gen_keys::GenKeys;
-use solana_faucet::faucet::request_airdrop_transaction;
-use solana_measure::measure::Measure;
-use solana_metrics::{self, datapoint_info};
-use solana_sdk::{
-    client::Client,
-    clock::{DEFAULT_MS_PER_SLOT, DEFAULT_S_PER_SLOT, MAX_PROCESSING_AGE},
-    commitment_config::CommitmentConfig,
-    hash::Hash,
-    instruction::{AccountMeta, Instruction},
-    message::Message,
-    pubkey::Pubkey,
-    signature::{Keypair, Signer},
-    system_instruction, system_transaction,
-    timing::{duration_as_ms, duration_as_s, duration_as_us, timestamp},
-    transaction::Transaction,
-};
-use std::{
-    collections::{HashSet, VecDeque},
-    net::SocketAddr,
-    process::exit,
-    sync::{
-        atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering},
-        Arc, Mutex, RwLock,
+use {
+    crate::cli::Config,
+    log::*,
+    rayon::prelude::*,
+    solana_client::perf_utils::{sample_txs, SampleStats},
+    solana_core::gen_keys::GenKeys,
+    solana_faucet::faucet::request_airdrop_transaction,
+    solana_measure::measure::Measure,
+    solana_metrics::{self, datapoint_info},
+    solana_sdk::{
+        client::Client,
+        clock::{DEFAULT_MS_PER_SLOT, DEFAULT_S_PER_SLOT, MAX_PROCESSING_AGE},
+        commitment_config::CommitmentConfig,
+        hash::Hash,
+        instruction::{AccountMeta, Instruction},
+        message::Message,
+        pubkey::Pubkey,
+        signature::{Keypair, Signer},
+        system_instruction, system_transaction,
+        timing::{duration_as_ms, duration_as_s, duration_as_us, timestamp},
+        transaction::Transaction,
     },
-    thread::{sleep, Builder, JoinHandle},
-    time::{Duration, Instant},
+    std::{
+        collections::{HashSet, VecDeque},
+        net::SocketAddr,
+        process::exit,
+        sync::{
+            atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering},
+            Arc, Mutex, RwLock,
+        },
+        thread::{sleep, Builder, JoinHandle},
+        time::{Duration, Instant},
+    },
 };
 
 // The point at which transactions become "too old", in seconds.
@@ -946,12 +948,14 @@ pub fn generate_and_fund_keypairs<T: 'static + Client + Send + Sync>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_runtime::bank::Bank;
-    use solana_runtime::bank_client::BankClient;
-    use solana_sdk::client::SyncClient;
-    use solana_sdk::fee_calculator::FeeRateGovernor;
-    use solana_sdk::genesis_config::create_genesis_config;
+    use {
+        super::*,
+        solana_runtime::{bank::Bank, bank_client::BankClient},
+        solana_sdk::{
+            client::SyncClient, fee_calculator::FeeRateGovernor,
+            genesis_config::create_genesis_config,
+        },
+    };
 
     #[test]
     fn test_bench_tps_bank_client() {

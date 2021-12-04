@@ -303,9 +303,11 @@ pub struct ProgramCost {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use rand::{seq::SliceRandom, thread_rng};
-    use std::iter::repeat;
+    use {
+        super::*,
+        rand::{seq::SliceRandom, thread_rng},
+        std::iter::repeat,
+    };
 
     #[test]
     fn test_erasure_meta_status() {

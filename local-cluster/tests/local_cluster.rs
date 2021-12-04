@@ -32,8 +32,7 @@ use {
         ancestor_iterator::AncestorIterator,
         blockstore::{Blockstore, PurgeType},
         blockstore_db::AccessType,
-        leader_schedule::FixedSchedule,
-        leader_schedule::LeaderSchedule,
+        leader_schedule::{FixedSchedule, LeaderSchedule},
     },
     solana_local_cluster::{
         cluster::{Cluster, ClusterValidatorInfo},
@@ -68,8 +67,10 @@ use {
         io::Read,
         iter,
         path::{Path, PathBuf},
-        sync::atomic::{AtomicBool, Ordering},
-        sync::Arc,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
         thread::{sleep, Builder, JoinHandle},
         time::{Duration, Instant},
     },

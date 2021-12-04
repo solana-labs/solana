@@ -1,7 +1,9 @@
 //! The `logger` module configures `env_logger`
 
-use lazy_static::lazy_static;
-use std::sync::{Arc, RwLock};
+use {
+    lazy_static::lazy_static,
+    std::sync::{Arc, RwLock},
+};
 
 lazy_static! {
     static ref LOGGER: Arc<RwLock<env_logger::Logger>> =

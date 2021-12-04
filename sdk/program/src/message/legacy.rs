@@ -1,21 +1,23 @@
 #![allow(clippy::integer_arithmetic)]
 //! A library for generating a message from a sequence of instructions
 
-use crate::sanitize::{Sanitize, SanitizeError};
-use crate::serialize_utils::{
-    append_slice, append_u16, append_u8, read_pubkey, read_slice, read_u16, read_u8,
+use {
+    crate::{
+        bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
+        hash::Hash,
+        instruction::{AccountMeta, CompiledInstruction, Instruction},
+        message::MessageHeader,
+        pubkey::Pubkey,
+        sanitize::{Sanitize, SanitizeError},
+        serialize_utils::{
+            append_slice, append_u16, append_u8, read_pubkey, read_slice, read_u16, read_u8,
+        },
+        short_vec, system_instruction, system_program, sysvar,
+    },
+    itertools::Itertools,
+    lazy_static::lazy_static,
+    std::{convert::TryFrom, str::FromStr},
 };
-use crate::{
-    bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
-    hash::Hash,
-    instruction::{AccountMeta, CompiledInstruction, Instruction},
-    message::MessageHeader,
-    pubkey::Pubkey,
-    short_vec, system_instruction, system_program, sysvar,
-};
-use itertools::Itertools;
-use lazy_static::lazy_static;
-use std::{convert::TryFrom, str::FromStr};
 
 lazy_static! {
     // Copied keys over since direct references create cyclical dependency.
@@ -526,9 +528,11 @@ impl Message {
 #[cfg(test)]
 mod tests {
     #![allow(deprecated)]
-    use super::*;
-    use crate::{hash, instruction::AccountMeta, message::MESSAGE_HEADER_LENGTH};
-    use std::collections::HashSet;
+    use {
+        super::*,
+        crate::{hash, instruction::AccountMeta, message::MESSAGE_HEADER_LENGTH},
+        std::collections::HashSet,
+    };
 
     #[test]
     fn test_message_unique_program_ids() {

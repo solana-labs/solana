@@ -1,15 +1,17 @@
-use crate::{
-    parse_account_data::{ParsableAccount, ParseAccountError},
-    StringAmount, StringDecimals,
-};
-use solana_sdk::pubkey::Pubkey;
-use spl_token::{
-    solana_program::{
-        program_option::COption, program_pack::Pack, pubkey::Pubkey as SplTokenPubkey,
+use {
+    crate::{
+        parse_account_data::{ParsableAccount, ParseAccountError},
+        StringAmount, StringDecimals,
     },
-    state::{Account, AccountState, Mint, Multisig},
+    solana_sdk::pubkey::Pubkey,
+    spl_token::{
+        solana_program::{
+            program_option::COption, program_pack::Pack, pubkey::Pubkey as SplTokenPubkey,
+        },
+        state::{Account, AccountState, Mint, Multisig},
+    },
+    std::str::FromStr,
 };
-use std::str::FromStr;
 
 // A helper function to convert spl_token::id() as spl_sdk::pubkey::Pubkey to
 // solana_sdk::pubkey::Pubkey

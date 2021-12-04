@@ -1,33 +1,35 @@
-use crate::{
-    checks::{check_account_for_fee_with_commitment, check_unique_pubkeys},
-    cli::{
-        log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
-        ProcessResult,
+use {
+    crate::{
+        checks::{check_account_for_fee_with_commitment, check_unique_pubkeys},
+        cli::{
+            log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
+            ProcessResult,
+        },
+        memo::WithMemo,
+        spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
+        stake::check_current_authority,
     },
-    memo::WithMemo,
-    spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
-    stake::check_current_authority,
+    clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand},
+    solana_clap_utils::{
+        input_parsers::*,
+        input_validators::*,
+        keypair::{DefaultSigner, SignerIndex},
+        memo::{memo_arg, MEMO_ARG},
+    },
+    solana_cli_output::{CliEpochVotingHistory, CliLockout, CliVoteAccount},
+    solana_client::{rpc_client::RpcClient, rpc_config::RpcGetVoteAccountsConfig},
+    solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_sdk::{
+        account::Account, commitment_config::CommitmentConfig, message::Message,
+        native_token::lamports_to_sol, pubkey::Pubkey, system_instruction::SystemError,
+        transaction::Transaction,
+    },
+    solana_vote_program::{
+        vote_instruction::{self, withdraw, VoteError},
+        vote_state::{VoteAuthorize, VoteInit, VoteState},
+    },
+    std::sync::Arc,
 };
-use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
-use solana_clap_utils::{
-    input_parsers::*,
-    input_validators::*,
-    keypair::{DefaultSigner, SignerIndex},
-    memo::{memo_arg, MEMO_ARG},
-};
-use solana_cli_output::{CliEpochVotingHistory, CliLockout, CliVoteAccount};
-use solana_client::{rpc_client::RpcClient, rpc_config::RpcGetVoteAccountsConfig};
-use solana_remote_wallet::remote_wallet::RemoteWalletManager;
-use solana_sdk::{
-    account::Account, commitment_config::CommitmentConfig, message::Message,
-    native_token::lamports_to_sol, pubkey::Pubkey, system_instruction::SystemError,
-    transaction::Transaction,
-};
-use solana_vote_program::{
-    vote_instruction::{self, withdraw, VoteError},
-    vote_state::{VoteAuthorize, VoteInit, VoteState},
-};
-use std::sync::Arc;
 
 pub trait VoteSubCommands {
     fn vote_subcommands(self) -> Self;
@@ -1049,10 +1051,12 @@ pub fn process_close_vote_account(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{clap_app::get_clap_app, cli::parse_command};
-    use solana_sdk::signature::{read_keypair_file, write_keypair, Keypair, Signer};
-    use tempfile::NamedTempFile;
+    use {
+        super::*,
+        crate::{clap_app::get_clap_app, cli::parse_command},
+        solana_sdk::signature::{read_keypair_file, write_keypair, Keypair, Signer},
+        tempfile::NamedTempFile,
+    };
 
     fn make_tmp_file() -> (String, NamedTempFile) {
         let tmp_file = NamedTempFile::new().unwrap();
