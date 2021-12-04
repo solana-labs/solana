@@ -4,10 +4,10 @@ use {
         lamports::LamportsError,
         pubkey::Pubkey,
     },
-    solana_program::{account_info::AccountInfo, sysvar::Sysvar},
+    solana_program::{account_info::AccountInfo, debug_account_data::*, sysvar::Sysvar},
     std::{
         cell::{Ref, RefCell},
-        cmp, fmt,
+        fmt,
         rc::Rc,
         sync::Arc,
     },
@@ -280,19 +280,6 @@ impl ReadableAccount for Ref<'_, Account> {
 }
 
 fn debug_fmt<T: ReadableAccount>(item: &T, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    struct Hex<'a>(&'a [u8]);
-    impl fmt::Debug for Hex<'_> {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            for &byte in self.0 {
-                write!(f, "{:02x}", byte)?;
-            }
-
-            Ok(())
-        }
-    }
-
-    let data_len = cmp::min(64, item.data().len());
-
     let mut f = f.debug_struct("Account");
 
     f.field("lamports", &item.lamports())
@@ -300,10 +287,7 @@ fn debug_fmt<T: ReadableAccount>(item: &T, f: &mut fmt::Formatter<'_>) -> fmt::R
         .field("owner", &item.owner())
         .field("executable", &item.executable())
         .field("rent_epoch", &item.rent_epoch());
-
-    if data_len > 0 {
-        f.field("data", &Hex(&item.data()[..data_len]));
-    }
+    debug_account_data(item.data(), &mut f);
 
     f.finish()
 }

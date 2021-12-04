@@ -1,10 +1,11 @@
 use {
     crate::{
-        clock::Epoch, program_error::ProgramError, program_memory::sol_memset, pubkey::Pubkey,
+        clock::Epoch, debug_account_data::*, program_error::ProgramError,
+        program_memory::sol_memset, pubkey::Pubkey,
     },
     std::{
         cell::{Ref, RefCell, RefMut},
-        cmp, fmt,
+        fmt,
         rc::Rc,
     },
 };
@@ -32,19 +33,6 @@ pub struct AccountInfo<'a> {
 
 impl<'a> fmt::Debug for AccountInfo<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        struct Hex<'a>(&'a [u8]);
-        impl fmt::Debug for Hex<'_> {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                for &byte in self.0 {
-                    write!(f, "{:02x}", byte)?;
-                }
-
-                Ok(())
-            }
-        }
-
-        let data_len = cmp::min(64, self.data_len());
-
         let mut f = f.debug_struct("AccountInfo");
 
         f.field("key", &self.key)
@@ -52,13 +40,10 @@ impl<'a> fmt::Debug for AccountInfo<'a> {
             .field("is_signer", &self.is_signer)
             .field("is_writable", &self.is_writable)
             .field("executable", &self.executable)
-            .field("rend_epoch", &self.rent_epoch)
+            .field("rent_epoch", &self.rent_epoch)
             .field("lamports", &self.lamports())
             .field("data.len", &self.data_len());
-
-        if data_len > 0 {
-            f.field("data", &Hex(&self.data.borrow()[..data_len]));
-        }
+        debug_account_data(&self.data.borrow(), &mut f);
 
         f.finish_non_exhaustive()
     }
@@ -421,5 +406,91 @@ mod tests {
         let d = &mut [0u8];
         let info = AccountInfo::new(&k, false, false, l, d, &k, false, 0);
         assert_eq!(info.key, info.as_ref().key);
+    }
+
+    #[test]
+    fn test_account_info_debug_data() {
+        let key = Pubkey::new_unique();
+        let mut lamports = 42;
+        let mut data = vec![5; 80];
+        let data_str = format!("{:?}", Hex(&data[..MAX_DEBUG_ACCOUNT_DATA]));
+        let info = AccountInfo::new(&key, false, false, &mut lamports, &mut data, &key, false, 0);
+        assert_eq!(
+            format!("{:?}", info),
+            format!(
+                "AccountInfo {{ \
+                key: {}, \
+                owner: {}, \
+                is_signer: {}, \
+                is_writable: {}, \
+                executable: {}, \
+                rent_epoch: {}, \
+                lamports: {}, \
+                data.len: {}, \
+                data: {}, .. }}",
+                key,
+                key,
+                false,
+                false,
+                false,
+                0,
+                lamports,
+                data.len(),
+                data_str,
+            )
+        );
+
+        let mut data = vec![5; 40];
+        let data_str = format!("{:?}", Hex(&data));
+        let info = AccountInfo::new(&key, false, false, &mut lamports, &mut data, &key, false, 0);
+        assert_eq!(
+            format!("{:?}", info),
+            format!(
+                "AccountInfo {{ \
+                key: {}, \
+                owner: {}, \
+                is_signer: {}, \
+                is_writable: {}, \
+                executable: {}, \
+                rent_epoch: {}, \
+                lamports: {}, \
+                data.len: {}, \
+                data: {}, .. }}",
+                key,
+                key,
+                false,
+                false,
+                false,
+                0,
+                lamports,
+                data.len(),
+                data_str,
+            )
+        );
+
+        let mut data = vec![];
+        let info = AccountInfo::new(&key, false, false, &mut lamports, &mut data, &key, false, 0);
+        assert_eq!(
+            format!("{:?}", info),
+            format!(
+                "AccountInfo {{ \
+                key: {}, \
+                owner: {}, \
+                is_signer: {}, \
+                is_writable: {}, \
+                executable: {}, \
+                rent_epoch: {}, \
+                lamports: {}, \
+                data.len: {}, .. }}",
+                key,
+                key,
+                false,
+                false,
+                false,
+                0,
+                lamports,
+                data.len(),
+            )
+        );
     }
 }
