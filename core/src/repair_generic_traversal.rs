@@ -132,8 +132,7 @@ pub fn get_closest_completion(
                                 "error",
                                 format!(
                                     "last_index + 1 < shred_count. last_index={} shred_count={}",
-                                    last_index,
-                                    shred_count,
+                                    last_index, shred_count,
                                 ),
                                 String
                             ),
