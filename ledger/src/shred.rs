@@ -75,7 +75,12 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signature, Signer},
     },
-    std::{convert::TryInto, mem::size_of, ops::Deref, sync::Arc},
+    std::{
+        convert::{TryFrom, TryInto},
+        mem::size_of,
+        ops::Deref,
+        sync::Arc,
+    },
     thiserror::Error,
 };
 
@@ -1972,11 +1977,7 @@ pub mod tests {
         assert_eq!(None, get_shred_slot_index_type(&packet, &mut stats));
         assert_eq!(1, stats.index_out_of_bounds);
 
-<<<<<<< HEAD
-        let (mut header, coding_header) = Shredder::new_coding_shred_header(8, 2, 10, 30, 4, 200);
-        header.shred_type = ShredType(u8::MAX);
-=======
-        let (header, coding_header) = Shredder::new_coding_shred_header(
+        let (mut header, coding_header) = Shredder::new_coding_shred_header(
             8,   // slot
             2,   // index
             10,  // fec_set_index
@@ -1985,7 +1986,7 @@ pub mod tests {
             3,   // position
             200, // version
         );
->>>>>>> cd17f63d8 (adds back position field to coding-shred-header (#21600))
+        header.shred_type = ShredType(u8::MAX);
         let shred = Shred::new_empty_from_header(header, DataShredHeader::default(), coding_header);
         shred.copy_to_packet(&mut packet);
 

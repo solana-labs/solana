@@ -5716,23 +5716,17 @@ pub mod tests {
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
-<<<<<<< HEAD
             let slot = 1;
-            let (shred, coding) = Shredder::new_coding_shred_header(slot, 11, 11, 11, 11, 0);
+            let (shred, coding) = Shredder::new_coding_shred_header(
+                slot, 11, // index
+                11, // fec_set_index
+                11, // num_data_shreds
+                11, // num_coding_shreds
+                8,  // position
+                0,  // version
+            );
             let coding_shred =
                 Shred::new_empty_from_header(shred, DataShredHeader::default(), coding);
-=======
-        let slot = 1;
-        let (shred, coding) = Shredder::new_coding_shred_header(
-            slot, 11, // index
-            11, // fec_set_index
-            11, // num_data_shreds
-            11, // num_coding_shreds
-            8,  // position
-            0,  // version
-        );
-        let coding_shred = Shred::new_empty_from_header(shred, DataShredHeader::default(), coding);
->>>>>>> cd17f63d8 (adds back position field to coding-shred-header (#21600))
 
             let mut erasure_metas = HashMap::new();
             let mut index_working_set = HashMap::new();
@@ -5774,45 +5768,20 @@ pub mod tests {
 
     #[test]
     pub fn test_should_insert_coding_shred() {
-<<<<<<< HEAD
         let blockstore_path = get_tmp_ledger_path!();
-=======
-        let ledger_path = get_tmp_ledger_path_auto_delete!();
-        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-        let last_root = RwLock::new(0);
-
-        let slot = 1;
-        let (mut shred, coding) = Shredder::new_coding_shred_header(
-            slot, 11, // index
-            11, // fec_set_index
-            11, // num_data_shreds
-            11, // num_coding_shreds
-            8,  // position
-            0,  // version
-        );
-        let coding_shred =
-            Shred::new_empty_from_header(shred.clone(), DataShredHeader::default(), coding.clone());
-
-        // Insert a good coding shred
-        assert!(Blockstore::should_insert_coding_shred(
-            &coding_shred,
-            &last_root
-        ));
-
-        // Insertion should succeed
-        blockstore
-            .insert_shreds(vec![coding_shred.clone()], None, false)
-            .unwrap();
-
-        // Trying to insert the same shred again should pass since this doesn't check for
-        // duplicate index
->>>>>>> cd17f63d8 (adds back position field to coding-shred-header (#21600))
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
             let last_root = RwLock::new(0);
 
             let slot = 1;
-            let (mut shred, coding) = Shredder::new_coding_shred_header(slot, 11, 11, 11, 11, 0);
+            let (mut shred, coding) = Shredder::new_coding_shred_header(
+                slot, 11, // index
+                11, // fec_set_index
+                11, // num_data_shreds
+                11, // num_coding_shreds
+                8,  // position
+                0,  // version
+            );
             let coding_shred = Shred::new_empty_from_header(
                 shred.clone(),
                 DataShredHeader::default(),
