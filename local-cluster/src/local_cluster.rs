@@ -281,7 +281,7 @@ impl LocalCluster {
         let mut listener_config = safe_clone_config(&config.validator_configs[0]);
         listener_config.voting_disabled = true;
         (0..config.num_listeners).for_each(|_| {
-            cluster.add_validator(
+            cluster.add_validator_listener(
                 &listener_config,
                 0,
                 Arc::new(Keypair::new()),
@@ -324,9 +324,48 @@ impl LocalCluster {
         }
     }
 
+    /// Set up validator without voting or staking accounts
+    pub fn add_validator_listener(
+        &mut self,
+        validator_config: &ValidatorConfig,
+        stake: u64,
+        validator_keypair: Arc<Keypair>,
+        voting_keypair: Option<Arc<Keypair>>,
+        socket_addr_space: SocketAddrSpace,
+    ) -> Pubkey {
+        self.do_add_validator(
+            validator_config,
+            true,
+            stake,
+            validator_keypair,
+            voting_keypair,
+            socket_addr_space,
+        )
+    }
+
+    /// Set up validator with voting and staking accounts
     pub fn add_validator(
         &mut self,
         validator_config: &ValidatorConfig,
+        stake: u64,
+        validator_keypair: Arc<Keypair>,
+        voting_keypair: Option<Arc<Keypair>>,
+        socket_addr_space: SocketAddrSpace,
+    ) -> Pubkey {
+        self.do_add_validator(
+            validator_config,
+            false,
+            stake,
+            validator_keypair,
+            voting_keypair,
+            socket_addr_space,
+        )
+    }
+
+    fn do_add_validator(
+        &mut self,
+        validator_config: &ValidatorConfig,
+        is_listener: bool,
         stake: u64,
         validator_keypair: Arc<Keypair>,
         mut voting_keypair: Option<Arc<Keypair>>,
@@ -348,7 +387,10 @@ impl LocalCluster {
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&self.genesis_config);
 
         // Give the validator some lamports to setup vote accounts
-        if should_create_vote_pubkey {
+        if is_listener {
+            // setup as a listener
+            info!("listener {} ", validator_pubkey,);
+        } else if should_create_vote_pubkey {
             let validator_balance = Self::transfer_with_client(
                 &client,
                 &self.funding_keypair,

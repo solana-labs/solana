@@ -3246,7 +3246,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     let mut validator_c_info = cluster.exit_node(&validator_c_pubkey);
 
     // Step 1:
-    // Let validator A, B, (D) run for a while.
+    // Let validator B, (D) run for a while.
     let now = Instant::now();
     loop {
         let elapsed = now.elapsed();
