@@ -862,6 +862,50 @@ mod test {
             local_entries_to_shred(&[Entry::default()], slot + 1, slot - 1, &leader_keypair);
         assert!(!should_retransmit_and_persist(
             &shreds[0],
+<<<<<<< HEAD
+=======
+            Some(bank.clone()),
+            &cache,
+            &me_id,
+            root,
+            0
+        ));
+
+        // coding shreds don't contain parent slot information, test that slot >= root
+        let (common, coding) = Shredder::new_coding_shred_header(
+            5, // slot
+            5, // index
+            5, // fec_set_index
+            6, // num_data_shreds
+            6, // num_coding_shreds
+            3, // position
+            0, // version
+        );
+        let mut coding_shred =
+            Shred::new_empty_from_header(common, DataShredHeader::default(), coding);
+        Shredder::sign_shred(&leader_keypair, &mut coding_shred);
+        // shred.slot() > root, shred continues
+        assert!(should_retransmit_and_persist(
+            &coding_shred,
+            Some(bank.clone()),
+            &cache,
+            &me_id,
+            0,
+            0
+        ));
+        // shred.slot() == root, shred continues
+        assert!(should_retransmit_and_persist(
+            &coding_shred,
+            Some(bank.clone()),
+            &cache,
+            &me_id,
+            5,
+            0
+        ));
+        // shred.slot() < root, shred gets thrown out
+        assert!(!should_retransmit_and_persist(
+            &coding_shred,
+>>>>>>> cd17f63d8 (adds back position field to coding-shred-header (#21600))
             Some(bank),
             &cache,
             &me_id,
@@ -918,7 +962,15 @@ mod test {
             std::net::{IpAddr, Ipv4Addr},
         };
         solana_logger::setup();
-        let (common, coding) = Shredder::new_coding_shred_header(5, 5, 5, 6, 6, 0);
+        let (common, coding) = Shredder::new_coding_shred_header(
+            5, // slot
+            5, // index
+            5, // fec_set_index
+            6, // num_data_shreds
+            6, // num_coding_shreds
+            4, // position
+            0, // version
+        );
         let shred = Shred::new_empty_from_header(common, DataShredHeader::default(), coding);
         let mut shreds = vec![shred.clone(), shred.clone(), shred];
         let _from_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
