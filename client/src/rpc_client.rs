@@ -1329,7 +1329,7 @@ impl RpcClient {
     /// # Ok::<(), ClientError>(())
     /// ```
     pub fn get_highest_snapshot_slot(&self) -> ClientResult<RpcSnapshotSlotInfo> {
-        if self.get_node_version()? < semver::Version::new(1, 8, 0) {
+        if self.get_node_version()? < semver::Version::new(1, 9, 0) {
             #[allow(deprecated)]
             self.get_snapshot_slot().map(|full| RpcSnapshotSlotInfo {
                 full,
@@ -4747,7 +4747,7 @@ impl RpcClient {
         commitment: CommitmentConfig,
     ) -> ClientResult<(Hash, u64)> {
         let (blockhash, last_valid_block_height) =
-            if self.get_node_version()? < semver::Version::new(1, 8, 0) {
+            if self.get_node_version()? < semver::Version::new(1, 9, 0) {
                 let Fees {
                     blockhash,
                     last_valid_block_height,
@@ -4781,7 +4781,7 @@ impl RpcClient {
         blockhash: &Hash,
         commitment: CommitmentConfig,
     ) -> ClientResult<bool> {
-        let result = if self.get_node_version()? < semver::Version::new(1, 8, 0) {
+        let result = if self.get_node_version()? < semver::Version::new(1, 9, 0) {
             self.get_fee_calculator_for_blockhash_with_commitment(blockhash, commitment)?
                 .value
                 .is_some()
