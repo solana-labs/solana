@@ -200,7 +200,7 @@ impl Pubkey {
     /// uniquely derive accounts per application requirements. It is common to
     /// use static strings and other pubkeys as seeds.
     ///
-    /// Because the program address must not lie on the ed25519 curve there may
+    /// Because the program address must not lie on the ed25519 curve, there may
     /// be seed and program id combinations that are invalid. For this reason,
     /// an extra seed (the bump seed) is calculated that results in a
     /// point off the curve. The bump seed must be passed as an additional seed
@@ -229,8 +229,8 @@ impl Pubkey {
     /// hashed sequentially which means that seeds {"abcdef"}, {"abc", "def"},
     /// and {"ab", "cd", "ef"} will all result in the same program address given
     /// the same program id. Since the chance of collision is local to a given
-    /// program id the developer of that program must take care to choose seeds
-    /// that do not collide with themselves. For seed schemes that are susceptible
+    /// program id, the developer of that program must take care to choose seeds
+    /// that do not collide with each other. For seed schemes that are susceptible
     /// to this type of hash collision, a common remedy is to insert separators
     /// between seeds, e.g. transforming {"abc", "def"} into {"abc", "-", "def"}.
     ///
