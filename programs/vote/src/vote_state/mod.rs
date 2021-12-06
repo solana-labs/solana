@@ -1778,7 +1778,7 @@ mod tests {
         // full withdraw, before/after activation
         {
             let rent_sysvar = Rent::default();
-            for rent_sysvar in [None, Some(rent_sysvar)] {
+            for rent_sysvar in &[None, Some(rent_sysvar)] {
                 let to_account = RefCell::new(AccountSharedData::default());
                 let (vote_pubkey, vote_account) = create_test_account();
                 let lamports = vote_account.borrow().lamports();
@@ -1789,7 +1789,7 @@ mod tests {
                     lamports,
                     &KeyedAccount::new(&solana_sdk::pubkey::new_rand(), false, &to_account),
                     &signers,
-                    rent_sysvar,
+                    *rent_sysvar,
                 );
                 assert_eq!(res, Ok(()));
                 assert_eq!(vote_account.borrow().lamports(), 0);
