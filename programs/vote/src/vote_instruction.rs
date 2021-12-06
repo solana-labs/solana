@@ -508,11 +508,15 @@ mod tests {
             .zip(accounts.into_iter())
             .map(|(meta, account)| (meta.is_signer, meta.is_writable, meta.pubkey, account))
             .collect();
-        solana_program_runtime::invoke_context::mock_process_instruction(
+
+        let rent = Rent::default();
+        let rent_sysvar = (sysvar::rent::id(), bincode::serialize(&rent).unwrap());
+        solana_program_runtime::invoke_context::mock_process_instruction_with_sysvars(
             &id(),
             Vec::new(),
             &instruction.data,
             &keyed_accounts,
+            &[rent_sysvar],
             super::process_instruction,
         )
     }
