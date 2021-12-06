@@ -38,7 +38,7 @@ After addresses are stored on-chain in an address lookup table account, they may
 succinctly referenced in a transaction using a 1-byte u8 index rather than a
 full 32-byte address. This will require a new transaction format to make use of
 these succinct references as well as runtime handling for looking up and loading
-accounts from the on-chain lookup tables.
+addresses from the on-chain lookup tables.
 
 #### State
 
@@ -53,24 +53,22 @@ store up to 256 addresses each. In addition to stored addresses, address table
 accounts also tracks various metadata explained below.
 
 ```rust
-pub struct AddressLookupTable {
+pub struct LookupTableMeta {
     /// The slot used to derive the table's address. The table cannot
     /// be closed until the derivation slot is no longer "recent"
     /// (not accessible in the `SlotHashes` sysvar).
     pub derivation_slot: Slot,
-    /// The slot that the lookup table was last appended to.
-    pub last_append_slot: Slot,
-    /// The total number of addresses that were appended during the
-    /// last appended slot. This is used to ensure that newly appended
-    /// addresses cannot be used until a later slot.
-    pub last_append_slot_new_address_total: u8,
-    /// Number of stored addresses.
-    pub num_addresses: u8,
-    /// Authority address which must sign for each modification. If `None`,
-    /// the lookup table is immutable.
+    /// The slot that the table was last extended. Address tables may
+    /// only be used to lookup addresses that were extended before
+    /// the current bank's slot.
+    pub last_extended_slot: Slot,
+    /// The start index where the table was last extended from during
+    /// the `last_extended_slot`.
+    pub last_extended_slot_start_index: u8,
+    /// Authority address which must sign for each modification.
     pub authority: Option<Pubkey>,
-
-    // Serialized list of stored addresses follows the above metadata.
+    // Raw list of addresses follows this serialized structure in
+    // the account's data, starting from `LOOKUP_TABLE_META_SIZE`.
 }
 ```
 
@@ -80,9 +78,7 @@ a buffer account. Buffer accounts can be used to extend a lookup table
 with many addresses in a single small transaction.
 
 ```rust
-pub struct AddressBuffer {
-    /// Number of buffered addresses.
-    pub num_addresses: u8,
+pub struct BufferMeta {
     /// Authority address which must sign for each modification.
     pub authority: Pubkey,
 
@@ -161,16 +157,22 @@ pub struct Message {
   #[serde(with = "short_vec")]
   pub instructions: Vec<CompiledInstruction>,
 
-  /// The last `address_table_lookups.len()` number of readonly
-  /// unsigned account keys should be loaded as address lookup tables
+  /// List of address table lookups used to load additional accounts
+  /// for this transaction.
   #[serde(with = "short_vec")]
-  pub address_table_lookups: Vec<AddressTableLookup>,
+  pub address_table_lookups: Vec<MessageAddressTableLookup>,
 }
 
+/// Address table lookups describe an on-chain address lookup table to use
+/// for loading more readonly and writable accounts in a single tx.
 #[derive(Serialize, Deserialize)]
-pub struct AddressTableLookup {
+pub struct MessageAddressTableLookup {
+  /// Address lookup table account key
+  pub account_key: Pubkey,
+  /// List of indexes used to load writable account addresses
   #[serde(with = "short_vec")]
   pub writable_indexes: Vec<u8>,
+  /// List of indexes used to load readonly account addresses
   #[serde(with = "short_vec")]
   pub readonly_indexes: Vec<u8>,
 }
@@ -183,7 +185,6 @@ pub struct AddressTableLookup {
 - 34 extra bytes for the address and lengths of the `writable_indexes`
 and `readonly_indexes` indexes in each address table lookup
 - 1 extra byte for each lookup table index
-- 32 saved bytes per address loaded with an address lookup table
 
 #### Metadata changes
 
