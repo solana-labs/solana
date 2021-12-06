@@ -365,8 +365,21 @@ pub fn process_instruction(
             )
         }
         VoteInstruction::Withdraw(lamports) => {
+<<<<<<< HEAD
             let to = keyed_account_at_index(keyed_accounts, 1)?;
             vote_state::withdraw(me, lamports, to, &signers)
+=======
+            let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
+            let rent_sysvar = if invoke_context
+                .feature_set
+                .is_active(&feature_set::reject_non_rent_exempt_vote_withdraws::id())
+            {
+                Some(invoke_context.get_sysvar(&sysvar::rent::id())?)
+            } else {
+                None
+            };
+            vote_state::withdraw(me, lamports, to, &signers, rent_sysvar)
+>>>>>>> e123883b2 (Reject vote withdraws that create non-rent-exempt accounts (#21639))
         }
         VoteInstruction::AuthorizeChecked(vote_authorize) => {
             if invoke_context.is_feature_active(&feature_set::vote_stake_checked_instructions::id())
@@ -460,6 +473,26 @@ mod tests {
                 &mut MockInvokeContext::new(keyed_accounts),
             )
         }
+<<<<<<< HEAD
+=======
+        let keyed_accounts: Vec<_> = instruction
+            .accounts
+            .iter()
+            .zip(accounts.into_iter())
+            .map(|(meta, account)| (meta.is_signer, meta.is_writable, meta.pubkey, account))
+            .collect();
+
+        let rent = Rent::default();
+        let rent_sysvar = (sysvar::rent::id(), bincode::serialize(&rent).unwrap());
+        solana_program_runtime::invoke_context::mock_process_instruction_with_sysvars(
+            &id(),
+            Vec::new(),
+            &instruction.data,
+            &keyed_accounts,
+            &[rent_sysvar],
+            super::process_instruction,
+        )
+>>>>>>> e123883b2 (Reject vote withdraws that create non-rent-exempt accounts (#21639))
     }
 
     fn invalid_vote_state_pubkey() -> Pubkey {
