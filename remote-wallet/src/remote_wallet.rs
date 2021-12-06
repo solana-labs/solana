@@ -1,11 +1,13 @@
+#[cfg(feature = "hidapi")]
+use {crate::ledger::is_valid_ledger, parking_lot::Mutex};
 use {
     crate::{
-        ledger::{is_valid_ledger, LedgerWallet},
+        ledger::LedgerWallet,
         ledger_error::LedgerError,
         locator::{Locator, LocatorError, Manufacturer},
     },
     log::*,
-    parking_lot::{Mutex, RwLock},
+    parking_lot::RwLock,
     solana_sdk::{
         derivation_path::{DerivationPath, DerivationPathError},
         pubkey::Pubkey,
@@ -61,6 +63,7 @@ pub enum RemoteWalletError {
     LocatorError(#[from] LocatorError),
 }
 
+#[cfg(feature = "hidapi")]
 impl From<hidapi::HidError> for RemoteWalletError {
     fn from(err: hidapi::HidError) -> RemoteWalletError {
         RemoteWalletError::Hid(err.to_string())
@@ -87,12 +90,14 @@ impl From<RemoteWalletError> for SignerError {
 
 /// Collection of connected RemoteWallets
 pub struct RemoteWalletManager {
+    #[cfg(feature = "hidapi")]
     usb: Arc<Mutex<hidapi::HidApi>>,
     devices: RwLock<Vec<Device>>,
 }
 
 impl RemoteWalletManager {
     /// Create a new instance.
+    #[cfg(feature = "hidapi")]
     pub fn new(usb: Arc<Mutex<hidapi::HidApi>>) -> Arc<Self> {
         Arc::new(Self {
             usb,
@@ -102,6 +107,7 @@ impl RemoteWalletManager {
 
     /// Repopulate device list
     /// Note: this method iterates over and updates all devices
+    #[cfg(feature = "hidapi")]
     pub fn update_devices(&self) -> Result<usize, RemoteWalletError> {
         let mut usb = self.usb.lock();
         usb.refresh_devices()?;
@@ -147,6 +153,13 @@ impl RemoteWalletManager {
         }
 
         Ok(num_curr_devices - num_prev_devices)
+    }
+
+    #[cfg(not(feature = "hidapi"))]
+    pub fn update_devices(&self) -> Result<usize, RemoteWalletError> {
+        Err(RemoteWalletError::Hid(
+            "hidapi crate compilation disabled in solana-remote-wallet.".to_string(),
+        ))
     }
 
     /// List connected and acknowledged wallets
@@ -195,30 +208,34 @@ impl RemoteWalletManager {
 }
 
 /// `RemoteWallet` trait
-pub trait RemoteWallet {
+#[allow(unused_variables)]
+pub trait RemoteWallet<T> {
     fn name(&self) -> &str {
         "remote wallet"
     }
 
     /// Parse device info and get device base pubkey
-    fn read_device(
-        &mut self,
-        dev_info: &hidapi::DeviceInfo,
-    ) -> Result<RemoteWalletInfo, RemoteWalletError>;
+    fn read_device(&mut self, dev_info: &T) -> Result<RemoteWalletInfo, RemoteWalletError> {
+        unreachable!();
+    }
 
     /// Get solana pubkey from a RemoteWallet
     fn get_pubkey(
         &self,
         derivation_path: &DerivationPath,
         confirm_key: bool,
-    ) -> Result<Pubkey, RemoteWalletError>;
+    ) -> Result<Pubkey, RemoteWalletError> {
+        unreachable!();
+    }
 
     /// Sign transaction data with wallet managing pubkey at derivation path m/44'/501'/<account>'/<change>'.
     fn sign_message(
         &self,
         derivation_path: &DerivationPath,
         data: &[u8],
-    ) -> Result<Signature, RemoteWalletError>;
+    ) -> Result<Signature, RemoteWalletError> {
+        unreachable!();
+    }
 }
 
 /// `RemoteWallet` device
@@ -280,9 +297,16 @@ pub fn is_valid_hid_device(usage_page: u16, interface_number: i32) -> bool {
 }
 
 /// Helper to initialize hidapi and RemoteWalletManager
+#[cfg(feature = "hidapi")]
 pub fn initialize_wallet_manager() -> Result<Arc<RemoteWalletManager>, RemoteWalletError> {
     let hidapi = Arc::new(Mutex::new(hidapi::HidApi::new()?));
     Ok(RemoteWalletManager::new(hidapi))
+}
+#[cfg(not(feature = "hidapi"))]
+pub fn initialize_wallet_manager() -> Result<Arc<RemoteWalletManager>, RemoteWalletError> {
+    Err(RemoteWalletError::Hid(
+        "hidapi crate compilation disabled in solana-remote-wallet.".to_string(),
+    ))
 }
 
 pub fn maybe_wallet_manager() -> Result<Option<Arc<RemoteWalletManager>>, RemoteWalletError> {
