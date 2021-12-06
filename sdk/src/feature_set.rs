@@ -263,17 +263,10 @@ pub mod reject_empty_instruction_without_program {
     solana_sdk::declare_id!("9kdtFSrXHQg3hKkbXkQ6trJ3Ja1xpJ22CTFSNAciEwmL");
 }
 
-<<<<<<< HEAD
-=======
-pub mod fixed_memcpy_nonoverlapping_check {
-    solana_sdk::declare_id!("36PRUK2Dz6HWYdG9SpjeAsF5F3KxnFCakA2BZMbtMhSb");
-}
-
 pub mod reject_non_rent_exempt_vote_withdraws {
     solana_sdk::declare_id!("7txXZZD6Um59YoLMF7XUNimbMjsqsWhc7g2EniiTrmp1");
 }
 
->>>>>>> e123883b2 (Reject vote withdraws that create non-rent-exempt accounts (#21639))
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -334,11 +327,7 @@ lazy_static! {
         (spl_token_v3_3_0_release::id(), "spl-token v3.3.0 release"),
         (leave_nonce_on_success::id(), "leave nonce as is on success"),
         (reject_empty_instruction_without_program::id(), "fail instructions which have native_loader as program_id directly"),
-<<<<<<< HEAD
-=======
-        (fixed_memcpy_nonoverlapping_check::id(), "use correct check for nonoverlapping regions in memcpy syscall"),
         (reject_non_rent_exempt_vote_withdraws::id(), "fail vote withdraw instructions which leave the account non-rent-exempt"),
->>>>>>> e123883b2 (Reject vote withdraws that create non-rent-exempt accounts (#21639))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
