@@ -408,7 +408,15 @@ pub fn process_instruction(
         }
         VoteInstruction::Withdraw(lamports) => {
             let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
-            vote_state::withdraw(me, lamports, to, &signers)
+            let rent_sysvar = if invoke_context
+                .feature_set
+                .is_active(&feature_set::reject_non_rent_exempt_vote_withdraws::id())
+            {
+                Some(invoke_context.get_sysvar(&sysvar::rent::id())?)
+            } else {
+                None
+            };
+            vote_state::withdraw(me, lamports, to, &signers, rent_sysvar)
         }
         VoteInstruction::AuthorizeChecked(vote_authorize) => {
             if invoke_context
@@ -500,11 +508,15 @@ mod tests {
             .zip(accounts.into_iter())
             .map(|(meta, account)| (meta.is_signer, meta.is_writable, meta.pubkey, account))
             .collect();
-        solana_program_runtime::invoke_context::mock_process_instruction(
+
+        let rent = Rent::default();
+        let rent_sysvar = (sysvar::rent::id(), bincode::serialize(&rent).unwrap());
+        solana_program_runtime::invoke_context::mock_process_instruction_with_sysvars(
             &id(),
             Vec::new(),
             &instruction.data,
             &keyed_accounts,
+            &[rent_sysvar],
             super::process_instruction,
         )
     }

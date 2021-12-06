@@ -193,11 +193,19 @@ impl<'a> InvokeContext<'a> {
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         builtin_programs: &'a [BuiltinProgram],
     ) -> Self {
+        Self::new_mock_with_sysvars(accounts, builtin_programs, &[])
+    }
+
+    pub fn new_mock_with_sysvars(
+        accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        builtin_programs: &'a [BuiltinProgram],
+        sysvars: &'a [(Pubkey, Vec<u8>)],
+    ) -> Self {
         Self::new(
             Rent::default(),
             accounts,
             builtin_programs,
-            &[],
+            sysvars,
             Some(LogCollector::new_ref()),
             ComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
@@ -918,11 +926,12 @@ pub fn with_mock_invoke_context<R, F: FnMut(&mut InvokeContext) -> R>(
     callback(&mut invoke_context)
 }
 
-pub fn mock_process_instruction(
+pub fn mock_process_instruction_with_sysvars(
     loader_id: &Pubkey,
     mut program_indices: Vec<usize>,
     instruction_data: &[u8],
     keyed_accounts: &[(bool, bool, Pubkey, Rc<RefCell<AccountSharedData>>)],
+    sysvars: &[(Pubkey, Vec<u8>)],
     process_instruction: ProcessInstructionWithContext,
 ) -> Result<(), InstructionError> {
     let mut preparation =
@@ -930,7 +939,8 @@ pub fn mock_process_instruction(
     let processor_account = AccountSharedData::new_ref(0, 0, &solana_sdk::native_loader::id());
     program_indices.insert(0, preparation.accounts.len());
     preparation.accounts.push((*loader_id, processor_account));
-    let mut invoke_context = InvokeContext::new_mock(&preparation.accounts, &[]);
+    let mut invoke_context =
+        InvokeContext::new_mock_with_sysvars(&preparation.accounts, &[], sysvars);
     invoke_context.push(
         &preparation.message,
         &preparation.message.instructions[0],
@@ -938,6 +948,23 @@ pub fn mock_process_instruction(
         Some(&preparation.account_indices),
     )?;
     process_instruction(1, instruction_data, &mut invoke_context)
+}
+
+pub fn mock_process_instruction(
+    loader_id: &Pubkey,
+    program_indices: Vec<usize>,
+    instruction_data: &[u8],
+    keyed_accounts: &[(bool, bool, Pubkey, Rc<RefCell<AccountSharedData>>)],
+    process_instruction: ProcessInstructionWithContext,
+) -> Result<(), InstructionError> {
+    mock_process_instruction_with_sysvars(
+        loader_id,
+        program_indices,
+        instruction_data,
+        keyed_accounts,
+        &[],
+        process_instruction,
+    )
 }
 
 #[cfg(test)]
