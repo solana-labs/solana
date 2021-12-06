@@ -35,6 +35,7 @@ type StakeDelegationsInner = HashMap<Pubkey, Delegation>;
 mod tests {
     use super::*;
 
+    /// Ensure that StakeDelegations is indeed clone-on-write
     #[test]
     fn test_stake_delegations_is_cow() {
         let voter_pubkey = Pubkey::new_unique();
@@ -81,6 +82,47 @@ mod tests {
                 !std::ptr::eq(stake_delegations.deref(), stake_delegations2.deref()),
                 "Deref must point to different HashMaps"
             );
+        }
+    }
+
+    /// Ensure that StakeDelegations serializes and deserializes between the inner and outer types
+    #[test]
+    fn test_stake_delegations_serde() {
+        let voter_pubkey = Pubkey::new_unique();
+        let stake = rand::random();
+        let activation_epoch = rand::random();
+        let warmup_cooldown_rate = rand::random();
+        let delegation =
+            Delegation::new(&voter_pubkey, stake, activation_epoch, warmup_cooldown_rate);
+
+        let pubkey = Pubkey::new_unique();
+
+        let mut stake_delegations_outer = StakeDelegations::default();
+        stake_delegations_outer.insert(pubkey, delegation);
+
+        let mut stake_delegations_inner = StakeDelegationsInner::default();
+        stake_delegations_inner.insert(pubkey, delegation);
+
+        // Test: Assert that serializing the outer and inner types produces the same data
+        assert_eq!(
+            bincode::serialize(&stake_delegations_outer).unwrap(),
+            bincode::serialize(&stake_delegations_inner).unwrap(),
+        );
+
+        // Test: Assert that serializing the outer type then deserializing to the inner type
+        // produces the same values
+        {
+            let data = bincode::serialize(&stake_delegations_outer).unwrap();
+            let deserialized_inner: StakeDelegationsInner = bincode::deserialize(&data).unwrap();
+            assert_eq!(&deserialized_inner, stake_delegations_outer.deref());
+        }
+
+        // Test: Assert that serializing the inner type then deserializing to the outer type
+        // produces the same values
+        {
+            let data = bincode::serialize(&stake_delegations_inner).unwrap();
+            let deserialized_outer: StakeDelegations = bincode::deserialize(&data).unwrap();
+            assert_eq!(deserialized_outer.deref(), &stake_delegations_inner);
         }
     }
 }
