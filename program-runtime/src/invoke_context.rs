@@ -740,7 +740,7 @@ impl<'a> InvokeContext<'a> {
         Ok(())
     }
 
-    /// Get the list of keyed accounts
+    /// Get the list of keyed accounts including the chain of program accounts
     pub fn get_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError> {
         self.invoke_stack
             .last()
@@ -748,7 +748,10 @@ impl<'a> InvokeContext<'a> {
             .ok_or(InstructionError::CallDepth)
     }
 
-    /// Get the list of keyed accounts skipping `first_instruction_account` many entries
+    /// Get the list of keyed accounts without the chain of program accounts
+    ///
+    /// Note: The `KeyedAccount` at index `0` has the key `program_id` and
+    /// is followed by the `KeyedAccount`s passed by the caller.
     pub fn get_instruction_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError> {
         let frame = self
             .invoke_stack
