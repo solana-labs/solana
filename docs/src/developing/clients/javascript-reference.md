@@ -428,7 +428,7 @@ await web3.sendAndConfirmTransaction(connection, transaction, [fromPublicKey])
 
 [SourceDocumentation](https://solana-labs.github.io/solana-web3.js/classes/Struct.html)
 
-The struct class is used to create Rust compatible structs in javascript. This class is only compatible with Borsch encoded Rust structs.
+The struct class is used to create Rust compatible structs in javascript. This class is only compatible with Borsh encoded Rust structs.
 
 #### Example Usage
 
@@ -455,7 +455,7 @@ export class Fee extends Struct {
 
 [Source Documentation](https://solana-labs.github.io/solana-web3.js/classes/Enum.html)
 
-The Enum class is used to represent a Rust compatible Enum in javascript. The enum will just be a string representation if logged but can be properly encoded/decoded when used in conjunction with [Struct](javascript-api.md#Struct). This class is only compatible with Borsch encoded Rust enumerations.
+The Enum class is used to represent a Rust compatible Enum in javascript. The enum will just be a string representation if logged but can be properly encoded/decoded when used in conjunction with [Struct](javascript-api.md#Struct). This class is only compatible with Borsh encoded Rust enumerations.
 
 #### Example Usage
 

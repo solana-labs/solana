@@ -670,7 +670,12 @@ impl PostgresClientWorker {
                         }
                     }
                     DbWorkItem::LogTransaction(transaction_log_info) => {
-                        self.client.log_transaction(*transaction_log_info)?;
+                        if let Err(err) = self.client.log_transaction(*transaction_log_info) {
+                            error!("Failed to update transaction: ({})", err);
+                            if panic_on_db_errors {
+                                abort();
+                            }
+                        }
                     }
                 },
                 Err(err) => match err {

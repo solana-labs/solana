@@ -1,6 +1,6 @@
 [package]
 name = "solana-program-runtime"
-version = "1.9.0"
+version = "1.10.0"
 description = "Solana program runtime"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -19,8 +19,8 @@ log = "0.4.14"
 num-derive = { version = "0.3" }
 num-traits = { version = "0.2" }
 serde = { version = "1.0.129", features = ["derive", "rc"] }
-solana-logger = { path = "../logger", version = "=1.9.0" }
-solana-sdk = { path = "../sdk", version = "=1.9.0" }
+solana-logger = { path = "../logger", version = "=1.10.0" }
+solana-sdk = { path = "../sdk", version = "=1.10.0" }
 thiserror = "1.0"
 
 [lib]

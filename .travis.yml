@@ -36,6 +36,9 @@ jobs:
         - source ci/rust-version.sh
         - PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
         - readlink -f .
+        - brew install gnu-tar
+        - PATH="/usr/local/opt/gnu-tar/libexec/gnubin:$PATH"
+        - tar --version
       script:
         - source ci/env.sh
         - rustup set profile default
