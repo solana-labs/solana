@@ -2167,10 +2167,6 @@ impl Bank {
         thread_pool: &ThreadPool,
         reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
     ) -> DashMap<Pubkey, VoteWithStakeDelegations> {
-        let filter_stake_delegation_accounts = self
-            .feature_set
-            .is_active(&feature_set::filter_stake_delegation_accounts::id());
-
         let stakes = self.stakes.read().unwrap();
         let accounts = DashMap::with_capacity(stakes.vote_accounts().as_ref().len());
 
@@ -2226,10 +2222,9 @@ impl Bank {
                     }
 
                     // filter invalid delegation accounts
-                    if filter_stake_delegation_accounts
-                        && (stake_account.owner() != &solana_stake_program::id()
-                            || (fetched_vote_account_owner.is_some()
-                                && fetched_vote_account_owner != Some(&solana_vote_program::id())))
+                    if stake_account.owner() != &solana_stake_program::id()
+                        || (fetched_vote_account_owner.is_some()
+                            && fetched_vote_account_owner != Some(&solana_vote_program::id()))
                     {
                         datapoint_warn!(
                             "bank-stake_delegation_accounts-invalid-account",
