@@ -21,11 +21,19 @@ use {
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
+<<<<<<< HEAD
             add_get_processed_sibling_instruction_syscall, blake3_syscall_enabled,
             disable_fees_sysvar, do_support_realloc, libsecp256k1_0_5_upgrade_enabled,
             prevent_calling_precompiles_as_programs, return_data_syscall_enabled,
             secp256k1_recover_syscall_enabled, sol_log_data_syscall_enabled,
             update_syscall_base_costs,
+=======
+            blake3_syscall_enabled, demote_program_write_locks, disable_fees_sysvar,
+            do_support_realloc, fixed_memcpy_nonoverlapping_check,
+            libsecp256k1_0_5_upgrade_enabled, prevent_calling_precompiles_as_programs,
+            return_data_syscall_enabled, secp256k1_recover_syscall_enabled,
+            sol_log_data_syscall_enabled,
+>>>>>>> df2b44899 (Fix incorrect nonoverlapping test in sol_memcpy (#21007))
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -37,6 +45,7 @@ use {
         native_loader,
         precompiles::is_precompile,
         program::MAX_RETURN_DATA,
+        program_stubs::is_nonoverlapping,
         pubkey::{Pubkey, PubkeyError, MAX_SEEDS, MAX_SEED_LEN},
         secp256k1_recover::{
             Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
@@ -1368,7 +1377,9 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallKeccak256<'a, 'b> {
     }
 }
 
-fn check_overlapping(src_addr: u64, dst_addr: u64, n: u64) -> bool {
+/// This function is incorrect due to arithmetic overflow and only exists for
+/// backwards compatibility. Instead use program_stubs::is_nonoverlapping.
+fn check_overlapping_do_not_use(src_addr: u64, dst_addr: u64, n: u64) -> bool {
     (src_addr <= dst_addr && src_addr + n > dst_addr)
         || (dst_addr <= src_addr && dst_addr + n > src_addr)
 }
@@ -1406,9 +1417,27 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcpy<'a, 'b> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        if check_overlapping(src_addr, dst_addr, n) {
-            *result = Err(SyscallError::CopyOverlapping.into());
-            return;
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+        let use_fixed_nonoverlapping_check = invoke_context
+            .feature_set
+            .is_active(&fixed_memcpy_nonoverlapping_check::id());
+
+        #[allow(clippy::collapsible_else_if)]
+        if use_fixed_nonoverlapping_check {
+            if !is_nonoverlapping(src_addr, dst_addr, n) {
+                *result = Err(SyscallError::CopyOverlapping.into());
+                return;
+            }
+        } else {
+            if check_overlapping_do_not_use(src_addr, dst_addr, n) {
+                *result = Err(SyscallError::CopyOverlapping.into());
+                return;
+            }
         }
 
         let invoke_context = question_mark!(
@@ -4028,13 +4057,13 @@ mod tests {
 
     #[test]
     fn test_overlapping() {
-        assert!(!check_overlapping(10, 7, 3));
-        assert!(check_overlapping(10, 8, 3));
-        assert!(check_overlapping(10, 9, 3));
-        assert!(check_overlapping(10, 10, 3));
-        assert!(check_overlapping(10, 11, 3));
-        assert!(check_overlapping(10, 12, 3));
-        assert!(!check_overlapping(10, 13, 3));
+        assert!(!check_overlapping_do_not_use(10, 7, 3));
+        assert!(check_overlapping_do_not_use(10, 8, 3));
+        assert!(check_overlapping_do_not_use(10, 9, 3));
+        assert!(check_overlapping_do_not_use(10, 10, 3));
+        assert!(check_overlapping_do_not_use(10, 11, 3));
+        assert!(check_overlapping_do_not_use(10, 12, 3));
+        assert!(!check_overlapping_do_not_use(10, 13, 3));
     }
 
     fn call_program_address_common(
