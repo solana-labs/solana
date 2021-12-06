@@ -179,10 +179,6 @@ pub struct CompiledInstructionV2 {
   /// unchanged
   pub program_id_index: u8,
 
-  /// NEW: Only programs in this list may be invoked by this instruction
-  #[serde(with = "short_vec")]
-  pub invokable_program_id_indexes: Vec<u8>,
-
   /// unchanged
   #[serde(with = "short_vec")]
   pub accounts: Vec<u8>,
@@ -209,13 +205,6 @@ can be confident that the invoked program can't act as them when invoking other
 programs. The preferred design pattern is using delegations to grant temporary
 authority to an invoked program to, for instance, transfer a certain number of tokens.
 
-#### Invokable programs
-
-The new transaction format supports lists of programs that a transaction
-instruction may use when invoking inner instructions. This provides extra
-protection to the caller by ensuring that only the programs listed in
-`inner_programs` may be invoked.
-
 #### Size changes
 
 - 1 byte for `prefix` field
@@ -223,7 +212,6 @@ protection to the caller by ensuring that only the programs listed in
 - 1 byte for `address_maps` length
 - Each map requires 2 bytes for `entries` length and `num_readonly`
 - Each map entry is 1 byte (u8)
-- Each instruction requires 2 extra bytes for the config flags and the length of `invokable_program_id_indexes`
 
 #### Cost changes
 
