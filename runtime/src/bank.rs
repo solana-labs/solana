@@ -4763,11 +4763,7 @@ impl Bank {
             .accounts
             .store_slow_cached(self.slot(), pubkey, account);
 
-        self.stakes_cache.check_and_store(
-            pubkey,
-            account,
-            self.stakes_remove_delegation_if_inactive_enabled(),
-        );
+        self.stakes_cache.check_and_store(pubkey, account);
     }
 
     pub fn force_flush_accounts_cache(&self) {
@@ -5509,11 +5505,7 @@ impl Bank {
             for (_i, (pubkey, account)) in
                 (0..message.account_keys_len()).zip(loaded_transaction.accounts.iter())
             {
-                self.stakes_cache.check_and_store(
-                    pubkey,
-                    account,
-                    self.stakes_remove_delegation_if_inactive_enabled(),
-                );
+                self.stakes_cache.check_and_store(pubkey, account);
             }
         }
     }
@@ -5775,11 +5767,6 @@ impl Bank {
     pub fn leave_nonce_on_success(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::leave_nonce_on_success::id())
-    }
-
-    pub fn stakes_remove_delegation_if_inactive_enabled(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::stakes_remove_delegation_if_inactive::id())
     }
 
     pub fn send_to_tpu_vote_port_enabled(&self) -> bool {
