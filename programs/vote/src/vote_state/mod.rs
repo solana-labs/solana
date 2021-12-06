@@ -20,7 +20,6 @@ use {
     },
     std::{
         boxed::Box,
-        cmp::Ordering,
         collections::{HashSet, VecDeque},
     },
 };
