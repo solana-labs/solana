@@ -135,8 +135,11 @@ struct StreamerSendStats {
 }
 
 impl StreamerSendStats {
-    fn maybe_submit(&mut self, name: &'static str) {
-        const SUBMIT_CADENCE: Duration = Duration::from_secs(10);
+    fn report_stats(
+        name: &'static str,
+        host_map: HashMap<[u16; 8], SendStats>,
+        sample_duration: Option<Duration>,
+    ) {
         const MAX_REPORT_ENTRIES: usize = 5;
         const MAP_SIZE_REPORTING_THRESHOLD: usize = 1_000;
         let elapsed = self.since.as_ref().map(Instant::elapsed);
@@ -146,11 +149,11 @@ impl StreamerSendStats {
             return;
         }
 
-        let sample_ms = elapsed.map(|e| e.as_millis()).unwrap_or_default();
+        let sample_ms = sample_duration.map(|d| d.as_millis()).unwrap_or_default();
         let mut hist = Histogram::default();
         let mut byte_sum = 0;
         let mut pkt_count = 0;
-        self.host_map.iter().for_each(|(_addr, host_stats)| {
+        host_map.iter().for_each(|(_addr, host_stats)| {
             hist.increment(host_stats.bytes).unwrap();
             byte_sum += host_stats.bytes;
             pkt_count += host_stats.count;
@@ -159,7 +162,7 @@ impl StreamerSendStats {
         datapoint_info!(
             name,
             ("streamer-send-sample_duration_ms", sample_ms, i64),
-            ("streamer-send-host_count", self.host_map.len(), i64),
+            ("streamer-send-host_count", host_map.len(), i64),
             ("streamer-send-bytes_total", byte_sum, i64),
             ("streamer-send-pkt_count_total", pkt_count, i64),
             (
@@ -194,8 +197,8 @@ impl StreamerSendStats {
             ),
         );
 
-        let num_entries = self.host_map.len();
-        let mut entries: Vec<_> = std::mem::take(&mut self.host_map).into_iter().collect();
+        let num_entries = host_map.len();
+        let mut entries: Vec<_> = host_map.into_iter().collect();
         if entries.len() > MAX_REPORT_ENTRIES {
             entries.select_nth_unstable_by_key(MAX_REPORT_ENTRIES, |(_addr, stats)| {
                 Reverse(stats.bytes)
@@ -206,11 +209,27 @@ impl StreamerSendStats {
             "streamer send {} hosts: count:{} {:?}",
             name, num_entries, entries,
         );
+    }
+
+    fn maybe_submit(&mut self, name: &'static str, sender: &Sender<Box<dyn FnOnce() + Send>>) {
+        const SUBMIT_CADENCE: Duration = Duration::from_secs(10);
+        const MAP_SIZE_REPORTING_THRESHOLD: usize = 1_000;
+        let elapsed = self.since.as_ref().map(Instant::elapsed);
+        if elapsed.map(|e| e < SUBMIT_CADENCE).unwrap_or_default()
+            && self.host_map.len() < MAP_SIZE_REPORTING_THRESHOLD
+        {
+            return;
+        }
+
+        let host_map = std::mem::take(&mut self.host_map);
+        let _ = sender.send(Box::new(move || {
+            Self::report_stats(name, host_map, elapsed);
+        }));
 
         *self = Self {
             since: Some(Instant::now()),
             ..Self::default()
-        }
+        };
     }
 
     fn record(&mut self, pkt: &Packet) {
@@ -224,11 +243,13 @@ fn recv_send(
     sock: &UdpSocket,
     r: &PacketReceiver,
     socket_addr_space: &SocketAddrSpace,
-    stats: &mut StreamerSendStats,
+    stats: &mut Option<StreamerSendStats>,
 ) -> Result<()> {
     let timer = Duration::new(1, 0);
     let msgs = r.recv_timeout(timer)?;
-    msgs.packets.iter().for_each(|p| stats.record(p));
+    if let Some(stats) = stats {
+        msgs.packets.iter().for_each(|p| stats.record(p));
+    }
     send_to(&msgs, sock, socket_addr_space)?;
     Ok(())
 }
@@ -255,6 +276,7 @@ pub fn responder(
     sock: Arc<UdpSocket>,
     r: PacketReceiver,
     socket_addr_space: SocketAddrSpace,
+    stats_reporter_sender: Option<Sender<Box<dyn FnOnce() + Send>>>,
 ) -> JoinHandle<()> {
     Builder::new()
         .name(format!("solana-responder-{}", name))
@@ -262,7 +284,12 @@ pub fn responder(
             let mut errors = 0;
             let mut last_error = None;
             let mut last_print = 0;
-            let mut stats = StreamerSendStats::default();
+            let mut stats = None;
+
+            if stats_reporter_sender.is_some() {
+                stats = Some(StreamerSendStats::default());
+            }
+
             loop {
                 if let Err(e) = recv_send(&sock, &r, &socket_addr_space, &mut stats) {
                     match e {
@@ -281,7 +308,11 @@ pub fn responder(
                     last_print = now;
                     errors = 0;
                 }
-                stats.maybe_submit(name);
+                if let Some(ref stats_reporter_sender) = stats_reporter_sender {
+                    if let Some(ref mut stats) = stats {
+                        stats.maybe_submit(name, stats_reporter_sender);
+                    }
+                }
             }
         })
         .unwrap()
