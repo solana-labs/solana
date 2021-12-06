@@ -106,7 +106,7 @@
     "chai-as-promised": "^7.1.1",
     "codecov": "^3.0.4",
     "cross-env": "7.0.3",
-    "eslint": "^7.19.0",
+    "eslint": "^8.4.0",
     "eslint-config-prettier": "^8.0.0",
     "eslint-plugin-import": "2.25.3",
     "eslint-plugin-mocha": "^9.0.0",
