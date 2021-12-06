@@ -54,7 +54,7 @@ pub trait SyscallStubs: Sync + Send {
     unsafe fn sol_memcpy(&self, dst: *mut u8, src: *const u8, n: usize) {
         // cannot be overlapping
         assert!(
-            !(dst as usize + n > src as usize && src as usize > dst as usize),
+            is_nonoverlapping(src as usize, dst as usize, n),
             "memcpy does not support overlapping regions"
         );
         std::ptr::copy_nonoverlapping(src, dst, n as usize);
@@ -175,4 +175,36 @@ pub(crate) fn sol_set_return_data(data: &[u8]) {
 
 pub(crate) fn sol_log_data(data: &[&[u8]]) {
     SYSCALL_STUBS.read().unwrap().sol_log_data(data)
+}
+
+/// Check that two regions do not overlap.
+///
+/// Adapted from libcore, hidden to share with bpf_loader without being part of
+/// the API surface.
+#[doc(hidden)]
+pub fn is_nonoverlapping<N>(src: N, dst: N, count: N) -> bool
+where
+    N: Ord + std::ops::Sub<Output = N>,
+    <N as std::ops::Sub>::Output: Ord,
+{
+    let diff = if src > dst { src - dst } else { dst - src };
+    // If the absolute distance between the ptrs is at least as big as the size of the buffer,
+    // they do not overlap.
+    diff >= count
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_nonoverlapping() {
+        assert!(is_nonoverlapping(10, 7, 3));
+        assert!(!is_nonoverlapping(10, 8, 3));
+        assert!(!is_nonoverlapping(10, 9, 3));
+        assert!(!is_nonoverlapping(10, 10, 3));
+        assert!(!is_nonoverlapping(10, 11, 3));
+        assert!(!is_nonoverlapping(10, 12, 3));
+        assert!(is_nonoverlapping(10, 13, 3));
+    }
 }

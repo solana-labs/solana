@@ -263,6 +263,10 @@ pub mod reject_empty_instruction_without_program {
     solana_sdk::declare_id!("9kdtFSrXHQg3hKkbXkQ6trJ3Ja1xpJ22CTFSNAciEwmL");
 }
 
+pub mod fixed_memcpy_nonoverlapping_check {
+    solana_sdk::declare_id!("36PRUK2Dz6HWYdG9SpjeAsF5F3KxnFCakA2BZMbtMhSb");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -323,6 +327,7 @@ lazy_static! {
         (spl_token_v3_3_0_release::id(), "spl-token v3.3.0 release"),
         (leave_nonce_on_success::id(), "leave nonce as is on success"),
         (reject_empty_instruction_without_program::id(), "fail instructions which have native_loader as program_id directly"),
+        (fixed_memcpy_nonoverlapping_check::id(), "use correct check for nonoverlapping regions in memcpy syscall"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
