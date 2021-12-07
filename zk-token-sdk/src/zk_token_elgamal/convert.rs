@@ -20,6 +20,7 @@ mod target_arch {
                 elgamal::{ElGamalCiphertext, ElGamalPubkey},
                 pedersen::{PedersenCommitment, PedersenDecryptHandle},
             },
+            equality_proof::EqualityProof,
             errors::ProofError,
             range_proof::RangeProof,
         },
@@ -137,6 +138,20 @@ mod target_arch {
 
         fn try_from(ct: pod::AesCiphertext) -> Result<Self, Self::Error> {
             Self::from_bytes(&ct.0).ok_or(ProofError::InconsistentCTData)
+        }
+    }
+
+    impl From<EqualityProof> for pod::EqualityProof {
+        fn from(proof: EqualityProof) -> Self {
+            Self(proof.to_bytes())
+        }
+    }
+
+    impl TryFrom<pod::EqualityProof> for EqualityProof {
+        type Error = ProofError;
+
+        fn try_from(pod: pod::EqualityProof) -> Result<Self, Self::Error> {
+            Self::from_bytes(&pod.0)
         }
     }
 
