@@ -3541,7 +3541,7 @@ pub mod rpc_full {
 
                 if result.is_ok()
                     && config_accounts.addresses.len() > post_simulation_accounts.len()
-                { 
+                {
                     return Err(Error::invalid_params(format!(
                         "Too many accounts provided; max {}",
                         post_simulation_accounts.len()
