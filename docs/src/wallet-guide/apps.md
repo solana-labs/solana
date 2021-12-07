@@ -22,12 +22,12 @@ Exodus includes live charts, a built-in exchange, and 24/7 human support.
 
 ## Solflare
 
-[Solflare Wallet](https://solflare.com/) has mobile applications available for both 
-iOS and Android. These Mobile apps have support for sending Solana and SPL tokens, 
+[Solflare Wallet](https://solflare.com/) has mobile applications available for both
+iOS and Android. These Mobile apps have support for sending Solana and SPL tokens,
 staking, and NFT management in a fully-featured NFT gallery.
 
-Security is a top priority for Solflare - the mobile wallet is non-custodial, 
-meaning keys are managed by the user who retains total control of their own funds. 
+Security is a top priority for Solflare - the mobile wallet is non-custodial,
+meaning keys are managed by the user who retains total control of their own funds.
 The app supports biometric protection alongside passwords for maximum security.
 
 ## Trust Wallet
