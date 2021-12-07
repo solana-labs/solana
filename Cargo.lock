@@ -4276,6 +4276,7 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "solana-streamer",
+ "solana-test-validator",
  "solana-transaction-status",
  "solana-version",
  "spl-token",
