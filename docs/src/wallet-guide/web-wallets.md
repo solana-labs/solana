@@ -40,7 +40,7 @@ Solflare is accessible and easy to use but also has a very comprehensive set of 
 - An in wallet swap for SPL tokens
 - Compatibility with the Ledger hardware wallet
 
-Solflare is available on web, as a browser extension, and as a mobile app for both Android and iOS. 
+Solflare is available on web, as a browser extension, and as a mobile app for both Android and iOS.
 The extension is available on Chrome, Brave, Firefox, Opera, and Edge.
 
 Check out our [guide for using SolFlare](solflare.md).
