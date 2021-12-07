@@ -29,8 +29,8 @@ Available for Chrome, Brave, Firefox, Vivaldi, and Edge
 
 ## Solflare
 
-[Solflare](https://solflare.com/) is a non-custodial web wallet created by the 
-[Solrise Finance](https://solrise.finance) team that was built specifically for Solana. 
+[Solflare](https://solflare.com/) is a non-custodial web wallet created by the
+[Solrise Finance](https://solrise.finance) team that was built specifically for Solana.
 Solflare is accessible and easy to use but also has a very comprehensive set of features, including:
 
 - The ability to connect your wallet to almost any Solana Dapp
