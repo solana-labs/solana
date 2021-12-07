@@ -199,23 +199,6 @@ fn test_vote_authorize_and_withdraw() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-<<<<<<< HEAD
-=======
-
-    // Close vote account
-    let destination_account = solana_sdk::pubkey::new_rand(); // Send withdrawal to new account to make balance check easy
-    config.signers = vec![&default_signer, &withdraw_authority];
-    config.command = CliCommand::CloseVoteAccount {
-        vote_account_pubkey,
-        withdraw_authority: 1,
-        destination_account_pubkey: destination_account,
-        memo: None,
-        fee_payer: 0,
-    };
-    process_command(&config).unwrap();
-    check_recent_balance(0, &rpc_client, &vote_account_pubkey);
-    check_recent_balance(expected_balance, &rpc_client, &destination_account);
->>>>>>> 873fe81bc (Add offline and fee-payer utilities to CLI vote module (#21579))
 }
 
 #[test]
@@ -316,7 +299,7 @@ fn test_offline_vote_authorize_and_withdraw() {
 
     // Authorize vote account withdrawal to another signer, offline
     let withdraw_authority = Keypair::new();
-    let blockhash = rpc_client.get_latest_blockhash().unwrap();
+    let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
     config_offline.command = CliCommand::VoteAuthorize {
         vote_account_pubkey,
         new_authorized_pubkey: withdraw_authority.pubkey(),
@@ -363,7 +346,7 @@ fn test_offline_vote_authorize_and_withdraw() {
 
     // Withdraw from vote account offline
     let destination_account = solana_sdk::pubkey::new_rand(); // Send withdrawal to new account to make balance check easy
-    let blockhash = rpc_client.get_latest_blockhash().unwrap();
+    let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
     let fee_payer_null_signer = NullSigner::new(&default_signer.pubkey());
     config_offline.signers = vec![&fee_payer_null_signer, &withdraw_authority];
     config_offline.command = CliCommand::WithdrawFromVoteAccount {
@@ -405,7 +388,7 @@ fn test_offline_vote_authorize_and_withdraw() {
     check_recent_balance(100, &rpc_client, &destination_account);
 
     // Re-assign validator identity offline
-    let blockhash = rpc_client.get_latest_blockhash().unwrap();
+    let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
     let new_identity_keypair = Keypair::new();
     let new_identity_null_signer = NullSigner::new(&new_identity_keypair.pubkey());
     config_offline.signers = vec![

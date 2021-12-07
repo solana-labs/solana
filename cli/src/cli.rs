@@ -324,16 +324,6 @@ pub enum CliCommand {
         memo: Option<String>,
         fee_payer: SignerIndex,
     },
-<<<<<<< HEAD
-=======
-    CloseVoteAccount {
-        vote_account_pubkey: Pubkey,
-        destination_account_pubkey: Pubkey,
-        withdraw_authority: SignerIndex,
-        memo: Option<String>,
-        fee_payer: SignerIndex,
-    },
->>>>>>> 873fe81bc (Add offline and fee-payer utilities to CLI vote module (#21579))
     VoteAuthorize {
         vote_account_pubkey: Pubkey,
         new_authorized_pubkey: Pubkey,
@@ -1477,24 +1467,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             memo.as_ref(),
             *fee_payer,
         ),
-<<<<<<< HEAD
-=======
-        CliCommand::CloseVoteAccount {
-            vote_account_pubkey,
-            withdraw_authority,
-            destination_account_pubkey,
-            memo,
-            fee_payer,
-        } => process_close_vote_account(
-            &rpc_client,
-            config,
-            vote_account_pubkey,
-            *withdraw_authority,
-            destination_account_pubkey,
-            memo.as_ref(),
-            *fee_payer,
-        ),
->>>>>>> 873fe81bc (Add offline and fee-payer utilities to CLI vote module (#21579))
         CliCommand::VoteAuthorize {
             vote_account_pubkey,
             new_authorized_pubkey,
