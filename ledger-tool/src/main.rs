@@ -1845,7 +1845,7 @@ fn main() {
                         slot,
                         allow_dead_slots,
                         &LedgerOutputMethod::Print,
-                        std::u64::MAX,
+                        verbose_level,
                     ) {
                         eprintln!("{}", err);
                     }
