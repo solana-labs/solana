@@ -890,20 +890,28 @@ pub fn withdraw<S: std::hash::BuildHasher>(
     lamports: u64,
     to_account: &KeyedAccount,
     signers: &HashSet<Pubkey, S>,
+    rent_sysvar: Option<Rent>,
 ) -> Result<(), InstructionError> {
     let vote_state: VoteState =
         State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
 
     verify_authorized_signer(&vote_state.authorized_withdrawer, signers)?;
 
-    match vote_account.lamports()?.cmp(&lamports) {
-        Ordering::Less => return Err(InstructionError::InsufficientFunds),
-        Ordering::Equal => {
-            // Deinitialize upon zero-balance
-            vote_account.set_state(&VoteStateVersions::new_current(VoteState::default()))?;
+    let remaining_balance = vote_account
+        .lamports()?
+        .checked_sub(lamports)
+        .ok_or(InstructionError::InsufficientFunds)?;
+
+    if remaining_balance == 0 {
+        // Deinitialize upon zero-balance
+        vote_account.set_state(&VoteStateVersions::new_current(VoteState::default()))?;
+    } else if let Some(rent_sysvar) = rent_sysvar {
+        let min_rent_exempt_balance = rent_sysvar.minimum_balance(vote_account.data_len()?);
+        if remaining_balance < min_rent_exempt_balance {
+            return Err(InstructionError::InsufficientFunds);
         }
-        _ => (),
     }
+
     vote_account
         .try_account_ref_mut()?
         .checked_sub_lamports(lamports)?;
@@ -1107,6 +1115,8 @@ mod tests {
     }
 
     fn create_test_account() -> (Pubkey, RefCell<AccountSharedData>) {
+        let rent = Rent::default();
+        let balance = VoteState::get_rent_exempt_reserve(&rent);
         let vote_pubkey = solana_sdk::pubkey::new_rand();
         (
             vote_pubkey,
@@ -1114,7 +1124,7 @@ mod tests {
                 &vote_pubkey,
                 &solana_sdk::pubkey::new_rand(),
                 0,
-                100,
+                balance,
             )),
         )
     }
@@ -1875,46 +1885,129 @@ mod tests {
                 &RefCell::new(AccountSharedData::default()),
             ),
             &signers,
+            None,
         );
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
         // insufficient funds
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
+        let lamports = vote_account.borrow().lamports();
         let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
         let res = withdraw(
             &keyed_accounts[0],
-            101,
+            lamports + 1,
             &KeyedAccount::new(
                 &solana_sdk::pubkey::new_rand(),
                 false,
                 &RefCell::new(AccountSharedData::default()),
             ),
             &signers,
+            None,
         );
         assert_eq!(res, Err(InstructionError::InsufficientFunds));
 
-        // all good
-        let to_account = RefCell::new(AccountSharedData::default());
-        let lamports = vote_account.borrow().lamports();
-        let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
-        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
-        let pre_state: VoteStateVersions = vote_account.borrow().state().unwrap();
-        let res = withdraw(
-            &keyed_accounts[0],
-            lamports,
-            &KeyedAccount::new(&solana_sdk::pubkey::new_rand(), false, &to_account),
-            &signers,
-        );
-        assert_eq!(res, Ok(()));
-        assert_eq!(vote_account.borrow().lamports(), 0);
-        assert_eq!(to_account.borrow().lamports(), lamports);
-        let post_state: VoteStateVersions = vote_account.borrow().state().unwrap();
-        // State has been deinitialized since balance is zero
-        assert!(post_state.is_uninitialized());
+        // non rent exempt withdraw, before feature activation
+        {
+            let (vote_pubkey, vote_account) = create_test_account();
+            let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
+            let lamports = vote_account.borrow().lamports();
+            let rent_sysvar = Rent::default();
+            let minimum_balance = rent_sysvar
+                .minimum_balance(vote_account.borrow().data().len())
+                .max(1);
+            assert!(minimum_balance <= lamports);
+            let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
+            let res = withdraw(
+                &keyed_accounts[0],
+                lamports - minimum_balance + 1,
+                &KeyedAccount::new(
+                    &solana_sdk::pubkey::new_rand(),
+                    false,
+                    &RefCell::new(AccountSharedData::default()),
+                ),
+                &signers,
+                None,
+            );
+            assert_eq!(res, Ok(()));
+        }
 
-        // reset balance and restore state, verify that authorized_withdrawer works
-        vote_account.borrow_mut().set_lamports(lamports);
-        vote_account.borrow_mut().set_state(&pre_state).unwrap();
+        // non rent exempt withdraw, after feature activation
+        {
+            let (vote_pubkey, vote_account) = create_test_account();
+            let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
+            let lamports = vote_account.borrow().lamports();
+            let rent_sysvar = Rent::default();
+            let minimum_balance = rent_sysvar
+                .minimum_balance(vote_account.borrow().data().len())
+                .max(1);
+            assert!(minimum_balance <= lamports);
+            let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
+            let res = withdraw(
+                &keyed_accounts[0],
+                lamports - minimum_balance + 1,
+                &KeyedAccount::new(
+                    &solana_sdk::pubkey::new_rand(),
+                    false,
+                    &RefCell::new(AccountSharedData::default()),
+                ),
+                &signers,
+                Some(rent_sysvar),
+            );
+            assert_eq!(res, Err(InstructionError::InsufficientFunds));
+        }
+
+        // partial valid withdraw, after feature activation
+        {
+            let to_account = RefCell::new(AccountSharedData::default());
+            let (vote_pubkey, vote_account) = create_test_account();
+            let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
+            let lamports = vote_account.borrow().lamports();
+            let rent_sysvar = Rent::default();
+            let minimum_balance = rent_sysvar
+                .minimum_balance(vote_account.borrow().data().len())
+                .max(1);
+            assert!(minimum_balance <= lamports);
+            let withdraw_lamports = lamports - minimum_balance;
+            let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
+            let res = withdraw(
+                &keyed_accounts[0],
+                withdraw_lamports,
+                &KeyedAccount::new(&solana_sdk::pubkey::new_rand(), false, &to_account),
+                &signers,
+                Some(rent_sysvar),
+            );
+            assert_eq!(res, Ok(()));
+            assert_eq!(
+                vote_account.borrow().lamports(),
+                lamports - withdraw_lamports
+            );
+            assert_eq!(to_account.borrow().lamports(), withdraw_lamports);
+        }
+
+        // full withdraw, before/after activation
+        {
+            let rent_sysvar = Rent::default();
+            for rent_sysvar in [None, Some(rent_sysvar)] {
+                let to_account = RefCell::new(AccountSharedData::default());
+                let (vote_pubkey, vote_account) = create_test_account();
+                let lamports = vote_account.borrow().lamports();
+                let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
+                let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
+                let res = withdraw(
+                    &keyed_accounts[0],
+                    lamports,
+                    &KeyedAccount::new(&solana_sdk::pubkey::new_rand(), false, &to_account),
+                    &signers,
+                    rent_sysvar,
+                );
+                assert_eq!(res, Ok(()));
+                assert_eq!(vote_account.borrow().lamports(), 0);
+                assert_eq!(to_account.borrow().lamports(), lamports);
+                let post_state: VoteStateVersions = vote_account.borrow().state().unwrap();
+                // State has been deinitialized since balance is zero
+                assert!(post_state.is_uninitialized());
+            }
+        }
 
         // authorize authorized_withdrawer
         let authorized_withdrawer_pubkey = solana_sdk::pubkey::new_rand();
@@ -1943,6 +2036,7 @@ mod tests {
             lamports,
             withdrawer_keyed_account,
             &signers,
+            None,
         );
         assert_eq!(res, Ok(()));
         assert_eq!(vote_account.borrow().lamports(), 0);
