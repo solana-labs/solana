@@ -38,6 +38,7 @@ mod tests {
         }
     }
 
+    /// Ensure that StakeHistory is indeed clone-on-write
     #[test]
     fn test_stake_history_is_cow() {
         let mut stake_history = StakeHistory::default();
@@ -79,6 +80,40 @@ mod tests {
                 !std::ptr::eq(stake_history.deref(), stake_history2.deref()),
                 "Deref must point to a different underlying instance"
             );
+        }
+    }
+
+    /// Ensure that StakeHistory serializes and deserializes between the inner and outer types
+    #[test]
+    fn test_stake_history_serde() {
+        let mut stake_history_outer = StakeHistory::default();
+        let mut stake_history_inner = StakeHistoryInner::default();
+        (2134..).take(11).for_each(|epoch| {
+            let entry = rand_stake_history_entry();
+            stake_history_outer.add(epoch, entry.clone());
+            stake_history_inner.add(epoch, entry);
+        });
+
+        // Test: Assert that serializing the outer and inner types produces the same data
+        assert_eq!(
+            bincode::serialize(&stake_history_outer).unwrap(),
+            bincode::serialize(&stake_history_inner).unwrap(),
+        );
+
+        // Test: Assert that serializing the outer type then deserializing to the inner type
+        // produces the same values
+        {
+            let data = bincode::serialize(&stake_history_outer).unwrap();
+            let deserialized_inner: StakeHistoryInner = bincode::deserialize(&data).unwrap();
+            assert_eq!(&deserialized_inner, stake_history_outer.deref());
+        }
+
+        // Test: Assert that serializing the inner type then deserializing to the outer type
+        // produces the same values
+        {
+            let data = bincode::serialize(&stake_history_inner).unwrap();
+            let deserialized_outer: StakeHistory = bincode::deserialize(&data).unwrap();
+            assert_eq!(deserialized_outer.deref(), &stake_history_inner);
         }
     }
 }
