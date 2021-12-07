@@ -436,7 +436,7 @@ fn run_accounts_bench(
                                         min_balance,
                                         mint.is_some(),
                                     );
-                                    if message.instructions.len() == 0 {
+                                    if message.instructions.is_empty() {
                                         return None;
                                     }
                                     let signers: Vec<&Keypair> = vec![keypair, &base_keypair];
