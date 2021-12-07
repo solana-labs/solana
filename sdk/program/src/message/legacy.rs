@@ -14,9 +14,13 @@ use {
         },
         short_vec, system_instruction, system_program, sysvar,
     },
-    itertools::Itertools,
     lazy_static::lazy_static,
-    std::{convert::TryFrom, str::FromStr},
+    std::{
+        collections::{hash_map::RandomState, HashSet},
+        convert::TryFrom,
+        hash::BuildHasher,
+        str::FromStr,
+    },
 };
 
 lazy_static! {
@@ -89,8 +93,12 @@ impl InstructionKeys {
 /// payer key is provided, it is always placed first in the list of signed keys. Read-only signed
 /// accounts are placed last in the set of signed accounts. Read-only unsigned accounts,
 /// including program ids, are placed last in the set. No duplicates and order is preserved.
-fn get_keys(instructions: &[Instruction], payer: Option<&Pubkey>) -> InstructionKeys {
-    let programs: Vec<_> = get_program_ids(instructions)
+fn get_keys_with_hasher<H: BuildHasher>(
+    instructions: &[Instruction],
+    payer: Option<&Pubkey>,
+    hasher: H,
+) -> InstructionKeys {
+    let programs: Vec<_> = get_program_ids_with_hasher(instructions, hasher)
         .iter()
         .map(|program_id| AccountMeta {
             pubkey: *program_id,
@@ -158,11 +166,15 @@ fn get_keys(instructions: &[Instruction], payer: Option<&Pubkey>) -> Instruction
 }
 
 /// Return program ids referenced by all instructions.  No duplicates and order is preserved.
-fn get_program_ids(instructions: &[Instruction]) -> Vec<Pubkey> {
+fn get_program_ids_with_hasher<H: BuildHasher>(
+    instructions: &[Instruction],
+    hasher: H,
+) -> Vec<Pubkey> {
+    let mut set = HashSet::with_capacity_and_hasher(instructions.len(), hasher);
     instructions
         .iter()
         .map(|ix| ix.program_id)
-        .unique()
+        .filter(|&program_id| set.insert(program_id))
         .collect()
 }
 
@@ -250,9 +262,26 @@ impl Message {
         Self::new_with_blockhash(instructions, payer, &Hash::default())
     }
 
+    pub fn new_with_hasher<H: BuildHasher>(
+        instructions: &[Instruction],
+        payer: Option<&Pubkey>,
+        hasher: H,
+    ) -> Self {
+        Self::new_with_hasher_with_blockhash(instructions, payer, hasher, &Hash::default())
+    }
+
     pub fn new_with_blockhash(
         instructions: &[Instruction],
         payer: Option<&Pubkey>,
+        blockhash: &Hash,
+    ) -> Self {
+        Self::new_with_hasher_with_blockhash(instructions, payer, RandomState::new(), blockhash)
+    }
+
+    pub fn new_with_hasher_with_blockhash<H: BuildHasher>(
+        instructions: &[Instruction],
+        payer: Option<&Pubkey>,
+        hasher: H,
         blockhash: &Hash,
     ) -> Self {
         let InstructionKeys {
@@ -260,7 +289,7 @@ impl Message {
             unsigned_keys,
             num_readonly_signed_accounts,
             num_readonly_unsigned_accounts,
-        } = get_keys(instructions, payer);
+        } = get_keys_with_hasher(instructions, payer, hasher);
         let num_required_signatures = signed_keys.len() as u8;
         signed_keys.extend(&unsigned_keys);
         let instructions = compile_instructions(instructions, &signed_keys);
@@ -275,15 +304,31 @@ impl Message {
     }
 
     pub fn new_with_nonce(
+        instructions: Vec<Instruction>,
+        payer: Option<&Pubkey>,
+        nonce_account_pubkey: &Pubkey,
+        nonce_authority_pubkey: &Pubkey,
+    ) -> Self {
+        Self::new_with_hasher_with_nonce(
+            instructions,
+            payer,
+            RandomState::new(),
+            nonce_account_pubkey,
+            nonce_authority_pubkey,
+        )
+    }
+
+    pub fn new_with_hasher_with_nonce<H: BuildHasher>(
         mut instructions: Vec<Instruction>,
         payer: Option<&Pubkey>,
+        hasher: H,
         nonce_account_pubkey: &Pubkey,
         nonce_authority_pubkey: &Pubkey,
     ) -> Self {
         let nonce_ix =
             system_instruction::advance_nonce_account(nonce_account_pubkey, nonce_authority_pubkey);
         instructions.insert(0, nonce_ix);
-        Self::new(&instructions, payer)
+        Self::new_with_hasher(&instructions, payer, hasher)
     }
 
     /// Compute the blake3 hash of this transaction's message
@@ -531,8 +576,15 @@ mod tests {
     use {
         super::*,
         crate::{hash, instruction::AccountMeta, message::MESSAGE_HEADER_LENGTH},
-        std::collections::HashSet,
     };
+
+    fn get_keys(instructions: &[Instruction], payer: Option<&Pubkey>) -> InstructionKeys {
+        get_keys_with_hasher(instructions, payer, RandomState::new())
+    }
+
+    fn get_program_ids(instructions: &[Instruction]) -> Vec<Pubkey> {
+        get_program_ids_with_hasher(instructions, RandomState::new())
+    }
 
     #[test]
     fn test_message_unique_program_ids() {
