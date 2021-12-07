@@ -3539,7 +3539,7 @@ pub mod rpc_full {
                     return Err(Error::invalid_params("base58 encoding not supported"));
                 }
 
-                if !result.is_err() && config_accounts.addresses.len() > post_simulation_accounts.len() {
+                if result.is_ok() && config_accounts.addresses.len() > post_simulation_accounts.len() {
                     return Err(Error::invalid_params(format!(
                         "Too many accounts provided; max {}",
                         post_simulation_accounts.len()
