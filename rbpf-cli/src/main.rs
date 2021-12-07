@@ -213,7 +213,7 @@ native machine code before execting it in the virtual machine.",
             &preparation.message,
             &preparation.message.instructions[0],
             &program_indices,
-            Some(&preparation.account_indices),
+            &preparation.account_indices,
         )
         .unwrap();
     let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();

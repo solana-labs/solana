@@ -2368,8 +2368,9 @@ fn call<'a, 'b: 'a>(
 
     // Process instruction
     invoke_context
-        .process_cross_program_instruction(
+        .process_instruction(
             &message,
+            &message.instructions[0],
             &program_indices,
             &account_indices,
             &caller_write_privileges,
@@ -2967,7 +2968,7 @@ mod tests {
         );
         let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
         invoke_context
-            .push(&message, &message.instructions[0], &[0], None)
+            .push(&message, &message.instructions[0], &[0], &[])
             .unwrap();
         let mut syscall_panic = SyscallPanic {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -3044,7 +3045,7 @@ mod tests {
         );
         let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
         invoke_context
-            .push(&message, &message.instructions[0], &[0], None)
+            .push(&message, &message.instructions[0], &[0], &[])
             .unwrap();
         let mut syscall_sol_log = SyscallLog {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -3148,7 +3149,7 @@ mod tests {
         );
         let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
         invoke_context
-            .push(&message, &message.instructions[0], &[0], None)
+            .push(&message, &message.instructions[0], &[0], &[])
             .unwrap();
         let cost = invoke_context.get_compute_budget().log_64_units;
         let mut syscall_sol_log_u64 = SyscallLogU64 {
@@ -3190,7 +3191,7 @@ mod tests {
         );
         let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
         invoke_context
-            .push(&message, &message.instructions[0], &[0], None)
+            .push(&message, &message.instructions[0], &[0], &[])
             .unwrap();
         let cost = invoke_context.get_compute_budget().log_pubkey_units;
         let mut syscall_sol_pubkey = SyscallLogPubkey {
@@ -3464,7 +3465,7 @@ mod tests {
                     * 4,
             );
         invoke_context
-            .push(&message, &message.instructions[0], &[0], None)
+            .push(&message, &message.instructions[0], &[0], &[])
             .unwrap();
         let mut syscall = SyscallSha256 {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -3563,7 +3564,7 @@ mod tests {
             let sysvars = [(sysvar::clock::id(), data)];
             invoke_context.sysvars = &sysvars;
             invoke_context
-                .push(&message, &message.instructions[0], &[0], None)
+                .push(&message, &message.instructions[0], &[0], &[])
                 .unwrap();
             let mut syscall = SyscallGetClockSysvar {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -3608,7 +3609,7 @@ mod tests {
             let sysvars = [(sysvar::epoch_schedule::id(), data)];
             invoke_context.sysvars = &sysvars;
             invoke_context
-                .push(&message, &message.instructions[0], &[0], None)
+                .push(&message, &message.instructions[0], &[0], &[])
                 .unwrap();
             let mut syscall = SyscallGetEpochScheduleSysvar {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -3660,7 +3661,7 @@ mod tests {
             let sysvars = [(sysvar::fees::id(), data)];
             invoke_context.sysvars = &sysvars;
             invoke_context
-                .push(&message, &message.instructions[0], &[0], None)
+                .push(&message, &message.instructions[0], &[0], &[])
                 .unwrap();
             let mut syscall = SyscallGetFeesSysvar {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -3703,7 +3704,7 @@ mod tests {
             let sysvars = [(sysvar::rent::id(), data)];
             invoke_context.sysvars = &sysvars;
             invoke_context
-                .push(&message, &message.instructions[0], &[0], None)
+                .push(&message, &message.instructions[0], &[0], &[])
                 .unwrap();
             let mut syscall = SyscallGetRentSysvar {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -3841,7 +3842,7 @@ mod tests {
         );
         let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
         invoke_context
-            .push(&message, &message.instructions[0], &[0], None)
+            .push(&message, &message.instructions[0], &[0], &[])
             .unwrap();
         let address = bpf_loader_upgradeable::id();
 
@@ -3957,7 +3958,7 @@ mod tests {
         );
         let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
         invoke_context
-            .push(&message, &message.instructions[0], &[0], None)
+            .push(&message, &message.instructions[0], &[0], &[])
             .unwrap();
         let cost = invoke_context
             .get_compute_budget()
