@@ -23,6 +23,7 @@ use {
     solana_streamer::socket::SocketAddrSpace,
     solana_transaction_status::parse_token::spl_token_instruction,
     std::{
+        cmp::min,
         net::SocketAddr,
         process::exit,
         sync::{
@@ -156,24 +157,30 @@ fn make_create_message(
 fn make_close_message(
     keypair: &Keypair,
     base_keypair: &Keypair,
-    max_closed_seed: Arc<AtomicU64>,
+    max_created: Arc<AtomicU64>,
+    max_closed: Arc<AtomicU64>,
     num_instructions: usize,
     balance: u64,
     spl_token: bool,
 ) -> Message {
     let instructions: Vec<_> = (0..num_instructions)
         .into_iter()
-        .map(|_| {
+        .filter_map(|_| {
             let program_id = if spl_token {
                 inline_spl_token::id()
             } else {
                 system_program::id()
             };
-            let seed = max_closed_seed.fetch_add(1, Ordering::Relaxed).to_string();
+            let max_created_seed = max_created.load(Ordering::Relaxed);
+            let max_closed_seed = max_closed.load(Ordering::Relaxed);
+            if max_closed_seed >= max_created_seed {
+                return None;
+            }
+            let seed = max_closed.fetch_add(1, Ordering::Relaxed).to_string();
             let address =
                 Pubkey::create_with_seed(&base_keypair.pubkey(), &seed, &program_id).unwrap();
             if spl_token {
-                spl_token_instruction(
+                Some(spl_token_instruction(
                     spl_token::instruction::close_account(
                         &spl_token::id(),
                         &spl_token_pubkey(&address),
@@ -182,16 +189,16 @@ fn make_close_message(
                         &[],
                     )
                     .unwrap(),
-                )
+                ))
             } else {
-                system_instruction::transfer_with_seed(
+                Some(system_instruction::transfer_with_seed(
                     &address,
                     &base_keypair.pubkey(),
                     seed,
                     &program_id,
                     &keypair.pubkey(),
                     balance,
-                )
+                ))
             }
         })
         .collect();
@@ -211,6 +218,7 @@ fn run_accounts_bench(
     maybe_lamports: Option<u64>,
     num_instructions: usize,
     mint: Option<Pubkey>,
+    reclaim_accounts: bool,
 ) {
     assert!(num_instructions > 0);
     let client =
@@ -350,6 +358,7 @@ fn run_accounts_bench(
                             let message = make_close_message(
                                 payer_keypairs[0],
                                 &base_keypair,
+                                seed_tracker.max_created.clone(),
                                 seed_tracker.max_closed.clone(),
                                 1,
                                 min_balance,
@@ -372,7 +381,7 @@ fn run_accounts_bench(
         }
 
         count += 1;
-        if last_log.elapsed().as_millis() > 3000 {
+        if last_log.elapsed().as_millis() > 3000 || count >= iterations {
             info!(
                 "total_accounts_created: {} total_accounts_closed: {} tx_sent_count: {} loop_count: {} balance(s): {:?}",
                 total_accounts_created, total_accounts_closed, tx_sent_count, count, balances
@@ -387,6 +396,83 @@ fn run_accounts_bench(
         }
     }
     executor.close();
+
+    if reclaim_accounts {
+        let executor = TransactionExecutor::new(entrypoint_addr);
+        loop {
+            let max_closed_seed = seed_tracker.max_closed.load(Ordering::Relaxed);
+            let max_created_seed = seed_tracker.max_created.load(Ordering::Relaxed);
+
+            if latest_blockhash.elapsed().as_millis() > 10_000 {
+                blockhash = client.get_latest_blockhash().expect("blockhash");
+                latest_blockhash = Instant::now();
+            }
+            message.recent_blockhash = blockhash;
+            let fee = client
+                .get_fee_for_message(&message)
+                .expect("get_fee_for_message");
+
+            let sigs_len = executor.num_outstanding();
+            if sigs_len < batch_size && max_closed_seed < max_created_seed {
+                let num_to_close = min(
+                    batch_size - sigs_len,
+                    (max_created_seed - max_closed_seed) as usize,
+                );
+                if num_to_close >= payer_keypairs.len() {
+                    info!("closing {} accounts", num_to_close);
+                    let chunk_size = num_to_close / payer_keypairs.len();
+                    info!("{:?} chunk_size", chunk_size);
+                    if chunk_size > 0 {
+                        for (i, keypair) in payer_keypairs.iter().enumerate() {
+                            let txs: Vec<_> = (0..chunk_size)
+                                .into_par_iter()
+                                .filter_map(|_| {
+                                    let message = make_close_message(
+                                        keypair,
+                                        &base_keypair,
+                                        seed_tracker.max_created.clone(),
+                                        seed_tracker.max_closed.clone(),
+                                        num_instructions,
+                                        min_balance,
+                                        mint.is_some(),
+                                    );
+                                    if message.instructions.is_empty() {
+                                        return None;
+                                    }
+                                    let signers: Vec<&Keypair> = vec![keypair, &base_keypair];
+                                    Some(Transaction::new(&signers, message, blockhash))
+                                })
+                                .collect();
+                            balances[i] = balances[i].saturating_sub(fee * txs.len() as u64);
+                            info!("close txs: {}", txs.len());
+                            let new_ids = executor.push_transactions(txs);
+                            info!("close ids: {}", new_ids.len());
+                            tx_sent_count += new_ids.len();
+                            total_accounts_closed += (num_instructions * new_ids.len()) as u64;
+                        }
+                    }
+                }
+            } else {
+                let _ = executor.drain_cleared();
+            }
+            count += 1;
+            if last_log.elapsed().as_millis() > 3000 || max_closed_seed >= max_created_seed {
+                info!(
+                    "total_accounts_closed: {} tx_sent_count: {} loop_count: {} balance(s): {:?}",
+                    total_accounts_closed, tx_sent_count, count, balances
+                );
+                last_log = Instant::now();
+            }
+
+            if max_closed_seed >= max_created_seed {
+                break;
+            }
+            if executor.num_outstanding() >= batch_size {
+                sleep(Duration::from_millis(500));
+            }
+        }
+        executor.close();
+    }
 }
 
 fn main() {
@@ -462,7 +548,7 @@ fn main() {
                 .long("iterations")
                 .takes_value(true)
                 .value_name("NUM")
-                .help("Number of iterations to make"),
+                .help("Number of iterations to make. 0 = unlimited iterations."),
         )
         .arg(
             Arg::with_name("check_gossip")
@@ -474,6 +560,12 @@ fn main() {
                 .long("mint")
                 .takes_value(true)
                 .help("Mint address to initialize account"),
+        )
+        .arg(
+            Arg::with_name("reclaim_accounts")
+                .long("reclaim-accounts")
+                .takes_value(false)
+                .help("Reclaim accounts after session ends; incompatible with --iterations 0"),
         )
         .get_matches();
 
@@ -556,6 +648,7 @@ fn main() {
         lamports,
         num_instructions,
         mint,
+        matches.is_present("reclaim_accounts"),
     );
 }
 
@@ -564,12 +657,18 @@ pub mod test {
     use {
         super::*,
         solana_core::validator::ValidatorConfig,
+        solana_faucet::faucet::run_local_faucet,
         solana_local_cluster::{
             local_cluster::{ClusterConfig, LocalCluster},
             validator_configs::make_identical_validator_configs,
         },
         solana_measure::measure::Measure,
-        solana_sdk::poh_config::PohConfig,
+        solana_sdk::{native_token::sol_to_lamports, poh_config::PohConfig},
+        solana_test_validator::TestValidator,
+        spl_token::{
+            solana_program::program_pack::Pack,
+            state::{Account, Mint},
+        },
     };
 
     #[test]
@@ -605,6 +704,108 @@ pub mod test {
             maybe_lamports,
             num_instructions,
             None,
+            false,
+        );
+        start.stop();
+        info!("{}", start);
+    }
+
+    #[test]
+    fn test_create_then_reclaim_spl_token_accounts() {
+        solana_logger::setup();
+        let mint_keypair = Keypair::new();
+        let mint_pubkey = mint_keypair.pubkey();
+        let faucet_addr = run_local_faucet(mint_keypair, None);
+        let test_validator = TestValidator::with_custom_fees(
+            mint_pubkey,
+            1,
+            Some(faucet_addr),
+            SocketAddrSpace::Unspecified,
+        );
+        let rpc_client =
+            RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
+
+        // Created funder
+        let funder = Keypair::new();
+        let latest_blockhash = rpc_client.get_latest_blockhash().unwrap();
+        let signature = rpc_client
+            .request_airdrop_with_blockhash(
+                &funder.pubkey(),
+                sol_to_lamports(1.0),
+                &latest_blockhash,
+            )
+            .unwrap();
+        rpc_client
+            .confirm_transaction_with_spinner(
+                &signature,
+                &latest_blockhash,
+                CommitmentConfig::confirmed(),
+            )
+            .unwrap();
+
+        // Create Mint
+        let spl_mint_keypair = Keypair::new();
+        let spl_mint_len = Mint::get_packed_len();
+        let spl_mint_rent = rpc_client
+            .get_minimum_balance_for_rent_exemption(spl_mint_len)
+            .unwrap();
+        let transaction = Transaction::new_signed_with_payer(
+            &[
+                system_instruction::create_account(
+                    &funder.pubkey(),
+                    &spl_mint_keypair.pubkey(),
+                    spl_mint_rent,
+                    spl_mint_len as u64,
+                    &inline_spl_token::id(),
+                ),
+                spl_token_instruction(
+                    spl_token::instruction::initialize_mint(
+                        &spl_token::id(),
+                        &spl_token_pubkey(&spl_mint_keypair.pubkey()),
+                        &spl_token_pubkey(&spl_mint_keypair.pubkey()),
+                        None,
+                        2,
+                    )
+                    .unwrap(),
+                ),
+            ],
+            Some(&funder.pubkey()),
+            &[&funder, &spl_mint_keypair],
+            latest_blockhash,
+        );
+        let _sig = rpc_client
+            .send_and_confirm_transaction(&transaction)
+            .unwrap();
+
+        let account_len = Account::get_packed_len();
+        let minimum_balance = rpc_client
+            .get_minimum_balance_for_rent_exemption(account_len)
+            .unwrap();
+
+        let iterations = 5;
+        let batch_size = 100;
+        let close_nth_batch = 0;
+        let num_instructions = 4;
+        let mut start = Measure::start("total accounts run");
+        let keypair0 = Keypair::new();
+        let keypair1 = Keypair::new();
+        let keypair2 = Keypair::new();
+        run_accounts_bench(
+            test_validator
+                .rpc_url()
+                .replace("http://", "")
+                .parse()
+                .unwrap(),
+            faucet_addr,
+            &[&keypair0, &keypair1, &keypair2],
+            iterations,
+            Some(account_len as u64),
+            batch_size,
+            close_nth_batch,
+            Some(minimum_balance),
+            num_instructions,
+            Some(spl_mint_keypair.pubkey()),
+            true,
         );
         start.stop();
         info!("{}", start);
