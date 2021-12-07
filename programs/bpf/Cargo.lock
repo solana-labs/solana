@@ -1326,9 +1326,9 @@ dependencies = [
 
 [[package]]
 name = "itertools"
-version = "0.10.1"
+version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69ddb889f9d0d08a67338271fa9b62996bc788c7796a5c18cf057420aaed5eaf"
+checksum = "a9a9d19fa1e79b6215ff29b9d6880b706147f16e9b1dbb1e4e5947b5b02bc5e3"
 dependencies = [
  "either",
 ]
@@ -2523,7 +2523,7 @@ dependencies = [
  "bincode",
  "byteorder 1.4.3",
  "elf",
- "itertools 0.10.1",
+ "itertools 0.10.3",
  "log",
  "miow",
  "net2",
@@ -3181,7 +3181,7 @@ dependencies = [
  "bv",
  "bytemuck",
  "curve25519-dalek 3.2.0",
- "itertools 0.10.1",
+ "itertools 0.10.3",
  "lazy_static",
  "libsecp256k1 0.6.0",
  "log",
@@ -3209,7 +3209,7 @@ version = "1.10.0"
 dependencies = [
  "base64 0.13.0",
  "bincode",
- "itertools 0.10.1",
+ "itertools 0.10.3",
  "libc",
  "libloading",
  "log",
@@ -3286,7 +3286,7 @@ dependencies = [
  "dir-diff",
  "flate2",
  "fnv",
- "itertools 0.10.1",
+ "itertools 0.10.3",
  "lazy_static",
  "log",
  "memmap2 0.5.0",
@@ -3336,7 +3336,7 @@ dependencies = [
  "ed25519-dalek-bip32",
  "generic-array 0.14.4",
  "hmac 0.11.0",
- "itertools 0.10.1",
+ "itertools 0.10.3",
  "lazy_static",
  "libsecp256k1 0.6.0",
  "log",

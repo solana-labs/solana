@@ -24,7 +24,7 @@ dashmap = { version = "4.0.2", features = ["rayon", "raw-api"] }
 etcd-client = { version = "0.8.1", features = ["tls"]}
 fs_extra = "1.2.0"
 histogram = "0.6.9"
-itertools = "0.10.1"
+itertools = "0.10.3"
 log = "0.4.14"
 lru = "0.7.0"
 rand = "0.7.0"

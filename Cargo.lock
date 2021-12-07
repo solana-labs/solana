@@ -2038,9 +2038,9 @@ dependencies = [
 
 [[package]]
 name = "itertools"
-version = "0.10.1"
+version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69ddb889f9d0d08a67338271fa9b62996bc788c7796a5c18cf057420aaed5eaf"
+checksum = "a9a9d19fa1e79b6215ff29b9d6880b706147f16e9b1dbb1e4e5947b5b02bc5e3"
 dependencies = [
  "either",
 ]
@@ -3097,7 +3097,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c6ce811d0b2e103743eec01db1c50612221f173084ce2f7941053e94b6bb474"
 dependencies = [
  "difflib",
- "itertools 0.10.1",
+ "itertools 0.10.3",
  "predicates-core",
 ]
 
@@ -3228,7 +3228,7 @@ checksum = "62941722fb675d463659e49c4f3fe1fe792ff24fe5bbaa9c08cd3b98a1c354f5"
 dependencies = [
  "bytes 1.1.0",
  "heck",
- "itertools 0.10.1",
+ "itertools 0.10.3",
  "lazy_static",
  "log 0.4.14",
  "multimap",
@@ -3247,7 +3247,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9cc1a3263e07e0bf68e96268f37665207b49560d98739662cdfaae215c720fe"
 dependencies = [
  "anyhow",
- "itertools 0.10.1",
+ "itertools 0.10.3",
  "proc-macro2 1.0.32",
  "quote 1.0.10",
  "syn 1.0.81",
@@ -4682,7 +4682,7 @@ dependencies = [
  "etcd-client",
  "fs_extra",
  "histogram",
- "itertools 0.10.1",
+ "itertools 0.10.3",
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
@@ -4908,7 +4908,7 @@ dependencies = [
  "clap 2.33.3",
  "flate2",
  "indexmap",
- "itertools 0.10.1",
+ "itertools 0.10.3",
  "log 0.4.14",
  "lru",
  "matches",
@@ -5002,7 +5002,7 @@ dependencies = [
  "crossbeam-channel",
  "fs_extra",
  "futures 0.3.18",
- "itertools 0.10.1",
+ "itertools 0.10.3",
  "lazy_static",
  "libc",
  "log 0.4.14",
@@ -5054,7 +5054,7 @@ dependencies = [
  "csv",
  "dashmap",
  "histogram",
- "itertools 0.10.1",
+ "itertools 0.10.3",
  "log 0.4.14",
  "regex",
  "serde",
@@ -5087,7 +5087,7 @@ dependencies = [
  "crossbeam-channel",
  "fs_extra",
  "gag",
- "itertools 0.10.1",
+ "itertools 0.10.3",
  "log 0.4.14",
  "rand 0.7.3",
  "rayon",
@@ -5340,7 +5340,7 @@ dependencies = [
  "bv",
  "bytemuck",
  "curve25519-dalek 3.2.0",
- "itertools 0.10.1",
+ "itertools 0.10.3",
  "lazy_static",
  "libsecp256k1 0.6.0",
  "log 0.4.14",
@@ -5370,7 +5370,7 @@ version = "1.10.0"
 dependencies = [
  "base64 0.13.0",
  "bincode",
- "itertools 0.10.1",
+ "itertools 0.10.3",
  "libc",
  "libloading",
  "log 0.4.14",
@@ -5488,7 +5488,7 @@ dependencies = [
  "bs58 0.4.0",
  "crossbeam-channel",
  "dashmap",
- "itertools 0.10.1",
+ "itertools 0.10.3",
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
@@ -5573,7 +5573,7 @@ dependencies = [
  "ed25519-dalek",
  "flate2",
  "fnv",
- "itertools 0.10.1",
+ "itertools 0.10.3",
  "lazy_static",
  "libsecp256k1 0.6.0",
  "log 0.4.14",
@@ -5625,7 +5625,7 @@ dependencies = [
  "ed25519-dalek-bip32",
  "generic-array 0.14.4",
  "hmac 0.11.0",
- "itertools 0.10.1",
+ "itertools 0.10.3",
  "lazy_static",
  "libsecp256k1 0.6.0",
  "log 0.4.14",
@@ -5782,7 +5782,7 @@ dependencies = [
 name = "solana-streamer"
 version = "1.10.0"
 dependencies = [
- "itertools 0.10.1",
+ "itertools 0.10.3",
  "libc",
  "log 0.4.14",
  "nix",
