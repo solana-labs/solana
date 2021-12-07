@@ -236,6 +236,10 @@ pub enum InstructionError {
     /// Illegal account owner
     #[error("Provided owner is not allowed")]
     IllegalOwner,
+
+    /// bprumo TODO: doc here, and add equivalent ProgramError
+    #[error("Accounts data budget exceeded")]
+    AccountsDataBudgetExceeded,
     // Note: For any new error added here an equivalent ProgramError and its
     // conversions must also be added
 }

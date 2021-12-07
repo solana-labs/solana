@@ -108,6 +108,62 @@ impl ComputeMeter {
     }
 }
 
+// bprumo TODO: doc where 128 GB came from. Move where the const is, also
+// 128 GB
+pub const DEFAULT_MAX_ACCOUNTS_DATA_LEN: usize = 128_000_000_000;
+
+/// bprumo TODO: doc, and/or move
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
+pub struct AccountsDataBudget {
+    maximum: usize,
+    current: usize,
+}
+impl AccountsDataBudget {
+    pub fn new(maximum: usize, current: usize) -> Self {
+        Self { maximum, current }
+    }
+    pub fn maximum(&self) -> usize {
+        self.maximum
+    }
+    pub fn current(&self) -> usize {
+        self.current
+    }
+    pub fn remaining(&self) -> usize {
+        self.maximum().saturating_sub(self.current())
+    }
+}
+
+/// bprumo TODO: doc, and/or move
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
+pub struct AccountsDataMeter {
+    capacity: usize,
+    consumed: usize,
+}
+impl AccountsDataMeter {
+    pub fn new_ref(capacity: usize) -> Rc<RefCell<Self>> {
+        Rc::new(RefCell::new(Self {
+            capacity,
+            consumed: 0,
+        }))
+    }
+    pub fn capacity(&self) -> usize {
+        self.capacity
+    }
+    pub fn consumed(&self) -> usize {
+        self.consumed
+    }
+    pub fn remaining(&self) -> usize {
+        self.capacity().saturating_sub(self.consumed())
+    }
+    pub fn consume(&mut self, amount: usize) -> Result<(), InstructionError> {
+        if amount > self.remaining() {
+            return Err(InstructionError::AccountsDataBudgetExceeded);
+        }
+        self.consumed = self.consumed.saturating_add(amount);
+        Ok(())
+    }
+}
+
 pub struct StackFrame<'a> {
     pub number_of_program_accounts: usize,
     pub keyed_accounts: Vec<KeyedAccount<'a>>,
@@ -134,6 +190,7 @@ impl<'a> StackFrame<'a> {
     }
 }
 
+// bprumo NOTE: here's the invoke context
 pub struct InvokeContext<'a> {
     invoke_stack: Vec<StackFrame<'a>>,
     rent: Rent,
@@ -145,6 +202,7 @@ pub struct InvokeContext<'a> {
     compute_budget: ComputeBudget,
     current_compute_budget: ComputeBudget,
     compute_meter: Rc<RefCell<ComputeMeter>>,
+    accounts_data_meter: Rc<RefCell<AccountsDataMeter>>,
     executors: Rc<RefCell<Executors>>,
     pub instruction_recorder: Option<&'a InstructionRecorder>,
     pub feature_set: Arc<FeatureSet>,
@@ -163,6 +221,7 @@ impl<'a> InvokeContext<'a> {
         sysvars: &'a [(Pubkey, Vec<u8>)],
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         compute_budget: ComputeBudget,
+        accounts_data_budget: AccountsDataBudget,
         executors: Rc<RefCell<Executors>>,
         feature_set: Arc<FeatureSet>,
         blockhash: Hash,
@@ -179,6 +238,7 @@ impl<'a> InvokeContext<'a> {
             current_compute_budget: compute_budget,
             compute_budget,
             compute_meter: ComputeMeter::new_ref(compute_budget.max_units),
+            accounts_data_meter: AccountsDataMeter::new_ref(accounts_data_budget.remaining()),
             executors,
             instruction_recorder: None,
             feature_set,
@@ -200,6 +260,7 @@ impl<'a> InvokeContext<'a> {
             &[],
             Some(LogCollector::new_ref()),
             ComputeBudget::default(),
+            AccountsDataBudget::new(DEFAULT_MAX_ACCOUNTS_DATA_LEN, 0),
             Rc::new(RefCell::new(Executors::default())),
             Arc::new(FeatureSet::all_enabled()),
             Hash::default(),
@@ -508,6 +569,7 @@ impl<'a> InvokeContext<'a> {
         // Verify the called program has not misbehaved
         let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
         for (account, prev_size) in prev_account_sizes.iter() {
+            // bprumo NOTE: looks like this checks for size changes...
             if !do_support_realloc && *prev_size != account.borrow().data().len() && *prev_size != 0
             {
                 // Only support for `CreateAccount` at this time.
@@ -636,6 +698,7 @@ impl<'a> InvokeContext<'a> {
         Ok((message, caller_write_privileges, program_indices))
     }
 
+    // bprumo NOTE: here's where the CPI instructions are processed
     /// Process a cross-program instruction
     pub fn process_instruction(
         &mut self,
@@ -781,6 +844,11 @@ impl<'a> InvokeContext<'a> {
     /// Get this invocation's ComputeMeter
     pub fn get_compute_meter(&self) -> Rc<RefCell<ComputeMeter>> {
         self.compute_meter.clone()
+    }
+
+    /// bprumo TODO: doc
+    pub fn accounts_data_meter(&self) -> Rc<RefCell<AccountsDataMeter>> {
+        Rc::clone(&self.accounts_data_meter)
     }
 
     /// Loaders may need to do work in order to execute a program. Cache

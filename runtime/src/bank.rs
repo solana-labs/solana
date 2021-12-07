@@ -74,7 +74,10 @@ use {
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
     solana_program_runtime::{
         instruction_recorder::InstructionRecorder,
-        invoke_context::{BuiltinProgram, Executor, Executors, ProcessInstructionWithContext},
+        invoke_context::{
+            AccountsDataBudget, BuiltinProgram, Executor, Executors, ProcessInstructionWithContext,
+            DEFAULT_MAX_ACCOUNTS_DATA_LEN,
+        },
         log_collector::LogCollector,
         timings::ExecuteDetailsTimings,
     },
@@ -117,8 +120,7 @@ use {
         signature::{Keypair, Signature},
         slot_hashes::SlotHashes,
         slot_history::SlotHistory,
-        system_transaction,
-        sysvar::{self},
+        system_transaction, sysvar,
         timing::years_as_slots,
         transaction::{
             Result, SanitizedTransaction, Transaction, TransactionError,
@@ -143,7 +145,10 @@ use {
         ptr,
         rc::Rc,
         sync::{
-            atomic::{AtomicBool, AtomicU64, Ordering::Relaxed},
+            atomic::{
+                AtomicBool, AtomicU64, AtomicUsize,
+                Ordering::{AcqRel, Acquire, Relaxed, Release},
+            },
             Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard,
         },
         time::{Duration, Instant},
@@ -733,6 +738,7 @@ pub(crate) struct BankFieldsToDeserialize {
     pub(crate) stakes: Stakes,
     pub(crate) epoch_stakes: HashMap<Epoch, EpochStakes>,
     pub(crate) is_delta: bool,
+    pub(crate) accounts_data_len: usize,
 }
 
 // Bank's common fields shared by all supported snapshot versions for serialization.
@@ -772,6 +778,7 @@ pub(crate) struct BankFieldsToSerialize<'a> {
     pub(crate) stakes: &'a RwLock<Stakes>,
     pub(crate) epoch_stakes: &'a HashMap<Epoch, EpochStakes>,
     pub(crate) is_delta: bool,
+    pub(crate) accounts_data_len: usize,
 }
 
 // Can't derive PartialEq because RwLock doesn't implement PartialEq
@@ -1040,6 +1047,9 @@ pub struct Bank {
     pub cost_tracker: RwLock<CostTracker>,
 
     sysvar_cache: RwLock<Vec<(Pubkey, Vec<u8>)>>,
+
+    /// bprumo TODO: doc
+    accounts_data_len: AtomicUsize,
 }
 
 impl Default for BlockhashQueue {
@@ -1119,7 +1129,7 @@ impl Bank {
     }
 
     fn default_with_accounts(accounts: Accounts) -> Self {
-        Self {
+        let bank = Self {
             rc: BankRc::new(accounts, Slot::default()),
             src: StatusCacheRc::default(),
             blockhash_queue: RwLock::<BlockhashQueue>::default(),
@@ -1175,7 +1185,16 @@ impl Bank {
             vote_only_bank: false,
             cost_tracker: RwLock::<CostTracker>::default(),
             sysvar_cache: RwLock::new(Vec::new()),
-        }
+            accounts_data_len: AtomicUsize::default(),
+        };
+
+        // bprumo TODO: how often is default_with_accounts() called? If I call scan() here, is that
+        // going to be way too slow?
+        let total_account_stats = bank.get_total_accounts_stats().unwrap();
+        bank.accounts_data_len
+            .store(total_account_stats.data_len, Release);
+
+        bank
     }
 
     pub fn new_with_paths_for_tests(
@@ -1421,7 +1440,15 @@ impl Bank {
             freeze_started: AtomicBool::new(false),
             cost_tracker: RwLock::new(CostTracker::default()),
             sysvar_cache: RwLock::new(Vec::new()),
+            accounts_data_len: AtomicUsize::new(parent.accounts_data_len.load(Acquire)),
         };
+
+        // bprumo TODO: move this somewhere else, like bank deserialization (from snapshot)
+        if new.accounts_data_len.load(Acquire) == 0 {
+            let total_account_stats = new.get_total_accounts_stats().unwrap();
+            new.accounts_data_len
+                .store(total_account_stats.data_len, Release);
+        }
 
         let mut ancestors = Vec::with_capacity(1 + new.parents().len());
         ancestors.push(new.slot());
@@ -1598,7 +1625,14 @@ impl Bank {
             vote_only_bank: false,
             cost_tracker: RwLock::new(CostTracker::default()),
             sysvar_cache: RwLock::new(Vec::new()),
+            accounts_data_len: AtomicUsize::default(),
         };
+
+        // bprumo TODO: get this from fields instead
+        let total_account_stats = bank.get_total_accounts_stats().unwrap();
+        bank.accounts_data_len
+            .store(total_account_stats.data_len, Release);
+
         bank.finish_init(
             genesis_config,
             additional_builtins,
@@ -1680,6 +1714,7 @@ impl Bank {
             stakes: &self.stakes,
             epoch_stakes: &self.epoch_stakes,
             is_delta: self.is_delta.load(Relaxed),
+            accounts_data_len: self.accounts_data_len.load(Acquire),
         }
     }
 
@@ -3435,6 +3470,7 @@ impl Bank {
         cache.remove(pubkey);
     }
 
+    // bprumo NOTE: here's where the bank executes the txns
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
@@ -3514,6 +3550,7 @@ impl Bank {
                     let feature_set = self.feature_set.clone();
                     signature_count += u64::from(tx.message().header().num_required_signatures);
 
+                    // bprumo NOTE: Here's where the ComputeBudget is created
                     let mut compute_budget = self.compute_budget.unwrap_or_else(ComputeBudget::new);
 
                     let mut process_result = if feature_set.is_active(&tx_wide_compute_cap::id()) {
@@ -3551,6 +3588,8 @@ impl Bank {
                             self.last_blockhash_and_lamports_per_signature();
 
                         if let Some(legacy_message) = tx.message().legacy_message() {
+                            // bprumo NOTE: Here's where the message/transaction starts getting processed
+                            // bprumo TODO: Update self (Bank) with the new accounts data len
                             process_result = MessageProcessor::process_message(
                                 &self.builtin_programs.vec,
                                 legacy_message,
@@ -3562,11 +3601,22 @@ impl Bank {
                                 instruction_recorders.as_deref(),
                                 feature_set,
                                 compute_budget,
+                                AccountsDataBudget::new(
+                                    DEFAULT_MAX_ACCOUNTS_DATA_LEN,
+                                    self.accounts_data_len.load(Acquire),
+                                ),
                                 &mut timings.details,
                                 &*self.sysvar_cache.read().unwrap(),
                                 blockhash,
                                 lamports_per_signature,
-                            );
+                            )
+                            .and_then(|process_message_result| {
+                                self.accounts_data_len.fetch_add(
+                                    process_message_result.accounts_data_meter.consumed(),
+                                    AcqRel,
+                                );
+                                Ok(())
+                            });
                         } else {
                             // TODO: support versioned messages
                             process_result = Err(TransactionError::UnsupportedVersion);

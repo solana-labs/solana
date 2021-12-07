@@ -3,7 +3,9 @@ use {
     solana_measure::measure::Measure,
     solana_program_runtime::{
         instruction_recorder::InstructionRecorder,
-        invoke_context::{BuiltinProgram, Executors, InvokeContext},
+        invoke_context::{
+            AccountsDataBudget, AccountsDataMeter, BuiltinProgram, Executors, InvokeContext,
+        },
         log_collector::LogCollector,
         timings::ExecuteDetailsTimings,
     },
@@ -34,6 +36,12 @@ impl ::solana_frozen_abi::abi_example::AbiExample for MessageProcessor {
     }
 }
 
+/// bprumo TODO: doc
+#[derive(Debug, Eq, PartialEq)]
+pub struct ProcessMessageResult {
+    pub accounts_data_meter: AccountsDataMeter,
+}
+
 impl MessageProcessor {
     /// Process a message.
     /// This method calls each instruction in the message over the set of loaded accounts.
@@ -52,11 +60,13 @@ impl MessageProcessor {
         instruction_recorders: Option<&[InstructionRecorder]>,
         feature_set: Arc<FeatureSet>,
         compute_budget: ComputeBudget,
+        accounts_data_budget: AccountsDataBudget,
         timings: &mut ExecuteDetailsTimings,
         sysvars: &[(Pubkey, Vec<u8>)],
         blockhash: Hash,
         lamports_per_signature: u64,
-    ) -> Result<(), TransactionError> {
+    ) -> Result<ProcessMessageResult, TransactionError> {
+        // bprumo NOTE: Here's where InvokeContext is created
         let mut invoke_context = InvokeContext::new(
             rent,
             accounts,
@@ -64,6 +74,7 @@ impl MessageProcessor {
             sysvars,
             log_collector,
             compute_budget,
+            accounts_data_budget,
             executors,
             feature_set,
             blockhash,
@@ -106,6 +117,7 @@ impl MessageProcessor {
             }
             let pre_remaining_units = invoke_context.get_compute_meter().borrow().get_remaining();
             let mut time = Measure::start("execute_instruction");
+            // bprumo NOTE: here's where the instruction is processed
             invoke_context
                 .process_instruction(message, instruction, program_indices, &[], &[])
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
@@ -118,7 +130,11 @@ impl MessageProcessor {
             );
             timings.accumulate(&invoke_context.timings);
         }
-        Ok(())
+        // bprumo NOTE: likely need to return the amount of new/changed account data size here too,
+        // so the bank can update its total
+        Ok(ProcessMessageResult {
+            accounts_data_meter: invoke_context.accounts_data_meter().take(),
+        })
     }
 }
 
@@ -239,12 +255,13 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
+            AccountsDataBudget::default(),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
             0,
         );
-        assert_eq!(result, Ok(()));
+        assert!(result.is_ok());
         assert_eq!(accounts[0].1.borrow().lamports(), 100);
         assert_eq!(accounts[1].1.borrow().lamports(), 0);
 
@@ -268,6 +285,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
+            AccountsDataBudget::default(),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
@@ -301,6 +319,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
+            AccountsDataBudget::default(),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
@@ -445,6 +464,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
+            AccountsDataBudget::default(),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
@@ -478,12 +498,13 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
+            AccountsDataBudget::default(),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
             0,
         );
-        assert_eq!(result, Ok(()));
+        assert!(result.is_ok());
 
         // Do work on the same account but at different location in keyed_accounts[]
         let message = Message::new(
@@ -508,12 +529,13 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
+            AccountsDataBudget::default(),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
             0,
         );
-        assert_eq!(result, Ok(()));
+        assert!(result.is_ok());
         assert_eq!(accounts[0].1.borrow().lamports(), 80);
         assert_eq!(accounts[1].1.borrow().lamports(), 20);
         assert_eq!(accounts[0].1.borrow().data(), &vec![42]);
@@ -565,6 +587,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
+            AccountsDataBudget::default(),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),

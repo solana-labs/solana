@@ -102,7 +102,15 @@ fn allocate(
         return Err(SystemError::InvalidAccountDataLength.into());
     }
 
-    account.set_data(vec![0; space as usize]);
+    // bprumo NOTE: Maybe here is the right spot to check if the new account data length exceeds
+    // the max total account data size?
+    let space = space as usize;
+    invoke_context
+        .accounts_data_meter()
+        .borrow_mut()
+        .consume(space)?;
+
+    account.set_data(vec![0; space]);
 
     Ok(())
 }
@@ -272,6 +280,7 @@ fn transfer_with_seed(
     transfer_verified(from, to, lamports, invoke_context)
 }
 
+// bprumo NOTE: here's the process instruction, where I can add stuff to the match {}
 pub fn process_instruction(
     first_instruction_account: usize,
     instruction_data: &[u8],
@@ -793,6 +802,42 @@ mod tests {
         assert_eq!(
             to_account.borrow().data().len() as u64,
             MAX_PERMITTED_DATA_LENGTH
+        );
+    }
+
+    #[test]
+    fn test_request_more_than_allowed_accounts_data_length() {
+        solana_logger::setup();
+        let invoke_context = InvokeContext::new_mock(&[], &[]);
+
+        let result = loop {
+            let from_account = AccountSharedData::new_ref(100, 0, &system_program::id());
+            let from = Pubkey::new_unique();
+            let to_account = AccountSharedData::new_ref(0, 0, &system_program::id());
+            let to = Pubkey::new_unique();
+
+            let signers = &[from, to].iter().cloned().collect::<HashSet<_>>();
+            let address = &to.into();
+
+            let result = create_account(
+                &KeyedAccount::new(&from, true, &from_account),
+                &KeyedAccount::new(&to, false, &to_account),
+                address,
+                10,
+                MAX_PERMITTED_DATA_LENGTH,
+                &system_program::id(),
+                signers,
+                &invoke_context,
+            );
+
+            if result.is_err() {
+                break result;
+            }
+        };
+
+        assert_eq!(
+            result.err().unwrap(),
+            InstructionError::AccountsDataBudgetExceeded
         );
     }
 
