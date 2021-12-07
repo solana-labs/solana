@@ -1114,13 +1114,11 @@ pub fn initialize_account<S: std::hash::BuildHasher>(
     )))
 }
 
-pub fn process_vote<S: std::hash::BuildHasher>(
+fn verify_and_get_vote_state<S: std::hash::BuildHasher>(
     vote_account: &KeyedAccount,
-    slot_hashes: &[SlotHash],
     clock: &Clock,
-    vote: &Vote,
     signers: &HashSet<Pubkey, S>,
-) -> Result<(), InstructionError> {
+) -> Result<VoteState, InstructionError> {
     let versioned = State::<VoteStateVersions>::state(vote_account)?;
 
     if versioned.is_uninitialized() {
@@ -1130,6 +1128,18 @@ pub fn process_vote<S: std::hash::BuildHasher>(
     let mut vote_state = versioned.convert_to_current();
     let authorized_voter = vote_state.get_and_update_authorized_voter(clock.epoch)?;
     verify_authorized_signer(&authorized_voter, signers)?;
+
+    Ok(vote_state)
+}
+
+pub fn process_vote<S: std::hash::BuildHasher>(
+    vote_account: &KeyedAccount,
+    slot_hashes: &[SlotHash],
+    clock: &Clock,
+    vote: &Vote,
+    signers: &HashSet<Pubkey, S>,
+) -> Result<(), InstructionError> {
+    let mut vote_state = verify_and_get_vote_state(vote_account, clock, signers)?;
 
     vote_state.process_vote(vote, slot_hashes, clock.epoch)?;
     if let Some(timestamp) = vote.timestamp {
@@ -1149,15 +1159,7 @@ pub fn process_vote_state_update<S: std::hash::BuildHasher>(
     vote_state_update: &VoteStateUpdate,
     signers: &HashSet<Pubkey, S>,
 ) -> Result<(), InstructionError> {
-    let versioned = State::<VoteStateVersions>::state(vote_account)?;
-
-    if versioned.is_uninitialized() {
-        return Err(InstructionError::UninitializedAccount);
-    }
-
-    let mut vote_state = versioned.convert_to_current();
-    let authorized_voter = vote_state.get_and_update_authorized_voter(clock.epoch)?;
-    verify_authorized_signer(&authorized_voter, signers)?;
+    let mut vote_state = verify_and_get_vote_state(vote_account, clock, signers)?;
 
     vote_state.check_slots_are_valid(vote_state_update, slot_hashes)?;
     vote_state.process_new_vote_state(
