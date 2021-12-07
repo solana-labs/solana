@@ -14,9 +14,8 @@ use {
         },
         short_vec, system_instruction, system_program, sysvar,
     },
-    itertools::Itertools,
     lazy_static::lazy_static,
-    std::{convert::TryFrom, str::FromStr},
+    std::{collections::BTreeSet, convert::TryFrom, str::FromStr},
 };
 
 lazy_static! {
@@ -159,10 +158,11 @@ fn get_keys(instructions: &[Instruction], payer: Option<&Pubkey>) -> Instruction
 
 /// Return program ids referenced by all instructions.  No duplicates and order is preserved.
 fn get_program_ids(instructions: &[Instruction]) -> Vec<Pubkey> {
+    let mut set = BTreeSet::new();
     instructions
         .iter()
         .map(|ix| ix.program_id)
-        .unique()
+        .filter(|&program_id| set.insert(program_id))
         .collect()
 }
 
