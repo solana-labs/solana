@@ -134,7 +134,7 @@ fn output_entry(
     match method {
         LedgerOutputMethod::Print => {
             println!(
-                "  Entry {} - num_hashes: {}, hashes: {}, transactions: {}",
+                "  Entry {} - num_hashes: {}, hash: {}, transactions: {}",
                 entry_index,
                 entry.num_hashes,
                 entry.hash,
@@ -201,7 +201,7 @@ fn output_slot(
                 println!(" Slot Meta {:?} is_full: {}", meta, is_full);
             } else {
                 println!(
-                    " num_shreds: {} parent_slot: {} num_entries: {} is_full: {}",
+                    " num_shreds: {}, parent_slot: {}, num_entries: {}, is_full: {}",
                     num_shreds,
                     meta.parent_slot,
                     entries.len(),
@@ -219,7 +219,7 @@ fn output_slot(
         output_slot_rewards(blockstore, slot, method);
     } else if verbose_level >= 1 {
         let mut transactions = 0;
-        let mut hashes = 0;
+        let mut num_hashes = 0;
         let mut program_ids = HashMap::new();
         let blockhash = if let Some(entry) = entries.last() {
             entry.hash
@@ -229,7 +229,7 @@ fn output_slot(
 
         for entry in entries {
             transactions += entry.transactions.len();
-            hashes += entry.num_hashes;
+            num_hashes += entry.num_hashes;
             for transaction in entry.transactions {
                 let tx_signature = transaction.signatures[0];
                 let sanitize_result =
@@ -254,8 +254,8 @@ fn output_slot(
         }
 
         println!(
-            "  Transactions: {} hashes: {} block_hash: {}",
-            transactions, hashes, blockhash,
+            "  Transactions: {}, hashes: {}, block_hash: {}",
+            transactions, num_hashes, blockhash,
         );
         println!("  Programs: {:?}", program_ids);
     }
@@ -1845,7 +1845,7 @@ fn main() {
                         slot,
                         allow_dead_slots,
                         &LedgerOutputMethod::Print,
-                        std::u64::MAX,
+                        verbose_level,
                     ) {
                         eprintln!("{}", err);
                     }
