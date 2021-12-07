@@ -365,6 +365,7 @@ mod tests {
             tn.sockets.gossip,
             None,
             true, // should_check_duplicate_instance
+            None,
             &exit,
         );
         exit.store(true, Ordering::Relaxed);
