@@ -3190,13 +3190,27 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     let (validator_a_pubkey, validator_b_pubkey, validator_c_pubkey) =
         (validators[0], validators[1], validators[2]);
 
+    // Disable voting on all validators other than validator B to ensure neither of the below two
+    // scenarios occur:
+    // 1. If the cluster immediately forks on restart while we're killing validators A and C,
+    // with Validator B on one side, and `A` and `C` on a heavier fork, it's possible that the lockouts
+    // on `A` and `C`'s latest votes do not extend past validator B's latest vote. Then validator B
+    // will be stuck unable to vote, but also unable generate a switching proof to the heavier fork.
+    //
+    // 2. Validator A doesn't vote past `next_slot_on_a` before we can kill it. This is essential
+    // because if validator A votes past `next_slot_on_a`, and then we copy over validator B's ledger
+    // below only for slots <= `next_slot_on_a`, validator A will not know how it's last vote chains
+    // to the otehr forks, and may violate switching proofs on restart.
+    let mut validator_configs =
+        make_identical_validator_configs(&ValidatorConfig::default(), node_stakes.len());
+
+    validator_configs[0].voting_disabled = true;
+    validator_configs[2].voting_disabled = true;
+
     let mut config = ClusterConfig {
         cluster_lamports: 100_000,
-        node_stakes: node_stakes.clone(),
-        validator_configs: make_identical_validator_configs(
-            &ValidatorConfig::default(),
-            node_stakes.len(),
-        ),
+        node_stakes,
+        validator_configs,
         validator_keys: Some(validator_keys),
         slots_per_epoch,
         stakers_slot_offset: slots_per_epoch,
@@ -3213,9 +3227,23 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     let val_b_ledger_path = cluster.ledger_path(&validator_b_pubkey);
     let val_c_ledger_path = cluster.ledger_path(&validator_c_pubkey);
 
+    info!(
+        "val_a {} ledger path {:?}",
+        validator_a_pubkey, val_a_ledger_path
+    );
+    info!(
+        "val_b {} ledger path {:?}",
+        validator_b_pubkey, val_b_ledger_path
+    );
+    info!(
+        "val_c {} ledger path {:?}",
+        validator_c_pubkey, val_c_ledger_path
+    );
+
     // Immediately kill validator A, and C
-    let validator_a_info = cluster.exit_node(&validator_a_pubkey);
-    let validator_c_info = cluster.exit_node(&validator_c_pubkey);
+    info!("Exiting validators A and C");
+    let mut validator_a_info = cluster.exit_node(&validator_a_pubkey);
+    let mut validator_c_info = cluster.exit_node(&validator_c_pubkey);
 
     // Step 1:
     // Let validator B, (D) run for a while.
@@ -3224,7 +3252,8 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
         let elapsed = now.elapsed();
         assert!(
             elapsed <= Duration::from_secs(30),
-            "LocalCluster nodes failed to log enough tower votes in {} secs",
+            "Validator B failed to vote on any slot >= {} in {} secs",
+            next_slot_on_a,
             elapsed.as_secs()
         );
         sleep(Duration::from_millis(100));
@@ -3269,27 +3298,36 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     }
 
     // Step 3:
-    // Restart A so that it can vote for the slots in B's fork
+    // Restart A with voting enabled so that it can vote on B's fork
+    // up to `next_slot_on_a`, thereby optimistcally confirming `next_slot_on_a`
     info!("Restarting A");
+    validator_a_info.config.voting_disabled = false;
     cluster.restart_node(
         &validator_a_pubkey,
         validator_a_info,
         SocketAddrSpace::Unspecified,
     );
 
-    info!("Waiting for A to vote");
-    let mut last_print = Instant::now();
+    info!("Waiting for A to vote on slot descended from slot `next_slot_on_a`");
+    let now = Instant::now();
     loop {
         if let Some((last_vote_slot, _)) =
             last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey)
         {
             if last_vote_slot >= next_slot_on_a {
-                info!("Validator A has caught up: {}", last_vote_slot);
+                info!(
+                    "Validator A has caught up and voted on slot: {}",
+                    last_vote_slot
+                );
                 break;
-            } else if last_print.elapsed().as_secs() >= 10 {
-                info!("Validator A latest vote: {}", last_vote_slot);
-                last_print = Instant::now();
             }
+        }
+
+        if now.elapsed().as_secs() >= 30 {
+            panic!(
+                "Validator A has not seen optimistic confirmation slot > {} in 30 seconds",
+                next_slot_on_a
+            );
         }
 
         sleep(Duration::from_millis(20));
@@ -3319,6 +3357,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     // Step 4:
     // Run validator C only to make it produce and vote on its own fork.
     info!("Restart validator C again!!!");
+    validator_c_info.config.voting_disabled = false;
     cluster.restart_node(
         &validator_c_pubkey,
         validator_c_info,
