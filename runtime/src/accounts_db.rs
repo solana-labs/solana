@@ -6663,6 +6663,7 @@ impl AccountsDb {
         accounts_map: GenerateIndexAccountsMap<'a>,
         slot: &Slot,
         rent_collector: &RentCollector,
+        total_data_len: &AtomicUsize,
     ) -> (u64, u64, u64) {
         if accounts_map.is_empty() {
             return (0, 0, 0);
@@ -6689,6 +6690,7 @@ impl AccountsDb {
                         &self.account_indexes,
                     );
                 }
+                total_data_len.fetch_add(stored_account.data.len(), Ordering::Relaxed);
 
                 if !rent_collector.should_collect_rent(&pubkey, &stored_account, false) || {
                     let (_rent_due, exempt) = rent_collector.get_rent_due(&stored_account);
@@ -6888,6 +6890,7 @@ impl AccountsDb {
             let rent_exempt = AtomicU64::new(0);
             let total_duplicates = AtomicU64::new(0);
             let storage_info_timings = Mutex::new(GenerateIndexTimings::default());
+            let total_data_len = AtomicUsize::new(0);
             let scan_time: u64 = slots
                 .par_chunks(chunk_size)
                 .map(|slots| {
@@ -6915,8 +6918,13 @@ impl AccountsDb {
 
                         let insert_us = if pass == 0 {
                             // generate index
-                            let (insert_us, rent_exempt_this_slot, total_this_slot) =
-                                self.generate_index_for_slot(accounts_map, slot, &rent_collector);
+                            let (insert_us, rent_exempt_this_slot, total_this_slot) = self
+                                .generate_index_for_slot(
+                                    accounts_map,
+                                    slot,
+                                    &rent_collector,
+                                    &total_data_len,
+                                );
                             rent_exempt.fetch_add(rent_exempt_this_slot, Ordering::Relaxed);
                             total_duplicates.fetch_add(total_this_slot, Ordering::Relaxed);
                             insert_us
@@ -6971,6 +6979,53 @@ impl AccountsDb {
                     len as usize
                 })
                 .sum();
+
+            {
+                // subtract data.len() from total_data_len for all old accounts which are in the index twice
+                let mut unique_pubkeys = HashSet::<Pubkey>::default();
+                self.uncleaned_pubkeys.iter().for_each(|entry| {
+                    entry.value().iter().for_each(|pubkey| {
+                        unique_pubkeys.insert(*pubkey);
+                    })
+                });
+                unique_pubkeys
+                    .into_iter()
+                    .collect::<Vec<_>>()
+                    .par_chunks(4000)
+                    .for_each(|pubkeys| {
+                        // subract out older data.len() for each pubkey
+                        pubkeys.into_iter().for_each(|pubkey| {
+                            if let Some(entry) = self.accounts_index.get_account_read_entry(pubkey)
+                            {
+                                let list = entry.slot_list();
+                                if list.len() < 2 {
+                                    return;
+                                }
+                                let mut list = list.clone();
+                                list.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+                                assert!(list[0].0 < list[1].0); // greatest to least
+                                list.into_iter()
+                                    .rev()
+                                    .skip(1)
+                                    .for_each(|(slot, account_info)| {
+                                        let maybe_storage_entry = self
+                                            .storage
+                                            .get_account_storage_entry(slot, account_info.store_id);
+                                        let mut accessor = LoadedAccountAccessor::Stored(
+                                            maybe_storage_entry
+                                                .map(|entry| (entry, account_info.offset)),
+                                        );
+                                        let loaded_account =
+                                            accessor.check_and_get_loaded_account();
+                                        let account = loaded_account.take_account();
+                                        total_data_len
+                                            .fetch_sub(account.data().len(), Ordering::Relaxed);
+                                    });
+                            }
+                        });
+                    });
+            }
+            info!("len: {}", total_data_len.load(Ordering::Relaxed));
 
             let storage_info_timings = storage_info_timings.into_inner().unwrap();
 
