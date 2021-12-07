@@ -193,19 +193,11 @@ impl<'a> InvokeContext<'a> {
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         builtin_programs: &'a [BuiltinProgram],
     ) -> Self {
-        Self::new_mock_with_sysvars(accounts, builtin_programs, &[])
-    }
-
-    pub fn new_mock_with_sysvars(
-        accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        builtin_programs: &'a [BuiltinProgram],
-        sysvars: &'a [(Pubkey, Vec<u8>)],
-    ) -> Self {
         Self::new(
             Rent::default(),
             accounts,
             builtin_programs,
-            sysvars,
+            &[],
             Some(LogCollector::new_ref()),
             ComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
@@ -221,7 +213,7 @@ impl<'a> InvokeContext<'a> {
         message: &Message,
         instruction: &CompiledInstruction,
         program_indices: &[usize],
-        account_indices: Option<&[usize]>,
+        account_indices: &[usize],
     ) -> Result<(), InstructionError> {
         if self.invoke_stack.len() > self.compute_budget.max_invoke_depth {
             return Err(InstructionError::CallDepth);
@@ -302,10 +294,10 @@ impl<'a> InvokeContext<'a> {
             })
             .chain(instruction.accounts.iter().map(|index_in_instruction| {
                 let index_in_instruction = *index_in_instruction as usize;
-                let account_index = if let Some(account_indices) = account_indices {
-                    account_indices[index_in_instruction]
-                } else {
+                let account_index = if account_indices.is_empty() {
                     index_in_instruction
+                } else {
+                    account_indices[index_in_instruction]
                 };
                 (
                     message.is_signer(index_in_instruction),
@@ -334,7 +326,7 @@ impl<'a> InvokeContext<'a> {
     }
 
     /// Verify the results of an instruction
-    pub fn verify(
+    fn verify(
         &mut self,
         message: &Message,
         instruction: &CompiledInstruction,
@@ -403,7 +395,7 @@ impl<'a> InvokeContext<'a> {
     }
 
     /// Verify and update PreAccount state based on program execution
-    pub fn verify_and_update(
+    fn verify_and_update(
         &mut self,
         instruction: &CompiledInstruction,
         account_indices: &[usize],
@@ -505,8 +497,9 @@ impl<'a> InvokeContext<'a> {
         if let Some(instruction_recorder) = &self.instruction_recorder {
             instruction_recorder.record_instruction(instruction);
         }
-        self.process_cross_program_instruction(
+        self.process_instruction(
             &message,
+            &message.instructions[0],
             &program_indices,
             &account_indices,
             &caller_write_privileges,
@@ -530,7 +523,7 @@ impl<'a> InvokeContext<'a> {
         Ok(())
     }
 
-    /// Helper to prepare for process_cross_program_instruction()
+    /// Helper to prepare for process_instruction()
     pub fn create_message(
         &mut self,
         instruction: &Instruction,
@@ -644,42 +637,50 @@ impl<'a> InvokeContext<'a> {
     }
 
     /// Process a cross-program instruction
-    pub fn process_cross_program_instruction(
+    pub fn process_instruction(
         &mut self,
         message: &Message,
+        instruction: &CompiledInstruction,
         program_indices: &[usize],
         account_indices: &[usize],
         caller_write_privileges: &[bool],
     ) -> Result<(), InstructionError> {
-        // This function is always called with a valid instruction, if that changes return an error
-        let instruction = message
-            .instructions
-            .get(0)
-            .ok_or(InstructionError::GenericError)?;
+        let is_lowest_invocation_level = self.invoke_stack.is_empty();
+        if !is_lowest_invocation_level {
+            // Verify the calling program hasn't misbehaved
+            self.verify_and_update(instruction, account_indices, caller_write_privileges)?;
+        }
 
-        // Verify the calling program hasn't misbehaved
-        self.verify_and_update(instruction, account_indices, caller_write_privileges)?;
+        let result = self
+            .push(message, instruction, program_indices, account_indices)
+            .and_then(|_| {
+                self.return_data = (*instruction.program_id(&message.account_keys), Vec::new());
+                self.process_executable_chain(&instruction.data)?;
 
-        self.return_data = (*self.get_caller()?, Vec::new());
-        self.push(message, instruction, program_indices, Some(account_indices))?;
-        let result = self.process_instruction(&instruction.data).and_then(|_| {
-            // Verify the called program has not misbehaved
-            let demote_program_write_locks = self
-                .feature_set
-                .is_active(&demote_program_write_locks::id());
-            let write_privileges: Vec<bool> = (0..message.account_keys.len())
-                .map(|i| message.is_writable(i, demote_program_write_locks))
-                .collect();
-            self.verify_and_update(instruction, account_indices, &write_privileges)
-        });
+                // Verify the called program has not misbehaved
+                if is_lowest_invocation_level {
+                    self.verify(message, instruction, program_indices)
+                } else {
+                    let demote_program_write_locks = self
+                        .feature_set
+                        .is_active(&demote_program_write_locks::id());
+                    let write_privileges: Vec<bool> = (0..message.account_keys.len())
+                        .map(|i| message.is_writable(i, demote_program_write_locks))
+                        .collect();
+                    self.verify_and_update(instruction, account_indices, &write_privileges)
+                }
+            });
 
-        // Restore previous state
+        // Pop the invoke_stack to restore previous state
         self.pop();
         result
     }
 
     /// Calls the instruction's program entrypoint method
-    pub fn process_instruction(&mut self, instruction_data: &[u8]) -> Result<(), InstructionError> {
+    fn process_executable_chain(
+        &mut self,
+        instruction_data: &[u8],
+    ) -> Result<(), InstructionError> {
         let keyed_accounts = self.get_keyed_accounts()?;
         let root_account = keyed_account_at_index(keyed_accounts, 0)
             .map_err(|_| InstructionError::UnsupportedProgramId)?;
@@ -920,7 +921,7 @@ pub fn with_mock_invoke_context<R, F: FnMut(&mut InvokeContext) -> R>(
             &preparation.message,
             &preparation.message.instructions[0],
             &program_indices,
-            Some(&preparation.account_indices),
+            &preparation.account_indices,
         )
         .unwrap();
     callback(&mut invoke_context)
@@ -939,13 +940,13 @@ pub fn mock_process_instruction_with_sysvars(
     let processor_account = AccountSharedData::new_ref(0, 0, &solana_sdk::native_loader::id());
     program_indices.insert(0, preparation.accounts.len());
     preparation.accounts.push((*loader_id, processor_account));
-    let mut invoke_context =
-        InvokeContext::new_mock_with_sysvars(&preparation.accounts, &[], sysvars);
+    let mut invoke_context = InvokeContext::new_mock(&preparation.accounts, &[]);
+    invoke_context.sysvars = sysvars;
     invoke_context.push(
         &preparation.message,
         &preparation.message.instructions[0],
         &program_indices,
-        Some(&preparation.account_indices),
+        &preparation.account_indices,
     )?;
     process_instruction(1, instruction_data, &mut invoke_context)
 }
@@ -1108,7 +1109,7 @@ mod tests {
                     &message,
                     &message.instructions[0],
                     &[MAX_DEPTH + depth_reached],
-                    None,
+                    &[],
                 )
             {
                 break;
@@ -1187,7 +1188,7 @@ mod tests {
         );
         let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
         invoke_context
-            .push(&message, &message.instructions[0], &[0], None)
+            .push(&message, &message.instructions[0], &[0], &[])
             .unwrap();
         assert!(invoke_context
             .verify(&message, &message.instructions[0], &[0])
@@ -1252,7 +1253,7 @@ mod tests {
         }];
         let mut invoke_context = InvokeContext::new_mock(&accounts, builtin_programs);
         invoke_context
-            .push(&message, &caller_instruction, &program_indices[..1], None)
+            .push(&message, &caller_instruction, &program_indices[..1], &[])
             .unwrap();
 
         // not owned account modified by the caller (before the invoke)
@@ -1267,8 +1268,9 @@ mod tests {
             .collect::<Vec<bool>>();
         accounts[0].1.borrow_mut().data_as_mut_slice()[0] = 1;
         assert_eq!(
-            invoke_context.process_cross_program_instruction(
+            invoke_context.process_instruction(
                 &message,
+                &message.instructions[0],
                 &program_indices[1..],
                 &account_indices,
                 &caller_write_privileges,
@@ -1280,8 +1282,9 @@ mod tests {
         // readonly account modified by the invoker
         accounts[2].1.borrow_mut().data_as_mut_slice()[0] = 1;
         assert_eq!(
-            invoke_context.process_cross_program_instruction(
+            invoke_context.process_instruction(
                 &message,
+                &message.instructions[0],
                 &program_indices[1..],
                 &account_indices,
                 &caller_write_privileges,
@@ -1309,7 +1312,7 @@ mod tests {
                 Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
             let message = Message::new(&[callee_instruction], None);
             invoke_context
-                .push(&message, &caller_instruction, &program_indices[..1], None)
+                .push(&message, &caller_instruction, &program_indices[..1], &[])
                 .unwrap();
             let caller_write_privileges = message
                 .account_keys
@@ -1318,8 +1321,9 @@ mod tests {
                 .map(|(i, _)| message.is_writable(i, demote_program_write_locks))
                 .collect::<Vec<bool>>();
             assert_eq!(
-                invoke_context.process_cross_program_instruction(
+                invoke_context.process_instruction(
                     &message,
+                    &message.instructions[0],
                     &program_indices[1..],
                     &account_indices,
                     &caller_write_privileges,
@@ -1380,7 +1384,7 @@ mod tests {
         }];
         let mut invoke_context = InvokeContext::new_mock(&accounts, builtin_programs);
         invoke_context
-            .push(&message, &caller_instruction, &program_indices, None)
+            .push(&message, &caller_instruction, &program_indices, &[])
             .unwrap();
 
         // not owned account modified by the invoker
@@ -1423,7 +1427,7 @@ mod tests {
                 Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
             let message = Message::new(&[callee_instruction.clone()], None);
             invoke_context
-                .push(&message, &caller_instruction, &program_indices, None)
+                .push(&message, &caller_instruction, &program_indices, &[])
                 .unwrap();
             assert_eq!(
                 invoke_context.native_invoke(callee_instruction, &[]),
@@ -1470,7 +1474,7 @@ mod tests {
         invoke_context.feature_set = Arc::new(feature_set);
 
         invoke_context
-            .push(&noop_message, &noop_message.instructions[0], &[0], None)
+            .push(&noop_message, &noop_message.instructions[0], &[0], &[])
             .unwrap();
         assert_eq!(
             *invoke_context.get_compute_budget(),
@@ -1479,7 +1483,7 @@ mod tests {
         invoke_context.pop();
 
         invoke_context
-            .push(&neon_message, &neon_message.instructions[0], &[1], None)
+            .push(&neon_message, &neon_message.instructions[0], &[1], &[])
             .unwrap();
         let expected_compute_budget = ComputeBudget {
             max_units: 500_000,
@@ -1493,7 +1497,7 @@ mod tests {
         invoke_context.pop();
 
         invoke_context
-            .push(&noop_message, &noop_message.instructions[0], &[0], None)
+            .push(&noop_message, &noop_message.instructions[0], &[0], &[])
             .unwrap();
         assert_eq!(
             *invoke_context.get_compute_budget(),

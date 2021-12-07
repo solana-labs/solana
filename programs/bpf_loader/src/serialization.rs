@@ -455,7 +455,7 @@ mod tests {
                 &preparation.message,
                 &preparation.message.instructions[0],
                 &program_indices,
-                Some(&preparation.account_indices),
+                &preparation.account_indices,
             )
             .unwrap();
 
