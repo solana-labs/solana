@@ -141,14 +141,6 @@ impl StreamerSendStats {
         sample_duration: Option<Duration>,
     ) {
         const MAX_REPORT_ENTRIES: usize = 5;
-        const MAP_SIZE_REPORTING_THRESHOLD: usize = 1_000;
-        let elapsed = self.since.as_ref().map(Instant::elapsed);
-        if elapsed.map(|e| e < SUBMIT_CADENCE).unwrap_or_default()
-            && self.host_map.len() < MAP_SIZE_REPORTING_THRESHOLD
-        {
-            return;
-        }
-
         let sample_ms = sample_duration.map(|d| d.as_millis()).unwrap_or_default();
         let mut hist = Histogram::default();
         let mut byte_sum = 0;
