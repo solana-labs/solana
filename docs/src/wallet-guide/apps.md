@@ -35,7 +35,7 @@ The app supports biometric protection alongside passwords for maximum security.
 [Trust Wallet](https://trustwallet.com/) is an app available for iOS and Android
 and can be used to send and receive SOL tokens.
 
-Note: Trust Wallet does not support stake accounts or staking operations_
+_Note: Trust Wallet does not support stake accounts or staking operations_
 
 ### Trust Wallet Security
 
