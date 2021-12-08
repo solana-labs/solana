@@ -3584,7 +3584,6 @@ impl Bank {
 
                         if let Some(legacy_message) = tx.message().legacy_message() {
                             // bprumo NOTE: Here's where the message/transaction starts getting processed
-                            // bprumo TODO: Update self (Bank) with the new accounts data len
                             process_result = MessageProcessor::process_message(
                                 &self.builtin_programs.vec,
                                 legacy_message,

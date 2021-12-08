@@ -130,8 +130,6 @@ impl MessageProcessor {
             );
             timings.accumulate(&invoke_context.timings);
         }
-        // bprumo NOTE: likely need to return the amount of new/changed account data size here too,
-        // so the bank can update its total
         Ok(ProcessMessageResult {
             accounts_data_meter: invoke_context.accounts_data_meter().take(),
         })
