@@ -27,6 +27,7 @@ RUN set -x \
       golang \
       unzip \
       \
+ && apt remove -y libcurl4-openssl-dev \
  && rm -rf /var/lib/apt/lists/* \
  && node --version \
  && npm --version \
