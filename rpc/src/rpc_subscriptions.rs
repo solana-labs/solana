@@ -39,8 +39,12 @@ use {
         timing::timestamp,
         transaction,
     },
+<<<<<<< HEAD
     solana_transaction_status::ConfirmedBlock,
     solana_vote_program::vote_state::Vote,
+=======
+    solana_vote_program::vote_state::VoteTransaction,
+>>>>>>> f0acf7681 (Add vote instructions that directly update on chain vote state (#21531))
     std::{
         cell::RefCell,
         collections::{HashMap, VecDeque},
@@ -93,7 +97,11 @@ impl From<NotificationEntry> for TimestampedNotificationEntry {
 pub enum NotificationEntry {
     Slot(SlotInfo),
     SlotUpdate(SlotUpdate),
+<<<<<<< HEAD
     Vote((Pubkey, Vote)),
+=======
+    Vote(Box<dyn VoteTransaction>),
+>>>>>>> f0acf7681 (Add vote instructions that directly update on chain vote state (#21531))
     Root(Slot),
     Bank(CommitmentSlots),
     Gossip(Slot),
@@ -677,8 +685,13 @@ impl RpcSubscriptions {
         self.enqueue_notification(NotificationEntry::SignaturesReceived(slot_signatures));
     }
 
+<<<<<<< HEAD
     pub fn notify_vote(&self, vote_pubkey: Pubkey, vote: &Vote) {
         self.enqueue_notification(NotificationEntry::Vote((vote_pubkey, vote.clone())));
+=======
+    pub fn notify_vote(&self, vote: Box<dyn VoteTransaction>) {
+        self.enqueue_notification(NotificationEntry::Vote(vote.clone()));
+>>>>>>> f0acf7681 (Add vote instructions that directly update on chain vote state (#21531))
     }
 
     pub fn notify_roots(&self, mut rooted_slots: Vec<Slot>) {
@@ -762,11 +775,17 @@ impl RpcSubscriptions {
                         // in VoteState's from bank states built in ReplayStage.
                         NotificationEntry::Vote((vote_pubkey, ref vote_info)) => {
                             let rpc_vote = RpcVote {
+<<<<<<< HEAD
                                 vote_pubkey: vote_pubkey.to_string(),
                                 // TODO: Remove clones
                                 slots: vote_info.slots.clone(),
                                 hash: bs58::encode(vote_info.hash).into_string(),
                                 timestamp: vote_info.timestamp,
+=======
+                                slots: vote_info.slots(),
+                                hash: bs58::encode(vote_info.hash()).into_string(),
+                                timestamp: vote_info.timestamp(),
+>>>>>>> f0acf7681 (Add vote instructions that directly update on chain vote state (#21531))
                             };
                             if let Some(sub) = subscriptions
                                 .node_progress_watchers()

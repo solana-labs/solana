@@ -43,10 +43,19 @@ pub fn find_and_send_votes(
         sanitized_txs
             .iter()
             .zip(execution_results.iter())
+<<<<<<< HEAD
             .for_each(|(tx, result)| {
                 if tx.is_simple_vote_transaction() && result.was_executed_successfully() {
                     if let Some(parsed_vote) = vote_parser::parse_sanitized_vote_transaction(tx) {
                         if parsed_vote.1.slots.last().is_some() {
+=======
+            .for_each(|(tx, (result, _nonce))| {
+                if tx.is_simple_vote_transaction() && result.is_ok() {
+                    if let Some(parsed_vote) =
+                        vote_transaction::parse_sanitized_vote_transaction(tx)
+                    {
+                        if parsed_vote.1.last_voted_slot().is_some() {
+>>>>>>> f0acf7681 (Add vote instructions that directly update on chain vote state (#21531))
                             let _ = vote_sender.send(parsed_vote);
                         }
                     }

@@ -16,12 +16,22 @@ num-derive = "0.3"
 num-traits = "0.2"
 serde = "1.0.130"
 serde_derive = "1.0.103"
+<<<<<<< HEAD
 solana-frozen-abi = { path = "../../frozen-abi", version = "=1.9.6" }
 solana-frozen-abi-macro = { path = "../../frozen-abi/macro", version = "=1.9.6" }
 solana-logger = { path = "../../logger", version = "=1.9.6" }
 solana-metrics = { path = "../../metrics", version = "=1.9.6" }
 solana-program-runtime = { path = "../../program-runtime", version = "=1.9.6" }
 solana-sdk = { path = "../../sdk", version = "=1.9.6" }
+=======
+solana-frozen-abi = { path = "../../frozen-abi", version = "=1.10.0" }
+solana-frozen-abi-macro = { path = "../../frozen-abi/macro", version = "=1.10.0" }
+solana-logger = { path = "../../logger", version = "=1.10.0" }
+solana-metrics = { path = "../../metrics", version = "=1.10.0" }
+solana-program-runtime = { path = "../../program-runtime", version = "=1.10.0" }
+solana-sdk = { path = "../../sdk", version = "=1.10.0" }
+typetag = "0.1"
+>>>>>>> f0acf7681 (Add vote instructions that directly update on chain vote state (#21531))
 thiserror = "1.0"
 
 [build-dependencies]

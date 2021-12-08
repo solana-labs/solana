@@ -305,9 +305,16 @@ impl Sanitize for Vote {
 }
 
 impl Vote {
+<<<<<<< HEAD
     // Returns None if cannot parse transaction into a vote.
     pub fn new(from: Pubkey, transaction: Transaction, wallclock: u64) -> Option<Self> {
         vote_parser::parse_vote_transaction(&transaction).map(|(_, vote, _)| Self {
+=======
+    pub fn new(from: Pubkey, transaction: Transaction, wallclock: u64) -> Self {
+        let slot =
+            parse_vote_transaction(&transaction).and_then(|(_, vote, _)| vote.last_voted_slot());
+        Self {
+>>>>>>> f0acf7681 (Add vote instructions that directly update on chain vote state (#21531))
             from,
             transaction,
             wallclock,

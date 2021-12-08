@@ -1315,7 +1315,11 @@ mod tests {
             hash: Hash::default(),
             timestamp: None,
         };
+<<<<<<< HEAD
         subscriptions.notify_vote(Pubkey::default(), &vote);
+=======
+        subscriptions.notify_vote(Box::new(vote));
+>>>>>>> f0acf7681 (Add vote instructions that directly update on chain vote state (#21531))
 
         let response = receiver.recv();
         assert_eq!(
