@@ -161,18 +161,14 @@ pub enum VoteInstruction {
     ///
     /// # Account references
     ///   0. `[Write]` Vote account to vote with
-    ///   1. `[]` Slot hashes sysvar
-    ///   2. `[]` Clock sysvar
-    ///   3. `[SIGNER]` Vote authority
+    ///   1. `[SIGNER]` Vote authority
     UpdateVoteState(VoteStateUpdate),
 
     /// Update the onchain vote state for the signer along with a switching proof.
     ///
     /// # Account references
     ///   0. `[Write]` Vote account to vote with
-    ///   1. `[]` Slot hashes sysvar
-    ///   2. `[]` Clock sysvar
-    ///   3. `[SIGNER]` Vote authority
+    ///   1. `[SIGNER]` Vote authority
     UpdateVoteStateSwitch(VoteStateUpdate, Hash),
 }
 
@@ -338,8 +334,6 @@ pub fn update_vote_state(
 ) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*vote_pubkey, false),
-        AccountMeta::new_readonly(sysvar::slot_hashes::id(), false),
-        AccountMeta::new_readonly(sysvar::clock::id(), false),
         AccountMeta::new_readonly(*authorized_voter_pubkey, true),
     ];
 
@@ -358,8 +352,6 @@ pub fn update_vote_state_switch(
 ) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*vote_pubkey, false),
-        AccountMeta::new_readonly(sysvar::slot_hashes::id(), false),
-        AccountMeta::new_readonly(sysvar::clock::id(), false),
         AccountMeta::new_readonly(*authorized_voter_pubkey, true),
     ];
 
@@ -466,17 +458,12 @@ pub fn process_instruction(
         VoteInstruction::UpdateVoteState(vote_state_update)
         | VoteInstruction::UpdateVoteStateSwitch(vote_state_update, _) => {
             inc_new_counter_info!("vote-state-native", 1);
+            let slot_hashes: SlotHashes = invoke_context.get_sysvar(&sysvar::slot_hashes::id())?;
             vote_state::process_vote_state_update(
                 me,
-                &from_keyed_account::<SlotHashes>(keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account + 1,
-                )?)?,
-                &from_keyed_account::<Clock>(keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account + 2,
-                )?)?,
-                &vote_state_update,
+                slot_hashes.slot_hashes(),
+                &invoke_context.get_sysvar(&sysvar::clock::id())?,
+                vote_state_update,
                 &signers,
             )
         }
