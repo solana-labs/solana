@@ -5,7 +5,7 @@ use {
     ahash::AHasher,
     rand::{thread_rng, Rng},
     solana_ledger::shred::Shred,
-    solana_perf::packet::Packet,
+    solana_perf::packet::PacketInterface,
     std::hash::Hasher,
 };
 
@@ -25,9 +25,9 @@ impl Default for PacketHasher {
 }
 
 impl PacketHasher {
-    pub(crate) fn hash_packet(&self, packet: &Packet) -> u64 {
-        let size = packet.data.len().min(packet.meta.size);
-        self.hash_data(&packet.data[..size])
+    pub(crate) fn hash_packet<P: PacketInterface>(&self, packet: &P) -> u64 {
+        let size = packet.get_data().len().min(packet.get_meta().size);
+        self.hash_data(&packet.get_data()[..size])
     }
 
     pub(crate) fn hash_shred(&self, shred: &Shred) -> u64 {

@@ -10,16 +10,19 @@ pub use solana_perf::sigverify::{
 use {
     crate::sigverify_stage::SigVerifier,
     solana_perf::{cuda_runtime::PinnedVec, packet::PacketBatch, recycler::Recycler, sigverify},
+    solana_sdk::packet::PacketInterface,
+    std::marker::PhantomData,
 };
 
 #[derive(Clone)]
-pub struct TransactionSigVerifier {
+pub struct TransactionSigVerifier<P: 'static + PacketInterface> {
     recycler: Recycler<TxOffset>,
     recycler_out: Recycler<PinnedVec<u8>>,
     reject_non_vote: bool,
+    _phantom: PhantomData<P>,
 }
 
-impl TransactionSigVerifier {
+impl<P: 'static + PacketInterface> TransactionSigVerifier<P> {
     pub fn new_reject_non_vote() -> Self {
         TransactionSigVerifier {
             reject_non_vote: true,
@@ -28,19 +31,20 @@ impl TransactionSigVerifier {
     }
 }
 
-impl Default for TransactionSigVerifier {
+impl<P: 'static + PacketInterface> Default for TransactionSigVerifier<P> {
     fn default() -> Self {
         init();
         Self {
             recycler: Recycler::warmed(50, 4096),
             recycler_out: Recycler::warmed(50, 4096),
             reject_non_vote: false,
+            _phantom: PhantomData::default(),
         }
     }
 }
 
-impl SigVerifier for TransactionSigVerifier {
-    fn verify_batches(&self, mut batches: Vec<PacketBatch>) -> Vec<PacketBatch> {
+impl<P: 'static + PacketInterface> SigVerifier<P> for TransactionSigVerifier<P> {
+    fn verify_batches(&self, mut batches: Vec<PacketBatch<P>>) -> Vec<PacketBatch<P>> {
         sigverify::ed25519_verify(
             &mut batches,
             &self.recycler,

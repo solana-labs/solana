@@ -47,8 +47,8 @@ use {
     solana_perf::{
         data_budget::DataBudget,
         packet::{
-            limited_deserialize, to_packet_batch_with_destination, Packet, PacketBatch,
-            PacketBatchRecycler, PACKET_DATA_SIZE,
+            limited_deserialize, to_packet_batch_with_destination, Packet, PacketInterface,
+            StandardPacketBatchRecycler, StandardPackets, PACKET_DATA_SIZE,
         },
     },
     solana_rayon_threadlimit::get_thread_count,
@@ -67,7 +67,7 @@ use {
         packet,
         sendmmsg::{multi_target_send, SendPktsError},
         socket::SocketAddrSpace,
-        streamer::{PacketBatchReceiver, PacketBatchSender},
+        streamer::{StandardPacketReceiver, StandardPacketSender},
     },
     solana_vote_program::{
         vote_state::MAX_LOCKOUT_HISTORY, vote_transaction::parse_vote_transaction,
@@ -1588,9 +1588,9 @@ impl ClusterInfo {
         &self,
         thread_pool: &ThreadPool,
         gossip_validators: Option<&HashSet<Pubkey>>,
-        recycler: &PacketBatchRecycler,
+        recycler: &StandardPacketBatchRecycler,
         stakes: &HashMap<Pubkey, u64>,
-        sender: &PacketBatchSender,
+        sender: &StandardPacketSender,
         generate_pull_requests: bool,
     ) -> Result<(), GossipError> {
         let reqs = self.generate_new_gossip_requests(
@@ -1699,7 +1699,7 @@ impl ClusterInfo {
     pub fn gossip(
         self: Arc<Self>,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
-        sender: PacketBatchSender,
+        sender: StandardPacketSender,
         gossip_validators: Option<HashSet<Pubkey>>,
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
@@ -1715,7 +1715,7 @@ impl ClusterInfo {
                 let mut last_contact_info_trace = timestamp();
                 let mut last_contact_info_save = timestamp();
                 let mut entrypoints_processed = false;
-                let recycler = PacketBatchRecycler::default();
+                let recycler = StandardPacketBatchRecycler::default();
                 let crds_data = vec![
                     CrdsData::Version(Version::new(self.id())),
                     CrdsData::NodeInstance(
@@ -1840,9 +1840,9 @@ impl ClusterInfo {
         // from address, crds filter, caller contact info
         requests: Vec<(SocketAddr, CrdsFilter, CrdsValue)>,
         thread_pool: &ThreadPool,
-        recycler: &PacketBatchRecycler,
+        recycler: &StandardPacketBatchRecycler,
         stakes: &HashMap<Pubkey, u64>,
-        response_sender: &PacketBatchSender,
+        response_sender: &StandardPacketSender,
     ) {
         let _st = ScopedTimer::from(&self.stats.handle_batch_pull_requests_time);
         if requests.is_empty() {
@@ -1904,7 +1904,7 @@ impl ClusterInfo {
         &'a self,
         now: Instant,
         mut rng: &'a mut R,
-        packet_batch: &'a mut PacketBatch,
+        packet_batch: &'a mut StandardPackets,
     ) -> impl FnMut(&PullData) -> bool + 'a
     where
         R: Rng + CryptoRng,
@@ -1944,10 +1944,10 @@ impl ClusterInfo {
     fn handle_pull_requests(
         &self,
         thread_pool: &ThreadPool,
-        recycler: &PacketBatchRecycler,
+        recycler: &StandardPacketBatchRecycler,
         requests: Vec<PullData>,
         stakes: &HashMap<Pubkey, u64>,
-    ) -> PacketBatch {
+    ) -> StandardPackets {
         const DEFAULT_EPOCH_DURATION_MS: u64 = DEFAULT_SLOTS_PER_EPOCH * DEFAULT_MS_PER_SLOT;
         let mut time = Measure::start("handle_pull_requests");
         let callers = crds_value::filter_current(requests.iter().map(|r| &r.caller));
@@ -1958,8 +1958,11 @@ impl ClusterInfo {
         }
         let output_size_limit =
             self.update_data_budget(stakes.len()) / PULL_RESPONSE_MIN_SERIALIZED_SIZE;
-        let mut packet_batch =
-            PacketBatch::new_unpinned_with_recycler(recycler.clone(), 64, "handle_pull_requests");
+        let mut packet_batch = StandardPackets::new_unpinned_with_recycler(
+            recycler.clone(),
+            64,
+            "handle_pull_requests",
+        );
         let (caller_and_filters, addrs): (Vec<_>, Vec<_>) = {
             let mut rng = rand::thread_rng();
             let check_pull_request =
@@ -2164,8 +2167,8 @@ impl ClusterInfo {
     fn handle_batch_ping_messages<I>(
         &self,
         pings: I,
-        recycler: &PacketBatchRecycler,
-        response_sender: &PacketBatchSender,
+        recycler: &StandardPacketBatchRecycler,
+        response_sender: &StandardPacketSender,
     ) where
         I: IntoIterator<Item = (SocketAddr, Ping)>,
     {
@@ -2178,8 +2181,8 @@ impl ClusterInfo {
     fn handle_ping_messages<I>(
         &self,
         pings: I,
-        recycler: &PacketBatchRecycler,
-    ) -> Option<PacketBatch>
+        recycler: &StandardPacketBatchRecycler,
+    ) -> Option<StandardPackets>
     where
         I: IntoIterator<Item = (SocketAddr, Ping)>,
     {
@@ -2201,7 +2204,7 @@ impl ClusterInfo {
         if packets.is_empty() {
             None
         } else {
-            let packet_batch = PacketBatch::new_unpinned_with_recycler_data(
+            let packet_batch = StandardPackets::new_unpinned_with_recycler_data(
                 recycler,
                 "handle_ping_messages",
                 packets,
@@ -2229,9 +2232,9 @@ impl ClusterInfo {
         &self,
         messages: Vec<(Pubkey, Vec<CrdsValue>)>,
         thread_pool: &ThreadPool,
-        recycler: &PacketBatchRecycler,
+        recycler: &StandardPacketBatchRecycler,
         stakes: &HashMap<Pubkey, u64>,
-        response_sender: &PacketBatchSender,
+        response_sender: &StandardPacketSender,
     ) {
         let _st = ScopedTimer::from(&self.stats.handle_batch_push_messages_time);
         if messages.is_empty() {
@@ -2349,8 +2352,8 @@ impl ClusterInfo {
         &self,
         packets: VecDeque<(/*from:*/ SocketAddr, Protocol)>,
         thread_pool: &ThreadPool,
-        recycler: &PacketBatchRecycler,
-        response_sender: &PacketBatchSender,
+        recycler: &StandardPacketBatchRecycler,
+        response_sender: &StandardPacketSender,
         stakes: &HashMap<Pubkey, u64>,
         _feature_set: Option<&FeatureSet>,
         epoch_duration: Duration,
@@ -2467,7 +2470,7 @@ impl ClusterInfo {
     // handling of requests/messages.
     fn run_socket_consume(
         &self,
-        receiver: &PacketBatchReceiver,
+        receiver: &StandardPacketReceiver,
         sender: &Sender<Vec<(/*from:*/ SocketAddr, Protocol)>>,
         thread_pool: &ThreadPool,
     ) -> Result<(), GossipError> {
@@ -2507,10 +2510,10 @@ impl ClusterInfo {
     /// Process messages from the network
     fn run_listen(
         &self,
-        recycler: &PacketBatchRecycler,
+        recycler: &StandardPacketBatchRecycler,
         bank_forks: Option<&RwLock<BankForks>>,
         receiver: &Receiver<Vec<(/*from:*/ SocketAddr, Protocol)>>,
-        response_sender: &PacketBatchSender,
+        response_sender: &StandardPacketSender,
         thread_pool: &ThreadPool,
         last_print: &mut Instant,
         should_check_duplicate_instance: bool,
@@ -2558,7 +2561,7 @@ impl ClusterInfo {
 
     pub(crate) fn start_socket_consume_thread(
         self: Arc<Self>,
-        receiver: PacketBatchReceiver,
+        receiver: StandardPacketReceiver,
         sender: Sender<Vec<(/*from:*/ SocketAddr, Protocol)>>,
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
@@ -2588,12 +2591,12 @@ impl ClusterInfo {
         self: Arc<Self>,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
         requests_receiver: Receiver<Vec<(/*from:*/ SocketAddr, Protocol)>>,
-        response_sender: PacketBatchSender,
+        response_sender: StandardPacketSender,
         should_check_duplicate_instance: bool,
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         let mut last_print = Instant::now();
-        let recycler = PacketBatchRecycler::default();
+        let recycler = StandardPacketBatchRecycler::default();
         let thread_pool = ThreadPoolBuilder::new()
             .num_threads(get_thread_count().min(8))
             .thread_name(|i| format!("sol-gossip-work-{}", i))
@@ -2971,7 +2974,8 @@ pub fn push_messages_to_peer(
     let reqs: Vec<_> = ClusterInfo::split_gossip_messages(PUSH_MESSAGE_MAX_PAYLOAD_SIZE, messages)
         .map(move |payload| (peer_gossip, Protocol::PushMessage(self_id, payload)))
         .collect();
-    let packet_batch = to_packet_batch_with_destination(PacketBatchRecycler::default(), &reqs);
+    let packet_batch =
+        to_packet_batch_with_destination(StandardPacketBatchRecycler::default(), &reqs);
     let sock = UdpSocket::bind("0.0.0.0:0").unwrap();
     packet::send_to(&packet_batch, &sock, socket_addr_space)?;
     Ok(())
@@ -3222,7 +3226,7 @@ mod tests {
             .iter()
             .map(|ping| Pong::new(ping, &this_node).unwrap())
             .collect();
-        let recycler = PacketBatchRecycler::default();
+        let recycler = StandardPacketBatchRecycler::default();
         let packets = cluster_info
             .handle_ping_messages(
                 remote_nodes

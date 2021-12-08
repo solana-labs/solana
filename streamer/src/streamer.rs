@@ -7,11 +7,8 @@ use {
         recvmmsg::NUM_RCVMMSGS,
         socket::SocketAddrSpace,
     },
-    histogram::Histogram,
-    solana_sdk::{packet::Packet, timing::timestamp},
+    solana_sdk::timing::timestamp,
     std::{
-        cmp::Reverse,
-        collections::HashMap,
         net::UdpSocket,
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -122,6 +119,7 @@ pub fn receiver(
         .unwrap()
 }
 
+
 #[derive(Debug, Default)]
 struct SendStats {
     bytes: u64,
@@ -132,6 +130,17 @@ struct SendStats {
 struct StreamerSendStats {
     host_map: HashMap<[u16; 8], SendStats>,
     since: Option<Instant>,
+}
+
+fn recv_send<P: PacketInterface>(
+    sock: &UdpSocket,
+    receiver: &PacketBatchReceiver<P>,
+    socket_addr_space: &SocketAddrSpace,
+) -> Result<(), P> {
+    let timer = Duration::new(1, 0);
+    let packet_batch = receiver.recv_timeout(timer)?;
+    send_to(&packet_batch, sock, socket_addr_space)?;
+    Ok(())
 }
 
 impl StreamerSendStats {
@@ -274,7 +283,6 @@ pub fn responder(
     sock: Arc<UdpSocket>,
     r: PacketBatchReceiver,
     socket_addr_space: SocketAddrSpace,
-    stats_reporter_sender: Option<Sender<Box<dyn FnOnce() + Send>>>,
 ) -> JoinHandle<()> {
     Builder::new()
         .name(format!("solana-responder-{}", name))
@@ -282,12 +290,6 @@ pub fn responder(
             let mut errors = 0;
             let mut last_error = None;
             let mut last_print = 0;
-            let mut stats = None;
-
-            if stats_reporter_sender.is_some() {
-                stats = Some(StreamerSendStats::default());
-            }
-
             loop {
                 if let Err(e) = recv_send(&sock, &r, &socket_addr_space, &mut stats) {
                     match e {
@@ -305,11 +307,6 @@ pub fn responder(
                     info!("{} last-error: {:?} count: {}", name, last_error, errors);
                     last_print = now;
                     errors = 0;
-                }
-                if let Some(ref stats_reporter_sender) = stats_reporter_sender {
-                    if let Some(ref mut stats) = stats {
-                        stats.maybe_submit(name, stats_reporter_sender);
-                    }
                 }
             }
         })
@@ -383,7 +380,6 @@ mod test {
                 Arc::new(send),
                 r_responder,
                 SocketAddrSpace::Unspecified,
-                None,
             );
             let mut packet_batch = PacketBatch::default();
             for i in 0..5 {

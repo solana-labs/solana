@@ -5,8 +5,9 @@ use {
         leader_schedule_cache::LeaderScheduleCache, shred::Shred,
         sigverify_shreds::verify_shreds_gpu,
     },
-    solana_perf::{self, packet::PacketBatch, recycler_cache::RecyclerCache},
+    solana_perf::{self, packet::StandardPackets, recycler_cache::RecyclerCache},
     solana_runtime::bank_forks::BankForks,
+    solana_sdk::packet::Packet,
     std::{
         collections::{HashMap, HashSet},
         sync::{Arc, RwLock},
@@ -32,7 +33,8 @@ impl ShredSigVerifier {
             recycler_cache: RecyclerCache::warmed(),
         }
     }
-    fn read_slots(batches: &[PacketBatch]) -> HashSet<u64> {
+
+    fn read_slots(batches: &[StandardPackets]) -> HashSet<u64> {
         batches
             .iter()
             .flat_map(|batch| batch.packets.iter().filter_map(Shred::get_slot_from_packet))
@@ -40,8 +42,8 @@ impl ShredSigVerifier {
     }
 }
 
-impl SigVerifier for ShredSigVerifier {
-    fn verify_batches(&self, mut batches: Vec<PacketBatch>) -> Vec<PacketBatch> {
+impl SigVerifier<Packet> for ShredSigVerifier {
+    fn verify_batches(&self, mut batches: Vec<StandardPackets>) -> Vec<StandardPackets> {
         let r_bank = self.bank_forks.read().unwrap().working_bank();
         let slots: HashSet<u64> = Self::read_slots(&batches);
         let mut leader_slots: HashMap<u64, [u8; 32]> = slots

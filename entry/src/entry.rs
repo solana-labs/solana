@@ -15,7 +15,7 @@ use {
     solana_metrics::*,
     solana_perf::{
         cuda_runtime::PinnedVec,
-        packet::{Packet, PacketBatch, PacketBatchRecycler, PACKETS_PER_BATCH},
+        packet::{Packet, PacketBatch, PacketBatchRecycler, PacketInterface, PACKETS_PER_BATCH},
         perf_libs,
         recycler::Recycler,
         sigverify,
@@ -308,7 +308,9 @@ impl<'a> EntrySigVerificationState {
 pub struct VerifyRecyclers {
     hash_recycler: Recycler<PinnedVec<Hash>>,
     tick_count_recycler: Recycler<PinnedVec<u64>>,
-    packet_recycler: PacketBatchRecycler,
+    // TODO: Revisit - does the below one need to be generic? Don't think so
+    //       because these should be shred packets which aren't variable in size
+    packet_recycler: PacketBatchRecycler<Packet>,
     out_recycler: Recycler<PinnedVec<u8>>,
     tx_offset_recycler: Recycler<sigverify::TxOffset>,
 }

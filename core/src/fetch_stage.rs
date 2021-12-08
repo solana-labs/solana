@@ -8,9 +8,13 @@ use {
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
     solana_perf::{packet::PacketBatchRecycler, recycler::Recycler},
     solana_poh::poh_recorder::PohRecorder,
-    solana_sdk::{clock::DEFAULT_TICKS_PER_SLOT, packet::Packet},
+    solana_sdk::{
+        clock::DEFAULT_TICKS_PER_SLOT,
+        packet::{Packet, PacketInterface},
+    },
     solana_streamer::streamer::{self, PacketBatchReceiver, PacketBatchSender},
     std::{
+        marker::PhantomData,
         net::UdpSocket,
         sync::{
             atomic::AtomicBool,
@@ -21,11 +25,14 @@ use {
     },
 };
 
-pub struct FetchStage {
+pub struct FetchStage<P: 'static + PacketInterface> {
     thread_hdls: Vec<JoinHandle<()>>,
+    _phantom: PhantomData<P>,
 }
 
-impl FetchStage {
+// todo: do we want all of these to use the type P or
+// should some of these always be the standard packets (e.g. the vote sender/receiver)
+impl<P: 'static + PacketInterface> FetchStage<P> {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         sockets: Vec<UdpSocket>,
@@ -34,7 +41,7 @@ impl FetchStage {
         exit: &Arc<AtomicBool>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         coalesce_ms: u64,
-    ) -> (Self, PacketBatchReceiver, PacketBatchReceiver) {
+    ) -> (Self, PacketBatchReceiver<P>, PacketBatchReceiver<Packet>) {
         let (sender, receiver) = channel();
         let (vote_sender, vote_receiver) = channel();
         (
@@ -58,8 +65,8 @@ impl FetchStage {
         tpu_forwards_sockets: Vec<UdpSocket>,
         tpu_vote_sockets: Vec<UdpSocket>,
         exit: &Arc<AtomicBool>,
-        sender: &PacketBatchSender,
-        vote_sender: &PacketBatchSender,
+        sender: &PacketBatchSender<P>,
+        vote_sender: &PacketBatchSender<Packet>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         coalesce_ms: u64,
     ) -> Self {
@@ -79,8 +86,8 @@ impl FetchStage {
     }
 
     fn handle_forwarded_packets(
-        recvr: &PacketBatchReceiver,
-        sendr: &PacketBatchSender,
+        recvr: &PacketBatchReceiver<P>,
+        sendr: &PacketBatchSender<P>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) -> Result<()> {
         let mark_forwarded = |packet: &mut Packet| {
@@ -125,12 +132,13 @@ impl FetchStage {
         tpu_forwards_sockets: Vec<Arc<UdpSocket>>,
         tpu_vote_sockets: Vec<Arc<UdpSocket>>,
         exit: &Arc<AtomicBool>,
-        sender: &PacketBatchSender,
-        vote_sender: &PacketBatchSender,
+        sender: &PacketBatchSender<P>,
+        vote_sender: &PacketBatchSender<Packet>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         coalesce_ms: u64,
     ) -> Self {
-        let recycler: PacketBatchRecycler = Recycler::warmed(1000, 1024);
+        let recycler: PacketBatchRecycler<P> = Recycler::warmed(1000, 1024);
+        let vote_recycler: PacketBatchRecycler<Packet> = Recycler::warmed(1000, 1024);
 
         let tpu_threads = tpu_sockets.into_iter().map(|socket| {
             streamer::receiver(
@@ -162,7 +170,7 @@ impl FetchStage {
                 socket,
                 exit,
                 vote_sender.clone(),
-                recycler.clone(),
+                vote_recycler.clone(),
                 "fetch_vote_stage",
                 coalesce_ms,
                 true,
@@ -194,7 +202,10 @@ impl FetchStage {
             .chain(tpu_vote_threads)
             .collect();
         thread_hdls.push(fwd_thread_hdl);
-        Self { thread_hdls }
+        Self {
+            thread_hdls,
+            _phantom: PhantomData::default(),
+        }
     }
 
     pub fn join(self) -> thread::Result<()> {

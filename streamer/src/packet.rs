@@ -12,10 +12,14 @@ pub use {
         limited_deserialize, to_packet_batches, PacketBatch, PacketBatchRecycler, NUM_PACKETS,
         PACKETS_PER_BATCH,
     },
-    solana_sdk::packet::{Meta, Packet, PACKET_DATA_SIZE},
+    solana_sdk::packet::{Meta, Packet, PacketInterface, PACKET_DATA_SIZE},
 };
 
-pub fn recv_from(batch: &mut PacketBatch, socket: &UdpSocket, max_wait_ms: u64) -> Result<usize> {
+pub fn recv_from<P: PacketInterface>(
+    batch: &mut PacketBatch<P>,
+    socket: &UdpSocket,
+    max_wait_ms: u64,
+) -> Result<usize> {
     let mut i = 0;
     //DOCUMENTED SIDE-EFFECT
     //Performance out of the IO without poll
@@ -29,7 +33,7 @@ pub fn recv_from(batch: &mut PacketBatch, socket: &UdpSocket, max_wait_ms: u64) 
     loop {
         batch.packets.resize(
             std::cmp::min(i + NUM_RCVMMSGS, PACKETS_PER_BATCH),
-            Packet::default(),
+            P::default(),
         );
         match recv_mmsg(socket, &mut batch.packets[i..]) {
             Err(_) if i > 0 => {
@@ -60,15 +64,15 @@ pub fn recv_from(batch: &mut PacketBatch, socket: &UdpSocket, max_wait_ms: u64) 
     Ok(i)
 }
 
-pub fn send_to(
-    batch: &PacketBatch,
+pub fn send_to<P: PacketInterface>(
+    batch: &PacketBatch<P>,
     socket: &UdpSocket,
     socket_addr_space: &SocketAddrSpace,
 ) -> Result<()> {
     for p in &batch.packets {
-        let addr = p.meta.addr();
+        let addr = p.get_meta().addr();
         if socket_addr_space.check(&addr) {
-            socket.send_to(&p.data[..p.meta.size], &addr)?;
+            socket.send_to(&p.get_data()[..p.get_meta().size], &addr)?;
         }
     }
     Ok(())

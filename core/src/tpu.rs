@@ -17,6 +17,7 @@ use {
     crossbeam_channel::unbounded,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender},
+    solana_perf::packet::{PacketBatch, StandardPackets},
     solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
     solana_rpc::{
         optimistically_confirmed_bank_tracker::BankNotificationSender,
@@ -27,6 +28,7 @@ use {
         cost_model::CostModel,
         vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
     },
+    solana_sdk::packet::{Packet, PacketInterface},
     std::{
         net::UdpSocket,
         sync::{
@@ -40,16 +42,16 @@ use {
 
 pub const DEFAULT_TPU_COALESCE_MS: u64 = 5;
 
-pub struct Tpu {
-    fetch_stage: FetchStage,
+pub struct Tpu<P: 'static + PacketInterface> {
+    fetch_stage: FetchStage<P>,
     sigverify_stage: SigVerifyStage,
     vote_sigverify_stage: SigVerifyStage,
-    banking_stage: BankingStage,
+    banking_stage: BankingStage<P>,
     cluster_info_vote_listener: ClusterInfoVoteListener,
     broadcast_stage: BroadcastStage,
 }
 
-impl Tpu {
+impl<P: 'static + PacketInterface> Tpu<P> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         cluster_info: &Arc<ClusterInfo>,
@@ -79,7 +81,7 @@ impl Tpu {
     ) -> Self {
         let (packet_sender, packet_receiver) = channel();
         let (vote_packet_sender, vote_packet_receiver) = channel();
-        let fetch_stage = FetchStage::new_with_sender(
+        let fetch_stage: FetchStage<P> = FetchStage::new_with_sender(
             transactions_sockets,
             tpu_forwards_sockets,
             tpu_vote_sockets,
@@ -89,17 +91,18 @@ impl Tpu {
             poh_recorder,
             tpu_coalesce_ms,
         );
-        let (verified_sender, verified_receiver) = unbounded();
+        let (verified_sender, verified_receiver) = unbounded::<Vec<PacketBatch<P>>>();
 
         let sigverify_stage = {
-            let verifier = TransactionSigVerifier::default();
+            let verifier = TransactionSigVerifier::<P>::default();
             SigVerifyStage::new(packet_receiver, verified_sender, verifier)
         };
 
-        let (verified_tpu_vote_packets_sender, verified_tpu_vote_packets_receiver) = unbounded();
+        let (verified_tpu_vote_packets_sender, verified_tpu_vote_packets_receiver) =
+            unbounded::<Vec<StandardPackets>>();
 
         let vote_sigverify_stage = {
-            let verifier = TransactionSigVerifier::new_reject_non_vote();
+            let verifier = TransactionSigVerifier::<Packet>::new_reject_non_vote();
             SigVerifyStage::new(
                 vote_packet_receiver,
                 verified_tpu_vote_packets_sender,
@@ -108,7 +111,7 @@ impl Tpu {
         };
 
         let (verified_gossip_vote_packets_sender, verified_gossip_vote_packets_receiver) =
-            unbounded();
+            unbounded::<Vec<StandardPackets>>();
         let cluster_info_vote_listener = ClusterInfoVoteListener::new(
             exit.clone(),
             cluster_info.clone(),
@@ -125,7 +128,7 @@ impl Tpu {
             cluster_confirmed_slot_sender,
         );
 
-        let banking_stage = BankingStage::new(
+        let banking_stage: BankingStage<P> = BankingStage::new(
             cluster_info,
             poh_recorder,
             verified_receiver,

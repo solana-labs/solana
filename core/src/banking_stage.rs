@@ -14,7 +14,7 @@ use {
     solana_perf::{
         cuda_runtime::PinnedVec,
         data_budget::DataBudget,
-        packet::{limited_deserialize, Packet, PacketBatch, PACKETS_PER_BATCH},
+        packet::{limited_deserialize, PacketBatch, StandardPackets, PACKETS_PER_BATCH},
         perf_libs,
     },
     solana_poh::poh_recorder::{BankStart, PohRecorder, PohRecorderError, TransactionRecorder},
@@ -36,6 +36,7 @@ use {
         },
         feature_set,
         message::Message,
+        packet::PacketInterface,
         pubkey::Pubkey,
         short_vec::decode_shortu16_len,
         signature::Signature,
@@ -50,6 +51,7 @@ use {
         cmp,
         collections::{HashMap, VecDeque},
         env,
+        marker::PhantomData,
         mem::size_of,
         net::{SocketAddr, UdpSocket},
         sync::{
@@ -62,10 +64,10 @@ use {
 };
 
 /// (packets, valid_indexes, forwarded)
-/// Batch of packets with a list of which are valid and if this batch has been forwarded.
-type PacketBatchAndOffsets = (PacketBatch, Vec<usize>, bool);
+/// Set of packets with a list of which are valid and if this batch has been forwarded.
+type PacketBatchAndOffsets<P: PacketInterface> = (PacketBatch<P>, Vec<usize>, bool);
 
-pub type UnprocessedPacketBatches = VecDeque<PacketBatchAndOffsets>;
+pub type UnprocessedPacketBatches<P: PacketInterface> = VecDeque<PacketBatchAndOffsets<P>>;
 
 /// Transaction forwarding
 pub const FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET: u64 = 2;
@@ -260,8 +262,9 @@ impl BankingStageStats {
 }
 
 /// Stores the stage's thread handle and output receiver.
-pub struct BankingStage {
+pub struct BankingStage<P: 'static + PacketInterface> {
     bank_thread_hdls: Vec<JoinHandle<()>>,
+    _phantom: PhantomData<P>,
 }
 
 #[derive(Debug, Clone)]
@@ -279,15 +282,15 @@ pub enum ForwardOption {
     ForwardTransaction,
 }
 
-impl BankingStage {
+impl<P: 'static + PacketInterface> BankingStage<P> {
     /// Create the stage using `bank`. Exit when `verified_receiver` is dropped.
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        verified_receiver: CrossbeamReceiver<Vec<PacketBatch>>,
-        tpu_verified_vote_receiver: CrossbeamReceiver<Vec<PacketBatch>>,
-        verified_vote_receiver: CrossbeamReceiver<Vec<PacketBatch>>,
+        verified_receiver: CrossbeamReceiver<Vec<PacketBatch<P>>>,
+        tpu_verified_vote_receiver: CrossbeamReceiver<Vec<StandardPackets>>,
+        verified_vote_receiver: CrossbeamReceiver<Vec<StandardPackets>>,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
         cost_model: Arc<RwLock<CostModel>>,
@@ -311,9 +314,9 @@ impl BankingStage {
     fn new_num_threads(
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        verified_receiver: CrossbeamReceiver<Vec<PacketBatch>>,
-        tpu_verified_vote_receiver: CrossbeamReceiver<Vec<PacketBatch>>,
-        verified_vote_receiver: CrossbeamReceiver<Vec<PacketBatch>>,
+        verified_receiver: CrossbeamReceiver<Vec<PacketBatch<P>>>,
+        tpu_verified_vote_receiver: CrossbeamReceiver<Vec<StandardPackets>>,
+        verified_vote_receiver: CrossbeamReceiver<Vec<StandardPackets>>,
         num_threads: u32,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
@@ -329,19 +332,6 @@ impl BankingStage {
         assert!(num_threads >= NUM_VOTE_PROCESSING_THREADS + MIN_THREADS_BANKING);
         let bank_thread_hdls: Vec<JoinHandle<()>> = (0..num_threads)
             .map(|i| {
-                let (verified_receiver, forward_option) = match i {
-                    0 => {
-                        // Disable forwarding of vote transactions
-                        // from gossip. Note - votes can also arrive from tpu
-                        (verified_vote_receiver.clone(), ForwardOption::NotForward)
-                    }
-                    1 => (
-                        tpu_verified_vote_receiver.clone(),
-                        ForwardOption::ForwardTpuVote,
-                    ),
-                    _ => (verified_receiver.clone(), ForwardOption::ForwardTransaction),
-                };
-
                 let poh_recorder = poh_recorder.clone();
                 let cluster_info = cluster_info.clone();
                 let mut recv_start = Instant::now();
@@ -350,33 +340,88 @@ impl BankingStage {
                 let packet_deduper = packet_deduper.clone();
                 let data_budget = data_budget.clone();
                 let cost_model = cost_model.clone();
-                Builder::new()
-                    .name("solana-banking-stage-tx".to_string())
-                    .spawn(move || {
-                        Self::process_loop(
-                            &verified_receiver,
-                            &poh_recorder,
-                            &cluster_info,
-                            &mut recv_start,
-                            forward_option,
-                            i,
-                            batch_limit,
-                            transaction_status_sender,
-                            gossip_vote_sender,
-                            &packet_deduper,
-                            &data_budget,
-                            cost_model,
-                        );
-                    })
-                    .unwrap()
+
+                match i {
+                    0 => {
+                        let verified_vote_receiver = verified_vote_receiver.clone();
+                        // Disable forwarding of vote transactions
+                        // from gossip. Note - votes can also arrive from tpu
+                        Builder::new()
+                            .name("solana-banking-stage-tx".to_string())
+                            .spawn(move || {
+                                Self::process_loop(
+                                    &verified_vote_receiver,
+                                    &poh_recorder,
+                                    &cluster_info,
+                                    &mut recv_start,
+                                    ForwardOption::NotForward,
+                                    i,
+                                    batch_limit,
+                                    transaction_status_sender,
+                                    gossip_vote_sender,
+                                    &duplicates,
+                                    &data_budget,
+                                    qos_service,
+                                );
+                            })
+                            .unwrap()
+                    }
+                    1 => {
+                        let tpu_verified_vote_receiver = tpu_verified_vote_receiver.clone();
+                        Builder::new()
+                            .name("solana-banking-stage-tx".to_string())
+                            .spawn(move || {
+                                Self::process_loop(
+                                    &tpu_verified_vote_receiver,
+                                    &poh_recorder,
+                                    &cluster_info,
+                                    &mut recv_start,
+                                    ForwardOption::ForwardTpuVote,
+                                    i,
+                                    batch_limit,
+                                    transaction_status_sender,
+                                    gossip_vote_sender,
+                                    &duplicates,
+                                    &data_budget,
+                                    qos_service,
+                                );
+                            })
+                            .unwrap()
+                    }
+                    _ => {
+                        let verified_receiver = verified_receiver.clone();
+                        Builder::new()
+                            .name("solana-banking-stage-tx".to_string())
+                            .spawn(move || {
+                                Self::process_loop(
+                                    &verified_receiver,
+                                    &poh_recorder,
+                                    &cluster_info,
+                                    &mut recv_start,
+                                    ForwardOption::ForwardTransaction,
+                                    i,
+                                    batch_limit,
+                                    transaction_status_sender,
+                                    gossip_vote_sender,
+                                    &duplicates,
+                                    &data_budget,
+                                    qos_service,
+                                );
+                            })
+                            .unwrap()
+                    }
+                }
             })
             .collect();
-        Self { bank_thread_hdls }
+        Self {
+            bank_thread_hdls,
+            _phantom: PhantomData::default(),
+        }
     }
 
-    fn filter_valid_packets_for_forwarding<'a>(
-        packet_batches: impl Iterator<Item = &'a PacketBatchAndOffsets>,
-    ) -> Vec<&'a Packet> {
+    fn filter_valid_packets_for_forwarding<'a, PacketType: 'static + PacketInterface>(
+        packet_batches: impl Iterator<Item = &'a PacketBatchAndOffsets<PacketType>>,
+    ) -> Vec<&'a PacketType> {
         packet_batches
             .filter(|(_batch, _indexes, forwarded)| !forwarded)
             .flat_map(|(batch, valid_indexes, _forwarded)| {
@@ -385,10 +430,10 @@ impl BankingStage {
             .collect()
     }
 
-    fn forward_buffered_packets(
+    fn forward_buffered_packets<PacketType: 'static + PacketInterface>(
         socket: &std::net::UdpSocket,
         tpu_forwards: &std::net::SocketAddr,
-        buffered_packet_batches: &UnprocessedPacketBatches,
+        buffered_packet_batches: &UnprocessedPacketBatches<PacketType>,
         data_budget: &DataBudget,
     ) -> std::io::Result<()> {
         let packets = Self::filter_valid_packets_for_forwarding(buffered_packet_batches.iter());
@@ -440,11 +485,11 @@ impl BankingStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn consume_buffered_packets(
+    pub fn consume_buffered_packets<PacketType: 'static + PacketInterface>(
         my_pubkey: &Pubkey,
         max_tx_ingestion_ns: u128,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        buffered_packet_batches: &mut UnprocessedPacketBatches,
+        buffered_packet_batches: &mut UnprocessedPacketBatches<PacketType>,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         test_fn: Option<impl Fn()>,
@@ -588,12 +633,12 @@ impl BankingStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn process_buffered_packets(
+    fn process_buffered_packets<PacketType: 'static + PacketInterface>(
         my_pubkey: &Pubkey,
         socket: &std::net::UdpSocket,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         cluster_info: &ClusterInfo,
-        buffered_packet_batches: &mut UnprocessedPacketBatches,
+        buffered_packet_batches: &mut UnprocessedPacketBatches<PacketType>,
         forward_option: &ForwardOption,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
@@ -671,10 +716,10 @@ impl BankingStage {
         decision
     }
 
-    fn handle_forwarding(
+    fn handle_forwarding<PacketType: 'static + PacketInterface>(
         forward_option: &ForwardOption,
         cluster_info: &ClusterInfo,
-        buffered_packet_batches: &mut UnprocessedPacketBatches,
+        buffered_packet_batches: &mut UnprocessedPacketBatches<PacketType>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         socket: &UdpSocket,
         hold: bool,
@@ -708,8 +753,8 @@ impl BankingStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn process_loop(
-        verified_receiver: &CrossbeamReceiver<Vec<PacketBatch>>,
+    fn process_loop<PacketType: 'static + PacketInterface>(
+        verified_receiver: &CrossbeamReceiver<Vec<PacketBatch<PacketType>>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         cluster_info: &ClusterInfo,
         recv_start: &mut Instant,
@@ -724,7 +769,8 @@ impl BankingStage {
     ) {
         let recorder = poh_recorder.lock().unwrap().recorder();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let mut buffered_packet_batches = VecDeque::with_capacity(batch_limit);
+        let mut buffered_packet_batches: UnprocessedPacketBatches<PacketType> =
+            VecDeque::with_capacity(batch_limit);
         let banking_stage_stats = BankingStageStats::new(id);
         let qos_service = QosService::new(cost_model, id);
         loop {
@@ -1102,21 +1148,21 @@ impl BankingStage {
     }
 
     /// Read the transaction message from packet data
-    fn packet_message(packet: &Packet) -> Option<&[u8]> {
-        let (sig_len, sig_size) = decode_shortu16_len(&packet.data).ok()?;
+    fn packet_message<PacketType: 'static + PacketInterface>(packet: &PacketType) -> Option<&[u8]> {
+        let (sig_len, sig_size) = decode_shortu16_len(&packet.get_data()).ok()?;
         let msg_start = sig_len
             .checked_mul(size_of::<Signature>())
             .and_then(|v| v.checked_add(sig_size))?;
-        let msg_end = packet.meta.size;
-        Some(&packet.data[msg_start..msg_end])
+        let msg_end = packet.get_meta().size;
+        Some(&packet.get_data()[msg_start..msg_end])
     }
 
     // This function deserializes packets into transactions, computes the blake3 hash of transaction
     // messages, and verifies secp256k1 instructions. A list of sanitized transactions are returned
     // with their packet indexes.
     #[allow(clippy::needless_collect)]
-    fn transactions_from_packets(
-        packet_batch: &PacketBatch,
+    fn transactions_from_packets<PacketType: 'static + PacketInterface>(
+        packet_batch: &PacketBatch<PacketType>,
         transaction_indexes: &[usize],
         feature_set: &Arc<feature_set::FeatureSet>,
         votes_only: bool,
@@ -1125,17 +1171,18 @@ impl BankingStage {
             .iter()
             .filter_map(|tx_index| {
                 let p = &packet_batch.packets[*tx_index];
-                if votes_only && !p.meta.is_simple_vote_tx {
+                if votes_only && !p.get_meta().is_simple_vote_tx {
                     return None;
                 }
 
-                let tx: VersionedTransaction = limited_deserialize(&p.data[0..p.meta.size]).ok()?;
+                let tx: VersionedTransaction =
+                    limited_deserialize(&p.get_data()[0..p.get_meta().size]).ok()?;
                 let message_bytes = Self::packet_message(p)?;
                 let message_hash = Message::hash_raw_message(message_bytes);
                 let tx = SanitizedTransaction::try_create(
                     tx,
                     message_hash,
-                    Some(p.meta.is_simple_vote_tx),
+                    Some(p.get_meta().is_simple_vote_tx),
                     |_| Err(TransactionError::UnsupportedVersion),
                 )
                 .ok()?;
@@ -1185,11 +1232,11 @@ impl BankingStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn process_packets_transactions(
+    fn process_packets_transactions<PacketType: 'static + PacketInterface>(
         bank: &Arc<Bank>,
         bank_creation_time: &Instant,
         poh: &TransactionRecorder,
-        packet_batch: &PacketBatch,
+        packet_batch: &PacketBatch<PacketType>,
         packet_indexes: Vec<usize>,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
@@ -1252,9 +1299,9 @@ impl BankingStage {
         (processed, tx_len, filtered_unprocessed_packet_indexes)
     }
 
-    fn filter_unprocessed_packets(
+    fn filter_unprocessed_packets<PacketType: 'static + PacketInterface>(
         bank: &Arc<Bank>,
-        packet_batch: &PacketBatch,
+        packet_batch: &PacketBatch<PacketType>,
         transaction_indexes: &[usize],
         my_pubkey: &Pubkey,
         next_leader: Option<Pubkey>,
@@ -1303,30 +1350,33 @@ impl BankingStage {
         filtered_unprocessed_packet_indexes
     }
 
-    fn generate_packet_indexes(vers: &PinnedVec<Packet>) -> Vec<usize> {
+    fn generate_packet_indexes<PacketType: 'static + PacketInterface>(
+        vers: &PinnedVec<PacketType>,
+    ) -> Vec<usize> {
         vers.iter()
             .enumerate()
-            .filter_map(
-                |(index, ver)| {
-                    if !ver.meta.discard {
-                        Some(index)
-                    } else {
-                        None
-                    }
-                },
-            )
+            .filter_map(|(index, ver)| {
+                if !ver.get_meta().discard {
+                    Some(index)
+                } else {
+                    None
+                }
+            })
             .collect()
     }
 
     #[allow(clippy::too_many_arguments)]
-    /// Receive incoming packets, push into unprocessed buffer with packet indexes
-    fn receive_and_buffer_packets(
+    /// Process the incoming packets
+    fn process_packets<PacketType: 'static + PacketInterface>(
+        my_pubkey: &Pubkey,
         verified_receiver: &CrossbeamReceiver<Vec<PacketBatch>>,
         recv_start: &mut Instant,
         recv_timeout: Duration,
         id: u32,
         batch_limit: usize,
-        buffered_packet_batches: &mut UnprocessedPacketBatches,
+        transaction_status_sender: Option<TransactionStatusSender>,
+        gossip_vote_sender: &ReplayVoteSender,
+        buffered_packet_batches: &mut UnprocessedPacketBatches<PacketType>,
         banking_stage_stats: &BankingStageStats,
         packet_deduper: &PacketDeduper,
     ) -> Result<(), RecvTimeoutError> {
@@ -1402,9 +1452,9 @@ impl BankingStage {
         Ok(())
     }
 
-    fn push_unprocessed(
-        unprocessed_packet_batches: &mut UnprocessedPacketBatches,
-        packet_batch: PacketBatch,
+    fn push_unprocessed<PacketType: 'static + PacketInterface>(
+        unprocessed_packet_batches: &mut UnprocessedPacketBatches<PacketType>,
+        packet_batch: PacketBatch<PacketType>,
         mut packet_indexes: Vec<usize>,
         dropped_packet_batches_count: &mut usize,
         dropped_packets_count: &mut usize,

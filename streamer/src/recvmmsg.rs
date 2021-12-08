@@ -2,7 +2,7 @@
 
 pub use solana_perf::packet::NUM_RCVMMSGS;
 use {
-    crate::packet::Packet,
+    crate::packet::PacketInterface,
     std::{cmp, io, net::UdpSocket},
 };
 #[cfg(target_os = "linux")]
@@ -14,13 +14,16 @@ use {
 };
 
 #[cfg(not(target_os = "linux"))]
-pub fn recv_mmsg(socket: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize, usize)> {
+pub fn recv_mmsg<P: PacketInterface>(
+    socket: &UdpSocket,
+    packets: &mut [P],
+) -> io::Result<(usize, usize)> {
     let mut i = 0;
     let count = cmp::min(NUM_RCVMMSGS, packets.len());
     let mut total_size = 0;
     for p in packets.iter_mut().take(count) {
-        p.meta.size = 0;
-        match socket.recv_from(&mut p.data) {
+        p.get_meta_mut().size = 0;
+        match socket.recv_from(p.get_data_mut()) {
             Err(_) if i > 0 => {
                 break;
             }
@@ -29,8 +32,8 @@ pub fn recv_mmsg(socket: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usiz
             }
             Ok((nrecv, from)) => {
                 total_size += nrecv;
-                p.meta.size = nrecv;
-                p.meta.set_addr(&from);
+                p.get_meta_mut().size = nrecv;
+                p.get_meta_mut().set_addr(&from);
                 if i == 0 {
                     socket.set_nonblocking(true)?;
                 }
@@ -67,7 +70,10 @@ fn cast_socket_addr(addr: &sockaddr_storage, hdr: &mmsghdr) -> Option<InetAddr> 
 
 #[cfg(target_os = "linux")]
 #[allow(clippy::uninit_assumed_init)]
-pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize, usize)> {
+pub fn recv_mmsg<P: PacketInterface>(
+    sock: &UdpSocket,
+    packets: &mut [P],
+) -> io::Result<(usize, usize)> {
     const SOCKADDR_STORAGE_SIZE: usize = mem::size_of::<sockaddr_storage>();
 
     let mut hdrs: [mmsghdr; NUM_RCVMMSGS] = unsafe { mem::zeroed() };
@@ -81,8 +87,8 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize,
         izip!(packets.iter_mut(), &mut hdrs, &mut iovs, &mut addrs).take(count)
     {
         *iov = iovec {
-            iov_base: packet.data.as_mut_ptr() as *mut libc::c_void,
-            iov_len: packet.data.len(),
+            iov_base: packet.get_data_mut().as_mut_ptr() as *mut libc::c_void,
+            iov_len: packet.get_data().len(),
         };
         hdr.msg_hdr.msg_name = addr as *mut _ as *mut _;
         hdr.msg_hdr.msg_namelen = SOCKADDR_STORAGE_SIZE as socklen_t;
@@ -109,11 +115,21 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize,
         })
         .zip(packets.iter_mut())
         .for_each(|((addr, hdr), pkt)| {
-            pkt.meta.size = hdr.msg_len as usize;
-            pkt.meta.set_addr(&addr);
+            pkt.get_meta_mut().size = hdr.msg_len as usize;
+            pkt.get_meta_mut().set_addr(&addr);
             npkts += 1;
         });
-    let total_size = packets.iter().take(npkts).map(|pkt| pkt.meta.size).sum();
+    // TODO: Not part of supporting larger transactions but revisit / make an issue for this
+    // - Could total_size be accumulated in above loop instead of running through packets below?
+    // - If cast_socket_addr() returns a None, then wouldn't doing filter_map with zip afterwards
+    //   misalign (addr, hdr) and packet? If we get a None, there will be fewer zipped (addr, hdr)
+    //   pairs, and when we zip with packets, anything after the bad (addr, hdr) will be zipped
+    //   with the wrong packet ... I think
+    let total_size = packets
+        .iter()
+        .take(npkts)
+        .map(|pkt| pkt.get_meta().size)
+        .sum();
     Ok((total_size, npkts))
 }
 

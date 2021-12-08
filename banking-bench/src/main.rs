@@ -13,7 +13,7 @@ use {
         get_tmp_ledger_path,
     },
     solana_measure::measure::Measure,
-    solana_perf::packet::to_packet_batches,
+    solana_perf::packet::{to_packet_batches, PacketBatch},
     solana_poh::poh_recorder::{create_test_recorder, PohRecorder, WorkingBankEntry},
     solana_runtime::{
         accounts_background_service::AbsRequestSender, bank::Bank, bank_forks::BankForks,
@@ -21,6 +21,7 @@ use {
     },
     solana_sdk::{
         hash::Hash,
+        packet::Packet,
         signature::{Keypair, Signature},
         system_transaction,
         timing::{duration_as_us, timestamp},
@@ -151,8 +152,10 @@ fn main() {
         )
         .get_matches();
 
-    let num_threads =
-        value_t!(matches, "num_threads", usize).unwrap_or(BankingStage::num_threads() as usize);
+    //todo: get rid of this hack to reference Packet even though it's not used (maybe by
+    //getting rid of P: PacketInterface as a type parameter to BankingStage)
+    let num_threads = value_t!(matches, "num_threads", usize)
+        .unwrap_or(BankingStage::<Packet>::num_threads() as usize);
     //   a multiple of packet chunk duplicates to avoid races
     let num_chunks = value_t!(matches, "num_chunks", usize).unwrap_or(16);
     let packets_per_chunk = value_t!(matches, "packets_per_chunk", usize).unwrap_or(192);
@@ -212,7 +215,8 @@ fn main() {
         bank.clear_signatures();
     }
 
-    let mut verified: Vec<_> = to_packet_batches(&transactions, packets_per_chunk);
+    let mut verified: Vec<PacketBatch<Packet>> =
+        to_packet_batches(&transactions, packets_per_chunk);
     let ledger_path = get_tmp_ledger_path!();
     {
         let blockstore = Arc::new(

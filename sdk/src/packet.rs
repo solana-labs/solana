@@ -14,6 +14,29 @@ use {
 ///   8 bytes is the size of the fragment header
 pub const PACKET_DATA_SIZE: usize = 1280 - 40 - 8;
 
+// TODO: Expose a second concrete instance of PacketInterface that uses updated size
+// pub const DOUBLE_DATA_SIZE: usize = PACKET_DATA_SIZE * 2;
+
+// Send + Sync needed to allow Rayon par_iter()
+/// Generic interface to support variable sized packtes
+pub trait PacketInterface: Clone + Default + Sized + Send + Sync + fmt::Debug {
+    fn get_data(&self) -> &[u8];
+
+    fn get_data_mut(&mut self) -> &mut [u8];
+
+    fn get_meta(&self) -> &Meta;
+
+    fn get_meta_mut(&mut self) -> &mut Meta;
+
+    fn from_data<T: Serialize>(dest: Option<&SocketAddr>, data: T) -> Result<Self>;
+
+    fn populate_packet<T: Serialize>(
+        packet: &mut Self,
+        dest: Option<&SocketAddr>,
+        data: &T,
+    ) -> Result<()>;
+}
+
 #[derive(Clone, Default, Debug, PartialEq)]
 #[repr(C)]
 pub struct Meta {
@@ -37,6 +60,46 @@ pub struct Packet {
     pub meta: Meta,
 }
 
+impl PacketInterface for Packet {
+    fn get_data(&self) -> &[u8] {
+        &self.data
+    }
+
+    fn get_data_mut(&mut self) -> &mut [u8] {
+        &mut self.data
+    }
+
+    fn get_meta(&self) -> &Meta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut Meta {
+        &mut self.meta
+    }
+
+    fn from_data<T: Serialize>(dest: Option<&SocketAddr>, data: T) -> Result<Self> {
+        let mut packet = Packet::default();
+        Self::populate_packet(&mut packet, dest, &data)?;
+        Ok(packet)
+    }
+
+    fn populate_packet<T: Serialize>(
+        packet: &mut Self,
+        dest: Option<&SocketAddr>,
+        data: &T,
+    ) -> Result<()> {
+        let mut wr = io::Cursor::new(&mut packet.get_data_mut()[..]);
+        bincode::serialize_into(&mut wr, data)?;
+        let len = wr.position() as usize;
+        packet.meta.size = len;
+        if let Some(dest) = dest {
+            packet.meta.set_addr(dest);
+        }
+        Ok(())
+    }
+}
+
+/*
 impl Packet {
     pub fn new(data: [u8; PACKET_DATA_SIZE], meta: Meta) -> Self {
         Self { data, meta }
@@ -48,8 +111,8 @@ impl Packet {
         Ok(packet)
     }
 
-    pub fn populate_packet<T: Serialize>(
-        packet: &mut Packet,
+    fn populate_packet<T: Serialize>(
+        packet: &mut Self,
         dest: Option<&SocketAddr>,
         data: &T,
     ) -> Result<()> {
@@ -63,6 +126,7 @@ impl Packet {
         Ok(())
     }
 }
+*/
 
 impl fmt::Debug for Packet {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

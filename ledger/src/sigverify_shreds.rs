@@ -36,6 +36,8 @@ lazy_static! {
         .unwrap();
 }
 
+type ShredPackets = PacketBatch<Packet>;
+
 /// Assuming layout is
 /// signature: Signature
 /// signed_msg: {
@@ -77,7 +79,7 @@ pub fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<u64, [u8; 32]>) 
 }
 
 fn verify_shreds_cpu(
-    batches: &[PacketBatch],
+    batches: &[ShredPackets],
     slot_leaders: &HashMap<u64, [u8; 32]>,
 ) -> Vec<Vec<u8>> {
     use rayon::prelude::*;
@@ -103,7 +105,7 @@ fn slot_key_data_for_gpu<
     T: Sync + Sized + Default + std::fmt::Debug + Eq + std::hash::Hash + Clone + Copy + AsRef<[u8]>,
 >(
     offset_start: usize,
-    batches: &[PacketBatch],
+    batches: &[ShredPackets],
     slot_keys: &HashMap<u64, T>,
     recycler_cache: &RecyclerCache,
 ) -> (PinnedVec<u8>, TxOffset, usize) {
@@ -188,7 +190,7 @@ fn resize_vec(keyvec: &mut PinnedVec<u8>) -> usize {
 
 fn shred_gpu_offsets(
     mut pubkeys_end: usize,
-    batches: &[PacketBatch],
+    batches: &[ShredPackets],
     recycler_cache: &RecyclerCache,
 ) -> (TxOffset, TxOffset, TxOffset, Vec<Vec<u32>>) {
     let mut signature_offsets = recycler_cache.offsets().allocate("shred_signatures");
@@ -226,7 +228,7 @@ fn shred_gpu_offsets(
 }
 
 pub fn verify_shreds_gpu(
-    batches: &[PacketBatch],
+    batches: &[ShredPackets],
     slot_leaders: &HashMap<u64, [u8; 32]>,
     recycler_cache: &RecyclerCache,
 ) -> Vec<Vec<u8>> {
@@ -321,7 +323,7 @@ fn sign_shred_cpu(keypair: &Keypair, packet: &mut Packet) {
     packet.data[0..sig_end].copy_from_slice(signature.as_ref());
 }
 
-pub fn sign_shreds_cpu(keypair: &Keypair, batches: &mut [PacketBatch]) {
+pub fn sign_shreds_cpu(keypair: &Keypair, batches: &mut [ShredPackets]) {
     use rayon::prelude::*;
     let packet_count = count_packets_in_batches(batches);
     debug!("CPU SHRED ECDSA for {}", packet_count);
@@ -355,7 +357,7 @@ pub fn sign_shreds_gpu_pinned_keypair(keypair: &Keypair, cache: &RecyclerCache) 
 pub fn sign_shreds_gpu(
     keypair: &Keypair,
     pinned_keypair: &Option<Arc<PinnedVec<u8>>>,
-    batches: &mut [PacketBatch],
+    batches: &mut [ShredPackets],
     recycler_cache: &RecyclerCache,
 ) {
     let sig_size = size_of::<Signature>();

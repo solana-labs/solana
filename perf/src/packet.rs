@@ -1,5 +1,5 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
-pub use solana_sdk::packet::{Meta, Packet, PACKET_DATA_SIZE};
+pub use solana_sdk::packet::{Meta, Packet, PacketInterface, PACKET_DATA_SIZE};
 use {
     crate::{cuda_runtime::PinnedVec, recycler::Recycler},
     bincode::config::Options,
@@ -13,47 +13,50 @@ pub const PACKETS_PER_BATCH: usize = 128;
 pub const NUM_RCVMMSGS: usize = 128;
 
 #[derive(Debug, Default, Clone)]
-pub struct PacketBatch {
-    pub packets: PinnedVec<Packet>,
+pub struct PacketBatch<P: PacketInterface> {
+    pub packets: PinnedVec<P>,
 }
 
-pub type PacketBatchRecycler = Recycler<PinnedVec<Packet>>;
+pub type StandardPackets = PacketBatch<Packet>;
 
-impl PacketBatch {
-    pub fn new(packets: Vec<Packet>) -> Self {
+pub type PacketBatchRecycler<P> = Recycler<PinnedVec<P>>;
+pub type StandardPacketBatchRecycler = PacketBatchRecycler<Packet>;
+
+impl<P: PacketInterface> PacketBatch<P> {
+    pub fn new(packets: Vec<P>) -> Self {
         let packets = PinnedVec::from_vec(packets);
         Self { packets }
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
         let packets = PinnedVec::with_capacity(capacity);
-        PacketBatch { packets }
+        Self { packets }
     }
 
     pub fn new_unpinned_with_recycler(
-        recycler: PacketBatchRecycler,
+        recycler: PacketBatchRecycler<P>,
         size: usize,
         name: &'static str,
     ) -> Self {
         let mut packets = recycler.allocate(name);
         packets.reserve(size);
-        PacketBatch { packets }
+        Self { packets }
     }
 
     pub fn new_with_recycler(
-        recycler: PacketBatchRecycler,
+        recycler: PacketBatchRecycler<P>,
         size: usize,
         name: &'static str,
     ) -> Self {
         let mut packets = recycler.allocate(name);
         packets.reserve_and_pin(size);
-        PacketBatch { packets }
+        Self { packets }
     }
 
     pub fn new_with_recycler_data(
-        recycler: &PacketBatchRecycler,
+        recycler: &PacketBatchRecycler<P>,
         name: &'static str,
-        mut packets: Vec<Packet>,
+        mut packets: Vec<P>,
     ) -> Self {
         let mut batch = Self::new_with_recycler(recycler.clone(), packets.len(), name);
         batch.packets.append(&mut packets);
@@ -61,9 +64,9 @@ impl PacketBatch {
     }
 
     pub fn new_unpinned_with_recycler_data(
-        recycler: &PacketBatchRecycler,
+        recycler: &PacketBatchRecycler<P>,
         name: &'static str,
-        mut packets: Vec<Packet>,
+        mut packets: Vec<P>,
     ) -> Self {
         let mut batch = Self::new_unpinned_with_recycler(recycler.clone(), packets.len(), name);
         batch.packets.append(&mut packets);
@@ -71,8 +74,8 @@ impl PacketBatch {
     }
 
     pub fn set_addr(&mut self, addr: &SocketAddr) {
-        for p in self.packets.iter_mut() {
-            p.meta.set_addr(addr);
+        for packet in self.packets.iter_mut() {
+            packet.get_meta_mut().set_addr(addr);
         }
     }
 
@@ -81,17 +84,20 @@ impl PacketBatch {
     }
 }
 
-pub fn to_packet_batches<T: Serialize>(xs: &[T], chunks: usize) -> Vec<PacketBatch> {
-    let mut out = vec![];
+pub fn to_packet_batches<T: Serialize, P: PacketInterface>(
+    xs: &[T],
+    chunks: usize,
+) -> Vec<PacketBatch<P>> {
+    let mut batches = vec![];
     for x in xs.chunks(chunks) {
         let mut batch = PacketBatch::with_capacity(x.len());
-        batch.packets.resize(x.len(), Packet::default());
+        batch.packets.resize(x.len(), P::default());
         for (i, packet) in x.iter().zip(batch.packets.iter_mut()) {
-            Packet::populate_packet(packet, None, i).expect("serialize request");
+            P::populate_packet(packet, None, i).expect("serialize request");
         }
-        out.push(batch);
+        batches.push(batch);
     }
-    out
+    batches
 }
 
 #[cfg(test)]
@@ -99,19 +105,19 @@ pub fn to_packet_batches_for_tests<T: Serialize>(xs: &[T]) -> Vec<PacketBatch> {
     to_packet_batches(xs, NUM_PACKETS)
 }
 
-pub fn to_packet_batch_with_destination<T: Serialize>(
-    recycler: PacketBatchRecycler,
+pub fn to_packet_batch_with_destination<T: Serialize, P: PacketInterface>(
+    recycler: PacketBatchRecycler<P>,
     dests_and_data: &[(SocketAddr, T)],
-) -> PacketBatch {
+) -> PacketBatch<P> {
     let mut out = PacketBatch::new_unpinned_with_recycler(
         recycler,
         dests_and_data.len(),
         "to_packet_batch_with_destination",
     );
-    out.packets.resize(dests_and_data.len(), Packet::default());
+    out.packets.resize(dests_and_data.len(), P::default());
     for (dest_and_data, o) in dests_and_data.iter().zip(out.packets.iter_mut()) {
         if !dest_and_data.0.ip().is_unspecified() && dest_and_data.0.port() != 0 {
-            if let Err(e) = Packet::populate_packet(o, Some(&dest_and_data.0), &dest_and_data.1) {
+            if let Err(e) = P::populate_packet(o, Some(&dest_and_data.0), &dest_and_data.1) {
                 // TODO: This should never happen. Instead the caller should
                 // break the payload into smaller messages, and here any errors
                 // should be propagated.

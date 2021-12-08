@@ -14,7 +14,7 @@ use {
     solana_ledger::{blockstore::Blockstore, shred::SIZE_OF_NONCE},
     solana_measure::measure::Measure,
     solana_perf::{
-        packet::{limited_deserialize, Packet, PacketBatch},
+        packet::{limited_deserialize, Packet, StandardPackets},
         recycler::Recycler,
     },
     solana_runtime::bank::Bank,
@@ -23,7 +23,7 @@ use {
         pubkey::Pubkey,
         timing::timestamp,
     },
-    solana_streamer::streamer::{self, PacketBatchReceiver},
+    solana_streamer::streamer::{self, StandardPacketReceiver},
     std::{
         collections::HashSet,
         net::UdpSocket,
@@ -197,7 +197,7 @@ impl AncestorHashesService {
     /// Listen for responses to our ancestors hashes repair requests
     fn run_responses_listener(
         ancestor_hashes_request_statuses: Arc<DashMap<Slot, DeadSlotAncestorRequestStatus>>,
-        response_receiver: PacketBatchReceiver,
+        response_receiver: StandardPacketReceiver,
         blockstore: Arc<Blockstore>,
         outstanding_requests: Arc<RwLock<OutstandingAncestorHashesRepairs>>,
         exit: Arc<AtomicBool>,
@@ -240,7 +240,7 @@ impl AncestorHashesService {
     /// Process messages from the network
     fn process_new_packets_from_channel(
         ancestor_hashes_request_statuses: &DashMap<Slot, DeadSlotAncestorRequestStatus>,
-        response_receiver: &PacketBatchReceiver,
+        response_receiver: &StandardPacketReceiver,
         blockstore: &Blockstore,
         outstanding_requests: &RwLock<OutstandingAncestorHashesRepairs>,
         stats: &mut AncestorHashesResponsesStats,
@@ -291,7 +291,7 @@ impl AncestorHashesService {
 
     fn process_packet_batch(
         ancestor_hashes_request_statuses: &DashMap<Slot, DeadSlotAncestorRequestStatus>,
-        packet_batch: PacketBatch,
+        packet_batch: StandardPackets,
         stats: &mut AncestorHashesResponsesStats,
         outstanding_requests: &RwLock<OutstandingAncestorHashesRepairs>,
         blockstore: &Blockstore,

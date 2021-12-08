@@ -9,7 +9,7 @@ use solana_sdk::transaction::Transaction;
 use {
     crate::{
         cuda_runtime::PinnedVec,
-        packet::{Packet, PacketBatch},
+        packet::{Packet, PacketBatch, PacketInterface},
         perf_libs,
         recycler::Recycler,
     },
@@ -107,28 +107,28 @@ pub fn init() {
     }
 }
 
-fn verify_packet(packet: &mut Packet, reject_non_vote: bool) {
+fn verify_packet<P: PacketInterface>(packet: &mut P, reject_non_vote: bool) {
     let packet_offsets = get_packet_offsets(packet, 0, reject_non_vote);
     let mut sig_start = packet_offsets.sig_start as usize;
     let mut pubkey_start = packet_offsets.pubkey_start as usize;
     let msg_start = packet_offsets.msg_start as usize;
 
     // If this packet was already marked as discard, drop it
-    if packet.meta.discard {
+    if packet.get_meta().discard {
         return;
     }
 
     if packet_offsets.sig_len == 0 {
-        packet.meta.discard = true;
+        packet.get_meta_mut().discard = true;
         return;
     }
 
-    if packet.meta.size <= msg_start {
-        packet.meta.discard = true;
+    if packet.get_meta().size <= msg_start {
+        packet.get_meta_mut().discard = true;
         return;
     }
 
-    let msg_end = packet.meta.size;
+    let msg_end = packet.get_meta().size;
     for _ in 0..packet_offsets.sig_len {
         let pubkey_end = pubkey_start.saturating_add(size_of::<Pubkey>());
         let sig_end = sig_start.saturating_add(size_of::<Signature>());
@@ -136,21 +136,21 @@ fn verify_packet(packet: &mut Packet, reject_non_vote: bool) {
         // get_packet_offsets should ensure pubkey_end and sig_end do
         // not overflow packet.meta.size
 
-        let signature = Signature::new(&packet.data[sig_start..sig_end]);
+        let signature = Signature::new(&packet.get_data()[sig_start..sig_end]);
 
         if !signature.verify(
-            &packet.data[pubkey_start..pubkey_end],
-            &packet.data[msg_start..msg_end],
+            &packet.get_data()[pubkey_start..pubkey_end],
+            &packet.get_data()[msg_start..msg_end],
         ) {
-            packet.meta.discard = true;
+            packet.get_meta_mut().discard = true;
             return;
         }
 
         // Check for tracer pubkey
-        if !packet.meta.is_tracer_tx
-            && &packet.data[pubkey_start..pubkey_end] == TRACER_KEY.as_ref()
+        if !packet.get_meta().is_tracer_tx
+            && &packet.get_data()[pubkey_start..pubkey_end] == TRACER_KEY.as_ref()
         {
-            packet.meta.is_tracer_tx = true;
+            packet.get_meta_mut().is_tracer_tx = true;
         }
 
         pubkey_start = pubkey_end;
@@ -158,24 +158,24 @@ fn verify_packet(packet: &mut Packet, reject_non_vote: bool) {
     }
 }
 
-pub fn count_packets_in_batches(batches: &[PacketBatch]) -> usize {
+pub fn count_packets_in_batches<P: PacketInterface>(batches: &[PacketBatch<P>]) -> usize {
     batches.iter().map(|batch| batch.packets.len()).sum()
 }
 
 // internal function to be unit-tested; should be used only by get_packet_offsets
-fn do_get_packet_offsets(
-    packet: &Packet,
+fn do_get_packet_offsets<P: PacketInterface>(
+    packet: &P,
     current_offset: usize,
 ) -> Result<PacketOffsets, PacketError> {
     // should have at least 1 signature and sig lengths
     let _ = 1usize
         .checked_add(size_of::<Signature>())
-        .filter(|v| *v <= packet.meta.size)
+        .filter(|v| *v <= packet.get_meta().size)
         .ok_or(PacketError::InvalidLen)?;
 
     // read the length of Transaction.signatures (serialized with short_vec)
     let (sig_len_untrusted, sig_size) =
-        decode_shortu16_len(&packet.data).map_err(|_| PacketError::InvalidShortVec)?;
+        decode_shortu16_len(&packet.get_data()).map_err(|_| PacketError::InvalidShortVec)?;
 
     // Using msg_start_offset which is based on sig_len_untrusted introduces uncertainty.
     // Ultimately, the actual sigverify will determine the uncertainty.
@@ -187,14 +187,14 @@ fn do_get_packet_offsets(
     // Determine the start of the message header by checking the message prefix bit.
     let msg_header_offset = {
         // Packet should have data for prefix bit
-        if msg_start_offset >= packet.meta.size {
+        if msg_start_offset >= packet.get_meta().size {
             return Err(PacketError::InvalidSignatureLen);
         }
 
         // next byte indicates if the transaction is versioned. If the top bit
         // is set, the remaining bits encode a version number. If the top bit is
         // not set, this byte is the first byte of the message header.
-        let message_prefix = packet.data[msg_start_offset];
+        let message_prefix = packet.get_data()[msg_start_offset];
         if message_prefix & MESSAGE_VERSION_PREFIX != 0 {
             let version = message_prefix & !MESSAGE_VERSION_PREFIX;
             match version {
@@ -220,11 +220,11 @@ fn do_get_packet_offsets(
     // Packet should have data at least for MessageHeader and 1 byte for Message.account_keys.len
     let _ = msg_header_offset_plus_one
         .checked_add(MESSAGE_HEADER_LENGTH)
-        .filter(|v| *v <= packet.meta.size)
+        .filter(|v| *v <= packet.get_meta().size)
         .ok_or(PacketError::InvalidSignatureLen)?;
 
     // read MessageHeader.num_required_signatures (serialized with u8)
-    let sig_len_maybe_trusted = packet.data[msg_header_offset];
+    let sig_len_maybe_trusted = packet.get_data()[msg_header_offset];
 
     let message_account_keys_len_offset = msg_header_offset
         .checked_add(MESSAGE_HEADER_LENGTH)
@@ -235,7 +235,7 @@ fn do_get_packet_offsets(
     // num_readonly_signed_accounts, the first account is not debitable, and cannot be charged
     // required transaction fees.
     let readonly_signer_offset = msg_header_offset_plus_one;
-    if sig_len_maybe_trusted <= packet.data[readonly_signer_offset] {
+    if sig_len_maybe_trusted <= packet.get_data()[readonly_signer_offset] {
         return Err(PacketError::PayerNotWritable);
     }
 
@@ -245,7 +245,7 @@ fn do_get_packet_offsets(
 
     // read the length of Message.account_keys (serialized with short_vec)
     let (pubkey_len, pubkey_len_size) =
-        decode_shortu16_len(&packet.data[message_account_keys_len_offset..])
+        decode_shortu16_len(&packet.get_data()[message_account_keys_len_offset..])
             .map_err(|_| PacketError::InvalidShortVec)?;
 
     let pubkey_start = message_account_keys_len_offset
@@ -255,7 +255,7 @@ fn do_get_packet_offsets(
     let _ = pubkey_len
         .checked_mul(size_of::<Pubkey>())
         .and_then(|v| v.checked_add(pubkey_start))
-        .filter(|v| *v <= packet.meta.size)
+        .filter(|v| *v <= packet.get_meta().size)
         .ok_or(PacketError::InvalidPubkeyLen)?;
 
     if pubkey_len < sig_len_untrusted {
@@ -281,15 +281,15 @@ fn do_get_packet_offsets(
     ))
 }
 
-fn get_packet_offsets(
-    packet: &mut Packet,
+fn get_packet_offsets<P: PacketInterface>(
+    packet: &mut P,
     current_offset: usize,
     reject_non_vote: bool,
 ) -> PacketOffsets {
     let unsanitized_packet_offsets = do_get_packet_offsets(packet, current_offset);
     if let Ok(offsets) = unsanitized_packet_offsets {
         check_for_simple_vote_transaction(packet, &offsets, current_offset).ok();
-        if !reject_non_vote || packet.meta.is_simple_vote_tx {
+        if !reject_non_vote || packet.get_meta().is_simple_vote_tx {
             return offsets;
         }
     }
@@ -297,8 +297,8 @@ fn get_packet_offsets(
     PacketOffsets::new(0, 0, 0, 0, 0)
 }
 
-fn check_for_simple_vote_transaction(
-    packet: &mut Packet,
+fn check_for_simple_vote_transaction<P: PacketInterface>(
+    packet: &mut P,
     packet_offsets: &PacketOffsets,
     current_offset: usize,
 ) -> Result<(), PacketError> {
@@ -321,11 +321,11 @@ fn check_for_simple_vote_transaction(
     // Packet should have at least 1 more byte for instructions.len
     let _ = instructions_len_offset
         .checked_add(1usize)
-        .filter(|v| *v <= packet.meta.size)
+        .filter(|v| *v <= packet.get_meta().size)
         .ok_or(PacketError::InvalidLen)?;
 
     let (instruction_len, instruction_len_size) =
-        decode_shortu16_len(&packet.data[instructions_len_offset..])
+        decode_shortu16_len(&packet.get_data()[instructions_len_offset..])
             .map_err(|_| PacketError::InvalidLen)?;
 
     // skip if has more than 1 instruction
@@ -340,10 +340,10 @@ fn check_for_simple_vote_transaction(
     // Packet should have at least 1 more byte for one instructions_program_id
     let _ = instruction_start
         .checked_add(1usize)
-        .filter(|v| *v <= packet.meta.size)
+        .filter(|v| *v <= packet.get_meta().size)
         .ok_or(PacketError::InvalidLen)?;
 
-    let instruction_program_id_index: usize = usize::from(packet.data[instruction_start]);
+    let instruction_program_id_index: usize = usize::from(packet.get_data()[instruction_start]);
 
     if instruction_program_id_index >= packet_offsets.pubkey_len as usize {
         return Err(PacketError::InvalidProgramIdIndex);
@@ -357,16 +357,17 @@ fn check_for_simple_vote_transaction(
         .checked_add(size_of::<Pubkey>())
         .ok_or(PacketError::InvalidLen)?;
 
-    if &packet.data[instruction_program_id_start..instruction_program_id_end]
+    if &packet.get_data()[instruction_program_id_start..instruction_program_id_end]
         == solana_sdk::vote::program::id().as_ref()
     {
-        packet.meta.is_simple_vote_tx = true;
+        // TODO: this should be mut
+        packet.get_meta_mut().is_simple_vote_tx = true;
     }
     Ok(())
 }
 
-pub fn generate_offsets(
-    batches: &mut [PacketBatch],
+pub fn generate_offsets<P: PacketInterface>(
+    batches: &mut [PacketBatch<P>],
     recycler: &Recycler<TxOffset>,
     reject_non_vote: bool,
 ) -> TxOffsets {
@@ -392,7 +393,7 @@ pub fn generate_offsets(
 
             let mut pubkey_offset = packet_offsets.pubkey_start;
             let mut sig_offset = packet_offsets.sig_start;
-            let msg_size = current_offset.saturating_add(packet.meta.size) as u32;
+            let msg_size = current_offset.saturating_add(packet.get_meta().size) as u32;
             for _ in 0..packet_offsets.sig_len {
                 signature_offsets.push(sig_offset);
                 sig_offset = sig_offset.saturating_add(size_of::<Signature>() as u32);
@@ -418,7 +419,10 @@ pub fn generate_offsets(
     )
 }
 
-pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool) {
+pub fn ed25519_verify_cpu<P: PacketInterface>(
+    batches: &mut [PacketBatch<P>],
+    reject_non_vote: bool,
+) {
     use rayon::prelude::*;
     let packet_count = count_packets_in_batches(batches);
     debug!("CPU ECDSA for {}", packet_count);
@@ -433,7 +437,7 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool) {
     inc_new_counter_debug!("ed25519_verify_cpu", packet_count);
 }
 
-pub fn ed25519_verify_disabled(batches: &mut [PacketBatch]) {
+pub fn ed25519_verify_disabled<P: PacketInterface>(batches: &mut [PacketBatch<P>]) {
     use rayon::prelude::*;
     let packet_count = count_packets_in_batches(batches);
     debug!("disabled ECDSA for {}", packet_count);
@@ -441,7 +445,7 @@ pub fn ed25519_verify_disabled(batches: &mut [PacketBatch]) {
         batch
             .packets
             .par_iter_mut()
-            .for_each(|p| p.meta.discard = false)
+            .for_each(|p| p.get_meta_mut().discard = false)
     });
     inc_new_counter_debug!("ed25519_verify_disabled", packet_count);
 }
@@ -497,16 +501,16 @@ pub fn get_checked_scalar(scalar: &[u8; 32]) -> Result<[u8; 32], PacketError> {
     Ok(out)
 }
 
-pub fn mark_disabled(batches: &mut [PacketBatch], r: &[Vec<u8>]) {
+pub fn mark_disabled<P: PacketInterface>(batches: &mut [PacketBatch<P>], r: &[Vec<u8>]) {
     batches.iter_mut().zip(r).for_each(|(b, v)| {
         b.packets.iter_mut().zip(v).for_each(|(p, f)| {
-            p.meta.discard = *f == 0;
+            p.get_meta_mut().discard = *f == 0;
         })
     });
 }
 
-pub fn ed25519_verify(
-    batches: &mut [PacketBatch],
+pub fn ed25519_verify<P: PacketInterface>(
+    batches: &mut [PacketBatch<P>],
     recycler: &Recycler<TxOffset>,
     recycler_out: &Recycler<PinnedVec<u8>>,
     reject_non_vote: bool,
@@ -542,7 +546,9 @@ pub fn ed25519_verify(
     let mut num_packets: usize = 0;
     for batch in batches.iter() {
         elems.push(perf_libs::Elems {
-            elems: batch.packets.as_ptr(),
+            // TODO: This is a VERY dirty hack for compilation; this will work fine if P
+            //       is Packet type, but will need a proper solution for other impl's of P
+            elems: batch.packets.as_ptr().cast::<Packet>(),
             num: batch.packets.len() as u32,
         });
         let mut v = Vec::new();
