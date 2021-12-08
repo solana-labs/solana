@@ -1518,6 +1518,14 @@ struct IndexAccountMapEntry<'a> {
 
 type GenerateIndexAccountsMap<'a> = HashMap<Pubkey, IndexAccountMapEntry<'a>>;
 
+#[derive(Debug, Default, Clone, Copy)]
+struct GenerateIndexForSlotResult {
+    insert_time_us: u64,
+    num_accounts: u64,
+    num_accounts_rent_exempt: u64,
+    accounts_data_len: usize,
+}
+
 impl AccountsDb {
     pub fn default_for_tests() -> Self {
         Self::default_with_accounts_index(AccountInfoAccountsIndex::default_for_tests(), None, None)
@@ -6657,22 +6665,21 @@ impl AccountsDb {
         accounts_map
     }
 
-    /// return time_us, # accts rent exempt, total # accts
     fn generate_index_for_slot<'a>(
         &self,
         accounts_map: GenerateIndexAccountsMap<'a>,
         slot: &Slot,
         rent_collector: &RentCollector,
-        total_data_len: &AtomicUsize,
-    ) -> (u64, u64, u64) {
+    ) -> GenerateIndexForSlotResult {
         if accounts_map.is_empty() {
-            return (0, 0, 0);
+            return GenerateIndexForSlotResult::default();
         }
 
         let secondary = !self.account_indexes.is_empty();
 
-        let mut rent_exempt = 0;
-        let len = accounts_map.len();
+        let mut num_accounts_rent_exempt = 0;
+        let mut accounts_data_len = 0;
+        let num_accounts = accounts_map.len();
         let items = accounts_map.into_iter().map(
             |(
                 pubkey,
@@ -6690,13 +6697,13 @@ impl AccountsDb {
                         &self.account_indexes,
                     );
                 }
-                total_data_len.fetch_add(stored_account.data.len(), Ordering::Relaxed);
+                accounts_data_len += stored_account.data().len();
 
                 if !rent_collector.should_collect_rent(&pubkey, &stored_account, false) || {
                     let (_rent_due, exempt) = rent_collector.get_rent_due(&stored_account);
                     exempt
                 } {
-                    rent_exempt += 1;
+                    num_accounts_rent_exempt += 1;
                 }
 
                 (
@@ -6711,9 +6718,9 @@ impl AccountsDb {
             },
         );
 
-        let (dirty_pubkeys, insert_us) = self
+        let (dirty_pubkeys, insert_time_us) = self
             .accounts_index
-            .insert_new_if_missing_into_primary_index(*slot, len, items);
+            .insert_new_if_missing_into_primary_index(*slot, num_accounts, items);
 
         // dirty_pubkeys will contain a pubkey if an item has multiple rooted entries for
         // a given pubkey. If there is just a single item, there is no cleaning to
@@ -6721,7 +6728,12 @@ impl AccountsDb {
         if !dirty_pubkeys.is_empty() {
             self.uncleaned_pubkeys.insert(*slot, dirty_pubkeys);
         }
-        (insert_us, rent_exempt, len as u64)
+        GenerateIndexForSlotResult {
+            insert_time_us,
+            num_accounts: num_accounts as u64,
+            num_accounts_rent_exempt,
+            accounts_data_len,
+        }
     }
 
     fn filler_unique_id_bytes() -> usize {
@@ -6857,7 +6869,7 @@ impl AccountsDb {
         limit_load_slot_count_from_snapshot: Option<usize>,
         verify: bool,
         genesis_config: &GenesisConfig,
-    ) {
+    ) -> usize {
         let mut slots = self.storage.all_slots();
         #[allow(clippy::stable_sort_primitive)]
         slots.sort();
@@ -6872,6 +6884,7 @@ impl AccountsDb {
             genesis_config.slots_per_year(),
             &genesis_config.rent,
         );
+        let accounts_data_len = AtomicUsize::new(0);
 
         // pass == 0 always runs and generates the index
         // pass == 1 only runs if verify == true.
@@ -6890,7 +6903,6 @@ impl AccountsDb {
             let rent_exempt = AtomicU64::new(0);
             let total_duplicates = AtomicU64::new(0);
             let storage_info_timings = Mutex::new(GenerateIndexTimings::default());
-            let total_data_len = AtomicUsize::new(0);
             let scan_time: u64 = slots
                 .par_chunks(chunk_size)
                 .map(|slots| {
@@ -6918,15 +6930,16 @@ impl AccountsDb {
 
                         let insert_us = if pass == 0 {
                             // generate index
-                            let (insert_us, rent_exempt_this_slot, total_this_slot) = self
-                                .generate_index_for_slot(
-                                    accounts_map,
-                                    slot,
-                                    &rent_collector,
-                                    &total_data_len,
-                                );
+                            let GenerateIndexForSlotResult {
+                                insert_time_us: insert_us,
+                                num_accounts: total_this_slot,
+                                num_accounts_rent_exempt: rent_exempt_this_slot,
+                                accounts_data_len: accounts_data_len_this_slot,
+                            } = self.generate_index_for_slot(accounts_map, slot, &rent_collector);
                             rent_exempt.fetch_add(rent_exempt_this_slot, Ordering::Relaxed);
                             total_duplicates.fetch_add(total_this_slot, Ordering::Relaxed);
+                            accounts_data_len
+                                .fetch_add(accounts_data_len_this_slot, Ordering::Relaxed);
                             insert_us
                         } else {
                             // verify index matches expected and measure the time to get all items
@@ -6980,8 +6993,9 @@ impl AccountsDb {
                 })
                 .sum();
 
-            {
-                // subtract data.len() from total_data_len for all old accounts which are in the index twice
+            if pass == 0 {
+                // subtract data.len() from accounts_data_len for all old accounts which are in the index twice
+                let mut timer = Measure::start("get accounts data len");
                 let mut unique_pubkeys = HashSet::<Pubkey>::default();
                 self.uncleaned_pubkeys.iter().for_each(|entry| {
                     entry.value().iter().for_each(|pubkey| {
@@ -6991,9 +7005,10 @@ impl AccountsDb {
                 unique_pubkeys
                     .into_iter()
                     .collect::<Vec<_>>()
-                    .par_chunks(4000)
+                    .par_chunks(4096)
                     .for_each(|pubkeys| {
                         // subract out older data.len() for each pubkey
+                        let mut accounts_data_len_from_duplicates = 0;
                         pubkeys.into_iter().for_each(|pubkey| {
                             if let Some(entry) = self.accounts_index.get_account_read_entry(pubkey)
                             {
@@ -7018,14 +7033,20 @@ impl AccountsDb {
                                         let loaded_account =
                                             accessor.check_and_get_loaded_account();
                                         let account = loaded_account.take_account();
-                                        total_data_len
-                                            .fetch_sub(account.data().len(), Ordering::Relaxed);
+                                        accounts_data_len_from_duplicates += account.data().len();
                                     });
                             }
                         });
+                        accounts_data_len
+                            .fetch_sub(accounts_data_len_from_duplicates, Ordering::Relaxed);
                     });
+                timer.stop();
+                info!(
+                    "accounts data len: {}, {:?}",
+                    accounts_data_len.load(Ordering::Relaxed),
+                    timer
+                );
             }
-            info!("len: {}", total_data_len.load(Ordering::Relaxed));
 
             let storage_info_timings = storage_info_timings.into_inner().unwrap();
 
@@ -7064,6 +7085,7 @@ impl AccountsDb {
             }
             timings.report();
         }
+        accounts_data_len.load(Ordering::Relaxed)
     }
 
     fn update_storage_info(

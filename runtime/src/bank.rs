@@ -1563,6 +1563,7 @@ impl Bank {
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
         debug_do_not_add_builtins: bool,
+        accounts_data_len: usize,
     ) -> Self {
         fn new<T: Default>() -> T {
             T::default()
@@ -1625,14 +1626,8 @@ impl Bank {
             vote_only_bank: false,
             cost_tracker: RwLock::new(CostTracker::default()),
             sysvar_cache: RwLock::new(Vec::new()),
-            accounts_data_len: AtomicUsize::default(),
+            accounts_data_len: AtomicUsize::new(accounts_data_len),
         };
-
-        // bprumo TODO: get this from fields instead
-        let total_account_stats = bank.get_total_accounts_stats().unwrap();
-        bank.accounts_data_len
-            .store(total_account_stats.data_len, Release);
-
         bank.finish_init(
             genesis_config,
             additional_builtins,

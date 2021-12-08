@@ -334,7 +334,7 @@ fn reconstruct_bank_from_fields<E>(
 where
     E: SerializableStorage + std::marker::Sync,
 {
-    let accounts_db = reconstruct_accountsdb_from_fields(
+    let (accounts_db, accounts_data_len) = reconstruct_accountsdb_from_fields(
         snapshot_accounts_db_fields,
         account_paths,
         unpacked_append_vec_map,
@@ -359,6 +359,7 @@ where
         debug_keys,
         additional_builtins,
         debug_do_not_add_builtins,
+        accounts_data_len,
     );
 
     info!("rent_collector: {:?}", bank.rent_collector());
@@ -399,7 +400,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-) -> Result<AccountsDb, Error>
+) -> Result<(AccountsDb, usize), Error>
 where
     E: SerializableStorage + std::marker::Sync,
 {
@@ -536,7 +537,7 @@ where
         })
         .unwrap();
 
-    accounts_db.generate_index(
+    let accounts_data_len = accounts_db.generate_index(
         limit_load_slot_count_from_snapshot,
         verify_index,
         genesis_config,
@@ -557,5 +558,5 @@ where
         ("accountsdb-notify-at-start-us", measure_notify.as_us(), i64),
     );
 
-    Ok(Arc::try_unwrap(accounts_db).unwrap())
+    Ok((Arc::try_unwrap(accounts_db).unwrap(), accounts_data_len))
 }
