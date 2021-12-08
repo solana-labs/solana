@@ -14,7 +14,7 @@ use {
 
 crate::declare_id!("ComputeBudget111111111111111111111111111111");
 
-const MAX_UNITS: u32 = 1_000_000;
+const MAX_UNITS: u32 = 1_400_000;
 const MAX_HEAP_FRAME_BYTES: u32 = 256 * 1024;
 
 /// Compute Budget Instructions

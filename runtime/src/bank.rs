@@ -47,6 +47,7 @@ use {
         ancestors::{Ancestors, AncestorsForSerialization},
         blockhash_queue::BlockhashQueue,
         builtins::{self, ActivationType, Builtin, Builtins},
+        compute_budget_whitelist::is_whitelisted,
         cost_tracker::CostTracker,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         inline_spl_token,
@@ -3517,7 +3518,12 @@ impl Bank {
                     let mut compute_budget = self.compute_budget.unwrap_or_else(ComputeBudget::new);
 
                     let mut process_result = if feature_set.is_active(&tx_wide_compute_cap::id()) {
-                        compute_budget.process_transaction(tx, feature_set.clone())
+                        if let Some(max_units) = is_whitelisted(&tx) {
+                            compute_budget.max_units = max_units;
+                            Ok(())
+                        } else {
+                            compute_budget.process_transaction(tx, feature_set.clone())
+                        }
                     } else {
                         Ok(())
                     };

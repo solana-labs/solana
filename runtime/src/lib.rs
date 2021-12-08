@@ -23,6 +23,7 @@ pub mod builtins;
 pub mod cache_hash_data;
 pub mod cache_hash_data_stats;
 pub mod commitment;
+pub mod compute_budget_whitelist;
 pub mod contains;
 pub mod cost_model;
 pub mod cost_tracker;

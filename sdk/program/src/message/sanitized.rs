@@ -134,6 +134,13 @@ impl SanitizedMessage {
         })
     }
 
+    pub fn program_ids(&self) -> Vec<&Pubkey> {
+        self.instructions()
+            .iter()
+            .filter_map(|ix| self.get_account_key(ix.program_id_index as usize))
+            .collect()
+    }
+
     /// Iterator of all account keys referenced in this message, included mapped keys.
     pub fn account_keys_iter(&self) -> Box<dyn Iterator<Item = &Pubkey> + '_> {
         match self {
