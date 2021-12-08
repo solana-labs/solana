@@ -15,6 +15,7 @@ pub(super) struct FailEntryVerificationBroadcastRun {
     good_shreds: Vec<Shred>,
     current_slot: Slot,
     next_shred_index: u32,
+    next_code_index: u32,
     cluster_nodes_cache: Arc<ClusterNodesCache<BroadcastStage>>,
 }
 
@@ -29,6 +30,7 @@ impl FailEntryVerificationBroadcastRun {
             good_shreds: vec![],
             current_slot: 0,
             next_shred_index: 0,
+            next_code_index: 0,
             cluster_nodes_cache,
         }
     }
@@ -50,6 +52,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
 
         if bank.slot() != self.current_slot {
             self.next_shred_index = 0;
+            self.next_code_index = 0;
             self.current_slot = bank.slot();
         }
 
@@ -83,22 +86,26 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         )
         .expect("Expected to create a new shredder");
 
-        let (data_shreds, _) = shredder.entries_to_shreds(
+        let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
             keypair,
             &receive_results.entries,
             last_tick_height == bank.max_tick_height() && last_entries.is_none(),
             self.next_shred_index,
+            self.next_code_index,
         );
 
         self.next_shred_index += data_shreds.len() as u32;
+        if let Some(index) = coding_shreds.iter().map(Shred::index).max() {
+            self.next_code_index = index + 1;
+        }
         let last_shreds = last_entries.map(|(good_last_entry, bad_last_entry)| {
             let (good_last_data_shred, _) =
-                shredder.entries_to_shreds(keypair, &[good_last_entry], true, self.next_shred_index);
+                shredder.entries_to_shreds(keypair, &[good_last_entry], true, self.next_shred_index, self.next_code_index);
 
             let (bad_last_data_shred, _) =
                 // Don't mark the last shred as last so that validators won't know that
                 // they've gotten all the shreds, and will continue trying to repair
-                shredder.entries_to_shreds(keypair, &[bad_last_entry], false, self.next_shred_index);
+                shredder.entries_to_shreds(keypair, &[bad_last_entry], false, self.next_shred_index, self.next_code_index);
 
             self.next_shred_index += 1;
             (good_last_data_shred, bad_last_data_shred)

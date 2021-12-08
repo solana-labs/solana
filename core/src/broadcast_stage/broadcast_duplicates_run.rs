@@ -28,6 +28,7 @@ pub(super) struct BroadcastDuplicatesRun {
     config: BroadcastDuplicatesConfig,
     current_slot: Slot,
     next_shred_index: u32,
+    next_code_index: u32,
     shred_version: u16,
     recent_blockhash: Option<Hash>,
     prev_entry_hash: Option<Hash>,
@@ -46,6 +47,7 @@ impl BroadcastDuplicatesRun {
         Self {
             config,
             next_shred_index: u32::MAX,
+            next_code_index: 0,
             shred_version,
             current_slot: 0,
             recent_blockhash: None,
@@ -74,6 +76,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
 
         if bank.slot() != self.current_slot {
             self.next_shred_index = 0;
+            self.next_code_index = 0;
             self.current_slot = bank.slot();
             self.prev_entry_hash = None;
             self.num_slots_broadcasted += 1;
@@ -154,22 +157,26 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         )
         .expect("Expected to create a new shredder");
 
-        let (data_shreds, _) = shredder.entries_to_shreds(
+        let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
             keypair,
             &receive_results.entries,
             last_tick_height == bank.max_tick_height() && last_entries.is_none(),
             self.next_shred_index,
+            self.next_code_index,
         );
 
         self.next_shred_index += data_shreds.len() as u32;
+        if let Some(index) = coding_shreds.iter().map(Shred::index).max() {
+            self.next_code_index = index + 1;
+        }
         let last_shreds = last_entries.map(|(original_last_entry, duplicate_extra_last_entries)| {
             let (original_last_data_shred, _) =
-                shredder.entries_to_shreds(keypair, &[original_last_entry], true, self.next_shred_index);
+                shredder.entries_to_shreds(keypair, &[original_last_entry], true, self.next_shred_index, self.next_code_index);
 
             let (partition_last_data_shred, _) =
                 // Don't mark the last shred as last so that validators won't know that
                 // they've gotten all the shreds, and will continue trying to repair
-                shredder.entries_to_shreds(keypair, &duplicate_extra_last_entries, true, self.next_shred_index);
+                shredder.entries_to_shreds(keypair, &duplicate_extra_last_entries, true, self.next_shred_index, self.next_code_index);
 
                 let sigs: Vec<_> = partition_last_data_shred.iter().map(|s| (s.signature(), s.index())).collect();
                 info!(

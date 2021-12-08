@@ -100,7 +100,11 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     let slot = 0;
     let parent = 0;
     let shredder = Shredder::new(slot, parent, 0, 0).unwrap();
-    let mut data_shreds = shredder.entries_to_shreds(&keypair, &entries, true, 0).0;
+    let (mut data_shreds, _) = shredder.entries_to_shreds(
+        &keypair, &entries, true, // is_last_in_slot
+        0,    // next_shred_index
+        0,    // next_code_index
+    );
 
     let num_packets = data_shreds.len();
 
