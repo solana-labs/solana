@@ -22,6 +22,7 @@ $(eval echo "$@")"
     upload_results_to_slack
   fi
 
+
   (
     execution_step "Collecting Logfiles from Nodes"
     collect_logs
