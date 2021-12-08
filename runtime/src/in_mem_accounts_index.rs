@@ -28,13 +28,15 @@ type K = Pubkey;
 type CacheRangesHeld = RwLock<Vec<Option<RangeInclusive<Pubkey>>>>;
 pub type SlotT<T> = (Slot, T);
 
+type InMemMap<T> = HashMap<Pubkey, AccountMapEntry<T>>;
+
 #[allow(dead_code)] // temporary during staging
                     // one instance of this represents one bin of the accounts index.
 pub struct InMemAccountsIndex<T: IndexValue> {
     last_age_flushed: AtomicU8,
 
     // backing store
-    map_internal: RwLock<HashMap<Pubkey, AccountMapEntry<T>>>,
+    map_internal: RwLock<InMemMap<T>>,
     storage: Arc<BucketMapHolder<T>>,
     bin: usize,
 
@@ -102,6 +104,16 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
     fn map(&self) -> &RwLock<HashMap<Pubkey, AccountMapEntry<T>>> {
         &self.map_internal
+    }
+
+    /// Release entire in-mem hashmap to free all memory associated with it.
+    /// Idea is that during startup we needed a larger map than we need during runtime.
+    /// When using disk-buckets, in-mem index grows over time with dynamic use and then shrinks, in theory back to 0.
+    pub fn shrink_to_fit(&self) {
+        // shrink_to_fit could be quite expensive on large map sizes, which 'no disk buckets' could produce, so avoid shrinking in case we end up here
+        if self.storage.is_disk_index_enabled() {
+            self.map_internal.write().unwrap().shrink_to_fit();
+        }
     }
 
     pub fn items<R>(&self, range: &Option<&R>) -> Vec<(K, AccountMapEntry<T>)>
@@ -898,6 +910,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 occupied.remove();
             }
         }
+        if map.is_empty() {
+            map.shrink_to_fit();
+        }
+        drop(map);
         self.stats()
             .insert_or_delete_mem_count(false, self.bin, removed);
         Self::update_stat(&self.stats().flush_entries_removed_from_mem, removed as u64);
