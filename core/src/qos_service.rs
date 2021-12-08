@@ -24,12 +24,21 @@ use {
     },
 };
 
+// QosService is local to each banking thread, each instance of QosService provides services to
+// one banking thread.
+// It hosts a private thread for async metrics reporting, tagged with banking thredas ID. Banking
+// threda calls `report_metrics(&bank)` at end of `process_and_record_tramsaction()`, or any time
+// it wants, QosService sends `&bank` to reporting thread via channel, signalling stats to be
+// reported if new bank slot has changed.
+//
 pub struct QosService {
     // cost_model instance is owned by validator, shared between replay_stage and
     // banking_stage. replay_stage writes the latest on-chain program timings to
     // it; banking_stage's qos_service reads that information to calculate
     // transaction cost, hence RwLock wrapped.
     cost_model: Arc<RwLock<CostModel>>,
+    // QosService hosts metrics object and a private reporting thread, as well as sender to
+    // communicate with thread.
     report_sender: Sender<Arc<Bank>>,
     metrics: Arc<QosServiceMetrics>,
     // metrics reporting runs on a private thread
@@ -147,11 +156,42 @@ impl QosService {
         select_results
     }
 
-    // metrics are reported with bank slot
+    // metrics are reported by bank slot
     pub fn report_metrics(&self, bank: Arc<Bank>) {
         self.report_sender
             .send(bank)
             .unwrap_or_else(|err| warn!("qos service report metrics failed: {:?}", err));
+    }
+
+    // metrics accumulating apis
+    pub fn accumulate_tpu_ingested_packets_count(&self, count: u64) {
+        self.metrics
+            .tpu_ingested_packets_count
+            .fetch_add(count, Ordering::Relaxed);
+    }
+
+    pub fn accumulate_tpu_buffered_packets_count(&self, count: u64) {
+        self.metrics
+            .tpu_buffered_packets_count
+            .fetch_add(count, Ordering::Relaxed);
+    }
+
+    pub fn accumulated_verified_txs_count(&self, count: u64) {
+        self.metrics
+            .verified_txs_count
+            .fetch_add(count, Ordering::Relaxed);
+    }
+
+    pub fn accumulated_processed_txs_count(&self, count: u64) {
+        self.metrics
+            .processed_txs_count
+            .fetch_add(count, Ordering::Relaxed);
+    }
+
+    pub fn accumulated_retryable_txs_count(&self, count: u64) {
+        self.metrics
+            .retryable_txs_count
+            .fetch_add(count, Ordering::Relaxed);
     }
 
     fn reporting_loop(
@@ -170,10 +210,31 @@ impl QosService {
 
 #[derive(Default)]
 struct QosServiceMetrics {
-    // bankign_stage creates one qos_service instance per working threads, which is uniquely
+    // banking_stage creates one QosService instance per working threads, that is uniquely
     // identified by id. This field allows to categorize metrics for gossip votes, TPU votes
     // and other transactions.
     id: u32,
+
+    // aggregate metrics per slot
+    slot: AtomicU64,
+
+    // accumulated number of live packets TPU received from verified receiver for processing.
+    tpu_ingested_packets_count: AtomicU64,
+
+    // accumulated number of live packets TPU put into buffer due to no active bank.
+    tpu_buffered_packets_count: AtomicU64,
+
+    // accumulated number of verified txs, which excludes unsanitized transactions and
+    // non-vote transactions when in vote-only mode from ingested packets
+    verified_txs_count: AtomicU64,
+
+    // accumulated number of transactions been processed, includes those landed and those to be
+    // returned (due to AccountInUse, and other QoS related reasons)
+    processed_txs_count: AtomicU64,
+
+    // accumulated number of transactions buffered for retry, often due to AccountInUse and QoS
+    // reasons, includes retried_txs_per_block_limit_count and retried_txs_per_account_limit_count
+    retryable_txs_count: AtomicU64,
 
     // accumulated time in micro-sec spent in computing transaction cost. It is the main performance
     // overhead introduced by cost_model
@@ -196,6 +257,8 @@ struct QosServiceMetrics {
     // number of transactions to be queued for retry due to its potential to breach writable
     // account limit
     retried_txs_per_account_limit_count: AtomicU64,
+
+    // number of transactions to be queued for retry due to its account data limits
     retried_txs_per_account_data_limit_count: AtomicU64,
 }
 
@@ -208,49 +271,77 @@ impl QosServiceMetrics {
     }
 
     pub fn report(&self, bank_slot: Slot) {
-        datapoint_info!(
-            "qos-service-stats",
-            ("id", self.id as i64, i64),
-            ("bank_slot", bank_slot as i64, i64),
-            (
-                "compute_cost_time",
-                self.compute_cost_time.swap(0, Ordering::Relaxed) as i64,
-                i64
-            ),
-            (
-                "compute_cost_count",
-                self.compute_cost_count.swap(0, Ordering::Relaxed) as i64,
-                i64
-            ),
-            (
-                "cost_tracking_time",
-                self.cost_tracking_time.swap(0, Ordering::Relaxed) as i64,
-                i64
-            ),
-            (
-                "selected_txs_count",
-                self.selected_txs_count.swap(0, Ordering::Relaxed) as i64,
-                i64
-            ),
-            (
-                "retried_txs_per_block_limit_count",
-                self.retried_txs_per_block_limit_count
-                    .swap(0, Ordering::Relaxed) as i64,
-                i64
-            ),
-            (
-                "retried_txs_per_account_limit_count",
-                self.retried_txs_per_account_limit_count
-                    .swap(0, Ordering::Relaxed) as i64,
-                i64
-            ),
-            (
-                "retried_txs_per_account_data_limit_count",
-                self.retried_txs_per_account_data_limit_count
-                    .swap(0, Ordering::Relaxed) as i64,
-                i64
-            ),
-        );
+        if bank_slot != self.slot.load(Ordering::Relaxed) {
+            datapoint_info!(
+                "qos-service-stats",
+                ("id", self.id as i64, i64),
+                ("bank_slot", bank_slot as i64, i64),
+                (
+                    "tpu_ingested_packets_count",
+                    self.tpu_ingested_packets_count.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "tpu_buffered_packets_count",
+                    self.tpu_buffered_packets_count.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "verified_txs_count",
+                    self.verified_txs_count.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "processed_txs_count",
+                    self.processed_txs_count.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "retryable_txs_count",
+                    self.retryable_txs_count.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "compute_cost_time",
+                    self.compute_cost_time.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "compute_cost_count",
+                    self.compute_cost_count.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "cost_tracking_time",
+                    self.cost_tracking_time.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "selected_txs_count",
+                    self.selected_txs_count.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "retried_txs_per_block_limit_count",
+                    self.retried_txs_per_block_limit_count
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "retried_txs_per_account_limit_count",
+                    self.retried_txs_per_account_limit_count
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "retried_txs_per_account_data_limit_count",
+                    self.retried_txs_per_account_data_limit_count
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+            );
+            self.slot.store(bank_slot, Ordering::Relaxed);
+        }
     }
 }
 
