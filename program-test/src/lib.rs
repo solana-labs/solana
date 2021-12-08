@@ -319,8 +319,9 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         }
 
         invoke_context
-            .process_cross_program_instruction(
+            .process_instruction(
                 &message,
+                &message.instructions[0],
                 &program_indices,
                 &account_indices,
                 &caller_privileges,
