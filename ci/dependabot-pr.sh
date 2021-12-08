@@ -25,12 +25,13 @@ api_base="https://api.github.com/repos/solana-labs/solana/pulls"
 pr_num=$(echo "$BUILDKITE_BRANCH" | grep -Eo '[0-9]+')
 branch=$(curl -s "$api_base/$pr_num" | python3 -c 'import json,sys;print(json.load(sys.stdin)["head"]["ref"])')
 
-git pull
 git add :**/Cargo.lock
 EMAIL="dependabot-buildkite@noreply.solana.com" \
   GIT_AUTHOR_NAME="$name" \
   GIT_COMMITTER_NAME="$name" \
   git commit -m "[auto-commit] Update all Cargo lock files"
+git config pull.rebase false
+git pull origin master --allow-unrelated-histories
 git push origin "HEAD:$branch"
 
 echo "Source branch is updated; failing this build for the next"
