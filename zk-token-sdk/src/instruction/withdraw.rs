@@ -6,8 +6,8 @@ use {
 use {
     crate::{
         encryption::{
-            elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey, ElGamalSecretKey},
-            pedersen::{Pedersen, PedersenBase, PedersenOpening},
+            elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
+            pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
         },
         equality_proof::EqualityProof,
         errors::ProofError,
@@ -15,9 +15,7 @@ use {
         range_proof::RangeProof,
         transcript::TranscriptProtocol,
     },
-    curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar, traits::MultiscalarMul},
     merlin::Transcript,
-    rand::rngs::OsRng,
     std::convert::TryInto,
 };
 
@@ -31,11 +29,14 @@ use {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct WithdrawData {
+    /// The source account ElGamal pubkey
+    pub elgamal_pubkey: pod::ElGamalPubkey, // 32 bytes
+
     /// The source account available balance *after* the withdraw (encrypted by
     /// `source_pk`
     pub final_balance_ct: pod::ElGamalCiphertext, // 64 bytes
 
-    /// Proof that the account is solvent
+    /// Range proof
     pub proof: WithdrawProof, // 736 bytes
 }
 
@@ -62,6 +63,7 @@ impl WithdrawData {
         let proof = WithdrawProof::new(source_keypair, final_balance, &final_balance_ct);
 
         Self {
+            elgamal_pubkey: source_keypair.public.into(),
             final_balance_ct: final_balance_ct.into(),
             proof,
         }
@@ -71,8 +73,9 @@ impl WithdrawData {
 #[cfg(not(target_arch = "bpf"))]
 impl Verifiable for WithdrawData {
     fn verify(&self) -> Result<(), ProofError> {
+        let elgamal_pubkey = self.elgamal_pubkey.try_into()?;
         let final_balance_ct = self.final_balance_ct.try_into()?;
-        self.proof.verify(&final_balance_ct)
+        self.proof.verify(&elgamal_pubkey, &final_balance_ct)
     }
 }
 
@@ -82,6 +85,9 @@ impl Verifiable for WithdrawData {
 #[repr(C)]
 #[allow(non_snake_case)]
 pub struct WithdrawProof {
+    /// New Pedersen commitment
+    pub commitment: pod::PedersenCommitment,
+
     /// Associated equality proof
     pub equality_proof: pod::EqualityProof,
 
@@ -115,6 +121,7 @@ impl WithdrawProof {
         let D_EG = final_balance_ct.decrypt_handle.get_point();
         let C_Ped = commitment.get_point();
 
+        // append all current state to the transcript
         transcript.append_point(b"P_EG", &P_EG.compress());
         transcript.append_point(b"C_EG", &C_EG.compress());
         transcript.append_point(b"D_EG", &D_EG.compress());
@@ -124,7 +131,6 @@ impl WithdrawProof {
         let equality_proof = EqualityProof::new(
             source_keypair,
             final_balance_ct,
-            &commitment,
             final_balance,
             &opening,
             &mut transcript,
@@ -138,36 +144,52 @@ impl WithdrawProof {
         );
 
         WithdrawProof {
+            commitment: commitment.into(),
             equality_proof: equality_proof.try_into().expect("equality proof"),
             range_proof: range_proof.try_into().expect("range proof"),
         }
     }
 
-    pub fn verify(&self, final_balance_ct: &ElGamalCiphertext) -> Result<(), ProofError> {
-        // let mut transcript = Self::transcript_new();
+    pub fn verify(
+        &self,
+        source_pk: &ElGamalPubkey,
+        final_balance_ct: &ElGamalCiphertext,
+    ) -> Result<(), ProofError> {
+        let mut transcript = Self::transcript_new();
 
-        // // Add a domain separator to record the start of the protocol
-        // transcript.withdraw_proof_domain_sep();
+        let commitment: PedersenCommitment = self.commitment.try_into()?;
+        let equality_proof: EqualityProof = self.equality_proof.try_into()?;
+        let range_proof: RangeProof = self.range_proof.try_into()?;
 
-        // // Extract the relevant scalar and Ristretto points from the input
-        // let C = final_balance_ct.message_comm.get_point();
-        // let D = final_balance_ct.decrypt_handle.get_point();
+        // add a domain separator to record the start of the protocol
+        transcript.withdraw_proof_domain_sep();
 
-        // let R = self.R.into();
-        // let z: Scalar = self.z.into();
+        // extract the relevant scalar and Ristretto points from the inputs
+        let P_EG = source_pk.get_point();
+        let C_EG = final_balance_ct.message_comm.get_point();
+        let D_EG = final_balance_ct.decrypt_handle.get_point();
+        let C_Ped = commitment.get_point();
 
-        // // generate a challenge scalar
-        // transcript.validate_and_append_point(b"R", &R)?;
-        // let c = transcript.challenge_scalar(b"c");
+        // append all current state to the transcript
+        transcript.append_point(b"P_EG", &P_EG.compress());
+        transcript.append_point(b"C_EG", &C_EG.compress());
+        transcript.append_point(b"D_EG", &D_EG.compress());
+        transcript.append_point(b"C_Ped", &C_Ped.compress());
 
-        // // decompress R or return verification error
-        // let R = R.decompress().ok_or(ProofError::VerificationError)?;
+        // verify equality proof
+        //
+        // TODO: we can also consider verifying equality and range proof in a batch
+        equality_proof.verify(source_pk, final_balance_ct, &commitment, &mut transcript)?;
 
-        // // compute new Pedersen commitment to verify range proof with
-        // let new_comm = RistrettoPoint::multiscalar_mul(vec![Scalar::one(), -z, c], vec![C, D, R]);
+        // verify range proof
+        //
+        // TODO: double compressing here - consider modifying range proof input type to `PedersenCommitment`
+        range_proof.verify(
+            vec![&commitment.get_point().compress()],
+            vec![64_usize],
+            &mut transcript,
+        )?;
 
-        // let range_proof: RangeProof = self.range_proof.try_into()?;
-        // range_proof.verify(vec![&new_comm.compress()], vec![64_usize], &mut transcript)
         Ok(())
     }
 }
@@ -176,37 +198,32 @@ impl WithdrawProof {
 mod test {
     use {super::*, crate::encryption::elgamal::ElGamalKeypair};
 
-    // #[test]
-    // #[ignore]
-    // fn test_withdraw_correctness() {
-    //     // generate and verify proof for the proper setting
-    //     let ElGamalKeypair { public, secret } = ElGamalKeypair::default();
+    #[test]
+    fn test_withdraw_correctness() {
+        // generate and verify proof for the proper setting
+        let elgamal_keypair = ElGamalKeypair::default();
 
-    //     let current_balance: u64 = 77;
-    //     let current_balance_ct = public.encrypt(current_balance);
+        let current_balance: u64 = 77;
+        let current_balance_ct = elgamal_keypair.public.encrypt(current_balance);
 
-    //     let withdraw_amount: u64 = 55;
+        let withdraw_amount: u64 = 55;
 
-    //     let data = WithdrawData::new(
-    //         withdraw_amount,
-    //         public,
-    //         &secret,
-    //         current_balance,
-    //         current_balance_ct,
-    //     );
-    //     assert!(data.verify().is_ok());
+        let data = WithdrawData::new(
+            withdraw_amount,
+            &elgamal_keypair,
+            current_balance,
+            current_balance_ct,
+        );
+        assert!(data.verify().is_ok());
 
-    //     // generate and verify proof with wrong balance
-    //     let wrong_balance: u64 = 99;
-    //     let data = WithdrawData::new(
-    //         withdraw_amount,
-    //         public,
-    //         &secret,
-    //         wrong_balance,
-    //         current_balance_ct,
-    //     );
-    //     assert!(data.verify().is_err());
-
-    //     // TODO: test for ciphertexts that encrypt numbers outside the 0, 2^64 range
-    // }
+        // generate and verify proof with wrong balance
+        let wrong_balance: u64 = 99;
+        let data = WithdrawData::new(
+            withdraw_amount,
+            &elgamal_keypair,
+            wrong_balance,
+            current_balance_ct,
+        );
+        assert!(data.verify().is_err());
+    }
 }
