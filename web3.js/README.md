@@ -49,18 +49,6 @@ $ npm install --save @solana/web3.js
 <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
 ```
 
-## Development Environment Setup
-
-Install the latest Solana release from https://docs.solana.com/cli/install-solana-cli-tools
-
-### Run test validator
-
-**Use `solana-test-validator` from the latest Solana release**
-
-### BPF program development
-
-**Use `cargo build-bpf` from the latest Solana release**
-
 ## Usage
 
 ### Javascript
@@ -86,13 +74,37 @@ console.log(solanaWeb3);
 
 ## Examples
 
-Example scripts for the web3.js repo and native programs:
+Quick example getting the balance of an account identified by its public key:
+
+```js
+const connection = new solanaWeb3.Connection(
+  solana.clusterApiUrl('mainnet-beta'),
+);
+
+const pubKey = new solanaWeb3.PublicKey('...');
+const balance = await connection.getBalance(pubKey);
+console.log(balance);
+```
+
+More example scripts for the web3.js repo and native programs:
 
 - [Web3 Examples](https://github.com/solana-labs/solana/tree/master/web3.js/examples)
 
 Example scripts for the Solana Program Library:
 
 - [Token Program Examples](https://github.com/solana-labs/solana-program-library/tree/master/token/js/examples)
+
+## Development Environment Setup
+
+Install the latest Solana release from https://docs.solana.com/cli/install-solana-cli-tools
+
+### Run test validator
+
+**Use `solana-test-validator` from the latest Solana release**
+
+### BPF program development
+
+**Use `cargo build-bpf` from the latest Solana release**
 
 ## Flow
 
