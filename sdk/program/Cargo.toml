@@ -27,7 +27,7 @@ rustversion = "1.0.3"
 serde = "1.0.112"
 serde_bytes = "0.11"
 serde_derive = "1.0.103"
-sha2 = "0.9.2"
+sha2 = "0.10.0"
 sha3 = "0.9.1"
 solana-frozen-abi = { path = "../../frozen-abi", version = "=1.10.0" }
 solana-frozen-abi-macro = { path = "../../frozen-abi/macro", version = "=1.10.0" }
