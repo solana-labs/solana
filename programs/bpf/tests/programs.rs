@@ -46,6 +46,9 @@ use solana_sdk::{
     clock::MAX_PROCESSING_AGE,
     compute_budget::ComputeBudgetInstruction,
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
+    feature_set::FeatureSet,
+    fee::FeeStructure,
+    fee_calculator::FeeRateGovernor,
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     loader_instruction,
     message::{v0::LoadedAddresses, Message, SanitizedMessage},
@@ -397,7 +400,7 @@ fn execute_transactions(
                         ),
                     }
                     .expect("lamports_per_signature must be available");
-                    let fee = Bank::get_fee_for_message_with_lamports_per_signature(
+                    let fee = bank.get_fee_for_message_with_lamports_per_signature(
                         &SanitizedMessage::try_from(tx.message().clone()).unwrap(),
                         lamports_per_signature,
                     );
@@ -1383,7 +1386,7 @@ fn test_program_bpf_compute_budget() {
     );
     let message = Message::new(
         &[
-            ComputeBudgetInstruction::request_units(1),
+            ComputeBudgetInstruction::request_units(1, 0),
             Instruction::new_with_bincode(program_id, &0, vec![]),
         ],
         Some(&mint_keypair.pubkey()),
@@ -2886,8 +2889,8 @@ fn test_program_bpf_realloc() {
         .unwrap();
 }
 
-#[cfg(feature = "bpf_rust")]
 #[test]
+#[cfg(feature = "bpf_rust")]
 fn test_program_bpf_realloc_invoke() {
     solana_logger::setup();
 
@@ -3417,4 +3420,77 @@ fn test_program_bpf_processed_inner_instruction() {
     assert!(bank_client
         .send_and_confirm_message(&[&mint_keypair], message)
         .is_ok());
+}
+
+#[test]
+#[cfg(feature = "bpf_rust")]
+fn test_program_fees() {
+    solana_logger::setup();
+
+    let congestion_multiplier = 1;
+
+    let GenesisConfigInfo {
+        mut genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(500_000_000);
+    genesis_config.fee_rate_governor = FeeRateGovernor::new(congestion_multiplier, 0);
+    let mut bank = Bank::new_for_tests(&genesis_config);
+    let fee_structure =
+        FeeStructure::new(0.000005, 0.0, vec![(200, 0.0000005), (1400000, 0.000005)]);
+    bank.fee_structure = fee_structure.clone();
+    bank.feature_set = Arc::new(FeatureSet::all_enabled());
+
+    let (name, id, entrypoint) = solana_bpf_loader_program!();
+    bank.add_builtin(&name, &id, entrypoint);
+    let bank_client = BankClient::new(bank);
+
+    let program_id = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_noop",
+    );
+
+    let pre_balance = bank_client.get_balance(&mint_keypair.pubkey()).unwrap();
+    let message = Message::new(
+        &[Instruction::new_with_bytes(program_id, &[], vec![])],
+        Some(&mint_keypair.pubkey()),
+    );
+
+    let sanitized_message = SanitizedMessage::try_from(message.clone()).unwrap();
+    let expected_max_fee = Bank::calculate_fee(
+        &sanitized_message,
+        congestion_multiplier,
+        &fee_structure,
+        true,
+    );
+    bank_client
+        .send_and_confirm_message(&[&mint_keypair], message)
+        .unwrap();
+    let post_balance = bank_client.get_balance(&mint_keypair.pubkey()).unwrap();
+    assert_eq!(pre_balance - post_balance, expected_max_fee);
+
+    let pre_balance = bank_client.get_balance(&mint_keypair.pubkey()).unwrap();
+    let message = Message::new(
+        &[
+            ComputeBudgetInstruction::request_units(100, 42),
+            Instruction::new_with_bytes(program_id, &[], vec![]),
+        ],
+        Some(&mint_keypair.pubkey()),
+    );
+    let sanitized_message = SanitizedMessage::try_from(message.clone()).unwrap();
+    let expected_min_fee = Bank::calculate_fee(
+        &sanitized_message,
+        congestion_multiplier,
+        &fee_structure,
+        true,
+    );
+    assert!(expected_min_fee < expected_max_fee);
+
+    bank_client
+        .send_and_confirm_message(&[&mint_keypair], message)
+        .unwrap();
+    let post_balance = bank_client.get_balance(&mint_keypair.pubkey()).unwrap();
+    assert_eq!(pre_balance - post_balance, expected_min_fee);
 }
