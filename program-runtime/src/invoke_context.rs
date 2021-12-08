@@ -115,7 +115,9 @@ pub const DEFAULT_MAX_ACCOUNTS_DATA_LEN: usize = 128_000_000_000;
 /// bprumo TODO: doc, and/or move
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
 pub struct AccountsDataBudget {
+    /// The global maximum size for accounts data (i.e. DEFAULT_MAX_ACCOUNTS_DATA_LEN)
     maximum: usize,
+    /// The current accounts data size (for a Bank)
     current: usize,
 }
 impl AccountsDataBudget {
@@ -136,7 +138,10 @@ impl AccountsDataBudget {
 /// bprumo TODO: doc, and/or move
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
 pub struct AccountsDataMeter {
+    /// The amount of available accounts data space (i.e. AccountsDataBudget::remaining())
     capacity: usize,
+    /// The amount available of accounts data space consumed.  This value is used to update the
+    /// Bank after transactions are successfully processed.
     consumed: usize,
 }
 impl AccountsDataMeter {
