@@ -791,6 +791,9 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                             InstructionError::IllegalOwner => {
                                 tx_by_addr::InstructionErrorType::IllegalOwner
                             }
+                            InstructionError::AccountsDataBudgetExceeded => {
+                                tx_by_addr::InstructionErrorType::IllegalOwner
+                            }
                         } as i32,
                         custom: match instruction_error {
                             InstructionError::Custom(custom) => {
