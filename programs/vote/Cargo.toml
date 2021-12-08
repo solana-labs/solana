@@ -22,6 +22,7 @@ solana-logger = { path = "../../logger", version = "=1.10.0" }
 solana-metrics = { path = "../../metrics", version = "=1.10.0" }
 solana-program-runtime = { path = "../../program-runtime", version = "=1.10.0" }
 solana-sdk = { path = "../../sdk", version = "=1.10.0" }
+typetag = "0.1"
 thiserror = "1.0"
 
 [build-dependencies]

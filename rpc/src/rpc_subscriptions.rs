@@ -37,7 +37,7 @@ use {
         timing::timestamp,
         transaction,
     },
-    solana_vote_program::vote_state::Vote,
+    solana_vote_program::vote_state::VoteTransaction,
     std::{
         cell::RefCell,
         collections::{HashMap, VecDeque},
@@ -90,7 +90,7 @@ impl From<NotificationEntry> for TimestampedNotificationEntry {
 pub enum NotificationEntry {
     Slot(SlotInfo),
     SlotUpdate(SlotUpdate),
-    Vote(Vote),
+    Vote(Box<dyn VoteTransaction>),
     Root(Slot),
     Bank(CommitmentSlots),
     Gossip(Slot),
@@ -612,7 +612,7 @@ impl RpcSubscriptions {
         self.enqueue_notification(NotificationEntry::SignaturesReceived(slot_signatures));
     }
 
-    pub fn notify_vote(&self, vote: &Vote) {
+    pub fn notify_vote(&self, vote: Box<dyn VoteTransaction>) {
         self.enqueue_notification(NotificationEntry::Vote(vote.clone()));
     }
 
@@ -695,10 +695,9 @@ impl RpcSubscriptions {
                         // in VoteState's from bank states built in ReplayStage.
                         NotificationEntry::Vote(ref vote_info) => {
                             let rpc_vote = RpcVote {
-                                // TODO: Remove clones
-                                slots: vote_info.slots.clone(),
-                                hash: bs58::encode(vote_info.hash).into_string(),
-                                timestamp: vote_info.timestamp,
+                                slots: vote_info.slots(),
+                                hash: bs58::encode(vote_info.hash()).into_string(),
+                                timestamp: vote_info.timestamp(),
                             };
                             if let Some(sub) = subscriptions
                                 .node_progress_watchers()

@@ -48,7 +48,7 @@ pub fn find_and_send_votes(
                     if let Some(parsed_vote) =
                         vote_transaction::parse_sanitized_vote_transaction(tx)
                     {
-                        if parsed_vote.1.slots.last().is_some() {
+                        if parsed_vote.1.last_voted_slot().is_some() {
                             let _ = vote_sender.send(parsed_vote);
                         }
                     }

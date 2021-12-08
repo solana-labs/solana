@@ -33,7 +33,7 @@ use {
         bank_forks::BankForks,
         commitment::VOTE_THRESHOLD_SIZE,
         epoch_stakes::{EpochAuthorizedVoters, EpochStakes},
-        vote_sender_types::{ReplayVoteReceiver, ReplayedVote},
+        vote_sender_types::ReplayVoteReceiver,
     },
     solana_sdk::{
         clock::{Epoch, Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT},
@@ -44,7 +44,10 @@ use {
         slot_hashes,
         transaction::Transaction,
     },
-    solana_vote_program::{self, vote_state::Vote, vote_transaction},
+    solana_vote_program::{
+        vote_state::VoteTransaction,
+        vote_transaction::{self, ParsedVote},
+    },
     std::{
         collections::{HashMap, HashSet},
         sync::{
@@ -403,7 +406,7 @@ impl ClusterInfoVoteListener {
             .filter_map(|(vote_tx, packet)| {
                 let (vote, vote_account_key) = vote_transaction::parse_vote_transaction(&vote_tx)
                     .and_then(|(vote_account_key, vote, _)| {
-                    if vote.slots.is_empty() {
+                    if vote.slots().is_empty() {
                         None
                     } else {
                         Some((vote, vote_account_key))
@@ -674,7 +677,7 @@ impl ClusterInfoVoteListener {
 
     #[allow(clippy::too_many_arguments)]
     fn track_new_votes_and_notify_confirmations(
-        vote: Vote,
+        vote: Box<dyn VoteTransaction>,
         vote_pubkey: &Pubkey,
         vote_tracker: &VoteTracker,
         root_bank: &Bank,
@@ -687,17 +690,17 @@ impl ClusterInfoVoteListener {
         bank_notification_sender: &Option<BankNotificationSender>,
         cluster_confirmed_slot_sender: &Option<GossipDuplicateConfirmedSlotsSender>,
     ) {
-        if vote.slots.is_empty() {
+        if vote.is_empty() {
             return;
         }
 
-        let last_vote_slot = *vote.slots.last().unwrap();
-        let last_vote_hash = vote.hash;
+        let (last_vote_slot, last_vote_hash) = vote.last_voted_slot_hash().unwrap();
 
         let root = root_bank.slot();
         let mut is_new_vote = false;
+        let vote_slots = vote.slots();
         // If slot is before the root, ignore it
-        for slot in vote.slots.iter().filter(|slot| **slot > root).rev() {
+        for slot in vote_slots.iter().filter(|slot| **slot > root).rev() {
             let slot = *slot;
 
             // if we don't have stake information, ignore it
@@ -781,28 +784,28 @@ impl ClusterInfoVoteListener {
         }
 
         if is_new_vote {
-            subscriptions.notify_vote(&vote);
-            let _ = verified_vote_sender.send((*vote_pubkey, vote.slots));
+            subscriptions.notify_vote(vote);
+            let _ = verified_vote_sender.send((*vote_pubkey, vote_slots));
         }
     }
 
     fn filter_gossip_votes(
         vote_tracker: &VoteTracker,
         vote_pubkey: &Pubkey,
-        vote: &Vote,
+        vote: &dyn VoteTransaction,
         gossip_tx: &Transaction,
     ) -> bool {
-        if vote.slots.is_empty() {
+        if vote.is_empty() {
             return false;
         }
-        let last_vote_slot = vote.slots.last().unwrap();
+        let last_vote_slot = vote.last_voted_slot().unwrap();
         // Votes from gossip need to be verified as they have not been
         // verified by the replay pipeline. Determine the authorized voter
         // based on the last vote slot. This will  drop votes from authorized
         // voters trying to make votes for slots earlier than the epoch for
         // which they are authorized
         let actual_authorized_voter =
-            vote_tracker.get_authorized_voter(vote_pubkey, *last_vote_slot);
+            vote_tracker.get_authorized_voter(vote_pubkey, last_vote_slot);
 
         if actual_authorized_voter.is_none() {
             return false;
@@ -822,7 +825,7 @@ impl ClusterInfoVoteListener {
     fn filter_and_confirm_with_new_votes(
         vote_tracker: &VoteTracker,
         gossip_vote_txs: Vec<Transaction>,
-        replayed_votes: Vec<ReplayedVote>,
+        replayed_votes: Vec<ParsedVote>,
         root_bank: &Bank,
         subscriptions: &RpcSubscriptions,
         gossip_verified_vote_hash_sender: &GossipVerifiedVoteHashSender,
@@ -839,7 +842,7 @@ impl ClusterInfoVoteListener {
             .filter_map(|gossip_tx| {
                 vote_transaction::parse_vote_transaction(gossip_tx)
                     .filter(|(vote_pubkey, vote, _)| {
-                        Self::filter_gossip_votes(vote_tracker, vote_pubkey, vote, gossip_tx)
+                        Self::filter_gossip_votes(vote_tracker, vote_pubkey, &**vote, gossip_tx)
                     })
                     .map(|v| (true, v))
             })
@@ -1243,7 +1246,7 @@ mod tests {
                 replay_votes_sender
                     .send((
                         vote_keypair.pubkey(),
-                        replay_vote.clone(),
+                        Box::new(replay_vote.clone()),
                         switch_proof_hash,
                     ))
                     .unwrap();
@@ -1490,7 +1493,8 @@ mod tests {
         let (votes_sender, votes_receiver) = unbounded();
         let (verified_vote_sender, _verified_vote_receiver) = unbounded();
         let (gossip_verified_vote_hash_sender, _gossip_verified_vote_hash_receiver) = unbounded();
-        let (replay_votes_sender, replay_votes_receiver) = unbounded();
+        let (replay_votes_sender, replay_votes_receiver): (ReplayVoteSender, ReplayVoteReceiver) =
+            unbounded();
 
         let vote_slot = 1;
         let vote_bank_hash = Hash::default();
@@ -1530,7 +1534,7 @@ mod tests {
                     replay_votes_sender
                         .send((
                             vote_keypair.pubkey(),
-                            Vote::new(vec![vote_slot], Hash::default()),
+                            Box::new(Vote::new(vec![vote_slot], Hash::default())),
                             switch_proof_hash,
                         ))
                         .unwrap();
@@ -1676,7 +1680,7 @@ mod tests {
             // Add gossip vote for same slot, should not affect outcome
             vec![(
                 validator0_keypairs.vote_keypair.pubkey(),
-                Vote::new(vec![voted_slot], Hash::default()),
+                Box::new(Vote::new(vec![voted_slot], Hash::default())),
                 None,
             )],
             &bank,
@@ -1732,7 +1736,7 @@ mod tests {
             vote_txs,
             vec![(
                 validator_keypairs[1].vote_keypair.pubkey(),
-                Vote::new(vec![first_slot_in_new_epoch], Hash::default()),
+                Box::new(Vote::new(vec![first_slot_in_new_epoch], Hash::default())),
                 None,
             )],
             &new_root_bank,
