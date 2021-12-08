@@ -2458,7 +2458,8 @@ export class Connection {
   }
 
   /**
-   * Fetch all the account info for the specified public key
+   * Fetch account information for the specified public key. `data` will be a `Buffer`.
+   * To get program-specific deserialized data, use {@link getParsedAccountInfo}.
    */
   async getAccountInfo(
     publicKey: PublicKey,
