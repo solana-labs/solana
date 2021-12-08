@@ -80,9 +80,18 @@ impl ScanConfig {
         }
     }
 
+    /// mark the scan as aborted
     pub fn abort(&self) {
         if let Some(abort) = self.abort.as_ref() {
             abort.store(true, Ordering::Relaxed)
+        }
+    }
+
+    /// use existing 'abort' if available, otherwise allocate one
+    pub fn recreate_with_abort(&self) -> Self {
+        ScanConfig {
+            abort: Some(self.abort.as_ref().map(Arc::clone).unwrap_or_default()),
+            collect_all_unsorted: self.collect_all_unsorted,
         }
     }
 
@@ -4319,5 +4328,30 @@ pub mod tests {
         let mut config = AccountsIndexConfig::default();
         config.bins = Some(3);
         AccountsIndex::<bool>::new(Some(config));
+    }
+
+    #[test]
+    fn test_scan_config() {
+        for collect_all_unsorted in [false, true] {
+            let config = ScanConfig::new(collect_all_unsorted);
+            assert_eq!(config.collect_all_unsorted, collect_all_unsorted);
+            assert!(config.abort.is_none()); // not allocated
+            assert!(!config.is_aborted());
+            config.abort(); // has no effect
+            assert!(!config.is_aborted());
+        }
+
+        let config = ScanConfig::default();
+        assert!(!config.collect_all_unsorted);
+        assert!(config.abort.is_none());
+
+        let config = config.recreate_with_abort();
+        assert!(config.abort.is_some());
+        assert!(!config.is_aborted());
+        config.abort();
+        assert!(config.is_aborted());
+
+        let config = config.recreate_with_abort();
+        assert!(config.is_aborted());
     }
 }
