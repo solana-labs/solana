@@ -90,7 +90,7 @@ impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
                         .vote_accounts()
                         .get(&vote_account_key)
                         .and_then(|(_stake, vote_account)| {
-                            vote_account.vote_state().as_ref().ok().map(|vote_state| {
+                            vote_account.vote_state().map(|vote_state| {
                                 let start_vote_slot =
                                     vote_state.last_voted_slot().map(|x| x + 1).unwrap_or(0);
                                 // Filter out the votes that are outdated

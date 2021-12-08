@@ -71,9 +71,8 @@ impl EpochStakes {
         let epoch_authorized_voters = epoch_vote_accounts
             .iter()
             .filter_map(|(key, (stake, account))| {
-                let vote_state = account.vote_state();
-                let vote_state = match vote_state.as_ref() {
-                    Err(_) => {
+                let vote_state = match account.vote_state() {
+                    None => {
                         datapoint_warn!(
                             "parse_epoch_vote_accounts",
                             (
@@ -84,7 +83,7 @@ impl EpochStakes {
                         );
                         return None;
                     }
-                    Ok(vote_state) => vote_state,
+                    Some(vote_state) => vote_state,
                 };
 
                 if *stake > 0 {

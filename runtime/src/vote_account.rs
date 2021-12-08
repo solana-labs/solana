@@ -6,7 +6,6 @@ use {
     },
     solana_sdk::{
         account::{Account, AccountSharedData},
-        instruction::InstructionError,
         pubkey::Pubkey,
     },
     solana_vote_program::vote_state::VoteState,
@@ -14,23 +13,17 @@ use {
         cmp::Ordering,
         collections::{hash_map::Entry, HashMap},
         iter::FromIterator,
-        sync::{Arc, Once, RwLock, RwLockReadGuard},
+        sync::{Arc, Once, RwLock},
     },
 };
-
-// The value here does not matter. It will be overwritten
-// at the first call to VoteAccount::vote_state().
-const INVALID_VOTE_STATE: Result<VoteState, InstructionError> =
-    Err(InstructionError::InvalidAccountData);
 
 #[derive(Clone, Debug, Default, PartialEq, AbiExample)]
 pub struct VoteAccount(Arc<VoteAccountInner>);
 
-#[derive(Debug, AbiExample)]
+#[derive(Debug, Default, PartialEq, AbiExample)]
 struct VoteAccountInner {
     account: Account,
-    vote_state: RwLock<Result<VoteState, InstructionError>>,
-    vote_state_once: Once,
+    vote_state: Option<VoteState>,
 }
 
 pub type VoteAccountsHashMap = HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>;
@@ -60,18 +53,13 @@ impl VoteAccount {
         self.account().lamports
     }
 
-    pub fn vote_state(&self) -> RwLockReadGuard<Result<VoteState, InstructionError>> {
-        let inner = &self.0;
-        inner.vote_state_once.call_once(|| {
-            let vote_state = VoteState::deserialize(&inner.account.data);
-            *inner.vote_state.write().unwrap() = vote_state;
-        });
-        inner.vote_state.read().unwrap()
+    pub fn vote_state(&self) -> Option<&VoteState> {
+        self.0.vote_state.as_ref()
     }
 
     /// VoteState.node_pubkey of this vote-account.
     fn node_pubkey(&self) -> Option<Pubkey> {
-        Some(self.vote_state().as_ref().ok()?.node_pubkey)
+        self.vote_state().map(|vote_state| vote_state.node_pubkey)
     }
 }
 
@@ -216,27 +204,11 @@ impl From<AccountSharedData> for VoteAccountInner {
 
 impl From<Account> for VoteAccountInner {
     fn from(account: Account) -> Self {
+        let vote_state = VoteState::from(&account);
         Self {
             account,
-            vote_state: RwLock::new(INVALID_VOTE_STATE),
-            vote_state_once: Once::new(),
+            vote_state,
         }
-    }
-}
-
-impl Default for VoteAccountInner {
-    fn default() -> Self {
-        Self {
-            account: Account::default(),
-            vote_state: RwLock::new(INVALID_VOTE_STATE),
-            vote_state_once: Once::new(),
-        }
-    }
-}
-
-impl PartialEq<VoteAccountInner> for VoteAccountInner {
-    fn eq(&self, other: &Self) -> bool {
-        self.account == other.account
     }
 }
 
@@ -372,7 +344,7 @@ mod tests {
         let nodes: Vec<_> = repeat_with(Pubkey::new_unique).take(num_nodes).collect();
         repeat_with(move || {
             let node = nodes[rng.gen_range(0, nodes.len())];
-            let (account, _) = new_rand_vote_account(rng, Some(node));
+            let (account, _vote_state) = new_rand_vote_account(rng, Some(node));
             let stake = rng.gen_range(0, 997);
             (Pubkey::new_unique(), (stake, VoteAccount::from(account)))
         })
@@ -404,9 +376,7 @@ mod tests {
         let lamports = account.lamports;
         let vote_account = VoteAccount::from(account);
         assert_eq!(lamports, vote_account.lamports());
-        assert_eq!(vote_state, *vote_account.vote_state().as_ref().unwrap());
-        // 2nd call to .vote_state() should return the cached value.
-        assert_eq!(vote_state, *vote_account.vote_state().as_ref().unwrap());
+        assert_eq!(vote_state, *vote_account.vote_state().unwrap());
     }
 
     #[test]
@@ -414,7 +384,7 @@ mod tests {
         let mut rng = rand::thread_rng();
         let (account, vote_state) = new_rand_vote_account(&mut rng, None);
         let vote_account = VoteAccount::from(account.clone());
-        assert_eq!(vote_state, *vote_account.vote_state().as_ref().unwrap());
+        assert_eq!(vote_state, *vote_account.vote_state().unwrap());
         // Assert than VoteAccount has the same wire format as Account.
         assert_eq!(
             bincode::serialize(&account).unwrap(),
@@ -428,13 +398,10 @@ mod tests {
         let (account, vote_state) = new_rand_vote_account(&mut rng, None);
         let data = bincode::serialize(&account).unwrap();
         let vote_account = VoteAccount::from(account);
-        assert_eq!(vote_state, *vote_account.vote_state().as_ref().unwrap());
+        assert_eq!(vote_state, *vote_account.vote_state().unwrap());
         let other_vote_account: VoteAccount = bincode::deserialize(&data).unwrap();
         assert_eq!(vote_account, other_vote_account);
-        assert_eq!(
-            vote_state,
-            *other_vote_account.vote_state().as_ref().unwrap()
-        );
+        assert_eq!(vote_state, *other_vote_account.vote_state().unwrap());
     }
 
     #[test]
@@ -442,15 +409,12 @@ mod tests {
         let mut rng = rand::thread_rng();
         let (account, vote_state) = new_rand_vote_account(&mut rng, None);
         let vote_account = VoteAccount::from(account);
-        assert_eq!(vote_state, *vote_account.vote_state().as_ref().unwrap());
+        assert_eq!(vote_state, *vote_account.vote_state().unwrap());
         let data = bincode::serialize(&vote_account).unwrap();
         let other_vote_account: VoteAccount = bincode::deserialize(&data).unwrap();
         // Assert that serialize->deserialized returns the same VoteAccount.
         assert_eq!(vote_account, other_vote_account);
-        assert_eq!(
-            vote_state,
-            *other_vote_account.vote_state().as_ref().unwrap()
-        );
+        assert_eq!(vote_state, *other_vote_account.vote_state().unwrap());
     }
 
     #[test]

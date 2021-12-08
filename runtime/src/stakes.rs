@@ -247,7 +247,7 @@ impl Stakes {
             .vote_accounts
             .iter()
             .max_by(|(_ak, av), (_bk, bv)| av.0.cmp(&bv.0))?;
-        let node_pubkey = vote_account.vote_state().as_ref().ok()?.node_pubkey;
+        let node_pubkey = vote_account.vote_state().as_ref()?.node_pubkey;
         Some(node_pubkey)
     }
 }

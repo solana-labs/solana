@@ -1335,15 +1335,15 @@ fn supermajority_root_from_vote_accounts(
                 return None;
             }
 
-            match account.vote_state().as_ref() {
-                Err(_) => {
+            match account.vote_state() {
+                None => {
                     warn!(
                         "Unable to get vote_state from account {} in bank: {}",
                         key, bank_slot
                     );
                     None
                 }
-                Ok(vote_state) => Some((vote_state.root_slot?, *stake)),
+                Some(vote_state) => Some((vote_state.root_slot?, *stake)),
             }
         })
         .collect();
