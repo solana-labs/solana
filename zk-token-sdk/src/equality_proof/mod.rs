@@ -6,12 +6,10 @@ use {
     },
     curve25519_dalek::traits::MultiscalarMul,
     rand::rngs::OsRng,
-    subtle::{Choice, ConditionallySelectable},
 };
 use {
     crate::{errors::ProofError, transcript::TranscriptProtocol},
     arrayref::{array_ref, array_refs},
-    core::iter,
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
@@ -37,7 +35,6 @@ impl EqualityProof {
     pub fn new(
         elgamal_keypair: &ElGamalKeypair,
         ciphertext: &ElGamalCiphertext,
-        commitment: &PedersenCommitment,
         message: u64,
         opening: &PedersenOpening,
         transcript: &mut Transcript,
@@ -47,10 +44,7 @@ impl EqualityProof {
         let H = PedersenBase::default().H;
 
         let P_EG = elgamal_keypair.public.get_point();
-        let C_EG = ciphertext.message_comm.get_point();
         let D_EG = ciphertext.decrypt_handle.get_point();
-
-        let C_Ped = commitment.get_point();
 
         let s = elgamal_keypair.secret.get_scalar();
         let x = Scalar::from(message);
@@ -67,7 +61,6 @@ impl EqualityProof {
 
         // record public key, ciphertext, and commitment in transcript and generate challenge
         // scalar
-
         transcript.append_point(b"Y_0", &Y_0);
         transcript.append_point(b"Y_1", &Y_1);
         transcript.append_point(b"Y_2", &Y_2);
@@ -107,6 +100,7 @@ impl EqualityProof {
 
         let C_Ped = commitment.get_point();
 
+        // include Y_0, Y_1, Y_2 to transcript and extract challenges
         transcript.validate_and_append_point(b"Y_0", &self.Y_0)?;
         transcript.validate_and_append_point(b"Y_1", &self.Y_1)?;
         transcript.validate_and_append_point(b"Y_2", &self.Y_2)?;
@@ -119,7 +113,8 @@ impl EqualityProof {
         let w = transcript.challenge_scalar(b"w");
         let ww = w * w;
 
-        let check = RistrettoPoint::multiscalar_mul(
+        // check that the required algebraic condition holds
+        let check = RistrettoPoint::vartime_multiscalar_mul(
             vec![
                 self.z_s,
                 -c,
@@ -143,7 +138,7 @@ impl EqualityProof {
         }
     }
 
-    pub fn to_bytes(self) -> [u8; 192] {
+    pub fn to_bytes(&self) -> [u8; 192] {
         let mut buf = [0_u8; 192];
         buf[..32].copy_from_slice(self.Y_0.as_bytes());
         buf[32..64].copy_from_slice(self.Y_1.as_bytes());
@@ -197,7 +192,6 @@ mod test {
         let proof = EqualityProof::new(
             &elgamal_keypair,
             &ciphertext,
-            &commitment,
             message,
             &opening,
             &mut transcript_prover,
@@ -226,7 +220,6 @@ mod test {
         let proof = EqualityProof::new(
             &elgamal_keypair,
             &ciphertext,
-            &commitment,
             message,
             &opening,
             &mut transcript_prover,
@@ -240,6 +233,5 @@ mod test {
                 &mut transcript_verifier
             )
             .is_err());
-
     }
 }
