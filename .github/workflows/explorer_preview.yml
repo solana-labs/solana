@@ -17,6 +17,7 @@ jobs:
            node-version: '14'
            cache: 'npm'
            cache-dependency-path: explorer/package-lock.json
+       - run: cd ./explorer
        - run: npm i -g npm@7
        - run: npm ci
        - run: npm run format
