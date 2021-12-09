@@ -2984,7 +2984,7 @@ mod tests {
     #[should_panic(expected = "UserError(SyscallError(Panic(\"Gaggablaghblagh!\", 42, 84)))")]
     fn test_syscall_sol_panic() {
         let program_id = Pubkey::new_unique();
-        let program_account = AccountSharedData::new_ref(0, 0, &bpf_loader::id());
+        let program_account = RefCell::new(AccountSharedData::new(0, 0, &bpf_loader::id()));
         let accounts = [(program_id, program_account)];
         let message = Message::new(
             &[Instruction::new_with_bytes(program_id, &[], vec![])],
@@ -3061,7 +3061,7 @@ mod tests {
     #[test]
     fn test_syscall_sol_log() {
         let program_id = Pubkey::new_unique();
-        let program_account = AccountSharedData::new_ref(0, 0, &bpf_loader::id());
+        let program_account = RefCell::new(AccountSharedData::new(0, 0, &bpf_loader::id()));
         let accounts = [(program_id, program_account)];
         let message = Message::new(
             &[Instruction::new_with_bytes(program_id, &[], vec![])],
@@ -3165,7 +3165,7 @@ mod tests {
     #[test]
     fn test_syscall_sol_log_u64() {
         let program_id = Pubkey::new_unique();
-        let program_account = AccountSharedData::new_ref(0, 0, &bpf_loader::id());
+        let program_account = RefCell::new(AccountSharedData::new(0, 0, &bpf_loader::id()));
         let accounts = [(program_id, program_account)];
         let message = Message::new(
             &[Instruction::new_with_bytes(program_id, &[], vec![])],
@@ -3207,7 +3207,7 @@ mod tests {
     #[test]
     fn test_syscall_sol_pubkey() {
         let program_id = Pubkey::new_unique();
-        let program_account = AccountSharedData::new_ref(0, 0, &bpf_loader::id());
+        let program_account = RefCell::new(AccountSharedData::new(0, 0, &bpf_loader::id()));
         let accounts = [(program_id, program_account)];
         let message = Message::new(
             &[Instruction::new_with_bytes(program_id, &[], vec![])],
@@ -3419,7 +3419,8 @@ mod tests {
     fn test_syscall_sha256() {
         let config = Config::default();
         let program_id = Pubkey::new_unique();
-        let program_account = AccountSharedData::new_ref(0, 0, &bpf_loader_deprecated::id());
+        let program_account =
+            RefCell::new(AccountSharedData::new(0, 0, &bpf_loader_deprecated::id()));
         let accounts = [(program_id, program_account)];
         let message = Message::new(
             &[Instruction::new_with_bytes(program_id, &[], vec![])],
@@ -3548,7 +3549,7 @@ mod tests {
     fn test_syscall_get_sysvar() {
         let config = Config::default();
         let program_id = Pubkey::new_unique();
-        let program_account = AccountSharedData::new_ref(0, 0, &bpf_loader::id());
+        let program_account = RefCell::new(AccountSharedData::new(0, 0, &bpf_loader::id()));
         let accounts = [(program_id, program_account)];
         let message = Message::new(
             &[Instruction::new_with_bytes(program_id, &[], vec![])],
@@ -3858,7 +3859,7 @@ mod tests {
         // These tests duplicate the direct tests in solana_program::pubkey
 
         let program_id = Pubkey::new_unique();
-        let program_account = AccountSharedData::new_ref(0, 0, &bpf_loader::id());
+        let program_account = RefCell::new(AccountSharedData::new(0, 0, &bpf_loader::id()));
         let accounts = [(program_id, program_account)];
         let message = Message::new(
             &[Instruction::new_with_bytes(program_id, &[], vec![])],
@@ -3974,7 +3975,7 @@ mod tests {
     #[test]
     fn test_find_program_address() {
         let program_id = Pubkey::new_unique();
-        let program_account = AccountSharedData::new_ref(0, 0, &bpf_loader::id());
+        let program_account = RefCell::new(AccountSharedData::new(0, 0, &bpf_loader::id()));
         let accounts = [(program_id, program_account)];
         let message = Message::new(
             &[Instruction::new_with_bytes(program_id, &[], vec![])],
