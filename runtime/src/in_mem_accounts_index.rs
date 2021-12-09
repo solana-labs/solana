@@ -1147,4 +1147,4 @@ mod tests {
         assert!(test.get_should_age(test.storage.current_age()));
         assert_eq!(test.storage.count_ages_flushed(), 0);
     }
-} 
+}
