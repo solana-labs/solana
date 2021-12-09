@@ -1,6 +1,0 @@
-#### Problem
-
-
-
-#### Proposed Solution
-

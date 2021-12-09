@@ -1,1 +1,0 @@
-../../frozen-abi/build.rs

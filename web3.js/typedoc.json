@@ -1,6 +1,0 @@
-{
-  "entryPoints": ["src/index.ts"],
-  "excludeInternal": true,
-  "excludePrivate": true,
-  "out": "doc"
-}
