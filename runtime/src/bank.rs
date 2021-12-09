@@ -5332,9 +5332,9 @@ impl Bank {
         accounts_db_skip_shrink: bool,
         last_full_snapshot_slot: Option<Slot>,
     ) -> bool {
-        info!("cleaning..");
         let mut clean_time = Measure::start("clean");
-        if self.slot() > 0 {
+        if !accounts_db_skip_shrink && self.slot() > 0 {
+            info!("cleaning..");
             self.clean_accounts(true, true, last_full_snapshot_slot);
         }
         clean_time.stop();
