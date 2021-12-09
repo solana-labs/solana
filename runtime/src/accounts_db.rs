@@ -6697,7 +6697,9 @@ impl AccountsDb {
                         &self.account_indexes,
                     );
                 }
-                accounts_data_len += stored_account.data().len();
+                if !stored_account.is_zero_lamport() {
+                    accounts_data_len += stored_account.data().len();
+                }
 
                 if !rent_collector.should_collect_rent(&pubkey, &stored_account, false) || {
                     let (_rent_due, exempt) = rent_collector.get_rent_due(&stored_account);
@@ -7033,7 +7035,10 @@ impl AccountsDb {
                                         let loaded_account =
                                             accessor.check_and_get_loaded_account();
                                         let account = loaded_account.take_account();
-                                        accounts_data_len_from_duplicates += account.data().len();
+                                        if !account.is_zero_lamport() {
+                                            accounts_data_len_from_duplicates +=
+                                                account.data().len();
+                                        }
                                     });
                             }
                         });
