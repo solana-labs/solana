@@ -3411,7 +3411,7 @@ dependencies = [
  "byteorder 1.4.3",
  "chrono",
  "derivation-path",
- "digest 0.9.0",
+ "digest 0.10.0",
  "ed25519-dalek",
  "ed25519-dalek-bip32",
  "generic-array 0.14.4",
