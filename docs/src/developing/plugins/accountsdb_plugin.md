@@ -290,4 +290,3 @@ delete from account_audit a2 where (pubkey, write_version) in (select pubkey, wr
 ## Performance Considerations
 
 If the validator lacks sufficient compute power, the overhead of saving the accounts data can cause the validator to fall behind the network especially when all accounts or large number of accounts selected . The node hosting the PostgreSQL database need to be powerful enough to handle the database loads as well. It has been found using GCP n2-standard-64 machine type for the validator and n2-highmem-32 for the PostgreSQL node is adequate for handling transmiting all accounts while keeping up with the network. It is best to keep the validator and the PostgreSQL in the same local network to reduce latency. You may need to size the validator and database nodes differently if serving other loads.
-
