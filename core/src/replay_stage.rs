@@ -778,7 +778,7 @@ impl ReplayStage {
                     dump_then_repair_correct_slots_time.stop();
 
                     let mut retransmit_not_propagated_time = Measure::start("retransmit_not_propagated_time");
-                    let retransmitted_slot = Self::retransmit_not_propagated(
+                    let retransmitted_slot = Self::retransmit_latest_unpropagated_leader_slot(
                         &poh_recorder,
                         &bank_forks,
                         &retransmit_slots_sender,
@@ -861,7 +861,9 @@ impl ReplayStage {
         }
     }
 
-    fn retransmit_not_propagated(
+    /// The return value is `Some(slot)` if `slot` was our leader block on the
+    /// heaviest fork that was retransmitted by the call to this function.
+    fn retransmit_latest_unpropagated_leader_slot(
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         bank_forks: &Arc<RwLock<BankForks>>,
         retransmit_slots_sender: &RetransmitSlotsSender,
@@ -883,10 +885,7 @@ impl ReplayStage {
                 .clone();
             if last_retransmit_retry_info.slot == bank.slot() {
                 if !progress.is_propagated(bank.slot()) {
-                    warn!(
-                        "retransmit_not_propagated: Not propagated slot:{}",
-                        bank.slot()
-                    );
+                    warn!("Slot not propagated: slot={}", bank.slot());
                     let backoff = std::cmp::min(
                         last_retransmit_retry_info.retry_iteration,
                         RETRANSMIT_BACKOFF_CAP,
@@ -895,7 +894,7 @@ impl ReplayStage {
                     let elapsed = last_retransmit_retry_info.time.elapsed().as_millis();
                     if last_retransmit_retry_info.time.elapsed().as_millis() > time_offset.into() {
                         info!(
-                            "retransmit_not_propagated: retrying retransmit. start_slot:{} bank_slot:{} retry_iteration:{} backoff:{} elapsed:{} time_offset:{}",
+                            "Retrying retransmit: start_slot={} bank_slot={} retry_iteration={} backoff={} elapsed={} time_offset={}",
                             start_slot,
                             bank.slot(),
                             last_retransmit_retry_info.retry_iteration,
@@ -904,7 +903,7 @@ impl ReplayStage {
                             time_offset,
                         );
                         datapoint_info!(
-                            "replay_stage-retransmit",
+                            "replay_stage-retransmit-timing-based",
                             ("slot", bank.slot(), i64),
                             (
                                 "retry_iteration",
@@ -919,7 +918,7 @@ impl ReplayStage {
                         last_retransmit_retry_info.time = Instant::now();
                     } else {
                         info!(
-                            "retransmit_not_propagated: bypass retry. elapsed:{} time_offset:{}",
+                            "Bypass retry: elapsed={} time_offset={}",
                             elapsed, time_offset
                         );
                     }
@@ -929,7 +928,7 @@ impl ReplayStage {
                 last_retransmit_retry_info.time = Instant::now();
                 last_retransmit_retry_info.retry_iteration = 0;
                 info!(
-                    "retransmit_not_propagated: resetting last_retransmit_retry_info {:?}",
+                    "Resetting last_retransmit_retry_info={:?}",
                     &last_retransmit_retry_info
                 );
             }
