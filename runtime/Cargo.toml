@@ -32,7 +32,7 @@ ouroboros = "0.13.0"
 rand = "0.7.0"
 rayon = "1.5.1"
 regex = "1.5.4"
-serde = { version = "1.0.130", features = ["rc"] }
+serde = { version = "1.0.131", features = ["rc"] }
 serde_derive = "1.0.103"
 solana-config-program = { path = "../programs/config", version = "=1.10.0" }
 solana-compute-budget-program = { path = "../programs/compute-budget", version = "=1.10.0" }
