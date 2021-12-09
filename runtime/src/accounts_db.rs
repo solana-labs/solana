@@ -7042,12 +7042,12 @@ impl AccountsDb {
                     });
                 timer.stop();
                 info!(
-                    "accounts data len: {}, {:?}",
+                    "accounts data len: {}, {}",
                     accounts_data_len.load(Ordering::Relaxed),
                     timer
                 );
                 error!(
-                    "bprumo DEBUG: generate_index(), accounts data len: {}, {:?}",
+                    "bprumo DEBUG: generate_index(), accounts data len: {}, {}",
                     accounts_data_len.load(Ordering::Relaxed),
                     timer
                 );
