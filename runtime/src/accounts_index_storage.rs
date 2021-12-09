@@ -102,9 +102,16 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
         }
         self.storage.set_startup(value);
         if !value {
+            // transitioning from startup to !startup (ie. steady state)
             // shutdown the bg threads
             *self.startup_worker_threads.lock().unwrap() = None;
+            // maybe shrink hashmaps
+            self.shrink_to_fit();
         }
+    }
+
+    fn shrink_to_fit(&self) {
+        self.in_mem.iter().for_each(|mem| mem.shrink_to_fit())
     }
 
     fn num_threads() -> usize {

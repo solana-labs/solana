@@ -57,6 +57,11 @@ impl<T: IndexValue> Debug for BucketMapHolder<T> {
 
 #[allow(clippy::mutex_atomic)]
 impl<T: IndexValue> BucketMapHolder<T> {
+    /// is the accounts index using disk as a backing store
+    pub fn is_disk_index_enabled(&self) -> bool {
+        self.disk.is_some()
+    }
+
     pub fn increment_age(&self) {
         // since we are about to change age, there are now 0 buckets that have been flushed at this age
         // this should happen before the age.fetch_add
@@ -352,6 +357,7 @@ pub mod tests {
         solana_logger::setup();
         let bins = 100;
         let test = BucketMapHolder::<u64>::new(bins, &Some(AccountsIndexConfig::default()), 1);
+        assert!(!test.is_disk_index_enabled());
         let bins = test.bins as u64;
         let interval_ms = test.age_interval_ms();
         // 90% of time elapsed, all but 1 bins flushed, should not wait since we'll end up right on time
@@ -374,6 +380,17 @@ pub mod tests {
         let bins_flushed = bins * 12 / 100;
         let result = test.throttling_wait_ms_internal(interval_ms, elapsed_ms, bins_flushed);
         assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_disk_index_enabled() {
+        let bins = 1;
+        let config = AccountsIndexConfig {
+            index_limit_mb: Some(0),
+            ..AccountsIndexConfig::default()
+        };
+        let test = BucketMapHolder::<u64>::new(bins, &Some(config), 1);
+        assert!(test.is_disk_index_enabled());
     }
 
     #[test]
