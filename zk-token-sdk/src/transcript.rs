@@ -6,11 +6,11 @@ use {
 
 pub trait TranscriptProtocol {
     /// Append a domain separator for an `n`-bit rangeproof for ElGamalKeypair
-    /// ciphertext using a decryption key
+    /// ciphertext using a decryption key // TODO: remove?
     fn rangeproof_from_key_domain_sep(&mut self, n: u64);
 
     /// Append a domain separator for an `n`-bit rangeproof for ElGamalKeypair
-    /// ciphertext using an opening
+    /// ciphertext using an opening // TODO: remove?
     fn rangeproof_from_opening_domain_sep(&mut self, n: u64);
 
     /// Append a domain separator for a length-`n` inner product proof.
@@ -19,17 +19,11 @@ pub trait TranscriptProtocol {
     /// Append a domain separator for close account proof.
     fn close_account_proof_domain_sep(&mut self);
 
-    /// Append a domain separator for update account public key proof.
-    fn update_account_public_key_proof_domain_sep(&mut self);
-
     /// Append a domain separator for withdraw proof.
     fn withdraw_proof_domain_sep(&mut self);
 
-    /// Append a domain separator for transfer with range proof.
-    fn transfer_range_proof_sep(&mut self);
-
-    /// Append a domain separator for transfer with validity proof.
-    fn transfer_validity_proof_sep(&mut self);
+    /// Append a domain separator for transfer proof.
+    fn transfer_proof_domain_sep(&mut self);
 
     /// Append a `scalar` with the given `label`.
     fn append_scalar(&mut self, label: &'static [u8], scalar: &Scalar);
@@ -69,20 +63,12 @@ impl TranscriptProtocol for Transcript {
         self.append_message(b"dom_sep", b"CloseAccountProof");
     }
 
-    fn update_account_public_key_proof_domain_sep(&mut self) {
-        self.append_message(b"dom_sep", b"UpdateAccountPublicKeyProof");
-    }
-
     fn withdraw_proof_domain_sep(&mut self) {
         self.append_message(b"dom_sep", b"WithdrawProof");
     }
 
-    fn transfer_range_proof_sep(&mut self) {
-        self.append_message(b"dom_sep", b"TransferRangeProof");
-    }
-
-    fn transfer_validity_proof_sep(&mut self) {
-        self.append_message(b"dom_sep", b"TransferValidityProof");
+    fn transfer_proof_domain_sep(&mut self) {
+        self.append_message(b"dom_sep", b"TransferProof");
     }
 
     fn append_scalar(&mut self, label: &'static [u8], scalar: &Scalar) {

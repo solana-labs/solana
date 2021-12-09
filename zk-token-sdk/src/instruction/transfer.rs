@@ -7,11 +7,12 @@ use {
     crate::{
         encryption::{
             discrete_log::*,
-            elgamal::{ElGamalCiphertext, ElGamalPubkey, ElGamalSecretKey},
+            elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey, ElGamalSecretKey},
             pedersen::{
                 Pedersen, PedersenBase, PedersenCommitment, PedersenDecryptHandle, PedersenOpening,
             },
         },
+        equality_proof::EqualityProof,
         errors::ProofError,
         instruction::{Role, Verifiable},
         range_proof::RangeProof,
@@ -40,7 +41,7 @@ pub struct TransferData {
     pub decrypt_handles_hi: TransferDecryptHandles,
 
     /// The public encryption keys associated with the transfer: source, dest, and auditor
-    pub transfer_public_keys: TransferPubKeys, // 96 bytes
+    pub transfer_public_keys: TransferPubkeys, // 96 bytes
 
     /// The final spendable ciphertext after the transfer
     pub new_spendable_ct: pod::ElGamalCiphertext, // 64 bytes
@@ -56,8 +57,7 @@ impl TransferData {
         transfer_amount: u64,
         spendable_balance: u64,
         spendable_ct: ElGamalCiphertext,
-        source_pk: ElGamalPubkey,
-        source_sk: &ElGamalSecretKey,
+        source_keypair: &ElGamalKeypair,
         dest_pk: ElGamalPubkey,
         auditor_pk: ElGamalPubkey,
     ) -> Self {
@@ -70,11 +70,11 @@ impl TransferData {
         let (comm_lo, open_lo) = Pedersen::new(amount_lo);
         let (comm_hi, open_hi) = Pedersen::new(amount_hi);
 
-        let handle_source_lo = source_pk.decrypt_handle(&open_lo);
+        let handle_source_lo = source_keypair.public.decrypt_handle(&open_lo);
         let handle_dest_lo = dest_pk.decrypt_handle(&open_lo);
         let handle_auditor_lo = auditor_pk.decrypt_handle(&open_lo);
 
-        let handle_source_hi = source_pk.decrypt_handle(&open_hi);
+        let handle_source_hi = source_keypair.public.decrypt_handle(&open_hi);
         let handle_dest_hi = dest_pk.decrypt_handle(&open_hi);
         let handle_auditor_hi = auditor_pk.decrypt_handle(&open_hi);
 
@@ -98,8 +98,8 @@ impl TransferData {
         };
 
         // grouping of the public keys for the transfer
-        let transfer_public_keys = TransferPubKeys {
-            source_pk: source_pk.into(),
+        let transfer_public_keys = TransferPubkeys {
+            source_pk: source_keypair.public.into(),
             dest_pk: dest_pk.into(),
             auditor_pk: auditor_pk.into(),
         };
@@ -120,8 +120,7 @@ impl TransferData {
 
         // range_proof and validity_proof should be generated together
         let proof = TransferProof::new(
-            source_sk,
-            &source_pk,
+            &source_keypair,
             &dest_pk,
             &auditor_pk,
             (amount_lo as u64, amount_hi as u64),
@@ -207,221 +206,142 @@ impl Verifiable for TransferData {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferProof {
-    // Proof component for the spendable ciphertext components: R
-    pub R: pod::CompressedRistretto, // 32 bytes
-    // Proof component for the spendable ciphertext components: z
-    pub z: pod::Scalar, // 32 bytes
-    // Proof component for the transaction amount components: T_src
-    pub T_joint: pod::CompressedRistretto, // 32 bytes
-    // Proof component for the transaction amount components: T_1
-    pub T_1: pod::CompressedRistretto, // 32 bytes
-    // Proof component for the transaction amount components: T_2
-    pub T_2: pod::CompressedRistretto, // 32 bytes
-    // Range proof component
+    /// New Pedersen commitment for the remaining balance in source
+    pub source_commitment: pod::PedersenCommitment,
+
+    /// Associated equality proof
+    pub equality_proof: pod::EqualityProof,
+
+    // Associated range proof
     pub range_proof: pod::RangeProof128,
 }
 
 #[allow(non_snake_case)]
 #[cfg(not(target_arch = "bpf"))]
 impl TransferProof {
+    fn transcript_new() -> Transcript {
+        Transcript::new(b"TransferProof")
+    }
+
     #[allow(clippy::too_many_arguments)]
     #[allow(clippy::many_single_char_names)]
     pub fn new(
-        source_sk: &ElGamalSecretKey,
-        source_pk: &ElGamalPubkey,
+        source_keypair: &ElGamalKeypair,
         dest_pk: &ElGamalPubkey,
         auditor_pk: &ElGamalPubkey,
         transfer_amt: (u64, u64),
         lo_open: &PedersenOpening,
         hi_open: &PedersenOpening,
-        new_spendable_balance: u64,
-        new_spendable_ct: &ElGamalCiphertext,
+        source_new_balance: u64,
+        source_new_balance_ct: &ElGamalCiphertext,
     ) -> Self {
-        // TODO: should also commit to pubkeys and commitments later
-        let mut transcript = merlin::Transcript::new(b"TransferProof");
+        let mut transcript = Self::transcript_new();
 
-        let H = PedersenBase::default().H;
-        let D = new_spendable_ct.decrypt_handle.get_point();
-        let s = source_sk.get_scalar();
+        // add a domain separator to record the start of the protocol
+        transcript.transfer_proof_domain_sep();
 
-        // Generate proof for the new spendable ciphertext
-        let r_new = Scalar::random(&mut OsRng);
-        let y = Scalar::random(&mut OsRng);
-        let R = RistrettoPoint::multiscalar_mul(vec![y, r_new], vec![D, H]).compress();
+        // generate a Pedersen commitment for the remaining balance in source
+        let (source_commitment, source_open) = Pedersen::new(source_new_balance);
 
-        transcript.append_point(b"R", &R);
-        let c = transcript.challenge_scalar(b"c");
+        // extract the relevant scalar and Ristretto points from the inputs
+        let P_EG = source_keypair.public.get_point();
+        let C_EG = source_new_balance_ct.message_comm.get_point();
+        let D_EG = source_new_balance_ct.decrypt_handle.get_point();
+        let C_Ped = source_commitment.get_point();
 
-        let z = s + c * y;
-        let new_spendable_open = PedersenOpening(c * r_new);
+        // append all current state to the transcript
+        transcript.append_point(b"P_EG", &P_EG.compress());
+        transcript.append_point(b"C_EG", &C_EG.compress());
+        transcript.append_point(b"D_EG", &D_EG.compress());
+        transcript.append_point(b"C_Ped", &C_Ped.compress());
 
-        // Generate proof for the transfer amounts
-        let t_1_blinding = PedersenOpening::random(&mut OsRng);
-        let t_2_blinding = PedersenOpening::random(&mut OsRng);
+        // let c = transcript.challenge_scalar(b"c");
+        // println!("{:?}", c);
 
-        // generate the range proof
-        let range_proof = RangeProof::create_with(
-            vec![new_spendable_balance, transfer_amt.0, transfer_amt.1],
-            vec![64, 32, 32],
-            vec![&new_spendable_open, lo_open, hi_open],
-            &t_1_blinding,
-            &t_2_blinding,
+        // generate equality_proof
+        let equality_proof = EqualityProof::new(
+            source_keypair,
+            source_new_balance_ct,
+            source_new_balance,
+            &source_open,
             &mut transcript,
         );
 
-        let u = transcript.challenge_scalar(b"u");
+        // TODO: Add ct validity proof
 
-        let P_joint = RistrettoPoint::multiscalar_mul(
-            vec![Scalar::one(), u, u * u],
-            vec![
-                source_pk.get_point(),
-                dest_pk.get_point(),
-                auditor_pk.get_point(),
-            ],
+        // generate the range proof
+        let range_proof = RangeProof::create(
+            vec![source_new_balance, transfer_amt.0, transfer_amt.1],
+            vec![64, 32, 32],
+            vec![&source_open, lo_open, hi_open],
+            &mut transcript,
         );
-        let T_joint = (new_spendable_open.get_scalar() * P_joint).compress();
-        let T_1 = (t_1_blinding.get_scalar() * P_joint).compress();
-        let T_2 = (t_2_blinding.get_scalar() * P_joint).compress();
-
-        transcript.append_point(b"T_1", &T_1);
-        transcript.append_point(b"T_2", &T_2);
 
         Self {
-            R: R.into(),
-            z: z.into(),
-            T_joint: T_joint.into(),
-            T_1: T_1.into(),
-            T_2: T_2.into(),
-            range_proof: range_proof.try_into().expect("invalid range proof"),
+            source_commitment: source_commitment.into(),
+            equality_proof: equality_proof.try_into().expect("equality proof"),
+            range_proof: range_proof.try_into().expect("range proof"),
         }
     }
-}
 
-#[allow(non_snake_case)]
-#[cfg(not(target_arch = "bpf"))]
-impl TransferProof {
     pub fn verify(
         self,
         amount_comms: &TransferCommitments,
         decryption_handles_lo: &TransferDecryptHandles,
         decryption_handles_hi: &TransferDecryptHandles,
         new_spendable_ct: &pod::ElGamalCiphertext,
-        transfer_public_keys: &TransferPubKeys,
+        transfer_public_keys: &TransferPubkeys,
     ) -> Result<(), ProofError> {
-        let mut transcript = Transcript::new(b"TransferProof");
+        let mut transcript = Self::transcript_new();
 
+        let commitment: PedersenCommitment = self.source_commitment.try_into()?;
+        let equality_proof: EqualityProof = self.equality_proof.try_into()?;
         let range_proof: RangeProof = self.range_proof.try_into()?;
 
-        let source_pk: ElGamalPubkey = transfer_public_keys.source_pk.try_into()?;
-        let dest_pk: ElGamalPubkey = transfer_public_keys.dest_pk.try_into()?;
-        let auditor_pk: ElGamalPubkey = transfer_public_keys.auditor_pk.try_into()?;
+        // add a domain separator to record the start of the protocol
+        transcript.transfer_proof_domain_sep();
 
-        // derive Pedersen commitment for range proof verification
+        // extract the relevant scalar and Ristretto points from the inputs
+        let source_pk: ElGamalPubkey = transfer_public_keys.source_pk.try_into()?;
         let new_spendable_ct: ElGamalCiphertext = (*new_spendable_ct).try_into()?;
 
-        let C = new_spendable_ct.message_comm.get_point();
-        let D = new_spendable_ct.decrypt_handle.get_point();
+        let P_EG = source_pk.get_point();
+        let C_EG = new_spendable_ct.message_comm.get_point();
+        let D_EG = new_spendable_ct.decrypt_handle.get_point();
+        let C_Ped = commitment.get_point();
 
-        let R = self.R.into();
-        let z: Scalar = self.z.into();
+        // append all current state to the transcript
+        transcript.append_point(b"P_EG", &P_EG.compress());
+        transcript.append_point(b"C_EG", &C_EG.compress());
+        transcript.append_point(b"D_EG", &D_EG.compress());
+        transcript.append_point(b"C_Ped", &C_Ped.compress());
 
-        transcript.validate_and_append_point(b"R", &R)?;
-        let c = transcript.challenge_scalar(b"c");
+        // verify equality proof
+        //
+        // TODO: we can also consider verifying equality and range proof in a batch
+        equality_proof.verify(&source_pk, &new_spendable_ct, &commitment, &mut transcript)?;
 
-        let R = R.decompress().ok_or(ProofError::VerificationError)?;
-
-        let spendable_comm_verification =
-            RistrettoPoint::multiscalar_mul(vec![Scalar::one(), -z, c], vec![C, D, R]).compress();
+        // TODO: validity proof
 
         // verify range proof
-        let range_proof_verification = range_proof.verify_challenges(
+        range_proof.verify(
             vec![
-                &spendable_comm_verification,
+                &self.source_commitment.into(),
                 &amount_comms.lo.into(),
                 &amount_comms.hi.into(),
             ],
             vec![64_usize, 32_usize, 32_usize],
             &mut transcript,
-        );
+        )?;
 
-        if range_proof_verification.is_err() {
-            return Err(ProofError::VerificationError);
-        }
-        let (z, x) = range_proof_verification.unwrap();
-
-        // check well-formedness of decryption handles
-
-        // derive joint public key
-        let u = transcript.challenge_scalar(b"u");
-        let P_joint = RistrettoPoint::vartime_multiscalar_mul(
-            vec![Scalar::one(), u, u * u],
-            vec![
-                source_pk.get_point(),
-                dest_pk.get_point(),
-                auditor_pk.get_point(),
-            ],
-        );
-
-        let t_x_blinding: Scalar = range_proof.t_x_blinding;
-        let T_1: CompressedRistretto = self.T_1.into();
-        let T_2: CompressedRistretto = self.T_2.into();
-
-        let handle_source_lo: PedersenDecryptHandle = decryption_handles_lo.source.try_into()?;
-        let handle_dest_lo: PedersenDecryptHandle = decryption_handles_lo.dest.try_into()?;
-        let handle_auditor_lo: PedersenDecryptHandle = decryption_handles_lo.auditor.try_into()?;
-
-        let D_joint: CompressedRistretto = self.T_joint.into();
-        let D_joint = D_joint.decompress().ok_or(ProofError::VerificationError)?;
-
-        let D_joint_lo = RistrettoPoint::vartime_multiscalar_mul(
-            vec![Scalar::one(), u, u * u],
-            vec![
-                handle_source_lo.get_point(),
-                handle_dest_lo.get_point(),
-                handle_auditor_lo.get_point(),
-            ],
-        );
-
-        let handle_source_hi: PedersenDecryptHandle = decryption_handles_hi.source.try_into()?;
-        let handle_dest_hi: PedersenDecryptHandle = decryption_handles_hi.dest.try_into()?;
-        let handle_auditor_hi: PedersenDecryptHandle = decryption_handles_hi.auditor.try_into()?;
-
-        let D_joint_hi = RistrettoPoint::vartime_multiscalar_mul(
-            vec![Scalar::one(), u, u * u],
-            vec![
-                handle_source_hi.get_point(),
-                handle_dest_hi.get_point(),
-                handle_auditor_hi.get_point(),
-            ],
-        );
-
-        // TODO: combine Pedersen commitment verification above to here for efficiency
-        // TODO: might need to add an additional proof-of-knowledge here (additional 64 byte)
-        let mega_check = RistrettoPoint::optional_multiscalar_mul(
-            vec![-t_x_blinding, x, x * x, z * z, z * z * z, z * z * z * z],
-            vec![
-                Some(P_joint),
-                T_1.decompress(),
-                T_2.decompress(),
-                Some(D_joint),
-                Some(D_joint_lo),
-                Some(D_joint_hi),
-            ],
-        )
-        .ok_or(ProofError::VerificationError)?;
-
-        if mega_check.is_identity() {
-            Ok(())
-        } else {
-            Err(ProofError::VerificationError)
-        }
+        Ok(())
     }
 }
 
 /// The ElGamal public keys needed for a transfer
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
-pub struct TransferPubKeys {
+pub struct TransferPubkeys {
     pub source_pk: pod::ElGamalPubkey,  // 32 bytes
     pub dest_pk: pod::ElGamalPubkey,    // 32 bytes
     pub auditor_pk: pod::ElGamalPubkey, // 32 bytes
@@ -485,16 +405,13 @@ mod test {
     #[test]
     fn test_transfer_correctness() {
         // ElGamalKeypair keys for source, destination, and auditor accounts
-        let ElGamalKeypair {
-            public: source_pk,
-            secret: source_sk,
-        } = ElGamalKeypair::default();
+        let source_keypair = ElGamalKeypair::default();
         let dest_pk = ElGamalKeypair::default().public;
         let auditor_pk = ElGamalKeypair::default().public;
 
         // create source account spendable ciphertext
         let spendable_balance: u64 = 77;
-        let spendable_ct = source_pk.encrypt(spendable_balance);
+        let spendable_ct = source_keypair.public.encrypt(spendable_balance);
 
         // transfer amount
         let transfer_amount: u64 = 55;
@@ -504,8 +421,7 @@ mod test {
             transfer_amount,
             spendable_balance,
             spendable_ct,
-            source_pk,
-            &source_sk,
+            &source_keypair,
             dest_pk,
             auditor_pk,
         );
@@ -516,10 +432,7 @@ mod test {
     #[test]
     fn test_source_dest_ciphertext() {
         // ElGamalKeypair keys for source, destination, and auditor accounts
-        let ElGamalKeypair {
-            public: source_pk,
-            secret: source_sk,
-        } = ElGamalKeypair::default();
+        let source_keypair = ElGamalKeypair::default();
 
         let ElGamalKeypair {
             public: dest_pk,
@@ -533,7 +446,7 @@ mod test {
 
         // create source account spendable ciphertext
         let spendable_balance: u64 = 77;
-        let spendable_ct = source_pk.encrypt(spendable_balance);
+        let spendable_ct = source_keypair.public.encrypt(spendable_balance);
 
         // transfer amount
         let transfer_amount: u64 = 55;
@@ -543,15 +456,14 @@ mod test {
             transfer_amount,
             spendable_balance,
             spendable_ct,
-            source_pk,
-            &source_sk,
+            &source_keypair,
             dest_pk,
             auditor_pk,
         );
 
         assert_eq!(
             transfer_data
-                .decrypt_amount(Role::Source, &source_sk)
+                .decrypt_amount(Role::Source, &source_keypair.secret)
                 .unwrap(),
             55_u64,
         );
