@@ -221,10 +221,10 @@ pub struct ErrorCounters {
 }
 
 #[derive(Debug, Default, Clone, Copy)]
-pub struct GenerateIndexResult {}
+pub struct GenerateIndexInfo {}
 
 #[derive(Debug, Default, Clone, Copy)]
-struct GenerateIndexForSlotResult {
+struct GenerateIndexForSlotInfo {
     insert_time_us: u64,
     num_accounts: u64,
     num_accounts_rent_exempt: u64,
@@ -6672,9 +6672,9 @@ impl AccountsDb {
         accounts_map: GenerateIndexAccountsMap<'a>,
         slot: &Slot,
         rent_collector: &RentCollector,
-    ) -> GenerateIndexForSlotResult {
+    ) -> GenerateIndexForSlotInfo {
         if accounts_map.is_empty() {
-            return GenerateIndexForSlotResult::default();
+            return GenerateIndexForSlotInfo::default();
         }
 
         let secondary = !self.account_indexes.is_empty();
@@ -6728,7 +6728,7 @@ impl AccountsDb {
         if !dirty_pubkeys.is_empty() {
             self.uncleaned_pubkeys.insert(*slot, dirty_pubkeys);
         }
-        GenerateIndexForSlotResult {
+        GenerateIndexForSlotInfo {
             insert_time_us,
             num_accounts: num_accounts as u64,
             num_accounts_rent_exempt,
@@ -6868,7 +6868,7 @@ impl AccountsDb {
         limit_load_slot_count_from_snapshot: Option<usize>,
         verify: bool,
         genesis_config: &GenesisConfig,
-    ) -> GenerateIndexResult {
+    ) -> GenerateIndexInfo {
         let mut slots = self.storage.all_slots();
         #[allow(clippy::stable_sort_primitive)]
         slots.sort();
@@ -6928,7 +6928,7 @@ impl AccountsDb {
 
                         let insert_us = if pass == 0 {
                             // generate index
-                            let GenerateIndexForSlotResult {
+                            let GenerateIndexForSlotInfo {
                                 insert_time_us: insert_us,
                                 num_accounts: total_this_slot,
                                 num_accounts_rent_exempt: rent_exempt_this_slot,
@@ -7026,7 +7026,7 @@ impl AccountsDb {
             timings.report();
         }
 
-        GenerateIndexResult::default()
+        GenerateIndexInfo::default()
     }
 
     fn update_storage_info(
