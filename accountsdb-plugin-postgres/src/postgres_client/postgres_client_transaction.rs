@@ -707,7 +707,8 @@ pub(crate) mod tests {
             readonly_indexes: vec![4, 5, 6],
         };
 
-        let db_address_table_lookups = DbTransactionMessageAddressTableLookup::from(&address_table_lookups);
+        let db_address_table_lookups =
+            DbTransactionMessageAddressTableLookup::from(&address_table_lookups);
         check_address_table_lookups_equality(&address_table_lookups, &db_address_table_lookups);
     }
 
