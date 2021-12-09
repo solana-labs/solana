@@ -6,7 +6,7 @@ mod withdraw;
 use crate::errors::ProofError;
 pub use {
     close_account::CloseAccountData,
-    transfer::{TransferCommitments, TransferData, TransferPubKeys},
+    transfer::{TransferCommitments, TransferData, TransferPubkeys},
     withdraw::WithdrawData,
 };
 
