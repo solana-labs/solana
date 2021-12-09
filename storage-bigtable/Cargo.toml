@@ -27,7 +27,7 @@ solana-sdk = { path = "../sdk", version = "=1.10.0" }
 solana-storage-proto = { path = "../storage-proto", version = "=1.10.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.10.0" }
 thiserror = "1.0"
-tonic = { version = "0.6.1", features = ["tls", "transport"] }
+tonic = { version = "0.6.2", features = ["tls", "transport"] }
 zstd = "0.9.0"
 
 # openssl is a dependency of the goauth and smpl_jwt crates, but explicitly
