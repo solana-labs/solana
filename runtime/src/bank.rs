@@ -146,7 +146,10 @@ use {
         ptr,
         rc::Rc,
         sync::{
-            atomic::{AtomicBool, AtomicU64, Ordering::Relaxed},
+            atomic::{
+                AtomicBool, AtomicU64,
+                Ordering::{Acquire, Relaxed, Release},
+            },
             Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard,
         },
         time::{Duration, Instant},
@@ -1042,6 +1045,10 @@ pub struct Bank {
     pub cost_tracker: RwLock<CostTracker>,
 
     sysvar_cache: RwLock<Vec<(Pubkey, Vec<u8>)>>,
+
+    /// Current size of the accounts data.  Used when processing messages to enforce a limit on its
+    /// maximum size.
+    accounts_data_len: AtomicU64,
 }
 
 impl Default for BlockhashQueue {
@@ -1127,7 +1134,7 @@ impl Bank {
     }
 
     fn default_with_accounts(accounts: Accounts) -> Self {
-        Self {
+        let bank = Self {
             rc: BankRc::new(accounts, Slot::default()),
             src: StatusCacheRc::default(),
             blockhash_queue: RwLock::<BlockhashQueue>::default(),
@@ -1183,7 +1190,14 @@ impl Bank {
             vote_only_bank: false,
             cost_tracker: RwLock::<CostTracker>::default(),
             sysvar_cache: RwLock::new(Vec::new()),
-        }
+            accounts_data_len: AtomicU64::default(),
+        };
+
+        let total_accounts_stats = bank.get_total_accounts_stats().unwrap();
+        bank.accounts_data_len
+            .store(total_accounts_stats.data_len as u64, Release);
+
+        bank
     }
 
     pub fn new_with_paths_for_tests(
@@ -1429,6 +1443,7 @@ impl Bank {
             freeze_started: AtomicBool::new(false),
             cost_tracker: RwLock::new(CostTracker::default()),
             sysvar_cache: RwLock::new(Vec::new()),
+            accounts_data_len: AtomicU64::new(parent.accounts_data_len.load(Acquire)),
         };
 
         let mut ancestors = Vec::with_capacity(1 + new.parents().len());
@@ -1541,6 +1556,7 @@ impl Bank {
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
         debug_do_not_add_builtins: bool,
+        accounts_data_len: u64,
     ) -> Self {
         fn new<T: Default>() -> T {
             T::default()
@@ -1603,6 +1619,7 @@ impl Bank {
             vote_only_bank: false,
             cost_tracker: RwLock::new(CostTracker::default()),
             sysvar_cache: RwLock::new(Vec::new()),
+            accounts_data_len: AtomicU64::new(accounts_data_len),
         };
         bank.finish_init(
             genesis_config,
