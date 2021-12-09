@@ -44,7 +44,7 @@ pub const ACCOUNTS_INDEX_CONFIG_FOR_TESTING: AccountsIndexConfig = AccountsIndex
     bins: Some(BINS_FOR_TESTING),
     flush_threads: Some(FLUSH_THREADS_TESTING),
     drives: None,
-    index_limit_mb: Some(1),
+    index_limit_mb: None,
     ages_to_stay_in_cache: None,
     scan_results_limit_bytes: None,
 };
@@ -849,7 +849,13 @@ pub struct AccountsIndex<T: IndexValue> {
 
 impl<T: IndexValue> AccountsIndex<T> {
     pub fn default_for_tests() -> Self {
-        Self::new(Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING))
+        let mut config = ACCOUNTS_INDEX_CONFIG_FOR_TESTING;
+        if let Ok(limit) = std::env::var("SOLANA_TEST_ACCOUNTS_INDEX_MEMORY_LIMIT_MB") {
+            // allocate with disk buckets
+            config.index_limit_mb = Some(limit.parse::<usize>().unwrap());
+        }
+
+        Self::new(Some(config))
     }
 
     pub fn new(config: Option<AccountsIndexConfig>) -> Self {
