@@ -1,7 +1,3 @@
-/// The interface for AccountsDb plugins. A plugin must implement
-/// the AccountsDbPlugin trait to work with the runtime.
-/// In addition, the dynamic library must export a "C" function _create_plugin which
-/// creates the implementation of the plugin.
 use {
     solana_sdk::{signature::Signature, transaction::SanitizedTransaction},
     solana_transaction_status::TransactionStatusMeta,
@@ -12,16 +8,38 @@ use {
 impl Eq for ReplicaAccountInfo<'_> {}
 
 #[derive(Clone, PartialEq, Debug)]
+/// Information about the accounts being updated
 pub struct ReplicaAccountInfo<'a> {
+    /// The Pubkey for the account
     pub pubkey: &'a [u8],
+
+    /// The lamports for the account
     pub lamports: u64,
+
+    /// The Pubkey of the owner program account
     pub owner: &'a [u8],
+
+    /// This account's data contains a loaded program (and is now read-only)
     pub executable: bool,
+
+    /// The epoch at which this account will next owe rent
     pub rent_epoch: u64,
+
+    /// The data held in this account.
     pub data: &'a [u8],
+
+    /// A global monitically increasing atomic number which can be used
+    /// to tell the order of the account update. For example, when an
+    /// account is updated in the same slot multiple times, the update
+    /// with higher write_version should supersede the one with lower
+    /// write_version.
     pub write_version: u64,
 }
 
+/// The versioned account information enum to avoid silent data corruptions
+/// If there were a change to the structure of the  ReplicaAccountInfo,
+/// there would be new enum entry for the newer version. This force the
+/// plugin implementation to handle the change.
 pub enum ReplicaAccountInfoVersions<'a> {
     V0_0_1(&'a ReplicaAccountInfo<'a>),
 }
@@ -38,28 +56,44 @@ pub enum ReplicaTransactionInfoVersions<'a> {
     V0_0_1(&'a ReplicaTransactionInfo<'a>),
 }
 
+/// The error enums the plugin can return in the calls.
 #[derive(Error, Debug)]
 pub enum AccountsDbPluginError {
+    /// Error opening the configuration file for example when the file
+    /// is not found or when the validator process has no permission to read it.
     #[error("Error opening config file. Error detail: ({0}).")]
     ConfigFileOpenError(#[from] io::Error),
 
+    /// Error in reading the content of the config file or the content
+    /// is not in the expected format.
     #[error("Error reading config file. Error message: ({msg})")]
     ConfigFileReadError { msg: String },
 
+    /// Error when updating the account.
     #[error("Error updating account. Error message: ({msg})")]
     AccountsUpdateError { msg: String },
 
+    /// Error when updating the slot status
     #[error("Error updating slot status. Error message: ({msg})")]
     SlotStatusUpdateError { msg: String },
 
+    /// Any other custom error the plugin can return.
     #[error("Plugin-defined custom error. Error message: ({0})")]
     Custom(Box<dyn error::Error + Send + Sync>),
 }
 
+/// The slot status enums
 #[derive(Debug, Clone)]
 pub enum SlotStatus {
+    /// The highest slot of the heaviest fork processed by the node. Ledger state at this slot is
+    /// not derived from a confirmed or finalized block, but if multiple forks are present, is from
+    /// the fork the validator believes is most likely to finalize.
     Processed,
+
+    /// The highest slot having reached max vote lockout.
     Rooted,
+
+    /// The highest slot that has been voted on by supermajority of the cluster, ie. is confirmed.
     Confirmed,
 }
 
@@ -75,6 +109,10 @@ impl SlotStatus {
 
 pub type Result<T> = std::result::Result<T, AccountsDbPluginError>;
 
+/// The interface for AccountsDb plugins. A plugin must implement
+/// the AccountsDbPlugin trait to work with the runtime.
+/// In addition, the dynamic library must export a "C" function _create_plugin which
+/// creates the implementation of the plugin.
 pub trait AccountsDbPlugin: Any + Send + Sync + std::fmt::Debug {
     fn name(&self) -> &'static str;
 
@@ -93,6 +131,9 @@ pub trait AccountsDbPlugin: Any + Send + Sync + std::fmt::Debug {
     fn on_unload(&mut self) {}
 
     /// Called when an account is updated at a slot.
+    /// When `is_startup` is true, it indicates the account is loaded from
+    /// snapshots when the validator starts up. When `is_startup` is false,
+    /// the account is updated during transaction processing.
     #[allow(unused_variables)]
     fn update_account(
         &mut self,
