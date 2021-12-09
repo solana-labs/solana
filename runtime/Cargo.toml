@@ -26,6 +26,8 @@ lazy_static = "1.4.0"
 log = "0.4.14"
 memmap2 = "0.5.0"
 num_cpus = "1.13.0"
+num-derive = { version = "0.3" }
+num-traits = { version = "0.2" }
 ouroboros = "0.13.0"
 rand = "0.7.0"
 rayon = "1.5.1"
