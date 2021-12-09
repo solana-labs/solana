@@ -231,6 +231,7 @@ fn start_gossip_node(
         gossip_socket,
         gossip_validators,
         should_check_duplicate_instance,
+        None,
         &gossip_exit_flag,
     );
     (cluster_info, gossip_exit_flag, gossip_service)
