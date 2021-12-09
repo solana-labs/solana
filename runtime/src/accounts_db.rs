@@ -220,6 +220,13 @@ pub struct ErrorCounters {
     pub invalid_writable_account: usize,
 }
 
+#[derive(Debug, Default, Clone, Copy)]
+struct SlotIndexGenerationInfo {
+    insert_time_us: u64,
+    num_accounts: u64,
+    num_accounts_rent_exempt: u64,
+}
+
 #[derive(Default, Debug)]
 struct GenerateIndexTimings {
     pub index_time: u64,
@@ -6657,21 +6664,20 @@ impl AccountsDb {
         accounts_map
     }
 
-    /// return time_us, # accts rent exempt, total # accts
     fn generate_index_for_slot<'a>(
         &self,
         accounts_map: GenerateIndexAccountsMap<'a>,
         slot: &Slot,
         rent_collector: &RentCollector,
-    ) -> (u64, u64, u64) {
+    ) -> SlotIndexGenerationInfo {
         if accounts_map.is_empty() {
-            return (0, 0, 0);
+            return SlotIndexGenerationInfo::default();
         }
 
         let secondary = !self.account_indexes.is_empty();
 
-        let mut rent_exempt = 0;
-        let len = accounts_map.len();
+        let mut num_accounts_rent_exempt = 0;
+        let num_accounts = accounts_map.len();
         let items = accounts_map.into_iter().map(
             |(
                 pubkey,
@@ -6694,7 +6700,7 @@ impl AccountsDb {
                     let (_rent_due, exempt) = rent_collector.get_rent_due(&stored_account);
                     exempt
                 } {
-                    rent_exempt += 1;
+                    num_accounts_rent_exempt += 1;
                 }
 
                 (
@@ -6709,9 +6715,9 @@ impl AccountsDb {
             },
         );
 
-        let (dirty_pubkeys, insert_us) = self
+        let (dirty_pubkeys, insert_time_us) = self
             .accounts_index
-            .insert_new_if_missing_into_primary_index(*slot, len, items);
+            .insert_new_if_missing_into_primary_index(*slot, num_accounts, items);
 
         // dirty_pubkeys will contain a pubkey if an item has multiple rooted entries for
         // a given pubkey. If there is just a single item, there is no cleaning to
@@ -6719,7 +6725,11 @@ impl AccountsDb {
         if !dirty_pubkeys.is_empty() {
             self.uncleaned_pubkeys.insert(*slot, dirty_pubkeys);
         }
-        (insert_us, rent_exempt, len as u64)
+        SlotIndexGenerationInfo {
+            insert_time_us,
+            num_accounts: num_accounts as u64,
+            num_accounts_rent_exempt,
+        }
     }
 
     fn filler_unique_id_bytes() -> usize {
@@ -6920,8 +6930,11 @@ impl AccountsDb {
 
                         let insert_us = if pass == 0 {
                             // generate index
-                            let (insert_us, rent_exempt_this_slot, total_this_slot) =
-                                self.generate_index_for_slot(accounts_map, slot, &rent_collector);
+                            let SlotIndexGenerationInfo {
+                                insert_time_us: insert_us,
+                                num_accounts: total_this_slot,
+                                num_accounts_rent_exempt: rent_exempt_this_slot,
+                            } = self.generate_index_for_slot(accounts_map, slot, &rent_collector);
                             rent_exempt.fetch_add(rent_exempt_this_slot, Ordering::Relaxed);
                             total_duplicates.fetch_add(total_this_slot, Ordering::Relaxed);
                             insert_us
