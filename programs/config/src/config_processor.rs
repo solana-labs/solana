@@ -1,22 +1,24 @@
 //! Config program
 
-use crate::ConfigKeys;
-use bincode::deserialize;
-use solana_program_runtime::{ic_msg, invoke_context::InvokeContext};
-use solana_sdk::{
-    account::{ReadableAccount, WritableAccount},
-    feature_set,
-    instruction::InstructionError,
-    keyed_account::keyed_account_at_index,
-    program_utils::limited_deserialize,
-    pubkey::Pubkey,
+use {
+    crate::ConfigKeys,
+    bincode::deserialize,
+    solana_program_runtime::{ic_msg, invoke_context::InvokeContext},
+    solana_sdk::{
+        account::{ReadableAccount, WritableAccount},
+        feature_set,
+        instruction::InstructionError,
+        keyed_account::keyed_account_at_index,
+        program_utils::limited_deserialize,
+        pubkey::Pubkey,
+    },
+    std::collections::BTreeSet,
 };
-use std::collections::BTreeSet;
 
 pub fn process_instruction(
     first_instruction_account: usize,
     data: &[u8],
-    invoke_context: &mut dyn InvokeContext,
+    invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
@@ -100,7 +102,10 @@ pub fn process_instruction(
         }
     }
 
-    if invoke_context.is_feature_active(&feature_set::dedupe_config_program_signers::id()) {
+    if invoke_context
+        .feature_set
+        .is_active(&feature_set::dedupe_config_program_signers::id())
+    {
         let total_new_keys = key_list.keys.len();
         let unique_new_keys = key_list.keys.into_iter().collect::<BTreeSet<_>>();
         if unique_new_keys.len() != total_new_keys {
@@ -134,18 +139,20 @@ pub fn process_instruction(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{config_instruction, get_config_data, id, ConfigKeys, ConfigState};
-    use bincode::serialized_size;
-    use serde_derive::{Deserialize, Serialize};
-    use solana_program_runtime::invoke_context::mock_process_instruction;
-    use solana_sdk::{
-        account::AccountSharedData,
-        pubkey::Pubkey,
-        signature::{Keypair, Signer},
-        system_instruction::SystemInstruction,
+    use {
+        super::*,
+        crate::{config_instruction, get_config_data, id, ConfigKeys, ConfigState},
+        bincode::serialized_size,
+        serde_derive::{Deserialize, Serialize},
+        solana_program_runtime::invoke_context::mock_process_instruction,
+        solana_sdk::{
+            account::AccountSharedData,
+            pubkey::Pubkey,
+            signature::{Keypair, Signer},
+            system_instruction::SystemInstruction,
+        },
+        std::{cell::RefCell, rc::Rc},
     };
-    use std::{cell::RefCell, rc::Rc};
 
     fn process_instruction(
         instruction_data: &[u8],

@@ -26,10 +26,9 @@ use {
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{clock::Slot, packet::PACKET_DATA_SIZE, pubkey::Pubkey},
-    std::collections::HashSet,
     std::{
         cmp::Reverse,
-        collections::HashMap,
+        collections::{HashMap, HashSet},
         net::{SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -879,7 +878,15 @@ mod test {
         ));
 
         // coding shreds don't contain parent slot information, test that slot >= root
-        let (common, coding) = Shredder::new_coding_shred_header(5, 5, 5, 6, 6, 0);
+        let (common, coding) = Shredder::new_coding_shred_header(
+            5, // slot
+            5, // index
+            5, // fec_set_index
+            6, // num_data_shreds
+            6, // num_coding_shreds
+            3, // position
+            0, // version
+        );
         let mut coding_shred =
             Shred::new_empty_from_header(common, DataShredHeader::default(), coding);
         Shredder::sign_shred(&leader_keypair, &mut coding_shred);
@@ -950,10 +957,20 @@ mod test {
 
     #[test]
     fn test_prune_shreds() {
-        use crate::serve_repair::ShredRepairType;
-        use std::net::{IpAddr, Ipv4Addr};
+        use {
+            crate::serve_repair::ShredRepairType,
+            std::net::{IpAddr, Ipv4Addr},
+        };
         solana_logger::setup();
-        let (common, coding) = Shredder::new_coding_shred_header(5, 5, 5, 6, 6, 0);
+        let (common, coding) = Shredder::new_coding_shred_header(
+            5, // slot
+            5, // index
+            5, // fec_set_index
+            6, // num_data_shreds
+            6, // num_coding_shreds
+            4, // position
+            0, // version
+        );
         let shred = Shred::new_empty_from_header(common, DataShredHeader::default(), coding);
         let mut shreds = vec![shred.clone(), shred.clone(), shred];
         let _from_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);

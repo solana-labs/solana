@@ -18,7 +18,7 @@ use solana_bpf_rust_invoke::instructions::*;
 use solana_bpf_rust_realloc::instructions::*;
 use solana_bpf_rust_realloc_invoke::instructions::*;
 use solana_cli_output::display::println_transaction;
-use solana_program_runtime::invoke_context::{with_mock_invoke_context, InvokeContext};
+use solana_program_runtime::invoke_context::with_mock_invoke_context;
 use solana_rbpf::{
     elf::Executable,
     static_analysis::Analysis,
@@ -209,6 +209,10 @@ fn run_program(name: &str) -> u64 {
         let mut instruction_meter = ThisInstructionMeter { compute_meter };
         let config = Config {
             enable_instruction_tracing: true,
+            reject_unresolved_syscalls: true,
+            reject_section_virtual_address_file_offset_mismatch: true,
+            verify_mul64_imm_nonzero: false,
+            verify_shift32_imm: true,
             ..Config::default()
         };
         let mut executable = Executable::<BpfError, ThisInstructionMeter>::from_elf(
@@ -223,11 +227,10 @@ fn run_program(name: &str) -> u64 {
         let mut instruction_count = 0;
         let mut tracer = None;
         for i in 0..2 {
-            invoke_context.set_return_data(Vec::new()).unwrap();
+            invoke_context.return_data = (*invoke_context.get_caller().unwrap(), Vec::new());
             let mut parameter_bytes = parameter_bytes.clone();
             {
                 let mut vm = create_vm(
-                    &loader_id,
                     &executable,
                     parameter_bytes.as_slice_mut(),
                     invoke_context,

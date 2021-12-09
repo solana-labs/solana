@@ -3914,30 +3914,32 @@ fn adjust_ulimit_nofile(enforce_ulimit_nofile: bool) -> Result<()> {
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
-    use crate::{
-        genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        leader_schedule::{FixedSchedule, LeaderSchedule},
-        shred::{max_ticks_per_n_shreds, DataShredHeader},
+    use {
+        super::*,
+        crate::{
+            genesis_utils::{create_genesis_config, GenesisConfigInfo},
+            leader_schedule::{FixedSchedule, LeaderSchedule},
+            shred::{max_ticks_per_n_shreds, DataShredHeader},
+        },
+        assert_matches::assert_matches,
+        bincode::serialize,
+        itertools::Itertools,
+        rand::{seq::SliceRandom, thread_rng},
+        solana_account_decoder::parse_token::UiTokenAmount,
+        solana_entry::entry::{next_entry, next_entry_mut},
+        solana_runtime::bank::{Bank, RewardType},
+        solana_sdk::{
+            hash::{self, hash, Hash},
+            instruction::CompiledInstruction,
+            packet::PACKET_DATA_SIZE,
+            pubkey::Pubkey,
+            signature::Signature,
+            transaction::{Transaction, TransactionError},
+        },
+        solana_storage_proto::convert::generated,
+        solana_transaction_status::{InnerInstructions, Reward, Rewards, TransactionTokenBalance},
+        std::{sync::mpsc::channel, thread::Builder, time::Duration},
     };
-    use assert_matches::assert_matches;
-    use bincode::serialize;
-    use itertools::Itertools;
-    use rand::{seq::SliceRandom, thread_rng};
-    use solana_account_decoder::parse_token::UiTokenAmount;
-    use solana_entry::entry::{next_entry, next_entry_mut};
-    use solana_runtime::bank::{Bank, RewardType};
-    use solana_sdk::{
-        hash::{self, hash, Hash},
-        instruction::CompiledInstruction,
-        packet::PACKET_DATA_SIZE,
-        pubkey::Pubkey,
-        signature::Signature,
-        transaction::{Transaction, TransactionError},
-    };
-    use solana_storage_proto::convert::generated;
-    use solana_transaction_status::{InnerInstructions, Reward, Rewards, TransactionTokenBalance};
-    use std::{sync::mpsc::channel, thread::Builder, time::Duration};
 
     // used for tests only
     pub(crate) fn make_slot_entries_with_transactions(num_entries: u64) -> Vec<Entry> {
@@ -5552,7 +5554,14 @@ pub mod tests {
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         let slot = 1;
-        let (shred, coding) = Shredder::new_coding_shred_header(slot, 11, 11, 11, 11, 0);
+        let (shred, coding) = Shredder::new_coding_shred_header(
+            slot, 11, // index
+            11, // fec_set_index
+            11, // num_data_shreds
+            11, // num_coding_shreds
+            8,  // position
+            0,  // version
+        );
         let coding_shred = Shred::new_empty_from_header(shred, DataShredHeader::default(), coding);
 
         let mut erasure_metas = HashMap::new();
@@ -5602,7 +5611,14 @@ pub mod tests {
         let last_root = RwLock::new(0);
 
         let slot = 1;
-        let (mut shred, coding) = Shredder::new_coding_shred_header(slot, 11, 11, 11, 11, 0);
+        let (mut shred, coding) = Shredder::new_coding_shred_header(
+            slot, 11, // index
+            11, // fec_set_index
+            11, // num_data_shreds
+            11, // num_coding_shreds
+            8,  // position
+            0,  // version
+        );
         let coding_shred =
             Shred::new_empty_from_header(shred.clone(), DataShredHeader::default(), coding.clone());
 

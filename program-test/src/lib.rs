@@ -3,16 +3,15 @@
 
 #[allow(deprecated)]
 use solana_sdk::sysvar::fees::Fees;
+// Export tokio for test clients
+pub use tokio;
 use {
     async_trait::async_trait,
     chrono_humanize::{Accuracy, HumanTime, Tense},
     log::*,
     solana_banks_client::start_client,
     solana_banks_server::banks_server::start_local_server,
-    solana_program_runtime::{
-        ic_msg, instruction_processor::InstructionProcessor,
-        invoke_context::ProcessInstructionWithContext, stable_log,
-    },
+    solana_program_runtime::{ic_msg, invoke_context::ProcessInstructionWithContext, stable_log},
     solana_runtime::{
         bank::{Bank, ExecuteTimings},
         bank_forks::BankForks,
@@ -31,8 +30,7 @@ use {
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
-        instruction::Instruction,
-        instruction::InstructionError,
+        instruction::{Instruction, InstructionError},
         message::Message,
         native_token::sol_to_lamports,
         poh_config::PohConfig,
@@ -65,13 +63,8 @@ use {
     thiserror::Error,
     tokio::task::JoinHandle,
 };
-
 // Export types so test clients can limit their solana crate dependencies
-pub use solana_banks_client::BanksClient;
-pub use solana_program_runtime::invoke_context::InvokeContext;
-
-// Export tokio for test clients
-pub use tokio;
+pub use {solana_banks_client::BanksClient, solana_program_runtime::invoke_context::InvokeContext};
 
 pub mod programs;
 
@@ -87,26 +80,25 @@ pub enum ProgramTestError {
 }
 
 thread_local! {
-    static INVOKE_CONTEXT: RefCell<Option<(usize, usize)>> = RefCell::new(None);
+    static INVOKE_CONTEXT: RefCell<Option<usize>> = RefCell::new(None);
 }
-fn set_invoke_context(new: &mut dyn InvokeContext) {
-    INVOKE_CONTEXT.with(|invoke_context| unsafe {
-        invoke_context.replace(Some(transmute::<_, (usize, usize)>(new)))
-    });
+fn set_invoke_context(new: &mut InvokeContext) {
+    INVOKE_CONTEXT
+        .with(|invoke_context| unsafe { invoke_context.replace(Some(transmute::<_, usize>(new))) });
 }
-fn get_invoke_context<'a>() -> &'a mut dyn InvokeContext {
-    let fat = INVOKE_CONTEXT.with(|invoke_context| match *invoke_context.borrow() {
+fn get_invoke_context<'a, 'b>() -> &'a mut InvokeContext<'b> {
+    let ptr = INVOKE_CONTEXT.with(|invoke_context| match *invoke_context.borrow() {
         Some(val) => val,
         None => panic!("Invoke context not set!"),
     });
-    unsafe { transmute::<(usize, usize), &mut dyn InvokeContext>(fat) }
+    unsafe { transmute::<usize, &mut InvokeContext>(ptr) }
 }
 
 pub fn builtin_process_instruction(
     process_instruction: solana_sdk::entrypoint::ProcessInstruction,
     _first_instruction_account: usize,
     input: &[u8],
-    invoke_context: &mut dyn InvokeContext,
+    invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     set_invoke_context(invoke_context);
 
@@ -190,7 +182,7 @@ macro_rules! processor {
         Some(
             |first_instruction_account: usize,
              input: &[u8],
-             invoke_context: &mut dyn solana_program_test::InvokeContext| {
+             invoke_context: &mut solana_program_test::InvokeContext| {
                 $crate::builtin_process_instruction(
                     $process_instruction,
                     first_instruction_account,
@@ -218,7 +210,7 @@ fn get_sysvar<T: Default + Sysvar + Sized + serde::de::DeserializeOwned>(
         panic!("Exceeded compute budget");
     }
 
-    match solana_program_runtime::invoke_context::get_sysvar::<T>(invoke_context, id) {
+    match invoke_context.get_sysvar::<T>(id) {
         Ok(sysvar_data) => unsafe {
             *(var_addr as *mut _ as *mut T) = sysvar_data;
             SUCCESS
@@ -252,8 +244,9 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         let message = Message::new(&[instruction.clone()], None);
         let program_id_index = message.instructions[0].program_id_index as usize;
         let program_id = message.account_keys[program_id_index];
-        let demote_program_write_locks =
-            invoke_context.is_feature_active(&demote_program_write_locks::id());
+        let demote_program_write_locks = invoke_context
+            .feature_set
+            .is_active(&demote_program_write_locks::id());
         // TODO don't have the caller's keyed_accounts so can't validate writer or signer escalation or deescalation yet
         let caller_privileges = message
             .account_keys
@@ -321,16 +314,19 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             }
         }
 
-        invoke_context.record_instruction(instruction);
+        if let Some(instruction_recorder) = &invoke_context.instruction_recorder {
+            instruction_recorder.record_instruction(instruction.clone());
+        }
 
-        InstructionProcessor::process_cross_program_instruction(
-            &message,
-            &program_indices,
-            &account_indices,
-            &caller_privileges,
-            invoke_context,
-        )
-        .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;
+        invoke_context
+            .process_instruction(
+                &message,
+                &message.instructions[0],
+                &program_indices,
+                &account_indices,
+                &caller_privileges,
+            )
+            .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;
 
         // Copy writeable account modifications back into the caller's AccountInfos
         for (account, account_info) in accounts.iter() {

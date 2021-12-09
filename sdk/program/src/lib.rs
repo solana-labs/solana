@@ -6,12 +6,14 @@
 extern crate self as solana_program;
 
 pub mod account_info;
+pub(crate) mod atomic_u64;
 pub mod blake3;
 pub mod borsh;
 pub mod bpf_loader;
 pub mod bpf_loader_deprecated;
 pub mod bpf_loader_upgradeable;
 pub mod clock;
+pub mod debug_account_data;
 pub mod decode_error;
 pub mod ed25519_program;
 pub mod entrypoint;

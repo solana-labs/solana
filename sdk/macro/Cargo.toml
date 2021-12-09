@@ -1,13 +1,13 @@
 [package]
 name = "solana-sdk-macro"
-version = "1.9.0"
+version = "1.10.0"
 description = "Solana SDK Macro"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-sdk-macro"
 license = "Apache-2.0"
-edition = "2018"
+edition = "2021"
 
 [lib]
 proc-macro = true

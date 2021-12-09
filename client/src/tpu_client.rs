@@ -1,34 +1,36 @@
-use crate::{
-    client_error::ClientError,
-    pubsub_client::{PubsubClient, PubsubClientError, PubsubClientSubscription},
-    rpc_client::RpcClient,
-    rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
-    rpc_response::SlotUpdate,
-    spinner,
-};
-use bincode::serialize;
-use log::*;
-use solana_sdk::{
-    clock::Slot,
-    commitment_config::CommitmentConfig,
-    message::Message,
-    pubkey::Pubkey,
-    signature::SignerError,
-    signers::Signers,
-    transaction::{Transaction, TransactionError},
-};
-use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    net::{SocketAddr, UdpSocket},
-    str::FromStr,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, RwLock,
+use {
+    crate::{
+        client_error::ClientError,
+        pubsub_client::{PubsubClient, PubsubClientError, PubsubClientSubscription},
+        rpc_client::RpcClient,
+        rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
+        rpc_response::SlotUpdate,
+        spinner,
     },
-    thread::{sleep, JoinHandle},
-    time::{Duration, Instant},
+    bincode::serialize,
+    log::*,
+    solana_sdk::{
+        clock::Slot,
+        commitment_config::CommitmentConfig,
+        message::Message,
+        pubkey::Pubkey,
+        signature::SignerError,
+        signers::Signers,
+        transaction::{Transaction, TransactionError},
+    },
+    std::{
+        collections::{HashMap, HashSet, VecDeque},
+        net::{SocketAddr, UdpSocket},
+        str::FromStr,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
+        thread::{sleep, JoinHandle},
+        time::{Duration, Instant},
+    },
+    thiserror::Error,
 };
-use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum TpuSenderError {

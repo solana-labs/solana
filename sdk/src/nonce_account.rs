@@ -1,10 +1,12 @@
-use crate::{
-    account::{AccountSharedData, ReadableAccount},
-    account_utils::StateMut,
-    hash::Hash,
-    nonce::{state::Versions, State},
+use {
+    crate::{
+        account::{AccountSharedData, ReadableAccount},
+        account_utils::StateMut,
+        hash::Hash,
+        nonce::{state::Versions, State},
+    },
+    std::cell::RefCell,
 };
-use std::cell::RefCell;
 
 pub fn create_account(lamports: u64) -> RefCell<AccountSharedData> {
     RefCell::new(
@@ -40,8 +42,7 @@ pub fn lamports_per_signature_of(account: &AccountSharedData) -> Option<u64> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::pubkey::Pubkey;
+    use {super::*, crate::pubkey::Pubkey};
 
     #[test]
     fn test_verify_bad_account_owner_fails() {

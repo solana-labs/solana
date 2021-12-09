@@ -28,6 +28,7 @@ jobs:
       if: type IN (api, cron) OR tag IS present
       name: "macOS release artifacts"
       os: osx
+      osx_image: xcode12
       language: rust
       rust:
         - stable
@@ -35,6 +36,9 @@ jobs:
         - source ci/rust-version.sh
         - PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
         - readlink -f .
+        - brew install gnu-tar
+        - PATH="/usr/local/opt/gnu-tar/libexec/gnubin:$PATH"
+        - tar --version
       script:
         - source ci/env.sh
         - rustup set profile default

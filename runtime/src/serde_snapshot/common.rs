@@ -1,5 +1,4 @@
-use super::*;
-use std::collections::HashSet;
+use {super::*, std::collections::HashSet};
 
 #[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize, AbiExample)]
 pub(crate) struct UnusedAccounts {

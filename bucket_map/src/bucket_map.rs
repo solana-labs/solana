@@ -1,15 +1,11 @@
 //! BucketMap is a mostly contention free concurrent map backed by MmapMut
 
-use crate::bucket_api::BucketApi;
-use crate::bucket_stats::BucketMapStats;
-use crate::{MaxSearch, RefCount};
-use solana_sdk::pubkey::Pubkey;
-use std::convert::TryInto;
-use std::fmt::Debug;
-use std::fs;
-use std::path::PathBuf;
-use std::sync::Arc;
-use tempfile::TempDir;
+use {
+    crate::{bucket_api::BucketApi, bucket_stats::BucketMapStats, MaxSearch, RefCount},
+    solana_sdk::pubkey::Pubkey,
+    std::{convert::TryInto, fmt::Debug, fs, path::PathBuf, sync::Arc},
+    tempfile::TempDir,
+};
 
 #[derive(Debug, Default, Clone)]
 pub struct BucketMapConfig {
@@ -194,11 +190,11 @@ fn read_be_u64(input: &[u8]) -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use rand::thread_rng;
-    use rand::Rng;
-    use std::collections::HashMap;
-    use std::sync::RwLock;
+    use {
+        super::*,
+        rand::{thread_rng, Rng},
+        std::{collections::HashMap, sync::RwLock},
+    };
 
     #[test]
     fn bucket_map_test_insert() {

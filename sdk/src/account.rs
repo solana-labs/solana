@@ -1,10 +1,17 @@
-use crate::{
-    clock::{Epoch, INITIAL_RENT_EPOCH},
-    lamports::LamportsError,
-    pubkey::Pubkey,
+use {
+    crate::{
+        clock::{Epoch, INITIAL_RENT_EPOCH},
+        lamports::LamportsError,
+        pubkey::Pubkey,
+    },
+    solana_program::{account_info::AccountInfo, debug_account_data::*, sysvar::Sysvar},
+    std::{
+        cell::{Ref, RefCell},
+        fmt,
+        rc::Rc,
+        sync::Arc,
+    },
 };
-use solana_program::{account_info::AccountInfo, sysvar::Sysvar};
-use std::{cell::Ref, cell::RefCell, cmp, fmt, rc::Rc, sync::Arc};
 
 /// An Account with data that is stored on chain
 #[repr(C)]
@@ -273,22 +280,16 @@ impl ReadableAccount for Ref<'_, Account> {
 }
 
 fn debug_fmt<T: ReadableAccount>(item: &T, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    let data_len = cmp::min(64, item.data().len());
-    let data_str = if data_len > 0 {
-        format!(" data: {}", hex::encode(item.data()[..data_len].to_vec()))
-    } else {
-        "".to_string()
-    };
-    write!(
-        f,
-        "Account {{ lamports: {} data.len: {} owner: {} executable: {} rent_epoch: {}{} }}",
-        item.lamports(),
-        item.data().len(),
-        item.owner(),
-        item.executable(),
-        item.rent_epoch(),
-        data_str,
-    )
+    let mut f = f.debug_struct("Account");
+
+    f.field("lamports", &item.lamports())
+        .field("data.len", &item.data().len())
+        .field("owner", &item.owner())
+        .field("executable", &item.executable())
+        .field("rent_epoch", &item.rent_epoch());
+    debug_account_data(item.data(), &mut f);
+
+    f.finish()
 }
 
 impl fmt::Debug for Account {

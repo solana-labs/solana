@@ -1,17 +1,19 @@
-use crate::{
-    parse_bpf_loader::parse_bpf_upgradeable_loader,
-    parse_config::parse_config,
-    parse_nonce::parse_nonce,
-    parse_stake::parse_stake,
-    parse_sysvar::parse_sysvar,
-    parse_token::{parse_token, spl_token_id},
-    parse_vote::parse_vote,
+use {
+    crate::{
+        parse_bpf_loader::parse_bpf_upgradeable_loader,
+        parse_config::parse_config,
+        parse_nonce::parse_nonce,
+        parse_stake::parse_stake,
+        parse_sysvar::parse_sysvar,
+        parse_token::{parse_token, spl_token_id},
+        parse_vote::parse_vote,
+    },
+    inflector::Inflector,
+    serde_json::Value,
+    solana_sdk::{instruction::InstructionError, pubkey::Pubkey, stake, system_program, sysvar},
+    std::collections::HashMap,
+    thiserror::Error,
 };
-use inflector::Inflector;
-use serde_json::Value;
-use solana_sdk::{instruction::InstructionError, pubkey::Pubkey, stake, system_program, sysvar};
-use std::collections::HashMap;
-use thiserror::Error;
 
 lazy_static! {
     static ref BPF_UPGRADEABLE_LOADER_PROGRAM_ID: Pubkey = solana_sdk::bpf_loader_upgradeable::id();
@@ -112,12 +114,14 @@ pub fn parse_account_data(
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use solana_sdk::nonce::{
-        state::{Data, Versions},
-        State,
+    use {
+        super::*,
+        solana_sdk::nonce::{
+            state::{Data, Versions},
+            State,
+        },
+        solana_vote_program::vote_state::{VoteState, VoteStateVersions},
     };
-    use solana_vote_program::vote_state::{VoteState, VoteStateVersions};
 
     #[test]
     fn test_parse_account_data() {

@@ -1,20 +1,26 @@
-use log::*;
-use rand::{thread_rng, Rng};
-use rayon::prelude::*;
-use solana_runtime::{
-    accounts_db::{AccountsDb, LoadHint},
-    ancestors::Ancestors,
+use {
+    log::*,
+    rand::{thread_rng, Rng},
+    rayon::prelude::*,
+    solana_runtime::{
+        accounts_db::{AccountsDb, LoadHint},
+        ancestors::Ancestors,
+    },
+    solana_sdk::{
+        account::{AccountSharedData, ReadableAccount, WritableAccount},
+        clock::Slot,
+        genesis_config::ClusterType,
+        pubkey::Pubkey,
+    },
+    std::{
+        collections::HashSet,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
+        time::Instant,
+    },
 };
-use solana_sdk::genesis_config::ClusterType;
-use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount, WritableAccount},
-    clock::Slot,
-    pubkey::Pubkey,
-};
-use std::collections::HashSet;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::time::Instant;
 
 #[test]
 fn test_shrink_and_clean() {

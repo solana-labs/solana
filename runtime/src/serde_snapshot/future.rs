@@ -1,9 +1,11 @@
-use super::common::UnusedAccounts;
 #[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
 use solana_frozen_abi::abi_example::IgnoreAsHelper;
-use {super::*, solana_measure::measure::Measure, std::cell::RefCell};
-
-use crate::ancestors::AncestorsForSerialization;
+use {
+    super::{common::UnusedAccounts, *},
+    crate::ancestors::AncestorsForSerialization,
+    solana_measure::measure::Measure,
+    std::cell::RefCell,
+};
 
 type AccountsDbFields = super::AccountsDbFields<SerializableAccountStorageEntry>;
 
@@ -79,8 +81,6 @@ pub(crate) struct DeserializableVersionedBank {
     pub(crate) unused_accounts: UnusedAccounts,
     pub(crate) epoch_stakes: HashMap<Epoch, EpochStakes>,
     pub(crate) is_delta: bool,
-    #[allow(dead_code)]
-    pub(crate) message_processor: InstructionProcessor,
 }
 
 impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
@@ -157,7 +157,6 @@ pub(crate) struct SerializableVersionedBank<'a> {
     pub(crate) unused_accounts: UnusedAccounts,
     pub(crate) epoch_stakes: &'a HashMap<Epoch, EpochStakes>,
     pub(crate) is_delta: bool,
-    pub(crate) message_processor: InstructionProcessor,
 }
 
 impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedBank<'a> {
@@ -198,7 +197,6 @@ impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedB
             unused_accounts: new(),
             epoch_stakes: rhs.epoch_stakes,
             is_delta: rhs.is_delta,
-            message_processor: new(),
         }
     }
 }

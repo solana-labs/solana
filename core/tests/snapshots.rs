@@ -45,56 +45,59 @@ macro_rules! DEFINE_SNAPSHOT_VERSION_PARAMETERIZED_TEST_FUNCTIONS {
 
 #[cfg(test)]
 mod tests {
-    use bincode::serialize_into;
-    use crossbeam_channel::unbounded;
-    use fs_extra::dir::CopyOptions;
-    use itertools::Itertools;
-    use log::{info, trace};
-    use solana_core::{
-        accounts_hash_verifier::AccountsHashVerifier,
-        snapshot_packager_service::SnapshotPackagerService,
-    };
-    use solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo};
-    use solana_runtime::{
-        accounts_background_service::{
-            AbsRequestHandler, AbsRequestSender, AccountsBackgroundService, SnapshotRequestHandler,
+    use {
+        bincode::serialize_into,
+        crossbeam_channel::unbounded,
+        fs_extra::dir::CopyOptions,
+        itertools::Itertools,
+        log::{info, trace},
+        solana_core::{
+            accounts_hash_verifier::AccountsHashVerifier,
+            snapshot_packager_service::SnapshotPackagerService,
         },
-        accounts_db::{self, ACCOUNTS_DB_CONFIG_FOR_TESTING},
-        accounts_index::AccountSecondaryIndexes,
-        bank::{Bank, BankSlotDelta},
-        bank_forks::BankForks,
-        genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        snapshot_archive_info::FullSnapshotArchiveInfo,
-        snapshot_config::SnapshotConfig,
-        snapshot_package::{
-            AccountsPackage, PendingSnapshotPackage, SnapshotPackage, SnapshotType,
+        solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
+        solana_runtime::{
+            accounts_background_service::{
+                AbsRequestHandler, AbsRequestSender, AccountsBackgroundService,
+                SnapshotRequestHandler,
+            },
+            accounts_db::{self, ACCOUNTS_DB_CONFIG_FOR_TESTING},
+            accounts_index::AccountSecondaryIndexes,
+            bank::{Bank, BankSlotDelta},
+            bank_forks::BankForks,
+            genesis_utils::{create_genesis_config, GenesisConfigInfo},
+            snapshot_archive_info::FullSnapshotArchiveInfo,
+            snapshot_config::SnapshotConfig,
+            snapshot_package::{
+                AccountsPackage, PendingSnapshotPackage, SnapshotPackage, SnapshotType,
+            },
+            snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
+            status_cache::MAX_CACHE_ENTRIES,
         },
-        snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
-        status_cache::MAX_CACHE_ENTRIES,
-    };
-    use solana_sdk::{
-        clock::Slot,
-        genesis_config::{ClusterType, GenesisConfig},
-        hash::{hashv, Hash},
-        pubkey::Pubkey,
-        signature::{Keypair, Signer},
-        system_transaction,
-        timing::timestamp,
-    };
-    use solana_streamer::socket::SocketAddrSpace;
-    use std::{
-        collections::HashSet,
-        fs,
-        io::{Error, ErrorKind},
-        path::PathBuf,
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            mpsc::channel,
-            Arc, RwLock,
+        solana_sdk::{
+            clock::Slot,
+            genesis_config::{ClusterType, GenesisConfig},
+            hash::{hashv, Hash},
+            pubkey::Pubkey,
+            signature::{Keypair, Signer},
+            system_transaction,
+            timing::timestamp,
         },
-        time::Duration,
+        solana_streamer::socket::SocketAddrSpace,
+        std::{
+            collections::HashSet,
+            fs,
+            io::{Error, ErrorKind},
+            path::PathBuf,
+            sync::{
+                atomic::{AtomicBool, Ordering},
+                mpsc::channel,
+                Arc, RwLock,
+            },
+            time::Duration,
+        },
+        tempfile::TempDir,
     };
-    use tempfile::TempDir;
 
     DEFINE_SNAPSHOT_VERSION_PARAMETERIZED_TEST_FUNCTIONS!(V1_2_0, Development, V1_2_0_Development);
     DEFINE_SNAPSHOT_VERSION_PARAMETERIZED_TEST_FUNCTIONS!(V1_2_0, Devnet, V1_2_0_Devnet);

@@ -1,26 +1,25 @@
-use crate::{
-    accounts_db::SnapshotStorages,
-    bank::{Bank, BankSlotDelta},
-};
-use crate::{
-    snapshot_archive_info::{SnapshotArchiveInfo, SnapshotArchiveInfoGetter},
-    snapshot_utils::{
-        self, ArchiveFormat, BankSnapshotInfo, Result, SnapshotVersion, TMP_BANK_SNAPSHOT_PREFIX,
+use {
+    crate::{
+        accounts_db::SnapshotStorages,
+        bank::{Bank, BankSlotDelta},
+        snapshot_archive_info::{SnapshotArchiveInfo, SnapshotArchiveInfoGetter},
+        snapshot_utils::{
+            self, ArchiveFormat, BankSnapshotInfo, Result, SnapshotVersion,
+            TMP_BANK_SNAPSHOT_PREFIX,
+        },
     },
-};
-use log::*;
-use solana_sdk::clock::Slot;
-use solana_sdk::genesis_config::ClusterType;
-use solana_sdk::hash::Hash;
-use std::{
-    fs,
-    path::{Path, PathBuf},
-    sync::{
-        mpsc::{Receiver, SendError, Sender},
-        Arc, Mutex,
+    log::*,
+    solana_sdk::{clock::Slot, genesis_config::ClusterType, hash::Hash},
+    std::{
+        fs,
+        path::{Path, PathBuf},
+        sync::{
+            mpsc::{Receiver, SendError, Sender},
+            Arc, Mutex,
+        },
     },
+    tempfile::TempDir,
 };
-use tempfile::TempDir;
 
 /// The sender side of the AccountsPackage channel, used by AccountsBackgroundService
 pub type AccountsPackageSender = Sender<AccountsPackage>;

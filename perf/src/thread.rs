@@ -1,8 +1,6 @@
 /// Wrapper for `nice(3)`.
 #[cfg(target_os = "linux")]
 fn nice(adjustment: i8) -> Result<i8, nix::errno::Errno> {
-    use std::convert::TryFrom;
-
     unsafe {
         *libc::__errno_location() = 0;
         let niceness = libc::nice(libc::c_int::from(adjustment));
@@ -71,6 +69,7 @@ pub fn is_renice_allowed(adjustment: i8) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_os = "linux")]
     use super::*;
 
     #[cfg(target_os = "linux")]

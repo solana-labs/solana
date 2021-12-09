@@ -24,6 +24,10 @@ impl LogCollector {
         }
     }
 
+    pub fn get_recorded_content(&self) -> &[String] {
+        self.messages.as_slice()
+    }
+
     pub fn new_ref() -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self::default()))
     }

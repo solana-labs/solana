@@ -1,7 +1,11 @@
 //! Stakes serve as a cache of stake and vote accounts to derive
 //! node stakes
 use {
-    crate::vote_account::{VoteAccount, VoteAccounts, VoteAccountsHashMap},
+    crate::{
+        stake_delegations::StakeDelegations,
+        stake_history::StakeHistory,
+        vote_account::{VoteAccount, VoteAccounts, VoteAccountsHashMap},
+    },
     rayon::{
         iter::{IntoParallelRefIterator, ParallelIterator},
         ThreadPool,
@@ -14,7 +18,6 @@ use {
             self,
             state::{Delegation, StakeActivationStatus, StakeState},
         },
-        stake_history::StakeHistory,
     },
     solana_stake_program::stake_state,
     solana_vote_program::vote_state::VoteState,
@@ -27,7 +30,7 @@ pub struct Stakes {
     vote_accounts: VoteAccounts,
 
     /// stake_delegations
-    stake_delegations: HashMap<Pubkey, Delegation>,
+    stake_delegations: StakeDelegations,
 
     /// unused
     unused: u64,
@@ -42,49 +45,6 @@ pub struct Stakes {
 impl Stakes {
     pub fn history(&self) -> &StakeHistory {
         &self.stake_history
-    }
-
-    #[deprecated(note = "remove after optimize_epoch_boundary_updates feature is active")]
-    pub fn clone_with_epoch(&self, next_epoch: Epoch) -> Self {
-        let prev_epoch = self.epoch;
-        if prev_epoch == next_epoch {
-            self.clone()
-        } else {
-            // wrap up the prev epoch by adding new stake history entry for the prev epoch
-            let mut stake_history_upto_prev_epoch = self.stake_history.clone();
-            stake_history_upto_prev_epoch.add(
-                prev_epoch,
-                stake_state::new_stake_history_entry(
-                    prev_epoch,
-                    self.stake_delegations
-                        .iter()
-                        .map(|(_pubkey, stake_delegation)| stake_delegation),
-                    Some(&self.stake_history),
-                ),
-            );
-
-            // refresh the stake distribution of vote accounts for the next epoch, using new stake history
-            let vote_accounts_for_next_epoch = self
-                .vote_accounts
-                .iter()
-                .map(|(pubkey, (_ /*stake*/, account))| {
-                    let stake = self.calculate_stake(
-                        pubkey,
-                        next_epoch,
-                        Some(&stake_history_upto_prev_epoch),
-                    );
-                    (*pubkey, (stake, account.clone()))
-                })
-                .collect();
-
-            Stakes {
-                stake_delegations: self.stake_delegations.clone(),
-                unused: self.unused,
-                epoch: next_epoch,
-                stake_history: stake_history_upto_prev_epoch,
-                vote_accounts: vote_accounts_for_next_epoch,
-            }
-        }
     }
 
     pub fn activate_epoch(&mut self, next_epoch: Epoch, thread_pool: &ThreadPool) {
@@ -154,35 +114,34 @@ impl Stakes {
         });
     }
 
-    // sum the stakes that point to the given voter_pubkey
+    /// Sum the stakes that point to the given voter_pubkey
     fn calculate_stake(
         &self,
         voter_pubkey: &Pubkey,
         epoch: Epoch,
-        stake_history: Option<&StakeHistory>,
+        stake_history: &StakeHistory,
     ) -> u64 {
+        let matches_voter_pubkey = |(_, stake_delegation): &(&_, &Delegation)| {
+            &stake_delegation.voter_pubkey == voter_pubkey
+        };
+        let get_stake = |(_, stake_delegation): (_, &Delegation)| {
+            stake_delegation.stake(epoch, Some(stake_history))
+        };
+
         self.stake_delegations
             .iter()
-            .map(|(_, stake_delegation)| {
-                if &stake_delegation.voter_pubkey == voter_pubkey {
-                    stake_delegation.stake(epoch, stake_history)
-                } else {
-                    0
-                }
-            })
+            .filter(matches_voter_pubkey)
+            .map(get_stake)
             .sum()
     }
 
+    /// Sum the lamports of the vote accounts and the delegated stake
     pub fn vote_balance_and_staked(&self) -> u64 {
-        self.stake_delegations
-            .iter()
-            .map(|(_, stake_delegation)| stake_delegation.stake)
-            .sum::<u64>()
-            + self
-                .vote_accounts
-                .iter()
-                .map(|(_pubkey, (_staked, vote_account))| vote_account.lamports())
-                .sum::<u64>()
+        let get_stake = |(_, stake_delegation): (_, &Delegation)| stake_delegation.stake;
+        let get_lamports = |(_, (_, vote_account)): (_, &(_, VoteAccount))| vote_account.lamports();
+
+        self.stake_delegations.iter().map(get_stake).sum::<u64>()
+            + self.vote_accounts.iter().map(get_lamports).sum::<u64>()
     }
 
     pub fn is_stake(account: &AccountSharedData) -> bool {
@@ -207,7 +166,7 @@ impl Stakes {
             if account.lamports() != 0 && VoteState::is_correct_size_and_initialized(account.data())
             {
                 let stake = old.as_ref().map_or_else(
-                    || self.calculate_stake(pubkey, self.epoch, Some(&self.stake_history)),
+                    || self.calculate_stake(pubkey, self.epoch, &self.stake_history),
                     |v| v.0,
                 );
 
@@ -275,7 +234,7 @@ impl Stakes {
         &self.vote_accounts
     }
 
-    pub fn stake_delegations(&self) -> &HashMap<Pubkey, Delegation> {
+    pub fn stake_delegations(&self) -> &StakeDelegations {
         &self.stake_delegations
     }
 
@@ -295,11 +254,13 @@ impl Stakes {
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
-    use rayon::ThreadPoolBuilder;
-    use solana_sdk::{account::WritableAccount, pubkey::Pubkey, rent::Rent};
-    use solana_stake_program::stake_state;
-    use solana_vote_program::vote_state::{self, VoteState, VoteStateVersions};
+    use {
+        super::*,
+        rayon::ThreadPoolBuilder,
+        solana_sdk::{account::WritableAccount, pubkey::Pubkey, rent::Rent},
+        solana_stake_program::stake_state,
+        solana_vote_program::vote_state::{self, VoteState, VoteStateVersions},
+    };
 
     //  set up some dummies for a staked node     ((     vote      )  (     stake     ))
     pub fn create_staked_node_accounts(
@@ -579,35 +540,6 @@ pub mod tests {
             let vote_accounts = stakes.vote_accounts();
             assert!(vote_accounts.get(&vote_pubkey).is_some());
             assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 20);
-        }
-    }
-
-    #[test]
-    fn test_clone_with_epoch() {
-        let mut stakes = Stakes::default();
-
-        let ((vote_pubkey, vote_account), (stake_pubkey, stake_account)) =
-            create_staked_node_accounts(10);
-
-        stakes.store(&vote_pubkey, &vote_account, true);
-        stakes.store(&stake_pubkey, &stake_account, true);
-        let stake = stake_state::stake_from(&stake_account).unwrap();
-
-        {
-            let vote_accounts = stakes.vote_accounts();
-            assert_eq!(
-                vote_accounts.get(&vote_pubkey).unwrap().0,
-                stake.stake(stakes.epoch, Some(&stakes.stake_history))
-            );
-        }
-        #[allow(deprecated)]
-        let stakes = stakes.clone_with_epoch(3);
-        {
-            let vote_accounts = stakes.vote_accounts();
-            assert_eq!(
-                vote_accounts.get(&vote_pubkey).unwrap().0,
-                stake.stake(stakes.epoch, Some(&stakes.stake_history))
-            );
         }
     }
 

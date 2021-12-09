@@ -2,8 +2,7 @@
 
 extern crate test;
 
-use solana_core::gen_keys::GenKeys;
-use test::Bencher;
+use {solana_core::gen_keys::GenKeys, test::Bencher};
 
 #[bench]
 fn bench_gen_keys(b: &mut Bencher) {

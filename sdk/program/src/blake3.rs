@@ -1,8 +1,10 @@
 //! The `blake3` module provides functions for creating hashes.
-use crate::sanitize::Sanitize;
-use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
-use std::{convert::TryFrom, fmt, mem, str::FromStr};
-use thiserror::Error;
+use {
+    crate::sanitize::Sanitize,
+    borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
+    std::{convert::TryFrom, fmt, mem, str::FromStr},
+    thiserror::Error,
+};
 
 /// Size of hash
 pub const HASH_BYTES: usize = 32;
@@ -103,11 +105,11 @@ impl Hash {
 
     /// unique Hash for tests and benchmarks.
     pub fn new_unique() -> Self {
-        use std::sync::atomic::{AtomicU64, Ordering};
+        use crate::atomic_u64::AtomicU64;
         static I: AtomicU64 = AtomicU64::new(1);
 
         let mut b = [0u8; HASH_BYTES];
-        let i = I.fetch_add(1, Ordering::Relaxed);
+        let i = I.fetch_add(1);
         b[0..8].copy_from_slice(&i.to_le_bytes());
         Self::new(&b)
     }

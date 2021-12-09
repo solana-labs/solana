@@ -1,22 +1,24 @@
-use serde_json::Value;
-use solana_cli::{
-    cli::{process_command, CliCommand, CliConfig},
-    program::ProgramCliCommand,
+use {
+    serde_json::Value,
+    solana_cli::{
+        cli::{process_command, CliCommand, CliConfig},
+        program::ProgramCliCommand,
+    },
+    solana_cli_output::OutputFormat,
+    solana_client::rpc_client::RpcClient,
+    solana_faucet::faucet::run_local_faucet,
+    solana_sdk::{
+        account_utils::StateMut,
+        bpf_loader,
+        bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+        commitment_config::CommitmentConfig,
+        pubkey::Pubkey,
+        signature::{Keypair, Signer},
+    },
+    solana_streamer::socket::SocketAddrSpace,
+    solana_test_validator::TestValidator,
+    std::{env, fs::File, io::Read, path::PathBuf, str::FromStr},
 };
-use solana_cli_output::OutputFormat;
-use solana_client::rpc_client::RpcClient;
-use solana_faucet::faucet::run_local_faucet;
-use solana_sdk::{
-    account_utils::StateMut,
-    bpf_loader,
-    bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    commitment_config::CommitmentConfig,
-    pubkey::Pubkey,
-    signature::{Keypair, Signer},
-};
-use solana_streamer::socket::SocketAddrSpace;
-use solana_test_validator::TestValidator;
-use std::{env, fs::File, io::Read, path::PathBuf, str::FromStr};
 
 #[test]
 fn test_cli_program_deploy_non_upgradeable() {

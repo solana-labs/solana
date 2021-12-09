@@ -1,11 +1,12 @@
-use solana_entry::entry;
-use solana_ledger::{
-    blockstore::{self, Blockstore},
-    get_tmp_ledger_path_auto_delete,
+use {
+    solana_entry::entry,
+    solana_ledger::{
+        blockstore::{self, Blockstore},
+        get_tmp_ledger_path_auto_delete,
+    },
+    solana_sdk::hash::Hash,
+    std::{sync::Arc, thread::Builder},
 };
-use solana_sdk::hash::Hash;
-use std::sync::Arc;
-use std::thread::Builder;
 
 #[test]
 fn test_multiple_threads_insert_shred() {

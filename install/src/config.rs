@@ -2,9 +2,11 @@ use {
     crate::update_manifest::UpdateManifest,
     serde::{Deserialize, Serialize},
     solana_sdk::pubkey::Pubkey,
-    std::fs::{create_dir_all, File},
-    std::io::{self, Write},
-    std::path::{Path, PathBuf},
+    std::{
+        fs::{create_dir_all, File},
+        io::{self, Write},
+        path::{Path, PathBuf},
+    },
 };
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]

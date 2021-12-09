@@ -1,13 +1,14 @@
-use clap::ArgMatches;
-use solana_clap_utils::keypair::{pubkey_from_path, signer_from_path};
-use solana_remote_wallet::remote_wallet::RemoteWalletManager;
-use solana_sdk::{
-    clock::{Epoch, UnixTimestamp},
-    pubkey::Pubkey,
-    signature::Signer,
+use {
+    clap::ArgMatches,
+    solana_clap_utils::keypair::{pubkey_from_path, signer_from_path},
+    solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_sdk::{
+        clock::{Epoch, UnixTimestamp},
+        pubkey::Pubkey,
+        signature::Signer,
+    },
+    std::{error::Error, sync::Arc},
 };
-use std::error::Error;
-use std::sync::Arc;
 
 pub(crate) struct NewArgs<P, K> {
     pub fee_payer: K,

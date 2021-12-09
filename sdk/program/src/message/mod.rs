@@ -10,13 +10,10 @@ mod non_bpf_modules {
     pub mod v0;
     mod versions;
 
-    pub use mapped::*;
-    pub use sanitized::*;
-    pub use versions::*;
+    pub use {mapped::*, sanitized::*, versions::*};
 }
 
 pub use legacy::Message;
-
 #[cfg(not(target_arch = "bpf"))]
 pub use non_bpf_modules::*;
 

@@ -1,24 +1,26 @@
-use serde::{Deserialize, Serialize};
-use solana_measure::measure::Measure;
-use solana_program_runtime::{
-    instruction_processor::{ExecuteDetailsTimings, Executors, InstructionProcessor},
-    instruction_recorder::InstructionRecorder,
-    invoke_context::{ComputeMeter, InvokeContext, ThisInvokeContext},
-    log_collector::LogCollector,
+use {
+    serde::{Deserialize, Serialize},
+    solana_measure::measure::Measure,
+    solana_program_runtime::{
+        instruction_recorder::InstructionRecorder,
+        invoke_context::{BuiltinProgram, Executors, InvokeContext},
+        log_collector::LogCollector,
+        timings::ExecuteDetailsTimings,
+    },
+    solana_sdk::{
+        account::{AccountSharedData, WritableAccount},
+        compute_budget::ComputeBudget,
+        feature_set::{prevent_calling_precompiles_as_programs, FeatureSet},
+        hash::Hash,
+        message::Message,
+        precompiles::is_precompile,
+        pubkey::Pubkey,
+        rent::Rent,
+        sysvar::instructions,
+        transaction::TransactionError,
+    },
+    std::{cell::RefCell, rc::Rc, sync::Arc},
 };
-use solana_sdk::{
-    account::{AccountSharedData, WritableAccount},
-    compute_budget::ComputeBudget,
-    feature_set::{prevent_calling_precompiles_as_programs, FeatureSet},
-    hash::Hash,
-    message::Message,
-    precompiles::is_precompile,
-    pubkey::Pubkey,
-    rent::Rent,
-    sysvar::instructions,
-    transaction::TransactionError,
-};
-use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct MessageProcessor {}
@@ -40,7 +42,7 @@ impl MessageProcessor {
     /// The accounts are committed back to the bank only if every instruction succeeds.
     #[allow(clippy::too_many_arguments)]
     pub fn process_message(
-        instruction_processor: &InstructionProcessor,
+        builtin_programs: &[BuiltinProgram],
         message: &Message,
         program_indices: &[Vec<usize>],
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
@@ -50,27 +52,23 @@ impl MessageProcessor {
         instruction_recorders: Option<&[InstructionRecorder]>,
         feature_set: Arc<FeatureSet>,
         compute_budget: ComputeBudget,
-        compute_meter: Rc<RefCell<ComputeMeter>>,
         timings: &mut ExecuteDetailsTimings,
         sysvars: &[(Pubkey, Vec<u8>)],
         blockhash: Hash,
         lamports_per_signature: u64,
     ) -> Result<(), TransactionError> {
-        let mut invoke_context = ThisInvokeContext::new(
+        let mut invoke_context = InvokeContext::new(
             rent,
             accounts,
-            instruction_processor.programs(),
+            builtin_programs,
             sysvars,
             log_collector,
             compute_budget,
-            compute_meter,
             executors,
-            instruction_recorders,
             feature_set,
             blockhash,
             lamports_per_signature,
         );
-        let compute_meter = invoke_context.get_compute_meter();
 
         debug_assert_eq!(program_indices.len(), message.instructions.len());
         for (instruction_index, (instruction, program_indices)) in message
@@ -80,15 +78,14 @@ impl MessageProcessor {
             .enumerate()
         {
             let program_id = instruction.program_id(&message.account_keys);
-            if invoke_context.is_feature_active(&prevent_calling_precompiles_as_programs::id())
-                && is_precompile(program_id, |id| invoke_context.is_feature_active(id))
+            if invoke_context
+                .feature_set
+                .is_active(&prevent_calling_precompiles_as_programs::id())
+                && is_precompile(program_id, |id| invoke_context.feature_set.is_active(id))
             {
                 // Precompiled programs don't have an instruction processor
                 continue;
             }
-
-            let mut time = Measure::start("execute_instruction");
-            let pre_remaining_units = compute_meter.borrow().get_remaining();
 
             // Fixup the special instructions key if present
             // before the account pre-values are taken care of
@@ -103,28 +100,23 @@ impl MessageProcessor {
                 }
             }
 
-            invoke_context.set_instruction_index(instruction_index);
-            let result = invoke_context
-                .push(message, instruction, program_indices, None)
-                .and_then(|_| {
-                    instruction_processor
-                        .process_instruction(&instruction.data, &mut invoke_context)?;
-                    invoke_context.verify(message, instruction, program_indices)?;
-                    timings.accumulate(&invoke_context.timings);
-                    Ok(())
-                })
-                .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err));
-            invoke_context.pop();
-
+            if let Some(instruction_recorders) = instruction_recorders {
+                invoke_context.instruction_recorder =
+                    Some(&instruction_recorders[instruction_index]);
+            }
+            let pre_remaining_units = invoke_context.get_compute_meter().borrow().get_remaining();
+            let mut time = Measure::start("execute_instruction");
+            invoke_context
+                .process_instruction(message, instruction, program_indices, &[], &[])
+                .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
             time.stop();
-            let post_remaining_units = compute_meter.borrow().get_remaining();
+            let post_remaining_units = invoke_context.get_compute_meter().borrow().get_remaining();
             timings.accumulate_program(
                 instruction.program_id(&message.account_keys),
                 time.as_us(),
                 pre_remaining_units - post_remaining_units,
             );
-
-            result?;
+            timings.accumulate(&invoke_context.timings);
         }
         Ok(())
     }
@@ -132,17 +124,18 @@ impl MessageProcessor {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::rent_collector::RentCollector;
-    use solana_program_runtime::invoke_context::ComputeMeter;
-    use solana_sdk::{
-        account::ReadableAccount,
-        instruction::{AccountMeta, Instruction, InstructionError},
-        keyed_account::keyed_account_at_index,
-        message::Message,
-        native_loader::{self, create_loadable_account_for_test},
-        secp256k1_instruction::new_secp256k1_instruction,
-        secp256k1_program,
+    use {
+        super::*,
+        crate::rent_collector::RentCollector,
+        solana_sdk::{
+            account::ReadableAccount,
+            instruction::{AccountMeta, Instruction, InstructionError},
+            keyed_account::keyed_account_at_index,
+            message::Message,
+            native_loader::{self, create_loadable_account_for_test},
+            secp256k1_instruction::new_secp256k1_instruction,
+            secp256k1_program,
+        },
     };
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -166,7 +159,7 @@ mod tests {
         fn mock_system_process_instruction(
             first_instruction_account: usize,
             data: &[u8],
-            invoke_context: &mut dyn InvokeContext,
+            invoke_context: &mut InvokeContext,
         ) -> Result<(), InstructionError> {
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             if let Ok(instruction) = bincode::deserialize(data) {
@@ -199,8 +192,10 @@ mod tests {
 
         let mock_system_program_id = Pubkey::new(&[2u8; 32]);
         let rent_collector = RentCollector::default();
-        let mut instruction_processor = InstructionProcessor::default();
-        instruction_processor.add_program(&mock_system_program_id, mock_system_process_instruction);
+        let builtin_programs = &[BuiltinProgram {
+            program_id: mock_system_program_id,
+            process_instruction: mock_system_process_instruction,
+        }];
 
         let program_account = Rc::new(RefCell::new(create_loadable_account_for_test(
             "mock_system_program",
@@ -234,7 +229,7 @@ mod tests {
         );
 
         let result = MessageProcessor::process_message(
-            &instruction_processor,
+            builtin_programs,
             &message,
             &program_indices,
             &accounts,
@@ -244,7 +239,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
@@ -264,7 +258,7 @@ mod tests {
         );
 
         let result = MessageProcessor::process_message(
-            &instruction_processor,
+            builtin_programs,
             &message,
             &program_indices,
             &accounts,
@@ -274,7 +268,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
@@ -298,7 +291,7 @@ mod tests {
         );
 
         let result = MessageProcessor::process_message(
-            &instruction_processor,
+            builtin_programs,
             &message,
             &program_indices,
             &accounts,
@@ -308,7 +301,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
@@ -335,7 +327,7 @@ mod tests {
         fn mock_system_process_instruction(
             first_instruction_account: usize,
             data: &[u8],
-            invoke_context: &mut dyn InvokeContext,
+            invoke_context: &mut InvokeContext,
         ) -> Result<(), InstructionError> {
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             if let Ok(instruction) = bincode::deserialize(data) {
@@ -404,8 +396,10 @@ mod tests {
 
         let mock_program_id = Pubkey::new(&[2u8; 32]);
         let rent_collector = RentCollector::default();
-        let mut instruction_processor = InstructionProcessor::default();
-        instruction_processor.add_program(&mock_program_id, mock_system_process_instruction);
+        let builtin_programs = &[BuiltinProgram {
+            program_id: mock_program_id,
+            process_instruction: mock_system_process_instruction,
+        }];
 
         let program_account = Rc::new(RefCell::new(create_loadable_account_for_test(
             "mock_system_program",
@@ -441,7 +435,7 @@ mod tests {
             Some(&accounts[0].0),
         );
         let result = MessageProcessor::process_message(
-            &instruction_processor,
+            builtin_programs,
             &message,
             &program_indices,
             &accounts,
@@ -451,7 +445,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
@@ -475,7 +468,7 @@ mod tests {
             Some(&accounts[0].0),
         );
         let result = MessageProcessor::process_message(
-            &instruction_processor,
+            builtin_programs,
             &message,
             &program_indices,
             &accounts,
@@ -485,7 +478,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
@@ -506,7 +498,7 @@ mod tests {
             Some(&accounts[0].0),
         );
         let result = MessageProcessor::process_message(
-            &instruction_processor,
+            builtin_programs,
             &message,
             &program_indices,
             &accounts,
@@ -516,7 +508,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
@@ -534,12 +525,14 @@ mod tests {
         fn mock_process_instruction(
             _first_instruction_account: usize,
             _data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
+            _invoke_context: &mut InvokeContext,
         ) -> Result<(), InstructionError> {
             Err(InstructionError::Custom(0xbabb1e))
         }
-        let mut instruction_processor = InstructionProcessor::default();
-        instruction_processor.add_program(&mock_program_id, mock_process_instruction);
+        let builtin_programs = &[BuiltinProgram {
+            program_id: mock_program_id,
+            process_instruction: mock_process_instruction,
+        }];
 
         let secp256k1_account = AccountSharedData::new_ref(1, 0, &native_loader::id());
         secp256k1_account.borrow_mut().set_executable(true);
@@ -562,7 +555,7 @@ mod tests {
         );
 
         let result = MessageProcessor::process_message(
-            &instruction_processor,
+            builtin_programs,
             &message,
             &[vec![0], vec![1]],
             &accounts,
@@ -572,7 +565,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            ComputeMeter::new_ref(std::i64::MAX as u64),
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),

@@ -1,8 +1,9 @@
-use std::{cell::RefCell, rc::Rc};
-
-use solana_sdk::{
-    instruction::{CompiledInstruction, Instruction},
-    message::SanitizedMessage,
+use {
+    solana_sdk::{
+        instruction::{CompiledInstruction, Instruction},
+        message::SanitizedMessage,
+    },
+    std::{cell::RefCell, rc::Rc},
 };
 
 /// Records and compiles cross-program invoked instructions

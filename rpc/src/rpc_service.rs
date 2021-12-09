@@ -40,8 +40,11 @@ use {
         collections::HashSet,
         net::SocketAddr,
         path::{Path, PathBuf},
-        sync::atomic::{AtomicBool, AtomicU64, Ordering},
-        sync::{mpsc::channel, Arc, Mutex, RwLock},
+        sync::{
+            atomic::{AtomicBool, AtomicU64, Ordering},
+            mpsc::channel,
+            Arc, Mutex, RwLock,
+        },
         thread::{self, Builder, JoinHandle},
     },
     tokio_util::codec::{BytesCodec, FramedRead},

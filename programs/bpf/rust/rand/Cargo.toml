@@ -1,18 +1,18 @@
 [package]
 name = "solana-bpf-rust-rand"
-version = "1.9.0"
+version = "1.10.0"
 description = "Solana BPF test program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-bpf-rust-rand"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 getrandom = { version = "0.1.14", features = ["dummy"] }
 rand = "0.7"
-solana-program = { path = "../../../../sdk/program", version = "=1.9.0" }
+solana-program = { path = "../../../../sdk/program", version = "=1.10.0" }
 
 [lib]
 crate-type = ["cdylib"]

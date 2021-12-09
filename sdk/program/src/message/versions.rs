@@ -10,7 +10,7 @@ use {
     serde::{
         de::{self, Deserializer, SeqAccess, Visitor},
         ser::{SerializeTuple, Serializer},
-        {Deserialize, Serialize},
+        Deserialize, Serialize,
     },
     std::fmt,
 };
@@ -89,7 +89,6 @@ impl VersionedMessage {
     /// Compute the blake3 hash of a raw transaction message
     pub fn hash_raw_message(message_bytes: &[u8]) -> Hash {
         use blake3::traits::digest::Digest;
-        use std::convert::TryFrom;
         let mut hasher = blake3::Hasher::new();
         hasher.update(b"solana-tx-message-v1");
         hasher.update(message_bytes);
@@ -244,10 +243,12 @@ impl<'de> Deserialize<'de> for VersionedMessage {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{
-        instruction::{AccountMeta, Instruction},
-        message::v0::AddressMapIndexes,
+    use {
+        super::*,
+        crate::{
+            instruction::{AccountMeta, Instruction},
+            message::v0::AddressMapIndexes,
+        },
     };
 
     #[test]

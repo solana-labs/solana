@@ -1,7 +1,10 @@
-use rand::{thread_rng, Rng};
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, Weak};
+use {
+    rand::{thread_rng, Rng},
+    std::sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc, Mutex, Weak,
+    },
+};
 
 // A temporary burst in the workload can cause a large number of allocations,
 // after which they will be recycled and still reside in memory. If the number
@@ -179,9 +182,7 @@ impl<T: Default + Reset> RecyclerX<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::packet::PacketsRecycler;
-    use std::iter::repeat_with;
+    use {super::*, crate::packet::PacketsRecycler, std::iter::repeat_with};
 
     impl Reset for u64 {
         fn reset(&mut self) {

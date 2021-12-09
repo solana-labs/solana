@@ -33,8 +33,7 @@ pub fn read_pubkey_file(infile: &str) -> Result<Pubkey, Box<dyn std::error::Erro
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::fs::remove_file;
+    use {super::*, std::fs::remove_file};
 
     #[test]
     fn test_read_write_pubkey() -> Result<(), Box<dyn std::error::Error>> {

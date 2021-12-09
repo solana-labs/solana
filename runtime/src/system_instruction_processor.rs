@@ -1,20 +1,24 @@
-use crate::nonce_keyed_account::NonceKeyedAccount;
-use log::*;
-use solana_program_runtime::{ic_msg, invoke_context::InvokeContext};
-use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount, WritableAccount},
-    account_utils::StateMut,
-    feature_set,
-    instruction::InstructionError,
-    keyed_account::{from_keyed_account, get_signers, keyed_account_at_index, KeyedAccount},
-    nonce,
-    program_utils::limited_deserialize,
-    pubkey::Pubkey,
-    system_instruction::{NonceError, SystemError, SystemInstruction, MAX_PERMITTED_DATA_LENGTH},
-    system_program,
-    sysvar::{self, rent::Rent},
+use {
+    crate::nonce_keyed_account::NonceKeyedAccount,
+    log::*,
+    solana_program_runtime::{ic_msg, invoke_context::InvokeContext},
+    solana_sdk::{
+        account::{AccountSharedData, ReadableAccount, WritableAccount},
+        account_utils::StateMut,
+        feature_set,
+        instruction::InstructionError,
+        keyed_account::{from_keyed_account, get_signers, keyed_account_at_index, KeyedAccount},
+        nonce,
+        program_utils::limited_deserialize,
+        pubkey::Pubkey,
+        system_instruction::{
+            NonceError, SystemError, SystemInstruction, MAX_PERMITTED_DATA_LENGTH,
+        },
+        system_program,
+        sysvar::{self, rent::Rent},
+    },
+    std::collections::HashSet,
 };
-use std::collections::HashSet;
 
 // represents an address that may or may not have been generated
 //  from a seed
@@ -35,7 +39,7 @@ impl Address {
     fn create(
         address: &Pubkey,
         with_seed: Option<(&Pubkey, &str, &Pubkey)>,
-        invoke_context: &dyn InvokeContext,
+        invoke_context: &InvokeContext,
     ) -> Result<Self, InstructionError> {
         let base = if let Some((base, seed, owner)) = with_seed {
             let address_with_seed = Pubkey::create_with_seed(base, seed, owner)?;
@@ -66,7 +70,7 @@ fn allocate(
     address: &Address,
     space: u64,
     signers: &HashSet<Pubkey>,
-    invoke_context: &dyn InvokeContext,
+    invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
     if !address.is_signer(signers) {
         ic_msg!(
@@ -108,7 +112,7 @@ fn assign(
     address: &Address,
     owner: &Pubkey,
     signers: &HashSet<Pubkey>,
-    invoke_context: &dyn InvokeContext,
+    invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
     // no work to do, just return
     if account.owner() == owner {
@@ -124,7 +128,9 @@ fn assign(
     // Thus, we're starting to remove this restriction from system instruction
     // processor for consistency and fewer special casing by piggybacking onto
     // the related feature gate..
-    let rent_for_sysvars = invoke_context.is_feature_active(&feature_set::rent_for_sysvars::id());
+    let rent_for_sysvars = invoke_context
+        .feature_set
+        .is_active(&feature_set::rent_for_sysvars::id());
     if !rent_for_sysvars && sysvar::check_id(owner) {
         // guard against sysvars being made
         ic_msg!(invoke_context, "Assign: cannot assign to sysvar, {}", owner);
@@ -141,7 +147,7 @@ fn allocate_and_assign(
     space: u64,
     owner: &Pubkey,
     signers: &HashSet<Pubkey>,
-    invoke_context: &dyn InvokeContext,
+    invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
     allocate(to, to_address, space, signers, invoke_context)?;
     assign(to, to_address, owner, signers, invoke_context)
@@ -155,7 +161,7 @@ fn create_account(
     space: u64,
     owner: &Pubkey,
     signers: &HashSet<Pubkey>,
-    invoke_context: &dyn InvokeContext,
+    invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
     // if it looks like the `to` account is already in use, bail
     {
@@ -178,7 +184,7 @@ fn transfer_verified(
     from: &KeyedAccount,
     to: &KeyedAccount,
     lamports: u64,
-    invoke_context: &dyn InvokeContext,
+    invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
     if !from.data_is_empty()? {
         ic_msg!(invoke_context, "Transfer: `from` must not carry data");
@@ -203,9 +209,11 @@ fn transfer(
     from: &KeyedAccount,
     to: &KeyedAccount,
     lamports: u64,
-    invoke_context: &dyn InvokeContext,
+    invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
-    if !invoke_context.is_feature_active(&feature_set::system_transfer_zero_check::id())
+    if !invoke_context
+        .feature_set
+        .is_active(&feature_set::system_transfer_zero_check::id())
         && lamports == 0
     {
         return Ok(());
@@ -230,9 +238,11 @@ fn transfer_with_seed(
     from_owner: &Pubkey,
     to: &KeyedAccount,
     lamports: u64,
-    invoke_context: &dyn InvokeContext,
+    invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
-    if !invoke_context.is_feature_active(&feature_set::system_transfer_zero_check::id())
+    if !invoke_context
+        .feature_set
+        .is_active(&feature_set::system_transfer_zero_check::id())
         && lamports == 0
     {
         return Ok(());
@@ -265,7 +275,7 @@ fn transfer_with_seed(
 pub fn process_instruction(
     first_instruction_account: usize,
     instruction_data: &[u8],
-    invoke_context: &mut dyn InvokeContext,
+    invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
     let instruction = limited_deserialize(instruction_data)?;
@@ -478,10 +488,6 @@ pub fn get_system_account_kind(account: &AccountSharedData) -> Option<SystemAcco
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{bank::Bank, bank_client::BankClient};
-    use bincode::serialize;
-    use solana_program_runtime::invoke_context::{mock_process_instruction, ThisInvokeContext};
     #[allow(deprecated)]
     use solana_sdk::{
         account::{self, Account, AccountSharedData},
@@ -497,8 +503,13 @@ mod tests {
         sysvar::recent_blockhashes::IterItem,
         transaction::TransactionError,
     };
-    use std::sync::Arc;
-    use std::{cell::RefCell, rc::Rc};
+    use {
+        super::*,
+        crate::{bank::Bank, bank_client::BankClient},
+        bincode::serialize,
+        solana_program_runtime::invoke_context::{mock_process_instruction, InvokeContext},
+        std::{cell::RefCell, rc::Rc, sync::Arc},
+    };
 
     impl From<Pubkey> for Address {
         fn from(address: Pubkey) -> Self {
@@ -638,7 +649,7 @@ mod tests {
 
     #[test]
     fn test_address_create_with_seed_mismatch() {
-        let invoke_context = ThisInvokeContext::new_mock(&[], &[]);
+        let invoke_context = InvokeContext::new_mock(&[], &[]);
         let from = Pubkey::new_unique();
         let seed = "dull boy";
         let to = Pubkey::new_unique();
@@ -652,7 +663,7 @@ mod tests {
 
     #[test]
     fn test_create_account_with_seed_missing_sig() {
-        let invoke_context = ThisInvokeContext::new_mock(&[], &[]);
+        let invoke_context = InvokeContext::new_mock(&[], &[]);
         let new_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_unique();
         let seed = "dull boy";
@@ -682,7 +693,7 @@ mod tests {
 
     #[test]
     fn test_create_with_zero_lamports() {
-        let invoke_context = ThisInvokeContext::new_mock(&[], &[]);
+        let invoke_context = InvokeContext::new_mock(&[], &[]);
         // create account with zero lamports transferred
         let new_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_unique();
@@ -716,7 +727,7 @@ mod tests {
 
     #[test]
     fn test_create_negative_lamports() {
-        let invoke_context = ThisInvokeContext::new_mock(&[], &[]);
+        let invoke_context = InvokeContext::new_mock(&[], &[]);
         // Attempt to create account with more lamports than remaining in from_account
         let new_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_unique();
@@ -740,7 +751,7 @@ mod tests {
 
     #[test]
     fn test_request_more_than_allowed_data_length() {
-        let invoke_context = ThisInvokeContext::new_mock(&[], &[]);
+        let invoke_context = InvokeContext::new_mock(&[], &[]);
         let from_account = AccountSharedData::new_ref(100, 0, &system_program::id());
         let from = Pubkey::new_unique();
         let to_account = AccountSharedData::new_ref(0, 0, &system_program::id());
@@ -787,7 +798,7 @@ mod tests {
 
     #[test]
     fn test_create_already_in_use() {
-        let invoke_context = ThisInvokeContext::new_mock(&[], &[]);
+        let invoke_context = InvokeContext::new_mock(&[], &[]);
         // Attempt to create system account in account already owned by another program
         let new_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_unique();
@@ -855,7 +866,7 @@ mod tests {
 
     #[test]
     fn test_create_unsigned() {
-        let invoke_context = ThisInvokeContext::new_mock(&[], &[]);
+        let invoke_context = InvokeContext::new_mock(&[], &[]);
         // Attempt to create an account without signing the transfer
         let new_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_unique();
@@ -910,7 +921,7 @@ mod tests {
 
     #[test]
     fn test_create_sysvar_invalid_id_with_feature() {
-        let invoke_context = ThisInvokeContext::new_mock(&[], &[]);
+        let invoke_context = InvokeContext::new_mock(&[], &[]);
         // Attempt to create system account in account already owned by another program
         let from = Pubkey::new_unique();
         let from_account = AccountSharedData::new_ref(100, 0, &system_program::id());
@@ -944,12 +955,8 @@ mod tests {
         feature_set
             .inactive
             .insert(feature_set::rent_for_sysvars::id());
-        let invoke_context = ThisInvokeContext::new_mock_with_sysvars_and_features(
-            &[],
-            &[],
-            &[],
-            Arc::new(feature_set),
-        );
+        let mut invoke_context = InvokeContext::new_mock(&[], &[]);
+        invoke_context.feature_set = Arc::new(feature_set);
         // Attempt to create system account in account already owned by another program
         let from = Pubkey::new_unique();
         let from_account = AccountSharedData::new_ref(100, 0, &system_program::id());
@@ -975,7 +982,7 @@ mod tests {
 
     #[test]
     fn test_create_data_populated() {
-        let invoke_context = ThisInvokeContext::new_mock(&[], &[]);
+        let invoke_context = InvokeContext::new_mock(&[], &[]);
         // Attempt to create system account in account with populated data
         let new_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_unique();
@@ -1009,7 +1016,7 @@ mod tests {
 
     #[test]
     fn test_create_from_account_is_nonce_fail() {
-        let invoke_context = ThisInvokeContext::new_mock(&[], &[]);
+        let invoke_context = InvokeContext::new_mock(&[], &[]);
         let nonce = Pubkey::new_unique();
         let nonce_account = AccountSharedData::new_ref_data(
             42,
@@ -1045,7 +1052,7 @@ mod tests {
 
     #[test]
     fn test_assign() {
-        let invoke_context = ThisInvokeContext::new_mock(&[], &[]);
+        let invoke_context = InvokeContext::new_mock(&[], &[]);
         let new_owner = Pubkey::new(&[9; 32]);
         let pubkey = Pubkey::new_unique();
         let mut account = AccountSharedData::new(100, 0, &system_program::id());
@@ -1085,7 +1092,7 @@ mod tests {
 
     #[test]
     fn test_assign_to_sysvar_with_feature() {
-        let invoke_context = ThisInvokeContext::new_mock(&[], &[]);
+        let invoke_context = InvokeContext::new_mock(&[], &[]);
         let new_owner = sysvar::id();
         let from = Pubkey::new_unique();
         let mut from_account = AccountSharedData::new(100, 0, &system_program::id());
@@ -1111,12 +1118,8 @@ mod tests {
         feature_set
             .inactive
             .insert(feature_set::rent_for_sysvars::id());
-        let invoke_context = ThisInvokeContext::new_mock_with_sysvars_and_features(
-            &[],
-            &[],
-            &[],
-            Arc::new(feature_set),
-        );
+        let mut invoke_context = InvokeContext::new_mock(&[], &[]);
+        invoke_context.feature_set = Arc::new(feature_set);
         let new_owner = sysvar::id();
         let from = Pubkey::new_unique();
         let mut from_account = AccountSharedData::new(100, 0, &system_program::id());
@@ -1154,7 +1157,7 @@ mod tests {
 
     #[test]
     fn test_transfer_lamports() {
-        let invoke_context = ThisInvokeContext::new_mock(&[], &[]);
+        let invoke_context = InvokeContext::new_mock(&[], &[]);
         let from = Pubkey::new_unique();
         let from_account = AccountSharedData::new_ref(100, 0, &Pubkey::new(&[2; 32])); // account owner should not matter
         let to = Pubkey::new(&[3; 32]);
@@ -1192,7 +1195,7 @@ mod tests {
 
     #[test]
     fn test_transfer_with_seed() {
-        let invoke_context = ThisInvokeContext::new_mock(&[], &[]);
+        let invoke_context = InvokeContext::new_mock(&[], &[]);
         let base = Pubkey::new_unique();
         let base_account = AccountSharedData::new_ref(100, 0, &Pubkey::new(&[2; 32])); // account owner should not matter
         let from_base_keyed_account = KeyedAccount::new(&base, true, &base_account);
@@ -1252,7 +1255,7 @@ mod tests {
 
     #[test]
     fn test_transfer_lamports_from_nonce_account_fail() {
-        let invoke_context = ThisInvokeContext::new_mock(&[], &[]);
+        let invoke_context = InvokeContext::new_mock(&[], &[]);
         let from = Pubkey::new_unique();
         let from_account = AccountSharedData::new_ref_data(
             100,
@@ -1582,8 +1585,8 @@ mod tests {
                 &keyed_accounts,
                 |first_instruction_account: usize,
                  instruction_data: &[u8],
-                 invoke_context: &mut dyn InvokeContext| {
-                    invoke_context.set_blockhash(hash(&serialize(&0).unwrap()));
+                 invoke_context: &mut InvokeContext| {
+                    invoke_context.blockhash = hash(&serialize(&0).unwrap());
                     super::process_instruction(
                         first_instruction_account,
                         instruction_data,
@@ -1998,8 +2001,8 @@ mod tests {
                 &keyed_accounts,
                 |first_instruction_account: usize,
                  instruction_data: &[u8],
-                 invoke_context: &mut dyn InvokeContext| {
-                    invoke_context.set_blockhash(hash(&serialize(&0).unwrap()));
+                 invoke_context: &mut InvokeContext| {
+                    invoke_context.blockhash = hash(&serialize(&0).unwrap());
                     super::process_instruction(
                         first_instruction_account,
                         instruction_data,

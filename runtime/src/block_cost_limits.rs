@@ -1,10 +1,12 @@
 //! defines block cost related limits
 //!
-use lazy_static::lazy_static;
-use solana_sdk::{
-    feature, incinerator, native_loader, pubkey::Pubkey, secp256k1_program, system_program,
+use {
+    lazy_static::lazy_static,
+    solana_sdk::{
+        feature, incinerator, native_loader, pubkey::Pubkey, secp256k1_program, system_program,
+    },
+    std::collections::HashMap,
 };
-use std::collections::HashMap;
 
 /// Static configurations:
 ///
