@@ -73,7 +73,7 @@ impl Sanitize for Message {
 
         // there should be at least 1 RW fee-payer account.
         if self.header.num_readonly_signed_accounts >= self.header.num_required_signatures {
-            return Err(SanitizeError::IndexOutOfBounds);
+            return Err(SanitizeError::InvalidValue);
         }
 
         let mut num_loaded_accounts = self.account_keys.len();
