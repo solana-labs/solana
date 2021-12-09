@@ -596,7 +596,7 @@ mod test {
             .expect("Expected a shred that signals an interrupt");
 
         // Validate the shred
-        assert_eq!(shred.parent(), Some(parent));
+        assert_eq!(shred.parent().unwrap(), parent);
         assert_eq!(shred.slot(), slot);
         assert_eq!(shred.index(), next_shred_index);
         assert!(shred.is_data());
