@@ -271,6 +271,10 @@ pub mod reject_non_rent_exempt_vote_withdraws {
     solana_sdk::declare_id!("7txXZZD6Um59YoLMF7XUNimbMjsqsWhc7g2EniiTrmp1");
 }
 
+pub mod evict_invalid_stakes_cache_entries {
+    solana_sdk::declare_id!("EMX9Q7TVFAmQ9V1CggAkhMzhXSg8ECp7fHrWQX2G1chf");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -333,6 +337,7 @@ lazy_static! {
         (reject_empty_instruction_without_program::id(), "fail instructions which have native_loader as program_id directly"),
         (fixed_memcpy_nonoverlapping_check::id(), "use correct check for nonoverlapping regions in memcpy syscall"),
         (reject_non_rent_exempt_vote_withdraws::id(), "fail vote withdraw instructions which leave the account non-rent-exempt"),
+        (evict_invalid_stakes_cache_entries::id(), "evict invalid stakes cache entries on epoch boundaries"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
