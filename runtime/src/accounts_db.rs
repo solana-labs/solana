@@ -6997,7 +6997,7 @@ impl AccountsDb {
 
             if pass == 0 {
                 // subtract data.len() from accounts_data_len for all old accounts which are in the index twice
-                let mut timer = Measure::start("get accounts data len");
+                let mut timer = Measure::start("handle accounts data len duplicates");
                 let mut unique_pubkeys = HashSet::<Pubkey>::default();
                 self.uncleaned_pubkeys.iter().for_each(|entry| {
                     entry.value().iter().for_each(|pubkey| {
