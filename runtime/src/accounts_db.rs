@@ -221,9 +221,6 @@ pub struct ErrorCounters {
 }
 
 #[derive(Debug, Default, Clone, Copy)]
-pub struct IndexGenerationInfo {}
-
-#[derive(Debug, Default, Clone, Copy)]
 struct SlotIndexGenerationInfo {
     insert_time_us: u64,
     num_accounts: u64,
@@ -6868,7 +6865,7 @@ impl AccountsDb {
         limit_load_slot_count_from_snapshot: Option<usize>,
         verify: bool,
         genesis_config: &GenesisConfig,
-    ) -> IndexGenerationInfo {
+    ) {
         let mut slots = self.storage.all_slots();
         #[allow(clippy::stable_sort_primitive)]
         slots.sort();
@@ -7025,8 +7022,6 @@ impl AccountsDb {
             }
             timings.report();
         }
-
-        IndexGenerationInfo::default()
     }
 
     fn update_storage_info(
