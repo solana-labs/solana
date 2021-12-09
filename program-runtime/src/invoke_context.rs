@@ -257,9 +257,9 @@ impl<'a> InvokeContext<'a> {
             self.pre_accounts = Vec::with_capacity(instruction.accounts.len());
             let mut work = |_unique_index: usize, account_index: usize| {
                 if account_index < self.accounts.len() {
-                    let account = self.accounts[account_index].1.borrow();
+                    let account = self.accounts[account_index].1.borrow().clone();
                     self.pre_accounts
-                        .push(PreAccount::new(&self.accounts[account_index].0, &account));
+                        .push(PreAccount::new(&self.accounts[account_index].0, account));
                     return Ok(());
                 }
                 Err(InstructionError::MissingAccount)
@@ -461,7 +461,7 @@ impl<'a> InvokeContext<'a> {
                             .checked_add(u128::from(account.lamports()))
                             .ok_or(InstructionError::UnbalancedInstruction)?;
                         if is_writable && !pre_account.executable() {
-                            pre_account.update(&account);
+                            pre_account.update(account.clone());
                         }
                         return Ok(());
                     }
