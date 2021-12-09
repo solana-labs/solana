@@ -63,9 +63,11 @@ use {
         vote_account::VoteAccount,
     },
     byteorder::{ByteOrder, LittleEndian},
-    dashmap::{DashMap, DashSet},
+    dashmap::DashMap,
     itertools::Itertools,
     log::*,
+    num_derive::ToPrimitive,
+    num_traits::ToPrimitive,
     rayon::{
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
         ThreadPool, ThreadPoolBuilder,
@@ -1054,10 +1056,17 @@ struct VoteWithStakeDelegations {
     delegations: Vec<(Pubkey, (StakeState, AccountSharedData))>,
 }
 
+#[derive(Debug, Clone, PartialEq, ToPrimitive)]
+enum InvalidReason {
+    Missing,
+    BadState,
+    WrongOwner,
+}
+
 struct LoadVoteAndStakeAccountsResult {
     vote_with_stake_delegations_map: DashMap<Pubkey, VoteWithStakeDelegations>,
-    invalid_stake_keys_set: DashSet<Pubkey>,
-    invalid_vote_keys_set: DashSet<Pubkey>,
+    invalid_stake_keys: DashMap<Pubkey, InvalidReason>,
+    invalid_vote_keys: DashMap<Pubkey, InvalidReason>,
 }
 
 #[derive(Debug, Default)]
@@ -2176,8 +2185,8 @@ impl Bank {
         let stakes = self.stakes.read().unwrap();
         let vote_with_stake_delegations_map =
             DashMap::with_capacity(stakes.vote_accounts().as_ref().len());
-        let invalid_stake_keys_set: DashSet<Pubkey> = DashSet::new();
-        let invalid_vote_keys_set: DashSet<Pubkey> = DashSet::new();
+        let invalid_stake_keys: DashMap<Pubkey, InvalidReason> = DashMap::new();
+        let invalid_vote_keys: DashMap<Pubkey, InvalidReason> = DashMap::new();
 
         thread_pool.install(|| {
             stakes
@@ -2185,27 +2194,28 @@ impl Bank {
                 .par_iter()
                 .for_each(|(stake_pubkey, delegation)| {
                     let vote_pubkey = &delegation.voter_pubkey;
-                    if invalid_vote_keys_set.contains(vote_pubkey) {
+                    if invalid_vote_keys.contains_key(vote_pubkey) {
                         return;
                     }
 
                     let stake_delegation = match self.get_account_with_fixed_root(stake_pubkey) {
                         Some(stake_account) => {
                             if stake_account.owner() != &solana_stake_program::id() {
-                                invalid_stake_keys_set.insert(*stake_pubkey);
+                                invalid_stake_keys.insert(*stake_pubkey, InvalidReason::WrongOwner);
                                 return;
                             }
 
                             match stake_account.state().ok() {
                                 Some(stake_state) => (*stake_pubkey, (stake_state, stake_account)),
                                 None => {
-                                    invalid_stake_keys_set.insert(*stake_pubkey);
+                                    invalid_stake_keys
+                                        .insert(*stake_pubkey, InvalidReason::BadState);
                                     return;
                                 }
                             }
                         }
                         None => {
-                            invalid_stake_keys_set.insert(*stake_pubkey);
+                            invalid_stake_keys.insert(*stake_pubkey, InvalidReason::Missing);
                             return;
                         }
                     };
@@ -2218,13 +2228,14 @@ impl Bank {
                         let vote_account = match self.get_account_with_fixed_root(vote_pubkey) {
                             Some(vote_account) => {
                                 if vote_account.owner() != &solana_vote_program::id() {
-                                    invalid_vote_keys_set.insert(*vote_pubkey);
+                                    invalid_vote_keys
+                                        .insert(*vote_pubkey, InvalidReason::WrongOwner);
                                     return;
                                 }
                                 vote_account
                             }
                             None => {
-                                invalid_vote_keys_set.insert(*vote_pubkey);
+                                invalid_vote_keys.insert(*vote_pubkey, InvalidReason::Missing);
                                 return;
                             }
                         };
@@ -2234,7 +2245,7 @@ impl Bank {
                         {
                             vote_state.convert_to_current()
                         } else {
-                            invalid_vote_keys_set.insert(*vote_pubkey);
+                            invalid_vote_keys.insert(*vote_pubkey, InvalidReason::BadState);
                             return;
                         };
 
@@ -2263,8 +2274,53 @@ impl Bank {
 
         LoadVoteAndStakeAccountsResult {
             vote_with_stake_delegations_map,
-            invalid_vote_keys_set,
-            invalid_stake_keys_set,
+            invalid_vote_keys,
+            invalid_stake_keys,
+        }
+    }
+
+    fn handle_invalid_stakes_cache_keys(
+        &self,
+        invalid_stake_keys: DashMap<Pubkey, InvalidReason>,
+        invalid_vote_keys: DashMap<Pubkey, InvalidReason>,
+    ) {
+        if invalid_stake_keys.is_empty() && invalid_vote_keys.is_empty() {
+            return;
+        }
+
+        // Prune invalid stake delegations and vote accounts that were
+        // not properly evicted in normal operation.
+        let mut maybe_stakes_cache = if self
+            .feature_set
+            .is_active(&feature_set::evict_invalid_stakes_cache_entries::id())
+        {
+            Some(self.stakes.write().unwrap())
+        } else {
+            None
+        };
+
+        for (stake_pubkey, reason) in invalid_stake_keys {
+            if let Some(stakes_cache) = maybe_stakes_cache.as_mut() {
+                stakes_cache.remove_stake_delegation(&stake_pubkey);
+            }
+            datapoint_warn!(
+                "bank-stake_delegation_accounts-invalid-account",
+                ("slot", self.slot() as i64, i64),
+                ("stake-address", format!("{:?}", stake_pubkey), String),
+                ("reason", reason.to_i64().unwrap_or_default(), i64),
+            );
+        }
+
+        for (vote_pubkey, reason) in invalid_vote_keys {
+            if let Some(stakes_cache) = maybe_stakes_cache.as_mut() {
+                stakes_cache.remove_vote_account(&vote_pubkey);
+            }
+            datapoint_warn!(
+                "bank-stake_delegation_accounts-invalid-account",
+                ("slot", self.slot() as i64, i64),
+                ("vote-address", format!("{:?}", vote_pubkey), String),
+                ("reason", reason.to_i64().unwrap_or_default(), i64),
+            );
         }
     }
 
@@ -2279,49 +2335,19 @@ impl Bank {
         thread_pool: &ThreadPool,
     ) -> f64 {
         let stake_history = self.stakes.read().unwrap().history().clone();
-        let LoadVoteAndStakeAccountsResult {
-            vote_with_stake_delegations_map,
-            invalid_stake_keys_set,
-            invalid_vote_keys_set,
-        } = self.load_vote_and_stake_accounts_with_thread_pool(
-            thread_pool,
-            reward_calc_tracer.as_ref(),
-        );
+        let vote_with_stake_delegations_map = {
+            let LoadVoteAndStakeAccountsResult {
+                vote_with_stake_delegations_map,
+                invalid_stake_keys,
+                invalid_vote_keys,
+            } = self.load_vote_and_stake_accounts_with_thread_pool(
+                thread_pool,
+                reward_calc_tracer.as_ref(),
+            );
 
-        {
-            // Prune invalid stake delegations and vote accounts that were
-            // not properly evicted in normal operation.
-            let mut maybe_stakes_cache = if self
-                .feature_set
-                .is_active(&feature_set::evict_invalid_stakes_cache_entries::id())
-            {
-                Some(self.stakes.write().unwrap())
-            } else {
-                None
-            };
-
-            for stake_pubkey in invalid_stake_keys_set {
-                if let Some(stakes_cache) = maybe_stakes_cache.as_mut() {
-                    stakes_cache.remove_stake_delegation(&stake_pubkey);
-                }
-                datapoint_warn!(
-                    "bank-stake_delegation_accounts-invalid-account",
-                    ("slot", self.slot() as i64, i64),
-                    ("stake-address", format!("{:?}", stake_pubkey), String),
-                );
-            }
-
-            for vote_pubkey in invalid_vote_keys_set {
-                if let Some(stakes_cache) = maybe_stakes_cache.as_mut() {
-                    stakes_cache.remove_vote_account(&vote_pubkey);
-                }
-                datapoint_warn!(
-                    "bank-stake_delegation_accounts-invalid-account",
-                    ("slot", self.slot() as i64, i64),
-                    ("vote-address", format!("{:?}", vote_pubkey), String),
-                );
-            }
-        }
+            self.handle_invalid_stakes_cache_keys(invalid_stake_keys, invalid_vote_keys);
+            vote_with_stake_delegations_map
+        };
 
         let points: u128 = thread_pool.install(|| {
             vote_with_stake_delegations_map
