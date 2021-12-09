@@ -30,13 +30,7 @@ memmap2 = "0.1.0"
 num-derive = { version = "0.3" }
 num-traits = { version = "0.2" }
 num_cpus = "1.13.0"
-<<<<<<< HEAD
 ouroboros = "0.10.0"
-=======
-num-derive = { version = "0.3" }
-num-traits = { version = "0.2" }
-ouroboros = "0.13.0"
->>>>>>> 6fc329180 (Add more reporting for invalid stake cache members and prune them (#21654))
 rand = "0.7.0"
 rayon = "1.5.0"
 regex = "1.3.9"

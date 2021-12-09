@@ -5478,11 +5478,7 @@ dependencies = [
  "libc",
  "libloading 0.6.2",
  "log 0.4.14",
-<<<<<<< HEAD
  "memmap2",
-=======
- "memmap2 0.5.0",
->>>>>>> 6fc329180 (Add more reporting for invalid stake cache members and prune them (#21654))
  "num-derive",
  "num-traits",
  "num_cpus",

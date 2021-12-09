@@ -3505,13 +3505,8 @@ dependencies = [
  "libc",
  "libloading",
  "log",
-<<<<<<< HEAD
  "memmap2",
  "num-derive 0.3.0",
-=======
- "memmap2 0.5.0",
- "num-derive",
->>>>>>> 6fc329180 (Add more reporting for invalid stake cache members and prune them (#21654))
  "num-traits",
  "num_cpus",
  "ouroboros",

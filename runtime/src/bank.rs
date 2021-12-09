@@ -2090,14 +2090,9 @@ impl Bank {
         reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
     ) -> LoadVoteAndStakeAccountsResult {
         let stakes = self.stakes.read().unwrap();
-<<<<<<< HEAD
-        let accounts = DashMap::with_capacity(stakes.vote_accounts().len());
-=======
-        let vote_with_stake_delegations_map =
-            DashMap::with_capacity(stakes.vote_accounts().as_ref().len());
+        let vote_with_stake_delegations_map = DashMap::with_capacity(stakes.vote_accounts().len());
         let invalid_stake_keys: DashMap<Pubkey, InvalidReason> = DashMap::new();
         let invalid_vote_keys: DashMap<Pubkey, InvalidReason> = DashMap::new();
->>>>>>> 6fc329180 (Add more reporting for invalid stake cache members and prune them (#21654))
 
         thread_pool.install(|| {
             stakes
