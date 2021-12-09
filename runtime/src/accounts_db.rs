@@ -7046,6 +7046,11 @@ impl AccountsDb {
                     accounts_data_len.load(Ordering::Relaxed),
                     timer
                 );
+                error!(
+                    "bprumo DEBUG: generate_index(), accounts data len: {}, {:?}",
+                    accounts_data_len.load(Ordering::Relaxed),
+                    timer
+                );
             }
 
             let storage_info_timings = storage_info_timings.into_inner().unwrap();

@@ -738,7 +738,7 @@ pub(crate) struct BankFieldsToDeserialize {
     pub(crate) stakes: Stakes,
     pub(crate) epoch_stakes: HashMap<Epoch, EpochStakes>,
     pub(crate) is_delta: bool,
-    pub(crate) accounts_data_len: usize,
+    // bprumo TODO: pub(crate) accounts_data_len: usize,
 }
 
 // Bank's common fields shared by all supported snapshot versions for serialization.
@@ -778,7 +778,7 @@ pub(crate) struct BankFieldsToSerialize<'a> {
     pub(crate) stakes: &'a RwLock<Stakes>,
     pub(crate) epoch_stakes: &'a HashMap<Epoch, EpochStakes>,
     pub(crate) is_delta: bool,
-    pub(crate) accounts_data_len: usize,
+    // bprumo TODO: pub(crate) accounts_data_len: usize,
 }
 
 // Can't derive PartialEq because RwLock doesn't implement PartialEq
@@ -1445,6 +1445,7 @@ impl Bank {
 
         // bprumo TODO: move this somewhere else, like bank deserialization (from snapshot)
         if new.accounts_data_len.load(Acquire) == 0 {
+            error!("bprumo DEBUG: Bank::new_from_parent(), parent accounts_data_len == 0!");
             let total_account_stats = new.get_total_accounts_stats().unwrap();
             new.accounts_data_len
                 .store(total_account_stats.data_len, Release);
@@ -1709,7 +1710,7 @@ impl Bank {
             stakes: &self.stakes,
             epoch_stakes: &self.epoch_stakes,
             is_delta: self.is_delta.load(Relaxed),
-            accounts_data_len: self.accounts_data_len.load(Acquire),
+            // bprumo TODO: accounts_data_len: self.accounts_data_len.load(Acquire),
         }
     }
 
