@@ -18,6 +18,9 @@ pub enum CostTrackerError {
 
     /// would exceed account max limit
     WouldExceedAccountMaxLimit,
+
+    /// transaction cost exceeds max tx-wide cap
+    ExceedsTransactionCostCap,
 }
 
 #[derive(AbiExample, Debug)]
@@ -74,6 +77,7 @@ impl CostTracker {
         _transaction: &SanitizedTransaction,
         tx_cost: &TransactionCost,
     ) -> Result<u64, CostTrackerError> {
+        self.satisfy_transaction_units_cap(tx_cost)?;
         let cost = tx_cost.sum() * tx_cost.cost_weight as u64;
         self.would_fit(&tx_cost.writable_accounts, &cost)?;
         self.add_transaction(&tx_cost.writable_accounts, &cost);
@@ -142,6 +146,22 @@ impl CostTracker {
         }
 
         Ok(())
+    }
+
+    // evaludate transaction's aggregated instruction executino cost against tx-wide cap, 
+    // throw it out up front if exceeds the cap, since it is *likely* to be dropped when executed
+    // down the road. 
+    // *likely* because instruction actual cost wouldn't be known until it is executed, and the
+    // accounts status. Cost model use replayed per-program measure to estimate instruction cost, 
+    // We could put a factor of 1.25 on tx-wide cap to reduce false negative.
+    fn satisfy_transaction_units_cap(&self, tx_cost: &TransactionCost) -> Result<(), CostTrackerError> {
+        let tx_wide_cap = 200_000u64;
+        let cap_factor = 1.25;
+        if tx_cost.executio_cost > tx_wide_cap * cap_factor {
+            Err(CostTrackerError::ExceedsTransactionCostCap)
+        } else {
+            Ok(())
+        }
     }
 
     fn add_transaction(&mut self, keys: &[Pubkey], cost: &u64) {
