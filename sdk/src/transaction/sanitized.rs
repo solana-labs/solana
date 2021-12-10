@@ -3,7 +3,10 @@
 use {
     crate::{
         hash::Hash,
-        message::{v0, MappedAddresses, MappedMessage, SanitizedMessage, VersionedMessage},
+        message::{
+            v0::{self, LoadedAddresses},
+            SanitizedMessage, VersionedMessage,
+        },
         nonce::NONCED_TX_MARKER_IX_INDEX,
         precompiles::verify_if_precompile,
         program_utils::limited_deserialize,
@@ -37,21 +40,21 @@ pub struct TransactionAccountLocks<'a> {
 
 impl SanitizedTransaction {
     /// Create a sanitized transaction from an unsanitized transaction.
-    /// If the input transaction uses address maps, attempt to map the
-    /// transaction keys to full addresses.
+    /// If the input transaction uses address tables, attempt to lookup
+    /// the address for each table index.
     pub fn try_create(
         tx: VersionedTransaction,
         message_hash: Hash,
         is_simple_vote_tx: Option<bool>,
-        address_mapper: impl Fn(&v0::Message) -> Result<MappedAddresses>,
+        address_loader: impl Fn(&v0::Message) -> Result<LoadedAddresses>,
     ) -> Result<Self> {
         tx.sanitize()?;
 
         let signatures = tx.signatures;
         let message = match tx.message {
             VersionedMessage::Legacy(message) => SanitizedMessage::Legacy(message),
-            VersionedMessage::V0(message) => SanitizedMessage::V0(MappedMessage {
-                mapped_addresses: address_mapper(&message)?,
+            VersionedMessage::V0(message) => SanitizedMessage::V0(v0::LoadedMessage {
+                loaded_addresses: address_loader(&message)?,
                 message,
             }),
         };
@@ -125,9 +128,9 @@ impl SanitizedTransaction {
     pub fn to_versioned_transaction(&self) -> VersionedTransaction {
         let signatures = self.signatures.clone();
         match &self.message {
-            SanitizedMessage::V0(mapped_msg) => VersionedTransaction {
+            SanitizedMessage::V0(sanitized_msg) => VersionedTransaction {
                 signatures,
-                message: VersionedMessage::V0(mapped_msg.message.clone()),
+                message: VersionedMessage::V0(sanitized_msg.message.clone()),
             },
             SanitizedMessage::Legacy(message) => VersionedTransaction {
                 signatures,
@@ -193,7 +196,7 @@ impl SanitizedTransaction {
     fn message_data(&self) -> Vec<u8> {
         match &self.message {
             SanitizedMessage::Legacy(message) => message.serialize(),
-            SanitizedMessage::V0(mapped_msg) => mapped_msg.message.serialize(),
+            SanitizedMessage::V0(message) => message.serialize(),
         }
     }
 

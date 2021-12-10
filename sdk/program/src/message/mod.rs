@@ -5,12 +5,10 @@ pub mod legacy;
 #[cfg(not(target_arch = "bpf"))]
 #[path = ""]
 mod non_bpf_modules {
-    mod mapped;
     mod sanitized;
-    pub mod v0;
     mod versions;
 
-    pub use {mapped::*, sanitized::*, versions::*};
+    pub use {sanitized::*, versions::*};
 }
 
 pub use legacy::Message;

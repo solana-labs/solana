@@ -113,9 +113,10 @@ CREATE TYPE "TransactionMessage" AS (
     instructions "CompiledInstruction"[]
 );
 
-CREATE TYPE "AddressMapIndexes" AS (
-    writable SMALLINT[],
-    readonly SMALLINT[]
+CREATE TYPE "TransactionMessageAddressTableLookup" AS (
+    account_key: BYTEA[],
+    writable_indexes SMALLINT[],
+    readonly_indexes SMALLINT[]
 );
 
 CREATE TYPE "TransactionMessageV0" AS (
@@ -123,17 +124,17 @@ CREATE TYPE "TransactionMessageV0" AS (
     account_keys BYTEA[],
     recent_blockhash BYTEA,
     instructions "CompiledInstruction"[],
-    address_map_indexes "AddressMapIndexes"[]
+    address_table_lookups "TransactionMessageAddressTableLookup"[]
 );
 
-CREATE TYPE "MappedAddresses" AS (
+CREATE TYPE "LoadedAddresses" AS (
     writable BYTEA[],
     readonly BYTEA[]
 );
 
-CREATE TYPE "MappedMessage" AS (
+CREATE TYPE "LoadedMessageV0" AS (
     message "TransactionMessageV0",
-    mapped_addresses "MappedAddresses"
+    loaded_addresses "LoadedAddresses"
 );
 
 -- The table storing transactions
@@ -143,7 +144,7 @@ CREATE TABLE transaction (
     is_vote BOOL NOT NULL,
     message_type SMALLINT, -- 0: legacy, 1: v0 message
     legacy_message "TransactionMessage",
-    v0_mapped_message "MappedMessage",
+    v0_loaded_message "LoadedMessageV0",
     signatures BYTEA[],
     message_hash BYTEA,
     meta "TransactionStatusMeta",
