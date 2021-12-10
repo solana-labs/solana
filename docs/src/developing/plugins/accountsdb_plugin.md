@@ -60,11 +60,11 @@ A plugin implementation can implement the `on_load` method to initialize itself.
 This function is invoked after a plugin is dynamically loaded into the validator
 when it starts. The configuration of the plugin is controlled by a configuration
 file in JSON format. The JSON file must have a field `libpath` that points
-to the full path name of the shared library implementing the plugin and the
-plugin can extend it with other configuration information such as connection
-parameters for the external database. The plugin configuration file is
-specified by the validator's CLI parameter `--accountsdb-plugin-config` and the
-file must be readable to the validator process.
+to the full path name of the shared library implementing the plugin, and may
+have other configuration information, like connection parameters for the external
+database. The plugin configuration file is specified by the validator's CLI
+parameter `--accountsdb-plugin-config` and the file must be readable to the
+validator process.
 
 Please see the below [example config file](#config) for the referential
 PostgreSQL plugin for an example.
