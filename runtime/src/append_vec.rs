@@ -301,7 +301,7 @@ impl AppendVec {
         self.file_size
     }
 
-    pub fn file_name(slot: Slot, id: usize) -> String {
+    pub fn file_name(slot: Slot, id: impl std::fmt::Display) -> String {
         format!("{}.{}", slot, id)
     }
 
