@@ -1,3 +1,7 @@
+/// The interface for AccountsDb plugins. A plugin must implement
+/// the AccountsDbPlugin trait to work with the runtime.
+/// In addition, the dynamic library must export a "C" function _create_plugin which
+/// creates the implementation of the plugin.
 use {
     solana_sdk::{signature::Signature, transaction::SanitizedTransaction},
     solana_transaction_status::TransactionStatusMeta,
@@ -109,10 +113,9 @@ impl SlotStatus {
 
 pub type Result<T> = std::result::Result<T, AccountsDbPluginError>;
 
-/// The interface for AccountsDb plugins. A plugin must implement
-/// the AccountsDbPlugin trait to work with the runtime.
-/// In addition, the dynamic library must export a "C" function _create_plugin which
-/// creates the implementation of the plugin.
+/// Defines an AccountsDb plugin, to stream data from the runtime.
+/// AccountsDb plugins must describe desired behavior for load and unload,
+/// as well as how they will handle streamed data.
 pub trait AccountsDbPlugin: Any + Send + Sync + std::fmt::Debug {
     fn name(&self) -> &'static str;
 
