@@ -3203,13 +3203,9 @@ dependencies = [
  "console_error_panic_hook",
  "console_log",
  "curve25519-dalek 3.2.0",
-<<<<<<< HEAD
- "itertools 0.10.1",
-=======
  "getrandom 0.1.14",
- "itertools 0.10.3",
+ "itertools 0.10.1",
  "js-sys",
->>>>>>> f4babb756 (Cargo.lock)
  "lazy_static",
  "libsecp256k1 0.6.0",
  "log",
@@ -3364,14 +3360,9 @@ dependencies = [
  "ed25519-dalek",
  "ed25519-dalek-bip32",
  "generic-array 0.14.4",
-<<<<<<< HEAD
  "hmac 0.11.0",
  "itertools 0.10.1",
-=======
- "hmac 0.12.0",
- "itertools 0.10.3",
  "js-sys",
->>>>>>> f4babb756 (Cargo.lock)
  "lazy_static",
  "libsecp256k1 0.6.0",
  "log",
