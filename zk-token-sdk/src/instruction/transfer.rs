@@ -8,9 +8,7 @@ use {
         encryption::{
             discrete_log::*,
             elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey, ElGamalSecretKey},
-            pedersen::{
-                Pedersen, PedersenBase, PedersenCommitment, PedersenDecryptHandle, PedersenOpening,
-            },
+            pedersen::{Pedersen, PedersenCommitment, PedersenDecryptHandle, PedersenOpening},
         },
         equality_proof::EqualityProof,
         errors::ProofError,
@@ -18,13 +16,8 @@ use {
         range_proof::RangeProof,
         transcript::TranscriptProtocol,
     },
-    curve25519_dalek::{
-        ristretto::{CompressedRistretto, RistrettoPoint},
-        scalar::Scalar,
-        traits::{IsIdentity, MultiscalarMul, VartimeMultiscalarMul},
-    },
+    curve25519_dalek::scalar::Scalar,
     merlin::Transcript,
-    rand::rngs::OsRng,
     std::convert::TryInto,
 };
 
@@ -120,7 +113,7 @@ impl TransferData {
 
         // range_proof and validity_proof should be generated together
         let proof = TransferProof::new(
-            &source_keypair,
+            source_keypair,
             &dest_pk,
             &auditor_pk,
             (amount_lo as u64, amount_hi as u64),
@@ -227,8 +220,8 @@ impl TransferProof {
     #[allow(clippy::many_single_char_names)]
     pub fn new(
         source_keypair: &ElGamalKeypair,
-        dest_pk: &ElGamalPubkey,
-        auditor_pk: &ElGamalPubkey,
+        _dest_pk: &ElGamalPubkey,
+        _auditor_pk: &ElGamalPubkey,
         transfer_amt: (u64, u64),
         lo_open: &PedersenOpening,
         hi_open: &PedersenOpening,
@@ -287,8 +280,8 @@ impl TransferProof {
     pub fn verify(
         self,
         amount_comms: &TransferCommitments,
-        decryption_handles_lo: &TransferDecryptHandles,
-        decryption_handles_hi: &TransferDecryptHandles,
+        _decryption_handles_lo: &TransferDecryptHandles,
+        _decryption_handles_hi: &TransferDecryptHandles,
         new_spendable_ct: &pod::ElGamalCiphertext,
         transfer_public_keys: &TransferPubkeys,
     ) -> Result<(), ProofError> {
