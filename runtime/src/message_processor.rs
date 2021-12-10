@@ -1,17 +1,13 @@
 use {
-<<<<<<< HEAD
     crate::{
-        accounts::Accounts, ancestors::Ancestors, instruction_recorder::InstructionRecorder,
-        log_collector::LogCollector, native_loader::NativeLoader, rent_collector::RentCollector,
+        accounts::Accounts, ancestors::Ancestors, bank::TransactionAccountRefCell,
+        instruction_recorder::InstructionRecorder, log_collector::LogCollector,
+        native_loader::NativeLoader, rent_collector::RentCollector,
     },
     log::*,
-=======
-    crate::bank::TransactionAccountRefCell,
->>>>>>> c1386d66e (Nits in message-processor (#21755))
     serde::{Deserialize, Serialize},
     solana_measure::measure::Measure,
     solana_sdk::{
-<<<<<<< HEAD
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
@@ -23,12 +19,6 @@ use {
         ic_logger_msg, ic_msg,
         instruction::{CompiledInstruction, Instruction, InstructionError},
         keyed_account::{create_keyed_accounts_unified, keyed_account_at_index, KeyedAccount},
-=======
-        account::WritableAccount,
-        compute_budget::ComputeBudget,
-        feature_set::{prevent_calling_precompiles_as_programs, FeatureSet},
-        hash::Hash,
->>>>>>> c1386d66e (Nits in message-processor (#21755))
         message::Message,
         native_loader,
         process_instruction::{
@@ -631,7 +621,6 @@ impl ::solana_frozen_abi::abi_example::AbiExample for MessageProcessor {
 }
 
 impl MessageProcessor {
-<<<<<<< HEAD
     /// Add a static entrypoint to intercept instructions before the dynamic loader.
     pub fn add_program(
         &mut self,
@@ -643,42 +632,6 @@ impl MessageProcessor {
             None => self.programs.push((program_id, process_instruction)),
         }
     }
-=======
-    /// Process a message.
-    /// This method calls each instruction in the message over the set of loaded accounts.
-    /// For each instruction it calls the program entrypoint method and verifies that the result of
-    /// the call does not violate the bank's accounting rules.
-    /// The accounts are committed back to the bank only if every instruction succeeds.
-    #[allow(clippy::too_many_arguments)]
-    pub fn process_message(
-        builtin_programs: &[BuiltinProgram],
-        message: &Message,
-        program_indices: &[Vec<usize>],
-        accounts: &[TransactionAccountRefCell],
-        rent: Rent,
-        log_collector: Option<Rc<RefCell<LogCollector>>>,
-        executors: Rc<RefCell<Executors>>,
-        instruction_recorders: Option<&[InstructionRecorder]>,
-        feature_set: Arc<FeatureSet>,
-        compute_budget: ComputeBudget,
-        timings: &mut ExecuteDetailsTimings,
-        sysvars: &[(Pubkey, Vec<u8>)],
-        blockhash: Hash,
-        lamports_per_signature: u64,
-    ) -> Result<(), TransactionError> {
-        let mut invoke_context = InvokeContext::new(
-            rent,
-            accounts,
-            builtin_programs,
-            sysvars,
-            log_collector,
-            compute_budget,
-            executors,
-            feature_set,
-            blockhash,
-            lamports_per_signature,
-        );
->>>>>>> c1386d66e (Nits in message-processor (#21755))
 
     pub fn add_loader(
         &mut self,
@@ -785,7 +738,6 @@ impl MessageProcessor {
                 return Err(InstructionError::PrivilegeEscalation);
             }
 
-<<<<<<< HEAD
             if account.is_signer && // If message indicates account is signed
             !( // one of the following needs to be true:
                 keyed_account.signer_key().is_some() // Signed in the parent instruction
@@ -1263,12 +1215,7 @@ impl MessageProcessor {
         // Fixup the special instructions key if present
         // before the account pre-values are taken care of
         if feature_set.is_active(&instructions_sysvar_enabled::id()) {
-            for (pubkey, accont) in accounts.iter().take(message.account_keys.len()) {
-=======
-            // Fixup the special instructions key if present
-            // before the account pre-values are taken care of
             for (pubkey, account) in accounts.iter().take(message.account_keys.len()) {
->>>>>>> c1386d66e (Nits in message-processor (#21755))
                 if instructions::check_id(pubkey) {
                     let mut mut_account_ref = account.borrow_mut();
                     instructions::store_current_index(
@@ -1353,7 +1300,7 @@ impl MessageProcessor {
         &self,
         message: &Message,
         loaders: &[Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>],
-        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        accounts: &[TransactionAccountRefCell],
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
@@ -1400,11 +1347,8 @@ mod tests {
     use {
         super::*,
         solana_sdk::{
-<<<<<<< HEAD
             account::Account,
-=======
             account::{AccountSharedData, ReadableAccount},
->>>>>>> c1386d66e (Nits in message-processor (#21755))
             instruction::{AccountMeta, Instruction, InstructionError},
             message::Message,
             native_loader::create_loadable_account_for_test,
