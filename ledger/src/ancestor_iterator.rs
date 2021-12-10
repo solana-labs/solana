@@ -11,8 +11,8 @@ pub struct AncestorIterator<'a> {
 impl<'a> AncestorIterator<'a> {
     pub fn new(start_slot: Slot, blockstore: &'a Blockstore) -> Self {
         let current = blockstore.meta(start_slot).unwrap().and_then(|slot_meta| {
-            if slot_meta.is_parent_set() && start_slot != 0 {
-                Some(slot_meta.parent_slot)
+            if start_slot != 0 {
+                slot_meta.parent_slot
             } else {
                 None
             }
@@ -37,13 +37,11 @@ impl<'a> Iterator for AncestorIterator<'a> {
         let current = self.current;
         current.map(|slot| {
             if slot != 0 {
-                self.current = self.blockstore.meta(slot).unwrap().and_then(|slot_meta| {
-                    if slot_meta.is_parent_set() {
-                        Some(slot_meta.parent_slot)
-                    } else {
-                        None
-                    }
-                });
+                self.current = self
+                    .blockstore
+                    .meta(slot)
+                    .unwrap()
+                    .and_then(|slot_meta| slot_meta.parent_slot);
             } else {
                 self.current = None;
             }
