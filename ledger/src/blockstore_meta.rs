@@ -1,5 +1,8 @@
 use {
-    crate::erasure::ErasureConfig,
+    crate::{
+        erasure::ErasureConfig,
+        shred::{Shred, ShredType},
+    },
     serde::{Deserialize, Serialize},
     solana_sdk::{clock::Slot, hash::Hash},
     std::{
@@ -56,9 +59,8 @@ pub struct ShredIndex {
 pub struct ErasureMeta {
     /// Which erasure set in the slot this is
     set_index: u64,
-    /// Deprecated field.
-    #[serde(rename = "first_coding_index")]
-    __unused_first_coding_index: u64,
+    /// First coding index in the FEC set
+    first_coding_index: u64,
     /// Size of shards in this erasure set
     #[serde(rename = "size")]
     __unused_size: usize,
@@ -226,13 +228,39 @@ impl SlotMeta {
 }
 
 impl ErasureMeta {
-    pub(crate) fn new(set_index: u64, config: ErasureConfig) -> ErasureMeta {
-        ErasureMeta {
-            set_index,
-            config,
-            __unused_first_coding_index: 0,
-            __unused_size: 0,
+    pub(crate) fn from_coding_shred(shred: &Shred) -> Option<Self> {
+        match shred.shred_type() {
+            ShredType::Data => None,
+            ShredType::Code => {
+                let config = ErasureConfig::new(
+                    usize::from(shred.coding_header.num_data_shreds),
+                    usize::from(shred.coding_header.num_coding_shreds),
+                );
+                let first_coding_index = u64::from(shred.first_coding_index()?);
+                let erasure_meta = ErasureMeta {
+                    set_index: u64::from(shred.fec_set_index()),
+                    config,
+                    first_coding_index,
+                    __unused_size: 0,
+                };
+                Some(erasure_meta)
+            }
         }
+    }
+
+    // Returns true if the erasure fields on the shred
+    // are consistent with the erasure-meta.
+    pub(crate) fn check_coding_shred(&self, shred: &Shred) -> bool {
+        let mut other = match Self::from_coding_shred(shred) {
+            Some(erasure_meta) => erasure_meta,
+            None => return false,
+        };
+        other.__unused_size = self.__unused_size;
+        // Ignore first_coding_index field for now to be backward compatible.
+        // TODO remove this once cluster is upgraded to always populate
+        // first_coding_index field.
+        other.first_coding_index = self.first_coding_index;
+        self == &other
     }
 
     pub(crate) fn config(&self) -> ErasureConfig {
@@ -246,7 +274,16 @@ impl ErasureMeta {
 
     pub(crate) fn coding_shreds_indices(&self) -> Range<u64> {
         let num_coding = self.config.num_coding() as u64;
-        self.set_index..self.set_index + num_coding
+        // first_coding_index == 0 may imply that the field is not populated.
+        // self.set_index to be backward compatible.
+        // TODO remove this once cluster is upgraded to always populate
+        // first_coding_index field.
+        let first_coding_index = if self.first_coding_index == 0 {
+            self.set_index
+        } else {
+            self.first_coding_index
+        };
+        first_coding_index..first_coding_index + num_coding
     }
 
     pub(crate) fn status(&self, index: &Index) -> ErasureMetaStatus {
@@ -316,7 +353,12 @@ mod test {
         let set_index = 0;
         let erasure_config = ErasureConfig::new(8, 16);
 
-        let e_meta = ErasureMeta::new(set_index, erasure_config);
+        let e_meta = ErasureMeta {
+            set_index,
+            first_coding_index: set_index,
+            config: erasure_config,
+            __unused_size: 0,
+        };
         let mut rng = thread_rng();
         let mut index = Index::new(0);
 
