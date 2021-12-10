@@ -291,8 +291,8 @@ Then run the script:
 psql -U solana -p 5433 -h 10.138.0.9 -w -d solana -f create_schema.sql
 ```
 
-After this, it is ready to start the validator with the plugin by using the
-`--accountsdb-plugin-config` argument mentioned above.
+After this, start the validator with the plugin by using the `--accountsdb-plugin-config`
+argument mentioned above.
 
 ### Destroy the Schema Objects
 
