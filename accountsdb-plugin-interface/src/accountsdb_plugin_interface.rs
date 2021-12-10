@@ -8,7 +8,7 @@ use {
 impl Eq for ReplicaAccountInfo<'_> {}
 
 #[derive(Clone, PartialEq, Debug)]
-/// Information about the accounts being updated
+/// Information about an account being updated
 pub struct ReplicaAccountInfo<'a> {
     /// The Pubkey for the account
     pub pubkey: &'a [u8],
@@ -28,7 +28,7 @@ pub struct ReplicaAccountInfo<'a> {
     /// The data held in this account.
     pub data: &'a [u8],
 
-    /// A global monitically increasing atomic number which can be used
+    /// A global monotonically increasing atomic number, which can be used
     /// to tell the order of the account update. For example, when an
     /// account is updated in the same slot multiple times, the update
     /// with higher write_version should supersede the one with lower
@@ -36,10 +36,10 @@ pub struct ReplicaAccountInfo<'a> {
     pub write_version: u64,
 }
 
-/// The versioned account information enum to avoid silent data corruptions
-/// If there were a change to the structure of the  ReplicaAccountInfo,
-/// there would be new enum entry for the newer version. This force the
-/// plugin implementation to handle the change.
+/// A wrapper to future-proof ReplicaAccountInfo handling.
+/// If there were a change to the structure of ReplicaAccountInfo,
+/// there would be new enum entry for the newer version, forcing
+/// plugin implementations to handle the change.
 pub enum ReplicaAccountInfoVersions<'a> {
     V0_0_1(&'a ReplicaAccountInfo<'a>),
 }
@@ -56,10 +56,10 @@ pub enum ReplicaTransactionInfoVersions<'a> {
     V0_0_1(&'a ReplicaTransactionInfo<'a>),
 }
 
-/// The error enums the plugin can return in the calls.
+/// Errors returned by plugin calls
 #[derive(Error, Debug)]
 pub enum AccountsDbPluginError {
-    /// Error opening the configuration file for example when the file
+    /// Error opening the configuration file; for example, when the file
     /// is not found or when the validator process has no permission to read it.
     #[error("Error opening config file. Error detail: ({0}).")]
     ConfigFileOpenError(#[from] io::Error),
@@ -77,12 +77,12 @@ pub enum AccountsDbPluginError {
     #[error("Error updating slot status. Error message: ({msg})")]
     SlotStatusUpdateError { msg: String },
 
-    /// Any other custom error the plugin can return.
+    /// Any custom error defined by the plugin.
     #[error("Plugin-defined custom error. Error message: ({0})")]
     Custom(Box<dyn error::Error + Send + Sync>),
 }
 
-/// The slot status enums
+/// The current status of a slot
 #[derive(Debug, Clone)]
 pub enum SlotStatus {
     /// The highest slot of the heaviest fork processed by the node. Ledger state at this slot is
