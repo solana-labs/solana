@@ -89,6 +89,7 @@ where
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
     )
+    .map(|(accounts_db, _)| accounts_db)
 }
 
 #[cfg(test)]
