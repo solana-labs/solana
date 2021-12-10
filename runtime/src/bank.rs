@@ -74,7 +74,10 @@ use {
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
     solana_program_runtime::{
         instruction_recorder::InstructionRecorder,
-        invoke_context::{BuiltinProgram, Executor, Executors, ProcessInstructionWithContext},
+        invoke_context::{
+            BuiltinProgram, Executor, Executors, ProcessInstructionWithContext,
+            TransactionAccountRefCells,
+        },
         log_collector::LogCollector,
         timings::ExecuteDetailsTimings,
     },
@@ -236,8 +239,6 @@ impl ExecuteTimings {
 type BankStatusCache = StatusCache<Result<()>>;
 #[frozen_abi(digest = "32EjVUc6shHHVPpsnBAVfyBziMgyFzH8qxisLwmwwdS1")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
-pub(crate) type TransactionAccountRefCell = (Pubkey, Rc<RefCell<AccountSharedData>>);
-type TransactionAccountRefCells = Vec<TransactionAccountRefCell>;
 
 // Eager rent collection repeats in cyclic manner.
 // Each cycle is composed of <partition_count> number of tiny pubkey subranges
