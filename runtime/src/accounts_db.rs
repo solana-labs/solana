@@ -7013,38 +7013,6 @@ impl AccountsDb {
             let mut accounts_data_len_dedup_timer =
                 Measure::start("handle accounts data len duplicates");
             if pass == 0 {
-                let pubkeys_to_accounts_data_len = |pubkeys: &[Pubkey]| {
-                    let mut accounts_data_len_from_duplicates = 0;
-                    pubkeys.iter().for_each(|pubkey| {
-                        if let Some(entry) = self.accounts_index.get_account_read_entry(pubkey) {
-                            let slot_list = entry.slot_list();
-                            if slot_list.len() < 2 {
-                                return;
-                            }
-                            let mut slot_list = slot_list.clone();
-                            slot_list.sort_unstable_by(|a, b| a.0.cmp(&b.0));
-                            assert!(slot_list[0].0 < slot_list[1].0);
-                            slot_list
-                                .into_iter()
-                                .rev()
-                                .skip(1)
-                                .for_each(|(slot, account_info)| {
-                                    let maybe_storage_entry = self
-                                        .storage
-                                        .get_account_storage_entry(slot, account_info.store_id);
-                                    let mut accessor = LoadedAccountAccessor::Stored(
-                                        maybe_storage_entry
-                                            .map(|entry| (entry, account_info.offset)),
-                                    );
-                                    let loaded_account = accessor.check_and_get_loaded_account();
-                                    let account = loaded_account.take_account();
-                                    accounts_data_len_from_duplicates += account.data().len();
-                                });
-                        }
-                    });
-                    accounts_data_len_from_duplicates as u64
-                };
-
                 let mut unique_pubkeys = HashSet::<Pubkey>::default();
                 self.uncleaned_pubkeys.iter().for_each(|entry| {
                     entry.value().iter().for_each(|pubkey| {
@@ -7055,7 +7023,7 @@ impl AccountsDb {
                     .into_iter()
                     .collect::<Vec<_>>()
                     .par_chunks(4096)
-                    .map(pubkeys_to_accounts_data_len)
+                    .map(|pubkeys| self.pubkeys_to_accounts_data_len(pubkeys))
                     .sum();
                 accounts_data_len.fetch_sub(accounts_data_len_from_duplicates, Ordering::Relaxed);
                 info!(
@@ -7107,6 +7075,38 @@ impl AccountsDb {
         IndexGenerationInfo {
             accounts_data_len: accounts_data_len.load(Ordering::Relaxed),
         }
+    }
+
+    /// Used during generate_index() to get the accounts data len from the given pubkeys
+    fn pubkeys_to_accounts_data_len(&self, pubkeys: &[Pubkey]) -> u64 {
+        let mut accounts_data_len_from_duplicates = 0;
+        pubkeys.iter().for_each(|pubkey| {
+            if let Some(entry) = self.accounts_index.get_account_read_entry(pubkey) {
+                let slot_list = entry.slot_list();
+                if slot_list.len() < 2 {
+                    return;
+                }
+                let mut slot_list = slot_list.clone();
+                slot_list.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+                assert!(slot_list[0].0 < slot_list[1].0);
+                slot_list
+                    .into_iter()
+                    .rev()
+                    .skip(1)
+                    .for_each(|(slot, account_info)| {
+                        let maybe_storage_entry = self
+                            .storage
+                            .get_account_storage_entry(slot, account_info.store_id);
+                        let mut accessor = LoadedAccountAccessor::Stored(
+                            maybe_storage_entry.map(|entry| (entry, account_info.offset)),
+                        );
+                        let loaded_account = accessor.check_and_get_loaded_account();
+                        let account = loaded_account.take_account();
+                        accounts_data_len_from_duplicates += account.data().len();
+                    });
+            }
+        });
+        accounts_data_len_from_duplicates as u64
     }
 
     fn update_storage_info(
