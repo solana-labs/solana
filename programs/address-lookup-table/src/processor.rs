@@ -196,7 +196,12 @@ impl Processor {
         drop(lookup_table_account_ref);
 
         lookup_table_meta.authority = None;
-        lookup_table_account.set_state(&ProgramState::LookupTable(lookup_table_meta))?;
+        AddressLookupTable::overwrite_meta_data(
+            lookup_table_account
+                .try_account_ref_mut()?
+                .data_as_mut_slice(),
+            lookup_table_meta,
+        )?;
 
         Ok(())
     }
@@ -277,20 +282,26 @@ impl Processor {
                 })?;
         }
 
+        let lookup_table_meta = lookup_table.meta;
+        drop(lookup_table_account_ref);
+
         let new_table_data_len = checked_add(
             LOOKUP_TABLE_META_SIZE,
             new_table_addresses_len.saturating_mul(PUBKEY_BYTES),
         )?;
-        let mut new_table_data = Vec::with_capacity(new_table_data_len);
-        lookup_table.serialize(&mut new_table_data)?;
-        for new_address in new_addresses {
-            new_table_data.extend_from_slice(new_address.as_ref());
-        }
 
-        drop(lookup_table_account_ref);
-        lookup_table_account
-            .try_account_ref_mut()?
-            .set_data(new_table_data);
+        {
+            let mut lookup_table_account_ref_mut = lookup_table_account.try_account_ref_mut()?;
+            AddressLookupTable::overwrite_meta_data(
+                lookup_table_account_ref_mut.data_as_mut_slice(),
+                lookup_table_meta,
+            )?;
+
+            let table_data = lookup_table_account_ref_mut.data_mut();
+            for new_address in new_addresses {
+                table_data.extend_from_slice(new_address.as_ref());
+            }
+        }
 
         let rent: Rent = invoke_context.get_sysvar(&rent::id())?;
         let required_lamports = rent

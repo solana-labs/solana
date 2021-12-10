@@ -24,7 +24,12 @@ async fn test_freeze_lookup_table() {
     let authority = Keypair::new();
     let mut initialized_table = new_address_lookup_table(Some(authority.pubkey()), 10);
     let lookup_table_address = Pubkey::new_unique();
-    add_lookup_table_account(&mut context, lookup_table_address, &initialized_table).await;
+    add_lookup_table_account(
+        &mut context,
+        lookup_table_address,
+        initialized_table.clone(),
+    )
+    .await;
 
     let client = &mut context.banks_client;
     let payer = &context.payer;
@@ -59,7 +64,7 @@ async fn test_freeze_immutable_lookup_table() {
 
     let initialized_table = new_address_lookup_table(None, 10);
     let lookup_table_address = Pubkey::new_unique();
-    add_lookup_table_account(&mut context, lookup_table_address, &initialized_table).await;
+    add_lookup_table_account(&mut context, lookup_table_address, initialized_table).await;
 
     let authority = Keypair::new();
     let ix = freeze_lookup_table(lookup_table_address, authority.pubkey());
@@ -81,7 +86,7 @@ async fn test_freeze_lookup_table_with_wrong_authority() {
     let wrong_authority = Keypair::new();
     let initialized_table = new_address_lookup_table(Some(authority.pubkey()), 10);
     let lookup_table_address = Pubkey::new_unique();
-    add_lookup_table_account(&mut context, lookup_table_address, &initialized_table).await;
+    add_lookup_table_account(&mut context, lookup_table_address, initialized_table).await;
 
     let ix = freeze_lookup_table(lookup_table_address, wrong_authority.pubkey());
 
@@ -101,7 +106,7 @@ async fn test_freeze_lookup_table_without_signing() {
     let authority = Keypair::new();
     let initialized_table = new_address_lookup_table(Some(authority.pubkey()), 10);
     let lookup_table_address = Pubkey::new_unique();
-    add_lookup_table_account(&mut context, lookup_table_address, &initialized_table).await;
+    add_lookup_table_account(&mut context, lookup_table_address, initialized_table).await;
 
     let mut ix = freeze_lookup_table(lookup_table_address, authority.pubkey());
     ix.accounts[1].is_signer = false;
@@ -122,7 +127,7 @@ async fn test_freeze_empty_lookup_table() {
     let authority = Keypair::new();
     let initialized_table = new_address_lookup_table(Some(authority.pubkey()), 0);
     let lookup_table_address = Pubkey::new_unique();
-    add_lookup_table_account(&mut context, lookup_table_address, &initialized_table).await;
+    add_lookup_table_account(&mut context, lookup_table_address, initialized_table).await;
 
     let ix = freeze_lookup_table(lookup_table_address, authority.pubkey());
 

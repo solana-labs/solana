@@ -2,7 +2,7 @@ use {
     crate::id,
     serde::{Deserialize, Serialize},
     solana_sdk::{
-        clock::{Epoch, Slot},
+        clock::Slot,
         instruction::{AccountMeta, Instruction},
         pubkey::Pubkey,
         system_program,
@@ -59,7 +59,7 @@ pub enum ProgramInstruction {
 /// Derives the address of an address table account from a wallet address and a recent block's slot.
 pub fn derive_lookup_table_address(
     authority_address: &Pubkey,
-    recent_block_slot: Epoch,
+    recent_block_slot: Slot,
 ) -> (Pubkey, u8) {
     Pubkey::find_program_address(
         &[authority_address.as_ref(), &recent_block_slot.to_le_bytes()],

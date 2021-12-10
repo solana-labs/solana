@@ -24,7 +24,7 @@ async fn test_close_lookup_table() {
     let authority_keypair = Keypair::new();
     let initialized_table = new_address_lookup_table(Some(authority_keypair.pubkey()), 0);
     let lookup_table_address = Pubkey::new_unique();
-    add_lookup_table_account(&mut context, lookup_table_address, &initialized_table).await;
+    add_lookup_table_account(&mut context, lookup_table_address, initialized_table).await;
 
     let client = &mut context.banks_client;
     let payer = &context.payer;
@@ -55,7 +55,7 @@ async fn test_close_lookup_table_too_recent() {
     let authority_keypair = Keypair::new();
     let initialized_table = new_address_lookup_table(Some(authority_keypair.pubkey()), 0);
     let lookup_table_address = Pubkey::new_unique();
-    add_lookup_table_account(&mut context, lookup_table_address, &initialized_table).await;
+    add_lookup_table_account(&mut context, lookup_table_address, initialized_table).await;
 
     let ix = close_lookup_table(
         lookup_table_address,
@@ -82,7 +82,7 @@ async fn test_close_immutable_lookup_table() {
 
     let initialized_table = new_address_lookup_table(None, 10);
     let lookup_table_address = Pubkey::new_unique();
-    add_lookup_table_account(&mut context, lookup_table_address, &initialized_table).await;
+    add_lookup_table_account(&mut context, lookup_table_address, initialized_table).await;
 
     let authority = Keypair::new();
     let ix = close_lookup_table(
@@ -108,7 +108,7 @@ async fn test_close_lookup_table_with_wrong_authority() {
     let wrong_authority = Keypair::new();
     let initialized_table = new_address_lookup_table(Some(authority.pubkey()), 10);
     let lookup_table_address = Pubkey::new_unique();
-    add_lookup_table_account(&mut context, lookup_table_address, &initialized_table).await;
+    add_lookup_table_account(&mut context, lookup_table_address, initialized_table).await;
 
     let ix = close_lookup_table(
         lookup_table_address,
@@ -132,7 +132,7 @@ async fn test_close_lookup_table_without_signing() {
     let authority = Keypair::new();
     let initialized_table = new_address_lookup_table(Some(authority.pubkey()), 10);
     let lookup_table_address = Pubkey::new_unique();
-    add_lookup_table_account(&mut context, lookup_table_address, &initialized_table).await;
+    add_lookup_table_account(&mut context, lookup_table_address, initialized_table).await;
 
     let mut ix = close_lookup_table(
         lookup_table_address,

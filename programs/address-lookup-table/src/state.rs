@@ -37,6 +37,8 @@ pub struct LookupTableMeta {
     pub last_extended_slot_start_index: u8,
     /// Authority address which must sign for each modification.
     pub authority: Option<Pubkey>,
+    // Padding to keep addresses 8-byte aligned
+    pub _padding: u16,
     // Raw list of addresses follows this serialized structure in
     // the account's data, starting from `LOOKUP_TABLE_META_SIZE`.
 }
@@ -46,8 +48,7 @@ impl LookupTableMeta {
         LookupTableMeta {
             derivation_slot,
             authority: Some(authority),
-            last_extended_slot: 0,
-            last_extended_slot_start_index: 0,
+            ..LookupTableMeta::default()
         }
     }
 }
@@ -59,15 +60,25 @@ pub struct AddressLookupTable<'a> {
 }
 
 impl<'a> AddressLookupTable<'a> {
+    /// Serialize an address table's updated meta data and zero
+    /// any leftover bytes.
+    pub fn overwrite_meta_data(
+        data: &mut [u8],
+        lookup_table_meta: LookupTableMeta,
+    ) -> Result<(), InstructionError> {
+        let meta_data = data
+            .get_mut(0..LOOKUP_TABLE_META_SIZE)
+            .ok_or(InstructionError::InvalidAccountData)?;
+        meta_data.fill(0);
+        bincode::serialize_into(meta_data, &ProgramState::LookupTable(lookup_table_meta))
+            .map_err(|_| InstructionError::GenericError)?;
+        Ok(())
+    }
+
     /// Serialize an address table including its addresses
-    pub fn serialize(&self, mut data: &mut Vec<u8>) -> Result<(), InstructionError> {
-        bincode::serialize_into(&mut data, &(1u32, &self.meta)).map_err(|_| {
-            // This should only fail if the length of `new_table_data`
-            // is less than the serialized size of lookup table metadata,
-            // but this invariant should be tested.
-            InstructionError::InvalidAccountData
-        })?;
+    pub fn serialize_for_tests(self, data: &mut Vec<u8>) -> Result<(), InstructionError> {
         data.resize(LOOKUP_TABLE_META_SIZE, 0);
+        Self::overwrite_meta_data(data, self.meta)?;
         self.addresses.iter().for_each(|address| {
             data.extend_from_slice(address.as_ref());
         });
@@ -132,16 +143,16 @@ mod tests {
         let lookup_table = ProgramState::LookupTable(LookupTableMeta::new_for_tests());
         let meta_size = bincode::serialized_size(&lookup_table).unwrap();
         assert!(meta_size as usize <= LOOKUP_TABLE_META_SIZE);
-        assert_eq!(meta_size as usize, 54);
+        assert_eq!(meta_size as usize, 56);
 
         let lookup_table = ProgramState::LookupTable(LookupTableMeta::default());
         let meta_size = bincode::serialized_size(&lookup_table).unwrap();
         assert!(meta_size as usize <= LOOKUP_TABLE_META_SIZE);
-        assert_eq!(meta_size as usize, 22);
+        assert_eq!(meta_size as usize, 24);
     }
 
     #[test]
-    fn test_serialize() {
+    fn test_overwrite_meta_data() {
         let meta = LookupTableMeta::new_for_tests();
         let empty_table = ProgramState::LookupTable(meta.clone());
         let mut serialized_table_1 = bincode::serialize(&empty_table).unwrap();
@@ -149,7 +160,9 @@ mod tests {
 
         let address_table = AddressLookupTable::new_for_tests(meta, 0);
         let mut serialized_table_2 = Vec::new();
-        address_table.serialize(&mut serialized_table_2).unwrap();
+        serialized_table_2.resize(LOOKUP_TABLE_META_SIZE, 0);
+        AddressLookupTable::overwrite_meta_data(&mut serialized_table_2, address_table.meta)
+            .unwrap();
 
         assert_eq!(serialized_table_1, serialized_table_2);
     }
@@ -170,7 +183,8 @@ mod tests {
             let lookup_table_meta = LookupTableMeta::new_for_tests();
             let address_table = AddressLookupTable::new_for_tests(lookup_table_meta, num_addresses);
             let mut address_table_data = Vec::new();
-            address_table.serialize(&mut address_table_data).unwrap();
+            AddressLookupTable::serialize_for_tests(address_table.clone(), &mut address_table_data)
+                .unwrap();
             assert_eq!(
                 AddressLookupTable::deserialize(&address_table_data).unwrap(),
                 address_table,

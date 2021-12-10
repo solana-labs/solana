@@ -103,7 +103,8 @@ async fn test_extend_lookup_table() {
 
             let lookup_table_address = Pubkey::new_unique();
             let lookup_table_account =
-                add_lookup_table_account(&mut context, lookup_table_address, &lookup_table).await;
+                add_lookup_table_account(&mut context, lookup_table_address, lookup_table.clone())
+                    .await;
 
             let mut new_addresses = Vec::with_capacity(num_new_addresses);
             new_addresses.resize_with(num_new_addresses, Pubkey::new_unique);
@@ -131,6 +132,7 @@ async fn test_extend_lookup_table() {
                         },
                         derivation_slot: lookup_table.meta.derivation_slot,
                         authority: lookup_table.meta.authority,
+                        _padding: 0u16,
                     },
                     addresses: Cow::Owned(expected_addresses),
                 };
@@ -175,7 +177,8 @@ async fn test_extend_addresses_authority_errors() {
     ] {
         let lookup_table = new_address_lookup_table(existing_authority, 0);
         let lookup_table_address = Pubkey::new_unique();
-        let _ = add_lookup_table_account(&mut context, lookup_table_address, &lookup_table).await;
+        let _ = add_lookup_table_account(&mut context, lookup_table_address, lookup_table.clone())
+            .await;
 
         let num_new_addresses = 1;
         let mut new_addresses = Vec::with_capacity(num_new_addresses);
