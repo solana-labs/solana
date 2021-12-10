@@ -471,6 +471,15 @@ impl Shred {
         self.common_header.fec_set_index
     }
 
+    pub(crate) fn first_coding_index(&self) -> Option<u32> {
+        match self.shred_type() {
+            ShredType::Data => None,
+            // TODO should be: self.index() - self.coding_header.position
+            // once position field is populated.
+            ShredType::Code => Some(self.fec_set_index()),
+        }
+    }
+
     // Returns true if the shred passes sanity checks.
     pub(crate) fn sanitize(&self) -> bool {
         self.erasure_block_index().is_some()
@@ -883,7 +892,7 @@ impl Shredder {
         assert_eq!(fec_set_index, index);
         assert!(data.iter().all(|shred| shred.common_header.slot == slot
             && shred.common_header.version == version
-            && shred.common_header.fec_set_index == fec_set_index));
+            && shred.fec_set_index() == fec_set_index));
         let num_data = data.len();
         let num_coding = if is_last_in_slot {
             (2 * MAX_DATA_SHREDS_PER_FEC_BLOCK as usize)
@@ -929,7 +938,7 @@ impl Shredder {
         Self::verify_consistent_shred_payload_sizes("try_recovery()", &shreds)?;
         let (slot, fec_set_index) = match shreds.first() {
             None => return Ok(Vec::default()),
-            Some(shred) => (shred.slot(), shred.common_header.fec_set_index),
+            Some(shred) => (shred.slot(), shred.fec_set_index()),
         };
         let (num_data_shreds, num_coding_shreds) = match shreds.iter().find(|shred| shred.is_code())
         {
@@ -939,9 +948,9 @@ impl Shredder {
                 shred.coding_header.num_coding_shreds,
             ),
         };
-        debug_assert!(shreds.iter().all(
-            |shred| shred.slot() == slot && shred.common_header.fec_set_index == fec_set_index
-        ));
+        debug_assert!(shreds
+            .iter()
+            .all(|shred| shred.slot() == slot && shred.fec_set_index() == fec_set_index));
         debug_assert!(shreds
             .iter()
             .filter(|shred| shred.is_code())
@@ -1784,7 +1793,7 @@ pub mod tests {
         let max_per_block = MAX_DATA_SHREDS_PER_FEC_BLOCK as usize;
         data_shreds.iter().enumerate().for_each(|(i, s)| {
             let expected_fec_set_index = start_index + ((i / max_per_block) * max_per_block) as u32;
-            assert_eq!(s.common_header.fec_set_index, expected_fec_set_index);
+            assert_eq!(s.fec_set_index(), expected_fec_set_index);
         });
 
         coding_shreds.iter().enumerate().for_each(|(i, s)| {
@@ -1792,7 +1801,7 @@ pub mod tests {
             while expected_fec_set_index as usize > data_shreds.len() {
                 expected_fec_set_index -= max_per_block as u32;
             }
-            assert_eq!(s.common_header.fec_set_index, expected_fec_set_index);
+            assert_eq!(s.fec_set_index(), expected_fec_set_index);
         });
     }
 
