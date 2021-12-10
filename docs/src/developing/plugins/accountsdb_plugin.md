@@ -23,7 +23,7 @@ implementation for the PostgreSQL database.
 
 ### Important Crates:
 
-- [`solana-accountsdb-plugin-interface`] &mdash; This crates defines the plugin
+- [`solana-accountsdb-plugin-interface`] &mdash; This crate defines the plugin
 interfaces.
 
 - [`solana-accountsdb-plugin-postgres`] &mdash; The crate for the referential
@@ -66,13 +66,13 @@ database. The plugin configuration file is specified by the validator's CLI
 parameter `--accountsdb-plugin-config` and the file must be readable to the
 validator process.
 
-Please see the below [example config file](#config) for the referential
-PostgreSQL plugin for an example.
+Please see the [config file](#config) for the referential
+PostgreSQL plugin below for an example.
 
 The plugin can implement the `on_unload` method to do any cleanup before the
 plugin is unloaded when the validator is gracefully shutdown.
 
-The following method is used for notifying accounts update:
+The following method is used for notifying on an account update:
 
 ```
     fn update_account(
@@ -83,7 +83,7 @@ The following method is used for notifying accounts update:
     ) -> Result<()>
 ```
 
-The `ReplicaAccountInfoVersions` contains the metadata and data of the account
+The `ReplicaAccountInfoVersions` struct contains the metadata and data of the account
 streamed. The `slot` points to the slot the account is being updated at. When
 `is_startup` is true, it indicates the account is loaded from snapshots when
 the validator starts up. When `is_startup` is false, the account is updated
