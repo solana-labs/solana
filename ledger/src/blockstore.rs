@@ -10,8 +10,11 @@ use {
             IteratorMode, LedgerColumn, Result, WriteBatch,
         },
         blockstore_meta::*,
+<<<<<<< HEAD
         entry::{create_ticks, Entry},
         erasure::ErasureConfig,
+=======
+>>>>>>> 49ba09b33 (adds back ErasureMeta::first_coding_index field (#21623))
         leader_schedule_cache::LeaderScheduleCache,
         next_slots_iterator::NextSlotsIterator,
         shred::{Result as ShredResult, Shred, ShredType, Shredder, SHRED_PAYLOAD_SIZE},
@@ -1063,21 +1066,16 @@ impl Blockstore {
             }
         }
 
-        let set_index = u64::from(shred.common_header.fec_set_index);
-        let erasure_config = ErasureConfig::new(
-            shred.coding_header.num_data_shreds as usize,
-            shred.coding_header.num_coding_shreds as usize,
-        );
-
+        let set_index = u64::from(shred.fec_set_index());
         let erasure_meta = erasure_metas.entry((slot, set_index)).or_insert_with(|| {
             self.erasure_meta(slot, set_index)
                 .expect("Expect database get to succeed")
-                .unwrap_or_else(|| ErasureMeta::new(set_index, erasure_config))
+                .unwrap_or_else(|| ErasureMeta::from_coding_shred(&shred).unwrap())
         });
 
         // TODO: handle_duplicate is not invoked and so duplicate shreds are
         // not gossiped to the rest of cluster.
-        if erasure_config != erasure_meta.config() {
+        if !erasure_meta.check_coding_shred(&shred) {
             metrics.num_coding_shreds_invalid_erasure_config += 1;
             let conflicting_shred = self.find_conflicting_coding_shred(
                 &shred,
@@ -1100,7 +1098,7 @@ impl Blockstore {
             warn!("Received multiple erasure configs for the same erasure set!!!");
             warn!(
                 "Slot: {}, shred index: {}, set_index: {}, is_duplicate: {}, stored config: {:#?}, new config: {:#?}",
-                slot, shred.index(), set_index, self.has_duplicate_shreds_in_slot(slot), erasure_meta.config(), erasure_config
+                slot, shred.index(), set_index, self.has_duplicate_shreds_in_slot(slot), erasure_meta.config(), shred.coding_header,
             );
 
             return false;
@@ -1230,7 +1228,7 @@ impl Blockstore {
             }
         }
 
-        let set_index = u64::from(shred.common_header.fec_set_index);
+        let set_index = u64::from(shred.fec_set_index());
         let newly_completed_data_sets = self.insert_data_shred(
             slot_meta,
             index_meta.data_mut(),
@@ -5466,6 +5464,7 @@ pub mod tests {
                 ShredSource::Recovered,
             ));
 
+<<<<<<< HEAD
             // Trying to insert another "is_last" shred with index < the received index should fail
             // skip over shred 7
             blockstore
@@ -5490,6 +5489,39 @@ pub mod tests {
                 ShredSource::Repaired,
             ));
             assert!(blockstore.has_duplicate_shreds_in_slot(0));
+=======
+        // Ensure that an empty shred (one with no data) would get inserted. Such shreds
+        // may be used as signals (broadcast does so to indicate a slot was interrupted)
+        // Reuse shred5's header values to avoid a false negative result
+        let mut empty_shred = Shred::new_from_data(
+            shred5.common_header.slot,
+            shred5.common_header.index,
+            shred5.data_header.parent_offset,
+            None, // data
+            true, // is_last_data
+            true, // is_last_in_slot
+            0,    // reference_tick
+            shred5.common_header.version,
+            shred5.fec_set_index(),
+        );
+        assert!(blockstore.should_insert_data_shred(
+            &empty_shred,
+            &slot_meta,
+            &HashMap::new(),
+            &last_root,
+            None,
+            ShredSource::Repaired,
+        ));
+        empty_shred.data_header.size = 0;
+        assert!(!blockstore.should_insert_data_shred(
+            &empty_shred,
+            &slot_meta,
+            &HashMap::new(),
+            &last_root,
+            None,
+            ShredSource::Recovered,
+        ));
+>>>>>>> 49ba09b33 (adds back ErasureMeta::first_coding_index field (#21623))
 
             // Insert all pending shreds
             let mut shred8 = shreds[8].clone();
@@ -5632,7 +5664,81 @@ pub mod tests {
                 coding.clone(),
             );
 
+<<<<<<< HEAD
             // Insert a good coding shred
+=======
+        // Trying to insert a shred with index < position should fail
+        {
+            let mut coding_shred = Shred::new_empty_from_header(
+                shred.clone(),
+                DataShredHeader::default(),
+                coding.clone(),
+            );
+            let index = coding_shred.index() - coding_shred.fec_set_index() - 1;
+            coding_shred.set_index(index as u32);
+
+            assert!(!Blockstore::should_insert_coding_shred(
+                &coding_shred,
+                &last_root
+            ));
+        }
+
+        // Trying to insert shred with num_coding == 0 should fail
+        {
+            let mut coding_shred = Shred::new_empty_from_header(
+                shred.clone(),
+                DataShredHeader::default(),
+                coding.clone(),
+            );
+            coding_shred.coding_header.num_coding_shreds = 0;
+            assert!(!Blockstore::should_insert_coding_shred(
+                &coding_shred,
+                &last_root
+            ));
+        }
+
+        // Trying to insert shred with pos >= num_coding should fail
+        {
+            let mut coding_shred = Shred::new_empty_from_header(
+                shred.clone(),
+                DataShredHeader::default(),
+                coding.clone(),
+            );
+            let num_coding_shreds = coding_shred.index() - coding_shred.fec_set_index();
+            coding_shred.coding_header.num_coding_shreds = num_coding_shreds as u16;
+            assert!(!Blockstore::should_insert_coding_shred(
+                &coding_shred,
+                &last_root
+            ));
+        }
+
+        // Trying to insert with set_index with num_coding that would imply the last shred
+        // has index > u32::MAX should fail
+        {
+            let mut coding_shred = Shred::new_empty_from_header(
+                shred.clone(),
+                DataShredHeader::default(),
+                coding.clone(),
+            );
+            coding_shred.common_header.fec_set_index = std::u32::MAX - 1;
+            coding_shred.coding_header.num_data_shreds = 2;
+            coding_shred.coding_header.num_coding_shreds = 3;
+            coding_shred.coding_header.position = 1;
+            coding_shred.common_header.index = std::u32::MAX - 1;
+            assert!(!Blockstore::should_insert_coding_shred(
+                &coding_shred,
+                &last_root
+            ));
+
+            coding_shred.coding_header.num_coding_shreds = 2000;
+            assert!(!Blockstore::should_insert_coding_shred(
+                &coding_shred,
+                &last_root
+            ));
+
+            // Decreasing the number of num_coding_shreds will put it within the allowed limit
+            coding_shred.coding_header.num_coding_shreds = 2;
+>>>>>>> 49ba09b33 (adds back ErasureMeta::first_coding_index field (#21623))
             assert!(Blockstore::should_insert_coding_shred(
                 &coding_shred,
                 &last_root
