@@ -5,15 +5,15 @@ title: AccountsDb Plugins
 Overview
 ========
 
-Validators under heavy RPC loads, such as when serving
-getProgramAccounts calls, can fall behind the network. To solve this problem,
-the validator has been enhanced to support a plugin mechanism through
-which the information about accounts and slots can be transmitted to external
-data stores such as relational databases, NoSQL databases or Kafka. RPC
-services then can be developed to consume data from these external data stores
-with the possibility of more flexible and targeted optimizations such as
-caching and indexing. This allows the validator to focus on processing
-transactions without being slowed down by busy RPC requests.
+Validators under heavy RPC loads, such as when serving getProgramAccounts calls,
+can fall behind the network. To solve this problem, the validator has been
+enhanced to support a plugin mechanism through which the information about
+accounts and slots can be transmitted to external data stores such as relational
+databases, NoSQL databases or Kafka. RPC services then can be developed to
+consume data from these external data stores with the possibility of more
+flexible and targeted optimizations such as caching and indexing. This allows
+the validator to focus on processing transactions without being slowed down by
+busy RPC requests.
 
 This document describes the interfaces of the plugin and the referential plugin
 implementation for the PostgreSQL database.
@@ -57,32 +57,17 @@ pub unsafe extern "C" fn _create_plugin() -> *mut dyn AccountsDbPlugin {
 ```
 
 A plugin implementation can implement the `on_load` method to initialize itself.
-This function is invoked after a plugin is dynamically loaded into the validator when it
-starts. The configuration of the plugin is controlled by a configuration file
-in JSON format. The JSON file must have a field `libpath` that points
+This function is invoked after a plugin is dynamically loaded into the validator
+when it starts. The configuration of the plugin is controlled by a configuration
+file in JSON format. The JSON file must have a field `libpath` that points
 to the full path name of the shared library implementing the plugin and the
 plugin can extend it with other configuration information such as connection
 parameters for the external database. The plugin configuration file is
 specified by the validator's CLI parameter `--accountsdb-plugin-config` and the
 file must be readable to the validator process.
 
-For example, the following is an example config file for the referential
-PostgreSQL plugin:
-
-```
-{
-	"libpath": "/solana/target/release/libsolana_accountsdb_plugin_postgres.so",
-	"host": "my-postgres-host",
-	"user": "solana",
-	"port": 5433,
-	"threads": 20,
-	"batch_size": 20,
-	"panic_on_db_errors": true,
-	"accounts_selector" : {
-           "accounts" : ["*"]
-    }
-}
-```
+Please see the below [example config file](#config) for the referential
+PostgreSQL plugin for an example.
 
 The plugin can implement the `on_unload` method to do any cleanup before the
 plugin is unloaded when the validator is gracefully shutdown.
@@ -136,16 +121,19 @@ For more details, please refer to the Rust documentation in
 [`solana-accountsdb-plugin-interface`].
 
 Example PostgreSQL Plugin
-=====================
+=========================
 
 The [`solana-accountsdb-plugin-postgres`] crate implements a plugin storing
 account data to a PostgreSQL database to illustrate how a plugin can be
 developed.
 
+<a name="config">
 ## Configuration File Format
+</a>
 
 The plugin is configured using the input configuration file. An example
 configuration file looks like the following:
+
 
 ```
 {
@@ -303,7 +291,8 @@ Then run the script:
 psql -U solana -p 5433 -h 10.138.0.9 -w -d solana -f create_schema.sql
 ```
 
-After this, it is ready to start the validator with the plugin by using the `--accountsdb-plugin-config` argument mentioned above.
+After this, it is ready to start the validator with the plugin by using the
+`--accountsdb-plugin-config` argument mentioned above.
 
 ### Destroy the Schema Objects
 
@@ -317,7 +306,8 @@ psql -U solana -p 5433 -h 10.138.0.9 -w -d solana -f drop_schema.sql
 
 ## Capture Historical Account Data
 
-The account historical data is captured using a database trigger as shown in `create_schema.sql`,
+The account historical data is captured using a database trigger as shown in
+`create_schema.sql`,
 
 ```
 CREATE FUNCTION audit_account_update() RETURNS trigger AS $audit_account_update$
