@@ -18,8 +18,8 @@ use {
     solana_sdk::{
         instruction::CompiledInstruction,
         message::{
-            v0::{self, AddressMapIndexes},
-            MappedAddresses, MappedMessage, Message, MessageHeader, SanitizedMessage,
+            v0::{self, LoadedAddresses, MessageAddressTableLookup},
+            Message, MessageHeader, SanitizedMessage,
         },
         transaction::TransactionError,
     },
@@ -105,10 +105,11 @@ pub struct DbTransactionMessage {
 }
 
 #[derive(Clone, Debug, ToSql)]
-#[postgres(name = "AddressMapIndexes")]
-pub struct DbAddressMapIndexes {
-    pub writable: Vec<i16>,
-    pub readonly: Vec<i16>,
+#[postgres(name = "TransactionMessageAddressTableLookup")]
+pub struct DbTransactionMessageAddressTableLookup {
+    pub account_key: Vec<u8>,
+    pub writable_indexes: Vec<i16>,
+    pub readonly_indexes: Vec<i16>,
 }
 
 #[derive(Clone, Debug, ToSql)]
@@ -118,21 +119,21 @@ pub struct DbTransactionMessageV0 {
     pub account_keys: Vec<Vec<u8>>,
     pub recent_blockhash: Vec<u8>,
     pub instructions: Vec<DbCompiledInstruction>,
-    pub address_map_indexes: Vec<DbAddressMapIndexes>,
+    pub address_table_lookups: Vec<DbTransactionMessageAddressTableLookup>,
 }
 
 #[derive(Clone, Debug, ToSql)]
-#[postgres(name = "MappedAddresses")]
-pub struct DbMappedAddresses {
+#[postgres(name = "LoadedAddresses")]
+pub struct DbLoadedAddresses {
     pub writable: Vec<Vec<u8>>,
     pub readonly: Vec<Vec<u8>>,
 }
 
 #[derive(Clone, Debug, ToSql)]
-#[postgres(name = "MappedMessage")]
-pub struct DbMappedMessage {
+#[postgres(name = "LoadedMessageV0")]
+pub struct DbLoadedMessageV0 {
     pub message: DbTransactionMessageV0,
-    pub mapped_addresses: DbMappedAddresses,
+    pub loaded_addresses: DbLoadedAddresses,
 }
 
 pub struct DbTransaction {
@@ -141,7 +142,7 @@ pub struct DbTransaction {
     pub slot: i64,
     pub message_type: i16,
     pub legacy_message: Option<DbTransactionMessage>,
-    pub v0_mapped_message: Option<DbMappedMessage>,
+    pub v0_loaded_message: Option<DbLoadedMessageV0>,
     pub message_hash: Vec<u8>,
     pub meta: DbTransactionStatusMeta,
     pub signatures: Vec<Vec<u8>>,
@@ -151,32 +152,33 @@ pub struct LogTransactionRequest {
     pub transaction_info: DbTransaction,
 }
 
-impl From<&AddressMapIndexes> for DbAddressMapIndexes {
-    fn from(address_map_indexes: &AddressMapIndexes) -> Self {
+impl From<&MessageAddressTableLookup> for DbTransactionMessageAddressTableLookup {
+    fn from(address_table_lookup: &MessageAddressTableLookup) -> Self {
         Self {
-            writable: address_map_indexes
-                .writable
+            account_key: address_table_lookup.account_key.as_ref().to_vec(),
+            writable_indexes: address_table_lookup
+                .writable_indexes
                 .iter()
-                .map(|address_idx| *address_idx as i16)
+                .map(|idx| *idx as i16)
                 .collect(),
-            readonly: address_map_indexes
-                .readonly
+            readonly_indexes: address_table_lookup
+                .readonly_indexes
                 .iter()
-                .map(|address_idx| *address_idx as i16)
+                .map(|idx| *idx as i16)
                 .collect(),
         }
     }
 }
 
-impl From<&MappedAddresses> for DbMappedAddresses {
-    fn from(mapped_addresses: &MappedAddresses) -> Self {
+impl From<&LoadedAddresses> for DbLoadedAddresses {
+    fn from(loaded_addresses: &LoadedAddresses) -> Self {
         Self {
-            writable: mapped_addresses
+            writable: loaded_addresses
                 .writable
                 .iter()
                 .map(|pubkey| pubkey.as_ref().to_vec())
                 .collect(),
-            readonly: mapped_addresses
+            readonly: loaded_addresses
                 .readonly
                 .iter()
                 .map(|pubkey| pubkey.as_ref().to_vec())
@@ -243,20 +245,20 @@ impl From<&v0::Message> for DbTransactionMessageV0 {
                 .iter()
                 .map(DbCompiledInstruction::from)
                 .collect(),
-            address_map_indexes: message
-                .address_map_indexes
+            address_table_lookups: message
+                .address_table_lookups
                 .iter()
-                .map(DbAddressMapIndexes::from)
+                .map(DbTransactionMessageAddressTableLookup::from)
                 .collect(),
         }
     }
 }
 
-impl From<&MappedMessage> for DbMappedMessage {
-    fn from(message: &MappedMessage) -> Self {
+impl From<&v0::LoadedMessage> for DbLoadedMessageV0 {
+    fn from(message: &v0::LoadedMessage) -> Self {
         Self {
             message: DbTransactionMessageV0::from(&message.message),
-            mapped_addresses: DbMappedAddresses::from(&message.mapped_addresses),
+            loaded_addresses: DbLoadedAddresses::from(&message.loaded_addresses),
         }
     }
 }
@@ -460,8 +462,8 @@ fn build_db_transaction(slot: u64, transaction_info: &ReplicaTransactionInfo) ->
             }
             _ => None,
         },
-        v0_mapped_message: match transaction_info.transaction.message() {
-            SanitizedMessage::V0(mapped_message) => Some(DbMappedMessage::from(mapped_message)),
+        v0_loaded_message: match transaction_info.transaction.message() {
+            SanitizedMessage::V0(loaded_message) => Some(DbLoadedMessageV0::from(loaded_message)),
             _ => None,
         },
         signatures: transaction_info
@@ -485,7 +487,7 @@ impl SimplePostgresClient {
         config: &AccountsDbPluginPostgresConfig,
     ) -> Result<Statement, AccountsDbPluginError> {
         let stmt = "INSERT INTO transaction AS txn (signature, is_vote, slot, message_type, legacy_message, \
-        v0_mapped_message, signatures, message_hash, meta, updated_on) \
+        v0_loaded_message, signatures, message_hash, meta, updated_on) \
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)";
 
         let stmt = client.prepare(stmt);
@@ -521,7 +523,7 @@ impl SimplePostgresClient {
                 &transaction_info.slot,
                 &transaction_info.message_type,
                 &transaction_info.legacy_message,
-                &transaction_info.v0_mapped_message,
+                &transaction_info.v0_loaded_message,
                 &transaction_info.signatures,
                 &transaction_info.message_hash,
                 &transaction_info.meta,
@@ -670,42 +672,44 @@ pub(crate) mod tests {
         check_inner_instructions_equality(&inner_instructions, &db_inner_instructions);
     }
 
-    fn check_address_map_indexes_equality(
-        address_map_indexes: &AddressMapIndexes,
-        db_address_map_indexes: &DbAddressMapIndexes,
+    fn check_address_table_lookups_equality(
+        address_table_lookups: &MessageAddressTableLookup,
+        db_address_table_lookups: &DbTransactionMessageAddressTableLookup,
     ) {
         assert_eq!(
-            address_map_indexes.writable.len(),
-            db_address_map_indexes.writable.len()
+            address_table_lookups.writable_indexes.len(),
+            db_address_table_lookups.writable_indexes.len()
         );
         assert_eq!(
-            address_map_indexes.readonly.len(),
-            db_address_map_indexes.readonly.len()
+            address_table_lookups.readonly_indexes.len(),
+            db_address_table_lookups.readonly_indexes.len()
         );
 
-        for i in 0..address_map_indexes.writable.len() {
+        for i in 0..address_table_lookups.writable_indexes.len() {
             assert_eq!(
-                address_map_indexes.writable[i],
-                db_address_map_indexes.writable[i] as u8
+                address_table_lookups.writable_indexes[i],
+                db_address_table_lookups.writable_indexes[i] as u8
             )
         }
-        for i in 0..address_map_indexes.readonly.len() {
+        for i in 0..address_table_lookups.readonly_indexes.len() {
             assert_eq!(
-                address_map_indexes.readonly[i],
-                db_address_map_indexes.readonly[i] as u8
+                address_table_lookups.readonly_indexes[i],
+                db_address_table_lookups.readonly_indexes[i] as u8
             )
         }
     }
 
     #[test]
-    fn test_transform_address_map_indexes() {
-        let address_map_indexes = AddressMapIndexes {
-            writable: vec![1, 2, 3],
-            readonly: vec![4, 5, 6],
+    fn test_transform_address_table_lookups() {
+        let address_table_lookups = MessageAddressTableLookup {
+            account_key: Pubkey::new_unique(),
+            writable_indexes: vec![1, 2, 3],
+            readonly_indexes: vec![4, 5, 6],
         };
 
-        let db_address_map_indexes = DbAddressMapIndexes::from(&address_map_indexes);
-        check_address_map_indexes_equality(&address_map_indexes, &db_address_map_indexes);
+        let db_address_table_lookups =
+            DbTransactionMessageAddressTableLookup::from(&address_table_lookups);
+        check_address_table_lookups_equality(&address_table_lookups, &db_address_table_lookups);
     }
 
     fn check_reward_equality(reward: &Reward, db_reward: &DbReward) {
@@ -1089,7 +1093,7 @@ pub(crate) mod tests {
         check_transaction_message_equality(&message, &db_message);
     }
 
-    fn check_transaction_messagev0_equality(
+    fn check_transaction_message_v0_equality(
         message: &v0::Message,
         db_message: &DbTransactionMessageV0,
     ) {
@@ -1106,18 +1110,18 @@ pub(crate) mod tests {
             );
         }
         assert_eq!(
-            message.address_map_indexes.len(),
-            db_message.address_map_indexes.len()
+            message.address_table_lookups.len(),
+            db_message.address_table_lookups.len()
         );
-        for i in 0..message.address_map_indexes.len() {
-            check_address_map_indexes_equality(
-                &message.address_map_indexes[i],
-                &db_message.address_map_indexes[i],
+        for i in 0..message.address_table_lookups.len() {
+            check_address_table_lookups_equality(
+                &message.address_table_lookups[i],
+                &db_message.address_table_lookups[i],
             );
         }
     }
 
-    fn build_transaction_messagev0() -> v0::Message {
+    fn build_transaction_message_v0() -> v0::Message {
         v0::Message {
             header: MessageHeader {
                 num_readonly_signed_accounts: 2,
@@ -1144,71 +1148,76 @@ pub(crate) mod tests {
                     data: vec![14, 15, 16],
                 },
             ],
-            address_map_indexes: vec![
-                AddressMapIndexes {
-                    writable: vec![0],
-                    readonly: vec![1, 2],
+            address_table_lookups: vec![
+                MessageAddressTableLookup {
+                    account_key: Pubkey::new_unique(),
+                    writable_indexes: vec![0],
+                    readonly_indexes: vec![1, 2],
                 },
-                AddressMapIndexes {
-                    writable: vec![1],
-                    readonly: vec![0, 2],
+                MessageAddressTableLookup {
+                    account_key: Pubkey::new_unique(),
+                    writable_indexes: vec![1],
+                    readonly_indexes: vec![0, 2],
                 },
             ],
         }
     }
 
     #[test]
-    fn test_transform_transaction_messagev0() {
-        let message = build_transaction_messagev0();
+    fn test_transform_transaction_message_v0() {
+        let message = build_transaction_message_v0();
 
         let db_message = DbTransactionMessageV0::from(&message);
-        check_transaction_messagev0_equality(&message, &db_message);
+        check_transaction_message_v0_equality(&message, &db_message);
     }
 
-    fn check_mapped_addresses(
-        mapped_addresses: &MappedAddresses,
-        db_mapped_addresses: &DbMappedAddresses,
+    fn check_loaded_addresses(
+        loaded_addresses: &LoadedAddresses,
+        db_loaded_addresses: &DbLoadedAddresses,
     ) {
         assert_eq!(
-            mapped_addresses.writable.len(),
-            db_mapped_addresses.writable.len()
+            loaded_addresses.writable.len(),
+            db_loaded_addresses.writable.len()
         );
-        for i in 0..mapped_addresses.writable.len() {
+        for i in 0..loaded_addresses.writable.len() {
             assert_eq!(
-                mapped_addresses.writable[i].as_ref(),
-                db_mapped_addresses.writable[i]
+                loaded_addresses.writable[i].as_ref(),
+                db_loaded_addresses.writable[i]
             );
         }
 
         assert_eq!(
-            mapped_addresses.readonly.len(),
-            db_mapped_addresses.readonly.len()
+            loaded_addresses.readonly.len(),
+            db_loaded_addresses.readonly.len()
         );
-        for i in 0..mapped_addresses.readonly.len() {
+        for i in 0..loaded_addresses.readonly.len() {
             assert_eq!(
-                mapped_addresses.readonly[i].as_ref(),
-                db_mapped_addresses.readonly[i]
+                loaded_addresses.readonly[i].as_ref(),
+                db_loaded_addresses.readonly[i]
             );
         }
     }
 
-    fn check_mapped_message_equality(message: &MappedMessage, db_message: &DbMappedMessage) {
-        check_transaction_messagev0_equality(&message.message, &db_message.message);
-        check_mapped_addresses(&message.mapped_addresses, &db_message.mapped_addresses);
+    fn check_loaded_message_v0_equality(
+        message: &v0::LoadedMessage,
+        db_message: &DbLoadedMessageV0,
+    ) {
+        check_transaction_message_v0_equality(&message.message, &db_message.message);
+        check_loaded_addresses(&message.loaded_addresses, &db_message.loaded_addresses);
     }
 
     #[test]
-    fn test_transform_mapped_message() {
-        let message = MappedMessage {
-            message: build_transaction_messagev0(),
-            mapped_addresses: MappedAddresses {
+    fn test_transform_loaded_message_v0() {
+        let message = v0::LoadedMessage {
+            message: build_transaction_message_v0(),
+            loaded_addresses: LoadedAddresses {
                 writable: vec![Pubkey::new_unique(), Pubkey::new_unique()],
                 readonly: vec![Pubkey::new_unique(), Pubkey::new_unique()],
             },
         };
 
-        let db_message = DbMappedMessage::from(&message);
-        check_mapped_message_equality(&message, &db_message);
+        let db_message = DbLoadedMessageV0::from(&message);
+        check_loaded_message_v0_equality(&message, &db_message);
     }
 
     fn check_transaction(
@@ -1229,9 +1238,9 @@ pub(crate) mod tests {
             }
             SanitizedMessage::V0(message) => {
                 assert_eq!(db_transaction.message_type, 1);
-                check_mapped_message_equality(
+                check_loaded_message_v0_equality(
                     message,
-                    db_transaction.v0_mapped_message.as_ref().unwrap(),
+                    db_transaction.v0_loaded_message.as_ref().unwrap(),
                 );
             }
         }
@@ -1298,7 +1307,7 @@ pub(crate) mod tests {
                 Signature::new(&[2u8; 64]),
                 Signature::new(&[3u8; 64]),
             ],
-            message: VersionedMessage::V0(build_transaction_messagev0()),
+            message: VersionedMessage::V0(build_transaction_message_v0()),
         }
     }
 
@@ -1313,7 +1322,7 @@ pub(crate) mod tests {
 
         let transaction =
             SanitizedTransaction::try_create(transaction, message_hash, Some(true), |_message| {
-                Ok(MappedAddresses {
+                Ok(LoadedAddresses {
                     writable: vec![Pubkey::new_unique(), Pubkey::new_unique()],
                     readonly: vec![Pubkey::new_unique(), Pubkey::new_unique()],
                 })
