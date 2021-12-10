@@ -7090,14 +7090,14 @@ impl AccountsDb {
                 // duplicates.  So sort the slot list in descending slot order, skip the first
                 // item, then sum up the remaining data len, which are the duplicates.
                 let mut slot_list = slot_list.clone();
-                slot_list.sort_unstable_by(|a, b| b.0.cmp(&a.0));
                 slot_list
-                    .into_iter()
-                    .skip(1)
+                    .select_nth_unstable_by(0, |a, b| b.0.cmp(&a.0))
+                    .2
+                    .iter()
                     .for_each(|(slot, account_info)| {
                         let maybe_storage_entry = self
                             .storage
-                            .get_account_storage_entry(slot, account_info.store_id);
+                            .get_account_storage_entry(*slot, account_info.store_id);
                         let mut accessor = LoadedAccountAccessor::Stored(
                             maybe_storage_entry.map(|entry| (entry, account_info.offset)),
                         );
