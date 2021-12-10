@@ -121,7 +121,7 @@ use {
         slot_hashes::SlotHashes,
         slot_history::SlotHistory,
         system_transaction,
-        sysvar::{self},
+        sysvar::{self, Sysvar, SysvarId},
         timing::years_as_slots,
         transaction::{
             Result, SanitizedTransaction, Transaction, TransactionError,
@@ -1893,6 +1893,18 @@ impl Bank {
         self.update_sysvar_account(&sysvar::clock::id(), |account| {
             create_account(
                 &clock,
+                self.inherit_specially_retained_account_fields(account),
+            )
+        });
+    }
+
+    pub fn set_sysvar_for_tests<T>(&self, sysvar: &T)
+    where
+        T: Sysvar + SysvarId,
+    {
+        self.update_sysvar_account(&T::id(), |account| {
+            create_account(
+                sysvar,
                 self.inherit_specially_retained_account_fields(account),
             )
         });
