@@ -282,7 +282,7 @@ pub struct ThisInvokeContext<'a> {
     invoke_stack: Vec<InvokeContextStackFrame<'a>>,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
-    accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+    accounts: &'a [TransactionAccountRefCell],
     programs: &'a [(Pubkey, ProcessInstructionWithContext)],
     logger: Rc<RefCell<dyn Logger>>,
     bpf_compute_budget: BpfComputeBudget,
@@ -305,8 +305,8 @@ impl<'a> ThisInvokeContext<'a> {
         rent: Rent,
         message: &'a Message,
         instruction: &'a CompiledInstruction,
-        executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        executable_accounts: &'a [TransactionAccountRefCell],
+        accounts: &'a [TransactionAccountRefCell],
         programs: &'a [(Pubkey, ProcessInstructionWithContext)],
         log_collector: Option<Rc<LogCollector>>,
         bpf_compute_budget: BpfComputeBudget,
@@ -422,7 +422,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn verify_and_update(
         &mut self,
         instruction: &CompiledInstruction,
-        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        accounts: &[TransactionAccountRefCell],
         write_privileges: &[bool],
     ) -> Result<(), InstructionError> {
         let stack_frame = self
@@ -645,8 +645,8 @@ impl MessageProcessor {
     fn create_keyed_accounts<'a>(
         message: &'a Message,
         instruction: &'a CompiledInstruction,
-        executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        executable_accounts: &'a [TransactionAccountRefCell],
+        accounts: &'a [TransactionAccountRefCell],
         demote_program_write_locks: bool,
     ) -> Vec<(bool, bool, &'a Pubkey, &'a RefCell<AccountSharedData>)> {
         executable_accounts
@@ -973,8 +973,8 @@ impl MessageProcessor {
     /// This method calls the instruction's program entrypoint function
     pub fn process_cross_program_instruction(
         message: &Message,
-        executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        executable_accounts: &[TransactionAccountRefCell],
+        accounts: &[TransactionAccountRefCell],
         caller_write_privileges: &[bool],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
@@ -1033,7 +1033,7 @@ impl MessageProcessor {
     pub fn create_pre_accounts(
         message: &Message,
         instruction: &CompiledInstruction,
-        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        accounts: &[TransactionAccountRefCell],
     ) -> Vec<PreAccount> {
         let mut pre_accounts = Vec::with_capacity(instruction.accounts.len());
         {
@@ -1052,7 +1052,7 @@ impl MessageProcessor {
 
     /// Verify there are no outstanding borrows
     pub fn verify_account_references(
-        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        accounts: &[TransactionAccountRefCell],
     ) -> Result<(), InstructionError> {
         for (_, account) in accounts.iter() {
             account
@@ -1068,8 +1068,8 @@ impl MessageProcessor {
         message: &Message,
         instruction: &CompiledInstruction,
         pre_accounts: &[PreAccount],
-        executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        executable_accounts: &[TransactionAccountRefCell],
+        accounts: &[TransactionAccountRefCell],
         rent: &Rent,
         timings: &mut ExecuteDetailsTimings,
         logger: Rc<RefCell<dyn Logger>>,
@@ -1130,7 +1130,7 @@ impl MessageProcessor {
     fn verify_and_update(
         instruction: &CompiledInstruction,
         pre_accounts: &mut [PreAccount],
-        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        accounts: &[TransactionAccountRefCell],
         program_id: &Pubkey,
         rent: &Rent,
         write_privileges: &[bool],
@@ -1198,8 +1198,8 @@ impl MessageProcessor {
         &self,
         message: &Message,
         instruction: &CompiledInstruction,
-        executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        executable_accounts: &[TransactionAccountRefCell],
+        accounts: &[TransactionAccountRefCell],
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
@@ -1299,7 +1299,7 @@ impl MessageProcessor {
     pub fn process_message(
         &self,
         message: &Message,
-        loaders: &[Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>],
+        loaders: &[Vec<TransactionAccountRefCell>],
         accounts: &[TransactionAccountRefCell],
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
