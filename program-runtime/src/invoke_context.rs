@@ -25,6 +25,9 @@ use {
     std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, sync::Arc},
 };
 
+pub type TransactionAccountRefCell = (Pubkey, Rc<RefCell<AccountSharedData>>);
+pub type TransactionAccountRefCells = Vec<TransactionAccountRefCell>;
+
 pub type ProcessInstructionWithContext =
     fn(usize, &[u8], &mut InvokeContext) -> Result<(), InstructionError>;
 
@@ -138,7 +141,7 @@ pub struct InvokeContext<'a> {
     invoke_stack: Vec<StackFrame<'a>>,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
-    accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+    accounts: &'a [TransactionAccountRefCell],
     builtin_programs: &'a [BuiltinProgram],
     pub sysvars: &'a [(Pubkey, Vec<u8>)],
     log_collector: Option<Rc<RefCell<LogCollector>>>,
@@ -158,7 +161,7 @@ impl<'a> InvokeContext<'a> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         rent: Rent,
-        accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        accounts: &'a [TransactionAccountRefCell],
         builtin_programs: &'a [BuiltinProgram],
         sysvars: &'a [(Pubkey, Vec<u8>)],
         log_collector: Option<Rc<RefCell<LogCollector>>>,
@@ -190,7 +193,7 @@ impl<'a> InvokeContext<'a> {
     }
 
     pub fn new_mock(
-        accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        accounts: &'a [TransactionAccountRefCell],
         builtin_programs: &'a [BuiltinProgram],
     ) -> Self {
         Self::new(
@@ -828,7 +831,7 @@ impl<'a> InvokeContext<'a> {
 }
 
 pub struct MockInvokeContextPreparation {
-    pub accounts: Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
+    pub accounts: TransactionAccountRefCells,
     pub message: Message,
     pub account_indices: Vec<usize>,
 }
@@ -839,10 +842,7 @@ pub fn prepare_mock_invoke_context(
     keyed_accounts: &[(bool, bool, Pubkey, Rc<RefCell<AccountSharedData>>)],
 ) -> MockInvokeContextPreparation {
     #[allow(clippy::type_complexity)]
-    let (accounts, mut metas): (
-        Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
-        Vec<AccountMeta>,
-    ) = keyed_accounts
+    let (accounts, mut metas): (TransactionAccountRefCells, Vec<AccountMeta>) = keyed_accounts
         .iter()
         .map(|(is_signer, is_writable, pubkey, account)| {
             (
