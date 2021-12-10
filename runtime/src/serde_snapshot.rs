@@ -536,7 +536,7 @@ where
         })
         .unwrap();
 
-    accounts_db.generate_index(
+    let _ = accounts_db.generate_index(
         limit_load_slot_count_from_snapshot,
         verify_index,
         genesis_config,

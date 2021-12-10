@@ -2,7 +2,7 @@
 //! Defines a composable Instruction type and a memory-efficient CompiledInstruction.
 
 use {
-    crate::{pubkey::Pubkey, sanitize::Sanitize, short_vec},
+    crate::{pubkey::Pubkey, sanitize::Sanitize, short_vec, wasm_bindgen},
     bincode::serialize,
     borsh::BorshSerialize,
     serde::Serialize,
@@ -240,13 +240,17 @@ pub enum InstructionError {
     // conversions must also be added
 }
 
+#[wasm_bindgen]
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct Instruction {
     /// Pubkey of the instruction processor that executes this instruction
+    #[wasm_bindgen(skip)]
     pub program_id: Pubkey,
     /// Metadata for what accounts should be passed to the instruction processor
+    #[wasm_bindgen(skip)]
     pub accounts: Vec<AccountMeta>,
     /// Opaque data passed to the instruction processor
+    #[wasm_bindgen(skip)]
     pub data: Vec<u8>,
 }
 

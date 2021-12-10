@@ -220,6 +220,13 @@ pub struct ErrorCounters {
     pub invalid_writable_account: usize,
 }
 
+#[derive(Debug, Default, Clone, Copy)]
+struct SlotIndexGenerationInfo {
+    insert_time_us: u64,
+    num_accounts: u64,
+    num_accounts_rent_exempt: u64,
+}
+
 #[derive(Default, Debug)]
 struct GenerateIndexTimings {
     pub index_time: u64,
@@ -6657,21 +6664,20 @@ impl AccountsDb {
         accounts_map
     }
 
-    /// return time_us, # accts rent exempt, total # accts
     fn generate_index_for_slot<'a>(
         &self,
         accounts_map: GenerateIndexAccountsMap<'a>,
         slot: &Slot,
         rent_collector: &RentCollector,
-    ) -> (u64, u64, u64) {
+    ) -> SlotIndexGenerationInfo {
         if accounts_map.is_empty() {
-            return (0, 0, 0);
+            return SlotIndexGenerationInfo::default();
         }
 
         let secondary = !self.account_indexes.is_empty();
 
-        let mut rent_exempt = 0;
-        let len = accounts_map.len();
+        let mut num_accounts_rent_exempt = 0;
+        let num_accounts = accounts_map.len();
         let items = accounts_map.into_iter().map(
             |(
                 pubkey,
@@ -6694,7 +6700,7 @@ impl AccountsDb {
                     let (_rent_due, exempt) = rent_collector.get_rent_due(&stored_account);
                     exempt
                 } {
-                    rent_exempt += 1;
+                    num_accounts_rent_exempt += 1;
                 }
 
                 (
@@ -6709,9 +6715,9 @@ impl AccountsDb {
             },
         );
 
-        let (dirty_pubkeys, insert_us) = self
+        let (dirty_pubkeys, insert_time_us) = self
             .accounts_index
-            .insert_new_if_missing_into_primary_index(*slot, len, items);
+            .insert_new_if_missing_into_primary_index(*slot, num_accounts, items);
 
         // dirty_pubkeys will contain a pubkey if an item has multiple rooted entries for
         // a given pubkey. If there is just a single item, there is no cleaning to
@@ -6719,7 +6725,11 @@ impl AccountsDb {
         if !dirty_pubkeys.is_empty() {
             self.uncleaned_pubkeys.insert(*slot, dirty_pubkeys);
         }
-        (insert_us, rent_exempt, len as u64)
+        SlotIndexGenerationInfo {
+            insert_time_us,
+            num_accounts: num_accounts as u64,
+            num_accounts_rent_exempt,
+        }
     }
 
     fn filler_unique_id_bytes() -> usize {
@@ -6798,51 +6808,49 @@ impl AccountsDb {
                 .skip(pass * per_pass)
                 .take(per_pass)
                 .collect::<Vec<_>>();
-            self.thread_pool.install(|| {
-                roots_in_this_pass.into_par_iter().for_each(|slot| {
-                    let storage_maps: Vec<Arc<AccountStorageEntry>> = self
-                        .storage
-                        .get_slot_storage_entries(*slot)
-                        .unwrap_or_default();
-                    if storage_maps.is_empty() {
-                        return;
-                    }
+            roots_in_this_pass.into_par_iter().for_each(|slot| {
+                let storage_maps: Vec<Arc<AccountStorageEntry>> = self
+                    .storage
+                    .get_slot_storage_entries(*slot)
+                    .unwrap_or_default();
+                if storage_maps.is_empty() {
+                    return;
+                }
 
-                    let partition = crate::bank::Bank::variable_cycle_partition_from_previous_slot(
-                        epoch_schedule,
-                        *slot,
-                    );
-                    let subrange = crate::bank::Bank::pubkey_range_from_partition(partition);
+                let partition = crate::bank::Bank::variable_cycle_partition_from_previous_slot(
+                    epoch_schedule,
+                    *slot,
+                );
+                let subrange = crate::bank::Bank::pubkey_range_from_partition(partition);
 
-                    let idx = overall_index.fetch_add(1, Ordering::Relaxed);
-                    let filler_entries = (idx + 1) * self.filler_account_count / root_count
-                        - idx * self.filler_account_count / root_count;
-                    let accounts = (0..filler_entries)
-                        .map(|_| {
-                            let my_id = added.fetch_add(1, Ordering::Relaxed);
-                            let my_id_bytes = u32::to_be_bytes(my_id as u32);
+                let idx = overall_index.fetch_add(1, Ordering::Relaxed);
+                let filler_entries = (idx + 1) * self.filler_account_count / root_count
+                    - idx * self.filler_account_count / root_count;
+                let accounts = (0..filler_entries)
+                    .map(|_| {
+                        let my_id = added.fetch_add(1, Ordering::Relaxed);
+                        let my_id_bytes = u32::to_be_bytes(my_id as u32);
 
-                            // pubkey begins life as entire filler 'suffix' pubkey
-                            let mut key = self.filler_account_suffix.unwrap();
-                            let rent_prefix_bytes = Self::filler_rent_partition_prefix_bytes();
-                            // first bytes are replaced with rent partition range: filler_rent_partition_prefix_bytes
-                            key.as_mut()[0..rent_prefix_bytes]
-                                .copy_from_slice(&subrange.start().as_ref()[0..rent_prefix_bytes]);
-                            // next bytes are replaced with my_id: filler_unique_id_bytes
-                            key.as_mut()[rent_prefix_bytes
-                                ..(rent_prefix_bytes + Self::filler_unique_id_bytes())]
-                                .copy_from_slice(&my_id_bytes);
-                            assert!(subrange.contains(&key));
-                            key
-                        })
-                        .collect::<Vec<_>>();
-                    let add = accounts
-                        .iter()
-                        .map(|key| (key, &account))
-                        .collect::<Vec<_>>();
-                    let hashes = (0..filler_entries).map(|_| hash).collect::<Vec<_>>();
-                    self.store_accounts_frozen(*slot, &add[..], Some(&hashes[..]), None, None);
-                })
+                        // pubkey begins life as entire filler 'suffix' pubkey
+                        let mut key = self.filler_account_suffix.unwrap();
+                        let rent_prefix_bytes = Self::filler_rent_partition_prefix_bytes();
+                        // first bytes are replaced with rent partition range: filler_rent_partition_prefix_bytes
+                        key.as_mut()[0..rent_prefix_bytes]
+                            .copy_from_slice(&subrange.start().as_ref()[0..rent_prefix_bytes]);
+                        // next bytes are replaced with my_id: filler_unique_id_bytes
+                        key.as_mut()[rent_prefix_bytes
+                            ..(rent_prefix_bytes + Self::filler_unique_id_bytes())]
+                            .copy_from_slice(&my_id_bytes);
+                        assert!(subrange.contains(&key));
+                        key
+                    })
+                    .collect::<Vec<_>>();
+                let add = accounts
+                    .iter()
+                    .map(|key| (key, &account))
+                    .collect::<Vec<_>>();
+                let hashes = (0..filler_entries).map(|_| hash).collect::<Vec<_>>();
+                self.store_accounts_frozen(*slot, &add[..], Some(&hashes[..]), None, None);
             });
             self.accounts_index.set_startup(false);
         }
@@ -6882,7 +6890,14 @@ impl AccountsDb {
             let storage_info = StorageSizeAndCountMap::default();
             let total_processed_slots_across_all_threads = AtomicU64::new(0);
             let outer_slots_len = slots.len();
-            let chunk_size = (outer_slots_len / 7) + 1; // approximately 400k slots in a snapshot
+            let threads = if self.accounts_index.is_disk_index_enabled() {
+                // these write directly to disk, so the more threads, the better
+                num_cpus::get()
+            } else {
+                // seems to be a good hueristic given varying # cpus for in-mem disk index
+                8
+            };
+            let chunk_size = (outer_slots_len / (std::cmp::max(1, threads.saturating_sub(1)))) + 1; // approximately 400k slots in a snapshot
             let mut index_time = Measure::start("index");
             let insertion_time_us = AtomicU64::new(0);
             let rent_exempt = AtomicU64::new(0);
@@ -6915,8 +6930,11 @@ impl AccountsDb {
 
                         let insert_us = if pass == 0 {
                             // generate index
-                            let (insert_us, rent_exempt_this_slot, total_this_slot) =
-                                self.generate_index_for_slot(accounts_map, slot, &rent_collector);
+                            let SlotIndexGenerationInfo {
+                                insert_time_us: insert_us,
+                                num_accounts: total_this_slot,
+                                num_accounts_rent_exempt: rent_exempt_this_slot,
+                            } = self.generate_index_for_slot(accounts_map, slot, &rent_collector);
                             rent_exempt.fetch_add(rent_exempt_this_slot, Ordering::Relaxed);
                             total_duplicates.fetch_add(total_this_slot, Ordering::Relaxed);
                             insert_us

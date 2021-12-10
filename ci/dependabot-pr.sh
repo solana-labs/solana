@@ -30,8 +30,6 @@ EMAIL="dependabot-buildkite@noreply.solana.com" \
   GIT_AUTHOR_NAME="$name" \
   GIT_COMMITTER_NAME="$name" \
   git commit -m "[auto-commit] Update all Cargo lock files"
-git config pull.rebase false
-git pull origin master --allow-unrelated-histories
 git push origin "HEAD:$branch"
 
 echo "Source branch is updated; failing this build for the next"

@@ -1,0 +1,14 @@
+{
+  "devDependencies": {
+    "chai": "^4.3.4",
+    "mocha": "^9.1.2",
+    "prettier": "^2.4.1"
+  },
+  "scripts": {
+    "postinstall": "npm run build",
+    "build": "wasm-pack build --target nodejs --dev --out-dir node_modules/crate --out-name crate",
+    "pretty": "prettier --check 'tests/*.mjs'",
+    "pretty:fix": "prettier --write 'tests/*.mjs'",
+    "test": "mocha 'tests/*.mjs'"
+  }
+}

@@ -161,6 +161,9 @@ pub enum ShredError {
         "invalid parent offset; parent_offset {parent_offset} must be larger than slot {slot}"
     )]
     InvalidParentOffset { slot: Slot, parent_offset: u16 },
+
+    #[error("invalid payload")]
+    InvalidPayload,
 }
 
 pub type Result<T> = std::result::Result<T, ShredError>;
@@ -340,41 +343,32 @@ impl Shred {
         let common_header: ShredCommonHeader =
             Self::deserialize_obj(&mut start, SIZE_OF_COMMON_SHRED_HEADER, &payload)?;
 
-        let slot = common_header.slot;
         // Shreds should be padded out to SHRED_PAYLOAD_SIZE
         // so that erasure generation/recovery works correctly
         // But only the data_header.size is stored in blockstore.
         payload.resize(SHRED_PAYLOAD_SIZE, 0);
-        let shred = match common_header.shred_type {
+        let (data_header, coding_header) = match common_header.shred_type {
             ShredType::Code => {
                 let coding_header: CodingShredHeader =
                     Self::deserialize_obj(&mut start, SIZE_OF_CODING_SHRED_HEADER, &payload)?;
-                Self {
-                    common_header,
-                    data_header: DataShredHeader::default(),
-                    coding_header,
-                    payload,
-                }
+                (DataShredHeader::default(), coding_header)
             }
             ShredType::Data => {
                 let data_header: DataShredHeader =
                     Self::deserialize_obj(&mut start, SIZE_OF_DATA_SHRED_HEADER, &payload)?;
-                if u64::from(data_header.parent_offset) > common_header.slot {
-                    return Err(ShredError::InvalidParentOffset {
-                        slot,
-                        parent_offset: data_header.parent_offset,
-                    });
-                }
-                Self {
-                    common_header,
-                    data_header,
-                    coding_header: CodingShredHeader::default(),
-                    payload,
-                }
+                (data_header, CodingShredHeader::default())
             }
         };
-
-        Ok(shred)
+        let shred = Self {
+            common_header,
+            data_header,
+            coding_header,
+            payload,
+        };
+        shred
+            .sanitize()
+            .then(|| shred)
+            .ok_or(ShredError::InvalidPayload)
     }
 
     pub fn new_empty_coding(
@@ -448,18 +442,48 @@ impl Shred {
         self.common_header.slot
     }
 
-    pub fn parent(&self) -> Option<Slot> {
+    pub fn parent(&self) -> Result<Slot> {
         match self.shred_type() {
             ShredType::Data => {
-                let parent_offset = Slot::try_from(self.data_header.parent_offset);
-                self.slot().checked_sub(parent_offset.ok()?)
+                let slot = self.slot();
+                let parent_offset = Slot::from(self.data_header.parent_offset);
+                if parent_offset == 0 && slot != 0 {
+                    return Err(ShredError::InvalidParentOffset {
+                        slot,
+                        parent_offset: 0,
+                    });
+                }
+                slot.checked_sub(parent_offset)
+                    .ok_or(ShredError::InvalidParentOffset {
+                        slot,
+                        parent_offset: self.data_header.parent_offset,
+                    })
             }
-            ShredType::Code => None,
+            ShredType::Code => Err(ShredError::InvalidShredType),
         }
     }
 
     pub fn index(&self) -> u32 {
         self.common_header.index
+    }
+
+    pub(crate) fn fec_set_index(&self) -> u32 {
+        self.common_header.fec_set_index
+    }
+
+    // Returns true if the shred passes sanity checks.
+    pub(crate) fn sanitize(&self) -> bool {
+        self.erasure_block_index().is_some()
+            && match self.shred_type() {
+                ShredType::Data => {
+                    self.parent().is_ok()
+                        && usize::from(self.data_header.size) <= self.payload.len()
+                }
+                ShredType::Code => {
+                    u32::from(self.coding_header.num_coding_shreds)
+                        <= 8 * MAX_DATA_SHREDS_PER_FEC_BLOCK
+                }
+            }
     }
 
     pub fn version(&self) -> u16 {
@@ -468,13 +492,23 @@ impl Shred {
 
     // Returns the block index within the erasure coding set.
     fn erasure_block_index(&self) -> Option<usize> {
-        let fec_set_index = self.common_header.fec_set_index;
-        let index = self.index().checked_sub(fec_set_index)? as usize;
+        let index = self.index().checked_sub(self.fec_set_index())?;
+        let index = usize::try_from(index).ok()?;
         match self.shred_type() {
             ShredType::Data => Some(index),
             ShredType::Code => {
-                let num_data_shreds = self.coding_header.num_data_shreds as usize;
-                let num_coding_shreds = self.coding_header.num_coding_shreds as usize;
+                // TODO should use first_coding_index once position field is
+                // populated.
+                // Assert that the last shred index in the erasure set does not
+                // overshoot u32.
+                self.fec_set_index().checked_add(u32::from(
+                    self.coding_header
+                        .num_data_shreds
+                        .max(self.coding_header.num_coding_shreds)
+                        .checked_sub(1)?,
+                ))?;
+                let num_data_shreds = usize::from(self.coding_header.num_data_shreds);
+                let num_coding_shreds = usize::from(self.coding_header.num_coding_shreds);
                 let fec_set_size = num_data_shreds.checked_add(num_coding_shreds)?;
                 let index = index.checked_add(num_data_shreds)?;
                 (index < fec_set_size).then(|| index)
@@ -1108,7 +1142,7 @@ pub fn verify_test_data_shred(
     assert!(shred.is_data());
     assert_eq!(shred.index(), index);
     assert_eq!(shred.slot(), slot);
-    assert_eq!(shred.parent(), Some(parent));
+    assert_eq!(shred.parent().unwrap(), parent);
     assert_eq!(verify, shred.verify(pk));
     if is_last_in_slot {
         assert!(shred.last_in_slot());
@@ -1845,12 +1879,13 @@ pub mod tests {
         shred.copy_to_packet(&mut packet);
         let shred_res = Shred::new_from_serialized_shred(packet.data.to_vec());
         assert_matches!(
-            shred_res,
+            shred.parent(),
             Err(ShredError::InvalidParentOffset {
                 slot: 10,
                 parent_offset: 1000
             })
         );
+        assert_matches!(shred_res, Err(ShredError::InvalidPayload));
     }
 
     #[test]

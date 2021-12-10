@@ -372,7 +372,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     }
                     Entry::Vacant(vacant) => {
                         // not in cache, look on disk
-                        let directly_to_disk = self.storage.get_startup();
+
+                        // desired to be this for filler accounts: self.storage.get_startup();
+                        // but, this has proven to be far too slow at high account counts
+                        let directly_to_disk = false;
                         if directly_to_disk {
                             // We may like this to always run, but it is unclear.
                             // If disk bucket needs to resize, then this call can stall for a long time.

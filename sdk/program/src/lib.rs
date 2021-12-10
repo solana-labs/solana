@@ -52,6 +52,12 @@ pub mod stake_history;
 pub mod system_instruction;
 pub mod system_program;
 pub mod sysvar;
+pub mod wasm;
+
+#[cfg(target_arch = "bpf")]
+pub use solana_sdk_macro::wasm_bindgen_stub as wasm_bindgen;
+#[cfg(not(target_arch = "bpf"))]
+pub use wasm_bindgen::prelude::wasm_bindgen;
 
 pub mod config {
     pub mod program {
