@@ -457,15 +457,23 @@ pub fn process_instruction(
         }
         VoteInstruction::UpdateVoteState(vote_state_update)
         | VoteInstruction::UpdateVoteStateSwitch(vote_state_update, _) => {
-            inc_new_counter_info!("vote-state-native", 1);
-            let slot_hashes: SlotHashes = invoke_context.get_sysvar(&sysvar::slot_hashes::id())?;
-            vote_state::process_vote_state_update(
-                me,
-                slot_hashes.slot_hashes(),
-                &invoke_context.get_sysvar(&sysvar::clock::id())?,
-                vote_state_update,
-                &signers,
-            )
+            if invoke_context
+                .feature_set
+                .is_active(&feature_set::allow_votes_to_directly_update_vote_state::id())
+            {
+                inc_new_counter_info!("vote-state-native", 1);
+                let slot_hashes: SlotHashes =
+                    invoke_context.get_sysvar(&sysvar::slot_hashes::id())?;
+                vote_state::process_vote_state_update(
+                    me,
+                    slot_hashes.slot_hashes(),
+                    &invoke_context.get_sysvar(&sysvar::clock::id())?,
+                    vote_state_update,
+                    &signers,
+                )
+            } else {
+                Err(InstructionError::InvalidInstructionData)
+            }
         }
         VoteInstruction::Withdraw(lamports) => {
             let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
