@@ -5,9 +5,9 @@ title: AccountsDb Plugins
 Overview
 ========
 
-It has been observed that validators under heavy RPC loads such as when serving
-getProgramAccounts calls can fall behind the network. To solve this problem,
-the Solana validator has been enhanced to support a plugin mechanism through
+Validators under heavy RPC loads, such as when serving
+getProgramAccounts calls, can fall behind the network. To solve this problem,
+the validator has been enhanced to support a plugin mechanism through
 which the information about accounts and slots can be transmitted to external
 data stores such as relational databases, NoSQL databases or Kafka. RPC
 services then can be developed to consume data from these external data stores
@@ -57,9 +57,9 @@ pub unsafe extern "C" fn _create_plugin() -> *mut dyn AccountsDbPlugin {
 ```
 
 A plugin implementation can implement the `on_load` method to initialize itself.
-This function is invoked after a plugin is dynmically into the validator when it
-starts. The configuration of the plugin is controlled by the configuration file
-in the JSON format. The JSON file must has a field `libpath` that points
+This function is invoked after a plugin is dynamically loaded into the validator when it
+starts. The configuration of the plugin is controlled by a configuration file
+in JSON format. The JSON file must have a field `libpath` that points
 to the full path name of the shared library implementing the plugin and the
 plugin can extend it with other configuration information such as connection
 parameters for the external database. The plugin configuration file is
@@ -135,10 +135,10 @@ validator restarts the account data will be re-transmitted.
 For more details, please refer to the Rust documentation in
 [`solana-accountsdb-plugin-interface`].
 
-The PostgreSQL Plugin
+Example PostgreSQL Plugin
 =====================
 
-The [`solana-accountsdb-plugin-postgres`] crate impelemented a plugin storing
+The [`solana-accountsdb-plugin-postgres`] crate implements a plugin storing
 account data to a PostgreSQL database to illustrate how a plugin can be
 developed.
 
@@ -167,12 +167,12 @@ information. For more advanced connection options, please use the
 `connection_str` field. Please see [Rust postgres configuration]
 (https://docs.rs/postgres/0.19.2/postgres/config/struct.Config.html).
 
-To improve the throuput to the database, the plugin supports connection pooling
-using multiple threads each maintaining a connection to the PostgreSQL database.
-The count of the threads is controled by the `threads` field. Higher threads
+To improve the throughput to the database, the plugin supports connection pooling
+using multiple threads, each maintaining a connection to the PostgreSQL database.
+The count of the threads is controlled by the `threads` field. A higher thread
 count usually offers better performance.
 
-To further improve performance when saving large number of accounts at the
+To further improve performance when saving large numbers of accounts at
 startup, the plugin uses bulk inserts. The batch size is controlled by the
 `batch_size` parameter. This can help reduce the round trips to the database.
 
@@ -181,10 +181,10 @@ errors to ensure data consistency.
 
 ## Account Selection
 
-The `accounts_selector` can be used to filter the accounts to persist.
+The `accounts_selector` can be used to filter the accounts that should be persisted.
 
-For example, one can use the following to persist only the accounts with the
-Base58 encoded Pubkeys,
+For example, one can use the following to persist only the accounts with particular
+Base58-encoded Pubkeys,
 
 ```
     "accounts_selector" : {
@@ -192,7 +192,7 @@ Base58 encoded Pubkeys,
     }
 ```
 
-Or use the following to select account with certain program owners:
+Or use the following to select accounts with certain program owners:
 
 ```
     "accounts_selector" : {
@@ -226,7 +226,7 @@ sudo apt-get -y install postgresql-14
 ### Control the Database Access
 
 Modify the pg_hba.conf as necessary to grant the plugin to access the database.
-For example, in /etc/postgresql/14/main/pg_hba.conf, the following entry allow
+For example, in /etc/postgresql/14/main/pg_hba.conf, the following entry allows
 nodes with IPs in the CIDR 10.138.0.0/24 to access all databases. The validator
 runs in a node with an ip in the specified range.
 
@@ -240,7 +240,7 @@ better performance.
 ### Configure the Database Performance Parameters
 
 Please refer to the [PostgreSQL Server Configuration](https://www.postgresql.org/docs/14/runtime-config.html)
-for configuration details. The referential implementation use the following
+for configuration details. The referential implementation uses the following
 configurations for better database performance in the /etc/postgresql/14/main/postgresql.conf
 which are different from the default postgresql-14 installation.
 
@@ -266,19 +266,19 @@ Start the server:
 sudo systemctl start postgresql@14-main
 ```
 
-Create the database, for example the following create a database named 'solana',
+Create the database. For example, the following creates a database named 'solana':
 
 ```
 sudo -u postgres createdb solana -p 5433
 ```
 
-Create the database user, for example, the following create a regular user named 'solana',
+Create the database user. For example, the following creates a regular user named 'solana':
 
 ```
 sudo -u postgres createuser -p 5433 solana
 ```
 
-Verify the database is working using psql, for example, assuming the node running
+Verify the database is working using psql. For example, assuming the node running
 PostgreSQL has the ip 10.138.0.9, the following command will land in a shell where
 SQL commands can be entered:
 
@@ -343,12 +343,12 @@ The trigger can be dropped to disable this feature, for example,
 DROP TRIGGER account_update_trigger ON account;
 ```
 
-Overtime, the account_audit can accumulate large amount of data. You may choose to
+Over time, the account_audit can accumulate large amount of data. You may choose to
 limit that by deleting older historical data.
 
 
-For example, the following SQL statement can be used to keep at most 1000 most
-up-to-date records for the same account:
+For example, the following SQL statement can be used to keep up to 1000 of the most
+recent records for an account:
 
 ```
 delete from account_audit a2 where (pubkey, write_version) in
@@ -363,7 +363,7 @@ delete from account_audit a2 where (pubkey, write_version) in
 
 When a validator lacks sufficient compute power, the overhead of saving the
 account data can cause it to fall behind the network especially when all
-accounts or a large number of accounts are selected . The node hosting the
+accounts or a large number of accounts are selected. The node hosting the
 PostgreSQL database need to be powerful enough to handle the database loads
 as well. It has been found using GCP n2-standard-64 machine type for the
 validator and n2-highmem-32 for the PostgreSQL node is adequate for handling
