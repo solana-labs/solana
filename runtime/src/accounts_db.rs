@@ -113,7 +113,7 @@ const MAX_ITEMS_PER_CHUNK: Slot = 2_500;
 // operations that take a storage entry can maintain a common interface
 // when interacting with cached accounts. This id is "virtual" in that it
 // doesn't actually refer to an actual storage entry.
-const CACHE_VIRTUAL_STORAGE_ID: usize = AppendVecId::MAX;
+const CACHE_VIRTUAL_STORAGE_ID: AppendVecId = AppendVecId::MAX;
 
 // A specially reserved write version (identifier for ordering writes in an AppendVec)
 // for entries in the cache, so that  operations that take a storage entry can maintain
@@ -386,6 +386,7 @@ impl<'a> MultiThreadProgress<'a> {
 }
 
 /// An offset into the AccountsDb::storage vector
+pub type AtomicAppendVecId = AtomicUsize;
 pub type AppendVecId = usize;
 pub type SnapshotStorage = Vec<Arc<AccountStorageEntry>>;
 pub type SnapshotStorages = Vec<SnapshotStorage>;
@@ -648,7 +649,7 @@ struct CleanKeyTimings {
 /// Persistent storage structure holding the accounts
 #[derive(Debug)]
 pub struct AccountStorageEntry {
-    pub(crate) id: AtomicUsize,
+    pub(crate) id: AtomicAppendVecId,
 
     pub(crate) slot: AtomicU64,
 
@@ -680,7 +681,7 @@ impl AccountStorageEntry {
         let accounts = AppendVec::new(&path, true, file_size as usize);
 
         Self {
-            id: AtomicUsize::new(id),
+            id: AtomicAppendVecId::new(id),
             slot: AtomicU64::new(slot),
             accounts,
             count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
@@ -696,7 +697,7 @@ impl AccountStorageEntry {
         num_accounts: usize,
     ) -> Self {
         Self {
-            id: AtomicUsize::new(id),
+            id: AtomicAppendVecId::new(id),
             slot: AtomicU64::new(slot),
             accounts,
             count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
@@ -1000,7 +1001,7 @@ pub struct AccountsDb {
     recycle_stores: RwLock<RecycleStores>,
 
     /// distribute the accounts across storage lists
-    pub next_id: AtomicUsize,
+    pub next_id: AtomicAppendVecId,
 
     /// Set of shrinkable stores organized by map of slot to append_vec_id
     pub shrink_candidate_slots: Mutex<ShrinkCandidates>,
@@ -1591,7 +1592,7 @@ impl AccountsDb {
             read_only_accounts_cache: ReadOnlyAccountsCache::new(MAX_READ_ONLY_CACHE_DATA_SIZE),
             recycle_stores: RwLock::new(RecycleStores::default()),
             uncleaned_pubkeys: DashMap::new(),
-            next_id: AtomicUsize::new(0),
+            next_id: AtomicAppendVecId::new(0),
             shrink_candidate_slots_v1: Mutex::new(Vec::new()),
             shrink_candidate_slots: Mutex::new(HashMap::new()),
             write_cache_limit_bytes: None,
