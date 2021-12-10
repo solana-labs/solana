@@ -221,10 +221,16 @@ pub struct ErrorCounters {
 }
 
 #[derive(Debug, Default, Clone, Copy)]
+pub struct IndexGenerationInfo {
+    pub accounts_data_len: u64,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
 struct SlotIndexGenerationInfo {
     insert_time_us: u64,
     num_accounts: u64,
     num_accounts_rent_exempt: u64,
+    accounts_data_len: u64,
 }
 
 #[derive(Default, Debug)]
@@ -241,6 +247,7 @@ struct GenerateIndexTimings {
     pub index_flush_us: u64,
     pub rent_exempt: u64,
     pub total_duplicates: u64,
+    pub accounts_data_len_dedup_time_us: u64,
 }
 
 #[derive(Default, Debug, PartialEq)]
@@ -287,6 +294,11 @@ impl GenerateIndexTimings {
                 i64
             ),
             ("total_items", self.total_items as i64, i64),
+            (
+                "accounts_data_len_dedup_time_us",
+                self.accounts_data_len_dedup_time_us as i64,
+                i64
+            ),
         );
     }
 }
@@ -6676,6 +6688,7 @@ impl AccountsDb {
 
         let secondary = !self.account_indexes.is_empty();
 
+        let mut accounts_data_len = 0;
         let mut num_accounts_rent_exempt = 0;
         let num_accounts = accounts_map.len();
         let items = accounts_map.into_iter().map(
@@ -6695,6 +6708,7 @@ impl AccountsDb {
                         &self.account_indexes,
                     );
                 }
+                accounts_data_len += stored_account.data().len() as u64;
 
                 if !rent_collector.should_collect_rent(&pubkey, &stored_account, false) || {
                     let (_rent_due, exempt) = rent_collector.get_rent_due(&stored_account);
@@ -6729,6 +6743,7 @@ impl AccountsDb {
             insert_time_us,
             num_accounts: num_accounts as u64,
             num_accounts_rent_exempt,
+            accounts_data_len,
         }
     }
 
@@ -6863,7 +6878,7 @@ impl AccountsDb {
         limit_load_slot_count_from_snapshot: Option<usize>,
         verify: bool,
         genesis_config: &GenesisConfig,
-    ) {
+    ) -> IndexGenerationInfo {
         let mut slots = self.storage.all_slots();
         #[allow(clippy::stable_sort_primitive)]
         slots.sort();
@@ -6878,6 +6893,7 @@ impl AccountsDb {
             genesis_config.slots_per_year(),
             &genesis_config.rent,
         );
+        let accounts_data_len = AtomicU64::new(0);
 
         // pass == 0 always runs and generates the index
         // pass == 1 only runs if verify == true.
@@ -6934,9 +6950,12 @@ impl AccountsDb {
                                 insert_time_us: insert_us,
                                 num_accounts: total_this_slot,
                                 num_accounts_rent_exempt: rent_exempt_this_slot,
+                                accounts_data_len: accounts_data_len_this_slot,
                             } = self.generate_index_for_slot(accounts_map, slot, &rent_collector);
                             rent_exempt.fetch_add(rent_exempt_this_slot, Ordering::Relaxed);
                             total_duplicates.fetch_add(total_this_slot, Ordering::Relaxed);
+                            accounts_data_len
+                                .fetch_add(accounts_data_len_this_slot, Ordering::Relaxed);
                             insert_us
                         } else {
                             // verify index matches expected and measure the time to get all items
@@ -6990,6 +7009,30 @@ impl AccountsDb {
                 })
                 .sum();
 
+            // subtract data.len() from accounts_data_len for all old accounts that are in the index twice
+            let mut accounts_data_len_dedup_timer =
+                Measure::start("handle accounts data len duplicates");
+            if pass == 0 {
+                let mut unique_pubkeys = HashSet::<Pubkey>::default();
+                self.uncleaned_pubkeys.iter().for_each(|entry| {
+                    entry.value().iter().for_each(|pubkey| {
+                        unique_pubkeys.insert(*pubkey);
+                    })
+                });
+                let accounts_data_len_from_duplicates = unique_pubkeys
+                    .into_iter()
+                    .collect::<Vec<_>>()
+                    .par_chunks(4096)
+                    .map(|pubkeys| self.pubkeys_to_duplicate_accounts_data_len(pubkeys))
+                    .sum();
+                accounts_data_len.fetch_sub(accounts_data_len_from_duplicates, Ordering::Relaxed);
+                info!(
+                    "accounts data len: {}",
+                    accounts_data_len.load(Ordering::Relaxed)
+                );
+            }
+            accounts_data_len_dedup_timer.stop();
+
             let storage_info_timings = storage_info_timings.into_inner().unwrap();
 
             let mut index_flush_us = 0;
@@ -7014,6 +7057,7 @@ impl AccountsDb {
                 storage_size_accounts_map_us: storage_info_timings.storage_size_accounts_map_us,
                 storage_size_accounts_map_flatten_us: storage_info_timings
                     .storage_size_accounts_map_flatten_us,
+                accounts_data_len_dedup_time_us: accounts_data_len_dedup_timer.as_us(),
                 ..GenerateIndexTimings::default()
             };
 
@@ -7027,6 +7071,43 @@ impl AccountsDb {
             }
             timings.report();
         }
+
+        IndexGenerationInfo {
+            accounts_data_len: accounts_data_len.load(Ordering::Relaxed),
+        }
+    }
+
+    /// Used during generate_index() to get the _duplicate_ accounts data len from the given pubkeys
+    fn pubkeys_to_duplicate_accounts_data_len(&self, pubkeys: &[Pubkey]) -> u64 {
+        let mut accounts_data_len_from_duplicates = 0;
+        pubkeys.iter().for_each(|pubkey| {
+            if let Some(entry) = self.accounts_index.get_account_read_entry(pubkey) {
+                let slot_list = entry.slot_list();
+                if slot_list.len() < 2 {
+                    return;
+                }
+                // Only the account data len in the highest slot should be used, and the rest are
+                // duplicates.  So sort the slot list in descending slot order, skip the first
+                // item, then sum up the remaining data len, which are the duplicates.
+                let mut slot_list = slot_list.clone();
+                slot_list
+                    .select_nth_unstable_by(0, |a, b| b.0.cmp(&a.0))
+                    .2
+                    .iter()
+                    .for_each(|(slot, account_info)| {
+                        let maybe_storage_entry = self
+                            .storage
+                            .get_account_storage_entry(*slot, account_info.store_id);
+                        let mut accessor = LoadedAccountAccessor::Stored(
+                            maybe_storage_entry.map(|entry| (entry, account_info.offset)),
+                        );
+                        let loaded_account = accessor.check_and_get_loaded_account();
+                        let account = loaded_account.take_account();
+                        accounts_data_len_from_duplicates += account.data().len();
+                    });
+            }
+        });
+        accounts_data_len_from_duplicates as u64
     }
 
     fn update_storage_info(
