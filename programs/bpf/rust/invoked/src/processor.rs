@@ -7,6 +7,7 @@ use solana_program::{
     account_info::AccountInfo,
     bpf_loader, entrypoint,
     entrypoint::{ProgramResult, MAX_PERMITTED_DATA_INCREASE},
+    log::sol_log_64,
     msg,
     program::{get_return_data, invoke, invoke_signed, set_return_data},
     program_error::ProgramError,
@@ -105,7 +106,7 @@ fn process_instruction(
                 assert!(accounts[INVOKED_PROGRAM_DUP_INDEX]
                     .try_borrow_mut_data()
                     .is_err());
-                msg!(data[0], 0, 0, 0, 0);
+                sol_log_64(data[0] as u64, 0, 0, 0, 0);
             }
         }
         RETURN_OK => {
