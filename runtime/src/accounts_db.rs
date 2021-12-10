@@ -247,6 +247,7 @@ struct GenerateIndexTimings {
     pub index_flush_us: u64,
     pub rent_exempt: u64,
     pub total_duplicates: u64,
+    pub accounts_data_len_dedup_time_us: u64,
 }
 
 #[derive(Default, Debug, PartialEq)]
@@ -293,6 +294,11 @@ impl GenerateIndexTimings {
                 i64
             ),
             ("total_items", self.total_items as i64, i64),
+            (
+                "accounts_data_len_dedup_time_us",
+                self.accounts_data_len_dedup_time_us as i64,
+                i64
+            ),
         );
     }
 }
@@ -7004,6 +7010,8 @@ impl AccountsDb {
                 .sum();
 
             // subtract data.len() from accounts_data_len for all old accounts that are in the index twice
+            let mut accounts_data_len_dedup_timer =
+                Measure::start("handle accounts data len duplicates");
             if pass == 0 {
                 let pubkeys_to_accounts_data_len = |pubkeys: &[Pubkey]| {
                     let mut accounts_data_len_from_duplicates = 0;
@@ -7037,7 +7045,6 @@ impl AccountsDb {
                     accounts_data_len_from_duplicates as u64
                 };
 
-                let mut timer = Measure::start("handle accounts data len duplicates");
                 let mut unique_pubkeys = HashSet::<Pubkey>::default();
                 self.uncleaned_pubkeys.iter().for_each(|entry| {
                     entry.value().iter().for_each(|pubkey| {
@@ -7051,13 +7058,12 @@ impl AccountsDb {
                     .map(pubkeys_to_accounts_data_len)
                     .sum();
                 accounts_data_len.fetch_sub(accounts_data_len_from_duplicates, Ordering::Relaxed);
-                timer.stop();
                 info!(
-                    "accounts data len: {}, {}",
-                    accounts_data_len.load(Ordering::Relaxed),
-                    timer
+                    "accounts data len: {}",
+                    accounts_data_len.load(Ordering::Relaxed)
                 );
             }
+            accounts_data_len_dedup_timer.stop();
 
             let storage_info_timings = storage_info_timings.into_inner().unwrap();
 
@@ -7083,6 +7089,7 @@ impl AccountsDb {
                 storage_size_accounts_map_us: storage_info_timings.storage_size_accounts_map_us,
                 storage_size_accounts_map_flatten_us: storage_info_timings
                     .storage_size_accounts_map_flatten_us,
+                accounts_data_len_dedup_time_us: accounts_data_len_dedup_timer.as_us(),
                 ..GenerateIndexTimings::default()
             };
 
