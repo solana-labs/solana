@@ -3,17 +3,36 @@ use std::{cell::RefCell, rc::Rc};
 
 const LOG_MESSAGES_BYTES_LIMIT: usize = 10 * 1000;
 
-#[derive(Default)]
 pub struct LogCollector {
     messages: Vec<String>,
     bytes_written: usize,
+    bytes_limit: Option<usize>,
     limit_warning: bool,
+}
+
+impl Default for LogCollector {
+    fn default() -> Self {
+        Self {
+            messages: Vec::new(),
+            bytes_written: 0,
+            bytes_limit: Some(LOG_MESSAGES_BYTES_LIMIT),
+            limit_warning: false,
+        }
+    }
 }
 
 impl LogCollector {
     pub fn log(&mut self, message: &str) {
+        let limit = match self.bytes_limit {
+            Some(limit) => limit,
+            None => {
+                self.messages.push(message.to_string());
+                return;
+            }
+        };
+
         let bytes_written = self.bytes_written.saturating_add(message.len());
-        if bytes_written >= LOG_MESSAGES_BYTES_LIMIT {
+        if bytes_written >= limit {
             if !self.limit_warning {
                 self.limit_warning = true;
                 self.messages.push(String::from("Log truncated"));
@@ -30,6 +49,13 @@ impl LogCollector {
 
     pub fn new_ref() -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self::default()))
+    }
+
+    pub fn new_ref_with_limit(bytes_limit: Option<usize>) -> Rc<RefCell<Self>> {
+        Rc::new(RefCell::new(Self {
+            bytes_limit,
+            ..Self::default()
+        }))
     }
 }
 
