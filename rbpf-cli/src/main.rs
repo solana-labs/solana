@@ -14,7 +14,9 @@ use {
         verifier::check,
         vm::{Config, DynamicAnalysis},
     },
-    solana_sdk::{account::AccountSharedData, bpf_loader, pubkey::Pubkey},
+    solana_sdk::{
+        account::AccountSharedData, bpf_loader, instruction::AccountMeta, pubkey::Pubkey,
+    },
     std::{
         fs::File,
         io::{Read, Seek, SeekFrom},
@@ -162,51 +164,57 @@ native machine code before execting it in the virtual machine.",
         ..Config::default()
     };
     let loader_id = bpf_loader::id();
-    let mut keyed_accounts = vec![
+    let mut transaction_accounts = vec![
         (
-            false,
-            false,
             loader_id,
-            AccountSharedData::new_ref(0, 0, &solana_sdk::native_loader::id()),
+            AccountSharedData::new(0, 0, &solana_sdk::native_loader::id()),
         ),
         (
-            false,
-            false,
             Pubkey::new_unique(),
-            AccountSharedData::new_ref(0, 0, &loader_id),
+            AccountSharedData::new(0, 0, &loader_id),
         ),
     ];
+    let mut instruction_accounts = Vec::new();
     let instruction_data = match matches.value_of("input").unwrap().parse::<usize>() {
         Ok(allocation_size) => {
-            keyed_accounts.push((
-                false,
-                true,
-                Pubkey::new_unique(),
-                AccountSharedData::new_ref(0, allocation_size, &Pubkey::new_unique()),
+            let pubkey = Pubkey::new_unique();
+            transaction_accounts.push((
+                pubkey,
+                AccountSharedData::new(0, allocation_size, &Pubkey::new_unique()),
             ));
+            instruction_accounts.push(AccountMeta {
+                pubkey,
+                is_signer: false,
+                is_writable: true,
+            });
             vec![]
         }
         Err(_) => {
             let input = load_accounts(Path::new(matches.value_of("input").unwrap())).unwrap();
-            for account in input.accounts {
-                let account_refcell = AccountSharedData::new_ref(
-                    account.lamports,
-                    account.data.len(),
-                    &account.owner,
+            for account_info in input.accounts {
+                let mut account = AccountSharedData::new(
+                    account_info.lamports,
+                    account_info.data.len(),
+                    &account_info.owner,
                 );
-                account_refcell.borrow_mut().set_data(account.data);
-                keyed_accounts.push((
-                    account.is_signer,
-                    account.is_writable,
-                    account.key,
-                    account_refcell,
-                ));
+                account.set_data(account_info.data);
+                instruction_accounts.push(AccountMeta {
+                    pubkey: account_info.key,
+                    is_signer: account_info.is_signer,
+                    is_writable: account_info.is_writable,
+                });
+                transaction_accounts.push((account_info.key, account));
             }
             input.instruction_data
         }
     };
     let program_indices = [0, 1];
-    let preparation = prepare_mock_invoke_context(&program_indices, &[], &keyed_accounts);
+    let preparation = prepare_mock_invoke_context(
+        &program_indices,
+        &[],
+        transaction_accounts,
+        instruction_accounts,
+    );
     let mut invoke_context = InvokeContext::new_mock(&preparation.accounts, &[]);
     invoke_context
         .push(
