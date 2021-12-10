@@ -22,7 +22,7 @@ indicatif = "0.16.2"
 lazy_static = "1.4.0"
 nix = "0.23.0"
 reqwest = { version = "0.11.6", default-features = false, features = ["blocking", "rustls-tls", "json"] }
-serde = { version = "1.0.130", features = ["derive"] }
+serde = { version = "1.0.131", features = ["derive"] }
 serde_yaml = "0.8.21"
 solana-clap-utils = { path = "../clap-utils", version = "=1.10.0" }
 solana-client = { path = "../client", version = "=1.10.0" }
