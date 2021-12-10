@@ -69,6 +69,10 @@ impl VoteAccount {
         inner.vote_state.read().unwrap()
     }
 
+    pub fn is_deserialized(&self) -> bool {
+        self.0.vote_state_once.is_completed()
+    }
+
     /// VoteState.node_pubkey of this vote-account.
     fn node_pubkey(&self) -> Option<Pubkey> {
         Some(self.vote_state().as_ref().ok()?.node_pubkey)
