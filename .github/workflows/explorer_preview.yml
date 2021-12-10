@@ -2,8 +2,8 @@ name : explorer_preview
 on:
   workflow_run:
     workflows: ["Explorer_build&test_on_PR"]
-    types: 
-      - completed
+#     types: 
+#       - completed
 jobs:
    explorer_preview:
     runs-on: ubuntu-latest
