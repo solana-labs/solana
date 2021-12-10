@@ -24,4 +24,4 @@ tonic = { version = "0.6.2", features = ["tls", "transport"] }
 targets = ["x86_64-unknown-linux-gnu"]
 
 [build-dependencies]
-tonic-build = "0.6.0"
+tonic-build = "0.6.2"
