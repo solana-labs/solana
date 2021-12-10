@@ -22,7 +22,7 @@ use {
     solana_ledger::blockstore::Blockstore,
     solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_debug,
-    solana_perf::packet::{self, Packets},
+    solana_perf::packet::{self, PacketBatch},
     solana_poh::poh_recorder::PohRecorder,
     solana_rpc::{
         optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
@@ -299,7 +299,7 @@ impl ClusterInfoVoteListener {
     pub fn new(
         exit: &Arc<AtomicBool>,
         cluster_info: Arc<ClusterInfo>,
-        verified_packets_sender: CrossbeamSender<Vec<Packets>>,
+        verified_packets_sender: CrossbeamSender<Vec<PacketBatch>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         vote_tracker: Arc<VoteTracker>,
         bank_forks: Arc<RwLock<BankForks>>,
@@ -396,14 +396,14 @@ impl ClusterInfoVoteListener {
 
     #[allow(clippy::type_complexity)]
     fn verify_votes(votes: Vec<Transaction>) -> (Vec<Transaction>, Vec<VerifiedVoteMetadata>) {
-        let mut msgs = packet::to_packets_chunked(&votes, 1);
+        let mut packet_batches = packet::to_packet_batches(&votes, 1);
 
         // Votes should already be filtered by this point.
         let reject_non_vote = false;
-        sigverify::ed25519_verify_cpu(&mut msgs, reject_non_vote);
+        sigverify::ed25519_verify_cpu(&mut packet_batches, reject_non_vote);
 
-        let (vote_txs, vote_metadata) = izip!(votes.into_iter(), msgs,)
-            .filter_map(|(vote_tx, packet)| {
+        let (vote_txs, vote_metadata) = izip!(votes.into_iter(), packet_batches)
+            .filter_map(|(vote_tx, packet_batch)| {
                 let (vote, vote_account_key) = vote_transaction::parse_vote_transaction(&vote_tx)
                     .and_then(|(vote_account_key, vote, _)| {
                     if vote.slots().is_empty() {
@@ -413,16 +413,16 @@ impl ClusterInfoVoteListener {
                     }
                 })?;
 
-                // to_packets_chunked() above split into 1 packet long chunks
-                assert_eq!(packet.packets.len(), 1);
-                if !packet.packets[0].meta.discard {
+                // to_packet_batches() above splits into 1 packet long batches
+                assert_eq!(packet_batch.packets.len(), 1);
+                if !packet_batch.packets[0].meta.discard {
                     if let Some(signature) = vote_tx.signatures.first().cloned() {
                         return Some((
                             vote_tx,
                             VerifiedVoteMetadata {
                                 vote_account_key,
                                 vote,
-                                packet,
+                                packet_batch,
                                 signature,
                             },
                         ));
@@ -438,7 +438,7 @@ impl ClusterInfoVoteListener {
         exit: Arc<AtomicBool>,
         verified_vote_label_packets_receiver: VerifiedLabelVotePacketsReceiver,
         poh_recorder: Arc<Mutex<PohRecorder>>,
-        verified_packets_sender: &CrossbeamSender<Vec<Packets>>,
+        verified_packets_sender: &CrossbeamSender<Vec<PacketBatch>>,
     ) -> Result<()> {
         let mut verified_vote_packets = VerifiedVotePackets::default();
         let mut time_since_lock = Instant::now();
@@ -486,7 +486,7 @@ impl ClusterInfoVoteListener {
     fn check_for_leader_bank_and_send_votes(
         bank_vote_sender_state_option: &mut Option<BankVoteSenderState>,
         current_working_bank: Arc<Bank>,
-        verified_packets_sender: &CrossbeamSender<Vec<Packets>>,
+        verified_packets_sender: &CrossbeamSender<Vec<PacketBatch>>,
         verified_vote_packets: &VerifiedVotePackets,
     ) -> Result<()> {
         // We will take this lock at most once every `BANK_SEND_VOTES_LOOP_SLEEP_MS`
@@ -986,9 +986,9 @@ mod tests {
         use bincode::serialized_size;
         info!("max vote size {}", serialized_size(&vote_tx).unwrap());
 
-        let msgs = packet::to_packets_chunked(&[vote_tx], 1); // panics if won't fit
+        let packet_batches = packet::to_packet_batches(&[vote_tx], 1); // panics if won't fit
 
-        assert_eq!(msgs.len(), 1);
+        assert_eq!(packet_batches.len(), 1);
     }
 
     fn run_vote_contains_authorized_voter(hash: Option<Hash>) {
@@ -1819,7 +1819,7 @@ mod tests {
     fn verify_packets_len(packets: &[VerifiedVoteMetadata], ref_value: usize) {
         let num_packets: usize = packets
             .iter()
-            .map(|vote_metadata| vote_metadata.packet.packets.len())
+            .map(|vote_metadata| vote_metadata.packet_batch.packets.len())
             .sum();
         assert_eq!(num_packets, ref_value);
     }
