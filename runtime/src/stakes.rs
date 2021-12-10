@@ -150,6 +150,18 @@ impl Stakes {
                 && account.data().len() >= std::mem::size_of::<StakeState>()
     }
 
+    pub fn remove_vote_account(&mut self, vote_pubkey: &Pubkey) {
+        self.vote_accounts.remove(vote_pubkey);
+    }
+
+    pub fn remove_stake_delegation(&mut self, stake_pubkey: &Pubkey) {
+        if let Some(removed_delegation) = self.stake_delegations.remove(stake_pubkey) {
+            let removed_stake = removed_delegation.stake(self.epoch, Some(&self.stake_history));
+            self.vote_accounts
+                .sub_stake(&removed_delegation.voter_pubkey, removed_stake);
+        }
+    }
+
     pub fn store(
         &mut self,
         pubkey: &Pubkey,
