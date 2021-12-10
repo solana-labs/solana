@@ -23,6 +23,7 @@ use {
         },
     },
     solana_stake_program::stake_state,
+    solana_vote_program::vote_state::VoteState,
     std::{
         collections::HashMap,
         sync::{Arc, RwLock, RwLockReadGuard},
@@ -61,7 +62,9 @@ impl StakesCache {
         remove_delegation_on_inactive: bool,
     ) {
         if solana_vote_program::check_id(account.owner()) {
-            let new_vote_account = if account.lamports() != 0 {
+            let new_vote_account = if account.lamports() != 0
+                && VoteState::is_correct_size_and_initialized(account.data())
+            {
                 let vote_account = VoteAccount::from(account.clone());
                 {
                     // Called to eagerly deserialize vote state
