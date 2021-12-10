@@ -7023,7 +7023,7 @@ impl AccountsDb {
                     .into_iter()
                     .collect::<Vec<_>>()
                     .par_chunks(4096)
-                    .map(|pubkeys| self.pubkeys_to_accounts_data_len(pubkeys))
+                    .map(|pubkeys| self.pubkeys_to_duplicate_accounts_data_len(pubkeys))
                     .sum();
                 accounts_data_len.fetch_sub(accounts_data_len_from_duplicates, Ordering::Relaxed);
                 info!(
@@ -7077,8 +7077,8 @@ impl AccountsDb {
         }
     }
 
-    /// Used during generate_index() to get the accounts data len from the given pubkeys
-    fn pubkeys_to_accounts_data_len(&self, pubkeys: &[Pubkey]) -> u64 {
+    /// Used during generate_index() to get the _duplicate_ accounts data len from the given pubkeys
+    fn pubkeys_to_duplicate_accounts_data_len(&self, pubkeys: &[Pubkey]) -> u64 {
         let mut accounts_data_len_from_duplicates = 0;
         pubkeys.iter().for_each(|pubkey| {
             if let Some(entry) = self.accounts_index.get_account_read_entry(pubkey) {
@@ -7086,12 +7086,13 @@ impl AccountsDb {
                 if slot_list.len() < 2 {
                     return;
                 }
+                // Only the account data len in the highest slot should be used, and the rest are
+                // duplicates.  So sort the slot list in descending slot order, skip the first
+                // item, then sum up the remaining data len, which are the duplicates.
                 let mut slot_list = slot_list.clone();
-                slot_list.sort_unstable_by(|a, b| a.0.cmp(&b.0));
-                assert!(slot_list[0].0 < slot_list[1].0);
+                slot_list.sort_unstable_by(|a, b| b.0.cmp(&a.0));
                 slot_list
                     .into_iter()
-                    .rev()
                     .skip(1)
                     .for_each(|(slot, account_info)| {
                         let maybe_storage_entry = self
