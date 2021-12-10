@@ -1,4 +1,5 @@
 use {
+    crate::bank::TransactionAccountRefCell,
     serde::{Deserialize, Serialize},
     solana_measure::measure::Measure,
     solana_program_runtime::{
@@ -8,7 +9,7 @@ use {
         timings::ExecuteDetailsTimings,
     },
     solana_sdk::{
-        account::{AccountSharedData, WritableAccount},
+        account::WritableAccount,
         compute_budget::ComputeBudget,
         feature_set::{prevent_calling_precompiles_as_programs, FeatureSet},
         hash::Hash,
@@ -45,7 +46,7 @@ impl MessageProcessor {
         builtin_programs: &[BuiltinProgram],
         message: &Message,
         program_indices: &[Vec<usize>],
-        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        accounts: &[TransactionAccountRefCell],
         rent: Rent,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         executors: Rc<RefCell<Executors>>,
@@ -89,9 +90,9 @@ impl MessageProcessor {
 
             // Fixup the special instructions key if present
             // before the account pre-values are taken care of
-            for (pubkey, accont) in accounts.iter().take(message.account_keys.len()) {
+            for (pubkey, account) in accounts.iter().take(message.account_keys.len()) {
                 if instructions::check_id(pubkey) {
-                    let mut mut_account_ref = accont.borrow_mut();
+                    let mut mut_account_ref = account.borrow_mut();
                     instructions::store_current_index(
                         mut_account_ref.data_as_mut_slice(),
                         instruction_index as u16,
@@ -128,7 +129,7 @@ mod tests {
         super::*,
         crate::rent_collector::RentCollector,
         solana_sdk::{
-            account::ReadableAccount,
+            account::{AccountSharedData, ReadableAccount},
             instruction::{AccountMeta, Instruction, InstructionError},
             keyed_account::keyed_account_at_index,
             message::Message,
