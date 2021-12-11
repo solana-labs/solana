@@ -635,43 +635,6 @@ impl ServeRepair {
         }
         Some(res)
     }
-<<<<<<< HEAD
-=======
-
-    fn run_ancestor_hashes(
-        recycler: &PacketBatchRecycler,
-        from_addr: &SocketAddr,
-        blockstore: Option<&Arc<Blockstore>>,
-        slot: Slot,
-        nonce: Nonce,
-    ) -> Option<PacketBatch> {
-        let blockstore = blockstore?;
-        let ancestor_slot_hashes = if blockstore.is_duplicate_confirmed(slot) {
-            let ancestor_iterator =
-                AncestorIteratorWithHash::from(AncestorIterator::new_inclusive(slot, blockstore));
-            ancestor_iterator.take(MAX_ANCESTOR_RESPONSES).collect()
-        } else {
-            // If this slot is not duplicate confirmed, return nothing
-            vec![]
-        };
-        let response = AncestorHashesResponseVersion::Current(ancestor_slot_hashes);
-        let serialized_response = serialize(&response).ok()?;
-
-        // Could probably directly write response into packet via `serialize_into()`
-        // instead of incurring extra copy in `repair_response_packet_from_bytes`, but
-        // serialize_into doesn't return the written size...
-        let packet = repair_response::repair_response_packet_from_bytes(
-            serialized_response,
-            from_addr,
-            nonce,
-        )?;
-        Some(PacketBatch::new_unpinned_with_recycler_data(
-            recycler,
-            "run_ancestor_hashes",
-            vec![packet],
-        ))
-    }
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
 }
 
 #[cfg(test)]
@@ -1070,92 +1033,6 @@ mod tests {
     }
 
     #[test]
-<<<<<<< HEAD
-=======
-    fn test_run_ancestor_hashes() {
-        solana_logger::setup();
-        let recycler = PacketBatchRecycler::default();
-        let ledger_path = get_tmp_ledger_path!();
-        {
-            let slot = 0;
-            let num_slots = MAX_ANCESTOR_RESPONSES as u64;
-            let nonce = 10;
-
-            let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-
-            // Create slots [slot, slot + num_slots) with 5 shreds apiece
-            let (shreds, _) = make_many_slot_entries(slot, num_slots, 5);
-
-            blockstore
-                .insert_shreds(shreds, None, false)
-                .expect("Expect successful ledger write");
-
-            // We don't have slot `slot + num_slots`, so we return empty
-            let rv = ServeRepair::run_ancestor_hashes(
-                &recycler,
-                &socketaddr_any!(),
-                Some(&blockstore),
-                slot + num_slots,
-                nonce,
-            )
-            .expect("run_ancestor_hashes packets")
-            .packets;
-            assert_eq!(rv.len(), 1);
-            let packet = &rv[0];
-            let ancestor_hashes_response: AncestorHashesResponseVersion =
-                limited_deserialize(&packet.data[..packet.meta.size - SIZE_OF_NONCE]).unwrap();
-            assert!(ancestor_hashes_response.into_slot_hashes().is_empty());
-
-            // `slot + num_slots - 1` is not marked duplicate confirmed so nothing should return
-            // empty
-            let rv = ServeRepair::run_ancestor_hashes(
-                &recycler,
-                &socketaddr_any!(),
-                Some(&blockstore),
-                slot + num_slots - 1,
-                nonce,
-            )
-            .expect("run_ancestor_hashes packets")
-            .packets;
-            assert_eq!(rv.len(), 1);
-            let packet = &rv[0];
-            let ancestor_hashes_response: AncestorHashesResponseVersion =
-                limited_deserialize(&packet.data[..packet.meta.size - SIZE_OF_NONCE]).unwrap();
-            assert!(ancestor_hashes_response.into_slot_hashes().is_empty());
-
-            // Set duplicate confirmed
-            let mut expected_ancestors = Vec::with_capacity(num_slots as usize);
-            expected_ancestors.resize(num_slots as usize, (0, Hash::default()));
-            for (i, duplicate_confirmed_slot) in (slot..slot + num_slots).enumerate() {
-                let frozen_hash = Hash::new_unique();
-                expected_ancestors[num_slots as usize - i - 1] =
-                    (duplicate_confirmed_slot, frozen_hash);
-                blockstore.insert_bank_hash(duplicate_confirmed_slot, frozen_hash, true);
-            }
-            let rv = ServeRepair::run_ancestor_hashes(
-                &recycler,
-                &socketaddr_any!(),
-                Some(&blockstore),
-                slot + num_slots - 1,
-                nonce,
-            )
-            .expect("run_ancestor_hashes packets")
-            .packets;
-            assert_eq!(rv.len(), 1);
-            let packet = &rv[0];
-            let ancestor_hashes_response: AncestorHashesResponseVersion =
-                limited_deserialize(&packet.data[..packet.meta.size - SIZE_OF_NONCE]).unwrap();
-            assert_eq!(
-                ancestor_hashes_response.into_slot_hashes(),
-                expected_ancestors
-            );
-        }
-
-        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
-    }
-
-    #[test]
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
     fn test_repair_with_repair_validators() {
         let cluster_slots = ClusterSlots::default();
         let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());

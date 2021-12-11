@@ -453,12 +453,8 @@ impl WindowService {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new<F>(
         blockstore: Arc<Blockstore>,
-<<<<<<< HEAD
         cluster_info: Arc<ClusterInfo>,
-        verified_receiver: CrossbeamReceiver<Vec<Packets>>,
-=======
         verified_receiver: CrossbeamReceiver<Vec<PacketBatch>>,
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
         retransmit_sender: Sender<Vec<Shred>>,
         repair_socket: Arc<UdpSocket>,
         exit: Arc<AtomicBool>,

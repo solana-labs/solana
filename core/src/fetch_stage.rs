@@ -100,16 +100,9 @@ impl FetchStage {
             .unwrap()
             .would_be_leader(HOLD_TRANSACTIONS_SLOT_OFFSET.saturating_mul(DEFAULT_TICKS_PER_SLOT))
         {
-<<<<<<< HEAD
-            inc_new_counter_debug!("fetch_stage-honor_forwards", len);
-            for packets in batch {
-                if sendr.send(packets).is_err() {
-=======
             inc_new_counter_debug!("fetch_stage-honor_forwards", num_packets);
             for packet_batch in packet_batches {
-                #[allow(clippy::question_mark)]
                 if sendr.send(packet_batch).is_err() {
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
                     return Err(Error::Send);
                 }
             }

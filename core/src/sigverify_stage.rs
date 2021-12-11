@@ -174,7 +174,6 @@ impl SigVerifyStage {
         verifier: &T,
         stats: &mut SigVerifierStats,
     ) -> Result<()> {
-<<<<<<< HEAD
         let (mut batches, len, recv_time) = streamer::recv_batch(recvr)?;
 
         let mut verify_batch_time = Measure::start("sigverify_batch_time");
@@ -183,23 +182,7 @@ impl SigVerifyStage {
         if len > MAX_SIGVERIFY_BATCH {
             Self::discard_excess_packets(&mut batches, MAX_SIGVERIFY_BATCH);
         }
-        sendr.send(verifier.verify_batch(batches))?;
-=======
-        let (mut batches, num_packets, recv_duration) = streamer::recv_packet_batches(recvr)?;
-
-        let batches_len = batches.len();
-        debug!(
-            "@{:?} verifier: verifying: {}",
-            timing::timestamp(),
-            num_packets,
-        );
-        if num_packets > MAX_SIGVERIFY_BATCH {
-            Self::discard_excess_packets(&mut batches, MAX_SIGVERIFY_BATCH);
-        }
-
-        let mut verify_batch_time = Measure::start("sigverify_batch_time");
         sendr.send(verifier.verify_batches(batches))?;
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
         verify_batch_time.stop();
 
         debug!(

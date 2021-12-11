@@ -690,14 +690,9 @@ impl BankingStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-<<<<<<< HEAD
     pub fn process_loop(
         my_pubkey: Pubkey,
-        verified_receiver: &CrossbeamReceiver<Vec<Packets>>,
-=======
-    fn process_loop(
         verified_receiver: &CrossbeamReceiver<Vec<PacketBatch>>,
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         cluster_info: &ClusterInfo,
         recv_start: &mut Instant,
@@ -715,12 +710,7 @@ impl BankingStage {
         let mut buffered_packet_batches = VecDeque::with_capacity(batch_limit);
         let banking_stage_stats = BankingStageStats::new(id);
         loop {
-<<<<<<< HEAD
-            while !buffered_packets.is_empty() {
-=======
-            let my_pubkey = cluster_info.id();
             while !buffered_packet_batches.is_empty() {
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
                 let decision = Self::process_buffered_packets(
                     &my_pubkey,
                     &socket,
@@ -1140,7 +1130,7 @@ impl BankingStage {
                 .filter_map(|(tx, tx_index)| {
                     // put transaction into retry queue if it wouldn't fit
                     // into current bank
-                    let is_vote = &msgs.packets[tx_index].meta.is_simple_vote_tx;
+                    let is_vote = &packet_batch.packets[tx_index].meta.is_simple_vote_tx;
 
                     // excluding vote TX from cost_model, for now
                     if !is_vote
@@ -1168,7 +1158,7 @@ impl BankingStage {
             filtered_transactions_with_packet_indexes
                 .into_iter()
                 .filter_map(|(tx, tx_index)| {
-                    let p = &msgs.packets[tx_index];
+                    let p = &packet_batch.packets[tx_index];
                     let message_bytes = Self::packet_message(p)?;
                     let message_hash = Message::hash_raw_message(message_bytes);
                     Some((
@@ -1245,10 +1235,9 @@ impl BankingStage {
         cost_model: &Arc<RwLock<CostModel>>,
     ) -> (usize, usize, Vec<usize>) {
         let mut packet_conversion_time = Measure::start("packet_conversion");
-<<<<<<< HEAD
         let (transactions, transaction_to_packet_indexes, retryable_packet_indexes) =
             Self::transactions_from_packets(
-                msgs,
+                packet_batch,
                 &packet_indexes,
                 &bank.feature_set,
                 &bank.read_cost_tracker().unwrap(),
@@ -1257,14 +1246,6 @@ impl BankingStage {
                 bank.vote_only_bank(),
                 cost_model,
             );
-=======
-        let (transactions, transaction_to_packet_indexes) = Self::transactions_from_packets(
-            packet_batch,
-            &packet_indexes,
-            &bank.feature_set,
-            bank.vote_only_bank(),
-        );
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
         packet_conversion_time.stop();
         inc_new_counter_info!("banking_stage-packet_conversion", 1);
 
@@ -1365,10 +1346,9 @@ impl BankingStage {
 
         let mut unprocessed_packet_conversion_time =
             Measure::start("unprocessed_packet_conversion");
-<<<<<<< HEAD
         let (transactions, transaction_to_packet_indexes, retry_packet_indexes) =
             Self::transactions_from_packets(
-                msgs,
+                packet_batch,
                 &transaction_indexes,
                 &bank.feature_set,
                 &bank.read_cost_tracker().unwrap(),
@@ -1377,14 +1357,6 @@ impl BankingStage {
                 bank.vote_only_bank(),
                 cost_model,
             );
-=======
-        let (transactions, transaction_to_packet_indexes) = Self::transactions_from_packets(
-            packet_batch,
-            transaction_indexes,
-            &bank.feature_set,
-            bank.vote_only_bank(),
-        );
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
         unprocessed_packet_conversion_time.stop();
 
         let tx_count = transaction_to_packet_indexes.len();
@@ -1467,18 +1439,10 @@ impl BankingStage {
         let mut dropped_packets_count = 0;
         let mut dropped_packet_batches_count = 0;
         let mut newly_buffered_packets_count = 0;
-<<<<<<< HEAD
-        while let Some(msgs) = mms_iter.next() {
-            let packet_indexes = Self::generate_packet_indexes(&msgs.packets);
-            let bank_start = poh.lock().unwrap().bank_start();
-            if PohRecorder::get_bank_still_processing_txs(&bank_start).is_none() {
-=======
         while let Some(packet_batch) = packet_batch_iter.next() {
             let packet_indexes = Self::generate_packet_indexes(&packet_batch.packets);
-            let poh_recorder_bank = poh.lock().unwrap().get_poh_recorder_bank();
-            let working_bank_start = poh_recorder_bank.working_bank_start();
-            if PohRecorder::get_working_bank_if_not_expired(&working_bank_start).is_none() {
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
+            let bank_start = poh.lock().unwrap().bank_start();
+            if PohRecorder::get_bank_still_processing_txs(&bank_start).is_none() {
                 Self::push_unprocessed(
                     buffered_packet_batches,
                     packet_batch,
@@ -1531,13 +1495,8 @@ impl BankingStage {
                 while let Some(packet_batch) = packet_batch_iter.next() {
                     let packet_indexes = Self::generate_packet_indexes(&packet_batch.packets);
                     let unprocessed_indexes = Self::filter_unprocessed_packets(
-<<<<<<< HEAD
                         &bank,
-                        &msgs,
-=======
-                        working_bank,
                         &packet_batch,
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
                         &packet_indexes,
                         my_pubkey,
                         next_leader,
@@ -3228,10 +3187,9 @@ mod tests {
                 make_test_packets(vec![transfer_tx.clone(), transfer_tx.clone()], vote_indexes);
 
             let mut votes_only = false;
-<<<<<<< HEAD
             let (txs, tx_packet_index, _retryable_packet_indexes) =
                 BankingStage::transactions_from_packets(
-                    &packets,
+                    &packet_batch,
                     &packet_indexes,
                     &Arc::new(feature_set::FeatureSet::default()),
                     &RwLock::new(CostTracker::default()).read().unwrap(),
@@ -3240,22 +3198,13 @@ mod tests {
                     votes_only,
                     &Arc::new(RwLock::new(CostModel::default())),
                 );
-=======
-            let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
-                &packet_batch,
-                &packet_indexes,
-                &Arc::new(FeatureSet::default()),
-                votes_only,
-            );
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
             assert_eq!(2, txs.len());
             assert_eq!(vec![0, 1], tx_packet_index);
 
             votes_only = true;
-<<<<<<< HEAD
             let (txs, tx_packet_index, _retryable_packet_indexes) =
                 BankingStage::transactions_from_packets(
-                    &packets,
+                    &packet_batch,
                     &packet_indexes,
                     &Arc::new(feature_set::FeatureSet::default()),
                     &RwLock::new(CostTracker::default()).read().unwrap(),
@@ -3264,14 +3213,6 @@ mod tests {
                     votes_only,
                     &Arc::new(RwLock::new(CostModel::default())),
                 );
-=======
-            let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
-                &packet_batch,
-                &packet_indexes,
-                &Arc::new(FeatureSet::default()),
-                votes_only,
-            );
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
             assert_eq!(0, txs.len());
             assert_eq!(0, tx_packet_index.len());
         }
@@ -3285,10 +3226,9 @@ mod tests {
             );
 
             let mut votes_only = false;
-<<<<<<< HEAD
             let (txs, tx_packet_index, _retryable_packet_indexes) =
                 BankingStage::transactions_from_packets(
-                    &packets,
+                    &packet_batch,
                     &packet_indexes,
                     &Arc::new(feature_set::FeatureSet::default()),
                     &RwLock::new(CostTracker::default()).read().unwrap(),
@@ -3297,22 +3237,13 @@ mod tests {
                     votes_only,
                     &Arc::new(RwLock::new(CostModel::default())),
                 );
-=======
-            let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
-                &packet_batch,
-                &packet_indexes,
-                &Arc::new(FeatureSet::default()),
-                votes_only,
-            );
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
             assert_eq!(3, txs.len());
             assert_eq!(vec![0, 1, 2], tx_packet_index);
 
             votes_only = true;
-<<<<<<< HEAD
             let (txs, tx_packet_index, _retryable_packet_indexes) =
                 BankingStage::transactions_from_packets(
-                    &packets,
+                    &packet_batch,
                     &packet_indexes,
                     &Arc::new(feature_set::FeatureSet::default()),
                     &RwLock::new(CostTracker::default()).read().unwrap(),
@@ -3321,14 +3252,6 @@ mod tests {
                     votes_only,
                     &Arc::new(RwLock::new(CostModel::default())),
                 );
-=======
-            let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
-                &packet_batch,
-                &packet_indexes,
-                &Arc::new(FeatureSet::default()),
-                votes_only,
-            );
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
             assert_eq!(2, txs.len());
             assert_eq!(vec![0, 2], tx_packet_index);
         }
@@ -3342,10 +3265,9 @@ mod tests {
             );
 
             let mut votes_only = false;
-<<<<<<< HEAD
             let (txs, tx_packet_index, _retryable_packet_indexes) =
                 BankingStage::transactions_from_packets(
-                    &packets,
+                    &packet_batch,
                     &packet_indexes,
                     &Arc::new(feature_set::FeatureSet::default()),
                     &RwLock::new(CostTracker::default()).read().unwrap(),
@@ -3354,22 +3276,13 @@ mod tests {
                     votes_only,
                     &Arc::new(RwLock::new(CostModel::default())),
                 );
-=======
-            let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
-                &packet_batch,
-                &packet_indexes,
-                &Arc::new(FeatureSet::default()),
-                votes_only,
-            );
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
             assert_eq!(3, txs.len());
             assert_eq!(vec![0, 1, 2], tx_packet_index);
 
             votes_only = true;
-<<<<<<< HEAD
             let (txs, tx_packet_index, _retryable_packet_indexes) =
                 BankingStage::transactions_from_packets(
-                    &packets,
+                    &packet_batch,
                     &packet_indexes,
                     &Arc::new(feature_set::FeatureSet::default()),
                     &RwLock::new(CostTracker::default()).read().unwrap(),
@@ -3378,14 +3291,6 @@ mod tests {
                     votes_only,
                     &Arc::new(RwLock::new(CostModel::default())),
                 );
-=======
-            let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
-                &packet_batch,
-                &packet_indexes,
-                &Arc::new(FeatureSet::default()),
-                votes_only,
-            );
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
             assert_eq!(3, txs.len());
             assert_eq!(vec![0, 1, 2], tx_packet_index);
         }

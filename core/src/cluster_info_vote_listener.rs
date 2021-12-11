@@ -56,8 +56,9 @@ use {
 // Map from a vote account to the authorized voter for an epoch
 pub type ThresholdConfirmedSlots = Vec<(Slot, Hash)>;
 pub type VotedHashUpdates = HashMap<Hash, Vec<Pubkey>>;
-pub type VerifiedLabelVotePacketsSender = CrossbeamSender<Vec<(CrdsValueLabel, Slot, Packets)>>;
-pub type VerifiedLabelVotePacketsReceiver = CrossbeamReceiver<Vec<(CrdsValueLabel, Slot, Packets)>>;
+pub type VerifiedLabelVotePacketsSender = CrossbeamSender<Vec<(CrdsValueLabel, Slot, PacketBatch)>>;
+pub type VerifiedLabelVotePacketsReceiver =
+    CrossbeamReceiver<Vec<(CrdsValueLabel, Slot, PacketBatch)>>;
 pub type VerifiedVoteTransactionsSender = CrossbeamSender<Vec<Transaction>>;
 pub type VerifiedVoteTransactionsReceiver = CrossbeamReceiver<Vec<Transaction>>;
 pub type VerifiedVoteSender = CrossbeamSender<(Pubkey, Vec<Slot>)>;
@@ -349,64 +350,31 @@ impl ClusterInfoVoteListener {
     }
 
     #[allow(clippy::type_complexity)]
-<<<<<<< HEAD
     fn verify_votes(
         votes: Vec<Transaction>,
         labels: Vec<CrdsValueLabel>,
-    ) -> (Vec<Transaction>, Vec<(CrdsValueLabel, Slot, Packets)>) {
-        let mut msgs = packet::to_packets_chunked(&votes, 1);
-=======
-    fn verify_votes(votes: Vec<Transaction>) -> (Vec<Transaction>, Vec<VerifiedVoteMetadata>) {
+    ) -> (Vec<Transaction>, Vec<(CrdsValueLabel, Slot, PacketBatch)>) {
         let mut packet_batches = packet::to_packet_batches(&votes, 1);
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
 
         // Votes should already be filtered by this point.
         let reject_non_vote = false;
         sigverify::ed25519_verify_cpu(&mut packet_batches, reject_non_vote);
 
-<<<<<<< HEAD
-        let (vote_txs, packets) = izip!(labels.into_iter(), votes.into_iter(), msgs,)
-            .filter_map(|(label, vote, packet)| {
+        let (vote_txs, packet_batch) = izip!(labels.into_iter(), votes.into_iter(), packet_batches)
+            .filter_map(|(label, vote, packet_batch)| {
                 let slot = vote_transaction::parse_vote_transaction(&vote)
                     .and_then(|(_, vote, _)| vote.slots.last().copied())?;
 
-                // to_packets_chunked() above split into 1 packet long chunks
-                assert_eq!(packet.packets.len(), 1);
-                if !packet.packets[0].meta.discard {
-                    Some((vote, (label, slot, packet)))
-                } else {
-                    None
-=======
-        let (vote_txs, vote_metadata) = izip!(votes.into_iter(), packet_batches)
-            .filter_map(|(vote_tx, packet_batch)| {
-                let (vote, vote_account_key) = vote_transaction::parse_vote_transaction(&vote_tx)
-                    .and_then(|(vote_account_key, vote, _)| {
-                    if vote.slots().is_empty() {
-                        None
-                    } else {
-                        Some((vote, vote_account_key))
-                    }
-                })?;
-
-                // to_packet_batches() above splits into 1 packet long batches
+                // to_packet_batches() above split into 1 packet long chunks
                 assert_eq!(packet_batch.packets.len(), 1);
                 if !packet_batch.packets[0].meta.discard {
-                    if let Some(signature) = vote_tx.signatures.first().cloned() {
-                        return Some((
-                            vote_tx,
-                            VerifiedVoteMetadata {
-                                vote_account_key,
-                                vote,
-                                packet_batch,
-                                signature,
-                            },
-                        ));
-                    }
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
+                    Some((vote, (label, slot, packet_batch)))
+                } else {
+                    None
                 }
             })
             .unzip();
-        (vote_txs, packets)
+        (vote_txs, packet_batch)
     }
 
     fn bank_send_loop(
@@ -447,10 +415,11 @@ impl ClusterInfoVoteListener {
                 let bank = poh_recorder.lock().unwrap().bank();
                 if let Some(bank) = bank {
                     let last_version = bank.last_vote_sync.load(Ordering::Relaxed);
-                    let (new_version, msgs) = verified_vote_packets.get_latest_votes(last_version);
-                    inc_new_counter_info!("bank_send_loop_batch_size", msgs.packets.len());
+                    let (new_version, packet_batch) =
+                        verified_vote_packets.get_latest_votes(last_version);
+                    inc_new_counter_info!("bank_send_loop_batch_size", packet_batch.packets.len());
                     inc_new_counter_info!("bank_send_loop_num_batches", 1);
-                    verified_packets_sender.send(vec![msgs])?;
+                    verified_packets_sender.send(vec![packet_batch])?;
                     #[allow(deprecated)]
                     bank.last_vote_sync.compare_and_swap(
                         last_version,
@@ -463,61 +432,6 @@ impl ClusterInfoVoteListener {
         }
     }
 
-<<<<<<< HEAD
-=======
-    fn check_for_leader_bank_and_send_votes(
-        bank_vote_sender_state_option: &mut Option<BankVoteSenderState>,
-        current_working_bank: Arc<Bank>,
-        verified_packets_sender: &CrossbeamSender<Vec<PacketBatch>>,
-        verified_vote_packets: &VerifiedVotePackets,
-    ) -> Result<()> {
-        // We will take this lock at most once every `BANK_SEND_VOTES_LOOP_SLEEP_MS`
-        if let Some(bank_vote_sender_state) = bank_vote_sender_state_option {
-            if bank_vote_sender_state.bank.slot() != current_working_bank.slot() {
-                bank_vote_sender_state.report_metrics();
-                *bank_vote_sender_state_option =
-                    Some(BankVoteSenderState::new(current_working_bank));
-            }
-        } else {
-            *bank_vote_sender_state_option = Some(BankVoteSenderState::new(current_working_bank));
-        }
-
-        let bank_vote_sender_state = bank_vote_sender_state_option.as_mut().unwrap();
-        let BankVoteSenderState {
-            ref bank,
-            ref mut bank_send_votes_stats,
-            ref mut previously_sent_to_bank_votes,
-        } = bank_vote_sender_state;
-
-        // This logic may run multiple times for the same leader bank,
-        // we just have to ensure that the same votes are not sent
-        // to the bank multiple times, which is guaranteed by
-        // `previously_sent_to_bank_votes`
-        let gossip_votes_iterator = ValidatorGossipVotesIterator::new(
-            bank.clone(),
-            verified_vote_packets,
-            previously_sent_to_bank_votes,
-        );
-
-        let mut filter_gossip_votes_timing = Measure::start("filter_gossip_votes");
-
-        // Send entire batch at a time so that there is no partial processing of
-        // a single validator's votes by two different banks. This might happen
-        // if we sent each vote individually, for instance if we creaed two different
-        // leader banks from the same common parent, one leader bank may process
-        // only the later votes and ignore the earlier votes.
-        for single_validator_votes in gossip_votes_iterator {
-            bank_send_votes_stats.num_votes_sent += single_validator_votes.len();
-            bank_send_votes_stats.num_batches_sent += 1;
-            verified_packets_sender.send(single_validator_votes)?;
-        }
-        filter_gossip_votes_timing.stop();
-        bank_send_votes_stats.total_elapsed += filter_gossip_votes_timing.as_us();
-
-        Ok(())
-    }
-
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
     #[allow(clippy::too_many_arguments)]
     fn process_votes_loop(
         exit: Arc<AtomicBool>,
@@ -1794,16 +1708,11 @@ mod tests {
         assert!(packets.is_empty());
     }
 
-<<<<<<< HEAD
-    fn verify_packets_len(packets: &[(CrdsValueLabel, Slot, Packets)], ref_value: usize) {
-        let num_packets: usize = packets.iter().map(|(_, _, p)| p.packets.len()).sum();
-=======
-    fn verify_packets_len(packets: &[VerifiedVoteMetadata], ref_value: usize) {
+    fn verify_packets_len(packets: &[(CrdsValueLabel, Slot, PacketBatch)], ref_value: usize) {
         let num_packets: usize = packets
             .iter()
-            .map(|vote_metadata| vote_metadata.packet_batch.packets.len())
+            .map(|(_, _, batch)| batch.packets.len())
             .sum();
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
         assert_eq!(num_packets, ref_value);
     }
 

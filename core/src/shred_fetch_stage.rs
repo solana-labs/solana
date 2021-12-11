@@ -97,13 +97,8 @@ impl ShredFetchStage {
                     slots_per_epoch = root_bank.get_slots_in_epoch(root_bank.epoch());
                 }
             }
-<<<<<<< HEAD
-            stats.shred_count += p.packets.len();
-            p.packets.iter_mut().for_each(|mut packet| {
-=======
             stats.shred_count += packet_batch.packets.len();
-            packet_batch.packets.iter_mut().for_each(|packet| {
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
+            packet_batch.packets.iter_mut().for_each(|mut packet| {
                 Self::process_packet(
                     &mut packet,
                     &mut shreds_received,

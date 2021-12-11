@@ -132,13 +132,7 @@ fn recv_send(
     Ok(())
 }
 
-<<<<<<< HEAD
-pub fn recv_batch(recvr: &PacketReceiver) -> Result<(Vec<Packets>, usize, u64)> {
-=======
-pub fn recv_packet_batches(
-    recvr: &PacketBatchReceiver,
-) -> Result<(Vec<PacketBatch>, usize, Duration)> {
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
+pub fn recv_batch(recvr: &PacketBatchReceiver) -> Result<(Vec<PacketBatch>, usize, u64)> {
     let timer = Duration::new(1, 0);
     let packet_batch = recvr.recv_timeout(timer)?;
     let recv_start = Instant::now();
@@ -151,21 +145,16 @@ pub fn recv_packet_batches(
         packet_batches.push(packet_batch);
     }
     let recv_duration = recv_start.elapsed();
-<<<<<<< HEAD
-    trace!("batch len {}", batch.len());
-    Ok((
-        batch,
-        len,
-        solana_sdk::timing::duration_as_ms(&recv_duration),
-    ))
-=======
     trace!(
         "packet batches len: {}, num packets: {}",
         packet_batches.len(),
         num_packets
     );
-    Ok((packet_batches, num_packets, recv_duration))
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
+    Ok((
+        packet_batches,
+        num_packets,
+        solana_sdk::timing::duration_as_ms(&recv_duration),
+    ))
 }
 
 pub fn responder(

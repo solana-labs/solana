@@ -1817,12 +1817,8 @@ impl ClusterInfo {
         thread_pool: &ThreadPool,
         recycler: &PacketBatchRecycler,
         stakes: &HashMap<Pubkey, u64>,
-<<<<<<< HEAD
-        response_sender: &PacketSender,
-        require_stake_for_gossip: bool,
-=======
         response_sender: &PacketBatchSender,
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
+        require_stake_for_gossip: bool,
     ) {
         let _st = ScopedTimer::from(&self.stats.handle_batch_pull_requests_time);
         if requests.is_empty() {
@@ -1933,12 +1929,8 @@ impl ClusterInfo {
         recycler: &PacketBatchRecycler,
         requests: Vec<PullData>,
         stakes: &HashMap<Pubkey, u64>,
-<<<<<<< HEAD
         require_stake_for_gossip: bool,
-    ) -> Packets {
-=======
     ) -> PacketBatch {
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
         const DEFAULT_EPOCH_DURATION_MS: u64 = DEFAULT_SLOTS_PER_EPOCH * DEFAULT_MS_PER_SLOT;
         let mut time = Measure::start("handle_pull_requests");
         let callers = crds_value::filter_current(requests.iter().map(|r| &r.caller));
@@ -2216,12 +2208,8 @@ impl ClusterInfo {
         thread_pool: &ThreadPool,
         recycler: &PacketBatchRecycler,
         stakes: &HashMap<Pubkey, u64>,
-<<<<<<< HEAD
-        response_sender: &PacketSender,
-        require_stake_for_gossip: bool,
-=======
         response_sender: &PacketBatchSender,
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
+        require_stake_for_gossip: bool,
     ) {
         let _st = ScopedTimer::from(&self.stats.handle_batch_push_messages_time);
         if messages.is_empty() {
@@ -2296,13 +2284,8 @@ impl ClusterInfo {
         let num_prune_packets = packet_batch.packets.len();
         self.stats
             .push_response_count
-<<<<<<< HEAD
-            .add_relaxed(packets.packets.len() as u64);
-        let new_push_requests = self.new_push_requests(stakes, require_stake_for_gossip);
-=======
             .add_relaxed(packet_batch.packets.len() as u64);
-        let new_push_requests = self.new_push_requests(stakes);
->>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
+        let new_push_requests = self.new_push_requests(stakes, require_stake_for_gossip);
         inc_new_counter_debug!("cluster_info-push_message-pushes", new_push_requests.len());
         for (address, request) in new_push_requests {
             if ContactInfo::is_valid_address(&address, &self.socket_addr_space) {
