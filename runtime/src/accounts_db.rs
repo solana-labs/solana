@@ -22,6 +22,7 @@
 use std::{thread::sleep, time::Duration};
 use {
     crate::{
+        account_info::AccountInfo,
         accounts_background_service::{DroppedSlotsSender, SendDroppedBankCallback},
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
         accounts_hash::{AccountsHash, CalculateHashIntermediate, HashStats, PreviousPass},
@@ -303,22 +304,6 @@ impl GenerateIndexTimings {
     }
 }
 
-#[derive(Default, Debug, PartialEq, Clone, Copy)]
-pub struct AccountInfo {
-    /// index identifying the append storage
-    store_id: AppendVecId,
-
-    /// offset into the storage
-    offset: usize,
-
-    /// needed to track shrink candidacy in bytes. Used to update the number
-    /// of alive bytes in an AppendVec as newer slots purge outdated entries
-    stored_size: usize,
-
-    /// lamports in the account used when squashing kept for optimization
-    /// purposes to remove accounts with zero balance.
-    lamports: u64,
-}
 impl IsCached for AccountInfo {
     fn is_cached(&self) -> bool {
         self.store_id == CACHE_VIRTUAL_STORAGE_ID
@@ -326,12 +311,6 @@ impl IsCached for AccountInfo {
 }
 
 impl IndexValue for AccountInfo {}
-
-impl ZeroLamport for AccountInfo {
-    fn is_zero_lamport(&self) -> bool {
-        self.lamports == 0
-    }
-}
 
 impl ZeroLamport for AccountSharedData {
     fn is_zero_lamport(&self) -> bool {
