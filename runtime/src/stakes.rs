@@ -2,13 +2,16 @@
 //! node stakes
 use {
     crate::vote_account::{ArcVoteAccount, VoteAccounts, VoteAccountsHashMap},
+    dashmap::DashMap,
+    num_derive::ToPrimitive,
+    num_traits::ToPrimitive,
     rayon::{
         iter::{IntoParallelRefIterator, ParallelIterator},
         ThreadPool,
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
-        clock::Epoch,
+        clock::{Epoch, Slot},
         pubkey::Pubkey,
         stake::{
             self,
@@ -18,8 +21,98 @@ use {
     },
     solana_stake_program::stake_state,
     solana_vote_program::vote_state::VoteState,
-    std::collections::HashMap,
+    std::{
+        collections::HashMap,
+        sync::{RwLock, RwLockReadGuard},
+    },
 };
+
+#[derive(Debug, Clone, PartialEq, ToPrimitive)]
+pub enum InvalidCacheEntryReason {
+    Missing,
+    BadState,
+    WrongOwner,
+}
+
+#[derive(Default, Debug, Deserialize, Serialize, AbiExample)]
+pub struct StakesCache(RwLock<Stakes>);
+
+impl StakesCache {
+    pub fn new(stakes: Stakes) -> Self {
+        Self(RwLock::new(stakes))
+    }
+
+    pub fn stakes(&self) -> RwLockReadGuard<Stakes> {
+        self.0.read().unwrap()
+    }
+
+    pub fn is_stake(account: &AccountSharedData) -> bool {
+        solana_vote_program::check_id(account.owner())
+            || stake::program::check_id(account.owner())
+                && account.data().len() >= std::mem::size_of::<StakeState>()
+    }
+
+    pub fn check_and_store(
+        &self,
+        pubkey: &Pubkey,
+        account: &AccountSharedData,
+        remove_delegation_on_inactive: bool,
+    ) {
+        if Self::is_stake(account) {
+            let mut stakes = self.0.write().unwrap();
+            stakes.store(pubkey, account, remove_delegation_on_inactive)
+        }
+    }
+
+    pub fn activate_epoch(&self, next_epoch: Epoch, thread_pool: &ThreadPool) {
+        let mut stakes = self.0.write().unwrap();
+        stakes.activate_epoch(next_epoch, thread_pool)
+    }
+
+    pub fn handle_invalid_keys(
+        &self,
+        invalid_stake_keys: DashMap<Pubkey, InvalidCacheEntryReason>,
+        invalid_vote_keys: DashMap<Pubkey, InvalidCacheEntryReason>,
+        should_evict_invalid_entries: bool,
+        current_slot: Slot,
+    ) {
+        if invalid_stake_keys.is_empty() && invalid_vote_keys.is_empty() {
+            return;
+        }
+
+        // Prune invalid stake delegations and vote accounts that were
+        // not properly evicted in normal operation.
+        let mut maybe_stakes = if should_evict_invalid_entries {
+            Some(self.0.write().unwrap())
+        } else {
+            None
+        };
+
+        for (stake_pubkey, reason) in invalid_stake_keys {
+            if let Some(stakes) = maybe_stakes.as_mut() {
+                stakes.remove_stake_delegation(&stake_pubkey);
+            }
+            datapoint_warn!(
+                "bank-stake_delegation_accounts-invalid-account",
+                ("slot", current_slot as i64, i64),
+                ("stake-address", format!("{:?}", stake_pubkey), String),
+                ("reason", reason.to_i64().unwrap_or_default(), i64),
+            );
+        }
+
+        for (vote_pubkey, reason) in invalid_vote_keys {
+            if let Some(stakes) = maybe_stakes.as_mut() {
+                stakes.remove_vote_account(&vote_pubkey);
+            }
+            datapoint_warn!(
+                "bank-stake_delegation_accounts-invalid-account",
+                ("slot", current_slot as i64, i64),
+                ("vote-address", format!("{:?}", vote_pubkey), String),
+                ("reason", reason.to_i64().unwrap_or_default(), i64),
+            );
+        }
+    }
+}
 
 #[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize, AbiExample)]
 pub struct Stakes {
@@ -140,12 +233,6 @@ impl Stakes {
                 .iter()
                 .map(|(_pubkey, (_staked, vote_account))| vote_account.lamports())
                 .sum::<u64>()
-    }
-
-    pub fn is_stake(account: &AccountSharedData) -> bool {
-        solana_vote_program::check_id(account.owner())
-            || stake::program::check_id(account.owner())
-                && account.data().len() >= std::mem::size_of::<StakeState>()
     }
 
     pub fn remove_vote_account(&mut self, vote_pubkey: &Pubkey) {
