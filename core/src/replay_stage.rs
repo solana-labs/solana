@@ -118,36 +118,6 @@ struct SkippedSlotsInfo {
     last_skipped_slot: u64,
 }
 
-const RETRANSMIT_BASE_DELAY_MS: u64 = 5_000;
-const RETRANSMIT_BACKOFF_CAP: u32 = 6;
-
-#[derive(Debug)]
-struct LastRetransmitInfo {
-    slot: Slot,
-    time: Instant,
-    retry_iteration: u32,
-}
-
-impl LastRetransmitInfo {
-    fn reached_retransmit_threshold(&self) -> bool {
-        let backoff = std::cmp::min(self.retry_iteration, RETRANSMIT_BACKOFF_CAP);
-        let backoff_duration_ms = 2_u64.pow(backoff) * RETRANSMIT_BASE_DELAY_MS;
-        let elapsed_ms = self.time.elapsed().as_millis();
-        elapsed_ms > backoff_duration_ms.into()
-    }
-
-    fn reset_for_new_slot(&mut self, slot: Slot) {
-        self.slot = slot;
-        self.retry_iteration = 0;
-        self.time = Instant::now();
-    }
-
-    fn increment_retry_iteration(&mut self) {
-        self.retry_iteration += 1;
-        self.time = Instant::now();
-    }
-}
-
 pub struct ReplayStageConfig {
     pub vote_account: Pubkey,
     pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
@@ -412,7 +382,6 @@ impl ReplayStage {
                 let mut last_reset = Hash::default();
                 let mut partition_exists = false;
                 let mut skipped_slots_info = SkippedSlotsInfo::default();
-                let mut last_retransmit_retry_info = LastRetransmitInfo { slot: 0, time: Instant::now(), retry_iteration: 0 };
                 let mut replay_timing = ReplayTiming::default();
                 let mut duplicate_slots_tracker = DuplicateSlotsTracker::default();
                 let mut gossip_duplicate_confirmed_slots: GossipDuplicateConfirmedSlots = GossipDuplicateConfirmedSlots::default();
@@ -803,7 +772,6 @@ impl ReplayStage {
                         &bank_forks,
                         &retransmit_slots_sender,
                         &mut progress,
-                        &mut last_retransmit_retry_info,
                     );
                     retransmit_not_propagated_time.stop();
 
@@ -818,11 +786,10 @@ impl ReplayStage {
                             &poh_recorder,
                             &leader_schedule_cache,
                             &rpc_subscriptions,
-                            &progress,
+                            &mut progress,
                             &retransmit_slots_sender,
                             &mut skipped_slots_info,
                             has_new_vote_been_rooted,
-                            &mut last_retransmit_retry_info,
                         );
 
                         let poh_bank = poh_recorder.lock().unwrap().bank();
@@ -881,14 +848,11 @@ impl ReplayStage {
         }
     }
 
-    /// The return value is `Some(slot)` if `slot` was our leader block on the
-    /// heaviest fork that was retransmitted by the call to this function.
     fn retransmit_latest_unpropagated_leader_slot(
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         bank_forks: &Arc<RwLock<BankForks>>,
         retransmit_slots_sender: &RetransmitSlotsSender,
         progress: &mut ProgressMap,
-        last_retransmit_retry_info: &mut LastRetransmitInfo,
     ) {
         let start_slot = poh_recorder.lock().unwrap().start_slot();
         if let Some(latest_leader_slot) = progress.get_latest_leader_slot(start_slot) {
@@ -901,36 +865,25 @@ impl ReplayStage {
                         latest leader must exist in progress map, and thus also in BankForks",
                 )
                 .clone();
-            if last_retransmit_retry_info.slot == bank.slot() {
-                if !progress.is_propagated(bank.slot()) {
-                    warn!("Slot not propagated: slot={}", bank.slot());
-                    if last_retransmit_retry_info.reached_retransmit_threshold() {
-                        info!(
-                            "Retrying retransmit: start_slot={} last_retransmit_retry_info={:?}",
-                            start_slot, &last_retransmit_retry_info,
-                        );
-                        datapoint_info!(
-                            "replay_stage-retransmit-timing-based",
-                            ("slot", bank.slot(), i64),
-                            (
-                                "retry_iteration",
-                                last_retransmit_retry_info.retry_iteration,
-                                i64
-                            ),
-                        );
-                        let _ = retransmit_slots_sender
-                            .send(vec![(bank.slot(), bank.clone())].into_iter().collect());
-                        last_retransmit_retry_info.increment_retry_iteration();
-                    } else {
-                        info!("Bypass retry: {:?}", &last_retransmit_retry_info);
-                    }
+            if !progress.is_propagated(bank.slot()) {
+                warn!("Slot not propagated: slot={}", bank.slot());
+                let retransmit_info = progress.get_retransmit_info(bank.slot()).unwrap();
+                if retransmit_info.reached_retransmit_threshold() {
+                    info!(
+                        "Retrying retransmit: start_slot={} retransmit_info={:?}",
+                        start_slot, &retransmit_info,
+                    );
+                    datapoint_info!(
+                        "replay_stage-retransmit-timing-based",
+                        ("slot", bank.slot(), i64),
+                        ("retry_iteration", retransmit_info.retry_iteration, i64),
+                    );
+                    let _ = retransmit_slots_sender
+                        .send(vec![(bank.slot(), bank.clone())].into_iter().collect());
+                    retransmit_info.increment_retry_iteration();
+                } else {
+                    info!("Bypass retry: {:?}", &retransmit_info);
                 }
-            } else {
-                last_retransmit_retry_info.reset_for_new_slot(bank.slot());
-                info!(
-                    "Resetting last_retransmit_retry_info={:?}",
-                    &last_retransmit_retry_info
-                );
             }
         }
     }
@@ -1457,11 +1410,10 @@ impl ReplayStage {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         rpc_subscriptions: &Arc<RpcSubscriptions>,
-        progress_map: &ProgressMap,
+        progress_map: &mut ProgressMap,
         retransmit_slots_sender: &RetransmitSlotsSender,
         skipped_slots_info: &mut SkippedSlotsInfo,
         has_new_vote_been_rooted: bool,
-        last_retransmit_retry_info: &mut LastRetransmitInfo,
     ) {
         // all the individual calls to poh_recorder.lock() are designed to
         // increase granularity, decrease contention
@@ -1549,35 +1501,22 @@ impl ReplayStage {
                     .clone();
 
                 if Self::should_retransmit(poh_slot, &mut skipped_slots_info.last_retransmit_slot) {
-                    let mut should_retransmit = false;
-                    if last_retransmit_retry_info.slot == bank.slot() {
-                        if last_retransmit_retry_info.reached_retransmit_threshold() {
-                            should_retransmit = true;
-                            last_retransmit_retry_info.increment_retry_iteration();
-                        }
-                    } else {
-                        should_retransmit = true;
-                        last_retransmit_retry_info.reset_for_new_slot(bank.slot());
-                    }
-
-                    if should_retransmit {
+                    let retransmit_info = progress_map.get_retransmit_info(bank.slot()).unwrap();
+                    if retransmit_info.reached_retransmit_threshold() {
                         info!(
-                            "Retrying retransmit: last_retransmit_retry_info={:?}",
-                            &last_retransmit_retry_info
+                            "Retrying retransmit: retransmit_info={:?}",
+                            &retransmit_info
                         );
                         datapoint_info!(
                             "replay_stage-retransmit",
                             ("slot", bank.slot(), i64),
-                            (
-                                "retry_iteration",
-                                last_retransmit_retry_info.retry_iteration,
-                                i64
-                            ),
+                            ("retry_iteration", retransmit_info.retry_iteration, i64),
                         );
                         let _ = retransmit_slots_sender
                             .send(vec![(bank.slot(), bank.clone())].into_iter().collect());
+                        retransmit_info.increment_retry_iteration();
                     } else {
-                        info!("Bypass retransmit: {:?}", &last_retransmit_retry_info);
+                        info!("Bypass retransmit: {:?}", &retransmit_info);
                     }
                 }
                 return;
@@ -3012,7 +2951,7 @@ pub mod tests {
         super::*,
         crate::{
             consensus::Tower,
-            progress_map::ValidatorStakeInfo,
+            progress_map::{ValidatorStakeInfo, RETRANSMIT_BASE_DELAY_MS},
             replay_stage::ReplayStage,
             tree_diff::TreeDiff,
             vote_simulator::{self, VoteSimulator},
@@ -6014,18 +5953,11 @@ pub mod tests {
         bank1.freeze();
         bank_forks.write().unwrap().insert(bank1);
 
-        let mut last_retransmit_retry_info = LastRetransmitInfo {
-            slot: 0,
-            time: Instant::now(),
-            retry_iteration: 0,
-        };
-
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
             bank_forks,
             &retransmit_slots_sender,
             &mut progress,
-            &mut last_retransmit_retry_info,
         );
         let res = retransmit_slots_receiver.recv_timeout(Duration::from_millis(10));
         assert!(
@@ -6033,14 +5965,13 @@ pub mod tests {
             "retry_iteration=0, elapsed < RETRANSMIT_BASE_DELAY_MS"
         );
 
-        last_retransmit_retry_info.time =
-            Instant::now() - Duration::from_millis(RETRANSMIT_BASE_DELAY_MS + 1);
+        progress.get_retransmit_info(0).unwrap().retry_time =
+            Some(Instant::now() - Duration::from_millis(RETRANSMIT_BASE_DELAY_MS + 1));
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
             bank_forks,
             &retransmit_slots_sender,
             &mut progress,
-            &mut last_retransmit_retry_info,
         );
         let res = retransmit_slots_receiver.recv_timeout(Duration::from_millis(10));
         assert!(
@@ -6048,7 +5979,8 @@ pub mod tests {
             "retry_iteration=0, elapsed > RETRANSMIT_BASE_DELAY_MS"
         );
         assert_eq!(
-            last_retransmit_retry_info.retry_iteration, 1,
+            progress.get_retransmit_info(0).unwrap().retry_iteration,
+            1,
             "retransmit should advance retry_iteration"
         );
 
@@ -6057,7 +5989,6 @@ pub mod tests {
             bank_forks,
             &retransmit_slots_sender,
             &mut progress,
-            &mut last_retransmit_retry_info,
         );
         let res = retransmit_slots_receiver.recv_timeout(Duration::from_millis(10));
         assert!(
@@ -6065,14 +5996,13 @@ pub mod tests {
             "retry_iteration=1, elapsed < 2^1 * RETRY_BASE_DELAY_MS"
         );
 
-        last_retransmit_retry_info.time =
-            Instant::now() - Duration::from_millis(RETRANSMIT_BASE_DELAY_MS + 1);
+        progress.get_retransmit_info(0).unwrap().retry_time =
+            Some(Instant::now() - Duration::from_millis(RETRANSMIT_BASE_DELAY_MS + 1));
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
             bank_forks,
             &retransmit_slots_sender,
             &mut progress,
-            &mut last_retransmit_retry_info,
         );
         let res = retransmit_slots_receiver.recv_timeout(Duration::from_millis(10));
         assert!(
@@ -6080,14 +6010,13 @@ pub mod tests {
             "retry_iteration=1, elapsed < 2^1 * RETRANSMIT_BASE_DELAY_MS"
         );
 
-        last_retransmit_retry_info.time =
-            Instant::now() - Duration::from_millis(2 * RETRANSMIT_BASE_DELAY_MS + 1);
+        progress.get_retransmit_info(0).unwrap().retry_time =
+            Some(Instant::now() - Duration::from_millis(2 * RETRANSMIT_BASE_DELAY_MS + 1));
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
             bank_forks,
             &retransmit_slots_sender,
             &mut progress,
-            &mut last_retransmit_retry_info,
         );
         let res = retransmit_slots_receiver.recv_timeout(Duration::from_millis(10));
         assert!(
@@ -6095,21 +6024,24 @@ pub mod tests {
             "retry_iteration=1, elapsed > 2^1 * RETRANSMIT_BASE_DELAY_MS"
         );
         assert_eq!(
-            last_retransmit_retry_info.retry_iteration, 2,
+            progress.get_retransmit_info(0).unwrap().retry_iteration,
+            2,
             "retransmit should advance retry_iteration"
         );
 
         // increment to retry iteration 3
-        last_retransmit_retry_info.increment_retry_iteration();
+        progress
+            .get_retransmit_info(0)
+            .unwrap()
+            .increment_retry_iteration();
 
-        last_retransmit_retry_info.time =
-            Instant::now() - Duration::from_millis(2 * RETRANSMIT_BASE_DELAY_MS + 1);
+        progress.get_retransmit_info(0).unwrap().retry_time =
+            Some(Instant::now() - Duration::from_millis(2 * RETRANSMIT_BASE_DELAY_MS + 1));
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
             bank_forks,
             &retransmit_slots_sender,
             &mut progress,
-            &mut last_retransmit_retry_info,
         );
         let res = retransmit_slots_receiver.recv_timeout(Duration::from_millis(10));
         assert!(
@@ -6117,14 +6049,13 @@ pub mod tests {
             "retry_iteration=3, elapsed < 2^3 * RETRANSMIT_BASE_DELAY_MS"
         );
 
-        last_retransmit_retry_info.time =
-            Instant::now() - Duration::from_millis(8 * RETRANSMIT_BASE_DELAY_MS + 1);
+        progress.get_retransmit_info(0).unwrap().retry_time =
+            Some(Instant::now() - Duration::from_millis(8 * RETRANSMIT_BASE_DELAY_MS + 1));
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
             bank_forks,
             &retransmit_slots_sender,
             &mut progress,
-            &mut last_retransmit_retry_info,
         );
         let res = retransmit_slots_receiver.recv_timeout(Duration::from_millis(10));
         assert!(
@@ -6132,7 +6063,8 @@ pub mod tests {
             "retry_iteration=3, elapsed > 2^3 * RETRANSMIT_BASE_DELAY"
         );
         assert_eq!(
-            last_retransmit_retry_info.retry_iteration, 4,
+            progress.get_retransmit_info(0).unwrap().retry_iteration,
+            4,
             "retransmit should advance retry_iteration"
         );
     }
