@@ -3628,8 +3628,7 @@ impl Bank {
                             .map(|process_result| {
                                 self.update_accounts_data_len(
                                     process_result.accounts_data_len_delta,
-                                );
-                                ()
+                                )
                             });
                         } else {
                             // TODO: support versioned messages
