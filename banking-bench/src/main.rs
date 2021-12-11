@@ -13,7 +13,7 @@ use {
         get_tmp_ledger_path,
     },
     solana_measure::measure::Measure,
-    solana_perf::packet::to_packets_chunked,
+    solana_perf::packet::to_packet_batches,
     solana_poh::poh_recorder::{create_test_recorder, PohRecorder, WorkingBankEntry},
     solana_runtime::{
         accounts_background_service::AbsRequestSender, bank::Bank, bank_forks::BankForks,
@@ -212,7 +212,7 @@ fn main() {
         bank.clear_signatures();
     }
 
-    let mut verified: Vec<_> = to_packets_chunked(&transactions, packets_per_chunk);
+    let mut verified: Vec<_> = to_packet_batches(&transactions, packets_per_chunk);
     let ledger_path = get_tmp_ledger_path!();
     {
         let blockstore = Arc::new(
@@ -364,7 +364,7 @@ fn main() {
                     let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen::<u8>()).collect();
                     tx.signatures[0] = Signature::new(&sig[0..64]);
                 }
-                verified = to_packets_chunked(&transactions.clone(), packets_per_chunk);
+                verified = to_packet_batches(&transactions.clone(), packets_per_chunk);
             }
 
             start += chunk_len;

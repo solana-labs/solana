@@ -3,7 +3,7 @@
 extern crate test;
 
 use {
-    solana_perf::{packet::to_packets_chunked, recycler::Recycler, sigverify, test_tx::test_tx},
+    solana_perf::{packet::to_packet_batches, recycler::Recycler, sigverify, test_tx::test_tx},
     test::Bencher,
 };
 
@@ -12,7 +12,7 @@ fn bench_sigverify(bencher: &mut Bencher) {
     let tx = test_tx();
 
     // generate packet vector
-    let mut batches = to_packets_chunked(&std::iter::repeat(tx).take(128).collect::<Vec<_>>(), 128);
+    let mut batches = to_packet_batches(&std::iter::repeat(tx).take(128).collect::<Vec<_>>(), 128);
 
     let recycler = Recycler::default();
     let recycler_out = Recycler::default();
@@ -28,7 +28,7 @@ fn bench_get_offsets(bencher: &mut Bencher) {
 
     // generate packet vector
     let mut batches =
-        to_packets_chunked(&std::iter::repeat(tx).take(1024).collect::<Vec<_>>(), 1024);
+        to_packet_batches(&std::iter::repeat(tx).take(1024).collect::<Vec<_>>(), 1024);
 
     let recycler = Recycler::default();
     // verify packets
