@@ -57,7 +57,7 @@ pub fn get_unknown_last_index(
             .entry(slot)
             .or_insert_with(|| blockstore.meta(slot).unwrap());
         if let Some(slot_meta) = slot_meta {
-            if slot_meta.known_last_index().is_none() {
+            if slot_meta.last_index.is_none() {
                 let shred_index = blockstore.get_index(slot).unwrap();
                 let num_processed_shreds = if let Some(shred_index) = shred_index {
                     shred_index.data().num_shreds() as u64
@@ -123,7 +123,7 @@ pub fn get_closest_completion(
             if slot_meta.is_full() {
                 continue;
             }
-            if let Some(last_index) = slot_meta.known_last_index() {
+            if let Some(last_index) = slot_meta.last_index {
                 let shred_index = blockstore.get_index(slot).unwrap();
                 let dist = if let Some(shred_index) = shred_index {
                     let shred_count = shred_index.data().num_shreds() as u64;
