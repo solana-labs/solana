@@ -347,10 +347,6 @@ where
         accounts_db_config,
         accounts_update_notifier,
     )?;
-    debug!(
-        "accounts data len: {}",
-        reconstructed_accounts_db_info.accounts_data_len
-    );
 
     let bank_rc = BankRc::new(Accounts::new_empty(accounts_db), bank_fields.slot);
 
@@ -363,6 +359,7 @@ where
         debug_keys,
         additional_builtins,
         debug_do_not_add_builtins,
+        reconstructed_accounts_db_info.accounts_data_len,
     );
 
     info!("rent_collector: {:?}", bank.rent_collector());
