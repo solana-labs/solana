@@ -5960,9 +5960,23 @@ pub mod tests {
             &mut progress,
         );
         let res = retransmit_slots_receiver.recv_timeout(Duration::from_millis(10));
+        assert!(res.is_ok(), "retry_iteration=0, retry_time=None");
+        assert_eq!(
+            progress.get_retransmit_info(0).unwrap().retry_iteration,
+            0,
+            "retransmit should not advance retry_iteration before time has been set"
+        );
+
+        ReplayStage::retransmit_latest_unpropagated_leader_slot(
+            &poh_recorder,
+            bank_forks,
+            &retransmit_slots_sender,
+            &mut progress,
+        );
+        let res = retransmit_slots_receiver.recv_timeout(Duration::from_millis(10));
         assert!(
             res.is_err(),
-            "retry_iteration=0, elapsed < RETRANSMIT_BASE_DELAY_MS"
+            "retry_iteration=0, elapsed < 2^0 * RETRANSMIT_BASE_DELAY_MS"
         );
 
         progress.get_retransmit_info(0).unwrap().retry_time =

@@ -208,7 +208,9 @@ impl RetransmitInfo {
     }
 
     pub fn increment_retry_iteration(&mut self) {
-        self.retry_iteration += 1;
+        if self.retry_time.is_some() {
+            self.retry_iteration += 1;
+        }
         self.retry_time = Some(Instant::now());
     }
 }
