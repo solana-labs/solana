@@ -15,7 +15,7 @@ use {
     solana_metrics::*,
     solana_perf::{
         cuda_runtime::PinnedVec,
-        packet::{Packet, Packets, PacketsRecycler, PACKETS_PER_BATCH},
+        packet::{Packet, PacketBatch, PacketBatchRecycler, PACKETS_PER_BATCH},
         perf_libs,
         recycler::Recycler,
         sigverify,
@@ -308,7 +308,7 @@ impl<'a> EntrySigVerificationState {
 pub struct VerifyRecyclers {
     hash_recycler: Recycler<PinnedVec<Hash>>,
     tick_count_recycler: Recycler<PinnedVec<u64>>,
-    packet_recycler: PacketsRecycler,
+    packet_recycler: PacketBatchRecycler,
     out_recycler: Recycler<PinnedVec<u8>>,
     tx_offset_recycler: Recycler<sigverify::TxOffset>,
 }
@@ -499,12 +499,12 @@ pub fn start_verify_transactions(
                 })
                 .flatten()
                 .collect::<Vec<_>>();
-            let mut packets_vec = entry_txs
+            let mut packet_batches = entry_txs
                 .par_iter()
                 .chunks(PACKETS_PER_BATCH)
                 .map(|slice| {
                     let vec_size = slice.len();
-                    let mut packets = Packets::new_with_recycler(
+                    let mut packet_batch = PacketBatch::new_with_recycler(
                         verify_recyclers.packet_recycler.clone(),
                         vec_size,
                         "entry-sig-verify",
@@ -515,13 +515,13 @@ pub fn start_verify_transactions(
                     // uninitialized anyway, so the initilization would simply write junk into
                     // the vector anyway.
                     unsafe {
-                        packets.packets.set_len(vec_size);
+                        packet_batch.packets.set_len(vec_size);
                     }
                     let entry_tx_iter = slice
                         .into_par_iter()
                         .map(|tx| tx.to_versioned_transaction());
 
-                    let res = packets
+                    let res = packet_batch
                         .packets
                         .par_iter_mut()
                         .zip(entry_tx_iter)
@@ -530,7 +530,7 @@ pub fn start_verify_transactions(
                             Packet::populate_packet(pair.0, None, &pair.1).is_ok()
                         });
                     if res {
-                        Ok(packets)
+                        Ok(packet_batch)
                     } else {
                         Err(TransactionError::SanitizeFailure)
                     }
@@ -542,14 +542,14 @@ pub fn start_verify_transactions(
             let gpu_verify_thread = thread::spawn(move || {
                 let mut verify_time = Measure::start("sigverify");
                 sigverify::ed25519_verify(
-                    &mut packets_vec,
+                    &mut packet_batches,
                     &tx_offset_recycler,
                     &out_recycler,
                     false,
                 );
-                let verified = packets_vec
+                let verified = packet_batches
                     .iter()
-                    .all(|packets| packets.packets.iter().all(|p| !p.meta.discard));
+                    .all(|batch| batch.packets.iter().all(|p| !p.meta.discard));
                 verify_time.stop();
                 (verified, verify_time.as_us())
             });

@@ -1,7 +1,7 @@
 use {
     crate::{cluster_info_vote_listener::VerifiedLabelVotePacketsReceiver, result::Result},
     crossbeam_channel::Select,
-    solana_perf::packet::Packets,
+    solana_perf::packet::PacketBatch,
     solana_runtime::bank::Bank,
     solana_sdk::{
         account::from_account, clock::Slot, hash::Hash, pubkey::Pubkey, signature::Signature,
@@ -19,8 +19,13 @@ const MAX_VOTES_PER_VALIDATOR: usize = 1000;
 
 pub struct VerifiedVoteMetadata {
     pub vote_account_key: Pubkey,
+<<<<<<< HEAD
     pub vote: Vote,
     pub packet: Packets,
+=======
+    pub vote: Box<dyn VoteTransaction>,
+    pub packet_batch: PacketBatch,
+>>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
     pub signature: Signature,
 }
 
@@ -70,7 +75,7 @@ impl<'a> ValidatorGossipVotesIterator<'a> {
 ///
 /// Iterator is done after iterating through all vote accounts
 impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
-    type Item = Vec<Packets>;
+    type Item = Vec<PacketBatch>;
 
     fn next(&mut self) -> Option<Self::Item> {
         // TODO: Maybe prioritize by stake weight
@@ -116,7 +121,7 @@ impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
                                             None
                                         }
                                     })
-                                    .collect::<Vec<Packets>>()
+                                    .collect::<Vec<PacketBatch>>()
                             })
                         })
                 });
@@ -130,7 +135,7 @@ impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
     }
 }
 
-pub type SingleValidatorVotes = BTreeMap<(Slot, Hash), (Packets, Signature)>;
+pub type SingleValidatorVotes = BTreeMap<(Slot, Hash), (PacketBatch, Signature)>;
 
 #[derive(Default)]
 pub struct VerifiedVotePackets(HashMap<Pubkey, SingleValidatorVotes>);
@@ -150,7 +155,7 @@ impl VerifiedVotePackets {
                     let VerifiedVoteMetadata {
                         vote_account_key,
                         vote,
-                        packet,
+                        packet_batch,
                         signature,
                     } = verfied_vote_metadata;
                     if vote.slots.is_empty() {
@@ -161,7 +166,11 @@ impl VerifiedVotePackets {
                     let hash = vote.hash;
 
                     let validator_votes = self.0.entry(vote_account_key).or_default();
+<<<<<<< HEAD
                     validator_votes.insert((*slot, hash), (packet, signature));
+=======
+                    validator_votes.insert((slot, hash), (packet_batch, signature));
+>>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
 
                     if validator_votes.len() > MAX_VOTES_PER_VALIDATOR {
                         let smallest_key = validator_votes.keys().next().cloned().unwrap();
@@ -198,8 +207,13 @@ mod tests {
         let vote = Vote::new(vec![vote_slot], vote_hash);
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
+<<<<<<< HEAD
             vote: vote.clone(),
             packet: Packets::default(),
+=======
+            vote: Box::new(vote.clone()),
+            packet_batch: PacketBatch::default(),
+>>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
             signature: Signature::new(&[1u8; 64]),
         }])
         .unwrap();
@@ -218,8 +232,13 @@ mod tests {
         // Same slot, same hash, should not be inserted
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
+<<<<<<< HEAD
             vote,
             packet: Packets::default(),
+=======
+            vote: Box::new(vote),
+            packet_batch: PacketBatch::default(),
+>>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
             signature: Signature::new(&[1u8; 64]),
         }])
         .unwrap();
@@ -240,8 +259,13 @@ mod tests {
         let vote = Vote::new(vec![vote_slot], new_vote_hash);
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
+<<<<<<< HEAD
             vote,
             packet: Packets::default(),
+=======
+            vote: Box::new(vote),
+            packet_batch: PacketBatch::default(),
+>>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
             signature: Signature::new(&[1u8; 64]),
         }])
         .unwrap();
@@ -263,8 +287,13 @@ mod tests {
         let vote = Vote::new(vec![vote_slot], vote_hash);
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
+<<<<<<< HEAD
             vote,
             packet: Packets::default(),
+=======
+            vote: Box::new(vote),
+            packet_batch: PacketBatch::default(),
+>>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
             signature: Signature::new(&[2u8; 64]),
         }])
         .unwrap();
@@ -302,8 +331,13 @@ mod tests {
             let vote = Vote::new(vec![vote_slot], vote_hash);
             s.send(vec![VerifiedVoteMetadata {
                 vote_account_key,
+<<<<<<< HEAD
                 vote,
                 packet: Packets::default(),
+=======
+                vote: Box::new(vote),
+                packet_batch: PacketBatch::default(),
+>>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
                 signature: Signature::new(&[1u8; 64]),
             }])
             .unwrap();
@@ -339,8 +373,13 @@ mod tests {
             let vote = Vote::new(vec![vote_slot], vote_hash);
             s.send(vec![VerifiedVoteMetadata {
                 vote_account_key,
+<<<<<<< HEAD
                 vote,
                 packet: Packets::default(),
+=======
+                vote: Box::new(vote),
+                packet_batch: PacketBatch::default(),
+>>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
                 signature: Signature::new_unique(),
             }])
             .unwrap();
@@ -393,8 +432,13 @@ mod tests {
                 let vote = Vote::new(vec![*vote_slot], *vote_hash);
                 s.send(vec![VerifiedVoteMetadata {
                     vote_account_key,
+<<<<<<< HEAD
                     vote,
                     packet: Packets::new(vec![Packet::default(); num_packets]),
+=======
+                    vote: Box::new(vote),
+                    packet_batch: PacketBatch::new(vec![Packet::default(); num_packets]),
+>>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
                     signature: Signature::new_unique(),
                 }])
                 .unwrap();
@@ -427,12 +471,12 @@ mod tests {
         // Get and verify batches
         let num_expected_batches = 2;
         for _ in 0..num_expected_batches {
-            let validator_batch: Vec<Packets> = gossip_votes_iterator.next().unwrap();
+            let validator_batch: Vec<PacketBatch> = gossip_votes_iterator.next().unwrap();
             assert_eq!(validator_batch.len(), slot_hashes.slot_hashes().len());
             let expected_len = validator_batch[0].packets.len();
             assert!(validator_batch
                 .iter()
-                .all(|p| p.packets.len() == expected_len));
+                .all(|batch| batch.packets.len() == expected_len));
         }
 
         // Should be empty now
@@ -461,7 +505,7 @@ mod tests {
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
             vote,
-            packet: Packets::default(),
+            packet_batch: PacketBatch::default(),
             signature: Signature::new_unique(),
         }])
         .unwrap();
