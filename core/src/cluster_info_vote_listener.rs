@@ -20,7 +20,7 @@ use {
     },
     solana_ledger::blockstore::Blockstore,
     solana_metrics::inc_new_counter_debug,
-    solana_perf::packet::{self, Packets},
+    solana_perf::packet::{self, PacketBatch},
     solana_poh::poh_recorder::PohRecorder,
     solana_rpc::{
         optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
@@ -253,7 +253,7 @@ impl ClusterInfoVoteListener {
     pub fn new(
         exit: &Arc<AtomicBool>,
         cluster_info: Arc<ClusterInfo>,
-        verified_packets_sender: CrossbeamSender<Vec<Packets>>,
+        verified_packets_sender: CrossbeamSender<Vec<PacketBatch>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         vote_tracker: Arc<VoteTracker>,
         bank_forks: Arc<RwLock<BankForks>>,
@@ -349,16 +349,22 @@ impl ClusterInfoVoteListener {
     }
 
     #[allow(clippy::type_complexity)]
+<<<<<<< HEAD
     fn verify_votes(
         votes: Vec<Transaction>,
         labels: Vec<CrdsValueLabel>,
     ) -> (Vec<Transaction>, Vec<(CrdsValueLabel, Slot, Packets)>) {
         let mut msgs = packet::to_packets_chunked(&votes, 1);
+=======
+    fn verify_votes(votes: Vec<Transaction>) -> (Vec<Transaction>, Vec<VerifiedVoteMetadata>) {
+        let mut packet_batches = packet::to_packet_batches(&votes, 1);
+>>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
 
         // Votes should already be filtered by this point.
         let reject_non_vote = false;
-        sigverify::ed25519_verify_cpu(&mut msgs, reject_non_vote);
+        sigverify::ed25519_verify_cpu(&mut packet_batches, reject_non_vote);
 
+<<<<<<< HEAD
         let (vote_txs, packets) = izip!(labels.into_iter(), votes.into_iter(), msgs,)
             .filter_map(|(label, vote, packet)| {
                 let slot = vote_transaction::parse_vote_transaction(&vote)
@@ -370,6 +376,33 @@ impl ClusterInfoVoteListener {
                     Some((vote, (label, slot, packet)))
                 } else {
                     None
+=======
+        let (vote_txs, vote_metadata) = izip!(votes.into_iter(), packet_batches)
+            .filter_map(|(vote_tx, packet_batch)| {
+                let (vote, vote_account_key) = vote_transaction::parse_vote_transaction(&vote_tx)
+                    .and_then(|(vote_account_key, vote, _)| {
+                    if vote.slots().is_empty() {
+                        None
+                    } else {
+                        Some((vote, vote_account_key))
+                    }
+                })?;
+
+                // to_packet_batches() above splits into 1 packet long batches
+                assert_eq!(packet_batch.packets.len(), 1);
+                if !packet_batch.packets[0].meta.discard {
+                    if let Some(signature) = vote_tx.signatures.first().cloned() {
+                        return Some((
+                            vote_tx,
+                            VerifiedVoteMetadata {
+                                vote_account_key,
+                                vote,
+                                packet_batch,
+                                signature,
+                            },
+                        ));
+                    }
+>>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
                 }
             })
             .unzip();
@@ -380,7 +413,7 @@ impl ClusterInfoVoteListener {
         exit: Arc<AtomicBool>,
         verified_vote_label_packets_receiver: VerifiedLabelVotePacketsReceiver,
         poh_recorder: Arc<Mutex<PohRecorder>>,
-        verified_packets_sender: &CrossbeamSender<Vec<Packets>>,
+        verified_packets_sender: &CrossbeamSender<Vec<PacketBatch>>,
     ) -> Result<()> {
         let mut verified_vote_packets = VerifiedVotePackets::default();
         let mut time_since_lock = Instant::now();
@@ -430,6 +463,61 @@ impl ClusterInfoVoteListener {
         }
     }
 
+<<<<<<< HEAD
+=======
+    fn check_for_leader_bank_and_send_votes(
+        bank_vote_sender_state_option: &mut Option<BankVoteSenderState>,
+        current_working_bank: Arc<Bank>,
+        verified_packets_sender: &CrossbeamSender<Vec<PacketBatch>>,
+        verified_vote_packets: &VerifiedVotePackets,
+    ) -> Result<()> {
+        // We will take this lock at most once every `BANK_SEND_VOTES_LOOP_SLEEP_MS`
+        if let Some(bank_vote_sender_state) = bank_vote_sender_state_option {
+            if bank_vote_sender_state.bank.slot() != current_working_bank.slot() {
+                bank_vote_sender_state.report_metrics();
+                *bank_vote_sender_state_option =
+                    Some(BankVoteSenderState::new(current_working_bank));
+            }
+        } else {
+            *bank_vote_sender_state_option = Some(BankVoteSenderState::new(current_working_bank));
+        }
+
+        let bank_vote_sender_state = bank_vote_sender_state_option.as_mut().unwrap();
+        let BankVoteSenderState {
+            ref bank,
+            ref mut bank_send_votes_stats,
+            ref mut previously_sent_to_bank_votes,
+        } = bank_vote_sender_state;
+
+        // This logic may run multiple times for the same leader bank,
+        // we just have to ensure that the same votes are not sent
+        // to the bank multiple times, which is guaranteed by
+        // `previously_sent_to_bank_votes`
+        let gossip_votes_iterator = ValidatorGossipVotesIterator::new(
+            bank.clone(),
+            verified_vote_packets,
+            previously_sent_to_bank_votes,
+        );
+
+        let mut filter_gossip_votes_timing = Measure::start("filter_gossip_votes");
+
+        // Send entire batch at a time so that there is no partial processing of
+        // a single validator's votes by two different banks. This might happen
+        // if we sent each vote individually, for instance if we creaed two different
+        // leader banks from the same common parent, one leader bank may process
+        // only the later votes and ignore the earlier votes.
+        for single_validator_votes in gossip_votes_iterator {
+            bank_send_votes_stats.num_votes_sent += single_validator_votes.len();
+            bank_send_votes_stats.num_batches_sent += 1;
+            verified_packets_sender.send(single_validator_votes)?;
+        }
+        filter_gossip_votes_timing.stop();
+        bank_send_votes_stats.total_elapsed += filter_gossip_votes_timing.as_us();
+
+        Ok(())
+    }
+
+>>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
     #[allow(clippy::too_many_arguments)]
     fn process_votes_loop(
         exit: Arc<AtomicBool>,
@@ -876,9 +964,9 @@ mod tests {
         use bincode::serialized_size;
         info!("max vote size {}", serialized_size(&vote_tx).unwrap());
 
-        let msgs = packet::to_packets_chunked(&[vote_tx], 1); // panics if won't fit
+        let packet_batches = packet::to_packet_batches(&[vote_tx], 1); // panics if won't fit
 
-        assert_eq!(msgs.len(), 1);
+        assert_eq!(packet_batches.len(), 1);
     }
 
     fn run_vote_contains_authorized_voter(hash: Option<Hash>) {
@@ -1706,8 +1794,16 @@ mod tests {
         assert!(packets.is_empty());
     }
 
+<<<<<<< HEAD
     fn verify_packets_len(packets: &[(CrdsValueLabel, Slot, Packets)], ref_value: usize) {
         let num_packets: usize = packets.iter().map(|(_, _, p)| p.packets.len()).sum();
+=======
+    fn verify_packets_len(packets: &[VerifiedVoteMetadata], ref_value: usize) {
+        let num_packets: usize = packets
+            .iter()
+            .map(|vote_metadata| vote_metadata.packet_batch.packets.len())
+            .sum();
+>>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
         assert_eq!(num_packets, ref_value);
     }
 

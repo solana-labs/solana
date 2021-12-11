@@ -23,14 +23,14 @@ use {
     },
     solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_debug,
-    solana_perf::packet::{limited_deserialize, Packets, PacketsRecycler},
+    solana_perf::packet::{limited_deserialize, PacketBatch, PacketBatchRecycler},
     solana_sdk::{
         clock::Slot,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         timing::duration_as_ms,
     },
-    solana_streamer::streamer::{PacketReceiver, PacketSender},
+    solana_streamer::streamer::{PacketBatchReceiver, PacketBatchSender},
     std::{
         collections::HashSet,
         net::SocketAddr,
@@ -183,12 +183,12 @@ impl ServeRepair {
 
     fn handle_repair(
         me: &Arc<RwLock<Self>>,
-        recycler: &PacketsRecycler,
+        recycler: &PacketBatchRecycler,
         from_addr: &SocketAddr,
         blockstore: Option<&Arc<Blockstore>>,
         request: RepairProtocol,
         stats: &mut ServeRepairStats,
-    ) -> Option<Packets> {
+    ) -> Option<PacketBatch> {
         let now = Instant::now();
 
         //TODO verify from is signed
@@ -264,10 +264,10 @@ impl ServeRepair {
     /// Process messages from the network
     fn run_listen(
         obj: &Arc<RwLock<Self>>,
-        recycler: &PacketsRecycler,
+        recycler: &PacketBatchRecycler,
         blockstore: Option<&Arc<Blockstore>>,
-        requests_receiver: &PacketReceiver,
-        response_sender: &PacketSender,
+        requests_receiver: &PacketBatchReceiver,
+        response_sender: &PacketBatchSender,
         stats: &mut ServeRepairStats,
         max_packets: &mut usize,
     ) -> Result<()> {
@@ -336,12 +336,12 @@ impl ServeRepair {
     pub fn listen(
         me: Arc<RwLock<Self>>,
         blockstore: Option<Arc<Blockstore>>,
-        requests_receiver: PacketReceiver,
-        response_sender: PacketSender,
+        requests_receiver: PacketBatchReceiver,
+        response_sender: PacketBatchSender,
         exit: &Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         let exit = exit.clone();
-        let recycler = PacketsRecycler::default();
+        let recycler = PacketBatchRecycler::default();
         Builder::new()
             .name("solana-repair-listen".to_string())
             .spawn(move || {
@@ -376,14 +376,14 @@ impl ServeRepair {
 
     fn handle_packets(
         me: &Arc<RwLock<Self>>,
-        recycler: &PacketsRecycler,
+        recycler: &PacketBatchRecycler,
         blockstore: Option<&Arc<Blockstore>>,
-        packets: Packets,
-        response_sender: &PacketSender,
+        packet_batch: PacketBatch,
+        response_sender: &PacketBatchSender,
         stats: &mut ServeRepairStats,
     ) {
         // iter over the packets
-        packets.packets.iter().for_each(|packet| {
+        packet_batch.packets.iter().for_each(|packet| {
             let from_addr = packet.meta.addr();
             limited_deserialize(&packet.data[..packet.meta.size])
                 .into_iter()
@@ -526,7 +526,7 @@ impl ServeRepair {
     }
 
     fn run_window_request(
-        recycler: &PacketsRecycler,
+        recycler: &PacketBatchRecycler,
         from: &ContactInfo,
         from_addr: &SocketAddr,
         blockstore: Option<&Arc<Blockstore>>,
@@ -534,7 +534,7 @@ impl ServeRepair {
         slot: Slot,
         shred_index: u64,
         nonce: Nonce,
-    ) -> Option<Packets> {
+    ) -> Option<PacketBatch> {
         if let Some(blockstore) = blockstore {
             // Try to find the requested index in one of the slots
             let packet = repair_response::repair_response_packet(
@@ -547,7 +547,7 @@ impl ServeRepair {
 
             if let Some(packet) = packet {
                 inc_new_counter_debug!("serve_repair-window-request-ledger", 1);
-                return Some(Packets::new_unpinned_with_recycler_data(
+                return Some(PacketBatch::new_unpinned_with_recycler_data(
                     recycler,
                     "run_window_request",
                     vec![packet],
@@ -568,13 +568,13 @@ impl ServeRepair {
     }
 
     fn run_highest_window_request(
-        recycler: &PacketsRecycler,
+        recycler: &PacketBatchRecycler,
         from_addr: &SocketAddr,
         blockstore: Option<&Arc<Blockstore>>,
         slot: Slot,
         highest_index: u64,
         nonce: Nonce,
-    ) -> Option<Packets> {
+    ) -> Option<PacketBatch> {
         let blockstore = blockstore?;
         // Try to find the requested index in one of the slots
         let meta = blockstore.meta(slot).ok()??;
@@ -587,7 +587,7 @@ impl ServeRepair {
                 from_addr,
                 nonce,
             )?;
-            return Some(Packets::new_unpinned_with_recycler_data(
+            return Some(PacketBatch::new_unpinned_with_recycler_data(
                 recycler,
                 "run_highest_window_request",
                 vec![packet],
@@ -597,14 +597,14 @@ impl ServeRepair {
     }
 
     fn run_orphan(
-        recycler: &PacketsRecycler,
+        recycler: &PacketBatchRecycler,
         from_addr: &SocketAddr,
         blockstore: Option<&Arc<Blockstore>>,
         mut slot: Slot,
         max_responses: usize,
         nonce: Nonce,
-    ) -> Option<Packets> {
-        let mut res = Packets::new_unpinned_with_recycler(recycler.clone(), 64, "run_orphan");
+    ) -> Option<PacketBatch> {
+        let mut res = PacketBatch::new_unpinned_with_recycler(recycler.clone(), 64, "run_orphan");
         if let Some(blockstore) = blockstore {
             // Try to find the next "n" parent slots of the input slot
             while let Ok(Some(meta)) = blockstore.meta(slot) {
@@ -635,6 +635,43 @@ impl ServeRepair {
         }
         Some(res)
     }
+<<<<<<< HEAD
+=======
+
+    fn run_ancestor_hashes(
+        recycler: &PacketBatchRecycler,
+        from_addr: &SocketAddr,
+        blockstore: Option<&Arc<Blockstore>>,
+        slot: Slot,
+        nonce: Nonce,
+    ) -> Option<PacketBatch> {
+        let blockstore = blockstore?;
+        let ancestor_slot_hashes = if blockstore.is_duplicate_confirmed(slot) {
+            let ancestor_iterator =
+                AncestorIteratorWithHash::from(AncestorIterator::new_inclusive(slot, blockstore));
+            ancestor_iterator.take(MAX_ANCESTOR_RESPONSES).collect()
+        } else {
+            // If this slot is not duplicate confirmed, return nothing
+            vec![]
+        };
+        let response = AncestorHashesResponseVersion::Current(ancestor_slot_hashes);
+        let serialized_response = serialize(&response).ok()?;
+
+        // Could probably directly write response into packet via `serialize_into()`
+        // instead of incurring extra copy in `repair_response_packet_from_bytes`, but
+        // serialize_into doesn't return the written size...
+        let packet = repair_response::repair_response_packet_from_bytes(
+            serialized_response,
+            from_addr,
+            nonce,
+        )?;
+        Some(PacketBatch::new_unpinned_with_recycler_data(
+            recycler,
+            "run_ancestor_hashes",
+            vec![packet],
+        ))
+    }
+>>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
 }
 
 #[cfg(test)]
@@ -661,7 +698,7 @@ mod tests {
 
     /// test run_window_request responds with the right shred, and do not overrun
     fn run_highest_window_request(slot: Slot, num_slots: u64, nonce: Nonce) {
-        let recycler = PacketsRecycler::default();
+        let recycler = PacketBatchRecycler::default();
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path!();
         {
@@ -731,7 +768,7 @@ mod tests {
 
     /// test window requests respond with the right shred, and do not overrun
     fn run_window_request(slot: Slot, nonce: Nonce) {
-        let recycler = PacketsRecycler::default();
+        let recycler = PacketBatchRecycler::default();
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path!();
         {
@@ -900,7 +937,7 @@ mod tests {
 
     fn run_orphan(slot: Slot, num_slots: u64, nonce: Nonce) {
         solana_logger::setup();
-        let recycler = PacketsRecycler::default();
+        let recycler = PacketBatchRecycler::default();
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
@@ -974,7 +1011,7 @@ mod tests {
     #[test]
     fn run_orphan_corrupted_shred_size() {
         solana_logger::setup();
-        let recycler = PacketsRecycler::default();
+        let recycler = PacketBatchRecycler::default();
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
@@ -1033,6 +1070,92 @@ mod tests {
     }
 
     #[test]
+<<<<<<< HEAD
+=======
+    fn test_run_ancestor_hashes() {
+        solana_logger::setup();
+        let recycler = PacketBatchRecycler::default();
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let slot = 0;
+            let num_slots = MAX_ANCESTOR_RESPONSES as u64;
+            let nonce = 10;
+
+            let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+
+            // Create slots [slot, slot + num_slots) with 5 shreds apiece
+            let (shreds, _) = make_many_slot_entries(slot, num_slots, 5);
+
+            blockstore
+                .insert_shreds(shreds, None, false)
+                .expect("Expect successful ledger write");
+
+            // We don't have slot `slot + num_slots`, so we return empty
+            let rv = ServeRepair::run_ancestor_hashes(
+                &recycler,
+                &socketaddr_any!(),
+                Some(&blockstore),
+                slot + num_slots,
+                nonce,
+            )
+            .expect("run_ancestor_hashes packets")
+            .packets;
+            assert_eq!(rv.len(), 1);
+            let packet = &rv[0];
+            let ancestor_hashes_response: AncestorHashesResponseVersion =
+                limited_deserialize(&packet.data[..packet.meta.size - SIZE_OF_NONCE]).unwrap();
+            assert!(ancestor_hashes_response.into_slot_hashes().is_empty());
+
+            // `slot + num_slots - 1` is not marked duplicate confirmed so nothing should return
+            // empty
+            let rv = ServeRepair::run_ancestor_hashes(
+                &recycler,
+                &socketaddr_any!(),
+                Some(&blockstore),
+                slot + num_slots - 1,
+                nonce,
+            )
+            .expect("run_ancestor_hashes packets")
+            .packets;
+            assert_eq!(rv.len(), 1);
+            let packet = &rv[0];
+            let ancestor_hashes_response: AncestorHashesResponseVersion =
+                limited_deserialize(&packet.data[..packet.meta.size - SIZE_OF_NONCE]).unwrap();
+            assert!(ancestor_hashes_response.into_slot_hashes().is_empty());
+
+            // Set duplicate confirmed
+            let mut expected_ancestors = Vec::with_capacity(num_slots as usize);
+            expected_ancestors.resize(num_slots as usize, (0, Hash::default()));
+            for (i, duplicate_confirmed_slot) in (slot..slot + num_slots).enumerate() {
+                let frozen_hash = Hash::new_unique();
+                expected_ancestors[num_slots as usize - i - 1] =
+                    (duplicate_confirmed_slot, frozen_hash);
+                blockstore.insert_bank_hash(duplicate_confirmed_slot, frozen_hash, true);
+            }
+            let rv = ServeRepair::run_ancestor_hashes(
+                &recycler,
+                &socketaddr_any!(),
+                Some(&blockstore),
+                slot + num_slots - 1,
+                nonce,
+            )
+            .expect("run_ancestor_hashes packets")
+            .packets;
+            assert_eq!(rv.len(), 1);
+            let packet = &rv[0];
+            let ancestor_hashes_response: AncestorHashesResponseVersion =
+                limited_deserialize(&packet.data[..packet.meta.size - SIZE_OF_NONCE]).unwrap();
+            assert_eq!(
+                ancestor_hashes_response.into_slot_hashes(),
+                expected_ancestors
+            );
+        }
+
+        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+>>>>>>> 254ef3e7b (Rename Packets to PacketBatch (#21794))
     fn test_repair_with_repair_validators() {
         let cluster_slots = ClusterSlots::default();
         let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
