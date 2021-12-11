@@ -3,7 +3,7 @@ use {
         erasure::ErasureConfig,
         shred::{Shred, ShredType},
     },
-    serde::{Deserialize, Serialize},
+    serde::{Deserialize, Deserializer, Serialize, Serializer},
     solana_sdk::{clock::Slot, hash::Hash},
     std::{
         collections::BTreeSet,
@@ -27,8 +27,10 @@ pub struct SlotMeta {
     // The timestamp of the first time a shred was added for this slot
     pub first_shred_timestamp: u64,
     // The index of the shred that is flagged as the last shred for this slot.
-    pub last_index: u64,
+    #[serde(with = "serde_compat")]
+    pub last_index: Option<u64>,
     // The slot height of the block this one derives from.
+    // TODO use Option<Slot> instead.
     pub parent_slot: Slot,
     // The list of slots, each of which contains a block that derives
     // from this one.
@@ -38,6 +40,27 @@ pub struct SlotMeta {
     pub is_connected: bool,
     // Shreds indices which are marked data complete.
     pub completed_data_indexes: BTreeSet<u32>,
+}
+
+// Serde implementation of serialize and deserialize for Option<u64>
+// where None is represented as u64::MAX; for backward compatibility.
+mod serde_compat {
+    use super::*;
+
+    pub(super) fn serialize<S>(val: &Option<u64>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        val.unwrap_or(u64::MAX).serialize(serializer)
+    }
+
+    pub(super) fn deserialize<'de, D>(deserializer: D) -> Result<Option<u64>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let val = u64::deserialize(deserializer)?;
+        Ok((val != u64::MAX).then(|| val))
+    }
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
@@ -168,38 +191,30 @@ impl ShredIndex {
 
 impl SlotMeta {
     pub fn is_full(&self) -> bool {
-        // last_index is std::u64::MAX when it has no information about how
+        // last_index is None when it has no information about how
         // many shreds will fill this slot.
         // Note: A full slot with zero shreds is not possible.
-        if self.last_index == std::u64::MAX {
-            return false;
-        }
-
         // Should never happen
-        if self.consumed > self.last_index + 1 {
+        if self
+            .last_index
+            .map(|ix| self.consumed > ix + 1)
+            .unwrap_or_default()
+        {
             datapoint_error!(
                 "blockstore_error",
                 (
                     "error",
                     format!(
-                        "Observed a slot meta with consumed: {} > meta.last_index + 1: {}",
+                        "Observed a slot meta with consumed: {} > meta.last_index + 1: {:?}",
                         self.consumed,
-                        self.last_index + 1
+                        self.last_index.map(|ix| ix + 1),
                     ),
                     String
                 )
             );
         }
 
-        self.consumed == self.last_index + 1
-    }
-
-    pub fn known_last_index(&self) -> Option<u64> {
-        if self.last_index == std::u64::MAX {
-            None
-        } else {
-            Some(self.last_index)
-        }
+        Some(self.consumed) == self.last_index.map(|ix| ix + 1)
     }
 
     pub fn is_parent_set(&self) -> bool {
@@ -217,7 +232,6 @@ impl SlotMeta {
             slot,
             parent_slot,
             is_connected: slot == 0,
-            last_index: std::u64::MAX,
             ..SlotMeta::default()
         }
     }
