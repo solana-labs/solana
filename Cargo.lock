@@ -5880,6 +5880,9 @@ version = "1.9.1"
 dependencies = [
  "base64 0.12.3",
  "log 0.4.14",
+ "serde_derive",
+ "serde_json",
+ "solana-cli-output",
  "solana-client",
  "solana-core",
  "solana-gossip",
