@@ -46,8 +46,6 @@ pub enum ReplicaAccountInfoVersions<'a> {
     V0_0_1(&'a ReplicaAccountInfo<'a>),
 }
 
-
-
 /// Errors returned by plugin calls
 #[derive(Error, Debug)]
 pub enum AccountsDbPluginError {
