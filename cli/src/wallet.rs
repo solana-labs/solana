@@ -462,18 +462,27 @@ pub fn process_show_account(
 
     let mut account_string = config.output_format.formatted_string(&cli_account);
 
-    if config.output_format == OutputFormat::Display
-        || config.output_format == OutputFormat::DisplayVerbose
-    {
-        if let Some(output_file) = output_file {
-            let mut f = File::create(output_file)?;
-            f.write_all(&data)?;
-            writeln!(&mut account_string)?;
-            writeln!(&mut account_string, "Wrote account data to {}", output_file)?;
-        } else if !data.is_empty() {
-            use pretty_hex::*;
-            writeln!(&mut account_string, "{:?}", data.hex_dump())?;
+    match config.output_format {
+        OutputFormat::Json | OutputFormat::JsonCompact => {
+            if let Some(output_file) = output_file {
+                let mut f = File::create(output_file)?;
+                f.write_all(account_string.as_bytes())?;
+                writeln!(&mut account_string)?;
+                writeln!(&mut account_string, "Wrote account to {}", output_file)?;
+            }
         }
+        OutputFormat::Display | OutputFormat::DisplayVerbose => {
+            if let Some(output_file) = output_file {
+                let mut f = File::create(output_file)?;
+                f.write_all(&data)?;
+                writeln!(&mut account_string)?;
+                writeln!(&mut account_string, "Wrote account data to {}", output_file)?;
+            } else if !data.is_empty() {
+                use pretty_hex::*;
+                writeln!(&mut account_string, "{:?}", data.hex_dump())?;
+            }
+        }
+        OutputFormat::DisplayQuiet => (),
     }
 
     Ok(account_string)
