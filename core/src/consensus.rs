@@ -105,7 +105,7 @@ pub(crate) struct ComputedBankState {
 #[frozen_abi(digest = "GMs1FxKteU7K4ZFRofMBqNhBpM4xkPVxfYod6R8DQmpT")]
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, AbiExample)]
 pub struct Tower {
-    pub(crate) node_pubkey: Pubkey,
+    pub node_pubkey: Pubkey,
     threshold_depth: usize,
     threshold_size: f64,
     vote_state: VoteState,
@@ -430,6 +430,13 @@ impl Tower {
     #[cfg(test)]
     pub fn record_vote(&mut self, slot: Slot, hash: Hash) -> Option<Slot> {
         self.record_bank_vote_and_update_lockouts(slot, hash, self.last_voted_slot())
+    }
+
+    /// Used for tests
+    pub fn increase_lockout(&mut self, confirmation_count_increase: u32) {
+        for vote in self.vote_state.votes.iter_mut() {
+            vote.confirmation_count += confirmation_count_increase;
+        }
     }
 
     pub fn last_voted_slot(&self) -> Option<Slot> {
