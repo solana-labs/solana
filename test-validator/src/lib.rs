@@ -1,6 +1,7 @@
 #![allow(clippy::integer_arithmetic)]
 use {
     log::*,
+    solana_cli_output::CliAccount,
     solana_client::rpc_client::RpcClient,
     solana_core::{
         tower_storage::TowerStorage,
@@ -36,14 +37,22 @@ use {
     solana_streamer::socket::SocketAddrSpace,
     std::{
         collections::HashMap,
-        fs::remove_dir_all,
+        fs::{remove_dir_all, File},
+        io::Read,
         net::{IpAddr, Ipv4Addr, SocketAddr},
         path::{Path, PathBuf},
+        str::FromStr,
         sync::{Arc, RwLock},
         thread::sleep,
         time::Duration,
     },
 };
+
+#[derive(Clone)]
+pub struct AccountInfo<'a> {
+    pub address: Pubkey,
+    pub filename: &'a str,
+}
 
 #[derive(Clone)]
 pub struct ProgramInfo {
@@ -200,6 +209,41 @@ impl TestValidatorGenesis {
                 solana_core::validator::abort();
             });
             self.add_account(address, AccountSharedData::from(account));
+        }
+        self
+    }
+
+    pub fn add_accounts_from_json_files(&mut self, accounts: &[AccountInfo]) -> &mut Self {
+        for account in accounts {
+            let account_path =
+                solana_program_test::find_file(account.filename).unwrap_or_else(|| {
+                    error!("Unable to locate {}", account.filename);
+                    solana_core::validator::abort();
+                });
+            let mut file = File::open(&account_path).unwrap();
+            let mut account_info_raw = String::new();
+            file.read_to_string(&mut account_info_raw).unwrap();
+
+            let result: serde_json::Result<CliAccount> = serde_json::from_str(&account_info_raw);
+            let account_info = match result {
+                Err(err) => {
+                    error!(
+                        "Unable to deserialize {}: {}",
+                        account_path.to_str().unwrap(),
+                        err
+                    );
+                    solana_core::validator::abort();
+                }
+                Ok(deserialized) => deserialized,
+            };
+            let address = Pubkey::from_str(account_info.keyed_account.pubkey.as_str()).unwrap();
+            let account = account_info
+                .keyed_account
+                .account
+                .decode::<AccountSharedData>()
+                .unwrap();
+
+            self.add_account(address, account);
         }
         self
     }

@@ -168,6 +168,19 @@ fn main() {
                 ),
         )
         .arg(
+            Arg::with_name("account")
+                .long("account")
+                .value_name("ADDRESS FILENAME.JSON")
+                .takes_value(true)
+                .number_of_values(2)
+                .multiple(true)
+                .help(
+                    "Load an account from the provided JSON file (see `solana account --help` on how to dump \
+                        an account to file). Files are searched for relatively to CWD and tests/fixtures. \
+                        If the ledger already exists then this parameter is silently ignored",
+                ),
+        )
+        .arg(
             Arg::with_name("no_bpf_jit")
                 .long("no-bpf-jit")
                 .takes_value(false)
@@ -404,7 +417,7 @@ fn main() {
         faucet_port,
     ));
 
-    let mut programs = vec![];
+    let mut programs_to_load = vec![];
     if let Some(values) = matches.values_of("bpf_program") {
         let values: Vec<&str> = values.collect::<Vec<_>>();
         for address_program in values.chunks(2) {
@@ -427,7 +440,7 @@ fn main() {
                         exit(1);
                     }
 
-                    programs.push(ProgramInfo {
+                    programs_to_load.push(ProgramInfo {
                         program_id: address,
                         loader: solana_sdk::bpf_loader::id(),
                         program_path,
@@ -438,7 +451,25 @@ fn main() {
         }
     }
 
-    let clone_accounts: HashSet<_> = pubkeys_of(&matches, "clone_account")
+    let mut accounts_to_load = vec![];
+    if let Some(values) = matches.values_of("account") {
+        let values: Vec<&str> = values.collect::<Vec<_>>();
+        for address_filename in values.chunks(2) {
+            match address_filename {
+                [address, filename] => {
+                    let address = address.parse::<Pubkey>().unwrap_or_else(|err| {
+                        println!("Error: invalid address {}: {}", address, err);
+                        exit(1);
+                    });
+
+                    accounts_to_load.push(AccountInfo { address, filename });
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    let accounts_to_clone: HashSet<_> = pubkeys_of(&matches, "clone_account")
         .map(|v| v.into_iter().collect())
         .unwrap_or_default();
 
@@ -500,6 +531,7 @@ fn main() {
         for (name, long) in &[
             ("bpf_program", "--bpf-program"),
             ("clone_account", "--clone"),
+            ("clone_account_from_file", "--clone-from-file"),
             ("mint_address", "--mint"),
             ("slots_per_epoch", "--slots-per-epoch"),
             ("faucet_sol", "--faucet-sol"),
@@ -565,11 +597,12 @@ fn main() {
         })
         .bpf_jit(!matches.is_present("no_bpf_jit"))
         .rpc_port(rpc_port)
-        .add_programs_with_path(&programs);
+        .add_programs_with_path(&programs_to_load)
+        .add_accounts_from_json_files(&accounts_to_load);
 
-    if !clone_accounts.is_empty() {
+    if !accounts_to_clone.is_empty() {
         genesis.clone_accounts(
-            clone_accounts,
+            accounts_to_clone,
             cluster_rpc_client
                 .as_ref()
                 .expect("bug: --url argument missing?"),
