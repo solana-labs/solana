@@ -3625,11 +3625,11 @@ impl Bank {
                                 blockhash,
                                 lamports_per_signature,
                             )
-                            .and_then(|process_result| {
+                            .map(|process_result| {
                                 self.update_accounts_data_len(
                                     process_result.accounts_data_len_delta,
                                 );
-                                Ok(())
+                                ()
                             });
                         } else {
                             // TODO: support versioned messages
