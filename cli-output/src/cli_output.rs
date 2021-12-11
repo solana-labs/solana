@@ -99,7 +99,7 @@ impl OutputFormat {
 pub struct CliAccount {
     #[serde(flatten)]
     pub keyed_account: RpcKeyedAccount,
-    #[serde(skip_serializing)]
+    #[serde(skip_serializing, skip_deserializing)]
     pub use_lamports_unit: bool,
 }
 
