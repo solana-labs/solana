@@ -1,7 +1,7 @@
 #[cfg(not(target_arch = "bpf"))]
 use {
     crate::encryption::{
-        elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
+        elgamal::{ElGamalKeypair, ElGamalPubkey},
         pedersen::{PedersenBase, PedersenCommitment, PedersenDecryptHandle, PedersenOpening},
     },
     curve25519_dalek::traits::MultiscalarMul,
@@ -62,8 +62,6 @@ impl ValidityProof {
         let c = transcript.challenge_scalar(b"c");
         transcript.challenge_scalar(b"w");
 
-        println!("prover: {:?}", t);
-
         // aggregate lo and hi messages and openings
         let x = Scalar::from(messages.0) + t * Scalar::from(messages.1);
         let r = openings.0.get_scalar() + t * openings.1.get_scalar();
@@ -103,8 +101,6 @@ impl ValidityProof {
         let c = transcript.challenge_scalar(b"c");
         let w = transcript.challenge_scalar(b"w");
         let ww = w * w;
-
-        println!("verifier: {:?}", t);
 
         // check the required algebraic conditions
         let Y_0 = self.Y_0.decompress().ok_or(ProofError::VerificationError)?;

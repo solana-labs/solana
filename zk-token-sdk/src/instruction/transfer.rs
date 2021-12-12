@@ -15,6 +15,7 @@ use {
         instruction::{Role, Verifiable},
         range_proof::RangeProof,
         transcript::TranscriptProtocol,
+        validity_proof::ValidityProof,
     },
     curve25519_dalek::scalar::Scalar,
     merlin::Transcript,
@@ -117,8 +118,7 @@ impl TransferData {
             &dest_pk,
             &auditor_pk,
             (amount_lo as u64, amount_hi as u64),
-            &open_lo,
-            &open_hi,
+            (&open_lo, &open_hi),
             new_spendable_balance,
             &new_spendable_ct,
         );
@@ -205,6 +205,9 @@ pub struct TransferProof {
     /// Associated equality proof
     pub equality_proof: pod::EqualityProof,
 
+    /// Associated ciphertext validity proof
+    pub validity_proof: pod::ValidityProof,
+
     // Associated range proof
     pub range_proof: pod::RangeProof128,
 }
@@ -220,11 +223,10 @@ impl TransferProof {
     #[allow(clippy::many_single_char_names)]
     pub fn new(
         source_keypair: &ElGamalKeypair,
-        _dest_pk: &ElGamalPubkey,
-        _auditor_pk: &ElGamalPubkey,
+        dest_pk: &ElGamalPubkey,
+        auditor_pk: &ElGamalPubkey,
         transfer_amt: (u64, u64),
-        lo_open: &PedersenOpening,
-        hi_open: &PedersenOpening,
+        openings: (&PedersenOpening, &PedersenOpening),
         source_new_balance: u64,
         source_new_balance_ct: &ElGamalCiphertext,
     ) -> Self {
@@ -260,19 +262,27 @@ impl TransferProof {
             &mut transcript,
         );
 
-        // TODO: Add ct validity proof
+        // generate ciphertext validity proof
+        let validity_proof = ValidityProof::new(
+            &dest_pk,
+            &auditor_pk,
+            transfer_amt,
+            openings,
+            &mut transcript,
+        );
 
         // generate the range proof
         let range_proof = RangeProof::create(
             vec![source_new_balance, transfer_amt.0, transfer_amt.1],
             vec![64, 32, 32],
-            vec![&source_open, lo_open, hi_open],
+            vec![&source_open, openings.0, openings.1],
             &mut transcript,
         );
 
         Self {
             source_commitment: source_commitment.into(),
             equality_proof: equality_proof.try_into().expect("equality proof"),
+            validity_proof: validity_proof.try_into().expect("validity proof"),
             range_proof: range_proof.try_into().expect("range proof"),
         }
     }
@@ -280,8 +290,8 @@ impl TransferProof {
     pub fn verify(
         self,
         amount_comms: &TransferCommitments,
-        _decryption_handles_lo: &TransferDecryptHandles,
-        _decryption_handles_hi: &TransferDecryptHandles,
+        decryption_handles_lo: &TransferDecryptHandles,
+        decryption_handles_hi: &TransferDecryptHandles,
         new_spendable_ct: &pod::ElGamalCiphertext,
         transfer_public_keys: &TransferPubkeys,
     ) -> Result<(), ProofError> {
@@ -289,6 +299,7 @@ impl TransferProof {
 
         let commitment: PedersenCommitment = self.source_commitment.try_into()?;
         let equality_proof: EqualityProof = self.equality_proof.try_into()?;
+        let validity_proof: ValidityProof = self.validity_proof.try_into()?;
         let range_proof: RangeProof = self.range_proof.try_into()?;
 
         // add a domain separator to record the start of the protocol
@@ -314,7 +325,28 @@ impl TransferProof {
         // TODO: we can also consider verifying equality and range proof in a batch
         equality_proof.verify(&source_pk, &new_spendable_ct, &commitment, &mut transcript)?;
 
+        // TODO: record destination and auditor public keys to transcript
+        let dest_elgamal_pubkey: ElGamalPubkey = transfer_public_keys.dest_pk.try_into()?;
+        let auditor_elgamal_pubkey: ElGamalPubkey = transfer_public_keys.auditor_pk.try_into()?;
+
+        let amount_comm_lo: PedersenCommitment = amount_comms.lo.try_into()?;
+        let amount_comm_hi: PedersenCommitment = amount_comms.hi.try_into()?;
+
+        let handle_lo_dest: PedersenDecryptHandle = decryption_handles_lo.dest.try_into()?;
+        let handle_hi_dest: PedersenDecryptHandle = decryption_handles_hi.dest.try_into()?;
+
+        let handle_lo_auditor: PedersenDecryptHandle = decryption_handles_lo.auditor.try_into()?;
+        let handle_hi_auditor: PedersenDecryptHandle = decryption_handles_hi.auditor.try_into()?;
+
         // TODO: validity proof
+        validity_proof.verify(
+            &dest_elgamal_pubkey,
+            &auditor_elgamal_pubkey,
+            (&amount_comm_lo, &amount_comm_hi),
+            (&handle_lo_dest, &handle_hi_dest),
+            (&handle_lo_auditor, &handle_hi_auditor),
+            &mut transcript,
+        )?;
 
         // verify range proof
         range_proof.verify(

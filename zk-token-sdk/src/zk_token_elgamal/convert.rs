@@ -23,6 +23,7 @@ mod target_arch {
             equality_proof::EqualityProof,
             errors::ProofError,
             range_proof::RangeProof,
+            validity_proof::ValidityProof,
         },
         curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar},
         std::convert::TryFrom,
@@ -151,6 +152,20 @@ mod target_arch {
         type Error = ProofError;
 
         fn try_from(pod: pod::EqualityProof) -> Result<Self, Self::Error> {
+            Self::from_bytes(&pod.0)
+        }
+    }
+
+    impl From<ValidityProof> for pod::ValidityProof {
+        fn from(proof: ValidityProof) -> Self {
+            Self(proof.to_bytes())
+        }
+    }
+
+    impl TryFrom<pod::ValidityProof> for ValidityProof {
+        type Error = ProofError;
+
+        fn try_from(pod: pod::ValidityProof) -> Result<Self, Self::Error> {
             Self::from_bytes(&pod.0)
         }
     }

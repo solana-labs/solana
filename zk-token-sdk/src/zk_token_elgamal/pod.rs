@@ -54,10 +54,21 @@ impl fmt::Debug for PedersenDecryptHandle {
 #[repr(transparent)]
 pub struct EqualityProof(pub [u8; 192]);
 
-// `PodRangeProof64` is a Pod and Zeroable.
+// `EqualityProof` is a Pod and Zeroable.
 // Add the marker traits manually because `bytemuck` only adds them for some `u8` arrays
 unsafe impl Zeroable for EqualityProof {}
 unsafe impl Pod for EqualityProof {}
+
+/// Serialization of validity proofs
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct ValidityProof(pub [u8; 160]);
+
+// `ValidityProof` is a Pod and Zeroable.
+// Add the marker traits manually because `bytemuck` only adds them for some `u8` arrays
+unsafe impl Zeroable for ValidityProof {}
+unsafe impl Pod for ValidityProof {}
+
 
 /// Serialization of range proofs for 64-bit numbers (for `Withdraw` instruction)
 #[derive(Clone, Copy)]
