@@ -110,6 +110,7 @@ impl CloseAccountProof {
         transcript.append_point(b"Y_P", &Y_P);
         transcript.append_point(b"Y_D", &Y_D);
         let c = transcript.challenge_scalar(b"c");
+        transcript.challenge_scalar(b"w");
 
         // compute the masked secret key
         let z = c * s + y;
