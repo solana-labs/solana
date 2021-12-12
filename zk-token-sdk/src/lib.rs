@@ -11,6 +11,8 @@ mod errors;
 mod range_proof;
 #[cfg(not(target_arch = "bpf"))]
 mod transcript;
+#[cfg(not(target_arch = "bpf"))]
+mod validity_proof;
 
 mod instruction;
 pub mod zk_token_elgamal;

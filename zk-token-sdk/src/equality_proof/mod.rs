@@ -59,8 +59,7 @@ impl EqualityProof {
         let Y_1 = RistrettoPoint::multiscalar_mul(vec![y_x, y_s], vec![G, D_EG]).compress();
         let Y_2 = RistrettoPoint::multiscalar_mul(vec![y_x, y_r], vec![G, H]).compress();
 
-        // record public key, ciphertext, and commitment in transcript and generate challenge
-        // scalar
+        // record masking factors in transcript
         transcript.append_point(b"Y_0", &Y_0);
         transcript.append_point(b"Y_1", &Y_1);
         transcript.append_point(b"Y_2", &Y_2);
@@ -105,15 +104,15 @@ impl EqualityProof {
         transcript.validate_and_append_point(b"Y_1", &self.Y_1)?;
         transcript.validate_and_append_point(b"Y_2", &self.Y_2)?;
 
-        let Y_0 = self.Y_0.decompress().ok_or(ProofError::VerificationError)?;
-        let Y_1 = self.Y_1.decompress().ok_or(ProofError::VerificationError)?;
-        let Y_2 = self.Y_2.decompress().ok_or(ProofError::VerificationError)?;
-
         let c = transcript.challenge_scalar(b"c");
         let w = transcript.challenge_scalar(b"w");
         let ww = w * w;
 
         // check that the required algebraic condition holds
+        let Y_0 = self.Y_0.decompress().ok_or(ProofError::VerificationError)?;
+        let Y_1 = self.Y_1.decompress().ok_or(ProofError::VerificationError)?;
+        let Y_2 = self.Y_2.decompress().ok_or(ProofError::VerificationError)?;
+
         let check = RistrettoPoint::vartime_multiscalar_mul(
             vec![
                 self.z_s,
