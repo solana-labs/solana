@@ -2129,7 +2129,7 @@ impl AccountsDb {
                                             // found info relative to max_clean_root
                                             let (slot, account_info) =
                                                 &slot_list[index_in_slot_list];
-                                            if account_info.lamports == 0 {
+                                            if account_info.is_zero_lamport() {
                                                 useless = false;
                                                 purges_zero_lamports.insert(
                                                     *pubkey,
@@ -5106,7 +5106,7 @@ impl AccountsDb {
                                 self.accounts_index.get(pubkey, Some(ancestors), Some(slot))
                             {
                                 let (slot, account_info) = &lock.slot_list()[index];
-                                if account_info.lamports != 0 {
+                                if !account_info.is_zero_lamport() {
                                     // Because we're keeping the `lock' here, there is no need
                                     // to use retry_to_get_account_accessor()
                                     // In other words, flusher/shrinker/cleaner is blocked to
@@ -5126,7 +5126,7 @@ impl AccountsDb {
                                     .and_then(
                                         |loaded_account| {
                                             let loaded_hash = loaded_account.loaded_hash();
-                                            let balance = account_info.lamports;
+                                            let balance = loaded_account.lamports();
                                             if check_hash && !self.is_filler_account(pubkey) {
                                                 let computed_hash =
                                                     loaded_account.compute_hash(*slot, pubkey);
