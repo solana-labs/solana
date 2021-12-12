@@ -120,11 +120,18 @@ impl ValidityProof {
 
         let check = RistrettoPoint::vartime_multiscalar_mul(
             vec![
-                self.z_r, self.z_x, -c, -Scalar::one(), w * self.z_r, -w * c, -w, ww * self.z_r, -ww * c, -ww,
+                self.z_r,
+                self.z_x,
+                -c,
+                -Scalar::one(),
+                w * self.z_r,
+                -w * c,
+                -w,
+                ww * self.z_r,
+                -ww * c,
+                -ww,
             ],
-            vec![
-                H, G, C, Y_0, P_dest, D_dest, Y_1, P_auditor, D_auditor, Y_2,
-            ],
+            vec![H, G, C, Y_0, P_dest, D_dest, Y_1, P_auditor, D_auditor, Y_2],
         );
 
         if check.is_identity() {
@@ -134,16 +141,35 @@ impl ValidityProof {
         }
     }
 
+    pub fn to_bytes(&self) -> [u8; 160] {
+        let mut buf = [0_u8; 160];
+        buf[..32].copy_from_slice(self.Y_0.as_bytes());
+        buf[32..64].copy_from_slice(self.Y_1.as_bytes());
+        buf[64..96].copy_from_slice(self.Y_2.as_bytes());
+        buf[96..128].copy_from_slice(self.z_r.as_bytes());
+        buf[128..160].copy_from_slice(self.z_x.as_bytes());
+        buf
+    }
 
-    // pub fn to_bytes(&self) -> [u8; 192] {
-    //     // TODO
-    //     [0_u8; 192]
-    // }
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ProofError> {
+        let bytes = array_ref![bytes, 0, 160];
+        let (Y_0, Y_1, Y_2, z_r, z_x) = array_refs![bytes, 32, 32, 32, 32, 32];
 
-    // pub fn from_bytes(bytes: &[u8]) -> Result<Self, ProofError> {
-    //     // TODO
-    //     Ok(())
-    // }
+        let Y_0 = CompressedRistretto::from_slice(Y_0);
+        let Y_1 = CompressedRistretto::from_slice(Y_1);
+        let Y_2 = CompressedRistretto::from_slice(Y_2);
+
+        let z_r = Scalar::from_canonical_bytes(*z_r).ok_or(ProofError::FormatError)?;
+        let z_x = Scalar::from_canonical_bytes(*z_x).ok_or(ProofError::FormatError)?;
+
+        Ok(ValidityProof {
+            Y_0,
+            Y_1,
+            Y_2,
+            z_r,
+            z_x,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -179,14 +205,19 @@ mod test {
             &mut transcript_prover,
         );
 
-        assert!(proof.verify(
+        assert!(proof
+            .verify(
                 &elgamal_pubkey_dest,
                 &elgamal_pubkey_auditor,
                 (&commitment_lo, &commitment_hi),
                 (&handle_lo_dest, &handle_hi_dest),
                 (&handle_lo_auditor, &handle_hi_auditor),
                 &mut transcript_verifier,
-                ).is_ok());
+            )
+            .is_ok());
+
+        // TODO: Test invalid cases
+
+        // TODO: Test serialization, deserialization
     }
 }
-
