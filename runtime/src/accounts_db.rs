@@ -6016,7 +6016,7 @@ impl AccountsDb {
                     "AccountDB::accounts_index corrupted. Storage pointed to: {}, expected: {}, should only point to one slot",
                     store.slot(), *slot
                 );
-                let count = store.remove_account(account_info.stored_size, reset_accounts);
+                let count = store.remove_account(account_info.stored_size(), reset_accounts);
                 if count == 0 {
                     self.dirty_stores
                         .insert((*slot, store.append_vec_id()), store.clone());
@@ -11852,7 +11852,7 @@ pub mod tests {
                     locked_entry.slot_list()[0]
                 })
                 .unwrap();
-            let removed_data_size = account_info.1.stored_size;
+            let removed_data_size = account_info.1.stored_size();
             // Fetching the account from storage should return the same
             // stored size as in the index.
             assert_eq!(removed_data_size, account.stored_size);
