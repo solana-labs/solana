@@ -240,7 +240,7 @@ impl ExecuteTimings {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "32EjVUc6shHHVPpsnBAVfyBziMgyFzH8qxisLwmwwdS1")]
+#[frozen_abi(digest = "GcfJc94Hb3s7gzF7Uh4YxLSiQf1MvUtMmtU45BvinkVT")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 // Eager rent collection repeats in cyclic manner.
@@ -3525,7 +3525,8 @@ impl Bank {
                     Some(index)
                 }
                 Err(TransactionError::WouldExceedMaxBlockCostLimit)
-                | Err(TransactionError::WouldExceedMaxAccountCostLimit) => Some(index),
+                | Err(TransactionError::WouldExceedMaxAccountCostLimit)
+                | Err(TransactionError::WouldExceedMaxAccountDataCostLimit) => Some(index),
                 Err(_) => None,
                 Ok(_) => None,
             })

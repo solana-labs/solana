@@ -949,8 +949,8 @@ impl BankingStage {
             bank.prepare_sanitized_batch_with_results(txs, transactions_qos_results.into_iter());
         lock_time.stop();
 
-        // retryable_txs includes AccountInUse, WouldExceedMaxBlockCostLimit and
-        // WouldExceedMaxAccountCostLimit
+        // retryable_txs includes AccountInUse, WouldExceedMaxBlockCostLimit
+        // WouldExceedMaxAccountCostLimit, and WouldExceedMaxAccountDataCostLimit
         let (result, mut retryable_txs) = Self::process_and_record_transactions_locked(
             bank,
             poh,

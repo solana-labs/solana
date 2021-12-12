@@ -567,6 +567,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
             18 => TransactionError::UnsupportedVersion,
             19 => TransactionError::InvalidWritableAccount,
             20 => TransactionError::WouldExceedMaxAccountCostLimit,
+            21 => TransactionError::WouldExceedMaxAccountDataCostLimit,
             _ => return Err("Invalid TransactionError"),
         })
     }
@@ -636,6 +637,9 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                 }
                 TransactionError::WouldExceedMaxAccountCostLimit => {
                     tx_by_addr::TransactionErrorType::WouldExceedMaxAccountCostLimit
+                }
+                TransactionError::WouldExceedMaxAccountDataCostLimit => {
+                    tx_by_addr::TransactionErrorType::WouldExceedMaxAccountDataCostLimit
                 }
             } as i32,
             instruction_error: match transaction_error {
