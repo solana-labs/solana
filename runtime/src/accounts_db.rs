@@ -371,7 +371,7 @@ pub type SnapshotStorage = Vec<Arc<AccountStorageEntry>>;
 pub type SnapshotStorages = Vec<SnapshotStorage>;
 
 // Each slot has a set of storage entries.
-pub(crate) type SlotStores = Arc<RwLock<HashMap<usize, Arc<AccountStorageEntry>>>>;
+pub(crate) type SlotStores = Arc<RwLock<HashMap<AppendVecId, Arc<AccountStorageEntry>>>>;
 
 type AccountSlots = HashMap<Pubkey, HashSet<Slot>>;
 type AppendVecOffsets = HashMap<AppendVecId, HashSet<usize>>;
@@ -654,7 +654,7 @@ pub struct AccountStorageEntry {
 }
 
 impl AccountStorageEntry {
-    pub fn new(path: &Path, slot: Slot, id: usize, file_size: u64) -> Self {
+    pub fn new(path: &Path, slot: Slot, id: AppendVecId, file_size: u64) -> Self {
         let tail = AppendVec::file_name(slot, id);
         let path = Path::new(path).join(tail);
         let accounts = AppendVec::new(&path, true, file_size as usize);
@@ -706,7 +706,7 @@ impl AccountStorageEntry {
         *count_and_status = (count, status);
     }
 
-    pub fn recycle(&self, slot: Slot, id: usize) {
+    pub fn recycle(&self, slot: Slot, id: AppendVecId) {
         let mut count_and_status = self.count_and_status.write().unwrap();
         self.accounts.reset();
         *count_and_status = (0, AccountStorageStatus::Available);
@@ -1843,7 +1843,7 @@ impl AccountsDb {
                 no_delete
             };
             if no_delete {
-                let mut pending_store_ids: HashSet<usize> = HashSet::new();
+                let mut pending_store_ids = HashSet::new();
                 for (_bank_id, account_info) in account_infos {
                     if !already_counted.contains(&account_info.store_id) {
                         pending_store_ids.insert(account_info.store_id);
@@ -3358,7 +3358,7 @@ impl AccountsDb {
     fn retry_to_get_account_accessor<'a>(
         &'a self,
         mut slot: Slot,
-        mut store_id: usize,
+        mut store_id: AppendVecId,
         mut offset: usize,
         ancestors: &'a Ancestors,
         pubkey: &'a Pubkey,
@@ -3696,7 +3696,7 @@ impl AccountsDb {
         &'a self,
         slot: Slot,
         pubkey: &'a Pubkey,
-        store_id: usize,
+        store_id: AppendVecId,
         offset: usize,
     ) -> LoadedAccountAccessor<'a> {
         if store_id == CACHE_VIRTUAL_STORAGE_ID {
