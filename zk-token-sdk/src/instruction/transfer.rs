@@ -263,13 +263,8 @@ impl TransferProof {
         );
 
         // generate ciphertext validity proof
-        let validity_proof = ValidityProof::new(
-            &dest_pk,
-            &auditor_pk,
-            transfer_amt,
-            openings,
-            &mut transcript,
-        );
+        let validity_proof =
+            ValidityProof::new(dest_pk, auditor_pk, transfer_amt, openings, &mut transcript);
 
         // generate the range proof
         let range_proof = RangeProof::create(

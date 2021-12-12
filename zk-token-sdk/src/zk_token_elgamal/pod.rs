@@ -69,7 +69,6 @@ pub struct ValidityProof(pub [u8; 160]);
 unsafe impl Zeroable for ValidityProof {}
 unsafe impl Pod for ValidityProof {}
 
-
 /// Serialization of range proofs for 64-bit numbers (for `Withdraw` instruction)
 #[derive(Clone, Copy)]
 #[repr(transparent)]

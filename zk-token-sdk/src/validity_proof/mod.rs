@@ -1,7 +1,7 @@
 #[cfg(not(target_arch = "bpf"))]
 use {
     crate::encryption::{
-        elgamal::{ElGamalKeypair, ElGamalPubkey},
+        elgamal::ElGamalPubkey,
         pedersen::{PedersenBase, PedersenCommitment, PedersenDecryptHandle, PedersenOpening},
     },
     curve25519_dalek::traits::MultiscalarMul,
@@ -171,7 +171,7 @@ impl ValidityProof {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::encryption::pedersen::Pedersen;
+    use crate::encryption::{elgamal::ElGamalKeypair, pedersen::Pedersen};
 
     #[test]
     fn test_validity_proof() {
