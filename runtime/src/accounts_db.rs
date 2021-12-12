@@ -4459,14 +4459,14 @@ impl AccountsDb {
                 let stored_size = offsets[1] - offsets[0];
                 storage.add_account(stored_size);
 
-                infos.push(AccountInfo {
-                    store_id: storage.append_vec_id(),
-                    offset: offsets[0],
+                infos.push(AccountInfo::new(
+                    storage.append_vec_id(),
+                    offsets[0],
                     stored_size,
-                    lamports: account
+                    account
                         .map(|account| account.lamports())
                         .unwrap_or_default(),
-                });
+                ));
             }
             // restore the state to available
             storage.set_status(AccountStorageStatus::Available);
@@ -4878,12 +4878,12 @@ impl AccountsDb {
                 let account = account
                     .map(|account| account.to_account_shared_data())
                     .unwrap_or_default();
-                let account_info = AccountInfo {
-                    store_id: CACHE_VIRTUAL_STORAGE_ID,
-                    offset: CACHE_VIRTUAL_OFFSET,
-                    stored_size: CACHE_VIRTUAL_STORED_SIZE,
-                    lamports: account.lamports(),
-                };
+                let account_info = AccountInfo::new(
+                    CACHE_VIRTUAL_STORAGE_ID,
+                    CACHE_VIRTUAL_OFFSET,
+                    CACHE_VIRTUAL_STORED_SIZE,
+                    account.lamports(),
+                );
 
                 self.notify_account_at_accounts_update(slot, meta, &account);
 
@@ -6699,12 +6699,12 @@ impl AccountsDb {
 
                 (
                     pubkey,
-                    AccountInfo {
+                    AccountInfo::new(
                         store_id,
-                        offset: stored_account.offset,
-                        stored_size: stored_account.stored_size,
-                        lamports: stored_account.account_meta.lamports,
-                    },
+                        stored_account.offset,
+                        stored_account.stored_size,
+                        stored_account.account_meta.lamports,
+                    ),
                 )
             },
         );
@@ -6950,15 +6950,12 @@ impl AccountsDb {
                                 for (slot2, account_info2) in sl.iter() {
                                     if slot2 == slot {
                                         count += 1;
-                                        let ai = AccountInfo {
-                                            store_id: account_info.store_id,
-                                            offset: account_info.stored_account.offset,
-                                            stored_size: account_info.stored_account.stored_size,
-                                            lamports: account_info
-                                                .stored_account
-                                                .account_meta
-                                                .lamports,
-                                        };
+                                        let ai = AccountInfo::new(
+                                            account_info.store_id,
+                                            account_info.stored_account.offset,
+                                            account_info.stored_account.stored_size,
+                                            account_info.stored_account.account_meta.lamports,
+                                        );
                                         assert_eq!(&ai, account_info2);
                                     }
                                 }
@@ -10999,30 +10996,10 @@ pub mod tests {
         let key0 = Pubkey::new_from_array([0u8; 32]);
         let key1 = Pubkey::new_from_array([1u8; 32]);
         let key2 = Pubkey::new_from_array([2u8; 32]);
-        let info0 = AccountInfo {
-            store_id: 0,
-            offset: 0,
-            stored_size: 0,
-            lamports: 0,
-        };
-        let info1 = AccountInfo {
-            store_id: 1,
-            offset: 0,
-            stored_size: 0,
-            lamports: 0,
-        };
-        let info2 = AccountInfo {
-            store_id: 2,
-            offset: 0,
-            stored_size: 0,
-            lamports: 0,
-        };
-        let info3 = AccountInfo {
-            store_id: 3,
-            offset: 0,
-            stored_size: 0,
-            lamports: 0,
-        };
+        let info0 = AccountInfo::new(0, 0, 0, 0);
+        let info1 = AccountInfo::new(1, 0, 0, 0);
+        let info2 = AccountInfo::new(2, 0, 0, 0);
+        let info3 = AccountInfo::new(3, 0, 0, 0);
         let mut reclaims = vec![];
         accounts_index.upsert(
             0,
@@ -13331,12 +13308,7 @@ pub mod tests {
         }
 
         let do_test = |test_params: TestParameters| {
-            let account_info = AccountInfo {
-                store_id: 42,
-                offset: 123,
-                stored_size: 234,
-                lamports: 0,
-            };
+            let account_info = AccountInfo::new(42, 123, 234, 0);
             let pubkey = solana_sdk::pubkey::new_rand();
             let mut key_set = HashSet::default();
             key_set.insert(pubkey);

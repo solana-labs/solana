@@ -22,3 +22,14 @@ impl ZeroLamport for AccountInfo {
         self.lamports == 0
     }
 }
+
+impl AccountInfo {
+    pub fn new(store_id: AppendVecId, offset: usize, stored_size: usize, lamports: u64) -> Self {
+        Self {
+            store_id,
+            offset,
+            stored_size,
+            lamports,
+        }
+    }
+}
