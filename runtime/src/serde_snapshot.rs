@@ -5,7 +5,7 @@ use {
         accounts::Accounts,
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig, AppendVecId,
-            BankHashInfo, IndexGenerationInfo,
+            AtomicAppendVecId, BankHashInfo, IndexGenerationInfo,
         },
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -437,7 +437,7 @@ where
 
     // Remap the deserialized AppendVec paths to point to correct local paths
     let num_collisions = AtomicUsize::new(0);
-    let next_append_vec_id = AtomicUsize::new(0);
+    let next_append_vec_id = AtomicAppendVecId::new(0);
     let mut measure_remap = Measure::start("remap");
     let mut storage = (0..snapshot_storages.len())
         .into_par_iter()
