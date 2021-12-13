@@ -75,12 +75,7 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signature, Signer},
     },
-    std::{
-        convert::{TryFrom, TryInto},
-        mem::size_of,
-        ops::Deref,
-        sync::Arc,
-    },
+    std::{convert::TryInto, mem::size_of, ops::Deref, sync::Arc},
     thiserror::Error,
 };
 
@@ -208,7 +203,8 @@ pub struct DataShredHeader {
 pub struct CodingShredHeader {
     pub num_data_shreds: u16,
     pub num_coding_shreds: u16,
-    pub position: u16,
+    #[serde(rename = "position")]
+    __unused: u16,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -366,9 +362,8 @@ impl Shred {
         slot: Slot,
         index: u32,
         fec_set_index: u32,
-        num_data: u16,
-        num_code: u16,
-        position: u16,
+        num_data: usize,
+        num_code: usize,
         version: u16,
     ) -> Self {
         let (header, coding_header) = Shredder::new_coding_shred_header(
@@ -377,7 +372,6 @@ impl Shred {
             fec_set_index,
             num_data,
             num_code,
-            position,
             version,
         );
         Shred::new_empty_from_header(header, DataShredHeader::default(), coding_header)
@@ -763,9 +757,8 @@ impl Shredder {
         slot: Slot,
         index: u32,
         fec_set_index: u32,
-        num_data_shreds: u16,
-        num_coding_shreds: u16,
-        position: u16,
+        num_data: usize,
+        num_code: usize,
         version: u16,
     ) -> (ShredCommonHeader, CodingShredHeader) {
         let header = ShredCommonHeader {
@@ -779,9 +772,9 @@ impl Shredder {
         (
             header,
             CodingShredHeader {
-                num_data_shreds,
-                num_coding_shreds,
-                position,
+                num_data_shreds: num_data as u16,
+                num_coding_shreds: num_code as u16,
+                ..CodingShredHeader::default()
             },
         )
     }
@@ -817,8 +810,6 @@ impl Shredder {
             .unwrap()
             .encode(&data, &mut parity[..])
             .unwrap();
-        let num_data = u16::try_from(num_data).unwrap();
-        let num_coding = u16::try_from(num_coding).unwrap();
         parity
             .iter()
             .enumerate()
@@ -829,7 +820,6 @@ impl Shredder {
                     fec_set_index,
                     num_data,
                     num_coding,
-                    u16::try_from(i).unwrap(), // position
                     version,
                 );
                 shred.payload[SIZE_OF_CODING_SHRED_HEADERS..].copy_from_slice(parity);
@@ -1957,15 +1947,7 @@ pub mod tests {
         );
         assert_eq!(stats.index_overrun, 4);
 
-        let shred = Shred::new_empty_coding(
-            8,   // slot
-            2,   // index
-            10,  // fec_set_index
-            30,  // num_data
-            4,   // num_code
-            1,   // position
-            200, // version
-        );
+        let shred = Shred::new_empty_coding(8, 2, 10, 30, 4, 200);
         shred.copy_to_packet(&mut packet);
         assert_eq!(
             Some((8, 2, false)),
@@ -1977,15 +1959,7 @@ pub mod tests {
         assert_eq!(None, get_shred_slot_index_type(&packet, &mut stats));
         assert_eq!(1, stats.index_out_of_bounds);
 
-        let (mut header, coding_header) = Shredder::new_coding_shred_header(
-            8,   // slot
-            2,   // index
-            10,  // fec_set_index
-            30,  // num_data_shreds
-            4,   // num_coding_shreds
-            3,   // position
-            200, // version
-        );
+        let (mut header, coding_header) = Shredder::new_coding_shred_header(8, 2, 10, 30, 4, 200);
         header.shred_type = ShredType(u8::MAX);
         let shred = Shred::new_empty_from_header(header, DataShredHeader::default(), coding_header);
         shred.copy_to_packet(&mut packet);
