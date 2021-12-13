@@ -4,7 +4,10 @@ use std::{
     process::{Command, Output},
 };
 
-fn run_cargo_build(extra_args: &[&str]) -> Output {
+#[macro_use]
+extern crate serial_test;
+
+fn run_cargo_build(crate_name: &str, extra_args: &[&str]) -> Output {
     let cwd = env::current_dir().expect("Unable to get current working directory");
     let root = cwd
         .parent()
@@ -14,7 +17,7 @@ fn run_cargo_build(extra_args: &[&str]) -> Output {
     let toml = cwd
         .join("tests")
         .join("crates")
-        .join("noop")
+        .join(crate_name)
         .join("Cargo.toml");
     let toml = format!("{}", toml.display());
     let mut args = vec!["--bpf-sdk", "../bpf", "--manifest-path", &toml];
@@ -22,24 +25,10 @@ fn run_cargo_build(extra_args: &[&str]) -> Output {
         args.push(arg);
     }
     let cargo_build_bpf = root.join("target").join("debug").join("cargo-build-bpf");
-    Command::new(cargo_build_bpf)
+    let output = Command::new(cargo_build_bpf)
         .args(&args)
         .output()
-        .expect("Error running cargo-build-bpf")
-}
-
-#[test]
-fn test_build() {
-    let output = run_cargo_build(&[]);
-    assert!(output.status.success());
-}
-
-// This test requires rustfilt.
-// TODO: Add a check for rustfilt, and install it if not available.
-#[ignore]
-#[test]
-fn test_dump() {
-    let output = run_cargo_build(&["--dump"]);
+        .expect("Error running cargo-build-bpf");
     if !output.status.success() {
         eprintln!("--- stdout ---");
         io::stderr().write_all(&output.stdout).unwrap();
@@ -47,6 +36,26 @@ fn test_dump() {
         io::stderr().write_all(&output.stderr).unwrap();
         eprintln!("--------------");
     }
+    output
+}
+
+#[test]
+#[serial]
+fn test_build() {
+    let output = run_cargo_build("noop", &[]);
+    assert!(output.status.success());
+}
+
+#[test]
+#[serial]
+fn test_dump() {
+    // This test requires rustfilt.
+    assert!(Command::new("cargo")
+        .args(&["install", "rustfilt"])
+        .status()
+        .expect("Unable to install rustfilt required for --dump option")
+        .success());
+    let output = run_cargo_build("noop", &["--dump"]);
     assert!(output.status.success());
     let cwd = env::current_dir().expect("Unable to get current working directory");
     let dump = cwd
@@ -60,8 +69,9 @@ fn test_dump() {
 }
 
 #[test]
+#[serial]
 fn test_out_dir() {
-    let output = run_cargo_build(&["--bpf-out-dir", "tmp_out"]);
+    let output = run_cargo_build("noop", &["--bpf-out-dir", "tmp_out"]);
     assert!(output.status.success());
     let cwd = env::current_dir().expect("Unable to get current working directory");
     let dir = cwd.join("tmp_out");
