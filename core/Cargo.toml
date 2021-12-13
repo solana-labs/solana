@@ -21,7 +21,7 @@ bs58 = "0.4.0"
 chrono = { version = "0.4.11", features = ["serde"] }
 crossbeam-channel = "0.5"
 dashmap = { version = "5.0.0", features = ["rayon", "raw-api"] }
-etcd-client = { version = "0.8.1", features = ["tls"]}
+etcd-client = { version = "0.8.2", features = ["tls"]}
 fs_extra = "1.2.0"
 histogram = "0.6.9"
 itertools = "0.10.3"
