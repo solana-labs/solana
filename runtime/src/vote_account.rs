@@ -1,9 +1,13 @@
 use {
     itertools::Itertools,
-    serde::de::{Deserialize, Deserializer},
-    serde::ser::{Serialize, Serializer},
+    serde::{
+        de::{Deserialize, Deserializer},
+        ser::{Serialize, Serializer},
+    },
     solana_sdk::{
-        account::Account, account::AccountSharedData, instruction::InstructionError, pubkey::Pubkey,
+        account::{Account, AccountSharedData},
+        instruction::InstructionError,
+        pubkey::Pubkey,
     },
     solana_vote_program::vote_state::VoteState,
     std::{
@@ -63,6 +67,10 @@ impl VoteAccount {
             *inner.vote_state.write().unwrap() = vote_state;
         });
         inner.vote_state.read().unwrap()
+    }
+
+    pub fn is_deserialized(&self) -> bool {
+        self.0.vote_state_once.is_completed()
     }
 
     /// VoteState.node_pubkey of this vote-account.
@@ -325,12 +333,14 @@ impl<'de> Deserialize<'de> for VoteAccounts {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use bincode::Options;
-    use rand::Rng;
-    use solana_sdk::{pubkey::Pubkey, sysvar::clock::Clock};
-    use solana_vote_program::vote_state::{VoteInit, VoteStateVersions};
-    use std::iter::repeat_with;
+    use {
+        super::*,
+        bincode::Options,
+        rand::Rng,
+        solana_sdk::{pubkey::Pubkey, sysvar::clock::Clock},
+        solana_vote_program::vote_state::{VoteInit, VoteStateVersions},
+        std::iter::repeat_with,
+    };
 
     fn new_rand_vote_account<R: Rng>(
         rng: &mut R,

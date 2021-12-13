@@ -22,11 +22,12 @@ use {
         contact_info::ContactInfo,
     },
     solana_ledger::{
+        blockstore::Blockstore,
+        leader_schedule_cache::LeaderScheduleCache,
         shred::{Shred, ShredType},
-        {blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache},
     },
     solana_measure::measure::Measure,
-    solana_perf::packet::Packets,
+    solana_perf::packet::PacketBatch,
     solana_rayon_threadlimit::get_thread_count,
     solana_rpc::{max_slots::MaxSlots, rpc_subscriptions::RpcSubscriptions},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
@@ -432,7 +433,7 @@ impl RetransmitStage {
         cluster_info: Arc<ClusterInfo>,
         retransmit_sockets: Arc<Vec<UdpSocket>>,
         repair_socket: Arc<UdpSocket>,
-        verified_receiver: Receiver<Vec<Packets>>,
+        verified_receiver: Receiver<Vec<PacketBatch>>,
         exit: Arc<AtomicBool>,
         cluster_slots_update_receiver: ClusterSlotsUpdateReceiver,
         epoch_schedule: EpochSchedule,
@@ -609,10 +610,10 @@ mod tests {
         let shred = Shred::new_from_data(0, 0, 0, None, true, true, 0, 0x20, 0);
         // it should send this over the sockets.
         retransmit_sender.send(vec![shred]).unwrap();
-        let mut packets = Packets::new(vec![]);
-        solana_streamer::packet::recv_from(&mut packets, &me_retransmit, 1).unwrap();
-        assert_eq!(packets.packets.len(), 1);
-        assert!(!packets.packets[0].meta.repair);
+        let mut packet_batch = PacketBatch::new(vec![]);
+        solana_streamer::packet::recv_from(&mut packet_batch, &me_retransmit, 1).unwrap();
+        assert_eq!(packet_batch.packets.len(), 1);
+        assert!(!packet_batch.packets[0].meta.repair);
     }
 
     #[test]
@@ -638,19 +639,19 @@ mod tests {
         assert!(should_skip_retransmit(&shred, &shreds_received));
         assert!(should_skip_retransmit(&shred, &shreds_received));
 
-        let shred = Shred::new_empty_coding(slot, index, 0, 1, 1, version);
+        let shred = Shred::new_empty_coding(slot, index, 0, 1, 1, 0, version);
         // Coding at (1, 5) passes
         assert!(!should_skip_retransmit(&shred, &shreds_received));
         // then blocked
         assert!(should_skip_retransmit(&shred, &shreds_received));
 
-        let shred = Shred::new_empty_coding(slot, index, 2, 1, 1, version);
+        let shred = Shred::new_empty_coding(slot, index, 2, 1, 1, 0, version);
         // 2nd unique coding at (1, 5) passes
         assert!(!should_skip_retransmit(&shred, &shreds_received));
         // same again is blocked
         assert!(should_skip_retransmit(&shred, &shreds_received));
 
-        let shred = Shred::new_empty_coding(slot, index, 3, 1, 1, version);
+        let shred = Shred::new_empty_coding(slot, index, 3, 1, 1, 0, version);
         // Another unique coding at (1, 5) always blocked
         assert!(should_skip_retransmit(&shred, &shreds_received));
         assert!(should_skip_retransmit(&shred, &shreds_received));

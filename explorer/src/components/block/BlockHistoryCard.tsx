@@ -151,7 +151,7 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
                 <tr key={i}>
                   <td>{tx.index + 1}</td>
                   <td>
-                    <span className={`badge badge-soft-${statusClass}`}>
+                    <span className={`badge bg-${statusClass}-soft`}>
                       {statusText}
                     </span>
                   </td>
@@ -164,7 +164,7 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
                           return (
                             <div key={i} className="d-flex align-items-center">
                               <Address pubkey={new PublicKey(programId)} link />
-                              <span className="ml-2 text-muted">{`(${count})`}</span>
+                              <span className="ms-2 text-muted">{`(${count})`}</span>
                             </div>
                           );
                         })}
@@ -252,7 +252,7 @@ const FilterDropdown = ({
   filterOptions.sort();
 
   return (
-    <div className="dropdown mr-2">
+    <div className="dropdown me-2">
       <button
         className="btn btn-white btn-sm dropdown-toggle"
         type="button"
@@ -261,7 +261,7 @@ const FilterDropdown = ({
         {currentFilterOption.name}
       </button>
       <div
-        className={`token-filter dropdown-menu-right dropdown-menu${
+        className={`token-filter dropdown-menu-end dropdown-menu${
           show ? " show" : ""
         }`}
       >

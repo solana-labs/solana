@@ -1,36 +1,37 @@
 #![allow(clippy::integer_arithmetic)]
-use clap::{crate_description, crate_name, value_t, App, Arg};
-use crossbeam_channel::unbounded;
-use log::*;
-use rand::{thread_rng, Rng};
-use rayon::prelude::*;
-use solana_core::banking_stage::BankingStage;
-use solana_gossip::{cluster_info::ClusterInfo, cluster_info::Node};
-use solana_ledger::{
-    blockstore::Blockstore,
-    genesis_utils::{create_genesis_config, GenesisConfigInfo},
-    get_tmp_ledger_path,
-};
-use solana_measure::measure::Measure;
-use solana_perf::packet::to_packets_chunked;
-use solana_poh::poh_recorder::{create_test_recorder, PohRecorder, WorkingBankEntry};
-use solana_runtime::{
-    accounts_background_service::AbsRequestSender, bank::Bank, bank_forks::BankForks,
-    cost_model::CostModel,
-};
-use solana_sdk::{
-    hash::Hash,
-    signature::Keypair,
-    signature::Signature,
-    system_transaction,
-    timing::{duration_as_us, timestamp},
-    transaction::Transaction,
-};
-use solana_streamer::socket::SocketAddrSpace;
-use std::{
-    sync::{atomic::Ordering, mpsc::Receiver, Arc, Mutex, RwLock},
-    thread::sleep,
-    time::{Duration, Instant},
+use {
+    clap::{crate_description, crate_name, value_t, App, Arg},
+    crossbeam_channel::unbounded,
+    log::*,
+    rand::{thread_rng, Rng},
+    rayon::prelude::*,
+    solana_core::banking_stage::BankingStage,
+    solana_gossip::cluster_info::{ClusterInfo, Node},
+    solana_ledger::{
+        blockstore::Blockstore,
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        get_tmp_ledger_path,
+    },
+    solana_measure::measure::Measure,
+    solana_perf::packet::to_packet_batches,
+    solana_poh::poh_recorder::{create_test_recorder, PohRecorder, WorkingBankEntry},
+    solana_runtime::{
+        accounts_background_service::AbsRequestSender, bank::Bank, bank_forks::BankForks,
+        cost_model::CostModel,
+    },
+    solana_sdk::{
+        hash::Hash,
+        signature::{Keypair, Signature},
+        system_transaction,
+        timing::{duration_as_us, timestamp},
+        transaction::Transaction,
+    },
+    solana_streamer::socket::SocketAddrSpace,
+    std::{
+        sync::{atomic::Ordering, mpsc::Receiver, Arc, Mutex, RwLock},
+        thread::sleep,
+        time::{Duration, Instant},
+    },
 };
 
 fn check_txs(
@@ -211,7 +212,7 @@ fn main() {
         bank.clear_signatures();
     }
 
-    let mut verified: Vec<_> = to_packets_chunked(&transactions, packets_per_chunk);
+    let mut verified: Vec<_> = to_packet_batches(&transactions, packets_per_chunk);
     let ledger_path = get_tmp_ledger_path!();
     {
         let blockstore = Arc::new(
@@ -363,7 +364,7 @@ fn main() {
                     let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen::<u8>()).collect();
                     tx.signatures[0] = Signature::new(&sig[0..64]);
                 }
-                verified = to_packets_chunked(&transactions.clone(), packets_per_chunk);
+                verified = to_packet_batches(&transactions.clone(), packets_per_chunk);
             }
 
             start += chunk_len;

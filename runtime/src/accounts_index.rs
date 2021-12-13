@@ -1,38 +1,39 @@
-use crate::{
-    accounts_index_storage::AccountsIndexStorage,
-    ancestors::Ancestors,
-    bucket_map_holder::{Age, BucketMapHolder},
-    contains::Contains,
-    in_mem_accounts_index::{InMemAccountsIndex, InsertNewEntryResults},
-    inline_spl_token::{self, SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
-    pubkey_bins::PubkeyBinCalculator24,
-    secondary_index::*,
-};
-use bv::BitVec;
-use log::*;
-use ouroboros::self_referencing;
-use rand::thread_rng;
-use rand::Rng;
-use solana_measure::measure::Measure;
-use solana_sdk::{
-    clock::{BankId, Slot},
-    pubkey::{Pubkey, PUBKEY_BYTES},
-};
-use std::{
-    collections::{btree_map::BTreeMap, HashSet},
-    fmt::Debug,
-    ops::{
-        Bound,
-        Bound::{Excluded, Included, Unbounded},
-        Range, RangeBounds,
+use {
+    crate::{
+        accounts_index_storage::AccountsIndexStorage,
+        ancestors::Ancestors,
+        bucket_map_holder::{Age, BucketMapHolder},
+        contains::Contains,
+        in_mem_accounts_index::{InMemAccountsIndex, InsertNewEntryResults},
+        inline_spl_token::{self, SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
+        pubkey_bins::PubkeyBinCalculator24,
+        secondary_index::*,
     },
-    path::PathBuf,
-    sync::{
-        atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering},
-        Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
+    bv::BitVec,
+    log::*,
+    ouroboros::self_referencing,
+    rand::{thread_rng, Rng},
+    solana_measure::measure::Measure,
+    solana_sdk::{
+        clock::{BankId, Slot},
+        pubkey::{Pubkey, PUBKEY_BYTES},
     },
+    std::{
+        collections::{btree_map::BTreeMap, HashSet},
+        fmt::Debug,
+        ops::{
+            Bound,
+            Bound::{Excluded, Included, Unbounded},
+            Range, RangeBounds,
+        },
+        path::PathBuf,
+        sync::{
+            atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering},
+            Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
+        },
+    },
+    thiserror::Error,
 };
-use thiserror::Error;
 
 pub const ITER_BATCH_SIZE: usize = 1000;
 pub const BINS_DEFAULT: usize = 8192;
@@ -43,7 +44,7 @@ pub const ACCOUNTS_INDEX_CONFIG_FOR_TESTING: AccountsIndexConfig = AccountsIndex
     bins: Some(BINS_FOR_TESTING),
     flush_threads: Some(FLUSH_THREADS_TESTING),
     drives: None,
-    index_limit_mb: Some(1),
+    index_limit_mb: None,
     ages_to_stay_in_cache: None,
     scan_results_limit_bytes: None,
 };
@@ -79,9 +80,18 @@ impl ScanConfig {
         }
     }
 
+    /// mark the scan as aborted
     pub fn abort(&self) {
         if let Some(abort) = self.abort.as_ref() {
             abort.store(true, Ordering::Relaxed)
+        }
+    }
+
+    /// use existing 'abort' if available, otherwise allocate one
+    pub fn recreate_with_abort(&self) -> Self {
+        ScanConfig {
+            abort: Some(self.abort.as_ref().map(Arc::clone).unwrap_or_default()),
+            collect_all_unsorted: self.collect_all_unsorted,
         }
     }
 
@@ -97,9 +107,7 @@ impl ScanConfig {
 
 pub(crate) type AccountMapEntry<T> = Arc<AccountMapEntryInner<T>>;
 
-pub trait IsCached:
-    'static + Clone + Debug + PartialEq + ZeroLamport + Copy + Default + Sync + Send
-{
+pub trait IsCached {
     fn is_cached(&self) -> bool;
 }
 
@@ -290,6 +298,17 @@ impl<T: IndexValue> ReadAccountMapEntry<T> {
 pub enum PreAllocatedAccountMapEntry<T: IndexValue> {
     Entry(AccountMapEntry<T>),
     Raw((Slot, T)),
+}
+
+impl<T: IndexValue> ZeroLamport for PreAllocatedAccountMapEntry<T> {
+    fn is_zero_lamport(&self) -> bool {
+        match self {
+            PreAllocatedAccountMapEntry::Entry(entry) => {
+                entry.slot_list.read().unwrap()[0].1.is_zero_lamport()
+            }
+            PreAllocatedAccountMapEntry::Raw(raw) => raw.1.is_zero_lamport(),
+        }
+    }
 }
 
 impl<T: IndexValue> From<PreAllocatedAccountMapEntry<T>> for (Slot, T) {
@@ -830,7 +849,13 @@ pub struct AccountsIndex<T: IndexValue> {
 
 impl<T: IndexValue> AccountsIndex<T> {
     pub fn default_for_tests() -> Self {
-        Self::new(Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING))
+        let mut config = ACCOUNTS_INDEX_CONFIG_FOR_TESTING;
+        if let Ok(limit) = std::env::var("SOLANA_TEST_ACCOUNTS_INDEX_MEMORY_LIMIT_MB") {
+            // allocate with disk buckets
+            config.index_limit_mb = Some(limit.parse::<usize>().unwrap());
+        }
+
+        Self::new(Some(config))
     }
 
     pub fn new(config: Option<AccountsIndexConfig>) -> Self {
@@ -884,6 +909,11 @@ impl<T: IndexValue> AccountsIndex<T> {
         R: RangeBounds<Pubkey>,
     {
         AccountsIndexIterator::new(self, range, collect_all_unsorted)
+    }
+
+    /// is the accounts index using disk as a backing store
+    pub fn is_disk_index_enabled(&self) -> bool {
+        self.storage.storage.is_disk_index_enabled()
     }
 
     fn do_checked_scan_accounts<F, R>(
@@ -1204,10 +1234,8 @@ impl<T: IndexValue> AccountsIndex<T> {
             if let AccountIndexGetResult::Found(list_r, index) =
                 self.get(&pubkey, Some(ancestors), max_root)
             {
-                func(
-                    &pubkey,
-                    (&list_r.slot_list()[index].1, list_r.slot_list()[index].0),
-                );
+                let entry = &list_r.slot_list()[index];
+                func(&pubkey, (&entry.1, entry.0));
             }
             if config.is_aborted() {
                 break;
@@ -1694,6 +1722,9 @@ impl<T: IndexValue> AccountsIndex<T> {
         reclaims: &mut SlotList<T>,
         previous_slot_entry_was_cached: bool,
     ) {
+        // vast majority of updates are to item already in accounts index, so store as raw to avoid unnecessary allocations
+        let store_raw = true;
+
         // We don't atomically update both primary index and secondary index together.
         // This certainly creates a small time window with inconsistent state across the two indexes.
         // However, this is acceptable because:
@@ -1706,7 +1737,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         //  So, what the accounts_index sees alone is sufficient as a source of truth for other non-scan
         //  account operations.
         let new_item =
-            PreAllocatedAccountMapEntry::new(slot, account_info, &self.storage.storage, false);
+            PreAllocatedAccountMapEntry::new(slot, account_info, &self.storage.storage, store_raw);
         let map = &self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)];
 
         {
@@ -1969,9 +2000,11 @@ impl<T: IndexValue> AccountsIndex<T> {
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
-    use solana_sdk::signature::{Keypair, Signer};
-    use std::ops::RangeInclusive;
+    use {
+        super::*,
+        solana_sdk::signature::{Keypair, Signer},
+        std::ops::RangeInclusive,
+    };
 
     pub enum SecondaryIndexTypes<'a> {
         RwLock(&'a SecondaryIndex<RwLockSecondaryIndexEntry>),
@@ -2883,36 +2916,69 @@ pub mod tests {
         assert_eq!(num, 1);
     }
 
+    fn get_pre_allocated<T: IndexValue>(
+        slot: Slot,
+        account_info: T,
+        storage: &Arc<BucketMapHolder<T>>,
+        store_raw: bool,
+        to_raw_first: bool,
+    ) -> PreAllocatedAccountMapEntry<T> {
+        let entry = PreAllocatedAccountMapEntry::new(slot, account_info, storage, store_raw);
+
+        if to_raw_first {
+            // convert to raw
+            let (slot2, account_info2) = entry.into();
+            // recreate using extracted raw
+            PreAllocatedAccountMapEntry::new(slot2, account_info2, storage, store_raw)
+        } else {
+            entry
+        }
+    }
+
     #[test]
     fn test_new_entry() {
-        let slot = 0;
-        // account_info type that IS cached
-        let account_info = AccountInfoTest::default();
-        let index = AccountsIndex::default_for_tests();
+        for store_raw in [false, true] {
+            for to_raw_first in [false, true] {
+                let slot = 0;
+                // account_info type that IS cached
+                let account_info = AccountInfoTest::default();
+                let index = AccountsIndex::default_for_tests();
 
-        let new_entry: AccountMapEntry<_> =
-            PreAllocatedAccountMapEntry::new(slot, account_info, &index.storage.storage, false)
+                let new_entry = get_pre_allocated(
+                    slot,
+                    account_info,
+                    &index.storage.storage,
+                    store_raw,
+                    to_raw_first,
+                )
                 .into_account_map_entry(&index.storage.storage);
-        assert_eq!(new_entry.ref_count.load(Ordering::Relaxed), 0);
-        assert_eq!(new_entry.slot_list.read().unwrap().capacity(), 1);
-        assert_eq!(
-            new_entry.slot_list.read().unwrap().to_vec(),
-            vec![(slot, account_info)]
-        );
+                assert_eq!(new_entry.ref_count(), 0);
+                assert_eq!(new_entry.slot_list.read().unwrap().capacity(), 1);
+                assert_eq!(
+                    new_entry.slot_list.read().unwrap().to_vec(),
+                    vec![(slot, account_info)]
+                );
 
-        // account_info type that is NOT cached
-        let account_info = true;
-        let index = AccountsIndex::default_for_tests();
+                // account_info type that is NOT cached
+                let account_info = true;
+                let index = AccountsIndex::default_for_tests();
 
-        let new_entry: AccountMapEntry<_> =
-            PreAllocatedAccountMapEntry::new(slot, account_info, &index.storage.storage, false)
+                let new_entry = get_pre_allocated(
+                    slot,
+                    account_info,
+                    &index.storage.storage,
+                    store_raw,
+                    to_raw_first,
+                )
                 .into_account_map_entry(&index.storage.storage);
-        assert_eq!(new_entry.ref_count.load(Ordering::Relaxed), 1);
-        assert_eq!(new_entry.slot_list.read().unwrap().capacity(), 1);
-        assert_eq!(
-            new_entry.slot_list.read().unwrap().to_vec(),
-            vec![(slot, account_info)]
-        );
+                assert_eq!(new_entry.ref_count(), 1);
+                assert_eq!(new_entry.slot_list.read().unwrap().capacity(), 1);
+                assert_eq!(
+                    new_entry.slot_list.read().unwrap().to_vec(),
+                    vec![(slot, account_info)]
+                );
+            }
+        }
     }
 
     #[test]
@@ -3052,10 +3118,10 @@ pub mod tests {
 
         let new_entry =
             PreAllocatedAccountMapEntry::new(slot, account_info, &index.storage.storage, false);
-        assert_eq!(0, account_maps_len_expensive(&index));
+        assert_eq!(0, account_maps_stats_len(&index));
         assert_eq!((slot, account_info), new_entry.clone().into());
 
-        assert_eq!(0, account_maps_len_expensive(&index));
+        assert_eq!(0, account_maps_stats_len(&index));
         let w_account_maps = index.get_account_maps_write_lock(&key.pubkey());
         w_account_maps.upsert(
             &key.pubkey(),
@@ -3064,7 +3130,7 @@ pub mod tests {
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         drop(w_account_maps);
-        assert_eq!(1, account_maps_len_expensive(&index));
+        assert_eq!(1, account_maps_stats_len(&index));
 
         let mut ancestors = Ancestors::default();
         assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_none());
@@ -3615,12 +3681,8 @@ pub mod tests {
         assert!(found_key);
     }
 
-    fn account_maps_len_expensive<T: IndexValue>(index: &AccountsIndex<T>) -> usize {
-        index
-            .account_maps
-            .iter()
-            .map(|bin_map| bin_map.read().unwrap().len())
-            .sum()
+    fn account_maps_stats_len<T: IndexValue>(index: &AccountsIndex<T>) -> usize {
+        index.storage.storage.stats.total_count()
     }
 
     #[test]
@@ -3628,7 +3690,7 @@ pub mod tests {
         let key = Keypair::new();
         let index = AccountsIndex::<u64>::default_for_tests();
         let mut gc = Vec::new();
-        assert_eq!(0, account_maps_len_expensive(&index));
+        assert_eq!(0, account_maps_stats_len(&index));
         index.upsert(
             1,
             &key.pubkey(),
@@ -3639,7 +3701,7 @@ pub mod tests {
             &mut gc,
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
-        assert_eq!(1, account_maps_len_expensive(&index));
+        assert_eq!(1, account_maps_stats_len(&index));
 
         index.upsert(
             1,
@@ -3651,7 +3713,7 @@ pub mod tests {
             &mut gc,
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
-        assert_eq!(1, account_maps_len_expensive(&index));
+        assert_eq!(1, account_maps_stats_len(&index));
 
         let purges = index.purge_roots(&key.pubkey());
         assert_eq!(purges, (vec![], false));
@@ -3660,7 +3722,7 @@ pub mod tests {
         let purges = index.purge_roots(&key.pubkey());
         assert_eq!(purges, (vec![(1, 10)], true));
 
-        assert_eq!(1, account_maps_len_expensive(&index));
+        assert_eq!(1, account_maps_stats_len(&index));
         index.upsert(
             1,
             &key.pubkey(),
@@ -3671,7 +3733,7 @@ pub mod tests {
             &mut gc,
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
-        assert_eq!(1, account_maps_len_expensive(&index));
+        assert_eq!(1, account_maps_stats_len(&index));
     }
 
     #[test]
@@ -4277,5 +4339,30 @@ pub mod tests {
         let mut config = AccountsIndexConfig::default();
         config.bins = Some(3);
         AccountsIndex::<bool>::new(Some(config));
+    }
+
+    #[test]
+    fn test_scan_config() {
+        for collect_all_unsorted in [false, true] {
+            let config = ScanConfig::new(collect_all_unsorted);
+            assert_eq!(config.collect_all_unsorted, collect_all_unsorted);
+            assert!(config.abort.is_none()); // not allocated
+            assert!(!config.is_aborted());
+            config.abort(); // has no effect
+            assert!(!config.is_aborted());
+        }
+
+        let config = ScanConfig::default();
+        assert!(!config.collect_all_unsorted);
+        assert!(config.abort.is_none());
+
+        let config = config.recreate_with_abort();
+        assert!(config.abort.is_some());
+        assert!(!config.is_aborted());
+        config.abort();
+        assert!(config.is_aborted());
+
+        let config = config.recreate_with_abort();
+        assert!(config.is_aborted());
     }
 }

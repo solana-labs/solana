@@ -1,9 +1,11 @@
 //! The `gen_keys` module makes lots of keypairs
 
-use rand::{Rng, SeedableRng};
-use rand_chacha::ChaChaRng;
-use rayon::prelude::*;
-use solana_sdk::signature::Keypair;
+use {
+    rand::{Rng, SeedableRng},
+    rand_chacha::ChaChaRng,
+    rayon::prelude::*,
+    solana_sdk::signature::Keypair,
+};
 
 pub struct GenKeys {
     generator: ChaChaRng,
@@ -39,10 +41,8 @@ impl GenKeys {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     pub use solana_sdk::pubkey::Pubkey;
-    use solana_sdk::signature::Signer;
-    use std::collections::HashSet;
+    use {super::*, solana_sdk::signature::Signer, std::collections::HashSet};
 
     #[test]
     fn test_new_key_is_deterministic() {

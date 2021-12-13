@@ -1,7 +1,8 @@
-use crate::blockstore_db::Result;
-use crate::{blockstore::*, blockstore_meta::SlotMeta};
-use log::*;
-use solana_sdk::clock::Slot;
+use {
+    crate::{blockstore::*, blockstore_db::Result, blockstore_meta::SlotMeta},
+    log::*,
+    solana_sdk::clock::Slot,
+};
 
 pub struct RootedSlotIterator<'a> {
     next_slots: Vec<Slot>,
@@ -76,9 +77,10 @@ impl<'a> Iterator for RootedSlotIterator<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::blockstore_processor::fill_blockstore_slot_with_ticks;
-    use solana_sdk::hash::Hash;
+    use {
+        super::*, crate::blockstore_processor::fill_blockstore_slot_with_ticks,
+        solana_sdk::hash::Hash,
+    };
 
     #[test]
     fn test_rooted_slot_iterator() {

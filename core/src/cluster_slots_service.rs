@@ -1,17 +1,19 @@
-use crate::cluster_slots::ClusterSlots;
-use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
-use solana_gossip::cluster_info::ClusterInfo;
-use solana_ledger::blockstore::Blockstore;
-use solana_measure::measure::Measure;
-use solana_runtime::bank_forks::BankForks;
-use solana_sdk::clock::Slot;
-use std::{
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        {Arc, RwLock},
+use {
+    crate::cluster_slots::ClusterSlots,
+    crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
+    solana_gossip::cluster_info::ClusterInfo,
+    solana_ledger::blockstore::Blockstore,
+    solana_measure::measure::Measure,
+    solana_runtime::bank_forks::BankForks,
+    solana_sdk::clock::Slot,
+    std::{
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
+        thread::{self, Builder, JoinHandle},
+        time::{Duration, Instant},
     },
-    thread::{self, Builder, JoinHandle},
-    time::{Duration, Instant},
 };
 
 pub type ClusterSlotsUpdateReceiver = Receiver<Vec<Slot>>;

@@ -9,13 +9,13 @@ use {
     bincode::{serialize, serialized_size},
     rand::{CryptoRng, Rng},
     serde::de::{Deserialize, Deserializer},
-    solana_sdk::sanitize::{Sanitize, SanitizeError},
-    solana_sdk::timing::timestamp,
     solana_sdk::{
         clock::Slot,
         hash::Hash,
         pubkey::{self, Pubkey},
+        sanitize::{Sanitize, SanitizeError},
         signature::{Keypair, Signable, Signature, Signer},
+        timing::timestamp,
         transaction::Transaction,
     },
     solana_vote_program::vote_transaction::parse_vote_transaction,
@@ -306,8 +306,8 @@ impl Sanitize for Vote {
 
 impl Vote {
     pub fn new(from: Pubkey, transaction: Transaction, wallclock: u64) -> Self {
-        let slot = parse_vote_transaction(&transaction)
-            .and_then(|(_, vote, _)| vote.slots.last().copied());
+        let slot =
+            parse_vote_transaction(&transaction).and_then(|(_, vote, _)| vote.last_voted_slot());
         Self {
             from,
             transaction,

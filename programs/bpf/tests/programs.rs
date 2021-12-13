@@ -18,10 +18,11 @@ use solana_bpf_rust_invoke::instructions::*;
 use solana_bpf_rust_realloc::instructions::*;
 use solana_bpf_rust_realloc_invoke::instructions::*;
 use solana_cli_output::display::println_transaction;
-use solana_program_runtime::invoke_context::{with_mock_invoke_context, InvokeContext};
+use solana_program_runtime::invoke_context::with_mock_invoke_context;
 use solana_rbpf::{
+    elf::Executable,
     static_analysis::Analysis,
-    vm::{Config, Executable, Tracer},
+    vm::{Config, Tracer},
 };
 use solana_runtime::{
     bank::{Bank, ExecuteTimings, NonceInfo, TransactionBalancesSet, TransactionResults},
@@ -208,9 +209,13 @@ fn run_program(name: &str) -> u64 {
         let mut instruction_meter = ThisInstructionMeter { compute_meter };
         let config = Config {
             enable_instruction_tracing: true,
+            reject_unresolved_syscalls: true,
+            reject_section_virtual_address_file_offset_mismatch: true,
+            verify_mul64_imm_nonzero: false,
+            verify_shift32_imm: true,
             ..Config::default()
         };
-        let mut executable = <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
+        let mut executable = Executable::<BpfError, ThisInstructionMeter>::from_elf(
             &data,
             None,
             config,
@@ -222,12 +227,11 @@ fn run_program(name: &str) -> u64 {
         let mut instruction_count = 0;
         let mut tracer = None;
         for i in 0..2 {
-            invoke_context.set_return_data(Vec::new()).unwrap();
+            invoke_context.return_data = (*invoke_context.get_caller().unwrap(), Vec::new());
             let mut parameter_bytes = parameter_bytes.clone();
             {
                 let mut vm = create_vm(
-                    &loader_id,
-                    executable.as_ref(),
+                    &executable,
                     parameter_bytes.as_slice_mut(),
                     invoke_context,
                     &account_lengths,
@@ -246,7 +250,7 @@ fn run_program(name: &str) -> u64 {
                 if config.enable_instruction_tracing {
                     if i == 1 {
                         if !Tracer::compare(tracer.as_ref().unwrap(), vm.get_tracer()) {
-                            let analysis = Analysis::from_executable(executable.as_ref());
+                            let analysis = Analysis::from_executable(&executable);
                             let stdout = std::io::stdout();
                             println!("TRACE (interpreted):");
                             tracer
@@ -260,7 +264,7 @@ fn run_program(name: &str) -> u64 {
                                 .unwrap();
                             assert!(false);
                         } else if log_enabled!(Trace) {
-                            let analysis = Analysis::from_executable(executable.as_ref());
+                            let analysis = Analysis::from_executable(&executable);
                             let mut trace_buffer = Vec::<u8>::new();
                             tracer
                                 .as_ref()

@@ -70,9 +70,7 @@ export function TransactionHistoryCard({ pubkey }: { pubkey: PublicKey }) {
           )}
 
           <td>
-            <span className={`badge badge-soft-${statusClass}`}>
-              {statusText}
-            </span>
+            <span className={`badge bg-${statusClass}-soft`}>{statusText}</span>
           </td>
         </tr>
       );

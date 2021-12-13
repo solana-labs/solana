@@ -760,19 +760,24 @@ function createRpcClient(
     agentManager = new AgentManager(useHttps);
   }
 
-  let fetchWithMiddleware: (url: string, options: any) => Promise<Response>;
+  let fetchWithMiddleware:
+    | ((url: string, options: any) => Promise<Response>)
+    | undefined;
 
   if (fetchMiddleware) {
-    fetchWithMiddleware = (url: string, options: any) => {
-      return new Promise<Response>((resolve, reject) => {
-        fetchMiddleware(url, options, async (url: string, options: any) => {
+    fetchWithMiddleware = async (url: string, options: any) => {
+      const modifiedFetchArgs = await new Promise<[string, any]>(
+        (resolve, reject) => {
           try {
-            resolve(await fetch(url, options));
+            fetchMiddleware(url, options, (modifiedUrl, modifiedOptions) =>
+              resolve([modifiedUrl, modifiedOptions]),
+            );
           } catch (error) {
             reject(error);
           }
-        });
-      });
+        },
+      );
+      return await fetch(...modifiedFetchArgs);
     };
   }
 
@@ -1972,7 +1977,7 @@ export type HttpHeaders = {[header: string]: string};
 export type FetchMiddleware = (
   url: string,
   options: any,
-  fetch: Function,
+  fetch: (modifiedUrl: string, modifiedOptions: any) => void,
 ) => void;
 
 /**

@@ -1,10 +1,12 @@
-use crate::{
-    bank::{Bank, TransactionResults},
-    genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs},
-    vote_sender_types::ReplayVoteSender,
+use {
+    crate::{
+        bank::{Bank, TransactionResults},
+        genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs},
+        vote_sender_types::ReplayVoteSender,
+    },
+    solana_sdk::{pubkey::Pubkey, signature::Signer, transaction::SanitizedTransaction},
+    solana_vote_program::vote_transaction,
 };
-use solana_sdk::{pubkey::Pubkey, signature::Signer, transaction::SanitizedTransaction};
-use solana_vote_program::vote_transaction;
 
 pub fn setup_bank_and_vote_pubkeys_for_tests(
     num_vote_accounts: usize,
@@ -46,7 +48,7 @@ pub fn find_and_send_votes(
                     if let Some(parsed_vote) =
                         vote_transaction::parse_sanitized_vote_transaction(tx)
                     {
-                        if parsed_vote.1.slots.last().is_some() {
+                        if parsed_vote.1.last_voted_slot().is_some() {
                             let _ = vote_sender.send(parsed_vote);
                         }
                     }

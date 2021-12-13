@@ -5,8 +5,8 @@
 use {
     crate::{
         hash::Hash,
-        instruction::{CompiledInstruction, Instruction, InstructionError},
-        message::{Message, SanitizeMessageError},
+        instruction::{CompiledInstruction, Instruction},
+        message::Message,
         nonce::NONCED_TX_MARKER_IX_INDEX,
         precompiles::verify_if_precompile,
         program_utils::limited_deserialize,
@@ -15,138 +15,31 @@ use {
         short_vec,
         signature::{Signature, SignerError},
         signers::Signers,
+        wasm_bindgen,
     },
     serde::Serialize,
     solana_program::{system_instruction::SystemInstruction, system_program},
     solana_sdk::feature_set,
-    std::result,
-    std::sync::Arc,
-    thiserror::Error,
+    std::{result, sync::Arc},
 };
 
+mod error;
 mod sanitized;
 mod versioned;
 
-pub use sanitized::*;
-pub use versioned::*;
+pub use {error::*, sanitized::*, versioned::*};
 
-/// Reasons a transaction might be rejected.
-#[derive(
-    Error, Serialize, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample, AbiEnumVisitor,
-)]
-pub enum TransactionError {
-    /// An account is already being processed in another transaction in a way
-    /// that does not support parallelism
-    #[error("Account in use")]
-    AccountInUse,
-
-    /// A `Pubkey` appears twice in the transaction's `account_keys`.  Instructions can reference
-    /// `Pubkey`s more than once but the message must contain a list with no duplicate keys
-    #[error("Account loaded twice")]
-    AccountLoadedTwice,
-
-    /// Attempt to debit an account but found no record of a prior credit.
-    #[error("Attempt to debit an account but found no record of a prior credit.")]
-    AccountNotFound,
-
-    /// Attempt to load a program that does not exist
-    #[error("Attempt to load a program that does not exist")]
-    ProgramAccountNotFound,
-
-    /// The from `Pubkey` does not have sufficient balance to pay the fee to schedule the transaction
-    #[error("Insufficient funds for fee")]
-    InsufficientFundsForFee,
-
-    /// This account may not be used to pay transaction fees
-    #[error("This account may not be used to pay transaction fees")]
-    InvalidAccountForFee,
-
-    /// The bank has seen this transaction before. This can occur under normal operation
-    /// when a UDP packet is duplicated, as a user error from a client not updating
-    /// its `recent_blockhash`, or as a double-spend attack.
-    #[error("This transaction has already been processed")]
-    AlreadyProcessed,
-
-    /// The bank has not seen the given `recent_blockhash` or the transaction is too old and
-    /// the `recent_blockhash` has been discarded.
-    #[error("Blockhash not found")]
-    BlockhashNotFound,
-
-    /// An error occurred while processing an instruction. The first element of the tuple
-    /// indicates the instruction index in which the error occurred.
-    #[error("Error processing Instruction {0}: {1}")]
-    InstructionError(u8, InstructionError),
-
-    /// Loader call chain is too deep
-    #[error("Loader call chain is too deep")]
-    CallChainTooDeep,
-
-    /// Transaction requires a fee but has no signature present
-    #[error("Transaction requires a fee but has no signature present")]
-    MissingSignatureForFee,
-
-    /// Transaction contains an invalid account reference
-    #[error("Transaction contains an invalid account reference")]
-    InvalidAccountIndex,
-
-    /// Transaction did not pass signature verification
-    #[error("Transaction did not pass signature verification")]
-    SignatureFailure,
-
-    /// This program may not be used for executing instructions
-    #[error("This program may not be used for executing instructions")]
-    InvalidProgramForExecution,
-
-    /// Transaction failed to sanitize accounts offsets correctly
-    /// implies that account locks are not taken for this TX, and should
-    /// not be unlocked.
-    #[error("Transaction failed to sanitize accounts offsets correctly")]
-    SanitizeFailure,
-
-    #[error("Transactions are currently disabled due to cluster maintenance")]
-    ClusterMaintenance,
-
-    /// Transaction processing left an account with an outstanding borrowed reference
-    #[error("Transaction processing left an account with an outstanding borrowed reference")]
-    AccountBorrowOutstanding,
-
-    /// Transaction would exceed max Block Cost Limit
-    #[error("Transaction would exceed max Block Cost Limit")]
-    WouldExceedMaxBlockCostLimit,
-
-    /// Transaction version is unsupported
-    #[error("Transaction version is unsupported")]
-    UnsupportedVersion,
-
-    /// Transaction loads a writable account that cannot be written
-    #[error("Transaction loads a writable account that cannot be written")]
-    InvalidWritableAccount,
-
-    /// Transaction would exceed max account limit within the block
-    #[error("Transaction would exceed max account limit within the block")]
-    WouldExceedMaxAccountCostLimit,
+#[derive(PartialEq, Clone, Copy, Debug)]
+pub enum TransactionVerificationMode {
+    HashOnly,
+    HashAndVerifyPrecompiles,
+    FullVerification,
 }
 
 pub type Result<T> = result::Result<T, TransactionError>;
 
-impl From<SanitizeError> for TransactionError {
-    fn from(_: SanitizeError) -> Self {
-        Self::SanitizeFailure
-    }
-}
-
-impl From<SanitizeMessageError> for TransactionError {
-    fn from(err: SanitizeMessageError) -> Self {
-        match err {
-            SanitizeMessageError::IndexOutOfBounds
-            | SanitizeMessageError::ValueOutOfBounds
-            | SanitizeMessageError::InvalidValue => Self::SanitizeFailure,
-            SanitizeMessageError::DuplicateAccountKey => Self::AccountLoadedTwice,
-        }
-    }
-}
-
 /// An atomic transaction
+#[wasm_bindgen]
 #[frozen_abi(digest = "FZtncnS1Xk8ghHfKiXE5oGiUbw2wJhmfXQuNgQR3K6Mc")]
 #[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize, AbiExample)]
 pub struct Transaction {
@@ -156,10 +49,12 @@ pub struct Transaction {
     /// [`account_keys`]: Message::account_keys
     ///
     // NOTE: Serialization-related changes must be paired with the direct read at sigverify.
+    #[wasm_bindgen(skip)]
     #[serde(with = "short_vec")]
     pub signatures: Vec<Signature>,
 
     /// The message to sign.
+    #[wasm_bindgen(skip)]
     pub message: Message,
 }
 
@@ -404,6 +299,10 @@ impl Transaction {
         }
     }
 
+    pub fn get_invalid_signature() -> Signature {
+        Signature::default()
+    }
+
     /// Verify the length of signatures matches the value in the message header
     pub fn verify_signatures_len(&self) -> bool {
         self.signatures.len() == self.message.header.num_required_signatures as usize
@@ -536,15 +435,17 @@ pub fn get_nonce_pubkey_from_instruction<'a>(
 mod tests {
     #![allow(deprecated)]
 
-    use super::*;
-    use crate::{
-        hash::hash,
-        instruction::AccountMeta,
-        signature::{Keypair, Presigner, Signer},
-        system_instruction, sysvar,
+    use {
+        super::*,
+        crate::{
+            hash::hash,
+            instruction::AccountMeta,
+            signature::{Keypair, Presigner, Signer},
+            system_instruction, sysvar,
+        },
+        bincode::{deserialize, serialize, serialized_size},
+        std::mem::size_of,
     };
-    use bincode::{deserialize, serialize, serialized_size};
-    use std::mem::size_of;
 
     fn get_program_id(tx: &Transaction, instruction_index: usize) -> &Pubkey {
         let message = tx.message();

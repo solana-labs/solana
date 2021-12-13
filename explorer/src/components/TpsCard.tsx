@@ -172,11 +172,11 @@ function TpsBarChart({ performanceInfo }: TpsBarChartProps) {
       <TableCardBody>
         <tr>
           <td className="w-100">Transaction count</td>
-          <td className="text-lg-right text-monospace">{transactionCount} </td>
+          <td className="text-lg-end font-monospace">{transactionCount} </td>
         </tr>
         <tr>
           <td className="w-100">Transactions per second (TPS)</td>
-          <td className="text-lg-right text-monospace">{averageTps} </td>
+          <td className="text-lg-end font-monospace">{averageTps} </td>
         </tr>
       </TableCardBody>
 
@@ -192,7 +192,7 @@ function TpsBarChart({ performanceInfo }: TpsBarChartProps) {
                 <button
                   key={key}
                   onClick={() => setSeries(key)}
-                  className={classNames("btn btn-sm btn-white ml-2", {
+                  className={classNames("btn btn-sm btn-white ms-2", {
                     active: series === key,
                   })}
                 >

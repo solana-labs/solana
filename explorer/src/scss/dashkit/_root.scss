@@ -3,10 +3,10 @@
 // Extended from Bootstrap
 //
 
-html {
-  height: 100%;
-}
+:root {
 
-body {
-  min-height: 100%;
+  // Chart variables
+  @each $color, $value in $chart-colors {
+    --bs-chart-#{$color}: #{$value};
+  }
 }

@@ -1,17 +1,18 @@
-use solana_sdk::timing::AtomicInterval;
-use std::{
-    collections::HashMap,
-    io::BufRead,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    thread::{self, sleep, Builder, JoinHandle},
-    time::Duration,
-};
-
 #[cfg(target_os = "linux")]
 use std::{fs::File, io::BufReader, path::Path};
+use {
+    solana_sdk::timing::AtomicInterval,
+    std::{
+        collections::HashMap,
+        io::BufRead,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
+        thread::{self, sleep, Builder, JoinHandle},
+        time::Duration,
+    },
+};
 
 const MS_PER_S: u64 = 1_000;
 const SAMPLE_INTERVAL_UDP_MS: u64 = 60 * MS_PER_S;

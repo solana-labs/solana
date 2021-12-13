@@ -1,5 +1,6 @@
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(min_specialization))]
 #![allow(clippy::integer_arithmetic)]
+pub mod account_info;
 pub mod accounts;
 pub mod accounts_background_service;
 pub mod accounts_cache;
@@ -48,6 +49,8 @@ pub mod snapshot_hash;
 pub mod snapshot_package;
 pub mod snapshot_utils;
 pub mod sorted_storages;
+pub mod stake_delegations;
+pub mod stake_history;
 pub mod stake_weighted_timestamp;
 pub mod stakes;
 pub mod status_cache;

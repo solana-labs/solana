@@ -217,15 +217,16 @@ solana_sdk::pubkeys!(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_sdk::{
-        account::Account,
-        account::AccountSharedData,
-        epoch_schedule::EpochSchedule,
-        genesis_config::{ClusterType, GenesisConfig},
-        stake::state::{Authorized, Lockup, Meta},
+    use {
+        super::*,
+        solana_sdk::{
+            account::{Account, AccountSharedData},
+            epoch_schedule::EpochSchedule,
+            genesis_config::{ClusterType, GenesisConfig},
+            stake::state::{Authorized, Lockup, Meta},
+        },
+        std::{collections::BTreeMap, sync::Arc},
     };
-    use std::{collections::BTreeMap, sync::Arc};
 
     fn new_from_parent(parent: &Arc<Bank>) -> Bank {
         Bank::new_from_parent(parent, &Pubkey::default(), parent.slot() + 1)

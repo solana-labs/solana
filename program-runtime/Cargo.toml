@@ -1,13 +1,13 @@
 [package]
 name = "solana-program-runtime"
-version = "1.9.0"
+version = "1.10.0"
 description = "Solana program runtime"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-program-runtime"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 base64 = "0.13"
@@ -19,10 +19,8 @@ log = "0.4.14"
 num-derive = { version = "0.3" }
 num-traits = { version = "0.2" }
 serde = { version = "1.0.129", features = ["derive", "rc"] }
-solana-frozen-abi = { path = "../frozen-abi", version = "=1.9.0" }
-solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.9.0" }
-solana-logger = { path = "../logger", version = "=1.9.0" }
-solana-sdk = { path = "../sdk", version = "=1.9.0" }
+solana-logger = { path = "../logger", version = "=1.10.0" }
+solana-sdk = { path = "../sdk", version = "=1.10.0" }
 thiserror = "1.0"
 
 [lib]

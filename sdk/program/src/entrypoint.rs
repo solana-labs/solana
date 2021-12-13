@@ -2,17 +2,18 @@
 //! BPFLoader.  For more information see './bpf_loader.rs'
 
 extern crate alloc;
-use crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
-use alloc::vec::Vec;
-use std::{
-    alloc::Layout,
-    cell::RefCell,
-    mem::size_of,
-    ptr::null_mut,
-    rc::Rc,
-    // Hide Result from bindgen gets confused about generics in non-generic type declarations
-    result::Result as ResultGeneric,
-    slice::{from_raw_parts, from_raw_parts_mut},
+use {
+    crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey},
+    alloc::vec::Vec,
+    std::{
+        alloc::Layout,
+        cell::RefCell,
+        mem::size_of,
+        ptr::null_mut,
+        rc::Rc,
+        result::Result as ResultGeneric,
+        slice::{from_raw_parts, from_raw_parts_mut},
+    },
 };
 
 pub type ProgramResult = ResultGeneric<(), ProgramError>;
@@ -252,8 +253,8 @@ unsafe impl std::alloc::GlobalAlloc for BumpAllocator {
 /// Maximum number of bytes a program may add to an account during a single realloc
 pub const MAX_PERMITTED_DATA_INCREASE: usize = 1_024 * 10;
 
-// Parameters passed to the entrypoint input buffer are aligned on 8-byte boundaries
-pub const PARAMETER_ALIGNMENT: usize = 8;
+/// `assert_eq(std::mem::align_of::<u128>(), 8)` is true for BPF but not for some host machines
+pub const BPF_ALIGN_OF_U128: usize = 8;
 
 /// Deserialize the input arguments
 ///
@@ -312,7 +313,7 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
                 from_raw_parts_mut(input.add(offset), data_len)
             }));
             offset += data_len + MAX_PERMITTED_DATA_INCREASE;
-            offset += (offset as *const u8).align_offset(PARAMETER_ALIGNMENT); // padding
+            offset += (offset as *const u8).align_offset(BPF_ALIGN_OF_U128); // padding
 
             #[allow(clippy::cast_ptr_alignment)]
             let rent_epoch = *(input.add(offset) as *const u64);
@@ -354,8 +355,7 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use std::alloc::GlobalAlloc;
+    use {super::*, std::alloc::GlobalAlloc};
 
     #[test]
     fn test_bump_allocator() {

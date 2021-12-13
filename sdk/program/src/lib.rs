@@ -6,12 +6,14 @@
 extern crate self as solana_program;
 
 pub mod account_info;
+pub(crate) mod atomic_u64;
 pub mod blake3;
 pub mod borsh;
 pub mod bpf_loader;
 pub mod bpf_loader_deprecated;
 pub mod bpf_loader_upgradeable;
 pub mod clock;
+pub mod debug_account_data;
 pub mod decode_error;
 pub mod ed25519_program;
 pub mod entrypoint;
@@ -50,6 +52,12 @@ pub mod stake_history;
 pub mod system_instruction;
 pub mod system_program;
 pub mod sysvar;
+pub mod wasm;
+
+#[cfg(target_arch = "bpf")]
+pub use solana_sdk_macro::wasm_bindgen_stub as wasm_bindgen;
+#[cfg(not(target_arch = "bpf"))]
+pub use wasm_bindgen::prelude::wasm_bindgen;
 
 pub mod config {
     pub mod program {

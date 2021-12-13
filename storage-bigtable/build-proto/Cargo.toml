@@ -1,13 +1,13 @@
 [package]
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 description = "Blockchain, Rebuilt for Scale"
-edition = "2018"
+edition = "2021"
 homepage = "https://solana.com/"
 license = "Apache-2.0"
 name = "proto"
 publish = false
 repository = "https://github.com/solana-labs/solana"
-version = "1.9.0"
+version = "1.10.0"
 
 [workspace]
 

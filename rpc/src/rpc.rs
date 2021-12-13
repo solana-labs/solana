@@ -26,8 +26,7 @@ use {
             MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, MAX_GET_SLOT_LEADERS, MAX_MULTIPLE_ACCOUNTS,
             NUM_LARGEST_ACCOUNTS,
         },
-        rpc_response::Response as RpcResponse,
-        rpc_response::*,
+        rpc_response::{Response as RpcResponse, *},
     },
     solana_faucet::faucet::request_airdrop_transaction,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
@@ -3521,6 +3520,7 @@ pub mod rpc_full {
             if config.sig_verify {
                 verify_transaction(&transaction, &bank.feature_set)?;
             }
+            let number_of_accounts = transaction.message().account_keys_len();
 
             let TransactionSimulationResult {
                 result,
@@ -3540,28 +3540,36 @@ pub mod rpc_full {
                     return Err(Error::invalid_params("base58 encoding not supported"));
                 }
 
-                if config_accounts.addresses.len() > post_simulation_accounts.len() {
+                if config_accounts.addresses.len() > number_of_accounts {
                     return Err(Error::invalid_params(format!(
                         "Too many accounts provided; max {}",
-                        post_simulation_accounts.len()
+                        number_of_accounts
                     )));
                 }
 
-                let mut accounts = vec![];
-                for address_str in config_accounts.addresses {
-                    let address = verify_pubkey(&address_str)?;
-                    accounts.push(if result.is_err() {
-                        None
-                    } else {
-                        post_simulation_accounts
-                            .iter()
-                            .find(|(key, _account)| key == &address)
-                            .map(|(pubkey, account)| {
-                                UiAccount::encode(pubkey, account, accounts_encoding, None, None)
-                            })
-                    });
+                if result.is_err() {
+                    Some(vec![None; config_accounts.addresses.len()])
+                } else {
+                    let mut accounts = vec![];
+                    for address_str in config_accounts.addresses {
+                        let address = verify_pubkey(&address_str)?;
+                        accounts.push(
+                            post_simulation_accounts
+                                .iter()
+                                .find(|(key, _account)| key == &address)
+                                .map(|(pubkey, account)| {
+                                    UiAccount::encode(
+                                        pubkey,
+                                        account,
+                                        accounts_encoding,
+                                        None,
+                                        None,
+                                    )
+                                }),
+                        );
+                    }
+                    Some(accounts)
                 }
-                Some(accounts)
             } else {
                 None
             };
@@ -4338,8 +4346,7 @@ pub mod tests {
         },
         spl_token::{
             solana_program::{program_option::COption, pubkey::Pubkey as SplTokenPubkey},
-            state::AccountState as TokenAccountState,
-            state::Mint,
+            state::{AccountState as TokenAccountState, Mint},
         },
         std::collections::HashMap,
     };

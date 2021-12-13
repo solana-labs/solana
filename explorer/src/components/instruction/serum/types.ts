@@ -1,11 +1,13 @@
 /* eslint-disable @typescript-eslint/no-redeclare */
 
 import { decodeInstruction, MARKETS } from "@project-serum/serum";
-import { PublicKey, TransactionInstruction } from "@solana/web3.js";
-import BN from "bn.js";
-import { enums, number, optional, type, Infer, create } from "superstruct";
+import {
+  AccountMeta,
+  PublicKey,
+  TransactionInstruction,
+} from "@solana/web3.js";
+import { enums, number, type, Infer, create } from "superstruct";
 import { BigNumFromString } from "validators/bignum";
-import { PublicKeyFromString } from "validators/pubkey";
 
 const SERUM_PROGRAM_IDS = [
   "4ckmDgGdxQoPDLUkDT3vHgSAkzA3QRdNq5ywwY4sUSJn",
@@ -20,25 +22,44 @@ export const Side = enums(["buy", "sell"]);
 export type OrderType = Infer<typeof OrderType>;
 export const OrderType = enums(["limit", "ioc", "postOnly"]);
 
+export type SelfTradeBehavior = Infer<typeof SelfTradeBehavior>;
+export const SelfTradeBehavior = enums([
+  "decrementTake",
+  "cancelProvide",
+  "abortTransaction",
+]);
+
+function getOptionalKey(
+  keys: AccountMeta[],
+  index: number
+): PublicKey | undefined {
+  if (index < keys.length) {
+    return keys[index].pubkey;
+  } else {
+    return undefined;
+  }
+}
+
 export type InitializeMarket = {
-  market: PublicKey;
-  requestQueue: PublicKey;
-  eventQueue: PublicKey;
-  bids: PublicKey;
-  asks: PublicKey;
-  baseVault: PublicKey;
-  quoteVault: PublicKey;
-  baseMint: PublicKey;
-  quoteMint: PublicKey;
-  baseLotSize: BN;
-  quoteLotSize: BN;
-  feeRateBps: number;
-  vaultSignerNonce: BN;
-  quoteDustThreshold: BN;
   programId: PublicKey;
+  data: Infer<typeof InitializeMarketInstruction>;
+  accounts: {
+    market: PublicKey;
+    requestQueue: PublicKey;
+    eventQueue: PublicKey;
+    bids: PublicKey;
+    asks: PublicKey;
+    baseVault: PublicKey;
+    quoteVault: PublicKey;
+    baseMint: PublicKey;
+    quoteMint: PublicKey;
+    openOrdersMarketAuthority?: PublicKey;
+    pruneAuthority?: PublicKey;
+    crankAuthority?: PublicKey;
+  };
 };
 
-export const InitializeMarketDecode = type({
+export const InitializeMarketInstruction = type({
   baseLotSize: BigNumFromString,
   quoteLotSize: BigNumFromString,
   feeRateBps: number(),
@@ -49,251 +70,506 @@ export const InitializeMarketDecode = type({
 export function decodeInitializeMarket(
   ix: TransactionInstruction
 ): InitializeMarket {
-  const decoded = create(
-    decodeInstruction(ix.data).initializeMarket,
-    InitializeMarketDecode
-  );
-
-  let initializeMarket: InitializeMarket = {
-    market: ix.keys[0].pubkey,
-    requestQueue: ix.keys[1].pubkey,
-    eventQueue: ix.keys[2].pubkey,
-    bids: ix.keys[3].pubkey,
-    asks: ix.keys[4].pubkey,
-    baseVault: ix.keys[5].pubkey,
-    quoteVault: ix.keys[6].pubkey,
-    baseMint: ix.keys[7].pubkey,
-    quoteMint: ix.keys[8].pubkey,
+  return {
     programId: ix.programId,
-    baseLotSize: decoded.baseLotSize as BN,
-    quoteLotSize: decoded.quoteLotSize as BN,
-    feeRateBps: decoded.feeRateBps,
-    quoteDustThreshold: decoded.quoteDustThreshold as BN,
-    vaultSignerNonce: decoded.vaultSignerNonce as BN,
+    data: create(
+      decodeInstruction(ix.data).initializeMarket,
+      InitializeMarketInstruction
+    ),
+    accounts: {
+      market: ix.keys[0].pubkey,
+      requestQueue: ix.keys[1].pubkey,
+      eventQueue: ix.keys[2].pubkey,
+      bids: ix.keys[3].pubkey,
+      asks: ix.keys[4].pubkey,
+      baseVault: ix.keys[5].pubkey,
+      quoteVault: ix.keys[6].pubkey,
+      baseMint: ix.keys[7].pubkey,
+      quoteMint: ix.keys[8].pubkey,
+      openOrdersMarketAuthority: getOptionalKey(ix.keys, 10),
+      pruneAuthority: getOptionalKey(ix.keys, 11),
+      crankAuthority: getOptionalKey(ix.keys, 12),
+    },
   };
-
-  return initializeMarket;
 }
 
 export type NewOrder = {
-  market: PublicKey;
-  openOrders: PublicKey;
-  requestQueue: PublicKey;
-  payer: PublicKey;
-  owner: PublicKey;
-  baseVault: PublicKey;
-  quoteVault: PublicKey;
   programId: PublicKey;
-  feeDiscountPubkey?: PublicKey;
-  side: Side;
-  limitPrice: BN;
-  maxQuantity: BN;
-  orderType: OrderType;
-  clientId: BN;
+  data: Infer<typeof NewOrderInstruction>;
+  accounts: {
+    market: PublicKey;
+    openOrders: PublicKey;
+    requestQueue: PublicKey;
+    payer: PublicKey;
+    openOrdersOwner: PublicKey;
+    baseVault: PublicKey;
+    quoteVault: PublicKey;
+    feeDiscountPubkey?: PublicKey;
+  };
 };
 
-export const NewOrderDecode = type({
+export const NewOrderInstruction = type({
   side: Side,
   limitPrice: BigNumFromString,
   maxQuantity: BigNumFromString,
   orderType: OrderType,
   clientId: BigNumFromString,
-  feeDiscountPubkey: optional(PublicKeyFromString),
 });
 
 export function decodeNewOrder(ix: TransactionInstruction): NewOrder {
-  const decoded = create(decodeInstruction(ix.data).newOrder, NewOrderDecode);
-
-  let newOrder: NewOrder = {
-    market: ix.keys[0].pubkey,
-    openOrders: ix.keys[1].pubkey,
-    requestQueue: ix.keys[2].pubkey,
-    payer: ix.keys[3].pubkey,
-    owner: ix.keys[4].pubkey,
-    baseVault: ix.keys[5].pubkey,
-    quoteVault: ix.keys[6].pubkey,
+  return {
     programId: ix.programId,
-    side: decoded.side as Side,
-    limitPrice: decoded.limitPrice as BN,
-    maxQuantity: decoded.maxQuantity as BN,
-    orderType: decoded.orderType as OrderType,
-    clientId: decoded.clientId as BN,
+    data: create(decodeInstruction(ix.data).newOrder, NewOrderInstruction),
+    accounts: {
+      market: ix.keys[0].pubkey,
+      openOrders: ix.keys[1].pubkey,
+      requestQueue: ix.keys[2].pubkey,
+      payer: ix.keys[3].pubkey,
+      openOrdersOwner: ix.keys[4].pubkey,
+      baseVault: ix.keys[5].pubkey,
+      quoteVault: ix.keys[6].pubkey,
+      feeDiscountPubkey: getOptionalKey(ix.keys, 9),
+    },
   };
-
-  if (decoded.feeDiscountPubkey) {
-    newOrder.feeDiscountPubkey = decoded.feeDiscountPubkey;
-  }
-
-  return newOrder;
 }
 
 export type MatchOrders = {
-  market: PublicKey;
-  requestQueue: PublicKey;
-  eventQueue: PublicKey;
-  bids: PublicKey;
-  asks: PublicKey;
-  baseVault: PublicKey;
-  quoteVault: PublicKey;
-  limit: number;
   programId: PublicKey;
+  data: Infer<typeof MatchOrdersInstruction>;
+  accounts: {
+    market: PublicKey;
+    requestQueue: PublicKey;
+    eventQueue: PublicKey;
+    bids: PublicKey;
+    asks: PublicKey;
+  };
 };
 
-export const MatchOrdersDecode = type({
+export const MatchOrdersInstruction = type({
   limit: number(),
 });
 
 export function decodeMatchOrders(ix: TransactionInstruction): MatchOrders {
-  const decoded = create(
-    decodeInstruction(ix.data).matchOrders,
-    MatchOrdersDecode
-  );
-
-  const matchOrders: MatchOrders = {
-    market: ix.keys[0].pubkey,
-    requestQueue: ix.keys[1].pubkey,
-    eventQueue: ix.keys[2].pubkey,
-    bids: ix.keys[3].pubkey,
-    asks: ix.keys[4].pubkey,
-    baseVault: ix.keys[5].pubkey,
-    quoteVault: ix.keys[6].pubkey,
+  return {
     programId: ix.programId,
-    limit: decoded.limit,
+    data: create(
+      decodeInstruction(ix.data).matchOrders,
+      MatchOrdersInstruction
+    ),
+    accounts: {
+      market: ix.keys[0].pubkey,
+      requestQueue: ix.keys[1].pubkey,
+      eventQueue: ix.keys[2].pubkey,
+      bids: ix.keys[3].pubkey,
+      asks: ix.keys[4].pubkey,
+    },
   };
-
-  return matchOrders;
 }
 
 export type ConsumeEvents = {
-  market: PublicKey;
-  eventQueue: PublicKey;
-  openOrdersAccounts: PublicKey[];
-  limit: number;
   programId: PublicKey;
+  data: Infer<typeof ConsumeEventsInstruction>;
+  accounts: {
+    openOrders: PublicKey[];
+    market: PublicKey;
+    eventQueue: PublicKey;
+  };
 };
 
-export const ConsumeEventsDecode = type({
+export const ConsumeEventsInstruction = type({
   limit: number(),
 });
 
 export function decodeConsumeEvents(ix: TransactionInstruction): ConsumeEvents {
-  const decoded = create(
-    decodeInstruction(ix.data).consumeEvents,
-    ConsumeEventsDecode
-  );
-
-  const consumeEvents: ConsumeEvents = {
-    openOrdersAccounts: ix.keys.slice(0, -2).map((k) => k.pubkey),
-    market: ix.keys[ix.keys.length - 2].pubkey,
-    eventQueue: ix.keys[ix.keys.length - 3].pubkey,
+  return {
     programId: ix.programId,
-    limit: decoded.limit,
+    data: create(
+      decodeInstruction(ix.data).consumeEvents,
+      ConsumeEventsInstruction
+    ),
+    accounts: {
+      openOrders: ix.keys.slice(0, -4).map((k) => k.pubkey),
+      market: ix.keys[ix.keys.length - 4].pubkey,
+      eventQueue: ix.keys[ix.keys.length - 3].pubkey,
+    },
   };
-
-  return consumeEvents;
 }
 
 export type CancelOrder = {
-  market: PublicKey;
-  openOrders: PublicKey;
-  owner: PublicKey;
-  requestQueue: PublicKey;
-  side: "buy" | "sell";
-  orderId: BN;
-  openOrdersSlot: number;
   programId: PublicKey;
+  data: Infer<typeof CancelOrderInstruction>;
+  accounts: {
+    market: PublicKey;
+    openOrders: PublicKey;
+    requestQueue: PublicKey;
+    openOrdersOwner: PublicKey;
+  };
 };
 
-export const CancelOrderDecode = type({
+export const CancelOrderInstruction = type({
   side: Side,
   orderId: BigNumFromString,
   openOrdersSlot: number(),
 });
 
 export function decodeCancelOrder(ix: TransactionInstruction): CancelOrder {
-  const decoded = create(
-    decodeInstruction(ix.data).cancelOrder,
-    CancelOrderDecode
-  );
-
-  const cancelOrder: CancelOrder = {
-    market: ix.keys[0].pubkey,
-    openOrders: ix.keys[1].pubkey,
-    requestQueue: ix.keys[2].pubkey,
-    owner: ix.keys[3].pubkey,
+  return {
     programId: ix.programId,
-    openOrdersSlot: decoded.openOrdersSlot,
-    orderId: decoded.orderId as BN,
-    side: decoded.side,
+    data: create(
+      decodeInstruction(ix.data).cancelOrder,
+      CancelOrderInstruction
+    ),
+    accounts: {
+      market: ix.keys[0].pubkey,
+      openOrders: ix.keys[1].pubkey,
+      requestQueue: ix.keys[2].pubkey,
+      openOrdersOwner: ix.keys[3].pubkey,
+    },
   };
+}
 
-  return cancelOrder;
+export type SettleFunds = {
+  programId: PublicKey;
+  accounts: {
+    market: PublicKey;
+    openOrders: PublicKey;
+    openOrdersOwner: PublicKey;
+    baseVault: PublicKey;
+    quoteVault: PublicKey;
+    baseWallet: PublicKey;
+    quoteWallet: PublicKey;
+    vaultSigner: PublicKey;
+    referrerQuoteWallet?: PublicKey;
+  };
+};
+
+export function decodeSettleFunds(ix: TransactionInstruction): SettleFunds {
+  return {
+    programId: ix.programId,
+    accounts: {
+      market: ix.keys[0].pubkey,
+      openOrders: ix.keys[1].pubkey,
+      openOrdersOwner: ix.keys[2].pubkey,
+      baseVault: ix.keys[3].pubkey,
+      quoteVault: ix.keys[4].pubkey,
+      baseWallet: ix.keys[5].pubkey,
+      quoteWallet: ix.keys[6].pubkey,
+      vaultSigner: ix.keys[7].pubkey,
+      referrerQuoteWallet: getOptionalKey(ix.keys, 9),
+    },
+  };
 }
 
 export type CancelOrderByClientId = {
-  market: PublicKey;
-  openOrders: PublicKey;
-  owner: PublicKey;
-  requestQueue: PublicKey;
-  clientId: BN;
   programId: PublicKey;
+  data: Infer<typeof CancelOrderByClientIdInstruction>;
+  accounts: {
+    market: PublicKey;
+    openOrders: PublicKey;
+    requestQueue: PublicKey;
+    openOrdersOwner: PublicKey;
+  };
 };
 
-export const CancelOrderByClientIdDecode = type({
+export const CancelOrderByClientIdInstruction = type({
   clientId: BigNumFromString,
 });
 
 export function decodeCancelOrderByClientId(
   ix: TransactionInstruction
 ): CancelOrderByClientId {
-  const decoded = create(
-    decodeInstruction(ix.data).cancelOrderByClientId,
-    CancelOrderByClientIdDecode
-  );
-
-  const cancelOrderByClientId: CancelOrderByClientId = {
-    market: ix.keys[0].pubkey,
-    openOrders: ix.keys[1].pubkey,
-    requestQueue: ix.keys[2].pubkey,
-    owner: ix.keys[3].pubkey,
+  return {
     programId: ix.programId,
-    clientId: decoded.clientId as BN,
+    data: create(
+      decodeInstruction(ix.data).cancelOrderByClientId,
+      CancelOrderByClientIdInstruction
+    ),
+    accounts: {
+      market: ix.keys[0].pubkey,
+      openOrders: ix.keys[1].pubkey,
+      requestQueue: ix.keys[2].pubkey,
+      openOrdersOwner: ix.keys[3].pubkey,
+    },
   };
-
-  return cancelOrderByClientId;
 }
 
-export type SettleFunds = {
-  market: PublicKey;
-  openOrders: PublicKey;
-  owner: PublicKey;
-  baseVault: PublicKey;
-  quoteVault: PublicKey;
-  baseWallet: PublicKey;
-  quoteWallet: PublicKey;
-  vaultSigner: PublicKey;
+export type DisableMarket = {
   programId: PublicKey;
-  referrerQuoteWallet?: PublicKey;
+  accounts: {
+    market: PublicKey;
+    disableAuthority: PublicKey;
+  };
 };
 
-export function decodeSettleFunds(ix: TransactionInstruction): SettleFunds {
-  let settleFunds: SettleFunds = {
-    market: ix.keys[0].pubkey,
-    openOrders: ix.keys[1].pubkey,
-    owner: ix.keys[2].pubkey,
-    baseVault: ix.keys[3].pubkey,
-    quoteVault: ix.keys[4].pubkey,
-    baseWallet: ix.keys[5].pubkey,
-    quoteWallet: ix.keys[6].pubkey,
-    vaultSigner: ix.keys[7].pubkey,
+export function decodeDisableMarket(ix: TransactionInstruction): DisableMarket {
+  return {
     programId: ix.programId,
+    accounts: {
+      market: ix.keys[0].pubkey,
+      disableAuthority: ix.keys[1].pubkey,
+    },
   };
+}
 
-  if (ix.keys.length > 9) {
-    settleFunds.referrerQuoteWallet = ix.keys[9].pubkey;
-  }
+export type SweepFees = {
+  programId: PublicKey;
+  accounts: {
+    market: PublicKey;
+    quoteVault: PublicKey;
+    feeSweepingAuthority: PublicKey;
+    quoteFeeReceiver: PublicKey;
+    vaultSigner: PublicKey;
+  };
+};
 
-  return settleFunds;
+export function decodeSweepFees(ix: TransactionInstruction): SweepFees {
+  return {
+    programId: ix.programId,
+    accounts: {
+      market: ix.keys[0].pubkey,
+      quoteVault: ix.keys[1].pubkey,
+      feeSweepingAuthority: ix.keys[2].pubkey,
+      quoteFeeReceiver: ix.keys[3].pubkey,
+      vaultSigner: ix.keys[4].pubkey,
+    },
+  };
+}
+
+export type NewOrderV3 = {
+  programId: PublicKey;
+  data: Infer<typeof NewOrderV3Instruction>;
+  accounts: {
+    market: PublicKey;
+    openOrders: PublicKey;
+    requestQueue: PublicKey;
+    eventQueue: PublicKey;
+    bids: PublicKey;
+    asks: PublicKey;
+    payer: PublicKey;
+    openOrdersOwner: PublicKey;
+    baseVault: PublicKey;
+    quoteVault: PublicKey;
+    feeDiscountPubkey?: PublicKey;
+  };
+};
+
+export const NewOrderV3Instruction = type({
+  side: Side,
+  limitPrice: BigNumFromString,
+  maxBaseQuantity: BigNumFromString,
+  maxQuoteQuantity: BigNumFromString,
+  selfTradeBehavior: SelfTradeBehavior,
+  orderType: OrderType,
+  clientId: BigNumFromString,
+  limit: number(),
+});
+
+export function decodeNewOrderV3(ix: TransactionInstruction): NewOrderV3 {
+  return {
+    programId: ix.programId,
+    data: create(decodeInstruction(ix.data).newOrderV3, NewOrderV3Instruction),
+    accounts: {
+      market: ix.keys[0].pubkey,
+      openOrders: ix.keys[1].pubkey,
+      requestQueue: ix.keys[2].pubkey,
+      eventQueue: ix.keys[3].pubkey,
+      bids: ix.keys[4].pubkey,
+      asks: ix.keys[5].pubkey,
+      payer: ix.keys[6].pubkey,
+      openOrdersOwner: ix.keys[7].pubkey,
+      baseVault: ix.keys[8].pubkey,
+      quoteVault: ix.keys[9].pubkey,
+      feeDiscountPubkey: getOptionalKey(ix.keys, 12),
+    },
+  };
+}
+
+export type CancelOrderV2 = {
+  programId: PublicKey;
+  data: Infer<typeof CancelOrderV2Instruction>;
+  accounts: {
+    market: PublicKey;
+    bids: PublicKey;
+    asks: PublicKey;
+    openOrders: PublicKey;
+    openOrdersOwner: PublicKey;
+    eventQueue: PublicKey;
+  };
+};
+
+export const CancelOrderV2Instruction = type({
+  side: Side,
+  orderId: BigNumFromString,
+});
+
+export function decodeCancelOrderV2(ix: TransactionInstruction): CancelOrderV2 {
+  return {
+    programId: ix.programId,
+    data: create(
+      decodeInstruction(ix.data).cancelOrderV2,
+      CancelOrderV2Instruction
+    ),
+    accounts: {
+      market: ix.keys[0].pubkey,
+      bids: ix.keys[1].pubkey,
+      asks: ix.keys[2].pubkey,
+      openOrders: ix.keys[3].pubkey,
+      openOrdersOwner: ix.keys[4].pubkey,
+      eventQueue: ix.keys[5].pubkey,
+    },
+  };
+}
+
+export type CancelOrderByClientIdV2 = {
+  programId: PublicKey;
+  data: Infer<typeof CancelOrderByClientIdV2Instruction>;
+  accounts: {
+    market: PublicKey;
+    bids: PublicKey;
+    asks: PublicKey;
+    openOrders: PublicKey;
+    openOrdersOwner: PublicKey;
+    eventQueue: PublicKey;
+  };
+};
+
+export const CancelOrderByClientIdV2Instruction = type({
+  clientId: BigNumFromString,
+});
+
+export function decodeCancelOrderByClientIdV2(
+  ix: TransactionInstruction
+): CancelOrderByClientIdV2 {
+  return {
+    programId: ix.programId,
+    data: create(
+      decodeInstruction(ix.data).cancelOrderByClientIdV2,
+      CancelOrderByClientIdV2Instruction
+    ),
+    accounts: {
+      market: ix.keys[0].pubkey,
+      bids: ix.keys[1].pubkey,
+      asks: ix.keys[2].pubkey,
+      openOrders: ix.keys[3].pubkey,
+      openOrdersOwner: ix.keys[4].pubkey,
+      eventQueue: ix.keys[5].pubkey,
+    },
+  };
+}
+
+export type CloseOpenOrders = {
+  programId: PublicKey;
+  accounts: {
+    openOrders: PublicKey;
+    openOrdersOwner: PublicKey;
+    rentReceiver: PublicKey;
+    market: PublicKey;
+  };
+};
+
+export function decodeCloseOpenOrders(
+  ix: TransactionInstruction
+): CloseOpenOrders {
+  return {
+    programId: ix.programId,
+    accounts: {
+      openOrders: ix.keys[0].pubkey,
+      openOrdersOwner: ix.keys[1].pubkey,
+      rentReceiver: ix.keys[2].pubkey,
+      market: ix.keys[3].pubkey,
+    },
+  };
+}
+
+export type InitOpenOrders = {
+  programId: PublicKey;
+  accounts: {
+    openOrders: PublicKey;
+    openOrdersOwner: PublicKey;
+    market: PublicKey;
+    openOrdersMarketAuthority?: PublicKey;
+  };
+};
+
+export function decodeInitOpenOrders(
+  ix: TransactionInstruction
+): InitOpenOrders {
+  return {
+    programId: ix.programId,
+    accounts: {
+      openOrders: ix.keys[0].pubkey,
+      openOrdersOwner: ix.keys[1].pubkey,
+      market: ix.keys[2].pubkey,
+      openOrdersMarketAuthority: ix.keys[4].pubkey,
+    },
+  };
+}
+
+export type Prune = {
+  programId: PublicKey;
+  data: Infer<typeof PruneInstruction>;
+  accounts: {
+    market: PublicKey;
+    bids: PublicKey;
+    asks: PublicKey;
+    pruneAuthority: PublicKey;
+    openOrders: PublicKey;
+    openOrdersOwner: PublicKey;
+    eventQueue: PublicKey;
+  };
+};
+
+export const PruneInstruction = type({
+  limit: number(),
+});
+
+export function decodePrune(ix: TransactionInstruction): Prune {
+  return {
+    programId: ix.programId,
+    data: create(decodeInstruction(ix.data).prune, PruneInstruction),
+    accounts: {
+      market: ix.keys[0].pubkey,
+      bids: ix.keys[1].pubkey,
+      asks: ix.keys[2].pubkey,
+      pruneAuthority: ix.keys[3].pubkey,
+      openOrders: ix.keys[4].pubkey,
+      openOrdersOwner: ix.keys[5].pubkey,
+      eventQueue: ix.keys[6].pubkey,
+    },
+  };
+}
+
+export type ConsumeEventsPermissioned = {
+  programId: PublicKey;
+  data: Infer<typeof ConsumeEventsPermissionedInstruction>;
+  accounts: {
+    openOrders: PublicKey[];
+    market: PublicKey;
+    eventQueue: PublicKey;
+    crankAuthority: PublicKey;
+  };
+};
+
+export const ConsumeEventsPermissionedInstruction = type({
+  limit: number(),
+});
+
+export function decodeConsumeEventsPermissioned(
+  ix: TransactionInstruction
+): ConsumeEventsPermissioned {
+  return {
+    programId: ix.programId,
+    data: create(
+      decodeInstruction(ix.data).consumeEventsPermissioned,
+      ConsumeEventsPermissionedInstruction
+    ),
+    accounts: {
+      openOrders: ix.keys.slice(0, -3).map((k) => k.pubkey),
+      market: ix.keys[ix.keys.length - 3].pubkey,
+      eventQueue: ix.keys[ix.keys.length - 2].pubkey,
+      crankAuthority: ix.keys[ix.keys.length - 1].pubkey,
+    },
+  };
 }
 
 export function isSerumInstruction(instruction: TransactionInstruction) {
@@ -326,16 +602,18 @@ const SERUM_CODE_LOOKUP: { [key: number]: string } = {
   3: "Consume Events",
   4: "Cancel Order",
   5: "Settle Funds",
-  6: "Cancel Order By Client Id",
+  6: "Cancel Order by Client Id",
   7: "Disable Market",
   8: "Sweep Fees",
-  9: "New Order",
-  10: "New Order",
-  11: "Cancel Order",
-  12: "Cancel Order By Client Id",
+  9: "New Order v2",
+  10: "New Order v3",
+  11: "Cancel Order v2",
+  12: "Cancel Order by Client Id v2",
   13: "Send Take",
   14: "Close Open Orders",
   15: "Init Open Orders",
+  16: "Prune",
+  17: "Consume Events Permissioned",
 };
 
 export function parseSerumInstructionCode(instruction: TransactionInstruction) {

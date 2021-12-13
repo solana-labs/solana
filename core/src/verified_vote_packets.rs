@@ -1,24 +1,26 @@
-use crate::{cluster_info_vote_listener::VerifiedLabelVotePacketsReceiver, result::Result};
-use crossbeam_channel::Select;
-use solana_perf::packet::Packets;
-use solana_runtime::bank::Bank;
-use solana_sdk::{
-    account::from_account, clock::Slot, hash::Hash, pubkey::Pubkey, signature::Signature,
-    slot_hashes::SlotHashes, sysvar,
-};
-use solana_vote_program::vote_state::Vote;
-use std::{
-    collections::{BTreeMap, HashMap, HashSet},
-    sync::Arc,
-    time::Duration,
+use {
+    crate::{cluster_info_vote_listener::VerifiedLabelVotePacketsReceiver, result::Result},
+    crossbeam_channel::Select,
+    solana_perf::packet::PacketBatch,
+    solana_runtime::bank::Bank,
+    solana_sdk::{
+        account::from_account, clock::Slot, hash::Hash, pubkey::Pubkey, signature::Signature,
+        slot_hashes::SlotHashes, sysvar,
+    },
+    solana_vote_program::vote_state::VoteTransaction,
+    std::{
+        collections::{BTreeMap, HashMap, HashSet},
+        sync::Arc,
+        time::Duration,
+    },
 };
 
 const MAX_VOTES_PER_VALIDATOR: usize = 1000;
 
 pub struct VerifiedVoteMetadata {
     pub vote_account_key: Pubkey,
-    pub vote: Vote,
-    pub packet: Packets,
+    pub vote: Box<dyn VoteTransaction>,
+    pub packet_batch: PacketBatch,
     pub signature: Signature,
 }
 
@@ -68,7 +70,7 @@ impl<'a> ValidatorGossipVotesIterator<'a> {
 ///
 /// Iterator is done after iterating through all vote accounts
 impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
-    type Item = Vec<Packets>;
+    type Item = Vec<PacketBatch>;
 
     fn next(&mut self) -> Option<Self::Item> {
         // TODO: Maybe prioritize by stake weight
@@ -114,7 +116,7 @@ impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
                                             None
                                         }
                                     })
-                                    .collect::<Vec<Packets>>()
+                                    .collect::<Vec<PacketBatch>>()
                             })
                         })
                 });
@@ -128,7 +130,7 @@ impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
     }
 }
 
-pub type SingleValidatorVotes = BTreeMap<(Slot, Hash), (Packets, Signature)>;
+pub type SingleValidatorVotes = BTreeMap<(Slot, Hash), (PacketBatch, Signature)>;
 
 #[derive(Default)]
 pub struct VerifiedVotePackets(HashMap<Pubkey, SingleValidatorVotes>);
@@ -148,18 +150,18 @@ impl VerifiedVotePackets {
                     let VerifiedVoteMetadata {
                         vote_account_key,
                         vote,
-                        packet,
+                        packet_batch,
                         signature,
                     } = verfied_vote_metadata;
-                    if vote.slots.is_empty() {
+                    if vote.is_empty() {
                         error!("Empty votes should have been filtered out earlier in the pipeline");
                         continue;
                     }
-                    let slot = vote.slots.last().unwrap();
-                    let hash = vote.hash;
+                    let slot = vote.last_voted_slot().unwrap();
+                    let hash = vote.hash();
 
                     let validator_votes = self.0.entry(vote_account_key).or_default();
-                    validator_votes.insert((*slot, hash), (packet, signature));
+                    validator_votes.insert((slot, hash), (packet_batch, signature));
 
                     if validator_votes.len() > MAX_VOTES_PER_VALIDATOR {
                         let smallest_key = validator_votes.keys().next().cloned().unwrap();
@@ -174,11 +176,14 @@ impl VerifiedVotePackets {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{result::Error, vote_simulator::VoteSimulator};
-    use crossbeam_channel::unbounded;
-    use solana_perf::packet::Packet;
-    use solana_sdk::slot_hashes::MAX_ENTRIES;
+    use {
+        super::*,
+        crate::{result::Error, vote_simulator::VoteSimulator},
+        crossbeam_channel::unbounded,
+        solana_perf::packet::Packet,
+        solana_sdk::slot_hashes::MAX_ENTRIES,
+        solana_vote_program::vote_state::Vote,
+    };
 
     #[test]
     fn test_verified_vote_packets_receive_and_process_vote_packets() {
@@ -194,8 +199,8 @@ mod tests {
         let vote = Vote::new(vec![vote_slot], vote_hash);
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
-            vote: vote.clone(),
-            packet: Packets::default(),
+            vote: Box::new(vote.clone()),
+            packet_batch: PacketBatch::default(),
             signature: Signature::new(&[1u8; 64]),
         }])
         .unwrap();
@@ -214,8 +219,8 @@ mod tests {
         // Same slot, same hash, should not be inserted
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
-            vote,
-            packet: Packets::default(),
+            vote: Box::new(vote),
+            packet_batch: PacketBatch::default(),
             signature: Signature::new(&[1u8; 64]),
         }])
         .unwrap();
@@ -236,8 +241,8 @@ mod tests {
         let vote = Vote::new(vec![vote_slot], new_vote_hash);
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
-            vote,
-            packet: Packets::default(),
+            vote: Box::new(vote),
+            packet_batch: PacketBatch::default(),
             signature: Signature::new(&[1u8; 64]),
         }])
         .unwrap();
@@ -259,8 +264,8 @@ mod tests {
         let vote = Vote::new(vec![vote_slot], vote_hash);
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
-            vote,
-            packet: Packets::default(),
+            vote: Box::new(vote),
+            packet_batch: PacketBatch::default(),
             signature: Signature::new(&[2u8; 64]),
         }])
         .unwrap();
@@ -298,8 +303,8 @@ mod tests {
             let vote = Vote::new(vec![vote_slot], vote_hash);
             s.send(vec![VerifiedVoteMetadata {
                 vote_account_key,
-                vote,
-                packet: Packets::default(),
+                vote: Box::new(vote),
+                packet_batch: PacketBatch::default(),
                 signature: Signature::new(&[1u8; 64]),
             }])
             .unwrap();
@@ -335,8 +340,8 @@ mod tests {
             let vote = Vote::new(vec![vote_slot], vote_hash);
             s.send(vec![VerifiedVoteMetadata {
                 vote_account_key,
-                vote,
-                packet: Packets::default(),
+                vote: Box::new(vote),
+                packet_batch: PacketBatch::default(),
                 signature: Signature::new_unique(),
             }])
             .unwrap();
@@ -389,8 +394,8 @@ mod tests {
                 let vote = Vote::new(vec![*vote_slot], *vote_hash);
                 s.send(vec![VerifiedVoteMetadata {
                     vote_account_key,
-                    vote,
-                    packet: Packets::new(vec![Packet::default(); num_packets]),
+                    vote: Box::new(vote),
+                    packet_batch: PacketBatch::new(vec![Packet::default(); num_packets]),
                     signature: Signature::new_unique(),
                 }])
                 .unwrap();
@@ -423,12 +428,12 @@ mod tests {
         // Get and verify batches
         let num_expected_batches = 2;
         for _ in 0..num_expected_batches {
-            let validator_batch: Vec<Packets> = gossip_votes_iterator.next().unwrap();
+            let validator_batch: Vec<PacketBatch> = gossip_votes_iterator.next().unwrap();
             assert_eq!(validator_batch.len(), slot_hashes.slot_hashes().len());
             let expected_len = validator_batch[0].packets.len();
             assert!(validator_batch
                 .iter()
-                .all(|p| p.packets.len() == expected_len));
+                .all(|batch| batch.packets.len() == expected_len));
         }
 
         // Should be empty now
@@ -453,11 +458,11 @@ mod tests {
             my_leader_bank.slot() + 1,
         ));
         let vote_account_key = vote_simulator.vote_pubkeys[1];
-        let vote = Vote::new(vec![vote_slot], vote_hash);
+        let vote = Box::new(Vote::new(vec![vote_slot], vote_hash));
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
             vote,
-            packet: Packets::default(),
+            packet_batch: PacketBatch::default(),
             signature: Signature::new_unique(),
         }])
         .unwrap();

@@ -1,22 +1,27 @@
-use clap::{crate_version, App, Arg};
-use serde::{Deserialize, Serialize};
-use serde_json::Result;
-use solana_bpf_loader_program::{
-    create_vm, serialization::serialize_parameters, syscalls::register_syscalls, BpfError,
-    ThisInstructionMeter,
+use {
+    clap::{crate_version, App, Arg},
+    serde::{Deserialize, Serialize},
+    serde_json::Result,
+    solana_bpf_loader_program::{
+        create_vm, serialization::serialize_parameters, syscalls::register_syscalls, BpfError,
+        ThisInstructionMeter,
+    },
+    solana_program_runtime::invoke_context::{prepare_mock_invoke_context, InvokeContext},
+    solana_rbpf::{
+        assembler::assemble,
+        elf::Executable,
+        static_analysis::Analysis,
+        verifier::check,
+        vm::{Config, DynamicAnalysis},
+    },
+    solana_sdk::{account::AccountSharedData, bpf_loader, pubkey::Pubkey},
+    std::{
+        fs::File,
+        io::{Read, Seek, SeekFrom},
+        path::Path,
+    },
+    time::Instant,
 };
-use solana_program_runtime::invoke_context::{
-    prepare_mock_invoke_context, InvokeContext, ThisInvokeContext,
-};
-use solana_rbpf::{
-    assembler::assemble,
-    static_analysis::Analysis,
-    verifier::check,
-    vm::{Config, DynamicAnalysis, Executable},
-};
-use solana_sdk::{account::AccountSharedData, bpf_loader, pubkey::Pubkey};
-use std::{fs::File, io::Read, io::Seek, io::SeekFrom, path::Path};
-use time::Instant;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Account {
@@ -153,6 +158,7 @@ native machine code before execting it in the virtual machine.",
 
     let config = Config {
         enable_instruction_tracing: matches.is_present("trace") || matches.is_present("profile"),
+        enable_symbol_and_section_labels: true,
         ..Config::default()
     };
     let loader_id = bpf_loader::id();
@@ -201,13 +207,13 @@ native machine code before execting it in the virtual machine.",
     };
     let program_indices = [0, 1];
     let preparation = prepare_mock_invoke_context(&program_indices, &[], &keyed_accounts);
-    let mut invoke_context = ThisInvokeContext::new_mock(&preparation.accounts, &[]);
+    let mut invoke_context = InvokeContext::new_mock(&preparation.accounts, &[]);
     invoke_context
         .push(
             &preparation.message,
             &preparation.message.instructions[0],
             &program_indices,
-            Some(&preparation.account_indices),
+            &preparation.account_indices,
         )
         .unwrap();
     let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
@@ -230,7 +236,7 @@ native machine code before execting it in the virtual machine.",
     file.read_to_end(&mut contents).unwrap();
     let syscall_registry = register_syscalls(&mut invoke_context).unwrap();
     let mut executable = if magic == [0x7f, 0x45, 0x4c, 0x46] {
-        <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
+        Executable::<BpfError, ThisInstructionMeter>::from_elf(
             &contents,
             None,
             config,
@@ -252,7 +258,7 @@ native machine code before execting it in the virtual machine.",
         check(text_bytes, &config).unwrap();
     }
     executable.jit_compile().unwrap();
-    let analysis = Analysis::from_executable(executable.as_ref());
+    let analysis = Analysis::from_executable(&executable);
 
     match matches.value_of("use") {
         Some("cfg") => {
@@ -268,10 +274,8 @@ native machine code before execting it in the virtual machine.",
         _ => {}
     }
 
-    let id = bpf_loader::id();
     let mut vm = create_vm(
-        &id,
-        executable.as_ref(),
+        &executable,
         parameter_bytes.as_slice_mut(),
         &mut invoke_context,
         &account_lengths,
@@ -291,7 +295,7 @@ native machine code before execting it in the virtual machine.",
     if matches.is_present("trace") {
         println!("Trace is saved in trace.out");
         let mut file = File::create("trace.out").unwrap();
-        let analysis = Analysis::from_executable(executable.as_ref());
+        let analysis = Analysis::from_executable(&executable);
         vm.get_tracer().write(&mut file, &analysis).unwrap();
     }
     if matches.is_present("profile") {

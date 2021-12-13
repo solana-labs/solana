@@ -7,8 +7,7 @@ use {
     solana_core::{
         consensus::Tower, tower_storage::FileTowerStorage, vote_simulator::VoteSimulator,
     },
-    solana_runtime::bank::Bank,
-    solana_runtime::bank_forks::BankForks,
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         pubkey::Pubkey,
         signature::{Keypair, Signer},

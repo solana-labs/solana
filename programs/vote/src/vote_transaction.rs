@@ -1,26 +1,43 @@
-use solana_sdk::{
-    clock::Slot,
-    hash::Hash,
-    instruction::CompiledInstruction,
-    program_utils::limited_deserialize,
-    pubkey::Pubkey,
-    signature::{Keypair, Signer},
-    transaction::{SanitizedTransaction, Transaction},
+use {
+    crate::{
+        vote_instruction::{self, VoteInstruction},
+        vote_state::{Vote, VoteTransaction},
+    },
+    solana_sdk::{
+        clock::Slot,
+        hash::Hash,
+        instruction::CompiledInstruction,
+        program_utils::limited_deserialize,
+        pubkey::Pubkey,
+        signature::{Keypair, Signer},
+        transaction::{SanitizedTransaction, Transaction},
+    },
 };
 
-use crate::{
-    vote_instruction::{self, VoteInstruction},
-    vote_state::Vote,
-};
-
-pub type ParsedVote = (Pubkey, Vote, Option<Hash>);
+pub type ParsedVote = (Pubkey, Box<dyn VoteTransaction>, Option<Hash>);
 
 fn parse_vote(vote_ix: &CompiledInstruction, vote_key: &Pubkey) -> Option<ParsedVote> {
     let vote_instruction = limited_deserialize(&vote_ix.data).ok();
-    vote_instruction.and_then(|vote_instruction| match vote_instruction {
-        VoteInstruction::Vote(vote) => Some((*vote_key, vote, None)),
-        VoteInstruction::VoteSwitch(vote, hash) => Some((*vote_key, vote, Some(hash))),
-        _ => None,
+    vote_instruction.and_then(|vote_instruction| {
+        let result: Option<ParsedVote> = match vote_instruction {
+            VoteInstruction::Vote(vote) => Some((*vote_key, Box::new(vote), None)),
+            VoteInstruction::VoteSwitch(vote, hash) => {
+                Some((*vote_key, Box::new(vote), Some(hash)))
+            }
+            VoteInstruction::UpdateVoteState(vote_state_update) => {
+                Some((*vote_key, Box::new(vote_state_update), None))
+            }
+            VoteInstruction::UpdateVoteStateSwitch(vote_state_update, hash) => {
+                Some((*vote_key, Box::new(vote_state_update), Some(hash)))
+            }
+            VoteInstruction::Authorize(_, _)
+            | VoteInstruction::AuthorizeChecked(_)
+            | VoteInstruction::InitializeAccount(_)
+            | VoteInstruction::UpdateCommission(_)
+            | VoteInstruction::UpdateValidatorIdentity
+            | VoteInstruction::Withdraw(_) => None,
+        };
+        result
     })
 }
 
@@ -104,8 +121,7 @@ pub fn new_vote_transaction(
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use solana_sdk::hash::hash;
+    use {super::*, solana_sdk::hash::hash};
 
     fn run_test_parse_vote_transaction(input_hash: Option<Hash>) {
         let node_keypair = Keypair::new();
@@ -123,7 +139,10 @@ mod test {
         );
         let (key, vote, hash) = parse_vote_transaction(&vote_tx).unwrap();
         assert_eq!(hash, input_hash);
-        assert_eq!(vote, Vote::new(vec![42], bank_hash));
+        assert_eq!(
+            *vote.as_any().downcast_ref::<Vote>().unwrap(),
+            Vote::new(vec![42], bank_hash)
+        );
         assert_eq!(key, vote_keypair.pubkey());
 
         // Test bad program id fails

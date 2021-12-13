@@ -2,8 +2,8 @@ use {
     crate::{
         cluster_info_vote_listener::SlotVoteTracker,
         cluster_slots::SlotPubkeys,
+        consensus::{Stake, VotedStakes},
         replay_stage::SUPERMINORITY_THRESHOLD,
-        {consensus::Stake, consensus::VotedStakes},
     },
     solana_ledger::blockstore_processor::{ConfirmationProgress, ConfirmationTiming},
     solana_runtime::{bank::Bank, bank_forks::BankForks, vote_account::VoteAccount},

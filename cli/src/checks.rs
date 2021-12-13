@@ -1,11 +1,13 @@
-use crate::cli::CliError;
-use solana_client::{
-    client_error::{ClientError, Result as ClientResult},
-    rpc_client::RpcClient,
-};
-use solana_sdk::{
-    commitment_config::CommitmentConfig, message::Message, native_token::lamports_to_sol,
-    pubkey::Pubkey,
+use {
+    crate::cli::CliError,
+    solana_client::{
+        client_error::{ClientError, Result as ClientResult},
+        rpc_client::RpcClient,
+    },
+    solana_sdk::{
+        commitment_config::CommitmentConfig, message::Message, native_token::lamports_to_sol,
+        pubkey::Pubkey,
+    },
 };
 
 pub fn check_account_for_fee(
@@ -149,14 +151,16 @@ pub fn check_unique_pubkeys(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use serde_json::json;
-    use solana_client::{
-        rpc_request::RpcRequest,
-        rpc_response::{Response, RpcResponseContext},
+    use {
+        super::*,
+        serde_json::json,
+        solana_client::{
+            rpc_request::RpcRequest,
+            rpc_response::{Response, RpcResponseContext},
+        },
+        solana_sdk::system_instruction,
+        std::collections::HashMap,
     };
-    use solana_sdk::system_instruction;
-    use std::collections::HashMap;
 
     #[test]
     fn test_check_account_for_fees() {

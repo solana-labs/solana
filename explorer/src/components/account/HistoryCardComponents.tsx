@@ -30,12 +30,12 @@ export function HistoryCardHeader({
       >
         {fetching ? (
           <>
-            <span className="spinner-grow spinner-grow-sm mr-2"></span>
+            <span className="spinner-grow spinner-grow-sm me-2"></span>
             Loading
           </>
         ) : (
           <>
-            <span className="fe fe-refresh-cw mr-2"></span>
+            <span className="fe fe-refresh-cw me-2"></span>
             Refresh
           </>
         )}
@@ -65,7 +65,7 @@ export function HistoryCardFooter({
         >
           {fetching ? (
             <>
-              <span className="spinner-grow spinner-grow-sm mr-2"></span>
+              <span className="spinner-grow spinner-grow-sm me-2"></span>
               Loading
             </>
           ) : (

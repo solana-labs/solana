@@ -73,8 +73,8 @@ function renderDetails<T>(
       attributes.push(
         <tr key="vote-hash">
           <td>Vote Hash</td>
-          <td className="text-lg-right">
-            <pre className="d-inline-block text-left mb-0">{value.hash}</pre>
+          <td className="text-lg-end">
+            <pre className="d-inline-block text-start mb-0">{value.hash}</pre>
           </td>
         </tr>
       );
@@ -83,7 +83,7 @@ function renderDetails<T>(
         attributes.push(
           <tr key="timestamp">
             <td>Timestamp</td>
-            <td className="text-lg-right text-monospace">
+            <td className="text-lg-end font-monospace">
               {displayTimestamp(value.timestamp * 1000)}
             </td>
           </tr>
@@ -93,8 +93,8 @@ function renderDetails<T>(
       attributes.push(
         <tr key="vote-slots">
           <td>Slots</td>
-          <td className="text-lg-right text-monospace">
-            <pre className="d-inline-block text-left mb-0">
+          <td className="text-lg-end font-monospace">
+            <pre className="d-inline-block text-start mb-0">
               {value.slots.join("\n")}
             </pre>
           </td>
@@ -104,7 +104,7 @@ function renderDetails<T>(
       attributes.push(
         <tr key={key}>
           <td>{camelToTitleCase(key)} </td>
-          <td className="text-lg-right">{value}</td>
+          <td className="text-lg-end">{value}</td>
         </tr>
       );
     }
@@ -117,7 +117,7 @@ function renderDetails<T>(
     >
       <tr>
         <td>Program</td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <Address pubkey={props.ix.programId} alignRight link />
         </td>
       </tr>

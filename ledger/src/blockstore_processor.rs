@@ -1,60 +1,65 @@
-use crate::{
-    block_error::BlockError, blockstore::Blockstore, blockstore_db::BlockstoreError,
-    blockstore_meta::SlotMeta, leader_schedule_cache::LeaderScheduleCache,
-};
-use chrono_humanize::{Accuracy, HumanTime, Tense};
-use crossbeam_channel::Sender;
-use itertools::Itertools;
-use log::*;
-use rand::{seq::SliceRandom, thread_rng};
-use rayon::{prelude::*, ThreadPool};
-use solana_entry::entry::{
-    self, create_ticks, Entry, EntrySlice, EntryType, EntryVerificationStatus, VerifyRecyclers,
-};
-use solana_measure::measure::Measure;
-use solana_metrics::{datapoint_error, inc_new_counter_debug};
-use solana_rayon_threadlimit::get_thread_count;
-use solana_runtime::{
-    accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
-    accounts_index::AccountSecondaryIndexes,
-    accounts_update_notifier_interface::AccountsUpdateNotifier,
-    bank::{
-        Bank, ExecuteTimings, InnerInstructionsList, RentDebits, TransactionBalancesSet,
-        TransactionExecutionResult, TransactionLogMessages, TransactionResults,
+use {
+    crate::{
+        block_error::BlockError, blockstore::Blockstore, blockstore_db::BlockstoreError,
+        blockstore_meta::SlotMeta, leader_schedule_cache::LeaderScheduleCache,
     },
-    bank_forks::BankForks,
-    bank_utils,
-    block_cost_limits::*,
-    commitment::VOTE_THRESHOLD_SIZE,
-    snapshot_config::SnapshotConfig,
-    snapshot_package::{AccountsPackageSender, SnapshotType},
-    snapshot_utils::{self, BankFromArchiveTimings},
-    transaction_batch::TransactionBatch,
-    vote_account::VoteAccount,
-    vote_sender_types::ReplayVoteSender,
+    chrono_humanize::{Accuracy, HumanTime, Tense},
+    crossbeam_channel::Sender,
+    itertools::Itertools,
+    log::*,
+    rand::{seq::SliceRandom, thread_rng},
+    rayon::{prelude::*, ThreadPool},
+    solana_entry::entry::{
+        self, create_ticks, Entry, EntrySlice, EntryType, EntryVerificationStatus, VerifyRecyclers,
+    },
+    solana_measure::measure::Measure,
+    solana_metrics::{datapoint_error, inc_new_counter_debug},
+    solana_rayon_threadlimit::get_thread_count,
+    solana_runtime::{
+        accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
+        accounts_index::AccountSecondaryIndexes,
+        accounts_update_notifier_interface::AccountsUpdateNotifier,
+        bank::{
+            Bank, ExecuteTimings, InnerInstructionsList, RentDebits, TransactionBalancesSet,
+            TransactionExecutionResult, TransactionLogMessages, TransactionResults,
+        },
+        bank_forks::BankForks,
+        bank_utils,
+        block_cost_limits::*,
+        commitment::VOTE_THRESHOLD_SIZE,
+        snapshot_config::SnapshotConfig,
+        snapshot_package::{AccountsPackageSender, SnapshotType},
+        snapshot_utils::{self, BankFromArchiveTimings},
+        transaction_batch::TransactionBatch,
+        vote_account::VoteAccount,
+        vote_sender_types::ReplayVoteSender,
+    },
+    solana_sdk::{
+        clock::{Slot, MAX_PROCESSING_AGE},
+        feature_set,
+        genesis_config::GenesisConfig,
+        hash::Hash,
+        pubkey::Pubkey,
+        signature::{Keypair, Signature},
+        timing,
+        transaction::{
+            Result, SanitizedTransaction, TransactionError, TransactionVerificationMode,
+            VersionedTransaction,
+        },
+    },
+    solana_transaction_status::token_balances::{
+        collect_token_balances, TransactionTokenBalancesSet,
+    },
+    std::{
+        cell::RefCell,
+        collections::{HashMap, HashSet},
+        path::PathBuf,
+        result,
+        sync::{Arc, RwLock},
+        time::{Duration, Instant},
+    },
+    thiserror::Error,
 };
-use solana_sdk::{
-    clock::{Slot, MAX_PROCESSING_AGE},
-    feature_set,
-    genesis_config::GenesisConfig,
-    hash::Hash,
-    pubkey::Pubkey,
-    signature::{Keypair, Signature},
-    timing,
-    transaction::{Result, SanitizedTransaction, TransactionError, VersionedTransaction},
-};
-use solana_transaction_status::token_balances::{
-    collect_token_balances, TransactionTokenBalancesSet,
-};
-use std::{
-    cell::RefCell,
-    collections::{HashMap, HashSet},
-    path::PathBuf,
-    result,
-    sync::{Arc, RwLock},
-    time::{Duration, Instant},
-};
-use thiserror::Error;
 
 // it tracks the block cost available capacity - number of compute-units allowed
 // by max blockl cost limit
@@ -301,7 +306,7 @@ pub fn process_entries_for_tests(
     let verify_transaction = {
         let bank = bank.clone();
         move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
-            bank.verify_transaction(versioned_tx, false)
+            bank.verify_transaction(versioned_tx, TransactionVerificationMode::FullVerification)
         }
     };
 
@@ -464,7 +469,6 @@ pub struct ProcessOptions {
     pub entry_callback: Option<ProcessCallback>,
     pub override_num_threads: Option<usize>,
     pub new_hard_forks: Option<Vec<Slot>>,
-    pub frozen_accounts: Vec<Pubkey>,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
     pub account_indexes: AccountSecondaryIndexes,
     pub accounts_db_caching_enabled: bool,
@@ -500,7 +504,6 @@ pub fn process_blockstore(
     let bank0 = Bank::new_with_paths(
         genesis_config,
         account_paths,
-        &opts.frozen_accounts,
         opts.debug_keys.clone(),
         Some(&crate::builtins::get(opts.bpf_jit)),
         opts.account_indexes.clone(),
@@ -921,54 +924,86 @@ pub fn confirm_slot(
 
     let verify_transaction = {
         let bank = bank.clone();
-        move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
-            bank.verify_transaction(versioned_tx, skip_verification)
+        move |versioned_tx: VersionedTransaction,
+              verification_mode: TransactionVerificationMode|
+              -> Result<SanitizedTransaction> {
+            bank.verify_transaction(versioned_tx, verification_mode)
         }
     };
+
     let check_start = Instant::now();
-    let mut entries = entry::verify_transactions(entries, Arc::new(verify_transaction))?;
-    let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
+    let check_result = entry::start_verify_transactions(
+        entries,
+        skip_verification,
+        recyclers.clone(),
+        Arc::new(verify_transaction),
+    );
+    let transaction_cpu_duration_us = timing::duration_as_us(&check_start.elapsed());
 
-    let mut replay_elapsed = Measure::start("replay_elapsed");
-    let mut execute_timings = ExecuteTimings::default();
-    let cost_capacity_meter = Arc::new(RwLock::new(BlockCostCapacityMeter::default()));
-    // Note: This will shuffle entries' transactions in-place.
-    let process_result = process_entries_with_callback(
-        bank,
-        &mut entries,
-        true, // shuffle transactions.
-        entry_callback,
-        transaction_status_sender,
-        replay_vote_sender,
-        &mut execute_timings,
-        cost_capacity_meter,
-    )
-    .map_err(BlockstoreProcessorError::from);
-    replay_elapsed.stop();
-    timing.replay_elapsed += replay_elapsed.as_us();
+    match check_result {
+        Ok(mut check_result) => {
+            let entries = check_result.entries();
+            assert!(entries.is_some());
 
-    timing.execute_timings.accumulate(&execute_timings);
+            let mut replay_elapsed = Measure::start("replay_elapsed");
+            let mut execute_timings = ExecuteTimings::default();
+            let cost_capacity_meter = Arc::new(RwLock::new(BlockCostCapacityMeter::default()));
+            // Note: This will shuffle entries' transactions in-place.
+            let process_result = process_entries_with_callback(
+                bank,
+                &mut entries.unwrap(),
+                true, // shuffle transactions.
+                entry_callback,
+                transaction_status_sender,
+                replay_vote_sender,
+                &mut execute_timings,
+                cost_capacity_meter,
+            )
+            .map_err(BlockstoreProcessorError::from);
+            replay_elapsed.stop();
+            timing.replay_elapsed += replay_elapsed.as_us();
 
-    if let Some(mut verifier) = verifier {
-        let verified = verifier.finish_verify();
-        timing.poh_verify_elapsed += verifier.poh_duration_us();
-        timing.transaction_verify_elapsed += transaction_duration_us;
-        if !verified {
+            timing.execute_timings.accumulate(&execute_timings);
+
+            // If running signature verification on the GPU, wait for that
+            // computation to finish, and get the result of it. If we did the
+            // signature verification on the CPU, this just returns the
+            // already-computed result produced in start_verify_transactions.
+            // Either way, check the result of the signature verification.
+            if !check_result.finish_verify() {
+                warn!("Ledger proof of history failed at slot: {}", bank.slot());
+                return Err(TransactionError::SignatureFailure.into());
+            }
+
+            if let Some(mut verifier) = verifier {
+                let verified = verifier.finish_verify();
+                timing.poh_verify_elapsed += verifier.poh_duration_us();
+                // The GPU Entry verification (if any) is kicked off right when the CPU-side
+                // Entry verification finishes, so these times should be disjoint
+                timing.transaction_verify_elapsed +=
+                    transaction_cpu_duration_us + check_result.gpu_verify_duration();
+                if !verified {
+                    warn!("Ledger proof of history failed at slot: {}", bank.slot());
+                    return Err(BlockError::InvalidEntryHash.into());
+                }
+            }
+
+            process_result?;
+
+            progress.num_shreds += num_shreds;
+            progress.num_entries += num_entries;
+            progress.num_txs += num_txs;
+            if let Some(last_entry_hash) = last_entry_hash {
+                progress.last_entry = last_entry_hash;
+            }
+
+            Ok(())
+        }
+        Err(err) => {
             warn!("Ledger proof of history failed at slot: {}", bank.slot());
-            return Err(BlockError::InvalidEntryHash.into());
+            Err(err.into())
         }
     }
-
-    process_result?;
-
-    progress.num_shreds += num_shreds;
-    progress.num_entries += num_entries;
-    progress.num_txs += num_txs;
-    if let Some(last_entry_hash) = last_entry_hash {
-        progress.last_entry = last_entry_hash;
-    }
-
-    Ok(())
 }
 
 // Special handling required for processing the entries in slot 0
@@ -1472,38 +1507,40 @@ pub fn fill_blockstore_slot_with_ticks(
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
-    use crate::genesis_utils::{
-        create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
+    use {
+        super::*,
+        crate::genesis_utils::{
+            create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
+        },
+        crossbeam_channel::unbounded,
+        matches::assert_matches,
+        rand::{thread_rng, Rng},
+        solana_entry::entry::{create_ticks, next_entry, next_entry_mut},
+        solana_runtime::genesis_utils::{
+            self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
+        },
+        solana_sdk::{
+            account::{AccountSharedData, WritableAccount},
+            epoch_schedule::EpochSchedule,
+            hash::Hash,
+            pubkey::Pubkey,
+            signature::{Keypair, Signer},
+            system_instruction::SystemError,
+            system_transaction,
+            transaction::{Transaction, TransactionError},
+        },
+        solana_vote_program::{
+            self,
+            vote_state::{VoteState, VoteStateVersions, MAX_LOCKOUT_HISTORY},
+            vote_transaction,
+        },
+        std::{
+            collections::BTreeSet,
+            sync::{mpsc::channel, RwLock},
+        },
+        tempfile::TempDir,
+        trees::tr,
     };
-    use crossbeam_channel::unbounded;
-    use matches::assert_matches;
-    use rand::{thread_rng, Rng};
-    use solana_entry::entry::{create_ticks, next_entry, next_entry_mut};
-    use solana_runtime::genesis_utils::{
-        self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
-    };
-    use solana_sdk::{
-        account::{AccountSharedData, WritableAccount},
-        epoch_schedule::EpochSchedule,
-        hash::Hash,
-        pubkey::Pubkey,
-        signature::{Keypair, Signer},
-        system_instruction::SystemError,
-        system_transaction,
-        transaction::{Transaction, TransactionError},
-    };
-    use solana_vote_program::{
-        self,
-        vote_state::{VoteState, VoteStateVersions, MAX_LOCKOUT_HISTORY},
-        vote_transaction,
-    };
-    use std::{
-        collections::BTreeSet,
-        sync::{mpsc::channel, RwLock},
-    };
-    use tempfile::TempDir;
-    use trees::tr;
 
     fn test_process_blockstore(
         genesis_config: &GenesisConfig,
@@ -3376,7 +3413,6 @@ pub mod tests {
         let bank = Bank::new_with_paths_for_tests(
             genesis_config,
             account_paths,
-            &[],
             None,
             None,
             AccountSecondaryIndexes::default(),

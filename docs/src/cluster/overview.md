@@ -20,18 +20,15 @@ Clients send transactions to any validator's Transaction Processing Unit \(TPU\)
 
 ## Confirming Transactions
 
-A Solana cluster is capable of subsecond _confirmation_ for up to 150 nodes with plans to scale up to hundreds of thousands of nodes. Once fully implemented, confirmation times are expected to increase only with the logarithm of the number of validators, where the logarithm's base is very high. If the base is one thousand, for example, it means that for the first thousand nodes, confirmation will be the duration of three network hops plus the time it takes the slowest validator of a supermajority to vote. For the next million nodes, confirmation increases by only one network hop.
+A Solana cluster is capable of subsecond _confirmation_ for thousands of nodes with plans to scale up to hundreds of thousands of nodes.  Confirmation times are expected to increase only with the logarithm of the number of validators, where the logarithm's base is very high. If the base is one thousand, for example, it means that for the first thousand nodes, confirmation will be the duration of three network hops plus the time it takes the slowest validator of a supermajority to vote. For the next million nodes, confirmation increases by only one network hop.
 
 Solana defines confirmation as the duration of time from when the leader timestamps a new entry to the moment when it recognizes a supermajority of ledger votes.
-
-A gossip network is much too slow to achieve subsecond confirmation once the network grows beyond a certain size. The time it takes to send messages to all nodes is proportional to the square of the number of nodes. If a blockchain wants to achieve low confirmation and attempts to do it using a gossip network, it will be forced to centralize to just a handful of nodes.
 
 Scalable confirmation can be achieved using the follow combination of techniques:
 
 1. Timestamp transactions with a VDF sample and sign the timestamp.
-2. Split the transactions into batches, send each to separate nodes and have
 
-   each node share its batch with its peers.
+2. Split the transactions into batches, send each to separate nodes and have each node share its batch with its peers.
 
 3. Repeat the previous step recursively until all nodes have all batches.
 
@@ -39,4 +36,4 @@ Solana rotates leaders at fixed intervals, called _slots_. Each leader may only 
 
 Next, transactions are broken into batches so that a node can send transactions to multiple parties without making multiple copies. If, for example, the leader needed to send 60 transactions to 6 nodes, it would break that collection of 60 into batches of 10 transactions and send one to each node. This allows the leader to put 60 transactions on the wire, not 60 transactions for each node. Each node then shares its batch with its peers. Once the node has collected all 6 batches, it reconstructs the original set of 60 transactions.
 
-A batch of transactions can only be split so many times before it is so small that header information becomes the primary consumer of network bandwidth. At the time of this writing, the approach is scaling well up to about 150 validators. To scale up to hundreds of thousands of validators, each node can apply the same technique as the leader node to another set of nodes of equal size. We call the technique [_Turbine Block Propogation_](turbine-block-propagation.md).
+A batch of transactions can only be split so many times before it is so small that header information becomes the primary consumer of network bandwidth. At the time of this writing (December, 2021), the approach is scaling well up to about 1,250 validators. To scale up to hundreds of thousands of validators, each node can apply the same technique as the leader node to another set of nodes of equal size. We call the technique [_Turbine Block Propogation_](turbine-block-propagation.md).

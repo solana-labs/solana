@@ -152,7 +152,7 @@ export function MangoDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title={`Mango: ${title || "Unknown"}`}
+      title={`Mango Program: ${title || "Unknown"}`}
       innerCards={innerCards}
       childIndex={childIndex}
       defaultRaw

@@ -9,15 +9,15 @@ export function RawDetails({ ix }: { ix: TransactionInstruction }) {
       {ix.keys.map(({ pubkey, isSigner, isWritable }, keyIndex) => (
         <tr key={keyIndex}>
           <td>
-            <div className="mr-2 d-md-inline">Account #{keyIndex + 1}</div>
+            <div className="me-2 d-md-inline">Account #{keyIndex + 1}</div>
             {isWritable && (
-              <span className="badge badge-soft-info mr-1">Writable</span>
+              <span className="badge bg-info-soft me-1">Writable</span>
             )}
             {isSigner && (
-              <span className="badge badge-soft-info mr-1">Signer</span>
+              <span className="badge bg-info-soft me-1">Signer</span>
             )}
           </td>
-          <td className="text-lg-right">
+          <td className="text-lg-end">
             <Address pubkey={pubkey} alignRight link />
           </td>
         </tr>
@@ -27,7 +27,7 @@ export function RawDetails({ ix }: { ix: TransactionInstruction }) {
         <td>
           Instruction Data <span className="text-muted">(Hex)</span>
         </td>
-        <td className="text-lg-right">
+        <td className="text-lg-end">
           <HexData raw={ix.data} />
         </td>
       </tr>

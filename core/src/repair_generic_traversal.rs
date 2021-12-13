@@ -1,10 +1,12 @@
-use crate::{
-    heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice, repair_service::RepairService,
-    serve_repair::ShredRepairType, tree_diff::TreeDiff,
+use {
+    crate::{
+        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice, repair_service::RepairService,
+        serve_repair::ShredRepairType, tree_diff::TreeDiff,
+    },
+    solana_ledger::{blockstore::Blockstore, blockstore_meta::SlotMeta},
+    solana_sdk::{clock::Slot, hash::Hash},
+    std::collections::{HashMap, HashSet},
 };
-use solana_ledger::{blockstore::Blockstore, blockstore_meta::SlotMeta};
-use solana_sdk::{clock::Slot, hash::Hash};
-use std::collections::{HashMap, HashSet};
 
 struct GenericTraversal<'a> {
     tree: &'a HeaviestSubtreeForkChoice,
@@ -55,7 +57,7 @@ pub fn get_unknown_last_index(
             .entry(slot)
             .or_insert_with(|| blockstore.meta(slot).unwrap());
         if let Some(slot_meta) = slot_meta {
-            if slot_meta.known_last_index().is_none() {
+            if slot_meta.last_index.is_none() {
                 let shred_index = blockstore.get_index(slot).unwrap();
                 let num_processed_shreds = if let Some(shred_index) = shred_index {
                     shred_index.data().num_shreds() as u64
@@ -121,13 +123,40 @@ pub fn get_closest_completion(
             if slot_meta.is_full() {
                 continue;
             }
-            if let Some(last_index) = slot_meta.known_last_index() {
+            if let Some(last_index) = slot_meta.last_index {
                 let shred_index = blockstore.get_index(slot).unwrap();
                 let dist = if let Some(shred_index) = shred_index {
                     let shred_count = shred_index.data().num_shreds() as u64;
-                    last_index - shred_count
+                    if last_index.saturating_add(1) < shred_count {
+                        datapoint_error!(
+                            "repair_generic_traversal_error",
+                            (
+                                "error",
+                                format!(
+                                    "last_index + 1 < shred_count. last_index={} shred_count={}",
+                                    last_index, shred_count,
+                                ),
+                                String
+                            ),
+                        );
+                    }
+                    last_index.saturating_add(1).saturating_sub(shred_count)
                 } else {
-                    last_index - slot_meta.consumed
+                    if last_index < slot_meta.consumed {
+                        datapoint_error!(
+                            "repair_generic_traversal_error",
+                            (
+                                "error",
+                                format!(
+                                    "last_index < slot_meta.consumed. last_index={} slot_meta.consumed={}",
+                                    last_index,
+                                    slot_meta.consumed,
+                                ),
+                                String
+                            ),
+                        );
+                    }
+                    last_index.saturating_sub(slot_meta.consumed)
                 };
                 v.push((slot, dist));
                 processed_slots.insert(slot);
@@ -164,14 +193,16 @@ pub fn get_closest_completion(
 
 #[cfg(test)]
 pub mod test {
-    use super::*;
-    use solana_ledger::{
-        blockstore::{Blockstore, MAX_TURBINE_PROPAGATION_IN_MS},
-        get_tmp_ledger_path,
+    use {
+        super::*,
+        solana_ledger::{
+            blockstore::{Blockstore, MAX_TURBINE_PROPAGATION_IN_MS},
+            get_tmp_ledger_path,
+        },
+        solana_sdk::hash::Hash,
+        std::{thread::sleep, time::Duration},
+        trees::{tr, Tree, TreeWalk},
     };
-    use solana_sdk::hash::Hash;
-    use std::{thread::sleep, time::Duration};
-    use trees::{tr, Tree, TreeWalk};
 
     #[test]
     fn test_get_unknown_last_index() {

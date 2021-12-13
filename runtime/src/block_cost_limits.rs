@@ -1,10 +1,12 @@
 //! defines block cost related limits
 //!
-use lazy_static::lazy_static;
-use solana_sdk::{
-    feature, incinerator, native_loader, pubkey::Pubkey, secp256k1_program, system_program,
+use {
+    lazy_static::lazy_static,
+    solana_sdk::{
+        feature, incinerator, native_loader, pubkey::Pubkey, secp256k1_program, system_program,
+    },
+    std::collections::HashMap,
 };
-use std::collections::HashMap;
 
 /// Static configurations:
 ///
@@ -56,3 +58,6 @@ pub const MAX_BLOCK_UNITS: u64 =
 /// limit is to prevent too many transactions write to same account, threrefore
 /// reduce block's paralellism.
 pub const MAX_WRITABLE_ACCOUNT_UNITS: u64 = MAX_BLOCK_REPLAY_TIME_US * COMPUTE_UNIT_TO_US_RATIO;
+
+/// max len of account data in a slot (bytes)
+pub const MAX_ACCOUNT_DATA_LEN: u64 = 100_000_000;

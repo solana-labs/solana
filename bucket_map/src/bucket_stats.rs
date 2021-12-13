@@ -1,5 +1,4 @@
-use std::sync::Arc;
-use std::sync::{atomic::AtomicU64, Mutex};
+use std::sync::{atomic::AtomicU64, Arc, Mutex};
 
 #[derive(Debug, Default)]
 pub struct BucketStats {

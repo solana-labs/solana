@@ -1,48 +1,53 @@
-use crate::{
-    accounts_db::{
-        AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, AccountsDbConfig, BankHashInfo,
-        ErrorCounters, LoadHint, LoadedAccount, ScanStorageResult,
-        ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
+use {
+    crate::{
+        accounts_db::{
+            AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, AccountsDbConfig,
+            BankHashInfo, ErrorCounters, LoadHint, LoadedAccount, ScanStorageResult,
+            ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
+        },
+        accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanError, ScanResult},
+        accounts_update_notifier_interface::AccountsUpdateNotifier,
+        ancestors::Ancestors,
+        bank::{
+            Bank, NonceFull, NonceInfo, RentDebits, TransactionCheckResult,
+            TransactionExecutionResult,
+        },
+        blockhash_queue::BlockhashQueue,
+        rent_collector::RentCollector,
+        system_instruction_processor::{get_system_account_kind, SystemAccountKind},
     },
-    accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanError, ScanResult},
-    accounts_update_notifier_interface::AccountsUpdateNotifier,
-    ancestors::Ancestors,
-    bank::{
-        Bank, NonceFull, NonceInfo, RentDebits, TransactionCheckResult, TransactionExecutionResult,
+    dashmap::{
+        mapref::entry::Entry::{Occupied, Vacant},
+        DashMap,
     },
-    blockhash_queue::BlockhashQueue,
-    rent_collector::RentCollector,
-    system_instruction_processor::{get_system_account_kind, SystemAccountKind},
-};
-use dashmap::{
-    mapref::entry::Entry::{Occupied, Vacant},
-    DashMap,
-};
-use log::*;
-use rand::{thread_rng, Rng};
-use solana_sdk::{
-    account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
-    account_utils::StateMut,
-    bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    clock::{BankId, Slot, INITIAL_RENT_EPOCH},
-    feature_set::{self, FeatureSet},
-    genesis_config::ClusterType,
-    hash::Hash,
-    message::SanitizedMessage,
-    native_loader,
-    nonce::{state::Versions as NonceVersions, State as NonceState, NONCED_TX_MARKER_IX_INDEX},
-    pubkey::Pubkey,
-    system_program, sysvar,
-    sysvar::instructions::construct_instructions_data,
-    transaction::{Result, SanitizedTransaction, TransactionError},
-};
-use std::{
-    cmp::Reverse,
-    collections::{hash_map, BinaryHeap, HashMap, HashSet},
-    ops::RangeBounds,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-    sync::{Arc, Mutex},
+    log::*,
+    rand::{thread_rng, Rng},
+    solana_sdk::{
+        account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
+        account_utils::StateMut,
+        bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+        clock::{BankId, Slot, INITIAL_RENT_EPOCH},
+        feature_set::{self, FeatureSet},
+        genesis_config::ClusterType,
+        hash::Hash,
+        message::SanitizedMessage,
+        native_loader,
+        nonce::{state::Versions as NonceVersions, State as NonceState},
+        pubkey::Pubkey,
+        system_program,
+        sysvar::{self, instructions::construct_instructions_data},
+        transaction::{Result, SanitizedTransaction, TransactionError},
+    },
+    std::{
+        cmp::Reverse,
+        collections::{hash_map, BinaryHeap, HashMap, HashSet},
+        ops::RangeBounds,
+        path::PathBuf,
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc, Mutex,
+        },
+    },
 };
 
 #[derive(Debug, Default, AbiExample)]
@@ -778,6 +783,42 @@ impl Accounts {
         )
     }
 
+    fn calc_scan_result_size(account: &AccountSharedData) -> usize {
+        account.data().len()
+            + std::mem::size_of::<AccountSharedData>()
+            + std::mem::size_of::<Pubkey>()
+    }
+
+    /// Accumulate size of (pubkey + account) into sum.
+    /// Return true iff sum > 'byte_limit_for_scan'
+    fn accumulate_and_check_scan_result_size(
+        sum: &AtomicUsize,
+        account: &AccountSharedData,
+        byte_limit_for_scan: &Option<usize>,
+    ) -> bool {
+        if let Some(byte_limit_for_scan) = byte_limit_for_scan.as_ref() {
+            let added = Self::calc_scan_result_size(account);
+            sum.fetch_add(added, Ordering::Relaxed)
+                .saturating_add(added)
+                > *byte_limit_for_scan
+        } else {
+            false
+        }
+    }
+
+    fn maybe_abort_scan(
+        result: ScanResult<Vec<(Pubkey, AccountSharedData)>>,
+        config: &ScanConfig,
+    ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
+        if config.is_aborted() {
+            ScanResult::Err(ScanError::Aborted(
+                "The accumulated scan results exceeded the limit".to_string(),
+            ))
+        } else {
+            result
+        }
+    }
+
     pub fn load_by_index_key_with_filter<F: Fn(&AccountSharedData) -> bool>(
         &self,
         ancestors: &Ancestors,
@@ -788,10 +829,7 @@ impl Accounts {
         byte_limit_for_scan: Option<usize>,
     ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
         let sum = AtomicUsize::default();
-        let config = ScanConfig {
-            abort: Some(config.abort.as_ref().map(Arc::clone).unwrap_or_default()),
-            collect_all_unsorted: config.collect_all_unsorted,
-        };
+        let config = config.recreate_with_abort();
         let result = self
             .accounts_db
             .index_scan_accounts(
@@ -801,20 +839,15 @@ impl Accounts {
                 |collector: &mut Vec<(Pubkey, AccountSharedData)>, some_account_tuple| {
                     Self::load_while_filtering(collector, some_account_tuple, |account| {
                         let use_account = filter(account);
-                        if use_account {
-                            if let Some(byte_limit_for_scan) = byte_limit_for_scan.as_ref() {
-                                let added = account.data().len()
-                                    + std::mem::size_of::<AccountSharedData>()
-                                    + std::mem::size_of::<Pubkey>();
-                                if sum
-                                    .fetch_add(added, Ordering::Relaxed)
-                                    .saturating_add(added)
-                                    > *byte_limit_for_scan
-                                {
-                                    // total size of results exceeds size limit, so abort scan
-                                    config.abort();
-                                }
-                            }
+                        if use_account
+                            && Self::accumulate_and_check_scan_result_size(
+                                &sum,
+                                account,
+                                &byte_limit_for_scan,
+                            )
+                        {
+                            // total size of results exceeds size limit, so abort scan
+                            config.abort();
                         }
                         use_account
                     });
@@ -822,13 +855,7 @@ impl Accounts {
                 &config,
             )
             .map(|result| result.0);
-        if config.is_aborted() {
-            ScanResult::Err(ScanError::Aborted(
-                "The accumulated scan results exceeded the limit".to_string(),
-            ))
-        } else {
-            result
-        }
+        Self::maybe_abort_scan(result, &config)
     }
 
     pub fn account_indexes_include_key(&self, key: &Pubkey) -> bool {
@@ -1005,11 +1032,12 @@ impl Accounts {
         let keys: Vec<_> = txs
             .zip(results)
             .filter_map(|(tx, res)| match res {
-                Err(TransactionError::AccountInUse) => None,
-                Err(TransactionError::SanitizeFailure) => None,
-                Err(TransactionError::AccountLoadedTwice) => None,
-                Err(TransactionError::WouldExceedMaxBlockCostLimit) => None,
-                Err(TransactionError::WouldExceedMaxAccountCostLimit) => None,
+                Err(TransactionError::AccountInUse)
+                | Err(TransactionError::SanitizeFailure)
+                | Err(TransactionError::AccountLoadedTwice)
+                | Err(TransactionError::WouldExceedMaxBlockCostLimit)
+                | Err(TransactionError::WouldExceedMaxAccountCostLimit)
+                | Err(TransactionError::WouldExceedMaxAccountDataCostLimit) => None,
                 _ => Some(tx.get_account_locks(demote_program_write_locks)),
             })
             .collect();
@@ -1033,8 +1061,8 @@ impl Accounts {
         blockhash: &Hash,
         lamports_per_signature: u64,
         rent_for_sysvars: bool,
-        merge_nonce_error_into_system_error: bool,
         demote_program_write_locks: bool,
+        leave_nonce_on_success: bool,
     ) {
         let accounts_to_store = self.collect_accounts_to_store(
             txs,
@@ -1044,8 +1072,8 @@ impl Accounts {
             blockhash,
             lamports_per_signature,
             rent_for_sysvars,
-            merge_nonce_error_into_system_error,
             demote_program_write_locks,
+            leave_nonce_on_success,
         );
         self.accounts_db.store_cached(slot, &accounts_to_store);
     }
@@ -1072,8 +1100,8 @@ impl Accounts {
         blockhash: &Hash,
         lamports_per_signature: u64,
         rent_for_sysvars: bool,
-        merge_nonce_error_into_system_error: bool,
         demote_program_write_locks: bool,
+        leave_nonce_on_success: bool,
     ) -> Vec<(&'a Pubkey, &'a AccountSharedData)> {
         let mut accounts = Vec::with_capacity(load_results.len());
         for (i, ((tx_load_result, _), tx)) in load_results.iter_mut().zip(txs).enumerate() {
@@ -1085,30 +1113,17 @@ impl Accounts {
             let (execution_result, nonce) = &execution_results[i];
             let maybe_nonce = match (execution_result, nonce) {
                 (Ok(_), Some(nonce)) => {
-                    let address = nonce.address();
-                    let account = nonce.account();
-                    let maybe_fee_payer_account = nonce.fee_payer_account();
-                    Some((address, account, maybe_fee_payer_account, true))
-                }
-                (Err(TransactionError::InstructionError(index, _)), Some(nonce)) => {
-                    let nonce_marker_ix_failed = if merge_nonce_error_into_system_error {
-                        // Don't advance stored blockhash when the nonce marker ix fails
-                        *index == NONCED_TX_MARKER_IX_INDEX
+                    if leave_nonce_on_success {
+                        None
                     } else {
-                        false
-                    };
-                    let address = nonce.address();
-                    let account = nonce.account();
-                    let maybe_fee_payer_account = nonce.fee_payer_account();
-                    Some((
-                        address,
-                        account,
-                        maybe_fee_payer_account,
-                        !nonce_marker_ix_failed,
-                    ))
+                        Some((nonce, false /* rollback */))
+                    }
                 }
-                (Ok(_), _nonce) => None,
-                (Err(_), _nonce) => continue,
+                (Err(TransactionError::InstructionError(_, _)), Some(nonce)) => {
+                    Some((nonce, true /* rollback */))
+                }
+                (Ok(_), _) => None, // Success, don't do any additional nonce processing
+                (Err(_), _) => continue, // Not nonce, don't store any accounts
             };
 
             let message = tx.message();
@@ -1118,49 +1133,39 @@ impl Accounts {
                 .zip(loaded_transaction.accounts.iter_mut())
                 .filter(|(i, _)| message.is_non_loader_key(*i))
             {
-                let is_nonce_account = prepare_if_nonce_account(
-                    address,
-                    account,
-                    execution_result,
-                    maybe_nonce,
-                    blockhash,
-                    lamports_per_signature,
-                );
                 if fee_payer_index.is_none() {
                     fee_payer_index = Some(i);
                 }
                 let is_fee_payer = Some(i) == fee_payer_index;
-                if message.is_writable(i, demote_program_write_locks)
-                    && (execution_result.is_ok()
-                        || (maybe_nonce.is_some() && (is_nonce_account || is_fee_payer)))
-                {
-                    if execution_result.is_err() {
-                        match (is_nonce_account, is_fee_payer, maybe_nonce) {
-                            // nonce is fee-payer, state updated in `prepare_if_nonce_account()`
-                            (true, true, Some((_, _, None, _))) => (),
-                            // nonce not fee-payer, state updated in `prepare_if_nonce_account()`
-                            (true, false, Some((_, _, Some(_), _))) => (),
-                            // not nonce, but fee-payer. rollback to cached state
-                            (false, true, Some((_, _, Some(fee_payer_account), _))) => {
-                                *account = fee_payer_account.clone();
-                            }
-                            _ => panic!("unexpected nonce condition"),
-                        }
-                    }
-                    if account.rent_epoch() == INITIAL_RENT_EPOCH {
-                        let rent = rent_collector.collect_from_created_account(
-                            address,
-                            account,
-                            rent_for_sysvars,
-                        );
-                        loaded_transaction.rent += rent;
-                        loaded_transaction
-                            .rent_debits
-                            .insert(address, rent, account.lamports());
-                    }
+                if message.is_writable(i, demote_program_write_locks) {
+                    let is_nonce_account = prepare_if_nonce_account(
+                        address,
+                        account,
+                        execution_result,
+                        is_fee_payer,
+                        maybe_nonce,
+                        blockhash,
+                        lamports_per_signature,
+                    );
 
-                    // Add to the accounts to store
-                    accounts.push((&*address, &*account));
+                    if execution_result.is_ok() || is_nonce_account || is_fee_payer {
+                        if account.rent_epoch() == INITIAL_RENT_EPOCH {
+                            let rent = rent_collector.collect_from_created_account(
+                                address,
+                                account,
+                                rent_for_sysvars,
+                            );
+                            loaded_transaction.rent += rent;
+                            loaded_transaction.rent_debits.insert(
+                                address,
+                                rent,
+                                account.lamports(),
+                            );
+                        }
+
+                        // Add to the accounts to store
+                        accounts.push((&*address, &*account));
+                    }
                 }
             }
         }
@@ -1168,52 +1173,59 @@ impl Accounts {
     }
 }
 
-pub fn prepare_if_nonce_account(
+pub fn prepare_if_nonce_account<'a>(
     address: &Pubkey,
     account: &mut AccountSharedData,
     execution_result: &Result<()>,
-    maybe_nonce: Option<(
-        &Pubkey,
-        &AccountSharedData,
-        Option<&AccountSharedData>,
-        bool,
-    )>,
+    is_fee_payer: bool,
+    maybe_nonce: Option<(&'a NonceFull, bool)>,
     blockhash: &Hash,
     lamports_per_signature: u64,
 ) -> bool {
-    if let Some((nonce_key, nonce_account, _, advance_blockhash)) = maybe_nonce {
-        if address == nonce_key {
-            if execution_result.is_err() {
+    if let Some((nonce, rollback)) = maybe_nonce {
+        if address == nonce.address() {
+            if rollback {
                 // The transaction failed which would normally drop the account
-                // processing changes, since this account is now being included in
-                // the accounts written back to the db, roll it back to
+                // processing changes, since this account is now being included
+                // in the accounts written back to the db, roll it back to
                 // pre-processing state.
-                *account = nonce_account.clone();
+                *account = nonce.account().clone();
             }
 
-            if advance_blockhash {
-                // Advance the stored blockhash to prevent fee theft by someone
-                // replaying nonce transactions that have failed with an
-                // `InstructionError`.
-                //
-                // Since we know we are dealing with a valid nonce account, unwrap is safe here
-                let state = StateMut::<NonceVersions>::state(nonce_account)
-                    .unwrap()
-                    .convert_to_current();
-                if let NonceState::Initialized(ref data) = state {
-                    account
-                        .set_state(&NonceVersions::new_current(NonceState::new_initialized(
-                            &data.authority,
-                            blockhash,
-                            lamports_per_signature,
-                        )))
-                        .unwrap();
+            // Advance the stored blockhash to prevent fee theft by someone
+            // replaying nonce transactions that have failed with an
+            // `InstructionError`.
+            //
+            // Since we know we are dealing with a valid nonce account,
+            // unwrap is safe here
+            let state = StateMut::<NonceVersions>::state(nonce.account())
+                .unwrap()
+                .convert_to_current();
+            if let NonceState::Initialized(ref data) = state {
+                account
+                    .set_state(&NonceVersions::new_current(NonceState::new_initialized(
+                        &data.authority,
+                        blockhash,
+                        lamports_per_signature,
+                    )))
+                    .unwrap();
+            }
+            true
+        } else {
+            if execution_result.is_err() && is_fee_payer {
+                if let Some(fee_payer_account) = nonce.fee_payer_account() {
+                    // Instruction error and fee-payer for this nonce tx is not
+                    // the nonce account itself, rollback the fee payer to the
+                    // fee-paid original state.
+                    *account = fee_payer_account.clone();
                 }
             }
-            return true;
+
+            false
         }
+    } else {
+        false
     }
-    false
 }
 
 pub fn create_test_accounts(
@@ -1243,25 +1255,27 @@ pub fn update_accounts_bench(accounts: &Accounts, pubkeys: &[Pubkey], slot: u64)
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::rent_collector::RentCollector;
-    use solana_sdk::{
-        account::{AccountSharedData, WritableAccount},
-        epoch_schedule::EpochSchedule,
-        genesis_config::ClusterType,
-        hash::Hash,
-        instruction::{CompiledInstruction, InstructionError},
-        message::Message,
-        nonce, nonce_account,
-        rent::Rent,
-        signature::{keypair_from_seed, signers::Signers, Keypair, Signer},
-        system_instruction, system_program,
-        transaction::Transaction,
-    };
-    use std::{
-        convert::TryFrom,
-        sync::atomic::{AtomicBool, AtomicU64, Ordering},
-        {thread, time},
+    use {
+        super::*,
+        crate::rent_collector::RentCollector,
+        solana_sdk::{
+            account::{AccountSharedData, WritableAccount},
+            epoch_schedule::EpochSchedule,
+            genesis_config::ClusterType,
+            hash::Hash,
+            instruction::{CompiledInstruction, InstructionError},
+            message::Message,
+            nonce, nonce_account,
+            rent::Rent,
+            signature::{keypair_from_seed, signers::Signers, Keypair, Signer},
+            system_instruction, system_program,
+            transaction::Transaction,
+        },
+        std::{
+            convert::TryFrom,
+            sync::atomic::{AtomicBool, AtomicU64, Ordering},
+            thread, time,
+        },
     };
 
     fn new_sanitized_tx<T: Signers>(
@@ -2596,8 +2610,8 @@ mod tests {
             &Hash::default(),
             0,
             true,
-            true, // merge_nonce_error_into_system_error
             true, // demote_program_write_locks
+            true, // leave_nonce_on_success
         );
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
@@ -2722,39 +2736,32 @@ mod tests {
         account_address: &Pubkey,
         account: &mut AccountSharedData,
         tx_result: &Result<()>,
-        maybe_nonce: Option<(
-            &Pubkey,
-            &AccountSharedData,
-            Option<&AccountSharedData>,
-            bool,
-        )>,
+        is_fee_payer: bool,
+        maybe_nonce: Option<(&NonceFull, bool)>,
         blockhash: &Hash,
         lamports_per_signature: u64,
         expect_account: &AccountSharedData,
     ) -> bool {
         // Verify expect_account's relationship
-        match maybe_nonce {
-            Some((nonce_address, _nonce_account, _maybe_fee_payer_account, _))
-                if nonce_address == account_address && tx_result.is_ok() =>
-            {
-                assert_eq!(expect_account, account) // Account update occurs in system_instruction_processor
+        if !is_fee_payer {
+            match maybe_nonce {
+                Some((nonce, _)) if nonce.address() == account_address => {
+                    assert_ne!(expect_account, nonce.account())
+                }
+                _ => assert_eq!(expect_account, account),
             }
-            Some((nonce_address, nonce_account, _maybe_fee_payer_account, _))
-                if nonce_address == account_address =>
-            {
-                assert_ne!(expect_account, nonce_account)
-            }
-            _ => assert_eq!(expect_account, account),
         }
 
         prepare_if_nonce_account(
             account_address,
             account,
             tx_result,
+            is_fee_payer,
             maybe_nonce,
             blockhash,
             lamports_per_signature,
         );
+        assert_eq!(expect_account, account);
         expect_account == account
     }
 
@@ -2769,22 +2776,25 @@ mod tests {
             maybe_fee_payer_account,
         ) = create_accounts_prepare_if_nonce_account();
         let post_account_address = pre_account_address;
+        let nonce = NonceFull::new(
+            pre_account_address,
+            pre_account.clone(),
+            maybe_fee_payer_account,
+        );
 
-        let mut expect_account = post_account.clone();
-        let data =
-            NonceVersions::new_current(NonceState::Initialized(nonce::state::Data::default()));
-        expect_account.set_state(&data).unwrap();
+        let mut expect_account = pre_account;
+        expect_account
+            .set_state(&NonceVersions::new_current(NonceState::Initialized(
+                nonce::state::Data::new(Pubkey::default(), blockhash, lamports_per_signature),
+            )))
+            .unwrap();
 
         assert!(run_prepare_if_nonce_account_test(
             &post_account_address,
             &mut post_account,
             &Ok(()),
-            Some((
-                &pre_account_address,
-                &pre_account,
-                maybe_fee_payer_account.as_ref(),
-                false,
-            )),
+            false,
+            Some((&nonce, true)),
             &blockhash,
             lamports_per_signature,
             &expect_account,
@@ -2809,6 +2819,7 @@ mod tests {
             &post_account_address,
             &mut post_account,
             &Ok(()),
+            false,
             None,
             &blockhash,
             lamports_per_signature,
@@ -2827,18 +2838,16 @@ mod tests {
             maybe_fee_payer_account,
         ) = create_accounts_prepare_if_nonce_account();
 
+        let nonce = NonceFull::new(pre_account_address, pre_account, maybe_fee_payer_account);
+
         let expect_account = post_account.clone();
         // Wrong key
         assert!(run_prepare_if_nonce_account_test(
             &Pubkey::new(&[1u8; 32]),
             &mut post_account,
             &Ok(()),
-            Some((
-                &pre_account_address,
-                &pre_account,
-                maybe_fee_payer_account.as_ref(),
-                true,
-            )),
+            false,
+            Some((&nonce, true)),
             &blockhash,
             lamports_per_signature,
             &expect_account,
@@ -2856,8 +2865,10 @@ mod tests {
             maybe_fee_payer_account,
         ) = create_accounts_prepare_if_nonce_account();
         let post_account_address = pre_account_address;
-
         let mut expect_account = pre_account.clone();
+
+        let nonce = NonceFull::new(pre_account_address, pre_account, maybe_fee_payer_account);
+
         expect_account
             .set_state(&NonceVersions::new_current(NonceState::Initialized(
                 nonce::state::Data::new(Pubkey::default(), blockhash, lamports_per_signature),
@@ -2871,15 +2882,78 @@ mod tests {
                 0,
                 InstructionError::InvalidArgument,
             )),
-            Some((
-                &pre_account_address,
-                &pre_account,
-                maybe_fee_payer_account.as_ref(),
-                true,
-            )),
+            false,
+            Some((&nonce, true)),
             &blockhash,
             lamports_per_signature,
             &expect_account,
+        ));
+    }
+
+    #[test]
+    fn test_rollback_nonce_fee_payer() {
+        let nonce_account = AccountSharedData::new_data(1, &(), &system_program::id()).unwrap();
+        let pre_fee_payer_account =
+            AccountSharedData::new_data(42, &(), &system_program::id()).unwrap();
+        let mut post_fee_payer_account =
+            AccountSharedData::new_data(84, &[1, 2, 3, 4], &system_program::id()).unwrap();
+        let nonce = NonceFull::new(
+            Pubkey::new_unique(),
+            nonce_account,
+            Some(pre_fee_payer_account.clone()),
+        );
+
+        assert!(run_prepare_if_nonce_account_test(
+            &Pubkey::new_unique(),
+            &mut post_fee_payer_account.clone(),
+            &Err(TransactionError::InstructionError(
+                0,
+                InstructionError::InvalidArgument,
+            )),
+            false,
+            Some((&nonce, true)),
+            &Hash::default(),
+            1,
+            &post_fee_payer_account.clone(),
+        ));
+
+        assert!(run_prepare_if_nonce_account_test(
+            &Pubkey::new_unique(),
+            &mut post_fee_payer_account.clone(),
+            &Ok(()),
+            true,
+            Some((&nonce, true)),
+            &Hash::default(),
+            1,
+            &post_fee_payer_account.clone(),
+        ));
+
+        assert!(run_prepare_if_nonce_account_test(
+            &Pubkey::new_unique(),
+            &mut post_fee_payer_account.clone(),
+            &Err(TransactionError::InstructionError(
+                0,
+                InstructionError::InvalidArgument,
+            )),
+            true,
+            None,
+            &Hash::default(),
+            1,
+            &post_fee_payer_account.clone(),
+        ));
+
+        assert!(run_prepare_if_nonce_account_test(
+            &Pubkey::new_unique(),
+            &mut post_fee_payer_account,
+            &Err(TransactionError::InstructionError(
+                0,
+                InstructionError::InvalidArgument,
+            )),
+            true,
+            Some((&nonce, true)),
+            &Hash::default(),
+            1,
+            &pre_fee_payer_account,
         ));
     }
 
@@ -2966,8 +3040,8 @@ mod tests {
             &next_blockhash,
             0,
             true,
-            true, // merge_nonce_error_into_system_error
             true, // demote_program_write_locks
+            true, // leave_nonce_on_success
         );
         assert_eq!(collected_accounts.len(), 2);
         assert_eq!(
@@ -3077,8 +3151,8 @@ mod tests {
             &next_blockhash,
             0,
             true,
-            true, // merge_nonce_error_into_system_error
             true, // demote_program_write_locks
+            true, // leave_nonce_on_success
         );
         assert_eq!(collected_accounts.len(), 1);
         let collected_nonce_account = collected_accounts
@@ -3277,5 +3351,68 @@ mod tests {
                 .unwrap(),
             vec![(pubkey1, 42), (pubkey2, 41)]
         );
+    }
+
+    fn zero_len_account_size() -> usize {
+        std::mem::size_of::<AccountSharedData>() + std::mem::size_of::<Pubkey>()
+    }
+
+    #[test]
+    fn test_calc_scan_result_size() {
+        for len in 0..3 {
+            assert_eq!(
+                Accounts::calc_scan_result_size(&AccountSharedData::new(
+                    0,
+                    len,
+                    &Pubkey::default()
+                )),
+                zero_len_account_size() + len
+            );
+        }
+    }
+
+    #[test]
+    fn test_maybe_abort_scan() {
+        assert!(Accounts::maybe_abort_scan(ScanResult::Ok(vec![]), &ScanConfig::default()).is_ok());
+        let config = ScanConfig::default().recreate_with_abort();
+        assert!(Accounts::maybe_abort_scan(ScanResult::Ok(vec![]), &config).is_ok());
+        config.abort();
+        assert!(Accounts::maybe_abort_scan(ScanResult::Ok(vec![]), &config).is_err());
+    }
+
+    #[test]
+    fn test_accumulate_and_check_scan_result_size() {
+        for (account, byte_limit_for_scan, result) in [
+            (AccountSharedData::default(), zero_len_account_size(), false),
+            (
+                AccountSharedData::new(0, 1, &Pubkey::default()),
+                zero_len_account_size(),
+                true,
+            ),
+            (
+                AccountSharedData::new(0, 2, &Pubkey::default()),
+                zero_len_account_size() + 3,
+                false,
+            ),
+        ] {
+            let sum = AtomicUsize::default();
+            assert_eq!(
+                result,
+                Accounts::accumulate_and_check_scan_result_size(
+                    &sum,
+                    &account,
+                    &Some(byte_limit_for_scan)
+                )
+            );
+            // calling a second time should accumulate above the threshold
+            assert!(Accounts::accumulate_and_check_scan_result_size(
+                &sum,
+                &account,
+                &Some(byte_limit_for_scan)
+            ));
+            assert!(!Accounts::accumulate_and_check_scan_result_size(
+                &sum, &account, &None
+            ));
+        }
     }
 }

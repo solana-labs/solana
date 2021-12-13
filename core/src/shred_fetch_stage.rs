@@ -1,21 +1,24 @@
 //! The `shred_fetch_stage` pulls shreds from UDP sockets and sends it to a channel.
 
-use crate::packet_hasher::PacketHasher;
-use lru::LruCache;
-use solana_ledger::shred::{get_shred_slot_index_type, ShredFetchStats};
-use solana_perf::cuda_runtime::PinnedVec;
-use solana_perf::packet::{Packet, PacketsRecycler};
-use solana_perf::recycler::Recycler;
-use solana_runtime::bank_forks::BankForks;
-use solana_sdk::clock::{Slot, DEFAULT_MS_PER_SLOT};
-use solana_streamer::streamer::{self, PacketReceiver, PacketSender};
-use std::net::UdpSocket;
-use std::sync::atomic::AtomicBool;
-use std::sync::mpsc::channel;
-use std::sync::Arc;
-use std::sync::RwLock;
-use std::thread::{self, Builder, JoinHandle};
-use std::time::Instant;
+use {
+    crate::packet_hasher::PacketHasher,
+    lru::LruCache,
+    solana_ledger::shred::{get_shred_slot_index_type, ShredFetchStats},
+    solana_perf::{
+        cuda_runtime::PinnedVec,
+        packet::{Packet, PacketBatchRecycler},
+        recycler::Recycler,
+    },
+    solana_runtime::bank_forks::BankForks,
+    solana_sdk::clock::{Slot, DEFAULT_MS_PER_SLOT},
+    solana_streamer::streamer::{self, PacketBatchReceiver, PacketBatchSender},
+    std::{
+        net::UdpSocket,
+        sync::{atomic::AtomicBool, mpsc::channel, Arc, RwLock},
+        thread::{self, Builder, JoinHandle},
+        time::Instant,
+    },
+};
 
 const DEFAULT_LRU_SIZE: usize = 10_000;
 pub type ShredsReceived = LruCache<u64, ()>;
@@ -60,8 +63,8 @@ impl ShredFetchStage {
 
     // updates packets received on a channel and sends them on another channel
     fn modify_packets<F>(
-        recvr: PacketReceiver,
-        sendr: PacketSender,
+        recvr: PacketBatchReceiver,
+        sendr: PacketBatchSender,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
         name: &'static str,
         modify: F,
@@ -80,7 +83,7 @@ impl ShredFetchStage {
         let mut stats = ShredFetchStats::default();
         let mut packet_hasher = PacketHasher::default();
 
-        while let Some(mut p) = recvr.iter().next() {
+        while let Some(mut packet_batch) = recvr.iter().next() {
             if last_updated.elapsed().as_millis() as u64 > DEFAULT_MS_PER_SLOT {
                 last_updated = Instant::now();
                 packet_hasher.reset();
@@ -94,8 +97,8 @@ impl ShredFetchStage {
                     slots_per_epoch = root_bank.get_slots_in_epoch(root_bank.epoch());
                 }
             }
-            stats.shred_count += p.packets.len();
-            p.packets.iter_mut().for_each(|packet| {
+            stats.shred_count += packet_batch.packets.len();
+            packet_batch.packets.iter_mut().for_each(|packet| {
                 Self::process_packet(
                     packet,
                     &mut shreds_received,
@@ -121,7 +124,7 @@ impl ShredFetchStage {
                 stats = ShredFetchStats::default();
                 last_stats = Instant::now();
             }
-            if sendr.send(p).is_err() {
+            if sendr.send(packet_batch).is_err() {
                 break;
             }
         }
@@ -130,7 +133,7 @@ impl ShredFetchStage {
     fn packet_modifier<F>(
         sockets: Vec<Arc<UdpSocket>>,
         exit: &Arc<AtomicBool>,
-        sender: PacketSender,
+        sender: PacketBatchSender,
         recycler: Recycler<PinnedVec<Packet>>,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
         name: &'static str,
@@ -166,11 +169,11 @@ impl ShredFetchStage {
         sockets: Vec<Arc<UdpSocket>>,
         forward_sockets: Vec<Arc<UdpSocket>>,
         repair_socket: Arc<UdpSocket>,
-        sender: &PacketSender,
+        sender: &PacketBatchSender,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
-        let recycler: PacketsRecycler = Recycler::warmed(100, 1024);
+        let recycler: PacketBatchRecycler = Recycler::warmed(100, 1024);
 
         let (mut tvu_threads, tvu_filter) = Self::packet_modifier(
             sockets,
@@ -223,9 +226,10 @@ impl ShredFetchStage {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_ledger::blockstore::MAX_DATA_SHREDS_PER_SLOT;
-    use solana_ledger::shred::Shred;
+    use {
+        super::*,
+        solana_ledger::{blockstore::MAX_DATA_SHREDS_PER_SLOT, shred::Shred},
+    };
 
     #[test]
     fn test_data_code_same_index() {

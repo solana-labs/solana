@@ -1,21 +1,22 @@
-use crate::system_instruction_processor;
-use solana_program_runtime::{
-    invoke_context::{InvokeContext, ProcessInstructionWithContext},
-    stable_log,
-};
-use solana_sdk::{
-    feature_set, instruction::InstructionError, pubkey::Pubkey, stake, system_program,
-};
-use std::fmt;
-
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
+use {
+    crate::system_instruction_processor,
+    solana_program_runtime::{
+        invoke_context::{InvokeContext, ProcessInstructionWithContext},
+        stable_log,
+    },
+    solana_sdk::{
+        feature_set, instruction::InstructionError, pubkey::Pubkey, stake, system_program,
+    },
+    std::fmt,
+};
 
 fn process_instruction_with_program_logging(
     process_instruction: ProcessInstructionWithContext,
     first_instruction_account: usize,
     instruction_data: &[u8],
-    invoke_context: &mut dyn InvokeContext,
+    invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let logger = invoke_context.get_log_collector();
     let program_id = invoke_context.get_caller()?;
@@ -35,7 +36,7 @@ macro_rules! with_program_logging {
     ($process_instruction:expr) => {
         |first_instruction_account: usize,
          instruction_data: &[u8],
-         invoke_context: &mut dyn InvokeContext| {
+         invoke_context: &mut InvokeContext| {
             process_instruction_with_program_logging(
                 $process_instruction,
                 first_instruction_account,
@@ -135,7 +136,7 @@ fn genesis_builtins() -> Vec<Builtin> {
 fn dummy_process_instruction(
     _first_instruction_account: usize,
     _data: &[u8],
-    _invoke_context: &mut dyn InvokeContext,
+    _invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     Ok(())
 }
@@ -170,6 +171,15 @@ fn feature_builtins() -> Vec<(Builtin, Pubkey, ActivationType)> {
             ),
             feature_set::prevent_calling_precompiles_as_programs::id(),
             ActivationType::RemoveProgram,
+        ),
+        (
+            Builtin::new(
+                "address_lookup_table_program",
+                solana_address_lookup_table_program::id(),
+                solana_address_lookup_table_program::processor::process_instruction,
+            ),
+            feature_set::versioned_tx_message_enabled::id(),
+            ActivationType::NewProgram,
         ),
     ]
 }

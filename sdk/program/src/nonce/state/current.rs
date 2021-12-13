@@ -1,6 +1,8 @@
-use super::Versions;
-use crate::{fee_calculator::FeeCalculator, hash::Hash, pubkey::Pubkey};
-use serde_derive::{Deserialize, Serialize};
+use {
+    super::Versions,
+    crate::{fee_calculator::FeeCalculator, hash::Hash, pubkey::Pubkey},
+    serde_derive::{Deserialize, Serialize},
+};
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Data {

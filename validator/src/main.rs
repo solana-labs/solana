@@ -1,4 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
+#[cfg(not(target_env = "msvc"))]
+use jemallocator::Jemalloc;
 use {
     clap::{
         crate_description, crate_name, value_t, value_t_or_exit, values_t, values_t_or_exit, App,
@@ -78,9 +80,6 @@ use {
         time::{Duration, SystemTime},
     },
 };
-
-#[cfg(not(target_env = "msvc"))]
-use jemallocator::Jemalloc;
 
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
@@ -423,9 +422,7 @@ fn platform_id() -> String {
 
 #[cfg(target_os = "linux")]
 fn check_os_network_limits() {
-    use solana_metrics::datapoint_warn;
-    use std::collections::HashMap;
-    use sysctl::Sysctl;
+    use {solana_metrics::datapoint_warn, std::collections::HashMap, sysctl::Sysctl};
 
     fn sysctl_read(name: &str) -> Result<String, sysctl::SysctlError> {
         let ctl = sysctl::Ctl::new(name)?;
@@ -1387,17 +1384,6 @@ pub fn main() {
                 .help("Abort the validator if a bank hash mismatch is detected within known validator set"),
         )
         .arg(
-            Arg::with_name("frozen_accounts")
-                .long("frozen-account")
-                .validator(is_pubkey)
-                .value_name("PUBKEY")
-                .multiple(true)
-                .takes_value(true)
-                .help("Freeze the specified account.  This will cause the validator to \
-                       intentionally crash should any transaction modify the frozen account in any way \
-                       other than increasing the account balance"),
-        )
-        .arg(
             Arg::with_name("snapshot_archive_format")
                 .long("snapshot-archive-format")
                 .alias("snapshot-compression") // Legacy name used by Solana v1.5.x and older
@@ -1509,6 +1495,14 @@ pub fn main() {
                       This option is for use during testing."),
         )
         .arg(
+            Arg::with_name("accounts_db_cache_limit_mb")
+                .long("accounts-db-cache-limit-mb")
+                .value_name("MEGABYTES")
+                .validator(is_parsable::<u64>)
+                .takes_value(true)
+                .help("How large the write cache for account data can become. If this is exceeded, the cache is flushed more aggressively."),
+        )
+        .arg(
             Arg::with_name("accounts_index_scan_results_limit_mb")
                 .long("accounts-index-scan-results-limit-mb")
                 .value_name("MEGABYTES")
@@ -1617,14 +1611,6 @@ pub fn main() {
                 .long("allow-private-addr")
                 .takes_value(false)
                 .help("Allow contacting private ip addresses")
-                .hidden(true),
-        )
-        .arg(
-            Arg::with_name("disable_epoch_boundary_optimization")
-                .long("disable-epoch-boundary-optimization")
-                .takes_value(false)
-                .help("Disables epoch boundary optimization and overrides the \
-                optimize_epoch_boundary_updates feature switch if enabled.")
                 .hidden(true),
         )
         .after_help("The default subcommand is run")
@@ -2136,6 +2122,9 @@ pub fn main() {
         index: Some(accounts_index_config),
         accounts_hash_cache_path: Some(ledger_path.clone()),
         filler_account_count,
+        write_cache_limit_bytes: value_t!(matches, "accounts_db_cache_limit_mb", u64)
+            .ok()
+            .map(|mb| mb * MB as u64),
         ..AccountsDbConfig::default()
     };
 
@@ -2252,7 +2241,6 @@ pub fn main() {
         known_validators,
         repair_validators,
         gossip_validators,
-        frozen_accounts: values_t!(matches, "frozen_accounts", Pubkey).unwrap_or_default(),
         no_rocksdb_compaction,
         rocksdb_compaction_interval,
         rocksdb_max_compaction_jitter,
@@ -2295,8 +2283,6 @@ pub fn main() {
         tpu_coalesce_ms,
         no_wait_for_vote_to_start_leader: matches.is_present("no_wait_for_vote_to_start_leader"),
         accounts_shrink_ratio,
-        disable_epoch_boundary_optimization: matches
-            .is_present("disable_epoch_boundary_optimization"),
         ..ValidatorConfig::default()
     };
 

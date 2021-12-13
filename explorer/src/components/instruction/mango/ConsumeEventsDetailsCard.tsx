@@ -23,14 +23,14 @@ export function ConsumeEventsDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title={"Mango: ConsumeEvents"}
+      title={"Mango Program: ConsumeEvents"}
       innerCards={innerCards}
       childIndex={childIndex}
     >
       {mangoPerpMarketConfig !== undefined && (
         <tr>
           <td>Perp market</td>
-          <td className="text-lg-right">{mangoPerpMarketConfig.name}</td>
+          <td className="text-lg-end">{mangoPerpMarketConfig.name}</td>
         </tr>
       )}
 

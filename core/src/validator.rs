@@ -136,7 +136,6 @@ pub struct ValidatorConfig {
     pub gossip_validators: Option<HashSet<Pubkey>>, // None = gossip with all
     pub halt_on_known_validators_accounts_hash_mismatch: bool,
     pub accounts_hash_fault_injection_slots: u64, // 0 = no fault injection
-    pub frozen_accounts: Vec<Pubkey>,
     pub no_rocksdb_compaction: bool,
     pub rocksdb_compaction_interval: Option<u64>,
     pub rocksdb_max_compaction_jitter: Option<u64>,
@@ -166,7 +165,6 @@ pub struct ValidatorConfig {
     pub validator_exit: Arc<RwLock<Exit>>,
     pub no_wait_for_vote_to_start_leader: bool,
     pub accounts_shrink_ratio: AccountShrinkThreshold,
-    pub disable_epoch_boundary_optimization: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -197,7 +195,6 @@ impl Default for ValidatorConfig {
             gossip_validators: None,
             halt_on_known_validators_accounts_hash_mismatch: false,
             accounts_hash_fault_injection_slots: 0,
-            frozen_accounts: vec![],
             no_rocksdb_compaction: false,
             rocksdb_compaction_interval: None,
             rocksdb_max_compaction_jitter: None,
@@ -227,7 +224,6 @@ impl Default for ValidatorConfig {
             no_wait_for_vote_to_start_leader: true,
             accounts_shrink_ratio: AccountShrinkThreshold::default(),
             accounts_db_config: None,
-            disable_epoch_boundary_optimization: false,
         }
     }
 }
@@ -868,7 +864,6 @@ impl Validator {
                 rocksdb_max_compaction_jitter: config.rocksdb_compaction_interval,
                 wait_for_vote_to_start_leader,
                 accounts_shrink_ratio: config.accounts_shrink_ratio,
-                disable_epoch_boundary_optimization: config.disable_epoch_boundary_optimization,
             },
             &max_slots,
             &cost_model,
@@ -1276,7 +1271,6 @@ fn new_banks_from_ledger(
         poh_verify,
         dev_halt_at_slot: config.dev_halt_at_slot,
         new_hard_forks: config.new_hard_forks.clone(),
-        frozen_accounts: config.frozen_accounts.clone(),
         debug_keys: config.debug_keys.clone(),
         account_indexes: config.account_indexes.clone(),
         accounts_db_caching_enabled: config.accounts_db_caching_enabled,
@@ -1743,11 +1737,12 @@ pub fn is_snapshot_config_valid(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader};
-    use solana_sdk::genesis_config::create_genesis_config;
-    use solana_sdk::poh_config::PohConfig;
-    use std::fs::remove_dir_all;
+    use {
+        super::*,
+        solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
+        solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
+        std::fs::remove_dir_all,
+    };
 
     #[test]
     fn validator_exit() {
@@ -1792,8 +1787,10 @@ mod tests {
     fn test_backup_and_clear_blockstore() {
         use std::time::Instant;
         solana_logger::setup();
-        use solana_entry::entry;
-        use solana_ledger::{blockstore, get_tmp_ledger_path};
+        use {
+            solana_entry::entry,
+            solana_ledger::{blockstore, get_tmp_ledger_path},
+        };
         let blockstore_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();

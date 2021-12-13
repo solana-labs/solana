@@ -1,8 +1,10 @@
-use solana_measure::measure::Measure;
-use solana_runtime::bank::Bank;
-use std::{
-    sync::{mpsc::Receiver, Arc},
-    thread::{self, Builder, JoinHandle},
+use {
+    solana_measure::measure::Measure,
+    solana_runtime::bank::Bank,
+    std::{
+        sync::{mpsc::Receiver, Arc},
+        thread::{self, Builder, JoinHandle},
+    },
 };
 
 pub struct DropBankService {

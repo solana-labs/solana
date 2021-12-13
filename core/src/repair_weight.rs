@@ -1,23 +1,25 @@
-use crate::{
-    heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
-    repair_generic_traversal::{get_closest_completion, get_unknown_last_index},
-    repair_service::{BestRepairsStats, RepairTiming},
-    repair_weighted_traversal,
-    serve_repair::ShredRepairType,
-    tree_diff::TreeDiff,
+use {
+    crate::{
+        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
+        repair_generic_traversal::{get_closest_completion, get_unknown_last_index},
+        repair_service::{BestRepairsStats, RepairTiming},
+        repair_weighted_traversal,
+        serve_repair::ShredRepairType,
+        tree_diff::TreeDiff,
+    },
+    solana_ledger::{
+        ancestor_iterator::AncestorIterator, blockstore::Blockstore, blockstore_meta::SlotMeta,
+    },
+    solana_measure::measure::Measure,
+    solana_runtime::{contains::Contains, epoch_stakes::EpochStakes},
+    solana_sdk::{
+        clock::Slot,
+        epoch_schedule::{Epoch, EpochSchedule},
+        hash::Hash,
+        pubkey::Pubkey,
+    },
+    std::collections::{BTreeSet, HashMap, HashSet, VecDeque},
 };
-use solana_ledger::{
-    ancestor_iterator::AncestorIterator, blockstore::Blockstore, blockstore_meta::SlotMeta,
-};
-use solana_measure::measure::Measure;
-use solana_runtime::{contains::Contains, epoch_stakes::EpochStakes};
-use solana_sdk::{
-    clock::Slot,
-    epoch_schedule::{Epoch, EpochSchedule},
-    hash::Hash,
-    pubkey::Pubkey,
-};
-use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 
 pub struct RepairWeight {
     // Map from root -> a subtree rooted at that `root`
@@ -653,11 +655,13 @@ impl RepairWeight {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
-    use solana_runtime::{bank::Bank, bank_utils};
-    use solana_sdk::hash::Hash;
-    use trees::tr;
+    use {
+        super::*,
+        solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path},
+        solana_runtime::{bank::Bank, bank_utils},
+        solana_sdk::hash::Hash,
+        trees::tr,
+    };
 
     #[test]
     fn test_sort_by_stake_weight_slot() {
