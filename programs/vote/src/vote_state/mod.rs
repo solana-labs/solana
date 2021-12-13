@@ -38,7 +38,7 @@ pub const INITIAL_LOCKOUT: usize = 2;
 // Maximum number of credits history to keep around
 pub const MAX_EPOCH_CREDITS_HISTORY: usize = 64;
 
-// Offset of VoteState::pri : Clone + Debug {or_voters, for determining initialization status without deserialization
+// Offset of VoteState::prior_voters, for determining initialization status without deserialization
 const DEFAULT_PRIOR_VOTERS_OFFSET: usize = 82;
 
 // VoteTransactionClone hack is done so that we can derive clone on the tower that uses the
@@ -1156,14 +1156,14 @@ pub fn process_vote_state_update<S: std::hash::BuildHasher>(
     vote_account: &KeyedAccount,
     slot_hashes: &[SlotHash],
     clock: &Clock,
-    vote_state_update: &VoteStateUpdate,
+    vote_state_update: VoteStateUpdate,
     signers: &HashSet<Pubkey, S>,
 ) -> Result<(), InstructionError> {
     let mut vote_state = verify_and_get_vote_state(vote_account, clock, signers)?;
 
-    vote_state.check_slots_are_valid(vote_state_update, slot_hashes)?;
+    vote_state.check_slots_are_valid(&vote_state_update, slot_hashes)?;
     vote_state.process_new_vote_state(
-        vote_state_update.lockouts.clone(),
+        vote_state_update.lockouts,
         vote_state_update.root,
         vote_state_update.timestamp,
         clock.epoch,

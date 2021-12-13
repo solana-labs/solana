@@ -5,7 +5,7 @@ extern crate test;
 use {
     rand::{thread_rng, Rng},
     solana_runtime::{
-        accounts_db::AccountInfo,
+        account_info::AccountInfo,
         accounts_index::{
             AccountSecondaryIndexes, AccountsIndex, ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS,
         },

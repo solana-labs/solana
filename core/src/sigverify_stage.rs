@@ -9,9 +9,9 @@ use {
     crate::sigverify,
     crossbeam_channel::{SendError, Sender as CrossbeamSender},
     solana_measure::measure::Measure,
-    solana_perf::packet::Packets,
+    solana_perf::packet::PacketBatch,
     solana_sdk::timing,
-    solana_streamer::streamer::{self, PacketReceiver, StreamerError},
+    solana_streamer::streamer::{self, PacketBatchReceiver, StreamerError},
     std::{
         collections::HashMap,
         sync::mpsc::{Receiver, RecvTimeoutError},
@@ -26,7 +26,7 @@ const MAX_SIGVERIFY_BATCH: usize = 10_000;
 #[derive(Error, Debug)]
 pub enum SigVerifyServiceError {
     #[error("send packets batch error")]
-    Send(#[from] SendError<Vec<Packets>>),
+    Send(#[from] SendError<Vec<PacketBatch>>),
 
     #[error("streamer error")]
     Streamer(#[from] StreamerError),
@@ -39,7 +39,7 @@ pub struct SigVerifyStage {
 }
 
 pub trait SigVerifier {
-    fn verify_batch(&self, batch: Vec<Packets>) -> Vec<Packets>;
+    fn verify_batches(&self, batches: Vec<PacketBatch>) -> Vec<PacketBatch>;
 }
 
 #[derive(Default, Clone)]
@@ -49,7 +49,7 @@ pub struct DisabledSigVerifier {}
 struct SigVerifierStats {
     recv_batches_us_hist: histogram::Histogram, // time to call recv_batch
     verify_batches_pp_us_hist: histogram::Histogram, // per-packet time to call verify_batch
-    batches_hist: histogram::Histogram,         // number of Packets structures per verify call
+    batches_hist: histogram::Histogram,         // number of packet batches per verify call
     packets_hist: histogram::Histogram,         // number of packets per verify call
     total_batches: usize,
     total_packets: usize,
@@ -122,24 +122,24 @@ impl SigVerifierStats {
 }
 
 impl SigVerifier for DisabledSigVerifier {
-    fn verify_batch(&self, mut batch: Vec<Packets>) -> Vec<Packets> {
-        sigverify::ed25519_verify_disabled(&mut batch);
-        batch
+    fn verify_batches(&self, mut batches: Vec<PacketBatch>) -> Vec<PacketBatch> {
+        sigverify::ed25519_verify_disabled(&mut batches);
+        batches
     }
 }
 
 impl SigVerifyStage {
     #[allow(clippy::new_ret_no_self)]
     pub fn new<T: SigVerifier + 'static + Send + Clone>(
-        packet_receiver: Receiver<Packets>,
-        verified_sender: CrossbeamSender<Vec<Packets>>,
+        packet_receiver: Receiver<PacketBatch>,
+        verified_sender: CrossbeamSender<Vec<PacketBatch>>,
         verifier: T,
     ) -> Self {
         let thread_hdl = Self::verifier_services(packet_receiver, verified_sender, verifier);
         Self { thread_hdl }
     }
 
-    pub fn discard_excess_packets(batches: &mut Vec<Packets>, max_packets: usize) {
+    pub fn discard_excess_packets(batches: &mut Vec<PacketBatch>, max_packets: usize) {
         let mut received_ips = HashMap::new();
         for (batch_index, batch) in batches.iter().enumerate() {
             for (packet_index, packets) in batch.packets.iter().enumerate() {
@@ -169,12 +169,12 @@ impl SigVerifyStage {
     }
 
     fn verifier<T: SigVerifier>(
-        recvr: &PacketReceiver,
-        sendr: &CrossbeamSender<Vec<Packets>>,
+        recvr: &PacketBatchReceiver,
+        sendr: &CrossbeamSender<Vec<PacketBatch>>,
         verifier: &T,
         stats: &mut SigVerifierStats,
     ) -> Result<()> {
-        let (mut batches, num_packets, recv_duration) = streamer::recv_batch(recvr)?;
+        let (mut batches, num_packets, recv_duration) = streamer::recv_packet_batches(recvr)?;
 
         let batches_len = batches.len();
         debug!(
@@ -187,7 +187,7 @@ impl SigVerifyStage {
         }
 
         let mut verify_batch_time = Measure::start("sigverify_batch_time");
-        sendr.send(verifier.verify_batch(batches))?;
+        sendr.send(verifier.verify_batches(batches))?;
         verify_batch_time.stop();
 
         debug!(
@@ -216,8 +216,8 @@ impl SigVerifyStage {
     }
 
     fn verifier_service<T: SigVerifier + 'static + Send + Clone>(
-        packet_receiver: PacketReceiver,
-        verified_sender: CrossbeamSender<Vec<Packets>>,
+        packet_receiver: PacketBatchReceiver,
+        verified_sender: CrossbeamSender<Vec<PacketBatch>>,
         verifier: &T,
     ) -> JoinHandle<()> {
         let verifier = verifier.clone();
@@ -252,8 +252,8 @@ impl SigVerifyStage {
     }
 
     fn verifier_services<T: SigVerifier + 'static + Send + Clone>(
-        packet_receiver: PacketReceiver,
-        verified_sender: CrossbeamSender<Vec<Packets>>,
+        packet_receiver: PacketBatchReceiver,
+        verified_sender: CrossbeamSender<Vec<PacketBatch>>,
         verifier: T,
     ) -> JoinHandle<()> {
         Self::verifier_service(packet_receiver, verified_sender, &verifier)
@@ -268,11 +268,12 @@ impl SigVerifyStage {
 mod tests {
     use {super::*, solana_perf::packet::Packet};
 
-    fn count_non_discard(packets: &[Packets]) -> usize {
-        packets
+    fn count_non_discard(packet_batches: &[PacketBatch]) -> usize {
+        packet_batches
             .iter()
-            .map(|pp| {
-                pp.packets
+            .map(|batch| {
+                batch
+                    .packets
                     .iter()
                     .map(|p| if p.meta.discard { 0 } else { 1 })
                     .sum::<usize>()
@@ -283,14 +284,14 @@ mod tests {
     #[test]
     fn test_packet_discard() {
         solana_logger::setup();
-        let mut p = Packets::default();
-        p.packets.resize(10, Packet::default());
-        p.packets[3].meta.addr = [1u16; 8];
-        let mut packets = vec![p];
+        let mut batch = PacketBatch::default();
+        batch.packets.resize(10, Packet::default());
+        batch.packets[3].meta.addr = [1u16; 8];
+        let mut batches = vec![batch];
         let max = 3;
-        SigVerifyStage::discard_excess_packets(&mut packets, max);
-        assert_eq!(count_non_discard(&packets), max);
-        assert!(!packets[0].packets[0].meta.discard);
-        assert!(!packets[0].packets[3].meta.discard);
+        SigVerifyStage::discard_excess_packets(&mut batches, max);
+        assert_eq!(count_non_discard(&batches), max);
+        assert!(!batches[0].packets[0].meta.discard);
+        assert!(!batches[0].packets[3].meta.discard);
     }
 }

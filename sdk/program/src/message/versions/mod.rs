@@ -2,7 +2,7 @@ use {
     crate::{
         hash::Hash,
         instruction::CompiledInstruction,
-        message::{v0, Message, MessageHeader},
+        message::{legacy::Message as LegacyMessage, MessageHeader},
         pubkey::Pubkey,
         sanitize::{Sanitize, SanitizeError},
         short_vec,
@@ -15,6 +15,8 @@ use {
     std::fmt,
 };
 
+pub mod v0;
+
 /// Bit mask that indicates whether a serialized message is versioned.
 pub const MESSAGE_VERSION_PREFIX: u8 = 0x80;
 
@@ -26,10 +28,10 @@ pub const MESSAGE_VERSION_PREFIX: u8 = 0x80;
 /// which message version is serialized starting from version `0`. If the first
 /// is bit is not set, all bytes are used to encode the legacy `Message`
 /// format.
-#[frozen_abi(digest = "x2F3RG2RhJQWN6L2N3jebvcAvNYFrhE3sKTPJ4sENvL")]
+#[frozen_abi(digest = "G4EAiqmGgBprgf5ePYemLJcoFfx4R7rhC1Weo2FVJ7fn")]
 #[derive(Debug, PartialEq, Eq, Clone, AbiEnumVisitor, AbiExample)]
 pub enum VersionedMessage {
-    Legacy(Message),
+    Legacy(LegacyMessage),
     V0(v0::Message),
 }
 
@@ -98,7 +100,7 @@ impl VersionedMessage {
 
 impl Default for VersionedMessage {
     fn default() -> Self {
-        Self::Legacy(Message::default())
+        Self::Legacy(LegacyMessage::default())
     }
 }
 
@@ -206,7 +208,7 @@ impl<'de> Deserialize<'de> for VersionedMessage {
                                 de::Error::invalid_length(1, &self)
                             })?;
 
-                        Ok(VersionedMessage::Legacy(Message {
+                        Ok(VersionedMessage::Legacy(LegacyMessage {
                             header: MessageHeader {
                                 num_required_signatures,
                                 num_readonly_signed_accounts: message.num_readonly_signed_accounts,
@@ -247,7 +249,7 @@ mod tests {
         super::*,
         crate::{
             instruction::{AccountMeta, Instruction},
-            message::v0::AddressMapIndexes,
+            message::v0::MessageAddressTableLookup,
         },
     };
 
@@ -274,7 +276,7 @@ mod tests {
             ),
         ];
 
-        let mut message = Message::new(&instructions, Some(&id1));
+        let mut message = LegacyMessage::new(&instructions, Some(&id1));
         message.recent_blockhash = Hash::new_unique();
 
         let bytes1 = bincode::serialize(&message).unwrap();
@@ -282,7 +284,7 @@ mod tests {
 
         assert_eq!(bytes1, bytes2);
 
-        let message1: Message = bincode::deserialize(&bytes1).unwrap();
+        let message1: LegacyMessage = bincode::deserialize(&bytes1).unwrap();
         let message2: VersionedMessage = bincode::deserialize(&bytes2).unwrap();
 
         if let VersionedMessage::Legacy(message2) = message2 {
@@ -299,27 +301,27 @@ mod tests {
             header: MessageHeader {
                 num_required_signatures: 1,
                 num_readonly_signed_accounts: 0,
-                num_readonly_unsigned_accounts: 2,
+                num_readonly_unsigned_accounts: 0,
             },
             recent_blockhash: Hash::new_unique(),
             account_keys: vec![
                 Pubkey::new_unique(),
-                Pubkey::new_unique(),
-                Pubkey::new_unique(),
             ],
-            address_map_indexes: vec![
-                AddressMapIndexes {
-                    writable: vec![1],
-                    readonly: vec![0],
+            address_table_lookups: vec![
+                MessageAddressTableLookup {
+                    account_key: Pubkey::new_unique(),
+                    writable_indexes: vec![1],
+                    readonly_indexes: vec![0],
                 },
-                AddressMapIndexes {
-                    writable: vec![0],
-                    readonly: vec![1],
+                MessageAddressTableLookup {
+                    account_key: Pubkey::new_unique(),
+                    writable_indexes: vec![0],
+                    readonly_indexes: vec![1],
                 },
             ],
             instructions: vec![CompiledInstruction {
                 program_id_index: 1,
-                accounts: vec![0],
+                accounts: vec![0, 2, 3, 4],
                 data: vec![],
             }],
         };

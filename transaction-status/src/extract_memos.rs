@@ -76,7 +76,10 @@ mod test {
         solana_sdk::{
             hash::Hash,
             instruction::CompiledInstruction,
-            message::{v0, MappedAddresses, MappedMessage, MessageHeader},
+            message::{
+                v0::{self, LoadedAddresses},
+                MessageHeader,
+            },
         },
     };
 
@@ -125,7 +128,7 @@ mod test {
         let sanitized_message = SanitizedMessage::Legacy(message);
         assert_eq!(sanitized_message.extract_memos(), expected_memos);
 
-        let mapped_message = MappedMessage {
+        let sanitized_message = SanitizedMessage::V0(v0::LoadedMessage {
             message: v0::Message {
                 header: MessageHeader {
                     num_required_signatures: 1,
@@ -136,12 +139,11 @@ mod test {
                 instructions: memo_instructions,
                 ..v0::Message::default()
             },
-            mapped_addresses: MappedAddresses {
+            loaded_addresses: LoadedAddresses {
                 writable: vec![],
                 readonly: vec![spl_memo_id_v1(), another_program_id, spl_memo_id_v3()],
             },
-        };
-        let sanitized_mapped_message = SanitizedMessage::V0(mapped_message);
-        assert_eq!(sanitized_mapped_message.extract_memos(), expected_memos);
+        });
+        assert_eq!(sanitized_message.extract_memos(), expected_memos);
     }
 }

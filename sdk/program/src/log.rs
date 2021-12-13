@@ -21,27 +21,16 @@ macro_rules! info {
 
 /// Print a message to the log
 ///
-/// There are two fast forms:
+/// Fast form:
 /// 1. Single string: `msg!("hi")`
-/// 2. 5 integers: `msg!(1, 2, 3, 4, 5)`
 ///
-/// The third form is more generic and incurs a very large runtime overhead so it should be used
-/// with care:
+/// The generic form incurs a very large runtime overhead so it should be used with care:
 /// 3. Generalized format string: `msg!("Hello {}: 1, 2, {}", "World", 3)`
 ///
 #[macro_export]
 macro_rules! msg {
     ($msg:expr) => {
         $crate::log::sol_log($msg)
-    };
-    ($arg1:expr, $arg2:expr, $arg3:expr, $arg4:expr, $arg5:expr) => {
-        $crate::log::sol_log_64(
-            $arg1 as u64,
-            $arg2 as u64,
-            $arg3 as u64,
-            $arg4 as u64,
-            $arg5 as u64,
-        )
     };
     ($($arg:tt)*) => ($crate::log::sol_log(&format!($($arg)*)));
 }
@@ -108,7 +97,7 @@ pub fn sol_log_data(data: &[&[u8]]) {
 #[allow(dead_code)]
 pub fn sol_log_slice(slice: &[u8]) {
     for (i, s) in slice.iter().enumerate() {
-        msg!(0, 0, 0, i, *s);
+        sol_log_64(0, 0, 0, i as u64, *s as u64);
     }
 }
 
@@ -120,15 +109,15 @@ pub fn sol_log_slice(slice: &[u8]) {
 pub fn sol_log_params(accounts: &[AccountInfo], data: &[u8]) {
     for (i, account) in accounts.iter().enumerate() {
         msg!("AccountInfo");
-        msg!(0, 0, 0, 0, i);
+        sol_log_64(0, 0, 0, 0, i as u64);
         msg!("- Is signer");
-        msg!(0, 0, 0, 0, account.is_signer);
+        sol_log_64(0, 0, 0, 0, account.is_signer as u64);
         msg!("- Key");
         account.key.log();
         msg!("- Lamports");
-        msg!(0, 0, 0, 0, account.lamports());
+        sol_log_64(0, 0, 0, 0, account.lamports());
         msg!("- Account data length");
-        msg!(0, 0, 0, 0, account.data_len());
+        sol_log_64(0, 0, 0, 0, account.data_len() as u64);
         msg!("- Owner");
         account.owner.log();
     }

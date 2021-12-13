@@ -15,6 +15,7 @@ use {
         short_vec,
         signature::{Signature, SignerError},
         signers::Signers,
+        wasm_bindgen,
     },
     serde::Serialize,
     solana_program::{system_instruction::SystemInstruction, system_program},
@@ -38,6 +39,7 @@ pub enum TransactionVerificationMode {
 pub type Result<T> = result::Result<T, TransactionError>;
 
 /// An atomic transaction
+#[wasm_bindgen]
 #[frozen_abi(digest = "FZtncnS1Xk8ghHfKiXE5oGiUbw2wJhmfXQuNgQR3K6Mc")]
 #[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize, AbiExample)]
 pub struct Transaction {
@@ -47,10 +49,12 @@ pub struct Transaction {
     /// [`account_keys`]: Message::account_keys
     ///
     // NOTE: Serialization-related changes must be paired with the direct read at sigverify.
+    #[wasm_bindgen(skip)]
     #[serde(with = "short_vec")]
     pub signatures: Vec<Signature>,
 
     /// The message to sign.
+    #[wasm_bindgen(skip)]
     pub message: Message,
 }
 

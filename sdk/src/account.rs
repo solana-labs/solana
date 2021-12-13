@@ -103,6 +103,7 @@ pub trait WritableAccount: ReadableAccount {
         );
         Ok(())
     }
+    fn data_mut(&mut self) -> &mut Vec<u8>;
     fn data_as_mut_slice(&mut self) -> &mut [u8];
     fn set_owner(&mut self, owner: Pubkey);
     fn copy_into_owner_from_slice(&mut self, source: &[u8]);
@@ -156,6 +157,9 @@ impl WritableAccount for Account {
     fn set_lamports(&mut self, lamports: u64) {
         self.lamports = lamports;
     }
+    fn data_mut(&mut self) -> &mut Vec<u8> {
+        &mut self.data
+    }
     fn data_as_mut_slice(&mut self) -> &mut [u8] {
         &mut self.data
     }
@@ -192,9 +196,11 @@ impl WritableAccount for AccountSharedData {
     fn set_lamports(&mut self, lamports: u64) {
         self.lamports = lamports;
     }
+    fn data_mut(&mut self) -> &mut Vec<u8> {
+        Arc::make_mut(&mut self.data)
+    }
     fn data_as_mut_slice(&mut self) -> &mut [u8] {
-        let data = Arc::make_mut(&mut self.data);
-        &mut data[..]
+        &mut self.data_mut()[..]
     }
     fn set_owner(&mut self, owner: Pubkey) {
         self.owner = owner;

@@ -1032,11 +1032,12 @@ impl Accounts {
         let keys: Vec<_> = txs
             .zip(results)
             .filter_map(|(tx, res)| match res {
-                Err(TransactionError::AccountInUse) => None,
-                Err(TransactionError::SanitizeFailure) => None,
-                Err(TransactionError::AccountLoadedTwice) => None,
-                Err(TransactionError::WouldExceedMaxBlockCostLimit) => None,
-                Err(TransactionError::WouldExceedMaxAccountCostLimit) => None,
+                Err(TransactionError::AccountInUse)
+                | Err(TransactionError::SanitizeFailure)
+                | Err(TransactionError::AccountLoadedTwice)
+                | Err(TransactionError::WouldExceedMaxBlockCostLimit)
+                | Err(TransactionError::WouldExceedMaxAccountCostLimit)
+                | Err(TransactionError::WouldExceedMaxAccountDataCostLimit) => None,
                 _ => Some(tx.get_account_locks(demote_program_write_locks)),
             })
             .collect();

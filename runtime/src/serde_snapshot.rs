@@ -5,7 +5,7 @@ use {
         accounts::Accounts,
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig, AppendVecId,
-            BankHashInfo,
+            AtomicAppendVecId, BankHashInfo, IndexGenerationInfo,
         },
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -334,7 +334,7 @@ fn reconstruct_bank_from_fields<E>(
 where
     E: SerializableStorage + std::marker::Sync,
 {
-    let accounts_db = reconstruct_accountsdb_from_fields(
+    let (accounts_db, reconstructed_accounts_db_info) = reconstruct_accountsdb_from_fields(
         snapshot_accounts_db_fields,
         account_paths,
         unpacked_append_vec_map,
@@ -359,6 +359,7 @@ where
         debug_keys,
         additional_builtins,
         debug_do_not_add_builtins,
+        reconstructed_accounts_db_info.accounts_data_len,
     );
 
     info!("rent_collector: {:?}", bank.rent_collector());
@@ -386,6 +387,12 @@ where
     Ok(())
 }
 
+/// This struct contains side-info while reconstructing the accounts DB from fields.
+#[derive(Debug, Default, Copy, Clone)]
+struct ReconstructedAccountsDbInfo {
+    accounts_data_len: u64,
+}
+
 #[allow(clippy::too_many_arguments)]
 fn reconstruct_accountsdb_from_fields<E>(
     snapshot_accounts_db_fields: SnapshotAccountsDbFields<E>,
@@ -399,7 +406,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-) -> Result<AccountsDb, Error>
+) -> Result<(AccountsDb, ReconstructedAccountsDbInfo), Error>
 where
     E: SerializableStorage + std::marker::Sync,
 {
@@ -430,7 +437,7 @@ where
 
     // Remap the deserialized AppendVec paths to point to correct local paths
     let num_collisions = AtomicUsize::new(0);
-    let next_append_vec_id = AtomicUsize::new(0);
+    let next_append_vec_id = AtomicAppendVecId::new(0);
     let mut measure_remap = Measure::start("remap");
     let mut storage = (0..snapshot_storages.len())
         .into_par_iter()
@@ -536,11 +543,12 @@ where
         })
         .unwrap();
 
-    accounts_db.generate_index(
+    let IndexGenerationInfo { accounts_data_len } = accounts_db.generate_index(
         limit_load_slot_count_from_snapshot,
         verify_index,
         genesis_config,
     );
+
     accounts_db.maybe_add_filler_accounts(&genesis_config.epoch_schedule);
 
     handle.join().unwrap();
@@ -557,5 +565,8 @@ where
         ("accountsdb-notify-at-start-us", measure_notify.as_us(), i64),
     );
 
-    Ok(Arc::try_unwrap(accounts_db).unwrap())
+    Ok((
+        Arc::try_unwrap(accounts_db).unwrap(),
+        ReconstructedAccountsDbInfo { accounts_data_len },
+    ))
 }

@@ -7,7 +7,7 @@ version = "1.10.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
-documentation = "https://docs.rs/solana-validator"
+documentation = "https://docs.rs/solana-accountsdb-plugin-interface"
 
 [dependencies]
 log = "0.4.11"
