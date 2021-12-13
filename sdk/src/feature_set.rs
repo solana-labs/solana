@@ -261,10 +261,6 @@ pub mod spl_token_v3_3_0_release {
     solana_sdk::declare_id!("Ftok2jhqAqxUWEiCVRrfRs9DPppWP8cgTB7NQNKL88mS");
 }
 
-pub mod reject_deployment_of_unresolved_syscalls {
-    solana_sdk::declare_id!("DqniU3MfvdpU3yhmNF1RKeaM5TZQELZuyFGosASRVUoy");
-}
-
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -330,7 +326,6 @@ lazy_static! {
         (requestable_heap_size::id(), "Requestable heap frame size"),
         (add_compute_budget_program::id(), "Add compute_budget_program"),
         (spl_token_v3_3_0_release::id(), "spl-token v3.3.0 release"),
-        (reject_deployment_of_unresolved_syscalls::id(), "Reject deployment of programs with unresolved syscall symbols"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
