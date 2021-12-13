@@ -154,6 +154,7 @@ pub struct ValidatorConfig {
     pub validator_exit: Arc<RwLock<Exit>>,
     pub no_wait_for_vote_to_start_leader: bool,
     pub accounts_shrink_ratio: AccountShrinkThreshold,
+    pub disable_epoch_boundary_optimization: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -212,6 +213,7 @@ impl Default for ValidatorConfig {
             validator_exit: Arc::new(RwLock::new(Exit::default())),
             no_wait_for_vote_to_start_leader: true,
             accounts_shrink_ratio: AccountShrinkThreshold::default(),
+            disable_epoch_boundary_optimization: false,
         }
     }
 }
@@ -808,6 +810,7 @@ impl Validator {
                 rocksdb_max_compaction_jitter: config.rocksdb_compaction_interval,
                 wait_for_vote_to_start_leader,
                 accounts_shrink_ratio: config.accounts_shrink_ratio,
+                disable_epoch_boundary_optimization: config.disable_epoch_boundary_optimization,
             },
             &max_slots,
             &cost_model,
