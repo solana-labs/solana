@@ -399,6 +399,7 @@ pub mod tests {
         solana_runtime::bank::Bank,
         solana_sdk::signature::{Keypair, Signer},
         solana_streamer::socket::SocketAddrSpace,
+        std::sync::atomic::AtomicU64,
         std::sync::atomic::Ordering,
     };
 
@@ -448,6 +449,7 @@ pub mod tests {
         let bank_forks = Arc::new(RwLock::new(bank_forks));
         let tower = Tower::default();
         let accounts_package_channel = channel();
+        let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let tvu = Tvu::new(
             &vote_keypair.pubkey(),
             Arc::new(RwLock::new(vec![Arc::new(vote_keypair)])),
@@ -465,6 +467,7 @@ pub mod tests {
             ledger_signal_receiver,
             &Arc::new(RpcSubscriptions::new_for_tests(
                 &exit,
+                max_complete_transaction_status_slot,
                 bank_forks.clone(),
                 block_commitment_cache.clone(),
                 OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),

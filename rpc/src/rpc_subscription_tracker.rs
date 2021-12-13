@@ -87,13 +87,13 @@ impl SubscriptionParams {
     fn is_commitment_watcher(&self) -> bool {
         let commitment = match self {
             SubscriptionParams::Account(params) => &params.commitment,
+            SubscriptionParams::Block(params) => &params.commitment,
             SubscriptionParams::Logs(params) => &params.commitment,
             SubscriptionParams::Program(params) => &params.commitment,
             SubscriptionParams::Signature(params) => &params.commitment,
-            SubscriptionParams::Slot
-            | SubscriptionParams::Block(_)
+            SubscriptionParams::Root
+            | SubscriptionParams::Slot
             | SubscriptionParams::SlotsUpdates
-            | SubscriptionParams::Root
             | SubscriptionParams::Vote => return false,
         };
         !commitment.is_confirmed()
@@ -102,13 +102,13 @@ impl SubscriptionParams {
     fn is_gossip_watcher(&self) -> bool {
         let commitment = match self {
             SubscriptionParams::Account(params) => &params.commitment,
+            SubscriptionParams::Block(params) => &params.commitment,
             SubscriptionParams::Logs(params) => &params.commitment,
             SubscriptionParams::Program(params) => &params.commitment,
             SubscriptionParams::Signature(params) => &params.commitment,
-            SubscriptionParams::Slot
-            | SubscriptionParams::Block(_)
+            SubscriptionParams::Root
+            | SubscriptionParams::Slot
             | SubscriptionParams::SlotsUpdates
-            | SubscriptionParams::Root
             | SubscriptionParams::Vote => return false,
         };
         commitment.is_confirmed()
@@ -139,6 +139,7 @@ pub struct BlockSubscriptionParams {
     pub encoding: UiTransactionEncoding,
     pub kind: BlockSubscriptionKind,
     pub transaction_details: TransactionDetails,
+    pub show_rewards: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -389,8 +390,6 @@ impl LogsSubscriptionsIndex {
 
 pub struct SubscriptionsTracker {
     logs_subscriptions_index: LogsSubscriptionsIndex,
-    confirmed_block_update_subscriptions: HashMap<SubscriptionId, Arc<SubscriptionInfo>>,
-    rooted_block_update_subscriptions: HashMap<SubscriptionId, Arc<SubscriptionInfo>>,
     by_signature: HashMap<Signature, HashMap<SubscriptionId, Arc<SubscriptionInfo>>>,
     // Accounts, logs, programs, signatures (not gossip)
     commitment_watchers: HashMap<SubscriptionId, Arc<SubscriptionInfo>>,
@@ -410,8 +409,6 @@ impl SubscriptionsTracker {
                 bank_forks,
             },
             by_signature: HashMap::new(),
-            confirmed_block_update_subscriptions: HashMap::new(),
-            rooted_block_update_subscriptions: HashMap::new(),
             commitment_watchers: HashMap::new(),
             gossip_watchers: HashMap::new(),
             node_progress_watchers: HashMap::new(),
@@ -432,15 +429,6 @@ impl SubscriptionsTracker {
             params: params.clone(),
         });
         match &params {
-            SubscriptionParams::Block(params) => {
-                if params.commitment.is_finalized() {
-                    self.rooted_block_update_subscriptions
-                        .insert(info.id, Arc::clone(&info));
-                } else {
-                    self.confirmed_block_update_subscriptions
-                        .insert(info.id, Arc::clone(&info));
-                }
-            }
             SubscriptionParams::Logs(params) => {
                 self.logs_subscriptions_index.add(params);
             }
@@ -482,13 +470,6 @@ impl SubscriptionsTracker {
                     warn!("Subscriptions inconsistency (missing entry in by_signature)");
                 }
             }
-            SubscriptionParams::Block(params) => {
-                if params.commitment.is_finalized() {
-                    self.rooted_block_update_subscriptions.remove(&id);
-                } else {
-                    self.confirmed_block_update_subscriptions.remove(&id);
-                }
-            }
             _ => {}
         }
         if params.is_commitment_watcher() {
@@ -506,18 +487,6 @@ impl SubscriptionsTracker {
                 warn!("Subscriptions inconsistency (missing entry in node_progress_watchers)");
             }
         }
-    }
-
-    pub fn confirmed_block_update_subscriptions(
-        &self,
-    ) -> &HashMap<SubscriptionId, Arc<SubscriptionInfo>> {
-        &self.confirmed_block_update_subscriptions
-    }
-
-    pub fn rooted_block_update_subscriptions(
-        &self,
-    ) -> &HashMap<SubscriptionId, Arc<SubscriptionInfo>> {
-        &self.rooted_block_update_subscriptions
     }
 
     pub fn by_signature(

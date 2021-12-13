@@ -33,6 +33,7 @@ pub const DEFAULT_WORKER_THREADS: usize = 1;
 
 #[derive(Debug, Clone)]
 pub struct PubSubConfig {
+    pub enable_block_subscription: bool,
     pub enable_vote_subscription: bool,
     pub max_active_subscriptions: usize,
     pub queue_capacity_items: usize,
@@ -44,6 +45,7 @@ pub struct PubSubConfig {
 impl Default for PubSubConfig {
     fn default() -> Self {
         Self {
+            enable_block_subscription: false,
             enable_vote_subscription: false,
             max_active_subscriptions: MAX_ACTIVE_SUBSCRIPTIONS,
             queue_capacity_items: DEFAULT_QUEUE_CAPACITY_ITEMS,
@@ -57,6 +59,7 @@ impl Default for PubSubConfig {
 impl PubSubConfig {
     pub fn default_for_tests() -> Self {
         Self {
+            enable_block_subscription: false,
             enable_vote_subscription: false,
             max_active_subscriptions: MAX_ACTIVE_SUBSCRIPTIONS,
             queue_capacity_items: DEFAULT_TEST_QUEUE_CAPACITY_ITEMS,
@@ -233,6 +236,7 @@ pub fn test_connection(
 
     let rpc_impl = RpcSolPubSubImpl::new(
         PubSubConfig {
+            enable_block_subscription: true,
             enable_vote_subscription: true,
             queue_capacity_items: 100,
             ..PubSubConfig::default()
@@ -386,7 +390,10 @@ mod tests {
         },
         std::{
             net::{IpAddr, Ipv4Addr},
-            sync::{atomic::AtomicBool, RwLock},
+            sync::{
+                atomic::{AtomicBool, AtomicU64},
+                RwLock,
+            },
         },
     };
 
@@ -394,6 +401,7 @@ mod tests {
     fn test_pubsub_new() {
         let pubsub_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
         let exit = Arc::new(AtomicBool::new(false));
+        let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
@@ -401,6 +409,7 @@ mod tests {
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
+            max_complete_transaction_status_slot,
             bank_forks,
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
             optimistically_confirmed_bank,
