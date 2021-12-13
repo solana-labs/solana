@@ -2721,16 +2721,9 @@ impl<'a> SyscallObject<BpfError> for SyscallLogData<'a> {
         );
 
         question_mark!(
-            invoke_context.get_compute_meter().consume(
-                budget
-                    .syscall_base_cost
-                    .saturating_mul(untranslated_fields.len() as u64)
-                    .saturating_add(
-                        untranslated_fields
-                            .iter()
-                            .fold(0, |total, e| total.saturating_add(e.len() as u64))
-                    )
-            ),
+            invoke_context
+                .get_compute_meter()
+                .consume(untranslated_fields.iter().map(|e| e.len() as u64).sum()),
             result
         );
 
