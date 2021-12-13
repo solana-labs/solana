@@ -248,10 +248,9 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
     }
 }
 
-pub enum AccountIndexGetResult<'a, T: IndexValue> {
+pub enum AccountIndexGetResult<T: IndexValue> {
     Found(ReadAccountMapEntry<T>, usize),
-    NotFoundOnFork,
-    Missing(AccountMapsReadLock<'a, T>),
+    NotFound,
 }
 
 #[self_referencing]
@@ -1523,7 +1522,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         pubkey: &Pubkey,
         ancestors: Option<&Ancestors>,
         max_root: Option<Slot>,
-    ) -> AccountIndexGetResult<'_, T> {
+    ) -> AccountIndexGetResult<T> {
         let read_lock = self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)]
             .read()
             .unwrap();
@@ -1538,10 +1537,10 @@ impl<T: IndexValue> AccountsIndex<T> {
                 let found_index = self.latest_slot(ancestors, slot_list, max_root);
                 match found_index {
                     Some(found_index) => AccountIndexGetResult::Found(locked_entry, found_index),
-                    None => AccountIndexGetResult::NotFoundOnFork,
+                    None => AccountIndexGetResult::NotFound,
                 }
             }
-            None => AccountIndexGetResult::Missing(read_lock),
+            None => AccountIndexGetResult::NotFound,
         }
     }
 
@@ -2029,7 +2028,7 @@ pub mod tests {
         }
     }
 
-    impl<'a, T: IndexValue> AccountIndexGetResult<'a, T> {
+    impl<T: IndexValue> AccountIndexGetResult<T> {
         pub fn unwrap(self) -> (ReadAccountMapEntry<T>, usize) {
             match self {
                 AccountIndexGetResult::Found(lock, size) => (lock, size),
