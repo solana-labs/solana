@@ -699,7 +699,6 @@ uint64_t entrypoint(const uint8_t *input);
  * Stub functions when building tests
  */
 #include <stdio.h>
-#include <stdlib.h>
 void sol_log_(const char *s, uint64_t len) {
   printf("Program log: %s\n", s);
 }
