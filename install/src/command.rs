@@ -859,54 +859,39 @@ fn check_for_newer_github_release(
     version_filter: Option<semver::VersionReq>,
     prerelease_allowed: bool,
 ) -> reqwest::Result<Option<String>> {
-    let mut page = 1;
-    const PER_PAGE: usize = 100;
+    let url =
+        reqwest::Url::parse("https://api.github.com/repos/solana-labs/solana/releases").unwrap();
     let client = reqwest::blocking::Client::builder()
         .user_agent("solana-install")
         .build()?;
-    let mut all_releases = vec![];
-    let mut releases = vec![];
+    let request = client.get(url).build()?;
+    let response = client.execute(request)?;
 
-    while page == 1 || releases.len() == PER_PAGE {
-        let url = reqwest::Url::parse_with_params(
-            "https://api.github.com/repos/solana-labs/solana/releases",
-            &[
-                ("per_page", &format!("{}", PER_PAGE)),
-                ("page", &format!("{}", page)),
-            ],
-        )
-        .unwrap();
-        let request = client.get(url).build()?;
-        let response = client.execute(request)?;
-
-        releases = response
-            .json::<GithubReleases>()?
-            .0
-            .into_iter()
-            .filter_map(
-                |GithubRelease {
-                     tag_name,
-                     prerelease,
-                 }| {
-                    if let Ok(version) = semver_of(&tag_name) {
-                        if (prerelease_allowed || !prerelease)
-                            && version_filter
-                                .as_ref()
-                                .map_or(true, |version_filter| version_filter.matches(&version))
-                        {
-                            return Some(version);
-                        }
+    let mut releases = response
+        .json::<GithubReleases>()?
+        .0
+        .into_iter()
+        .filter_map(
+            |GithubRelease {
+                 tag_name,
+                 prerelease,
+             }| {
+                if let Ok(version) = semver_of(&tag_name) {
+                    if (prerelease_allowed || !prerelease)
+                        && version_filter
+                            .as_ref()
+                            .map_or(true, |version_filter| version_filter.matches(&version))
+                    {
+                        return Some(version);
                     }
-                    None
-                },
-            )
-            .collect::<Vec<_>>();
-        all_releases.extend_from_slice(&releases);
-        page += 1;
-    }
+                }
+                None
+            },
+        )
+        .collect::<Vec<_>>();
 
-    all_releases.sort();
-    Ok(all_releases.pop().map(|r| r.to_string()))
+    releases.sort();
+    Ok(releases.pop().map(|r| r.to_string()))
 }
 
 pub enum SemverUpdateType {
