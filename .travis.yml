@@ -29,7 +29,6 @@ jobs:
       if: type IN (api, cron) OR tag IS present
       name: "macOS release artifacts"
       os: osx
-      osx_image: xcode12
       language: rust
       rust:
         - stable
