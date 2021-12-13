@@ -17,10 +17,8 @@ pub mod validator_info;
 use {
     crate::parse_account_data::{parse_account_data, AccountAdditionalData, ParsedAccount},
     solana_sdk::{
-        account::{ReadableAccount, WritableAccount},
-        clock::Epoch,
-        fee_calculator::FeeCalculator,
-        pubkey::Pubkey,
+        account::ReadableAccount, account::WritableAccount, clock::Epoch,
+        fee_calculator::FeeCalculator, pubkey::Pubkey,
     },
     std::{
         io::{Read, Write},
@@ -204,10 +202,8 @@ fn slice_data(data: &[u8], data_slice_config: Option<UiDataSliceConfig>) -> &[u8
 
 #[cfg(test)]
 mod test {
-    use {
-        super::*,
-        solana_sdk::account::{Account, AccountSharedData},
-    };
+    use super::*;
+    use solana_sdk::account::{Account, AccountSharedData};
 
     #[test]
     fn test_slice_data() {

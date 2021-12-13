@@ -1,12 +1,10 @@
-use {
-    crate::{cluster_info_vote_listener::VerifiedLabelVotePacketsReceiver, result::Result},
-    solana_gossip::crds_value::CrdsValueLabel,
-    solana_perf::packet::Packets,
-    solana_sdk::clock::Slot,
-    std::{
-        collections::{hash_map::Entry, HashMap},
-        time::Duration,
-    },
+use crate::{cluster_info_vote_listener::VerifiedLabelVotePacketsReceiver, result::Result};
+use solana_gossip::crds_value::CrdsValueLabel;
+use solana_perf::packet::Packets;
+use solana_sdk::clock::Slot;
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    time::Duration,
 };
 
 #[derive(Default)]
@@ -76,12 +74,10 @@ impl VerifiedVotePackets {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        crate::result::Error,
-        crossbeam_channel::{unbounded, RecvTimeoutError},
-        solana_perf::packet::{Meta, Packet},
-    };
+    use super::*;
+    use crate::result::Error;
+    use crossbeam_channel::{unbounded, RecvTimeoutError};
+    use solana_perf::packet::{Meta, Packet};
 
     #[test]
     fn test_get_latest_votes() {

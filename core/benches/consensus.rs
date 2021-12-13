@@ -3,17 +3,16 @@
 extern crate solana_core;
 extern crate test;
 
-use {
-    solana_core::consensus::Tower,
-    solana_runtime::{bank::Bank, bank_forks::BankForks},
-    solana_sdk::{
-        pubkey::Pubkey,
-        signature::{Keypair, Signer},
-    },
-    std::sync::Arc,
-    tempfile::TempDir,
-    test::Bencher,
+use solana_core::consensus::Tower;
+use solana_runtime::bank::Bank;
+use solana_runtime::bank_forks::BankForks;
+use solana_sdk::{
+    pubkey::Pubkey,
+    signature::{Keypair, Signer},
 };
+use std::sync::Arc;
+use tempfile::TempDir;
+use test::Bencher;
 
 #[bench]
 fn bench_save_tower(bench: &mut Bencher) {

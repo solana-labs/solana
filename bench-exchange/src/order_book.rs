@@ -1,13 +1,11 @@
-use {
-    itertools::{
-        EitherOrBoth::{Both, Left, Right},
-        Itertools,
-    },
-    log::*,
-    solana_exchange_program::exchange_state::*,
-    solana_sdk::pubkey::Pubkey,
-    std::{cmp::Ordering, collections::BinaryHeap, error, fmt},
-};
+use itertools::EitherOrBoth::{Both, Left, Right};
+use itertools::Itertools;
+use log::*;
+use solana_exchange_program::exchange_state::*;
+use solana_sdk::pubkey::Pubkey;
+use std::cmp::Ordering;
+use std::collections::BinaryHeap;
+use std::{error, fmt};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ToOrder {

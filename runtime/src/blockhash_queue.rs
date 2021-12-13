@@ -1,10 +1,8 @@
-use {
-    serde::{Deserialize, Serialize},
-    solana_sdk::{
-        fee_calculator::FeeCalculator, hash::Hash, sysvar::recent_blockhashes, timing::timestamp,
-    },
-    std::collections::HashMap,
+use serde::{Deserialize, Serialize};
+use solana_sdk::{
+    fee_calculator::FeeCalculator, hash::Hash, sysvar::recent_blockhashes, timing::timestamp,
 };
+use std::collections::HashMap;
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, AbiExample)]
 struct HashAge {
@@ -135,12 +133,10 @@ impl BlockhashQueue {
 }
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        bincode::serialize,
-        solana_sdk::{
-            clock::MAX_RECENT_BLOCKHASHES, hash::hash, sysvar::recent_blockhashes::IterItem,
-        },
+    use super::*;
+    use bincode::serialize;
+    use solana_sdk::{
+        clock::MAX_RECENT_BLOCKHASHES, hash::hash, sysvar::recent_blockhashes::IterItem,
     };
 
     #[test]

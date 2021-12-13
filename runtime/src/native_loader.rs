@@ -3,28 +3,26 @@
 use libloading::os::unix::*;
 #[cfg(windows)]
 use libloading::os::windows::*;
-use {
-    log::*,
-    num_derive::{FromPrimitive, ToPrimitive},
-    solana_sdk::{
-        account::ReadableAccount,
-        decode_error::DecodeError,
-        entrypoint_native::ProgramEntrypoint,
-        instruction::InstructionError,
-        keyed_account::keyed_account_at_index,
-        native_loader,
-        process_instruction::{InvokeContext, LoaderEntrypoint},
-        pubkey::Pubkey,
-    },
-    std::{
-        collections::HashMap,
-        env,
-        path::{Path, PathBuf},
-        str,
-        sync::RwLock,
-    },
-    thiserror::Error,
+use log::*;
+use num_derive::{FromPrimitive, ToPrimitive};
+use solana_sdk::{
+    account::ReadableAccount,
+    decode_error::DecodeError,
+    entrypoint_native::ProgramEntrypoint,
+    instruction::InstructionError,
+    keyed_account::keyed_account_at_index,
+    native_loader,
+    process_instruction::{InvokeContext, LoaderEntrypoint},
+    pubkey::Pubkey,
 };
+use std::{
+    collections::HashMap,
+    env,
+    path::{Path, PathBuf},
+    str,
+    sync::RwLock,
+};
+use thiserror::Error;
 
 #[derive(Error, Debug, Serialize, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum NativeLoaderError {

@@ -2,10 +2,8 @@
 //!
 //! this account carries the Bank's most recent bank hashes for some N parents
 //!
-use {
-    crate::hash::Hash,
-    std::{iter::FromIterator, ops::Deref},
-};
+use crate::hash::Hash;
+use std::{iter::FromIterator, ops::Deref};
 
 pub const MAX_ENTRIES: usize = 512; // about 2.5 minutes to get your vote in
 
@@ -53,7 +51,8 @@ impl Deref for SlotHashes {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, crate::hash::hash};
+    use super::*;
+    use crate::hash::hash;
 
     #[test]
     fn test() {

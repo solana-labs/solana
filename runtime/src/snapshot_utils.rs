@@ -23,7 +23,8 @@ use {
     solana_measure::measure::Measure,
     solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash, pubkey::Pubkey},
     std::{
-        cmp::{max, Ordering},
+        cmp::max,
+        cmp::Ordering,
         collections::HashSet,
         fmt,
         fs::{self, File},
@@ -1112,12 +1113,10 @@ pub fn process_accounts_package_pre(
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        assert_matches::assert_matches,
-        bincode::{deserialize_from, serialize_into},
-        std::mem::size_of,
-    };
+    use super::*;
+    use assert_matches::assert_matches;
+    use bincode::{deserialize_from, serialize_into};
+    use std::mem::size_of;
 
     #[test]
     fn test_serialize_snapshot_data_file_under_limit() {

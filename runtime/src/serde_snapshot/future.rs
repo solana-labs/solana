@@ -1,11 +1,9 @@
+use super::common::UnusedAccounts;
 #[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
 use solana_frozen_abi::abi_example::IgnoreAsHelper;
-use {
-    super::{common::UnusedAccounts, *},
-    crate::ancestors::AncestorsForSerialization,
-    solana_measure::measure::Measure,
-    std::cell::RefCell,
-};
+use {super::*, solana_measure::measure::Measure, std::cell::RefCell};
+
+use crate::ancestors::AncestorsForSerialization;
 
 type AccountsDbFields = super::AccountsDbFields<SerializableAccountStorageEntry>;
 

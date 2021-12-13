@@ -105,10 +105,8 @@ pub fn get_instruction_relative(
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        crate::{instruction::AccountMeta, message::Message, pubkey::Pubkey},
-    };
+    use super::*;
+    use crate::{instruction::AccountMeta, message::Message, pubkey::Pubkey};
 
     #[test]
     fn test_load_store_instruction() {

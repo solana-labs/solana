@@ -154,7 +154,8 @@ fn extract_release_archive(
     archive: &Path,
     extract_dir: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use {bzip2::bufread::BzDecoder, tar::Archive};
+    use bzip2::bufread::BzDecoder;
+    use tar::Archive;
 
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message(&format!("{}Extracting...", PACKAGE));
@@ -307,7 +308,8 @@ fn check_env_path_for_bin_dir(config: &Config) {
 /// Encodes a UTF-8 string as a null-terminated UCS-2 string in bytes
 #[cfg(windows)]
 pub fn string_to_winreg_bytes(s: &str) -> Vec<u8> {
-    use std::{ffi::OsString, os::windows::ffi::OsStrExt};
+    use std::ffi::OsString;
+    use std::os::windows::ffi::OsStrExt;
     let v: Vec<_> = OsString::from(format!("{}\x00", s)).encode_wide().collect();
     unsafe { std::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * 2).to_vec() }
 }
@@ -318,7 +320,8 @@ pub fn string_to_winreg_bytes(s: &str) -> Vec<u8> {
 // conversion.
 #[cfg(windows)]
 pub fn string_from_winreg_value(val: &winreg::RegValue) -> Option<String> {
-    use {std::slice, winreg::enums::RegType};
+    use std::slice;
+    use winreg::enums::RegType;
 
     match val.vtype {
         RegType::REG_SZ | RegType::REG_EXPAND_SZ => {
@@ -344,10 +347,8 @@ pub fn string_from_winreg_value(val: &winreg::RegValue) -> Option<String> {
 // should not mess with it.
 #[cfg(windows)]
 fn get_windows_path_var() -> Result<Option<String>, String> {
-    use winreg::{
-        enums::{HKEY_CURRENT_USER, KEY_READ, KEY_WRITE},
-        RegKey,
-    };
+    use winreg::enums::{HKEY_CURRENT_USER, KEY_READ, KEY_WRITE};
+    use winreg::RegKey;
 
     let root = RegKey::predef(HKEY_CURRENT_USER);
     let environment = root
@@ -371,19 +372,13 @@ fn get_windows_path_var() -> Result<Option<String>, String> {
 
 #[cfg(windows)]
 fn add_to_path(new_path: &str) -> bool {
-    use {
-        std::ptr,
-        winapi::{
-            shared::minwindef::*,
-            um::winuser::{
-                SendMessageTimeoutA, HWND_BROADCAST, SMTO_ABORTIFHUNG, WM_SETTINGCHANGE,
-            },
-        },
-        winreg::{
-            enums::{RegType, HKEY_CURRENT_USER, KEY_READ, KEY_WRITE},
-            RegKey, RegValue,
-        },
+    use std::ptr;
+    use winapi::shared::minwindef::*;
+    use winapi::um::winuser::{
+        SendMessageTimeoutA, HWND_BROADCAST, SMTO_ABORTIFHUNG, WM_SETTINGCHANGE,
     };
+    use winreg::enums::{RegType, HKEY_CURRENT_USER, KEY_READ, KEY_WRITE};
+    use winreg::{RegKey, RegValue};
 
     let old_path = if let Some(s) =
         get_windows_path_var().unwrap_or_else(|err| panic!("Unable to get PATH: {}", err))

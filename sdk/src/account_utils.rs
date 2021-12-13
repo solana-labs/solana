@@ -1,12 +1,7 @@
 //! useful extras for Account state
-use {
-    crate::{
-        account::{Account, AccountSharedData},
-        instruction::InstructionError,
-    },
-    bincode::ErrorKind,
-    std::cell::Ref,
-};
+use crate::{account::Account, account::AccountSharedData, instruction::InstructionError};
+use bincode::ErrorKind;
+use std::cell::Ref;
 
 /// Convenience trait to covert bincode errors to instruction errors.
 pub trait StateMut<T> {
@@ -65,10 +60,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        crate::{account::AccountSharedData, pubkey::Pubkey},
-    };
+    use super::*;
+    use crate::{account::AccountSharedData, pubkey::Pubkey};
 
     #[test]
     fn test_account_state() {

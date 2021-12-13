@@ -2,31 +2,29 @@
 //
 // This can be expensive since we have to walk the append vecs being cleaned up.
 
-use {
-    crate::{
-        bank::{Bank, BankSlotDelta, DropCallback},
-        bank_forks::{BankForks, SnapshotConfig},
-        snapshot_package::AccountsPackageSender,
-        snapshot_utils,
+use crate::{
+    bank::{Bank, BankSlotDelta, DropCallback},
+    bank_forks::{BankForks, SnapshotConfig},
+    snapshot_package::AccountsPackageSender,
+    snapshot_utils,
+};
+use crossbeam_channel::{Receiver, SendError, Sender};
+use log::*;
+use rand::{thread_rng, Rng};
+use solana_measure::measure::Measure;
+use solana_sdk::{
+    clock::{BankId, Slot},
+    hash::Hash,
+};
+use std::{
+    boxed::Box,
+    fmt::{Debug, Formatter},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, RwLock,
     },
-    crossbeam_channel::{Receiver, SendError, Sender},
-    log::*,
-    rand::{thread_rng, Rng},
-    solana_measure::measure::Measure,
-    solana_sdk::{
-        clock::{BankId, Slot},
-        hash::Hash,
-    },
-    std::{
-        boxed::Box,
-        fmt::{Debug, Formatter},
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            Arc, RwLock,
-        },
-        thread::{self, sleep, Builder, JoinHandle},
-        time::{Duration, Instant},
-    },
+    thread::{self, sleep, Builder, JoinHandle},
+    time::{Duration, Instant},
 };
 
 const INTERVAL_MS: u64 = 100;
@@ -457,12 +455,10 @@ impl AccountsBackgroundService {
 
 #[cfg(test)]
 mod test {
-    use {
-        super::*,
-        crate::genesis_utils::create_genesis_config,
-        crossbeam_channel::unbounded,
-        solana_sdk::{account::AccountSharedData, pubkey::Pubkey},
-    };
+    use super::*;
+    use crate::genesis_utils::create_genesis_config;
+    use crossbeam_channel::unbounded;
+    use solana_sdk::{account::AccountSharedData, pubkey::Pubkey};
 
     #[test]
     fn test_accounts_background_service_remove_dead_slots() {

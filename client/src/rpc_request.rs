@@ -241,11 +241,9 @@ pub enum TokenAccountsFilter {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        crate::rpc_config::RpcTokenAccountsFilter,
-        solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel},
-    };
+    use super::*;
+    use crate::rpc_config::RpcTokenAccountsFilter;
+    use solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
 
     #[test]
     fn test_build_request_json() {

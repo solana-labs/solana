@@ -1,14 +1,12 @@
 #![feature(test)]
 
 extern crate test;
-use {
-    solana_sdk::{
-        account::{create_account_for_test, from_account},
-        hash::Hash,
-        slot_hashes::{Slot, SlotHashes, MAX_ENTRIES},
-    },
-    test::Bencher,
+use solana_sdk::{
+    account::{create_account_for_test, from_account},
+    hash::Hash,
+    slot_hashes::{Slot, SlotHashes, MAX_ENTRIES},
 };
+use test::Bencher;
 
 #[bench]
 fn bench_to_from_account(b: &mut Bencher) {

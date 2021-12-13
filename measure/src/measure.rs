@@ -1,7 +1,5 @@
-use {
-    solana_sdk::timing::duration_as_ns,
-    std::{fmt, time::Instant},
-};
+use solana_sdk::timing::duration_as_ns;
+use std::{fmt, time::Instant};
 
 pub struct Measure {
     name: &'static str,
@@ -92,10 +90,9 @@ impl fmt::Display for Measure {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        std::{thread::sleep, time::Duration},
-    };
+    use super::*;
+    use std::thread::sleep;
+    use std::time::Duration;
 
     #[test]
     fn test_measure() {

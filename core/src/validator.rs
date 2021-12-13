@@ -45,6 +45,7 @@ use {
         poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
         poh_service::{self, PohService},
     },
+    solana_rpc::send_transaction_service,
     solana_rpc::{
         max_slots::MaxSlots,
         optimistically_confirmed_bank_tracker::{
@@ -55,7 +56,6 @@ use {
         rpc_pubsub_service::{PubSubConfig, PubSubService},
         rpc_service::JsonRpcService,
         rpc_subscriptions::RpcSubscriptions,
-        send_transaction_service,
         transaction_status_service::TransactionStatusService,
     },
     solana_runtime::{
@@ -1640,12 +1640,11 @@ pub fn is_snapshot_config_invalid(
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
-        solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
-        std::fs::remove_dir_all,
-    };
+    use super::*;
+    use solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader};
+    use solana_sdk::genesis_config::create_genesis_config;
+    use solana_sdk::poh_config::PohConfig;
+    use std::fs::remove_dir_all;
 
     #[test]
     fn validator_exit() {
@@ -1690,7 +1689,8 @@ mod tests {
     fn test_backup_and_clear_blockstore() {
         use std::time::Instant;
         solana_logger::setup();
-        use solana_ledger::{blockstore, entry, get_tmp_ledger_path};
+        use solana_ledger::get_tmp_ledger_path;
+        use solana_ledger::{blockstore, entry};
         let blockstore_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();

@@ -1,10 +1,8 @@
-use {
-    solana_runtime::{
-        bank::{Builtin, Builtins},
-        builtins::ActivationType,
-    },
-    solana_sdk::{feature_set, pubkey::Pubkey},
+use solana_runtime::{
+    bank::{Builtin, Builtins},
+    builtins::ActivationType,
 };
+use solana_sdk::{feature_set, pubkey::Pubkey};
 
 macro_rules! to_builtin {
     ($b:expr) => {

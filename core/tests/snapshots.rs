@@ -35,45 +35,44 @@ macro_rules! DEFINE_SNAPSHOT_VERSION_PARAMETERIZED_TEST_FUNCTIONS {
 
 #[cfg(test)]
 mod tests {
-    use {
-        bincode::serialize_into,
-        crossbeam_channel::unbounded,
-        fs_extra::dir::CopyOptions,
-        itertools::Itertools,
-        solana_core::snapshot_packager_service::{PendingSnapshotPackage, SnapshotPackagerService},
-        solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
-        solana_runtime::{
-            accounts_background_service::{AbsRequestSender, SnapshotRequestHandler},
-            accounts_db,
-            accounts_index::AccountSecondaryIndexes,
-            bank::{Bank, BankSlotDelta},
-            bank_forks::{ArchiveFormat, BankForks, SnapshotConfig},
-            genesis_utils::{create_genesis_config, GenesisConfigInfo},
-            snapshot_utils::{self, SnapshotVersion, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
-            status_cache::MAX_CACHE_ENTRIES,
-        },
-        solana_sdk::{
-            clock::Slot,
-            genesis_config::{ClusterType, GenesisConfig},
-            hash::hashv,
-            pubkey::Pubkey,
-            signature::{Keypair, Signer},
-            system_transaction,
-        },
-        solana_streamer::socket::SocketAddrSpace,
-        std::{
-            collections::HashSet,
-            fs,
-            path::PathBuf,
-            sync::{
-                atomic::{AtomicBool, Ordering},
-                mpsc::channel,
-                Arc,
-            },
-            time::Duration,
-        },
-        tempfile::TempDir,
+    use bincode::serialize_into;
+    use crossbeam_channel::unbounded;
+    use fs_extra::dir::CopyOptions;
+    use itertools::Itertools;
+    use solana_core::snapshot_packager_service::{PendingSnapshotPackage, SnapshotPackagerService};
+    use solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo};
+    use solana_runtime::{
+        accounts_background_service::{AbsRequestSender, SnapshotRequestHandler},
+        accounts_db,
+        accounts_index::AccountSecondaryIndexes,
+        bank::{Bank, BankSlotDelta},
+        bank_forks::{ArchiveFormat, BankForks, SnapshotConfig},
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        snapshot_utils,
+        snapshot_utils::{SnapshotVersion, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
+        status_cache::MAX_CACHE_ENTRIES,
     };
+    use solana_sdk::{
+        clock::Slot,
+        genesis_config::{ClusterType, GenesisConfig},
+        hash::hashv,
+        pubkey::Pubkey,
+        signature::{Keypair, Signer},
+        system_transaction,
+    };
+    use solana_streamer::socket::SocketAddrSpace;
+    use std::{
+        collections::HashSet,
+        fs,
+        path::PathBuf,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            mpsc::channel,
+            Arc,
+        },
+        time::Duration,
+    };
+    use tempfile::TempDir;
 
     DEFINE_SNAPSHOT_VERSION_PARAMETERIZED_TEST_FUNCTIONS!(V1_2_0, Development, V1_2_0_Development);
     DEFINE_SNAPSHOT_VERSION_PARAMETERIZED_TEST_FUNCTIONS!(V1_2_0, Devnet, V1_2_0_Devnet);

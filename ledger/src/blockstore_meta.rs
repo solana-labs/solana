@@ -1,9 +1,7 @@
-use {
-    crate::erasure::ErasureConfig,
-    serde::{Deserialize, Serialize},
-    solana_sdk::{clock::Slot, hash::Hash},
-    std::{collections::BTreeSet, ops::RangeBounds},
-};
+use crate::erasure::ErasureConfig;
+use serde::{Deserialize, Serialize};
+use solana_sdk::{clock::Slot, hash::Hash};
+use std::{collections::BTreeSet, ops::RangeBounds};
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 // The Meta column family
@@ -289,11 +287,9 @@ pub struct ProgramCost {
 
 #[cfg(test)]
 mod test {
-    use {
-        super::*,
-        rand::{seq::SliceRandom, thread_rng},
-        std::iter::repeat,
-    };
+    use super::*;
+    use rand::{seq::SliceRandom, thread_rng};
+    use std::iter::repeat;
 
     #[test]
     fn test_erasure_meta_status() {

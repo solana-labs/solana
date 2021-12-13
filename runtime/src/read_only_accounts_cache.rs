@@ -1,21 +1,20 @@
 //! ReadOnlyAccountsCache used to store accounts, such as executable accounts,
 //! which can be large, loaded many times, and rarely change.
+use dashmap::{mapref::entry::Entry, DashMap};
 //use mapref::entry::{Entry, OccupiedEntry, VacantEntry};
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
     clock::Slot,
     pubkey::Pubkey,
 };
-use {
-    dashmap::{mapref::entry::Entry, DashMap},
-    std::{
-        sync::{
-            atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
-            Arc, RwLock,
-        },
-        thread::{sleep, Builder, JoinHandle},
-        time::{Duration, Instant},
+use std::thread::{sleep, Builder, JoinHandle};
+use std::time::Duration;
+use std::{
+    sync::{
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+        Arc, RwLock,
     },
+    time::Instant,
 };
 
 type ReadOnlyCacheKey = (Pubkey, Slot);
@@ -241,10 +240,8 @@ impl ReadOnlyAccountsCache {
 
 #[cfg(test)]
 pub mod tests {
-    use {
-        super::*,
-        solana_sdk::account::{accounts_equal, Account, WritableAccount},
-    };
+    use super::*;
+    use solana_sdk::account::{accounts_equal, Account, WritableAccount};
     #[test]
     fn test_accountsdb_sizeof() {
         // size_of(arc(x)) does not return the size of x

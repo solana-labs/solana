@@ -1,12 +1,10 @@
-use {
-    lazy_static::lazy_static,
-    solana_sdk::{
-        clock::Slot,
-        hash::{Hash, Hasher},
-        pubkey::Pubkey,
-    },
-    std::collections::{HashMap, HashSet},
+use lazy_static::lazy_static;
+use solana_sdk::{
+    clock::Slot,
+    hash::{Hash, Hasher},
+    pubkey::Pubkey,
 };
+use std::collections::{HashMap, HashSet};
 
 pub mod instructions_sysvar_enabled {
     solana_sdk::declare_id!("EnvhHCLvg55P7PDtbvR1NwuTuAeodqpusV3MR5QEK8gs");

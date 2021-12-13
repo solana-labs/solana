@@ -2,10 +2,9 @@
 
 extern crate test;
 
-use {
-    solana_perf::{packet::PacketsRecycler, recycler::Recycler},
-    test::Bencher,
-};
+use solana_perf::{packet::PacketsRecycler, recycler::Recycler};
+
+use test::Bencher;
 
 #[bench]
 fn bench_recycler(bencher: &mut Bencher) {

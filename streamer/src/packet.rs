@@ -1,19 +1,16 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
-use {
-    crate::{
-        recvmmsg::{recv_mmsg, NUM_RCVMMSGS},
-        socket::SocketAddrSpace,
-    },
-    solana_metrics::inc_new_counter_debug,
-    std::{io::Result, net::UdpSocket, time::Instant},
+use crate::{
+    recvmmsg::{recv_mmsg, NUM_RCVMMSGS},
+    socket::SocketAddrSpace,
 };
-pub use {
-    solana_perf::packet::{
-        limited_deserialize, to_packets_chunked, Packets, PacketsRecycler, NUM_PACKETS,
-        PACKETS_PER_BATCH,
-    },
-    solana_sdk::packet::{Meta, Packet, PACKET_DATA_SIZE},
+pub use solana_perf::packet::{
+    limited_deserialize, to_packets_chunked, Packets, PacketsRecycler, NUM_PACKETS,
+    PACKETS_PER_BATCH,
 };
+
+use solana_metrics::inc_new_counter_debug;
+pub use solana_sdk::packet::{Meta, Packet, PACKET_DATA_SIZE};
+use std::{io::Result, net::UdpSocket, time::Instant};
 
 pub fn recv_from(obj: &mut Packets, socket: &UdpSocket, max_wait_ms: u64) -> Result<usize> {
     let mut i = 0;
@@ -76,14 +73,10 @@ pub fn send_to(
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        std::{
-            io,
-            io::Write,
-            net::{SocketAddr, UdpSocket},
-        },
-    };
+    use super::*;
+    use std::io;
+    use std::io::Write;
+    use std::net::{SocketAddr, UdpSocket};
 
     #[test]
     fn test_packets_set_addr() {

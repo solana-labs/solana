@@ -2,10 +2,11 @@
 
 extern crate test;
 
-use {
-    solana_perf::{packet::to_packets_chunked, recycler::Recycler, sigverify, test_tx::test_tx},
-    test::Bencher,
-};
+use solana_perf::packet::to_packets_chunked;
+use solana_perf::recycler::Recycler;
+use solana_perf::sigverify;
+use solana_perf::test_tx::test_tx;
+use test::Bencher;
 
 #[bench]
 fn bench_sigverify(bencher: &mut Bencher) {

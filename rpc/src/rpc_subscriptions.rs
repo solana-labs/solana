@@ -48,7 +48,8 @@ use {
             Arc, Mutex, RwLock, Weak,
         },
         thread::{Builder, JoinHandle},
-        time::{Duration, Instant},
+        time::Duration,
+        time::Instant,
     },
     tokio::sync::broadcast,
 };

@@ -1,4 +1,5 @@
-use {crate::instruction::InstructionError, thiserror::Error};
+use crate::instruction::InstructionError;
+use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum LamportsError {

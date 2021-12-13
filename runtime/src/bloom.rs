@@ -1,17 +1,12 @@
 //! Simple Bloom Filter
-use {
-    bv::BitVec,
-    fnv::FnvHasher,
-    rand::{self, Rng},
-    serde::{Deserialize, Serialize},
-    solana_sdk::sanitize::{Sanitize, SanitizeError},
-    std::{
-        cmp, fmt,
-        hash::Hasher,
-        marker::PhantomData,
-        sync::atomic::{AtomicU64, Ordering},
-    },
-};
+use bv::BitVec;
+use fnv::FnvHasher;
+use rand::{self, Rng};
+use serde::{Deserialize, Serialize};
+use solana_sdk::sanitize::{Sanitize, SanitizeError};
+use std::fmt;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::{cmp, hash::Hasher, marker::PhantomData};
 
 /// Generate a stable hash of `self` for each `hash_index`
 /// Best effort can be made for uniqueness of each hash.
@@ -222,11 +217,9 @@ impl<T: BloomHashIndex> From<AtomicBloom<T>> for Bloom<T> {
 
 #[cfg(test)]
 mod test {
-    use {
-        super::*,
-        rayon::prelude::*,
-        solana_sdk::hash::{hash, Hash},
-    };
+    use super::*;
+    use rayon::prelude::*;
+    use solana_sdk::hash::{hash, Hash};
 
     #[test]
     fn test_bloom_filter() {

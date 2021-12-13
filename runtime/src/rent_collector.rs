@@ -126,7 +126,8 @@ impl RentCollector {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, solana_sdk::account::Account};
+    use super::*;
+    use solana_sdk::account::Account;
 
     #[test]
     fn test_collect_from_account_created_and_existing() {

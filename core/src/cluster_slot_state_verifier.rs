@@ -1,11 +1,9 @@
-use {
-    crate::{
-        fork_choice::ForkChoice, heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
-        progress_map::ProgressMap,
-    },
-    solana_sdk::{clock::Slot, hash::Hash},
-    std::collections::{BTreeMap, BTreeSet},
+use crate::{
+    fork_choice::ForkChoice, heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
+    progress_map::ProgressMap,
 };
+use solana_sdk::{clock::Slot, hash::Hash};
+use std::collections::{BTreeMap, BTreeSet};
 
 pub(crate) type DuplicateSlotsTracker = BTreeSet<Slot>;
 pub(crate) type GossipDuplicateConfirmedSlots = BTreeMap<Slot, Hash>;
@@ -307,16 +305,14 @@ pub(crate) fn check_slot_agrees_with_cluster(
 
 #[cfg(test)]
 mod test {
-    use {
-        super::*,
-        crate::consensus::test::VoteSimulator,
-        solana_runtime::bank_forks::BankForks,
-        std::{
-            collections::{HashMap, HashSet},
-            sync::RwLock,
-        },
-        trees::tr,
+    use super::*;
+    use crate::consensus::test::VoteSimulator;
+    use solana_runtime::bank_forks::BankForks;
+    use std::{
+        collections::{HashMap, HashSet},
+        sync::RwLock,
     };
+    use trees::tr;
 
     struct InitialState {
         heaviest_subtree_fork_choice: HeaviestSubtreeForkChoice,

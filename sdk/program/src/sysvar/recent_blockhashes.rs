@@ -1,13 +1,11 @@
 #![allow(clippy::integer_arithmetic)]
-use {
-    crate::{
-        declare_sysvar_id,
-        fee_calculator::FeeCalculator,
-        hash::{hash, Hash},
-        sysvar::Sysvar,
-    },
-    std::{cmp::Ordering, collections::BinaryHeap, iter::FromIterator, ops::Deref},
+use crate::{
+    declare_sysvar_id,
+    fee_calculator::FeeCalculator,
+    hash::{hash, Hash},
+    sysvar::Sysvar,
 };
+use std::{cmp::Ordering, collections::BinaryHeap, iter::FromIterator, ops::Deref};
 
 pub const MAX_ENTRIES: usize = 150;
 
@@ -147,7 +145,8 @@ pub fn create_test_recent_blockhashes(start: usize) -> RecentBlockhashes {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, crate::clock::MAX_PROCESSING_AGE};
+    use super::*;
+    use crate::clock::MAX_PROCESSING_AGE;
 
     #[test]
     #[allow(clippy::assertions_on_constants)]

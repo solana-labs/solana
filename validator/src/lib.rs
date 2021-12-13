@@ -1,4 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
+pub use solana_core::test_validator;
+pub use solana_gossip::cluster_info::MINIMUM_VALIDATOR_PORT_RANGE_WIDTH;
 use {
     console::style,
     fd_lock::{FdLock, FdLockGuard},
@@ -10,9 +12,6 @@ use {
         process::exit,
         thread::JoinHandle,
     },
-};
-pub use {
-    solana_core::test_validator, solana_gossip::cluster_info::MINIMUM_VALIDATOR_PORT_RANGE_WIDTH,
 };
 
 pub mod admin_rpc_service;

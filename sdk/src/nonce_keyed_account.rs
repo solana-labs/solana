@@ -1,21 +1,19 @@
-use {
-    crate::{
-        account::{ReadableAccount, WritableAccount},
-        account_utils::State as AccountUtilsState,
-        feature_set, ic_msg,
-        keyed_account::KeyedAccount,
-        nonce_account::create_account,
-        process_instruction::InvokeContext,
-    },
-    solana_program::{
-        instruction::{checked_add, InstructionError},
-        nonce::{self, state::Versions, State},
-        pubkey::Pubkey,
-        system_instruction::{nonce_to_instruction_error, NonceError},
-        sysvar::{recent_blockhashes::RecentBlockhashes, rent::Rent},
-    },
-    std::collections::HashSet,
+use crate::{
+    account::{ReadableAccount, WritableAccount},
+    account_utils::State as AccountUtilsState,
+    feature_set, ic_msg,
+    keyed_account::KeyedAccount,
+    nonce_account::create_account,
+    process_instruction::InvokeContext,
 };
+use solana_program::{
+    instruction::{checked_add, InstructionError},
+    nonce::{self, state::Versions, State},
+    pubkey::Pubkey,
+    system_instruction::{nonce_to_instruction_error, NonceError},
+    sysvar::{recent_blockhashes::RecentBlockhashes, rent::Rent},
+};
+use std::collections::HashSet;
 
 pub trait NonceKeyedAccount {
     fn advance_nonce_account(
@@ -296,20 +294,18 @@ where
 
 #[cfg(test)]
 mod test {
-    use {
-        super::*,
-        crate::{
-            account::ReadableAccount,
-            account_utils::State as AccountUtilsState,
-            keyed_account::KeyedAccount,
-            nonce::{self, State},
-            nonce_account::verify_nonce_account,
-            process_instruction::MockInvokeContext,
-            system_instruction::SystemError,
-            sysvar::recent_blockhashes::create_test_recent_blockhashes,
-        },
-        solana_program::hash::Hash,
+    use super::*;
+    use crate::{
+        account::ReadableAccount,
+        account_utils::State as AccountUtilsState,
+        keyed_account::KeyedAccount,
+        nonce::{self, State},
+        nonce_account::verify_nonce_account,
+        process_instruction::MockInvokeContext,
+        system_instruction::SystemError,
+        sysvar::recent_blockhashes::create_test_recent_blockhashes,
     };
+    use solana_program::hash::Hash;
 
     #[test]
     fn default_is_uninitialized() {

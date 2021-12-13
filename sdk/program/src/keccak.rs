@@ -1,10 +1,8 @@
-use {
-    crate::sanitize::Sanitize,
-    borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
-    sha3::{Digest, Keccak256},
-    std::{convert::TryFrom, fmt, mem, str::FromStr},
-    thiserror::Error,
-};
+use crate::sanitize::Sanitize;
+use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
+use sha3::{Digest, Keccak256};
+use std::{convert::TryFrom, fmt, mem, str::FromStr};
+use thiserror::Error;
 
 pub const HASH_BYTES: usize = 32;
 /// Maximum string length of a base58 encoded hash

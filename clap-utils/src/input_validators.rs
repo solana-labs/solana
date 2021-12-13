@@ -7,7 +7,8 @@ use {
         pubkey::{Pubkey, MAX_SEED_LEN},
         signature::{read_keypair_file, Signature},
     },
-    std::{fmt::Display, str::FromStr},
+    std::fmt::Display,
+    std::str::FromStr,
 };
 
 fn is_parsable_generic<U, T>(string: T) -> Result<(), String>

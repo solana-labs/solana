@@ -8,15 +8,13 @@
 //! upgradeable programs which still have a functioning authority.  For more
 //! information refer to `loader_upgradeable_instruction.rs`
 
-use {
-    crate::{
-        instruction::{AccountMeta, Instruction, InstructionError},
-        loader_upgradeable_instruction::UpgradeableLoaderInstruction,
-        pubkey::Pubkey,
-        system_instruction, sysvar,
-    },
-    bincode::serialized_size,
+use crate::{
+    instruction::{AccountMeta, Instruction, InstructionError},
+    loader_upgradeable_instruction::UpgradeableLoaderInstruction,
+    pubkey::Pubkey,
+    system_instruction, sysvar,
 };
+use bincode::serialized_size;
 
 crate::declare_id!("BPFLoaderUpgradeab1e11111111111111111111111");
 

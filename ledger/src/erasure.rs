@@ -41,10 +41,9 @@
 //!
 //!
 
-use {
-    reed_solomon_erasure::{galois_8::Field, ReedSolomon},
-    serde::{Deserialize, Serialize},
-};
+use reed_solomon_erasure::galois_8::Field;
+use reed_solomon_erasure::ReedSolomon;
+use serde::{Deserialize, Serialize};
 
 //TODO(sakridge) pick these values
 /// Number of data shreds
@@ -133,7 +132,9 @@ impl Default for Session {
 
 #[cfg(test)]
 pub mod test {
-    use {super::*, log::*, solana_sdk::clock::Slot};
+    use super::*;
+    use log::*;
+    use solana_sdk::clock::Slot;
 
     /// Specifies the contents of a 16-data-shred and 4-coding-shred erasure set
     /// Exists to be passed to `generate_blockstore_with_coding`

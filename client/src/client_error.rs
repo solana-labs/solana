@@ -1,4 +1,3 @@
-pub use reqwest;
 use {
     crate::{rpc_request, rpc_response},
     solana_faucet::faucet::FaucetError,
@@ -7,7 +6,9 @@ use {
     },
     std::io,
     thiserror::Error,
-}; // export `reqwest` for clients
+};
+
+pub use reqwest; // export `reqwest` for clients
 
 #[derive(Error, Debug)]
 pub enum ClientErrorKind {

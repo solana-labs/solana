@@ -1,15 +1,13 @@
-use {
-    serde::{Deserialize, Serialize},
-    solana_sdk::{
-        account::Account,
-        clock::Slot,
-        commitment_config::CommitmentLevel,
-        fee_calculator::FeeCalculator,
-        hash::Hash,
-        pubkey::Pubkey,
-        signature::Signature,
-        transaction::{self, Transaction, TransactionError},
-    },
+use serde::{Deserialize, Serialize};
+use solana_sdk::{
+    account::Account,
+    clock::Slot,
+    commitment_config::CommitmentLevel,
+    fee_calculator::FeeCalculator,
+    hash::Hash,
+    pubkey::Pubkey,
+    signature::Signature,
+    transaction::{self, Transaction, TransactionError},
 };
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -49,10 +47,8 @@ pub trait Banks {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        tarpc::{client, transport},
-    };
+    use super::*;
+    use tarpc::{client, transport};
 
     #[test]
     fn test_banks_client_new() {

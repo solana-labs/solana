@@ -3,6 +3,7 @@ extern crate lazy_static;
 
 mod config;
 pub use config::{Config, CONFIG_FILE};
+
 use std::{
     fs::{create_dir_all, File},
     io::{self, Write},

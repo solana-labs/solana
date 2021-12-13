@@ -1,8 +1,6 @@
 //! lockups generator
-use {
-    solana_sdk::{clock::Epoch, epoch_schedule::EpochSchedule, timing::years_as_slots},
-    std::time::Duration,
-};
+use solana_sdk::{clock::Epoch, epoch_schedule::EpochSchedule, timing::years_as_slots};
+use std::time::Duration;
 
 #[derive(Debug)]
 pub struct UnlockInfo {

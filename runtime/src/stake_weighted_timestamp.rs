@@ -100,10 +100,8 @@ where
 
 #[cfg(test)]
 pub mod tests {
-    use {
-        super::*,
-        solana_sdk::{account::Account, native_token::sol_to_lamports},
-    };
+    use super::*;
+    use solana_sdk::{account::Account, native_token::sol_to_lamports};
 
     #[test]
     fn test_calculate_stake_weighted_timestamp_uses_median() {

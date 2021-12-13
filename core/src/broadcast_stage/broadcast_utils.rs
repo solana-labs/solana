@@ -1,13 +1,12 @@
-use {
-    crate::result::Result,
-    solana_ledger::{entry::Entry, shred::Shred},
-    solana_poh::poh_recorder::WorkingBankEntry,
-    solana_runtime::bank::Bank,
-    solana_sdk::clock::Slot,
-    std::{
-        sync::{mpsc::Receiver, Arc},
-        time::{Duration, Instant},
-    },
+use crate::result::Result;
+use solana_ledger::{entry::Entry, shred::Shred};
+use solana_poh::poh_recorder::WorkingBankEntry;
+use solana_runtime::bank::Bank;
+use solana_sdk::clock::Slot;
+use std::{
+    sync::mpsc::Receiver,
+    sync::Arc,
+    time::{Duration, Instant},
 };
 
 pub(super) struct ReceiveResults {
@@ -80,15 +79,13 @@ pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        solana_sdk::{
-            genesis_config::GenesisConfig, pubkey::Pubkey, system_transaction,
-            transaction::Transaction,
-        },
-        std::sync::mpsc::channel,
-    };
+    use super::*;
+    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
+    use solana_sdk::genesis_config::GenesisConfig;
+    use solana_sdk::pubkey::Pubkey;
+    use solana_sdk::system_transaction;
+    use solana_sdk::transaction::Transaction;
+    use std::sync::mpsc::channel;
 
     fn setup_test() -> (GenesisConfig, Arc<Bank>, Transaction) {
         let GenesisConfigInfo {

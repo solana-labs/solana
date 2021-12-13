@@ -2,15 +2,13 @@
 
 extern crate test;
 
-use {
-    rand::{thread_rng, Rng},
-    solana_runtime::{
-        accounts_db::AccountInfo,
-        accounts_index::{AccountSecondaryIndexes, AccountsIndex},
-    },
-    solana_sdk::pubkey::{self, Pubkey},
-    test::Bencher,
+use rand::{thread_rng, Rng};
+use solana_runtime::{
+    accounts_db::AccountInfo,
+    accounts_index::{AccountSecondaryIndexes, AccountsIndex},
 };
+use solana_sdk::pubkey::{self, Pubkey};
+use test::Bencher;
 
 #[bench]
 fn bench_accounts_index(bencher: &mut Bencher) {

@@ -1,16 +1,12 @@
-use {
-    crate::{
-        abi_example::{normalize_type_name, AbiEnumVisitor},
-        hash::{Hash, Hasher},
-    },
-    log::*,
-    serde::{
-        ser::{Error as SerdeError, *},
-        Serialize, Serializer,
-    },
-    std::{any::type_name, io::Write},
-    thiserror::Error,
-};
+use crate::abi_example::{normalize_type_name, AbiEnumVisitor};
+use crate::hash::{Hash, Hasher};
+use log::*;
+use serde::ser::Error as SerdeError;
+use serde::ser::*;
+use serde::{Serialize, Serializer};
+use std::any::type_name;
+use std::io::Write;
+use thiserror::Error;
 
 #[derive(Debug)]
 pub struct AbiDigester {
@@ -532,7 +528,8 @@ impl SerializeStructVariant for AbiDigester {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, sync::atomic::AtomicIsize};
+    use std::collections::HashMap;
+    use std::sync::atomic::AtomicIsize;
 
     #[frozen_abi(digest = "CQiGCzsGquChkwffHjZKFqa3tCYtS3GWYRRYX7iDR38Q")]
     type TestTypeAlias = i32;

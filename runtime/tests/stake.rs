@@ -1,30 +1,28 @@
 #![allow(clippy::integer_arithmetic)]
-use {
-    solana_runtime::{
-        bank::Bank,
-        bank_client::BankClient,
-        genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
-    },
-    solana_sdk::{
-        account::from_account,
-        account_utils::StateMut,
-        client::SyncClient,
-        message::Message,
-        pubkey::Pubkey,
-        signature::{Keypair, Signer},
-        stake::{
-            self, instruction as stake_instruction,
-            state::{Authorized, Lockup, StakeState},
-        },
-        sysvar::{self, stake_history::StakeHistory},
-    },
-    solana_stake_program::stake_state,
-    solana_vote_program::{
-        vote_instruction,
-        vote_state::{Vote, VoteInit, VoteState, VoteStateVersions},
-    },
-    std::sync::Arc,
+use solana_runtime::{
+    bank::Bank,
+    bank_client::BankClient,
+    genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
 };
+use solana_sdk::{
+    account::from_account,
+    account_utils::StateMut,
+    client::SyncClient,
+    message::Message,
+    pubkey::Pubkey,
+    signature::{Keypair, Signer},
+    stake::{
+        self, instruction as stake_instruction,
+        state::{Authorized, Lockup, StakeState},
+    },
+    sysvar::{self, stake_history::StakeHistory},
+};
+use solana_stake_program::stake_state;
+use solana_vote_program::{
+    vote_instruction,
+    vote_state::{Vote, VoteInit, VoteState, VoteStateVersions},
+};
+use std::sync::Arc;
 
 fn next_epoch(bank: &Arc<Bank>) -> Arc<Bank> {
     bank.squash();

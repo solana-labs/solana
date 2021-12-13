@@ -16,13 +16,13 @@ use {
             is_parsable, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
         },
     },
+    solana_ledger::entry::Entry,
     solana_ledger::{
         ancestor_iterator::AncestorIterator,
         bank_forks_utils,
         blockstore::{create_new_ledger, Blockstore, PurgeType},
         blockstore_db::{self, AccessType, BlockstoreRecoveryMode, Column, Database},
         blockstore_processor::ProcessOptions,
-        entry::Entry,
         shred::Shred,
     },
     solana_runtime::{
@@ -31,7 +31,8 @@ use {
         cost_model::CostModel,
         cost_tracker::CostTracker,
         hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
-        snapshot_utils::{self, SnapshotVersion, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
+        snapshot_utils,
+        snapshot_utils::{SnapshotVersion, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},

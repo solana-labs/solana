@@ -1,19 +1,17 @@
 #![cfg(feature = "full")]
 
-use {
-    crate::{
-        entrypoint::HEAP_LENGTH as MIN_HEAP_FRAME_BYTES,
-        feature_set::{requestable_heap_size, FeatureSet},
-        process_instruction::BpfComputeBudget,
-        transaction::{Transaction, TransactionError},
-    },
-    borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
-    solana_sdk::{
-        borsh::try_from_slice_unchecked,
-        instruction::{Instruction, InstructionError},
-    },
-    std::sync::Arc,
+use crate::{
+    entrypoint::HEAP_LENGTH as MIN_HEAP_FRAME_BYTES,
+    feature_set::{requestable_heap_size, FeatureSet},
+    process_instruction::BpfComputeBudget,
+    transaction::{Transaction, TransactionError},
 };
+use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
+use solana_sdk::{
+    borsh::try_from_slice_unchecked,
+    instruction::{Instruction, InstructionError},
+};
+use std::sync::Arc;
 
 crate::declare_id!("ComputeBudget111111111111111111111111111111");
 
@@ -93,10 +91,8 @@ pub fn process_request(
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        crate::{hash::Hash, message::Message, pubkey::Pubkey, signature::Keypair, signer::Signer},
-    };
+    use super::*;
+    use crate::{hash::Hash, message::Message, pubkey::Pubkey, signature::Keypair, signer::Signer};
 
     macro_rules! test {
         ( $instructions: expr, $expected_error: expr, $expected_budget: expr ) => {
