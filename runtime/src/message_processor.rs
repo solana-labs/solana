@@ -1260,9 +1260,6 @@ impl MessageProcessor {
             account_db,
             ancestors,
         );
-        let pre_remaining_units = invoke_context.get_compute_meter().borrow().get_remaining();
-        let mut time = Measure::start("execute_instruction");
-
         self.process_instruction(program_id, &instruction.data, &mut invoke_context)?;
         Self::verify(
             message,
@@ -1276,14 +1273,6 @@ impl MessageProcessor {
             invoke_context.is_feature_active(&updated_verify_policy::id()),
             invoke_context.is_feature_active(&demote_program_write_locks::id()),
         )?;
-
-        time.stop();
-        let post_remaining_units = invoke_context.get_compute_meter().borrow().get_remaining();
-
-        let program_timing = timings.per_program_timings.entry(*program_id).or_default();
-        program_timing.accumulated_us += time.as_us();
-        program_timing.accumulated_units += pre_remaining_units - post_remaining_units;
-        program_timing.count += 1;
 
         timings.accumulate(&invoke_context.timings);
 
@@ -1312,6 +1301,8 @@ impl MessageProcessor {
         ancestors: &Ancestors,
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
+            let mut time = Measure::start("execute_instruction");
+            let pre_remaining_units = compute_meter.borrow().get_remaining();
             let instruction_recorder = instruction_recorders
                 .as_ref()
                 .map(|recorders| recorders[instruction_index].clone());
@@ -1334,6 +1325,14 @@ impl MessageProcessor {
                     ancestors,
                 )
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err));
+            time.stop();
+            let post_remaining_units = compute_meter.borrow().get_remaining();
+
+            let program_id = instruction.program_id(&message.account_keys);
+            let program_timing = timings.per_program_timings.entry(*program_id).or_default();
+            program_timing.accumulated_us += time.as_us();
+            program_timing.accumulated_units += pre_remaining_units - post_remaining_units;
+            program_timing.count += 1;
 
             err?;
         }
