@@ -45,7 +45,7 @@ pub enum FeatureCliCommand {
     },
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", tag = "status", content = "sinceSlot")]
 pub enum CliFeatureStatus {
     Inactive,
@@ -53,13 +53,50 @@ pub enum CliFeatureStatus {
     Active(Slot),
 }
 
-#[derive(Serialize, Deserialize)]
+impl PartialOrd for CliFeatureStatus {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for CliFeatureStatus {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self, other) {
+            (Self::Inactive, Self::Inactive) => Ordering::Equal,
+            (Self::Inactive, _) => Ordering::Greater,
+            (_, Self::Inactive) => Ordering::Less,
+            (Self::Pending, Self::Pending) => Ordering::Equal,
+            (Self::Pending, _) => Ordering::Greater,
+            (_, Self::Pending) => Ordering::Less,
+            (Self::Active(self_active_slot), Self::Active(other_active_slot)) => {
+                self_active_slot.cmp(other_active_slot)
+            }
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct CliFeature {
     pub id: String,
     pub description: String,
     #[serde(flatten)]
     pub status: CliFeatureStatus,
+}
+
+impl PartialOrd for CliFeature {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for CliFeature {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match self.status.cmp(&other.status) {
+            Ordering::Equal => self.id.cmp(&other.id),
+            ordering => ordering,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -93,7 +130,7 @@ impl fmt::Display for CliFeatures {
                     CliFeatureStatus::Inactive => style("inactive".to_string()).red(),
                     CliFeatureStatus::Pending => style("activation pending".to_string()).yellow(),
                     CliFeatureStatus::Active(activation_slot) =>
-                        style(format!("active since slot {}", activation_slot)).green(),
+                        style(format!("active since slot {:>9}", activation_slot)).green(),
                 },
                 feature.description,
             )?;
@@ -549,6 +586,8 @@ fn process_status(
             status: CliFeatureStatus::Inactive,
         });
     }
+
+    features.sort_unstable();
 
     let feature_activation_allowed = feature_activation_allowed(rpc_client, features.len() <= 1)?;
     let feature_set = CliFeatures {
