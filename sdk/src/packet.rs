@@ -14,6 +14,9 @@ use {
 ///   8 bytes is the size of the fragment header
 pub const PACKET_DATA_SIZE: usize = 1280 - 40 - 8;
 
+pub const EXTENDED_PACKET_DATA_SIZE: usize = PACKET_DATA_SIZE * 2;
+
+
 // TODO: Expose a second concrete instance of PacketInterface that uses updated size
 // pub const DOUBLE_DATA_SIZE: usize = PACKET_DATA_SIZE * 2;
 
@@ -59,6 +62,54 @@ pub struct Packet {
     pub data: [u8; PACKET_DATA_SIZE],
     pub meta: Meta,
 }
+
+// TODO: can we de-duplicate some if this Packet and ExtendedPacket code?
+#[derive(Clone)]
+#[repr(C)]
+pub struct ExtendedPacket {
+    pub data: [u8; EXTENDED_PACKET_DATA_SIZE],
+    pub meta: Meta,
+}
+
+impl PacketInterface for ExtendedPacket {
+    fn get_data(&self) -> &[u8] {
+        &self.data
+    }
+
+    fn get_data_mut(&mut self) -> &mut [u8] {
+        &mut self.data
+    }
+
+    fn get_meta(&self) -> &Meta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut Meta {
+        &mut self.meta
+    }
+
+    fn from_data<T: Serialize>(dest: Option<&SocketAddr>, data: T) -> Result<Self> {
+        let mut packet = ExtendedPacket::default();
+        Self::populate_packet(&mut packet, dest, &data)?;
+        Ok(packet)
+    }
+
+    fn populate_packet<T: Serialize>(
+        packet: &mut Self,
+        dest: Option<&SocketAddr>,
+        data: &T,
+    ) -> Result<()> {
+        let mut wr = io::Cursor::new(&mut packet.get_data_mut()[..]);
+        bincode::serialize_into(&mut wr, data)?;
+        let len = wr.position() as usize;
+        packet.meta.size = len;
+        if let Some(dest) = dest {
+            packet.meta.set_addr(dest);
+        }
+        Ok(())
+    }
+}
+
 
 impl PacketInterface for Packet {
     fn get_data(&self) -> &[u8] {
@@ -151,6 +202,37 @@ impl Default for Packet {
 
 impl PartialEq for Packet {
     fn eq(&self, other: &Packet) -> bool {
+        let self_data: &[u8] = self.data.as_ref();
+        let other_data: &[u8] = other.data.as_ref();
+        self.meta == other.meta && self_data[..self.meta.size] == other_data[..self.meta.size]
+    }
+}
+
+impl fmt::Debug for ExtendedPacket {
+    // It may be useful to know the type of Packet in the debug
+    // print
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "ExtendedPacket {{ size: {:?}, addr: {:?} }}",
+            self.meta.size,
+            self.meta.addr()
+        )
+    }
+}
+
+#[allow(clippy::uninit_assumed_init)]
+impl Default for ExtendedPacket {
+    fn default() -> ExtendedPacket {
+        ExtendedPacket {
+            data: unsafe { std::mem::MaybeUninit::uninit().assume_init() },
+            meta: Meta::default(),
+        }
+    }
+}
+
+impl PartialEq for ExtendedPacket {
+    fn eq(&self, other: &ExtendedPacket) -> bool {
         let self_data: &[u8] = self.data.as_ref();
         let other_data: &[u8] = other.data.as_ref();
         self.meta == other.meta && self_data[..self.meta.size] == other_data[..self.meta.size]
