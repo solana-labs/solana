@@ -14,7 +14,7 @@ pub struct AccountInfo {
 
     /// lamports in the account used when squashing kept for optimization
     /// purposes to remove accounts with zero balance.
-    pub lamports: u64,
+    lamports: u64,
 }
 
 impl ZeroLamport for AccountInfo {
