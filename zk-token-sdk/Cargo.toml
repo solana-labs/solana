@@ -16,7 +16,7 @@ num-traits = "0.2"
 solana-program = "=1.7.15"
 
 [target.'cfg(not(target_arch = "bpf"))'.dependencies]
-aes-gcm = "0.9.4"
+aes-gcm-siv = "0.10.3"
 arrayref = "0.3.6"
 bincode = "1"
 byteorder = "1"
