@@ -580,12 +580,19 @@ mod tests {
 
         let rent = Rent::default();
         let rent_sysvar = (sysvar::rent::id(), bincode::serialize(&rent).unwrap());
+        let clock = Clock::default();
+        let clock_sysvar = (sysvar::clock::id(), bincode::serialize(&clock).unwrap());
+        let slot_hashes = SlotHashes::default();
+        let slot_hashes_sysvar = (
+            sysvar::slot_hashes::id(),
+            bincode::serialize(&slot_hashes).unwrap(),
+        );
         solana_program_runtime::invoke_context::mock_process_instruction_with_sysvars(
             &id(),
             Vec::new(),
             &instruction.data,
             &keyed_accounts,
-            &[rent_sysvar],
+            &[rent_sysvar, clock_sysvar, slot_hashes_sysvar],
             super::process_instruction,
         )
     }
