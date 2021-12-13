@@ -57,7 +57,7 @@ use {
             calculate_stake_weighted_timestamp, MaxAllowableDrift, MAX_ALLOWABLE_DRIFT_PERCENTAGE,
             MAX_ALLOWABLE_DRIFT_PERCENTAGE_FAST, MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW,
         },
-        stakes::{InvalidCacheEntryReason, Stakes, StakesCache},
+        stakes::Stakes,
         status_cache::{SlotDelta, StatusCache},
         system_instruction_processor::{get_system_account_kind, SystemAccountKind},
         transaction_batch::TransactionBatch,
@@ -67,6 +67,8 @@ use {
     dashmap::DashMap,
     itertools::Itertools,
     log::*,
+    num_derive::ToPrimitive,
+    num_traits::ToPrimitive,
     rayon::{
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
         ThreadPool, ThreadPoolBuilder,
@@ -838,7 +840,7 @@ pub(crate) struct BankFieldsToSerialize<'a> {
     pub(crate) rent_collector: RentCollector,
     pub(crate) epoch_schedule: EpochSchedule,
     pub(crate) inflation: Inflation,
-    pub(crate) stakes: &'a StakesCache,
+    pub(crate) stakes: &'a RwLock<Stakes>,
     pub(crate) epoch_stakes: &'a HashMap<Epoch, EpochStakes>,
     pub(crate) is_delta: bool,
 }
@@ -877,7 +879,7 @@ impl PartialEq for Bank {
             && self.rent_collector == other.rent_collector
             && self.epoch_schedule == other.epoch_schedule
             && *self.inflation.read().unwrap() == *other.inflation.read().unwrap()
-            && *self.stakes_cache.stakes() == *other.stakes_cache.stakes()
+            && *self.stakes.read().unwrap() == *other.stakes.read().unwrap()
             && self.epoch_stakes == other.epoch_stakes
             && self.is_delta.load(Relaxed) == other.is_delta.load(Relaxed)
     }
@@ -1044,7 +1046,7 @@ pub struct Bank {
     inflation: Arc<RwLock<Inflation>>,
 
     /// cache of vote_account and stake_account state for this fork
-    stakes_cache: StakesCache,
+    stakes: RwLock<Stakes>,
 
     /// staked nodes on epoch boundaries, saved off when a bank.slot() is at
     ///   a leader schedule calculation boundary
@@ -1111,10 +1113,17 @@ struct VoteWithStakeDelegations {
     delegations: Vec<(Pubkey, (StakeState, AccountSharedData))>,
 }
 
+#[derive(Debug, Clone, PartialEq, ToPrimitive)]
+enum InvalidReason {
+    Missing,
+    BadState,
+    WrongOwner,
+}
+
 struct LoadVoteAndStakeAccountsResult {
     vote_with_stake_delegations_map: DashMap<Pubkey, VoteWithStakeDelegations>,
-    invalid_stake_keys: DashMap<Pubkey, InvalidCacheEntryReason>,
-    invalid_vote_keys: DashMap<Pubkey, InvalidCacheEntryReason>,
+    invalid_stake_keys: DashMap<Pubkey, InvalidReason>,
+    invalid_vote_keys: DashMap<Pubkey, InvalidReason>,
 }
 
 #[derive(Debug, Default)]
@@ -1218,7 +1227,7 @@ impl Bank {
         // genesis needs stakes for all epochs up to the epoch implied by
         //  slot = 0 and genesis configuration
         {
-            let stakes = bank.stakes_cache.stakes();
+            let stakes = bank.stakes.read().unwrap();
             for epoch in 0..=bank.get_leader_schedule_epoch(bank.slot) {
                 bank.epoch_stakes
                     .insert(epoch, EpochStakes::new(&stakes, epoch));
@@ -1331,7 +1340,7 @@ impl Bank {
             transaction_entries_count: AtomicU64::new(0),
             transactions_per_entry_max: AtomicU64::new(0),
             // we will .clone_with_epoch() this soon after stake data update; so just .clone() for now
-            stakes_cache: StakesCache::new(parent.stakes_cache.stakes().clone()),
+            stakes: RwLock::new(parent.stakes.read().unwrap().clone()),
             epoch_stakes: parent.epoch_stakes.clone(),
             parent_hash: parent.hash(),
             parent_slot: parent.slot(),
@@ -1388,7 +1397,10 @@ impl Bank {
             // Add new entry to stakes.stake_history, set appropriate epoch and
             //   update vote accounts with warmed up stakes before saving a
             //   snapshot of stakes in epoch stakes
-            new.stakes_cache.activate_epoch(epoch, &thread_pool);
+            new.stakes
+                .write()
+                .unwrap()
+                .activate_epoch(epoch, &thread_pool);
 
             // Save a snapshot of stakes for use in consensus and stake weighted networking
             let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
@@ -1515,7 +1527,7 @@ impl Bank {
             rent_collector: fields.rent_collector.clone_with_epoch(fields.epoch),
             epoch_schedule: fields.epoch_schedule,
             inflation: Arc::new(RwLock::new(fields.inflation)),
-            stakes_cache: StakesCache::new(fields.stakes),
+            stakes: RwLock::new(fields.stakes),
             epoch_stakes: fields.epoch_stakes,
             is_delta: AtomicBool::new(fields.is_delta),
             message_processor: new(),
@@ -1613,7 +1625,7 @@ impl Bank {
             rent_collector: self.rent_collector.clone(),
             epoch_schedule: self.epoch_schedule,
             inflation: *self.inflation.read().unwrap(),
-            stakes: &self.stakes_cache,
+            stakes: &self.stakes,
             epoch_stakes: &self.epoch_stakes,
             is_delta: self.is_delta.load(Relaxed),
         }
@@ -1863,11 +1875,12 @@ impl Bank {
             });
 
             let new_epoch_stakes =
-                EpochStakes::new(&self.stakes_cache.stakes(), leader_schedule_epoch);
+                EpochStakes::new(&self.stakes.read().unwrap(), leader_schedule_epoch);
             {
                 let vote_stakes: HashMap<_, _> = self
-                    .stakes_cache
-                    .stakes()
+                    .stakes
+                    .read()
+                    .unwrap()
                     .vote_accounts()
                     .iter()
                     .map(|(pubkey, (stake, _))| (*pubkey, *stake))
@@ -1918,7 +1931,7 @@ impl Bank {
         // if I'm the first Bank in an epoch, ensure stake_history is updated
         self.update_sysvar_account(&sysvar::stake_history::id(), |account| {
             create_account::<sysvar::stake_history::StakeHistory>(
-                self.stakes_cache.stakes().history(),
+                self.stakes.read().unwrap().history(),
                 self.inherit_specially_retained_account_fields(account),
             )
         });
@@ -1991,7 +2004,7 @@ impl Bank {
         let validator_rewards =
             (validator_rate * capitalization as f64 * epoch_duration_in_years) as u64;
 
-        let old_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
+        let old_vote_balance_and_staked = self.stakes.read().unwrap().vote_balance_and_staked();
 
         let validator_point_value = self.pay_validator_rewards_with_thread_pool(
             prev_epoch,
@@ -2014,7 +2027,7 @@ impl Bank {
             });
         }
 
-        let new_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
+        let new_vote_balance_and_staked = self.stakes.read().unwrap().vote_balance_and_staked();
         let validator_rewards_paid = new_vote_balance_and_staked - old_vote_balance_and_staked;
         assert_eq!(
             validator_rewards_paid,
@@ -2046,7 +2059,7 @@ impl Bank {
             .fetch_add(validator_rewards_paid, Relaxed);
 
         let active_stake = if let Some(stake_history_entry) =
-            self.stakes_cache.stakes().history().get(&prev_epoch)
+            self.stakes.read().unwrap().history().get(&prev_epoch)
         {
             stake_history_entry.effective
         } else {
@@ -2077,10 +2090,10 @@ impl Bank {
         thread_pool: &ThreadPool,
         reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
     ) -> LoadVoteAndStakeAccountsResult {
-        let stakes = self.stakes_cache.stakes();
+        let stakes = self.stakes.read().unwrap();
         let vote_with_stake_delegations_map = DashMap::with_capacity(stakes.vote_accounts().len());
-        let invalid_stake_keys: DashMap<Pubkey, InvalidCacheEntryReason> = DashMap::new();
-        let invalid_vote_keys: DashMap<Pubkey, InvalidCacheEntryReason> = DashMap::new();
+        let invalid_stake_keys: DashMap<Pubkey, InvalidReason> = DashMap::new();
+        let invalid_vote_keys: DashMap<Pubkey, InvalidReason> = DashMap::new();
 
         thread_pool.install(|| {
             stakes
@@ -2095,8 +2108,7 @@ impl Bank {
                     let stake_delegation = match self.get_account_with_fixed_root(stake_pubkey) {
                         Some(stake_account) => {
                             if stake_account.owner() != &solana_stake_program::id() {
-                                invalid_stake_keys
-                                    .insert(*stake_pubkey, InvalidCacheEntryReason::WrongOwner);
+                                invalid_stake_keys.insert(*stake_pubkey, InvalidReason::WrongOwner);
                                 return;
                             }
 
@@ -2104,14 +2116,13 @@ impl Bank {
                                 Some(stake_state) => (*stake_pubkey, (stake_state, stake_account)),
                                 None => {
                                     invalid_stake_keys
-                                        .insert(*stake_pubkey, InvalidCacheEntryReason::BadState);
+                                        .insert(*stake_pubkey, InvalidReason::BadState);
                                     return;
                                 }
                             }
                         }
                         None => {
-                            invalid_stake_keys
-                                .insert(*stake_pubkey, InvalidCacheEntryReason::Missing);
+                            invalid_stake_keys.insert(*stake_pubkey, InvalidReason::Missing);
                             return;
                         }
                     };
@@ -2125,14 +2136,13 @@ impl Bank {
                             Some(vote_account) => {
                                 if vote_account.owner() != &solana_vote_program::id() {
                                     invalid_vote_keys
-                                        .insert(*vote_pubkey, InvalidCacheEntryReason::WrongOwner);
+                                        .insert(*vote_pubkey, InvalidReason::WrongOwner);
                                     return;
                                 }
                                 vote_account
                             }
                             None => {
-                                invalid_vote_keys
-                                    .insert(*vote_pubkey, InvalidCacheEntryReason::Missing);
+                                invalid_vote_keys.insert(*vote_pubkey, InvalidReason::Missing);
                                 return;
                             }
                         };
@@ -2142,8 +2152,7 @@ impl Bank {
                         {
                             vote_state.convert_to_current()
                         } else {
-                            invalid_vote_keys
-                                .insert(*vote_pubkey, InvalidCacheEntryReason::BadState);
+                            invalid_vote_keys.insert(*vote_pubkey, InvalidReason::BadState);
                             return;
                         };
 
@@ -2177,6 +2186,51 @@ impl Bank {
         }
     }
 
+    fn handle_invalid_stakes_cache_keys(
+        &self,
+        invalid_stake_keys: DashMap<Pubkey, InvalidReason>,
+        invalid_vote_keys: DashMap<Pubkey, InvalidReason>,
+    ) {
+        if invalid_stake_keys.is_empty() && invalid_vote_keys.is_empty() {
+            return;
+        }
+
+        // Prune invalid stake delegations and vote accounts that were
+        // not properly evicted in normal operation.
+        let mut maybe_stakes_cache = if self
+            .feature_set
+            .is_active(&feature_set::evict_invalid_stakes_cache_entries::id())
+        {
+            Some(self.stakes.write().unwrap())
+        } else {
+            None
+        };
+
+        for (stake_pubkey, reason) in invalid_stake_keys {
+            if let Some(stakes_cache) = maybe_stakes_cache.as_mut() {
+                stakes_cache.remove_stake_delegation(&stake_pubkey);
+            }
+            datapoint_warn!(
+                "bank-stake_delegation_accounts-invalid-account",
+                ("slot", self.slot() as i64, i64),
+                ("stake-address", format!("{:?}", stake_pubkey), String),
+                ("reason", reason.to_i64().unwrap_or_default(), i64),
+            );
+        }
+
+        for (vote_pubkey, reason) in invalid_vote_keys {
+            if let Some(stakes_cache) = maybe_stakes_cache.as_mut() {
+                stakes_cache.remove_vote_account(&vote_pubkey);
+            }
+            datapoint_warn!(
+                "bank-stake_delegation_accounts-invalid-account",
+                ("slot", self.slot() as i64, i64),
+                ("vote-address", format!("{:?}", vote_pubkey), String),
+                ("reason", reason.to_i64().unwrap_or_default(), i64),
+            );
+        }
+    }
+
     /// iterate over all stakes, redeem vote credits for each stake we can
     ///   successfully load and parse, return the lamport value of one point
     fn pay_validator_rewards_with_thread_pool(
@@ -2187,7 +2241,7 @@ impl Bank {
         fix_activating_credits_observed: bool,
         thread_pool: &ThreadPool,
     ) -> f64 {
-        let stake_history = self.stakes_cache.stakes().history().clone();
+        let stake_history = self.stakes.read().unwrap().history().clone();
         let vote_with_stake_delegations_map = {
             let LoadVoteAndStakeAccountsResult {
                 vote_with_stake_delegations_map,
@@ -2198,15 +2252,7 @@ impl Bank {
                 reward_calc_tracer.as_ref(),
             );
 
-            let evict_invalid_stakes_cache_entries = self
-                .feature_set
-                .is_active(&feature_set::evict_invalid_stakes_cache_entries::id());
-            self.stakes_cache.handle_invalid_keys(
-                invalid_stake_keys,
-                invalid_vote_keys,
-                evict_invalid_stakes_cache_entries,
-                self.slot(),
-            );
+            self.handle_invalid_stakes_cache_keys(invalid_stake_keys, invalid_vote_keys);
             vote_with_stake_delegations_map
         };
 
@@ -2629,8 +2675,9 @@ impl Bank {
 
         // highest staked node is the first collector
         self.collector_id = self
-            .stakes_cache
-            .stakes()
+            .stakes
+            .read()
+            .unwrap()
             .highest_staked_node()
             .unwrap_or_default();
 
@@ -4503,11 +4550,13 @@ impl Bank {
             .accounts
             .store_slow_cached(self.slot(), pubkey, account);
 
-        self.stakes_cache.check_and_store(
-            pubkey,
-            account,
-            self.stakes_remove_delegation_if_inactive_enabled(),
-        );
+        if Stakes::is_stake(account) {
+            self.stakes.write().unwrap().store(
+                pubkey,
+                account,
+                self.stakes_remove_delegation_if_inactive_enabled(),
+            );
+        }
     }
 
     pub fn force_flush_accounts_cache(&self) {
@@ -5171,10 +5220,11 @@ impl Bank {
             let message = &tx.message();
             let loaded_transaction = raccs.as_ref().unwrap();
 
-            for (_i, (pubkey, account)) in
-                (0..message.account_keys.len()).zip(loaded_transaction.accounts.iter())
+            for (_i, (pubkey, account)) in (0..message.account_keys.len())
+                .zip(loaded_transaction.accounts.iter())
+                .filter(|(_i, (_pubkey, account))| (Stakes::is_stake(account)))
             {
-                self.stakes_cache.check_and_store(
+                self.stakes.write().unwrap().store(
                     pubkey,
                     account,
                     self.stakes_remove_delegation_if_inactive_enabled(),
@@ -5185,11 +5235,11 @@ impl Bank {
 
     /// current stake delegations for this bank
     pub fn cloned_stake_delegations(&self) -> HashMap<Pubkey, Delegation> {
-        self.stakes_cache.stakes().stake_delegations().clone()
+        self.stakes.read().unwrap().stake_delegations().clone()
     }
 
     pub fn staked_nodes(&self) -> HashMap<Pubkey, u64> {
-        self.stakes_cache.stakes().staked_nodes()
+        self.stakes.read().unwrap().staked_nodes()
     }
 
     /// current vote accounts for this bank along with the stake
@@ -5197,8 +5247,9 @@ impl Bank {
     /// Note: This clones the entire vote-accounts hashmap. For a single
     /// account lookup use get_vote_account instead.
     pub fn vote_accounts(&self) -> Vec<(Pubkey, (u64 /*stake*/, ArcVoteAccount))> {
-        self.stakes_cache
-            .stakes()
+        self.stakes
+            .read()
+            .unwrap()
             .vote_accounts()
             .iter()
             .map(|(k, v)| (*k, v.clone()))
@@ -5210,8 +5261,9 @@ impl Bank {
         &self,
         vote_account: &Pubkey,
     ) -> Option<(u64 /*stake*/, ArcVoteAccount)> {
-        self.stakes_cache
-            .stakes()
+        self.stakes
+            .read()
+            .unwrap()
             .vote_accounts()
             .get(vote_account)
             .cloned()
@@ -9946,12 +9998,9 @@ pub(crate) mod tests {
             Err(InstructionError::Custom(42))
         }
 
-        // Non-builtin loader accounts can not be used for instruction processing
-        {
-            let stakes = bank.stakes_cache.stakes();
-            assert!(stakes.vote_accounts().is_empty());
-        }
-        assert!(bank.stakes_cache.stakes().stake_delegations().is_empty());
+        // Non-native loader accounts can not be used for instruction processing
+        assert!(bank.stakes.read().unwrap().vote_accounts().is_empty());
+        assert!(bank.stakes.read().unwrap().stake_delegations().is_empty());
         assert_eq!(bank.calculate_capitalization(true), bank.capitalization());
 
         let ((vote_id, vote_account), (stake_id, stake_account)) =
@@ -9960,20 +10009,14 @@ pub(crate) mod tests {
             .fetch_add(vote_account.lamports() + stake_account.lamports(), Relaxed);
         bank.store_account(&vote_id, &vote_account);
         bank.store_account(&stake_id, &stake_account);
-        {
-            let stakes = bank.stakes_cache.stakes();
-            assert!(!stakes.vote_accounts().is_empty());
-        }
-        assert!(!bank.stakes_cache.stakes().stake_delegations().is_empty());
+        assert!(!bank.stakes.read().unwrap().vote_accounts().is_empty());
+        assert!(!bank.stakes.read().unwrap().stake_delegations().is_empty());
         assert_eq!(bank.calculate_capitalization(true), bank.capitalization());
 
         bank.add_builtin("mock_program1", vote_id, mock_ix_processor);
         bank.add_builtin("mock_program2", stake_id, mock_ix_processor);
-        {
-            let stakes = bank.stakes_cache.stakes();
-            assert!(stakes.vote_accounts().is_empty());
-        }
-        assert!(bank.stakes_cache.stakes().stake_delegations().is_empty());
+        assert!(bank.stakes.read().unwrap().vote_accounts().is_empty());
+        assert!(bank.stakes.read().unwrap().stake_delegations().is_empty());
         assert_eq!(bank.calculate_capitalization(true), bank.capitalization());
         assert_eq!(
             "mock_program1",
@@ -9992,11 +10035,8 @@ pub(crate) mod tests {
         bank.update_accounts_hash();
         let new_hash = bank.get_accounts_hash();
         assert_eq!(old_hash, new_hash);
-        {
-            let stakes = bank.stakes_cache.stakes();
-            assert!(stakes.vote_accounts().is_empty());
-        }
-        assert!(bank.stakes_cache.stakes().stake_delegations().is_empty());
+        assert!(bank.stakes.read().unwrap().vote_accounts().is_empty());
+        assert!(bank.stakes.read().unwrap().stake_delegations().is_empty());
         assert_eq!(bank.calculate_capitalization(true), bank.capitalization());
         assert_eq!(
             "mock_program1",
