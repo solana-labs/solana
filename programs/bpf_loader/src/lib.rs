@@ -34,7 +34,8 @@ use solana_sdk::{
     feature_set::{
         add_missing_program_error_mappings, close_upgradeable_program_accounts, fix_write_privs,
         reduce_required_deploy_balance, reject_deployment_of_unresolved_syscalls,
-        requestable_heap_size, stop_verify_mul64_imm_nonzero, upgradeable_close_instruction,
+        reject_section_virtual_address_file_offset_mismatch, requestable_heap_size,
+        start_verify_shift32_imm, stop_verify_mul64_imm_nonzero, upgradeable_close_instruction,
     },
     ic_logger_msg, ic_msg,
     instruction::{AccountMeta, InstructionError},
@@ -77,7 +78,7 @@ pub fn create_executor(
     program_data_offset: usize,
     invoke_context: &mut dyn InvokeContext,
     use_jit: bool,
-    reject_unresolved_syscalls: bool,
+    reject_deployment_of_broken_elfs: bool,
 ) -> Result<Arc<BpfExecutor>, InstructionError> {
     let syscall_registry = syscalls::register_syscalls(invoke_context).map_err(|e| {
         ic_msg!(invoke_context, "Failed to register syscalls: {}", e);
@@ -88,10 +89,14 @@ pub fn create_executor(
         max_call_depth: bpf_compute_budget.max_call_depth,
         stack_frame_size: bpf_compute_budget.stack_frame_size,
         enable_instruction_tracing: log_enabled!(Trace),
-        reject_unresolved_syscalls: reject_unresolved_syscalls
+        reject_unresolved_syscalls: reject_deployment_of_broken_elfs
             && invoke_context.is_feature_active(&reject_deployment_of_unresolved_syscalls::id()),
+        reject_section_virtual_address_file_offset_mismatch: reject_deployment_of_broken_elfs
+            && invoke_context
+                .is_feature_active(&reject_section_virtual_address_file_offset_mismatch::id()),
         verify_mul64_imm_nonzero: !invoke_context
-            .is_feature_active(&stop_verify_mul64_imm_nonzero::id()), // TODO: Feature gate and then remove me
+            .is_feature_active(&stop_verify_mul64_imm_nonzero::id()),
+        verify_shift32_imm: invoke_context.is_feature_active(&start_verify_shift32_imm::id()),
         ..Config::default()
     };
     let mut executable = {
