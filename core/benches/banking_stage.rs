@@ -17,7 +17,7 @@ use {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
     },
-    solana_perf::{packet::to_packet_batches, test_tx::test_tx},
+    solana_perf::{packet::to_packets_chunked, test_tx::test_tx},
     solana_poh::poh_recorder::{create_test_recorder, WorkingBankEntry},
     solana_runtime::{bank::Bank, cost_model::CostModel},
     solana_sdk::{
@@ -74,11 +74,11 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
         let tx = test_tx();
         let len = 4096;
         let chunk_size = 1024;
-        let batches = to_packet_batches(&vec![tx; len], chunk_size);
-        let mut packet_batches = VecDeque::new();
+        let batches = to_packets_chunked(&vec![tx; len], chunk_size);
+        let mut packets = VecDeque::new();
         for batch in batches {
             let batch_len = batch.packets.len();
-            packet_batches.push_back((batch, vec![0usize; batch_len], false));
+            packets.push_back((batch, vec![0usize; batch_len], false));
         }
         let (s, _r) = unbounded();
         // This tests the performance of buffering packets.
@@ -88,7 +88,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 &my_pubkey,
                 std::u128::MAX,
                 &poh_recorder,
-                &mut packet_batches,
+                &mut packets,
                 None,
                 &s,
                 None::<Box<dyn Fn()>>,
@@ -203,7 +203,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
         assert!(r.is_ok(), "sanity parallel execution");
     }
     bank.clear_signatures();
-    let verified: Vec<_> = to_packet_batches(&transactions, PACKETS_PER_BATCH);
+    let verified: Vec<_> = to_packets_chunked(&transactions, PACKETS_PER_BATCH);
     let ledger_path = get_tmp_ledger_path!();
     {
         let blockstore = Arc::new(
