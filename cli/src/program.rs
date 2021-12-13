@@ -9,7 +9,7 @@ use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
 use solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig};
-use solana_bpf_loader_program::{bpf_verifier, BpfError, ThisInstructionMeter};
+use solana_bpf_loader_program::{BpfError, ThisInstructionMeter};
 use solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*};
 use solana_cli_output::{
     CliProgram, CliProgramAccountType, CliProgramAuthority, CliProgramBuffer, CliProgramId,
@@ -24,7 +24,10 @@ use solana_client::{
     rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
     tpu_client::{TpuClient, TpuClientConfig},
 };
-use solana_rbpf::vm::{Config, Executable};
+use solana_rbpf::{
+    verifier,
+    vm::{Config, Executable},
+};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     account::Account,
@@ -1987,7 +1990,7 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     // Verify the program
     <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
         &program_data,
-        Some(|x| bpf_verifier::check(x)),
+        Some(|x| verifier::check(x)),
         Config::default(),
     )
     .map_err(|err| format!("ELF error: {}", err))?;
