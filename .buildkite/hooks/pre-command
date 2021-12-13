@@ -14,9 +14,13 @@ export PS4="++"
 echo "$BRANCH"
 echo "$CHANNEL"
 eval "$(ci/channel-info.sh)"
+echo "$BRANCH"
+echo "$CHANNEL"
 export CARGO_TARGET_CACHE=$HOME/cargo-target-cache/"$CHANNEL"-"$BUILDKITE_LABEL"
 (
   set -x
+  echo "$BRANCH"
+  echo "$CHANNEL"
   MAX_CACHE_SIZE=18 # gigabytes
 
   if [[ -d $CARGO_TARGET_CACHE ]]; then
