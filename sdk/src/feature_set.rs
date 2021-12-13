@@ -242,15 +242,15 @@ pub mod remove_native_loader {
 }
 
 pub mod return_data_syscall_enabled {
-    solana_sdk::declare_id!("DwScAzPUjuv65TMbDnFY7AgwmotzWy3xpEJMXM3hZFaB");
+    solana_sdk::declare_id!("BJVXq6NdLC7jCDGjfqJv7M1XHD4Y13VrpDqRF2U7UBcC");
 }
 
 pub mod sol_log_data_syscall_enabled {
-    solana_sdk::declare_id!("6uaHcKPGUy4J7emLBgUTeufhJdiwhngW6a1R9B7c2ob9");
+    solana_sdk::declare_id!("HYPs7jyJ3KwQFdDpuSzMtVKf1MLJDaZRv3CSWvfUqdFo");
 }
 
 pub mod ed25519_program_enabled {
-    solana_sdk::declare_id!("6ppMXNYLhVd7GcsZ5uV11wQEW7spppiMVfqQv5SXhDpX");
+    solana_sdk::declare_id!("E1TvTNipX8TKNHrhRC8SMuAwQmGY58TZ4drdztP3Gxwc");
 }
 
 pub mod requestable_heap_size {
