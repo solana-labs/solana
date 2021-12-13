@@ -3081,12 +3081,7 @@ impl AccountsDb {
             bank_id,
             |pubkey, (account_info, slot)| {
                 let account_slot = self
-                    .get_account_accessor(
-                        slot,
-                        pubkey,
-                        account_info.store_id(),
-                        account_info.offset(),
-                    )
+                    .get_account_accessor(slot, pubkey, &account_info.storage_location())
                     .get_loaded_account()
                     .map(|loaded_account| (pubkey, loaded_account.take_account(), slot));
                 scan_func(&mut collector, account_slot)
@@ -3114,12 +3109,7 @@ impl AccountsDb {
             ancestors,
             |pubkey, (account_info, slot)| {
                 if let Some(loaded_account) = self
-                    .get_account_accessor(
-                        slot,
-                        pubkey,
-                        account_info.store_id(),
-                        account_info.offset(),
-                    )
+                    .get_account_accessor(slot, pubkey, &account_info.storage_location())
                     .get_loaded_account()
                 {
                     scan_func(&mut collector, (pubkey, loaded_account, slot));
@@ -3160,12 +3150,7 @@ impl AccountsDb {
                 // changes to the index entry.
                 // For details, see the comment in retry_to_get_account_accessor()
                 let account_slot = self
-                    .get_account_accessor(
-                        slot,
-                        pubkey,
-                        account_info.store_id(),
-                        account_info.offset(),
-                    )
+                    .get_account_accessor(slot, pubkey, &account_info.storage_location())
                     .get_loaded_account()
                     .map(|loaded_account| (pubkey, loaded_account.take_account(), slot))
                     .unwrap();
@@ -3206,12 +3191,7 @@ impl AccountsDb {
             index_key,
             |pubkey, (account_info, slot)| {
                 let account_slot = self
-                    .get_account_accessor(
-                        slot,
-                        pubkey,
-                        account_info.store_id(),
-                        account_info.offset(),
-                    )
+                    .get_account_accessor(slot, pubkey, &account_info.storage_location())
                     .get_loaded_account()
                     .map(|loaded_account| (pubkey, loaded_account.take_account(), slot));
                 scan_func(&mut collector, account_slot)
@@ -3328,7 +3308,7 @@ impl AccountsDb {
         pubkey: &'a Pubkey,
         max_root: Option<Slot>,
         clone_in_lock: bool,
-    ) -> Option<(Slot, AppendVecId, usize, Option<LoadedAccountAccessor<'a>>)> {
+    ) -> Option<(Slot, StorageLocation, Option<LoadedAccountAccessor<'a>>)> {
         let (lock, index) = match self.accounts_index.get(pubkey, Some(ancestors), max_root) {
             AccountIndexGetResult::Found(lock, index) => (lock, index),
             // we bail out pretty early for missing.
@@ -3339,8 +3319,7 @@ impl AccountsDb {
 
         let slot_list = lock.slot_list();
         let (slot, info) = slot_list[index];
-        let store_id = info.store_id();
-        let offset = info.offset();
+        let storage_location = info.storage_location();
         let some_from_slow_path = if clone_in_lock {
             // the fast path must have failed.... so take the slower approach
             // of copying potentially large Account::data inside the lock.
@@ -3348,12 +3327,12 @@ impl AccountsDb {
             // calling check_and_get_loaded_account is safe as long as we're guaranteed to hold
             // the lock during the time and there should be no purge thanks to alive ancestors
             // held by our caller.
-            Some(self.get_account_accessor(slot, pubkey, store_id, offset))
+            Some(self.get_account_accessor(slot, pubkey, &storage_location))
         } else {
             None
         };
 
-        Some((slot, store_id, offset, some_from_slow_path))
+        Some((slot, storage_location, some_from_slow_path))
         // `lock` is dropped here rather pretty quickly with clone_in_lock = false,
         // so the entry could be raced for mutation by other subsystems,
         // before we actually provision an account data for caller's use from now on.
@@ -3365,8 +3344,7 @@ impl AccountsDb {
     fn retry_to_get_account_accessor<'a>(
         &'a self,
         mut slot: Slot,
-        mut store_id: AppendVecId,
-        mut offset: usize,
+        mut storage_location: StorageLocation,
         ancestors: &'a Ancestors,
         pubkey: &'a Pubkey,
         max_root: Option<Slot>,
@@ -3484,7 +3462,7 @@ impl AccountsDb {
         // Failsafe for potential race conditions with other subsystems
         let mut num_acceptable_failed_iterations = 0;
         loop {
-            let account_accessor = self.get_account_accessor(slot, pubkey, store_id, offset);
+            let account_accessor = self.get_account_accessor(slot, pubkey, &storage_location);
             match account_accessor {
                 LoadedAccountAccessor::Cached(Some(_)) | LoadedAccountAccessor::Stored(Some(_)) => {
                     // Great! There was no race, just return :) This is the most usual situation
@@ -3571,8 +3549,8 @@ impl AccountsDb {
                 // accounts/purge_slots
                 let message = format!(
                     "do_load() failed to get key: {} from storage, latest attempt was for \
-                     slot: {}, storage_entry: {} offset: {}, load_hint: {:?}",
-                    pubkey, slot, store_id, offset, load_hint,
+                     slot: {}, storage_location: {:?}, load_hint: {:?}",
+                    pubkey, slot, storage_location, load_hint,
                 );
                 datapoint_warn!("accounts_db-do_load_warn", ("warn", message, String));
                 true
@@ -3581,7 +3559,7 @@ impl AccountsDb {
             };
 
             // Because reading from the cache/storage failed, retry from the index read
-            let (new_slot, new_store_id, new_offset, maybe_account_accessor) = self
+            let (new_slot, new_storage_location, maybe_account_accessor) = self
                 .read_index_for_accessor_or_load_slow(
                     ancestors,
                     pubkey,
@@ -3590,16 +3568,16 @@ impl AccountsDb {
                 )?;
             // Notice the subtle `?` at previous line, we bail out pretty early if missing.
 
-            if new_slot == slot && new_store_id == store_id {
+            if new_slot == slot && new_storage_location.is_store_id_equal(&storage_location) {
                 // Considering that we're failed to get accessor above and further that
                 // the index still returned the same (slot, store_id) tuple, offset must be same
                 // too.
-                assert!(new_offset == offset);
+                assert!(new_storage_location.is_offset_equal(&storage_location));
 
                 // If the entry was missing from the cache, that means it must have been flushed,
                 // and the accounts index is always updated before cache flush, so store_id must
                 // not indicate being cached at this point.
-                assert!(new_store_id != CACHE_VIRTUAL_STORAGE_ID);
+                assert!(!new_storage_location.is_cached());
 
                 // If this is not a cache entry, then this was a minor fork slot
                 // that had its storage entries cleaned up by purge_slots() but hasn't been
@@ -3617,8 +3595,8 @@ impl AccountsDb {
                 // For details, see the comment in AccountIndex::do_checked_scan_accounts(),
                 // which is referring back here.
                 panic!(
-                    "Bad index entry detected ({}, {}, {}, {}, {:?})",
-                    pubkey, slot, store_id, offset, load_hint
+                    "Bad index entry detected ({}, {}, {:?}, {:?})",
+                    pubkey, slot, storage_location, load_hint
                 );
             } else if fallback_to_slow_path {
                 // the above bad-index-entry check must had been checked first to retain the same
@@ -3630,8 +3608,7 @@ impl AccountsDb {
             }
 
             slot = new_slot;
-            store_id = new_store_id;
-            offset = new_offset;
+            storage_location = new_storage_location;
         }
     }
 
@@ -3645,11 +3622,11 @@ impl AccountsDb {
         #[cfg(not(test))]
         assert!(max_root.is_none());
 
-        let (slot, store_id, offset, _maybe_account_accesor) =
+        let (slot, storage_location, _maybe_account_accesor) =
             self.read_index_for_accessor_or_load_slow(ancestors, pubkey, max_root, false)?;
         // Notice the subtle `?` at previous line, we bail out pretty early if missing.
 
-        if self.caching_enabled && store_id != CACHE_VIRTUAL_STORAGE_ID {
+        if self.caching_enabled && !storage_location.is_cached() {
             let result = self.read_only_accounts_cache.load(pubkey, slot);
             if let Some(account) = result {
                 return Some((account, slot));
@@ -3657,7 +3634,12 @@ impl AccountsDb {
         }
 
         let (mut account_accessor, slot) = self.retry_to_get_account_accessor(
-            slot, store_id, offset, ancestors, pubkey, max_root, load_hint,
+            slot,
+            storage_location,
+            ancestors,
+            pubkey,
+            max_root,
+            load_hint,
         )?;
         let loaded_account = account_accessor.check_and_get_loaded_account();
         let is_cached = loaded_account.is_cached();
@@ -3688,12 +3670,17 @@ impl AccountsDb {
         max_root: Option<Slot>,
         load_hint: LoadHint,
     ) -> Option<Hash> {
-        let (slot, store_id, offset, _maybe_account_accesor) =
+        let (slot, storage_location, _maybe_account_accesor) =
             self.read_index_for_accessor_or_load_slow(ancestors, pubkey, max_root, false)?;
         // Notice the subtle `?` at previous line, we bail out pretty early if missing.
 
         let (mut account_accessor, _) = self.retry_to_get_account_accessor(
-            slot, store_id, offset, ancestors, pubkey, max_root, load_hint,
+            slot,
+            storage_location,
+            ancestors,
+            pubkey,
+            max_root,
+            load_hint,
         )?;
         let loaded_account = account_accessor.check_and_get_loaded_account();
         Some(loaded_account.loaded_hash())
@@ -3703,18 +3690,20 @@ impl AccountsDb {
         &'a self,
         slot: Slot,
         pubkey: &'a Pubkey,
-        store_id: AppendVecId,
-        offset: usize,
+        storage_location: &StorageLocation,
     ) -> LoadedAccountAccessor<'a> {
-        if store_id == CACHE_VIRTUAL_STORAGE_ID {
-            let maybe_cached_account = self.accounts_cache.load(slot, pubkey).map(Cow::Owned);
-            LoadedAccountAccessor::Cached(maybe_cached_account)
-        } else {
-            let maybe_storage_entry = self
-                .storage
-                .get_account_storage_entry(slot, store_id)
-                .map(|account_storage_entry| (account_storage_entry, offset));
-            LoadedAccountAccessor::Stored(maybe_storage_entry)
+        match storage_location {
+            StorageLocation::Cached => {
+                let maybe_cached_account = self.accounts_cache.load(slot, pubkey).map(Cow::Owned);
+                LoadedAccountAccessor::Cached(maybe_cached_account)
+            }
+            StorageLocation::AppendVec(store_id, offset) => {
+                let maybe_storage_entry = self
+                    .storage
+                    .get_account_storage_entry(slot, *store_id)
+                    .map(|account_storage_entry| (account_storage_entry, *offset));
+                LoadedAccountAccessor::Stored(maybe_storage_entry)
+            }
         }
     }
 
@@ -5124,8 +5113,7 @@ impl AccountsDb {
                                     self.get_account_accessor(
                                         *slot,
                                         pubkey,
-                                        account_info.store_id(),
-                                        account_info.offset(),
+                                        &account_info.storage_location(),
                                     )
                                     .get_loaded_account()
                                     .and_then(
