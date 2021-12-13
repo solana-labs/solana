@@ -247,6 +247,10 @@ pub mod reject_section_virtual_address_file_offset_mismatch {
     solana_sdk::declare_id!("5N4NikcJLEiZNqwndhNyvZw15LvFXp1oF7AJQTNTZY5k");
 }
 
+pub mod reject_all_writable_sections {
+    solana_sdk::declare_id!("Dz1Ln7oRyVsyZBirceufeAfFTpHvNrmZtFZkSmqyMGcU");
+}
+
 pub mod nonce_must_be_writable {
     solana_sdk::declare_id!("BiCU7M5w8ZCMykVSyhZ7Q3m2SWoR2qrEQ86ERcDX77ME");
 }
@@ -335,6 +339,7 @@ lazy_static! {
         (add_compute_budget_program::id(), "Add compute_budget_program"),
         (reject_deployment_of_unresolved_syscalls::id(), "Reject deployment of programs with unresolved syscall symbols"),
         (reject_section_virtual_address_file_offset_mismatch::id(), "enforce section virtual addresses and file offsets in ELF to be equal"),
+        (reject_all_writable_sections::id(), "reject deployment of programs with writable data sections"),
         (nonce_must_be_writable::id(), "nonce must be writable"),
         (spl_token_v3_3_0_release::id(), "spl-token v3.3.0 release"),
         (leave_nonce_on_success::id(), "leave nonce as is on success"),

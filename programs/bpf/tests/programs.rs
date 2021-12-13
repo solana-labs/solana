@@ -211,6 +211,7 @@ fn run_program(name: &str) -> u64 {
             enable_instruction_tracing: true,
             reject_unresolved_syscalls: true,
             reject_section_virtual_address_file_offset_mismatch: true,
+            reject_all_writable_sections: true,
             verify_mul64_imm_nonzero: false,
             verify_shift32_imm: true,
             ..Config::default()

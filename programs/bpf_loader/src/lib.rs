@@ -38,7 +38,7 @@ use {
         clock::Clock,
         entrypoint::{HEAP_LENGTH, SUCCESS},
         feature_set::{
-            do_support_realloc, reduce_required_deploy_balance,
+            do_support_realloc, reduce_required_deploy_balance, reject_all_writable_sections,
             reject_deployment_of_unresolved_syscalls,
             reject_section_virtual_address_file_offset_mismatch, requestable_heap_size,
             start_verify_shift32_imm, stop_verify_mul64_imm_nonzero,
@@ -101,6 +101,10 @@ pub fn create_executor(
             && invoke_context
                 .feature_set
                 .is_active(&reject_section_virtual_address_file_offset_mismatch::id()),
+        reject_all_writable_sections: reject_deployment_of_broken_elfs
+            && invoke_context
+                .feature_set
+                .is_active(&reject_all_writable_sections::id()),
         verify_mul64_imm_nonzero: !invoke_context
             .feature_set
             .is_active(&stop_verify_mul64_imm_nonzero::id()),
