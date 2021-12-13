@@ -11,6 +11,8 @@ export PS4="++"
 #
 # Restore target/ from the previous CI build on this machine
 #
+echo "$BRANCH"
+echo "$CHANNEL"
 eval "$(ci/channel-info.sh)"
 export CARGO_TARGET_CACHE=$HOME/cargo-target-cache/"$CHANNEL"-"$BUILDKITE_LABEL"
 (
