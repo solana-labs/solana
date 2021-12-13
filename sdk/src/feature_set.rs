@@ -275,6 +275,10 @@ pub mod evict_invalid_stakes_cache_entries {
     solana_sdk::declare_id!("EMX9Q7TVFAmQ9V1CggAkhMzhXSg8ECp7fHrWQX2G1chf");
 }
 
+pub mod allow_votes_to_directly_update_vote_state {
+    solana_sdk::declare_id!("Ff8b1fBeB86q8cjq47ZhsQLgv5EkHu3G1C99zjUfAzrq");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -338,6 +342,7 @@ lazy_static! {
         (fixed_memcpy_nonoverlapping_check::id(), "use correct check for nonoverlapping regions in memcpy syscall"),
         (reject_non_rent_exempt_vote_withdraws::id(), "fail vote withdraw instructions which leave the account non-rent-exempt"),
         (evict_invalid_stakes_cache_entries::id(), "evict invalid stakes cache entries on epoch boundaries"),
+        (allow_votes_to_directly_update_vote_state::id(), "enable direct vote state update"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
