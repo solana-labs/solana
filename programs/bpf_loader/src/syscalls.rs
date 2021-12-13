@@ -16,7 +16,7 @@ use solana_sdk::{
     bpf_loader, bpf_loader_deprecated,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::Clock,
-    entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
+    entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     epoch_schedule::EpochSchedule,
     feature_set::{
         allow_native_ids, check_seed_length, close_upgradeable_program_accounts, cpi_data_cost,
@@ -825,7 +825,7 @@ impl SyscallObject<BpfError> for SyscallAllocFree {
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         let align = if self.aligned {
-            BPF_ALIGN_OF_U128
+            align_of::<u128>()
         } else {
             align_of::<u8>()
         };

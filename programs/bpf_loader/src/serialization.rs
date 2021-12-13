@@ -3,12 +3,15 @@ use solana_rbpf::{aligned_memory::AlignedMemory, ebpf::HOST_ALIGN};
 use solana_sdk::{
     account::{ReadableAccount, WritableAccount},
     bpf_loader_deprecated,
-    entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE},
+    entrypoint::{MAX_PERMITTED_DATA_INCREASE, PARAMETER_ALIGNMENT},
     instruction::InstructionError,
     keyed_account::KeyedAccount,
     pubkey::Pubkey,
 };
-use std::{io::prelude::*, mem::size_of};
+use std::{
+    io::prelude::*,
+    mem::{align_of, size_of},
+};
 
 /// Look for a duplicate account and return its position if found
 pub fn is_dup(accounts: &[KeyedAccount], keyed_account: &KeyedAccount) -> (bool, usize) {
@@ -165,7 +168,7 @@ pub fn get_serialized_account_size_aligned(
             + size_of::<u64>()  // data len
             + data_len
             + MAX_PERMITTED_DATA_INCREASE
-            + (data_len as *const u8).align_offset(BPF_ALIGN_OF_U128)
+            + (data_len as *const u8).align_offset(align_of::<u128>())
             + size_of::<u64>(), // rent epoch
     )
 }
@@ -224,7 +227,7 @@ pub fn serialize_parameters_aligned(
                 .map_err(|_| InstructionError::InvalidArgument)?;
             v.resize(
                 MAX_PERMITTED_DATA_INCREASE
-                    + (v.write_index() as *const u8).align_offset(BPF_ALIGN_OF_U128),
+                    + (v.write_index() as *const u8).align_offset(PARAMETER_ALIGNMENT),
                 0,
             )
             .map_err(|_| InstructionError::InvalidArgument)?;
@@ -274,7 +277,7 @@ pub fn deserialize_parameters_aligned(
 
             account.set_data_from_slice(&buffer[start..data_end]);
             start += pre_len + MAX_PERMITTED_DATA_INCREASE; // data
-            start += (start as *const u8).align_offset(BPF_ALIGN_OF_U128);
+            start += (start as *const u8).align_offset(align_of::<u128>());
             start += size_of::<u64>(); // rent_epoch
         }
     }
@@ -403,7 +406,7 @@ mod tests {
         assert_eq!(&program_id, de_program_id);
         assert_eq!(instruction_data, de_instruction_data);
         assert_eq!(
-            (&de_instruction_data[0] as *const u8).align_offset(BPF_ALIGN_OF_U128),
+            (&de_instruction_data[0] as *const u8).align_offset(align_of::<u128>()),
             0
         );
         for ((account, account_info), key) in accounts.iter().zip(de_accounts).zip(keys.clone()) {
@@ -416,7 +419,7 @@ mod tests {
             assert_eq!(account.rent_epoch(), account_info.rent_epoch);
 
             assert_eq!(
-                (*account_info.lamports.borrow() as *const u64).align_offset(BPF_ALIGN_OF_U128),
+                (*account_info.lamports.borrow() as *const u64).align_offset(align_of::<u64>()),
                 0
             );
             assert_eq!(
@@ -424,7 +427,7 @@ mod tests {
                     .data
                     .borrow()
                     .as_ptr()
-                    .align_offset(BPF_ALIGN_OF_U128),
+                    .align_offset(align_of::<u128>()),
                 0
             );
         }
