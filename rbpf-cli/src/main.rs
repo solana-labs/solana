@@ -7,10 +7,9 @@ use solana_bpf_loader_program::{
 };
 use solana_rbpf::{
     assembler::assemble,
-    elf::Executable,
     static_analysis::Analysis,
     verifier::check,
-    vm::{Config, DynamicAnalysis},
+    vm::{Config, DynamicAnalysis, Executable},
 };
 use solana_sdk::{
     account::AccountSharedData,
@@ -188,7 +187,7 @@ native machine code before execting it in the virtual machine.",
     file.read_to_end(&mut contents).unwrap();
     let syscall_registry = register_syscalls(&mut invoke_context).unwrap();
     let mut executable = if magic == [0x7f, 0x45, 0x4c, 0x46] {
-        Executable::<BpfError, ThisInstructionMeter>::from_elf(
+        <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
             &contents,
             None,
             config,
@@ -210,7 +209,7 @@ native machine code before execting it in the virtual machine.",
         check(text_bytes, &config).unwrap();
     }
     executable.jit_compile().unwrap();
-    let analysis = Analysis::from_executable(&executable);
+    let analysis = Analysis::from_executable(executable.as_ref());
 
     match matches.value_of("use") {
         Some("cfg") => {
@@ -227,7 +226,7 @@ native machine code before execting it in the virtual machine.",
     }
 
     let id = bpf_loader::id();
-    let mut vm = create_vm(&id, &executable, &mut mem, &mut invoke_context).unwrap();
+    let mut vm = create_vm(&id, executable.as_ref(), &mut mem, &mut invoke_context).unwrap();
     let result = if matches.value_of("use").unwrap() == "interpreter" {
         vm.execute_program_interpreted(&mut instruction_meter)
     } else {
@@ -245,7 +244,7 @@ native machine code before execting it in the virtual machine.",
     if matches.is_present("trace") {
         println!("Trace is saved in trace.out");
         let mut file = File::create("trace.out").unwrap();
-        let analysis = Analysis::from_executable(&executable);
+        let analysis = Analysis::from_executable(executable.as_ref());
         vm.get_tracer().write(&mut file, &analysis).unwrap();
     }
     if matches.is_present("profile") {
