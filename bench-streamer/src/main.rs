@@ -2,8 +2,8 @@
 use {
     clap::{crate_description, crate_name, App, Arg},
     solana_streamer::{
-        packet::{Packet, PacketBatch, PacketBatchRecycler, PACKET_DATA_SIZE},
-        streamer::{receiver, PacketBatchReceiver},
+        packet::{Packet, Packets, PacketsRecycler, PACKET_DATA_SIZE},
+        streamer::{receiver, PacketReceiver},
     },
     std::{
         cmp::max,
@@ -20,19 +20,19 @@ use {
 
 fn producer(addr: &SocketAddr, exit: Arc<AtomicBool>) -> JoinHandle<()> {
     let send = UdpSocket::bind("0.0.0.0:0").unwrap();
-    let mut packet_batch = PacketBatch::default();
-    packet_batch.packets.resize(10, Packet::default());
-    for w in packet_batch.packets.iter_mut() {
+    let mut msgs = Packets::default();
+    msgs.packets.resize(10, Packet::default());
+    for w in msgs.packets.iter_mut() {
         w.meta.size = PACKET_DATA_SIZE;
         w.meta.set_addr(addr);
     }
-    let packet_batch = Arc::new(packet_batch);
+    let msgs = Arc::new(msgs);
     spawn(move || loop {
         if exit.load(Ordering::Relaxed) {
             return;
         }
         let mut num = 0;
-        for p in &packet_batch.packets {
+        for p in &msgs.packets {
             let a = p.meta.addr();
             assert!(p.meta.size <= PACKET_DATA_SIZE);
             send.send_to(&p.data[..p.meta.size], &a).unwrap();
@@ -42,14 +42,14 @@ fn producer(addr: &SocketAddr, exit: Arc<AtomicBool>) -> JoinHandle<()> {
     })
 }
 
-fn sink(exit: Arc<AtomicBool>, rvs: Arc<AtomicUsize>, r: PacketBatchReceiver) -> JoinHandle<()> {
+fn sink(exit: Arc<AtomicBool>, rvs: Arc<AtomicUsize>, r: PacketReceiver) -> JoinHandle<()> {
     spawn(move || loop {
         if exit.load(Ordering::Relaxed) {
             return;
         }
         let timer = Duration::new(1, 0);
-        if let Ok(packet_batch) = r.recv_timeout(timer) {
-            rvs.fetch_add(packet_batch.packets.len(), Ordering::Relaxed);
+        if let Ok(msgs) = r.recv_timeout(timer) {
+            rvs.fetch_add(msgs.packets.len(), Ordering::Relaxed);
         }
     })
 }
@@ -81,7 +81,7 @@ fn main() -> Result<()> {
 
     let mut read_channels = Vec::new();
     let mut read_threads = Vec::new();
-    let recycler = PacketBatchRecycler::default();
+    let recycler = PacketsRecycler::default();
     for _ in 0..num_sockets {
         let read = solana_net_utils::bind_to(ip_addr, port, false).unwrap();
         read.set_read_timeout(Some(Duration::new(1, 0))).unwrap();

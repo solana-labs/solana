@@ -3,7 +3,7 @@
 
 use {
     crate::{
-        packet::{self, send_to, PacketBatch, PacketBatchRecycler, PACKETS_PER_BATCH},
+        packet::{self, send_to, Packets, PacketsRecycler, PACKETS_PER_BATCH},
         recvmmsg::NUM_RCVMMSGS,
         socket::SocketAddrSpace,
     },
@@ -21,8 +21,8 @@ use {
     thiserror::Error,
 };
 
-pub type PacketBatchReceiver = Receiver<PacketBatch>;
-pub type PacketBatchSender = Sender<PacketBatch>;
+pub type PacketReceiver = Receiver<Packets>;
+pub type PacketSender = Sender<Packets>;
 
 #[derive(Error, Debug)]
 pub enum StreamerError {
@@ -33,7 +33,7 @@ pub enum StreamerError {
     RecvTimeout(#[from] RecvTimeoutError),
 
     #[error("send packets error")]
-    Send(#[from] SendError<PacketBatch>),
+    Send(#[from] SendError<Packets>),
 }
 
 pub type Result<T> = std::result::Result<T, StreamerError>;
@@ -41,8 +41,8 @@ pub type Result<T> = std::result::Result<T, StreamerError>;
 fn recv_loop(
     sock: &UdpSocket,
     exit: Arc<AtomicBool>,
-    channel: &PacketBatchSender,
-    recycler: &PacketBatchRecycler,
+    channel: &PacketSender,
+    recycler: &PacketsRecycler,
     name: &'static str,
     coalesce_ms: u64,
     use_pinned_memory: bool,
@@ -52,10 +52,10 @@ fn recv_loop(
     let mut now = Instant::now();
     let mut num_max_received = 0; // Number of times maximum packets were received
     loop {
-        let mut packet_batch = if use_pinned_memory {
-            PacketBatch::new_with_recycler(recycler.clone(), PACKETS_PER_BATCH, name)
+        let mut msgs = if use_pinned_memory {
+            Packets::new_with_recycler(recycler.clone(), PACKETS_PER_BATCH, name)
         } else {
-            PacketBatch::with_capacity(PACKETS_PER_BATCH)
+            Packets::with_capacity(PACKETS_PER_BATCH)
         };
         loop {
             // Check for exit signal, even if socket is busy
@@ -63,14 +63,14 @@ fn recv_loop(
             if exit.load(Ordering::Relaxed) {
                 return Ok(());
             }
-            if let Ok(len) = packet::recv_from(&mut packet_batch, sock, coalesce_ms) {
+            if let Ok(len) = packet::recv_from(&mut msgs, sock, coalesce_ms) {
                 if len == NUM_RCVMMSGS {
                     num_max_received += 1;
                 }
                 recv_count += len;
                 call_count += 1;
                 if len > 0 {
-                    channel.send(packet_batch)?;
+                    channel.send(msgs)?;
                 }
                 break;
             }
@@ -94,8 +94,8 @@ fn recv_loop(
 pub fn receiver(
     sock: Arc<UdpSocket>,
     exit: &Arc<AtomicBool>,
-    packet_sender: PacketBatchSender,
-    recycler: PacketBatchRecycler,
+    packet_sender: PacketSender,
+    recycler: PacketsRecycler,
     name: &'static str,
     coalesce_ms: u64,
     use_pinned_memory: bool,
@@ -123,36 +123,32 @@ pub fn receiver(
 
 fn recv_send(
     sock: &UdpSocket,
-    r: &PacketBatchReceiver,
+    r: &PacketReceiver,
     socket_addr_space: &SocketAddrSpace,
 ) -> Result<()> {
     let timer = Duration::new(1, 0);
-    let packet_batch = r.recv_timeout(timer)?;
-    send_to(&packet_batch, sock, socket_addr_space)?;
+    let msgs = r.recv_timeout(timer)?;
+    send_to(&msgs, sock, socket_addr_space)?;
     Ok(())
 }
 
-pub fn recv_batch(recvr: &PacketBatchReceiver) -> Result<(Vec<PacketBatch>, usize, u64)> {
+pub fn recv_batch(recvr: &PacketReceiver) -> Result<(Vec<Packets>, usize, u64)> {
     let timer = Duration::new(1, 0);
-    let packet_batch = recvr.recv_timeout(timer)?;
+    let msgs = recvr.recv_timeout(timer)?;
     let recv_start = Instant::now();
-    trace!("got packets");
-    let mut num_packets = packet_batch.packets.len();
-    let mut packet_batches = vec![packet_batch];
-    while let Ok(packet_batch) = recvr.try_recv() {
-        trace!("got more packets");
-        num_packets += packet_batch.packets.len();
-        packet_batches.push(packet_batch);
+    trace!("got msgs");
+    let mut len = msgs.packets.len();
+    let mut batch = vec![msgs];
+    while let Ok(more) = recvr.try_recv() {
+        trace!("got more msgs");
+        len += more.packets.len();
+        batch.push(more);
     }
     let recv_duration = recv_start.elapsed();
-    trace!(
-        "packet batches len: {}, num packets: {}",
-        packet_batches.len(),
-        num_packets
-    );
+    trace!("batch len {}", batch.len());
     Ok((
-        packet_batches,
-        num_packets,
+        batch,
+        len,
         solana_sdk::timing::duration_as_ms(&recv_duration),
     ))
 }
@@ -160,7 +156,7 @@ pub fn recv_batch(recvr: &PacketBatchReceiver) -> Result<(Vec<PacketBatch>, usiz
 pub fn responder(
     name: &'static str,
     sock: Arc<UdpSocket>,
-    r: PacketBatchReceiver,
+    r: PacketReceiver,
     socket_addr_space: SocketAddrSpace,
 ) -> JoinHandle<()> {
     Builder::new()
@@ -197,7 +193,7 @@ mod test {
     use {
         super::*,
         crate::{
-            packet::{Packet, PacketBatch, PACKET_DATA_SIZE},
+            packet::{Packet, Packets, PACKET_DATA_SIZE},
             streamer::{receiver, responder},
         },
         solana_perf::recycler::Recycler,
@@ -214,16 +210,16 @@ mod test {
         },
     };
 
-    fn get_packet_batches(r: PacketBatchReceiver, num_packets: &mut usize) {
+    fn get_msgs(r: PacketReceiver, num: &mut usize) {
         for _ in 0..10 {
-            let packet_batch_res = r.recv_timeout(Duration::new(1, 0));
-            if packet_batch_res.is_err() {
+            let m = r.recv_timeout(Duration::new(1, 0));
+            if m.is_err() {
                 continue;
             }
 
-            *num_packets -= packet_batch_res.unwrap().packets.len();
+            *num -= m.unwrap().packets.len();
 
-            if *num_packets == 0 {
+            if *num == 0 {
                 break;
             }
         }
@@ -232,7 +228,7 @@ mod test {
     #[test]
     fn streamer_debug() {
         write!(io::sink(), "{:?}", Packet::default()).unwrap();
-        write!(io::sink(), "{:?}", PacketBatch::default()).unwrap();
+        write!(io::sink(), "{:?}", Packets::default()).unwrap();
     }
     #[test]
     fn streamer_send_test() {
@@ -260,23 +256,23 @@ mod test {
                 r_responder,
                 SocketAddrSpace::Unspecified,
             );
-            let mut packet_batch = PacketBatch::default();
+            let mut msgs = Packets::default();
             for i in 0..5 {
-                let mut p = Packet::default();
+                let mut b = Packet::default();
                 {
-                    p.data[0] = i as u8;
-                    p.meta.size = PACKET_DATA_SIZE;
-                    p.meta.set_addr(&addr);
+                    b.data[0] = i as u8;
+                    b.meta.size = PACKET_DATA_SIZE;
+                    b.meta.set_addr(&addr);
                 }
-                packet_batch.packets.push(p);
+                msgs.packets.push(b);
             }
-            s_responder.send(packet_batch).expect("send");
+            s_responder.send(msgs).expect("send");
             t_responder
         };
 
-        let mut packets_remaining = 5;
-        get_packet_batches(r_reader, &mut packets_remaining);
-        assert_eq!(packets_remaining, 0);
+        let mut num = 5;
+        get_msgs(r_reader, &mut num);
+        assert_eq!(num, 0);
         exit.store(true, Ordering::Relaxed);
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
