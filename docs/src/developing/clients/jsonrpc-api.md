@@ -989,6 +989,9 @@ Result:
 
 ### getFeeForMessage
 
+**NEW: This method is only available in solana-core v1.9 or newer. Please use
+[getFees](jsonrpc-api.md#getfees) for solana-core v1.8**
+
 Get the fee the network will charge for a particular Message
 
 #### Parameters:
@@ -1144,7 +1147,7 @@ Unhealthy Result (if additional information is available)
 ### getHighestSnapshotSlot
 
 **NEW: This method is only available in solana-core v1.9 or newer. Please use
-[getSnapshotSlot](jsonrpc-api.md#getsnapshotslot) for solana-core v1.7/v1.8**
+[getSnapshotSlot](jsonrpc-api.md#getsnapshotslot) for solana-core v1.8**
 
 Returns the highest slot information that the node has snapshots for.
 
@@ -1451,6 +1454,9 @@ Result:
 ```
 
 ### getLatestBlockhash
+
+**NEW: This method is only available in solana-core v1.9 or newer. Please use
+[getRecentBlockhash](jsonrpc-api.md#getrecentblockhash) for solana-core v1.8**
 
 Returns the latest blockhash
 
@@ -3055,6 +3061,9 @@ Result:
 ```
 
 ### isBlockhashValid
+
+**NEW: This method is only available in solana-core v1.9 or newer. Please use
+[getFeeCalculatorForBlockhash](jsonrpc-api.md#getfeecalculatorforblockhash) for solana-core v1.8**
 
 Returns whether a blockhash is still valid or not
 
