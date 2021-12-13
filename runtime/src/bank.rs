@@ -614,7 +614,7 @@ pub struct TransactionLogCollectorConfig {
     pub filter: TransactionLogCollectorFilter,
 }
 
-#[derive(AbiExample, Clone, Debug, PartialEq)]
+#[derive(AbiExample, Clone, Debug)]
 pub struct TransactionLogInfo {
     pub signature: Signature,
     pub result: Result<()>,
@@ -631,23 +631,6 @@ pub struct TransactionLogCollector {
     // For each `mentioned_addresses`, maintain a list of indices into `logs` to easily
     // locate the logs from transactions that included the mentioned addresses.
     pub mentioned_address_map: HashMap<Pubkey, Vec<usize>>,
-}
-
-impl TransactionLogCollector {
-    pub fn get_logs_for_address(
-        &self,
-        address: Option<&Pubkey>,
-    ) -> Option<Vec<TransactionLogInfo>> {
-        match address {
-            None => Some(self.logs.clone()),
-            Some(address) => self.mentioned_address_map.get(address).map(|log_indices| {
-                log_indices
-                    .iter()
-                    .filter_map(|i| self.logs.get(*i).cloned())
-                    .collect()
-            }),
-        }
-    }
 }
 
 pub trait NonceRollbackInfo {
@@ -3871,7 +3854,10 @@ impl Bank {
             if Self::can_commit(r) // Skip log collection for unprocessed transactions
                 && transaction_log_collector_config.filter != TransactionLogCollectorFilter::None
             {
-                let mut filtered_mentioned_addresses = Vec::new();
+                let mut transaction_log_collector = self.transaction_log_collector.write().unwrap();
+                let transaction_log_index = transaction_log_collector.logs.len();
+
+                let mut mentioned_address = false;
                 if !transaction_log_collector_config
                     .mentioned_addresses
                     .is_empty()
@@ -3881,42 +3867,32 @@ impl Bank {
                             .mentioned_addresses
                             .contains(key)
                         {
-                            filtered_mentioned_addresses.push(*key);
+                            transaction_log_collector
+                                .mentioned_address_map
+                                .entry(*key)
+                                .or_default()
+                                .push(transaction_log_index);
+                            mentioned_address = true;
                         }
                     }
                 }
 
                 let is_vote = is_simple_vote_transaction(tx);
                 let store = match transaction_log_collector_config.filter {
-                    TransactionLogCollectorFilter::All => {
-                        !is_vote || !filtered_mentioned_addresses.is_empty()
-                    }
+                    TransactionLogCollectorFilter::All => !is_vote || mentioned_address,
                     TransactionLogCollectorFilter::AllWithVotes => true,
                     TransactionLogCollectorFilter::None => false,
-                    TransactionLogCollectorFilter::OnlyMentionedAddresses => {
-                        !filtered_mentioned_addresses.is_empty()
-                    }
+                    TransactionLogCollectorFilter::OnlyMentionedAddresses => mentioned_address,
                 };
 
                 if store {
                     if let Some(log_messages) = transaction_log_messages.get(i).cloned().flatten() {
-                        let mut transaction_log_collector =
-                            self.transaction_log_collector.write().unwrap();
-                        let transaction_log_index = transaction_log_collector.logs.len();
-
                         transaction_log_collector.logs.push(TransactionLogInfo {
                             signature: tx.signatures[0],
                             result: r.clone(),
                             is_vote,
                             log_messages,
                         });
-                        for key in filtered_mentioned_addresses.into_iter() {
-                            transaction_log_collector
-                                .mentioned_address_map
-                                .entry(key)
-                                .or_default()
-                                .push(transaction_log_index);
-                        }
                     }
                 }
             }
@@ -5071,10 +5047,20 @@ impl Bank {
         &self,
         address: Option<&Pubkey>,
     ) -> Option<Vec<TransactionLogInfo>> {
-        self.transaction_log_collector
-            .read()
-            .unwrap()
-            .get_logs_for_address(address)
+        let transaction_log_collector = self.transaction_log_collector.read().unwrap();
+
+        match address {
+            None => Some(transaction_log_collector.logs.clone()),
+            Some(address) => transaction_log_collector
+                .mentioned_address_map
+                .get(address)
+                .map(|log_indices| {
+                    log_indices
+                        .iter()
+                        .map(|i| transaction_log_collector.logs[*i].clone())
+                        .collect()
+                }),
+        }
     }
 
     pub fn get_all_accounts_modified_since_parent(&self) -> Vec<(Pubkey, AccountSharedData)> {
@@ -14422,20 +14408,5 @@ pub(crate) mod tests {
         );
         let tx = Transaction::new(&[&mint_keypair], message, bank.last_blockhash());
         bank.process_transaction(&tx).unwrap();
-    }
-
-    #[test]
-    fn test_transaction_log_collector_get_logs_for_address() {
-        let address = Pubkey::new_unique();
-        let mut mentioned_address_map = HashMap::new();
-        mentioned_address_map.insert(address, vec![0]);
-        let transaction_log_collector = TransactionLogCollector {
-            mentioned_address_map,
-            ..TransactionLogCollector::default()
-        };
-        assert_eq!(
-            transaction_log_collector.get_logs_for_address(Some(&address)),
-            Some(Vec::<TransactionLogInfo>::new()),
-        );
     }
 }
