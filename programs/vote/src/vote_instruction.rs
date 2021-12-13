@@ -161,18 +161,14 @@ pub enum VoteInstruction {
     ///
     /// # Account references
     ///   0. `[Write]` Vote account to vote with
-    ///   1. `[]` Slot hashes sysvar
-    ///   2. `[]` Clock sysvar
-    ///   3. `[SIGNER]` Vote authority
+    ///   1. `[SIGNER]` Vote authority
     UpdateVoteState(VoteStateUpdate),
 
     /// Update the onchain vote state for the signer along with a switching proof.
     ///
     /// # Account references
     ///   0. `[Write]` Vote account to vote with
-    ///   1. `[]` Slot hashes sysvar
-    ///   2. `[]` Clock sysvar
-    ///   3. `[SIGNER]` Vote authority
+    ///   1. `[SIGNER]` Vote authority
     UpdateVoteStateSwitch(VoteStateUpdate, Hash),
 }
 
@@ -338,8 +334,6 @@ pub fn update_vote_state(
 ) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*vote_pubkey, false),
-        AccountMeta::new_readonly(sysvar::slot_hashes::id(), false),
-        AccountMeta::new_readonly(sysvar::clock::id(), false),
         AccountMeta::new_readonly(*authorized_voter_pubkey, true),
     ];
 
@@ -358,8 +352,6 @@ pub fn update_vote_state_switch(
 ) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*vote_pubkey, false),
-        AccountMeta::new_readonly(sysvar::slot_hashes::id(), false),
-        AccountMeta::new_readonly(sysvar::clock::id(), false),
         AccountMeta::new_readonly(*authorized_voter_pubkey, true),
     ];
 
@@ -465,20 +457,23 @@ pub fn process_instruction(
         }
         VoteInstruction::UpdateVoteState(vote_state_update)
         | VoteInstruction::UpdateVoteStateSwitch(vote_state_update, _) => {
-            inc_new_counter_info!("vote-state-native", 1);
-            vote_state::process_vote_state_update(
-                me,
-                &from_keyed_account::<SlotHashes>(keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account + 1,
-                )?)?,
-                &from_keyed_account::<Clock>(keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account + 2,
-                )?)?,
-                &vote_state_update,
-                &signers,
-            )
+            if invoke_context
+                .feature_set
+                .is_active(&feature_set::allow_votes_to_directly_update_vote_state::id())
+            {
+                inc_new_counter_info!("vote-state-native", 1);
+                let slot_hashes: SlotHashes =
+                    invoke_context.get_sysvar(&sysvar::slot_hashes::id())?;
+                vote_state::process_vote_state_update(
+                    me,
+                    slot_hashes.slot_hashes(),
+                    &invoke_context.get_sysvar(&sysvar::clock::id())?,
+                    vote_state_update,
+                    &signers,
+                )
+            } else {
+                Err(InstructionError::InvalidInstructionData)
+            }
         }
         VoteInstruction::Withdraw(lamports) => {
             let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
@@ -585,12 +580,19 @@ mod tests {
 
         let rent = Rent::default();
         let rent_sysvar = (sysvar::rent::id(), bincode::serialize(&rent).unwrap());
+        let clock = Clock::default();
+        let clock_sysvar = (sysvar::clock::id(), bincode::serialize(&clock).unwrap());
+        let slot_hashes = SlotHashes::default();
+        let slot_hashes_sysvar = (
+            sysvar::slot_hashes::id(),
+            bincode::serialize(&slot_hashes).unwrap(),
+        );
         solana_program_runtime::invoke_context::mock_process_instruction_with_sysvars(
             &id(),
             Vec::new(),
             &instruction.data,
             &keyed_accounts,
-            &[rent_sysvar],
+            &[rent_sysvar, clock_sysvar, slot_hashes_sysvar],
             super::process_instruction,
         )
     }

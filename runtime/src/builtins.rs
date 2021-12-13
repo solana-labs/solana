@@ -172,6 +172,15 @@ fn feature_builtins() -> Vec<(Builtin, Pubkey, ActivationType)> {
             feature_set::prevent_calling_precompiles_as_programs::id(),
             ActivationType::RemoveProgram,
         ),
+        (
+            Builtin::new(
+                "address_lookup_table_program",
+                solana_address_lookup_table_program::id(),
+                solana_address_lookup_table_program::processor::process_instruction,
+            ),
+            feature_set::versioned_tx_message_enabled::id(),
+            ActivationType::NewProgram,
+        ),
     ]
 }
 

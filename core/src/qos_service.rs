@@ -133,6 +133,10 @@ impl QosService {
                             self.metrics.retried_txs_per_account_limit_count.fetch_add(1, Ordering::Relaxed);
                             Err(TransactionError::WouldExceedMaxAccountCostLimit)
                         }
+                        CostTrackerError::WouldExceedAccountDataMaxLimit => {
+                            self.metrics.retried_txs_per_account_data_limit_count.fetch_add(1, Ordering::Relaxed);
+                            Err(TransactionError::WouldExceedMaxAccountDataCostLimit)
+                        }
                     }
                 }
             })
@@ -165,6 +169,7 @@ struct QosServiceMetrics {
     selected_txs_count: AtomicU64,
     retried_txs_per_block_limit_count: AtomicU64,
     retried_txs_per_account_limit_count: AtomicU64,
+    retried_txs_per_account_data_limit_count: AtomicU64,
 }
 
 impl QosServiceMetrics {
@@ -201,6 +206,12 @@ impl QosServiceMetrics {
                 (
                     "retried_txs_per_account_limit_count",
                     self.retried_txs_per_account_limit_count
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "retried_txs_per_account_data_limit_count",
+                    self.retried_txs_per_account_data_limit_count
                         .swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),

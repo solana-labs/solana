@@ -25,6 +25,9 @@ impl SlotHashes {
         }
         (self.0).truncate(MAX_ENTRIES);
     }
+    pub fn position(&self, slot: &Slot) -> Option<usize> {
+        self.binary_search_by(|(probe, _)| slot.cmp(probe)).ok()
+    }
     #[allow(clippy::trivially_copy_pass_by_ref)]
     pub fn get(&self, slot: &Slot) -> Option<&Hash> {
         self.binary_search_by(|(probe, _)| slot.cmp(probe))

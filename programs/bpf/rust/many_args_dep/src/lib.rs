@@ -1,7 +1,7 @@
 //! Solana Rust-based BPF program utility functions and types
 
 extern crate solana_program;
-use solana_program::msg;
+use solana_program::{log::sol_log_64, msg};
 
 pub fn many_args(
     arg1: u64,
@@ -15,8 +15,8 @@ pub fn many_args(
     arg9: u64,
 ) -> u64 {
     msg!("Another package - many_args");
-    msg!(arg1, arg2, arg3, arg4, arg5);
-    msg!(arg6, arg7, arg8, arg9, 0);
+    sol_log_64(arg1, arg2, arg3, arg4, arg5);
+    sol_log_64(arg6, arg7, arg8, arg9, 0);
     arg1 + arg2 + arg3 + arg4 + arg5 + arg6 + arg7 + arg8 + arg9
 }
 
@@ -39,8 +39,8 @@ pub fn many_args_sret(
     arg9: u64,
 ) -> Ret {
     msg!("Another package - many_args_sret");
-    msg!(arg1, arg2, arg3, arg4, arg5);
-    msg!(arg6, arg7, arg8, arg9, 0);
+    sol_log_64(arg1, arg2, arg3, arg4, arg5);
+    sol_log_64(arg6, arg7, arg8, arg9, 0);
     Ret {
         group1: u128::from(arg1) + u128::from(arg2) + u128::from(arg3),
         group2: u128::from(arg4) + u128::from(arg5) + u128::from(arg6),

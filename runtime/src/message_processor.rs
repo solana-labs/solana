@@ -1,10 +1,9 @@
 use {
-    crate::bank::TransactionAccountRefCell,
     serde::{Deserialize, Serialize},
     solana_measure::measure::Measure,
     solana_program_runtime::{
         instruction_recorder::InstructionRecorder,
-        invoke_context::{BuiltinProgram, Executors, InvokeContext},
+        invoke_context::{BuiltinProgram, Executors, InvokeContext, TransactionAccountRefCell},
         log_collector::LogCollector,
         timings::ExecuteDetailsTimings,
     },
