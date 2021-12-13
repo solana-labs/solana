@@ -363,9 +363,6 @@ Result:
 
 ### getBlock
 
-**NEW: This method is only available in solana-core v1.7 or newer. Please use
-[getConfirmedBlock](jsonrpc-api.md#getconfirmedblock) for solana-core v1.6**
-
 Returns identity and transaction information about a confirmed block in the ledger
 
 #### Parameters:
@@ -768,9 +765,6 @@ Result:
 
 ### getBlocks
 
-**NEW: This method is only available in solana-core v1.7 or newer. Please use
-[getConfirmedBlocks](jsonrpc-api.md#getconfirmedblocks) for solana-core v1.6**
-
 Returns a list of confirmed blocks between two slots
 
 #### Parameters:
@@ -801,9 +795,6 @@ Result:
 ```
 
 ### getBlocksWithLimit
-
-**NEW: This method is only available in solana-core v1.7 or newer. Please use
-[getConfirmedBlocksWithLimit](jsonrpc-api.md#getconfirmedblockswithlimit) for solana-core v1.6**
 
 Returns a list of confirmed blocks starting at the given slot
 
@@ -997,9 +988,6 @@ Result:
 ```
 
 ### getFeeForMessage
-
-**NEW: This method is only available in solana-core v1.9 or newer. Please use
-[getFees](jsonrpc-api.md#getfees) for solana-core v1.7/v1.8**
 
 Get the fee the network will charge for a particular Message
 
@@ -1976,9 +1964,6 @@ Result:
 
 ### getSignaturesForAddress
 
-**NEW: This method is only available in solana-core v1.7 or newer. Please use
-[getConfirmedSignaturesForAddress2](jsonrpc-api.md#getconfirmedsignaturesforaddress2) for solana-core v1.6**
-
 
 Returns confirmed signatures for transactions involving an
 address backwards in time from the provided signature or most recent confirmed block
@@ -2726,9 +2711,6 @@ Result:
 ```
 
 ### getTransaction
-
-**NEW: This method is only available in solana-core v1.7 or newer. Please use
-[getConfirmedTransaction](jsonrpc-api.md#getconfirmedtransaction) for solana-core v1.6**
 
 Returns transaction details for a confirmed transaction
 
