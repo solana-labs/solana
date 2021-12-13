@@ -1,9 +1,7 @@
 //! The `Poh` module provides an object for generating a Proof of History.
-use {
-    log::*,
-    solana_sdk::hash::{hash, hashv, Hash},
-    std::time::{Duration, Instant},
-};
+use log::*;
+use solana_sdk::hash::{hash, hashv, Hash};
+use std::time::{Duration, Instant};
 
 pub struct Poh {
     pub hash: Hash,
@@ -129,12 +127,10 @@ pub fn compute_hashes_per_tick(duration: Duration, hashes_sample_size: u64) -> u
 
 #[cfg(test)]
 mod tests {
-    use {
-        crate::poh::{Poh, PohEntry},
-        matches::assert_matches,
-        solana_sdk::hash::{hash, hashv, Hash},
-        std::time::Duration,
-    };
+    use crate::poh::{Poh, PohEntry};
+    use matches::assert_matches;
+    use solana_sdk::hash::{hash, hashv, Hash};
+    use std::time::Duration;
 
     fn verify(initial_hash: Hash, entries: &[(PohEntry, Option<Hash>)]) -> bool {
         let mut current_hash = initial_hash;

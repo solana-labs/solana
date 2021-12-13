@@ -1,6 +1,8 @@
 #![cfg(feature = "full")]
 
-use {crate::transaction::TransactionError, std::io, thiserror::Error};
+use crate::transaction::TransactionError;
+use std::io;
+use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum TransportError {

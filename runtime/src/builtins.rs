@@ -1,15 +1,13 @@
-use {
-    crate::{
-        bank::{Builtin, Builtins},
-        system_instruction_processor,
-    },
-    solana_sdk::{
-        feature_set,
-        instruction::InstructionError,
-        process_instruction::{stable_log, InvokeContext, ProcessInstructionWithContext},
-        pubkey::Pubkey,
-        stake, system_program,
-    },
+use crate::{
+    bank::{Builtin, Builtins},
+    system_instruction_processor,
+};
+use solana_sdk::{
+    feature_set,
+    instruction::InstructionError,
+    process_instruction::{stable_log, InvokeContext, ProcessInstructionWithContext},
+    pubkey::Pubkey,
+    stake, system_program,
 };
 
 fn process_instruction_with_program_logging(

@@ -1,19 +1,15 @@
-use {
-    crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
-    solana_ledger::{
-        blockstore::{Blockstore, CompletedDataSetInfo},
-        entry::Entry,
+use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
+use solana_ledger::blockstore::{Blockstore, CompletedDataSetInfo};
+use solana_ledger::entry::Entry;
+use solana_rpc::{max_slots::MaxSlots, rpc_subscriptions::RpcSubscriptions};
+use solana_sdk::signature::Signature;
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
     },
-    solana_rpc::{max_slots::MaxSlots, rpc_subscriptions::RpcSubscriptions},
-    solana_sdk::signature::Signature,
-    std::{
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            Arc,
-        },
-        thread::{self, Builder, JoinHandle},
-        time::Duration,
-    },
+    thread::{self, Builder, JoinHandle},
+    time::Duration,
 };
 
 pub type CompletedDataSetsReceiver = Receiver<Vec<CompletedDataSetInfo>>;
@@ -104,14 +100,10 @@ impl CompletedDataSetsService {
 
 #[cfg(test)]
 pub mod test {
-    use {
-        super::*,
-        solana_sdk::{
-            hash::Hash,
-            signature::{Keypair, Signer},
-            transaction::Transaction,
-        },
-    };
+    use super::*;
+    use solana_sdk::hash::Hash;
+    use solana_sdk::signature::{Keypair, Signer};
+    use solana_sdk::transaction::Transaction;
 
     #[test]
     fn test_zero_signatures() {

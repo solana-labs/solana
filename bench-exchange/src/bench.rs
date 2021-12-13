@@ -1,45 +1,43 @@
 #![allow(clippy::useless_attribute)]
 #![allow(clippy::integer_arithmetic)]
 
-use {
-    crate::order_book::*,
-    itertools::izip,
-    log::*,
-    rand::{thread_rng, Rng},
-    rayon::prelude::*,
-    solana_client::perf_utils::{sample_txs, SampleStats},
-    solana_core::gen_keys::GenKeys,
-    solana_exchange_program::{exchange_instruction, exchange_state::*, id},
-    solana_faucet::faucet::request_airdrop_transaction,
-    solana_genesis::Base64Account,
-    solana_metrics::datapoint_info,
-    solana_sdk::{
-        client::{Client, SyncClient},
-        commitment_config::CommitmentConfig,
-        message::Message,
-        pubkey::Pubkey,
-        signature::{Keypair, Signer},
-        system_instruction, system_program,
-        timing::{duration_as_ms, duration_as_s},
-        transaction::Transaction,
+use crate::order_book::*;
+use itertools::izip;
+use log::*;
+use rand::{thread_rng, Rng};
+use rayon::prelude::*;
+use solana_client::perf_utils::{sample_txs, SampleStats};
+use solana_core::gen_keys::GenKeys;
+use solana_exchange_program::{exchange_instruction, exchange_state::*, id};
+use solana_faucet::faucet::request_airdrop_transaction;
+use solana_genesis::Base64Account;
+use solana_metrics::datapoint_info;
+use solana_sdk::{
+    client::{Client, SyncClient},
+    commitment_config::CommitmentConfig,
+    message::Message,
+    pubkey::Pubkey,
+    signature::{Keypair, Signer},
+    timing::{duration_as_ms, duration_as_s},
+    transaction::Transaction,
+    {system_instruction, system_program},
+};
+use std::{
+    cmp,
+    collections::{HashMap, VecDeque},
+    fs::File,
+    io::prelude::*,
+    mem,
+    net::SocketAddr,
+    path::Path,
+    process::exit,
+    sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        mpsc::{channel, Receiver, Sender},
+        Arc, RwLock,
     },
-    std::{
-        cmp,
-        collections::{HashMap, VecDeque},
-        fs::File,
-        io::prelude::*,
-        mem,
-        net::SocketAddr,
-        path::Path,
-        process::exit,
-        sync::{
-            atomic::{AtomicBool, AtomicUsize, Ordering},
-            mpsc::{channel, Receiver, Sender},
-            Arc, RwLock,
-        },
-        thread::{sleep, Builder},
-        time::{Duration, Instant},
-    },
+    thread::{sleep, Builder},
+    time::{Duration, Instant},
 };
 
 // TODO Chunk length as specified results in a bunch of failures, divide by 10 helps...

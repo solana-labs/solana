@@ -1,11 +1,9 @@
-use {
-    crate::{
-        parse_account_data::{ParsableAccount, ParseAccountError},
-        UiAccountData, UiAccountEncoding,
-    },
-    bincode::{deserialize, serialized_size},
-    solana_sdk::{bpf_loader_upgradeable::UpgradeableLoaderState, pubkey::Pubkey},
+use crate::{
+    parse_account_data::{ParsableAccount, ParseAccountError},
+    UiAccountData, UiAccountEncoding,
 };
+use bincode::{deserialize, serialized_size};
+use solana_sdk::{bpf_loader_upgradeable::UpgradeableLoaderState, pubkey::Pubkey};
 
 pub fn parse_bpf_upgradeable_loader(
     data: &[u8],
@@ -92,7 +90,9 @@ pub struct UiProgramData {
 
 #[cfg(test)]
 mod test {
-    use {super::*, bincode::serialize, solana_sdk::pubkey::Pubkey};
+    use super::*;
+    use bincode::serialize;
+    use solana_sdk::pubkey::Pubkey;
 
     #[test]
     fn test_parse_bpf_upgradeable_loader_accounts() {

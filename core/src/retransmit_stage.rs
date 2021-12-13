@@ -18,7 +18,8 @@ use {
     solana_client::rpc_response::SlotUpdate,
     solana_gossip::cluster_info::{ClusterInfo, DATA_PLANE_FANOUT},
     solana_ledger::{
-        blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache, shred::Shred,
+        shred::Shred,
+        {blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache},
     },
     solana_measure::measure::Measure,
     solana_perf::packet::Packets,

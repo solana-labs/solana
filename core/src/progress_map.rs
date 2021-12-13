@@ -1,17 +1,15 @@
-use {
-    crate::{
-        cluster_info_vote_listener::SlotVoteTracker,
-        cluster_slots::SlotPubkeys,
-        consensus::{Stake, VotedStakes},
-        replay_stage::SUPERMINORITY_THRESHOLD,
-    },
-    solana_ledger::blockstore_processor::{ConfirmationProgress, ConfirmationTiming},
-    solana_runtime::{bank::Bank, bank_forks::BankForks, vote_account::ArcVoteAccount},
-    solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey},
-    std::{
-        collections::{BTreeMap, HashMap, HashSet},
-        sync::{Arc, RwLock},
-    },
+use crate::{
+    cluster_info_vote_listener::SlotVoteTracker,
+    cluster_slots::SlotPubkeys,
+    replay_stage::SUPERMINORITY_THRESHOLD,
+    {consensus::Stake, consensus::VotedStakes},
+};
+use solana_ledger::blockstore_processor::{ConfirmationProgress, ConfirmationTiming};
+use solana_runtime::{bank::Bank, bank_forks::BankForks, vote_account::ArcVoteAccount};
+use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    sync::{Arc, RwLock},
 };
 
 type VotedSlot = Slot;

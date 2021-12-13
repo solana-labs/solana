@@ -1,12 +1,10 @@
-use {
-    solana_gossip::cluster_info::ClusterInfo,
-    solana_poh::poh_recorder::PohRecorder,
-    solana_runtime::bank_forks::BankForks,
-    solana_sdk::{clock::Slot, transaction::Transaction},
-    std::{
-        sync::{mpsc::Receiver, Arc, Mutex, RwLock},
-        thread::{self, Builder, JoinHandle},
-    },
+use solana_gossip::cluster_info::ClusterInfo;
+use solana_poh::poh_recorder::PohRecorder;
+use solana_runtime::bank_forks::BankForks;
+use solana_sdk::{clock::Slot, transaction::Transaction};
+use std::{
+    sync::{mpsc::Receiver, Arc, Mutex, RwLock},
+    thread::{self, Builder, JoinHandle},
 };
 
 pub enum VoteOp {

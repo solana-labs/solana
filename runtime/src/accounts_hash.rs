@@ -1,13 +1,11 @@
-use {
-    log::*,
-    rayon::prelude::*,
-    solana_measure::measure::Measure,
-    solana_sdk::{
-        hash::{Hash, Hasher},
-        pubkey::Pubkey,
-    },
-    std::{convert::TryInto, sync::Mutex},
+use log::*;
+use rayon::prelude::*;
+use solana_measure::measure::Measure;
+use solana_sdk::{
+    hash::{Hash, Hasher},
+    pubkey::Pubkey,
 };
+use std::{convert::TryInto, sync::Mutex};
 
 pub const ZERO_RAW_LAMPORTS_SENTINEL: u64 = std::u64::MAX;
 pub const MERKLE_FANOUT: usize = 16;
@@ -784,7 +782,8 @@ impl AccountsHash {
 
 #[cfg(test)]
 pub mod tests {
-    use {super::*, std::str::FromStr};
+    use super::*;
+    use std::str::FromStr;
 
     #[test]
     fn test_accountsdb_div_ceil() {

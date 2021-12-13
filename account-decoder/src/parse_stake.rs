@@ -1,14 +1,10 @@
-use {
-    crate::{
-        parse_account_data::{ParsableAccount, ParseAccountError},
-        StringAmount,
-    },
-    bincode::deserialize,
-    solana_sdk::{
-        clock::{Epoch, UnixTimestamp},
-        stake::state::{Authorized, Delegation, Lockup, Meta, Stake, StakeState},
-    },
+use crate::{
+    parse_account_data::{ParsableAccount, ParseAccountError},
+    StringAmount,
 };
+use bincode::deserialize;
+use solana_sdk::clock::{Epoch, UnixTimestamp};
+use solana_sdk::stake::state::{Authorized, Delegation, Lockup, Meta, Stake, StakeState};
 
 pub fn parse_stake(data: &[u8]) -> Result<StakeAccountType, ParseAccountError> {
     let stake_state: StakeState = deserialize(data)
@@ -136,7 +132,8 @@ impl From<Delegation> for UiDelegation {
 
 #[cfg(test)]
 mod test {
-    use {super::*, bincode::serialize};
+    use super::*;
+    use bincode::serialize;
 
     #[test]
     fn test_parse_stake() {

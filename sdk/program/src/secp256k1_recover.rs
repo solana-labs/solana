@@ -1,8 +1,6 @@
-use {
-    borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
-    core::convert::TryFrom,
-    thiserror::Error,
-};
+use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
+use core::convert::TryFrom;
+use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum Secp256k1RecoverError {

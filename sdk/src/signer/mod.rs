@@ -100,7 +100,8 @@ pub fn unique_signers(signers: Vec<&dyn Signer>) -> Vec<&dyn Signer> {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, crate::signer::keypair::Keypair};
+    use super::*;
+    use crate::signer::keypair::Keypair;
 
     fn pubkeys(signers: &[&dyn Signer]) -> Vec<Pubkey> {
         signers.iter().map(|x| x.pubkey()).collect()

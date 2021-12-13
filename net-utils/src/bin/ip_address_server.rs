@@ -1,7 +1,5 @@
-use {
-    clap::{App, Arg},
-    std::net::{SocketAddr, TcpListener},
-};
+use clap::{App, Arg};
+use std::net::{SocketAddr, TcpListener};
 
 fn main() {
     solana_logger::setup();

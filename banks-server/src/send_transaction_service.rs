@@ -1,19 +1,17 @@
 // TODO: Merge this implementation with the one at `core/src/send_transaction_service.rs`
-use {
-    log::*,
-    solana_metrics::{datapoint_warn, inc_new_counter_info},
-    solana_runtime::{bank::Bank, bank_forks::BankForks},
-    solana_sdk::signature::Signature,
-    std::{
-        collections::HashMap,
-        net::{SocketAddr, UdpSocket},
-        sync::{
-            mpsc::{Receiver, RecvTimeoutError},
-            Arc, RwLock,
-        },
-        thread::{self, Builder, JoinHandle},
-        time::{Duration, Instant},
+use log::*;
+use solana_metrics::{datapoint_warn, inc_new_counter_info};
+use solana_runtime::{bank::Bank, bank_forks::BankForks};
+use solana_sdk::signature::Signature;
+use std::{
+    collections::HashMap,
+    net::{SocketAddr, UdpSocket},
+    sync::{
+        mpsc::{Receiver, RecvTimeoutError},
+        Arc, RwLock,
     },
+    thread::{self, Builder, JoinHandle},
+    time::{Duration, Instant},
 };
 
 /// Maximum size of the transaction queue
@@ -185,14 +183,12 @@ impl SendTransactionService {
 
 #[cfg(test)]
 mod test {
-    use {
-        super::*,
-        solana_sdk::{
-            genesis_config::create_genesis_config, pubkey::Pubkey, signature::Signer,
-            system_transaction,
-        },
-        std::sync::mpsc::channel,
+    use super::*;
+    use solana_sdk::{
+        genesis_config::create_genesis_config, pubkey::Pubkey, signature::Signer,
+        system_transaction,
     };
+    use std::sync::mpsc::channel;
 
     #[test]
     fn service_exit() {

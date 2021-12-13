@@ -13,7 +13,8 @@ pub trait DecodeError<E> {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, num_derive::FromPrimitive};
+    use super::*;
+    use num_derive::FromPrimitive;
 
     #[test]
     fn test_decode_custom_error_to_enum() {

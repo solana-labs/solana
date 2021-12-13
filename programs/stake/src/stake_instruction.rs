@@ -1,8 +1,3 @@
-#[deprecated(
-    since = "1.7.2",
-    note = "Please use `solana_sdk::stake::instruction` or `solana_program::stake::instruction` instead"
-)]
-pub use solana_sdk::stake::instruction::*;
 use {
     crate::{config, stake_state::StakeAccount},
     log::*,
@@ -21,6 +16,12 @@ use {
         sysvar::{self, clock::Clock, rent::Rent, stake_history::StakeHistory},
     },
 };
+
+#[deprecated(
+    since = "1.7.2",
+    note = "Please use `solana_sdk::stake::instruction` or `solana_program::stake::instruction` instead"
+)]
+pub use solana_sdk::stake::instruction::*;
 
 pub fn process_instruction(
     _program_id: &Pubkey,
@@ -273,25 +274,23 @@ pub fn process_instruction(
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        crate::stake_state::{Meta, StakeState},
-        bincode::serialize,
-        solana_sdk::{
-            account::{self, Account, AccountSharedData, WritableAccount},
-            instruction::{AccountMeta, Instruction},
-            keyed_account::KeyedAccount,
-            process_instruction::{mock_set_sysvar, MockInvokeContext},
-            rent::Rent,
-            stake::{
-                config as stake_config,
-                instruction::{self, LockupArgs},
-                state::{Authorized, Lockup, StakeAuthorize},
-            },
-            sysvar::stake_history::StakeHistory,
+    use super::*;
+    use crate::stake_state::{Meta, StakeState};
+    use bincode::serialize;
+    use solana_sdk::{
+        account::{self, Account, AccountSharedData, WritableAccount},
+        instruction::{AccountMeta, Instruction},
+        keyed_account::KeyedAccount,
+        process_instruction::{mock_set_sysvar, MockInvokeContext},
+        rent::Rent,
+        stake::{
+            config as stake_config,
+            instruction::{self, LockupArgs},
+            state::{Authorized, Lockup, StakeAuthorize},
         },
-        std::{cell::RefCell, rc::Rc, str::FromStr},
+        sysvar::stake_history::StakeHistory,
     };
+    use std::{cell::RefCell, rc::Rc, str::FromStr};
 
     fn create_default_account() -> RefCell<AccountSharedData> {
         RefCell::new(AccountSharedData::default())

@@ -70,7 +70,8 @@ use {
     solana_sdk::{
         clock::Slot,
         feature_set,
-        hash::{hashv, Hash},
+        hash::hashv,
+        hash::Hash,
         packet::PACKET_DATA_SIZE,
         pubkey::Pubkey,
         signature::{Keypair, Signature, Signer},
@@ -1126,17 +1127,15 @@ pub fn verify_test_data_shred(
 
 #[cfg(test)]
 pub mod tests {
-    use {
-        super::*,
-        bincode::serialized_size,
-        matches::assert_matches,
-        rand::{seq::SliceRandom, Rng},
-        solana_sdk::{
-            hash::{self, hash},
-            shred_version, system_transaction,
-        },
-        std::{collections::HashSet, convert::TryInto, iter::repeat_with},
+    use super::*;
+    use bincode::serialized_size;
+    use matches::assert_matches;
+    use rand::{seq::SliceRandom, Rng};
+    use solana_sdk::{
+        hash::{self, hash},
+        shred_version, system_transaction,
     };
+    use std::{collections::HashSet, convert::TryInto, iter::repeat_with};
 
     #[test]
     fn test_shred_constants() {

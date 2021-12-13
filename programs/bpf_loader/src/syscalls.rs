@@ -1,58 +1,56 @@
-use {
-    crate::{alloc, BpfError},
-    alloc::Alloc,
-    solana_rbpf::{
-        aligned_memory::AlignedMemory,
-        ebpf::MM_HEAP_START,
-        error::EbpfError,
-        memory_region::{AccessType, MemoryMapping},
-        question_mark,
-        vm::{EbpfVm, SyscallObject, SyscallRegistry},
-    },
-    solana_runtime::message_processor::MessageProcessor,
-    solana_sdk::{
-        account::{Account, AccountSharedData, ReadableAccount},
-        account_info::AccountInfo,
-        account_utils::StateMut,
-        bpf_loader, bpf_loader_deprecated,
-        bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-        clock::Clock,
-        entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
-        epoch_schedule::EpochSchedule,
-        feature_set::{
-            allow_native_ids, check_seed_length, close_upgradeable_program_accounts, cpi_data_cost,
-            demote_program_write_locks, enforce_aligned_host_addrs, keccak256_syscall_enabled,
-            libsecp256k1_0_5_upgrade_enabled, mem_overlap_fix, memory_ops_syscalls,
-            return_data_syscall_enabled, secp256k1_recover_syscall_enabled,
-            set_upgrade_authority_via_cpi_enabled, sol_log_data_syscall_enabled,
-            sysvar_via_syscall, update_data_on_realloc,
-        },
-        hash::{Hasher, HASH_BYTES},
-        ic_msg,
-        instruction::{AccountMeta, Instruction, InstructionError},
-        keccak,
-        keyed_account::KeyedAccount,
-        native_loader,
-        process_instruction::{self, stable_log, ComputeMeter, InvokeContext, Logger},
-        program::MAX_RETURN_DATA,
-        pubkey::{Pubkey, PubkeyError, MAX_SEEDS, MAX_SEED_LEN},
-        rent::Rent,
-        secp256k1_recover::{
-            Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
-        },
-        sysvar::{self, fees::Fees, Sysvar, SysvarId},
-    },
-    std::{
-        alloc::Layout,
-        cell::{Ref, RefCell, RefMut},
-        cmp::min,
-        mem::{align_of, size_of},
-        rc::Rc,
-        slice::from_raw_parts_mut,
-        str::{from_utf8, Utf8Error},
-    },
-    thiserror::Error as ThisError,
+use crate::{alloc, BpfError};
+use alloc::Alloc;
+use solana_rbpf::{
+    aligned_memory::AlignedMemory,
+    ebpf::MM_HEAP_START,
+    error::EbpfError,
+    memory_region::{AccessType, MemoryMapping},
+    question_mark,
+    vm::{EbpfVm, SyscallObject, SyscallRegistry},
 };
+use solana_runtime::message_processor::MessageProcessor;
+use solana_sdk::{
+    account::{Account, AccountSharedData, ReadableAccount},
+    account_info::AccountInfo,
+    account_utils::StateMut,
+    bpf_loader, bpf_loader_deprecated,
+    bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+    clock::Clock,
+    entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
+    epoch_schedule::EpochSchedule,
+    feature_set::{
+        allow_native_ids, check_seed_length, close_upgradeable_program_accounts, cpi_data_cost,
+        demote_program_write_locks, enforce_aligned_host_addrs, keccak256_syscall_enabled,
+        libsecp256k1_0_5_upgrade_enabled, mem_overlap_fix, memory_ops_syscalls,
+        return_data_syscall_enabled, secp256k1_recover_syscall_enabled,
+        set_upgrade_authority_via_cpi_enabled, sol_log_data_syscall_enabled, sysvar_via_syscall,
+        update_data_on_realloc,
+    },
+    hash::{Hasher, HASH_BYTES},
+    ic_msg,
+    instruction::{AccountMeta, Instruction, InstructionError},
+    keccak,
+    keyed_account::KeyedAccount,
+    native_loader,
+    process_instruction::{self, stable_log, ComputeMeter, InvokeContext, Logger},
+    program::MAX_RETURN_DATA,
+    pubkey::{Pubkey, PubkeyError, MAX_SEEDS, MAX_SEED_LEN},
+    rent::Rent,
+    secp256k1_recover::{
+        Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
+    },
+    sysvar::{self, fees::Fees, Sysvar, SysvarId},
+};
+use std::{
+    alloc::Layout,
+    cell::{Ref, RefCell, RefMut},
+    cmp::min,
+    mem::{align_of, size_of},
+    rc::Rc,
+    slice::from_raw_parts_mut,
+    str::{from_utf8, Utf8Error},
+};
+use thiserror::Error as ThisError;
 
 /// Maximum signers
 pub const MAX_SIGNERS: usize = 16;
@@ -2764,19 +2762,17 @@ impl<'a> SyscallObject<BpfError> for SyscallLogData<'a> {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        solana_rbpf::{
-            ebpf::HOST_ALIGN, memory_region::MemoryRegion, user_error::UserError, vm::Config,
-        },
-        solana_sdk::{
-            bpf_loader,
-            fee_calculator::FeeCalculator,
-            hash::hashv,
-            process_instruction::{MockComputeMeter, MockInvokeContext, MockLogger},
-        },
-        std::str::FromStr,
+    use super::*;
+    use solana_rbpf::{
+        ebpf::HOST_ALIGN, memory_region::MemoryRegion, user_error::UserError, vm::Config,
     };
+    use solana_sdk::{
+        bpf_loader,
+        fee_calculator::FeeCalculator,
+        hash::hashv,
+        process_instruction::{MockComputeMeter, MockInvokeContext, MockLogger},
+    };
+    use std::str::FromStr;
 
     const DEFAULT_CONFIG: Config = Config {
         max_call_depth: 20,

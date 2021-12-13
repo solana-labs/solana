@@ -1,14 +1,12 @@
-use {
-    crate::{
-        account::{from_account, AccountSharedData, ReadableAccount},
-        account_utils::{State, StateMut},
-    },
-    solana_program::{clock::Epoch, instruction::InstructionError, pubkey::Pubkey, sysvar::Sysvar},
-    std::{
-        cell::{Ref, RefCell, RefMut},
-        iter::FromIterator,
-        rc::Rc,
-    },
+use crate::{
+    account::{from_account, AccountSharedData, ReadableAccount},
+    account_utils::{State, StateMut},
+};
+use solana_program::{clock::Epoch, instruction::InstructionError, pubkey::Pubkey, sysvar::Sysvar};
+use std::{
+    cell::{Ref, RefCell, RefMut},
+    iter::FromIterator,
+    rc::Rc,
 };
 
 #[repr(C)]
@@ -258,14 +256,12 @@ pub fn from_keyed_account<S: Sysvar>(
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        crate::{
-            account::{create_account_for_test, to_account},
-            pubkey::Pubkey,
-        },
-        std::cell::RefCell,
+    use super::*;
+    use crate::{
+        account::{create_account_for_test, to_account},
+        pubkey::Pubkey,
     };
+    use std::cell::RefCell;
 
     #[repr(C)]
     #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]

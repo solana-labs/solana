@@ -1,11 +1,10 @@
-use {
-    crate::leader_schedule::LeaderSchedule,
-    solana_runtime::bank::Bank,
-    solana_sdk::{
-        clock::{Epoch, Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
-        pubkey::Pubkey,
-    },
-    std::collections::HashMap,
+use std::collections::HashMap;
+
+use crate::leader_schedule::LeaderSchedule;
+use solana_runtime::bank::Bank;
+use solana_sdk::{
+    clock::{Epoch, Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
+    pubkey::Pubkey,
 };
 
 /// Return the leader schedule for the given epoch.
@@ -76,11 +75,9 @@ fn sort_stakes(stakes: &mut Vec<(Pubkey, u64)>) {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        solana_runtime::genesis_utils::{
-            bootstrap_validator_stake_lamports, create_genesis_config_with_leader,
-        },
+    use super::*;
+    use solana_runtime::genesis_utils::{
+        bootstrap_validator_stake_lamports, create_genesis_config_with_leader,
     };
 
     #[test]

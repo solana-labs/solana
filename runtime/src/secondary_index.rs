@@ -1,13 +1,11 @@
-use {
-    dashmap::{mapref::entry::Entry::Occupied, DashMap},
-    solana_sdk::{pubkey::Pubkey, timing::AtomicInterval},
-    std::{
-        collections::HashSet,
-        fmt::Debug,
-        sync::{
-            atomic::{AtomicU64, Ordering},
-            RwLock,
-        },
+use dashmap::{mapref::entry::Entry::Occupied, DashMap};
+use solana_sdk::{pubkey::Pubkey, timing::AtomicInterval};
+use std::{
+    collections::HashSet,
+    fmt::Debug,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        RwLock,
     },
 };
 

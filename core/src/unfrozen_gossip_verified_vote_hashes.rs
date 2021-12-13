@@ -1,8 +1,6 @@
-use {
-    crate::latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
-    solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey},
-    std::collections::{BTreeMap, HashMap},
-};
+use crate::latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks;
+use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
+use std::collections::{BTreeMap, HashMap};
 
 #[derive(Default)]
 pub(crate) struct UnfrozenGossipVerifiedVoteHashes {

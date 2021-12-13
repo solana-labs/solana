@@ -1,13 +1,11 @@
-use {
-    crate::{
-        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice, repair_service::RepairService,
-        serve_repair::RepairType, tree_diff::TreeDiff,
-    },
-    solana_ledger::blockstore::Blockstore,
-    solana_runtime::contains::Contains,
-    solana_sdk::{clock::Slot, hash::Hash},
-    std::collections::{HashMap, HashSet},
+use crate::{
+    heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice, repair_service::RepairService,
+    serve_repair::RepairType, tree_diff::TreeDiff,
 };
+use solana_ledger::blockstore::Blockstore;
+use solana_runtime::contains::Contains;
+use solana_sdk::{clock::Slot, hash::Hash};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, PartialEq)]
 enum Visit {
@@ -138,13 +136,11 @@ pub fn get_best_repair_shreds<'a>(
 
 #[cfg(test)]
 pub mod test {
-    use {
-        super::*,
-        solana_ledger::{get_tmp_ledger_path, shred::Shred},
-        solana_runtime::bank_utils,
-        solana_sdk::hash::Hash,
-        trees::tr,
-    };
+    use super::*;
+    use solana_ledger::{get_tmp_ledger_path, shred::Shred};
+    use solana_runtime::bank_utils;
+    use solana_sdk::hash::Hash;
+    use trees::tr;
 
     #[test]
     fn test_weighted_repair_traversal_single() {

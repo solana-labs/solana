@@ -1,9 +1,7 @@
-use {
-    log::*,
-    serde_derive::{Deserialize, Serialize},
-    solana_sdk::{clock::Epoch, pubkey::Pubkey},
-    std::collections::BTreeMap,
-};
+use log::*;
+use serde_derive::{Deserialize, Serialize};
+use solana_sdk::{clock::Epoch, pubkey::Pubkey};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone, AbiExample)]
 pub struct AuthorizedVoters {

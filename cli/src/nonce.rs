@@ -1,43 +1,41 @@
-use {
-    crate::{
-        checks::{check_account_for_fee_with_commitment, check_unique_pubkeys},
-        cli::{
-            log_instruction_custom_error, log_instruction_custom_error_ex, CliCommand,
-            CliCommandInfo, CliConfig, CliError, ProcessResult,
-        },
-        feature::get_feature_is_active,
-        memo::WithMemo,
-        spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
+use crate::{
+    checks::{check_account_for_fee_with_commitment, check_unique_pubkeys},
+    cli::{
+        log_instruction_custom_error, log_instruction_custom_error_ex, CliCommand, CliCommandInfo,
+        CliConfig, CliError, ProcessResult,
     },
-    clap::{App, Arg, ArgMatches, SubCommand},
-    solana_clap_utils::{
-        input_parsers::*,
-        input_validators::*,
-        keypair::{DefaultSigner, SignerIndex},
-        memo::{memo_arg, MEMO_ARG},
-        nonce::*,
-    },
-    solana_cli_output::CliNonceAccount,
-    solana_client::{nonce_utils::*, rpc_client::RpcClient},
-    solana_remote_wallet::remote_wallet::RemoteWalletManager,
-    solana_sdk::{
-        account::Account,
-        feature_set::merge_nonce_error_into_system_error,
-        hash::Hash,
-        instruction::InstructionError,
-        message::Message,
-        nonce::{self, State},
-        pubkey::Pubkey,
-        system_instruction::{
-            advance_nonce_account, authorize_nonce_account, create_nonce_account,
-            create_nonce_account_with_seed, instruction_to_nonce_error, withdraw_nonce_account,
-            NonceError, SystemError,
-        },
-        system_program,
-        transaction::{Transaction, TransactionError},
-    },
-    std::sync::Arc,
+    feature::get_feature_is_active,
+    memo::WithMemo,
+    spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
 };
+use clap::{App, Arg, ArgMatches, SubCommand};
+use solana_clap_utils::{
+    input_parsers::*,
+    input_validators::*,
+    keypair::{DefaultSigner, SignerIndex},
+    memo::{memo_arg, MEMO_ARG},
+    nonce::*,
+};
+use solana_cli_output::CliNonceAccount;
+use solana_client::{nonce_utils::*, rpc_client::RpcClient};
+use solana_remote_wallet::remote_wallet::RemoteWalletManager;
+use solana_sdk::{
+    account::Account,
+    feature_set::merge_nonce_error_into_system_error,
+    hash::Hash,
+    instruction::InstructionError,
+    message::Message,
+    nonce::{self, State},
+    pubkey::Pubkey,
+    system_instruction::{
+        advance_nonce_account, authorize_nonce_account, create_nonce_account,
+        create_nonce_account_with_seed, instruction_to_nonce_error, withdraw_nonce_account,
+        NonceError, SystemError,
+    },
+    system_program,
+    transaction::{Transaction, TransactionError},
+};
+use std::sync::Arc;
 
 pub trait NonceSubCommands {
     fn nonce_subcommands(self) -> Self;
@@ -652,21 +650,19 @@ pub fn process_withdraw_from_nonce_account(
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        crate::{clap_app::get_clap_app, cli::parse_command},
-        solana_sdk::{
-            account::Account,
-            account_utils::StateMut,
-            fee_calculator::FeeCalculator,
-            hash::hash,
-            nonce::{self, state::Versions, State},
-            nonce_account,
-            signature::{read_keypair_file, write_keypair, Keypair, Signer},
-            system_program,
-        },
-        tempfile::NamedTempFile,
+    use super::*;
+    use crate::{clap_app::get_clap_app, cli::parse_command};
+    use solana_sdk::{
+        account::Account,
+        account_utils::StateMut,
+        fee_calculator::FeeCalculator,
+        hash::hash,
+        nonce::{self, state::Versions, State},
+        nonce_account,
+        signature::{read_keypair_file, write_keypair, Keypair, Signer},
+        system_program,
     };
+    use tempfile::NamedTempFile;
 
     fn make_tmp_file() -> (String, NamedTempFile) {
         let tmp_file = NamedTempFile::new().unwrap();

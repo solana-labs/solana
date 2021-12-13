@@ -1,9 +1,7 @@
 //! The `result` module exposes a Result type that propagates one of many different Error types.
 
-use {
-    solana_gossip::{cluster_info, gossip_error::GossipError},
-    solana_ledger::blockstore,
-};
+use solana_gossip::{cluster_info, gossip_error::GossipError};
+use solana_ledger::blockstore;
 
 #[derive(Debug)]
 pub enum Error {
@@ -100,15 +98,14 @@ impl std::convert::From<GossipError> for Error {
 
 #[cfg(test)]
 mod tests {
-    use {
-        crate::result::{Error, Result},
-        std::{
-            io,
-            io::Write,
-            panic,
-            sync::mpsc::{channel, RecvError, RecvTimeoutError},
-        },
-    };
+    use crate::result::Error;
+    use crate::result::Result;
+    use std::io;
+    use std::io::Write;
+    use std::panic;
+    use std::sync::mpsc::channel;
+    use std::sync::mpsc::RecvError;
+    use std::sync::mpsc::RecvTimeoutError;
 
     fn send_error() -> Result<()> {
         let (s, r) = channel();

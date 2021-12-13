@@ -1,23 +1,21 @@
 //! The `rpc_banks_service` module implements the Solana Banks RPC API.
 
-use {
-    crate::banks_server::start_tcp_server,
-    futures::{future::FutureExt, pin_mut, prelude::stream::StreamExt, select},
-    solana_runtime::{bank_forks::BankForks, commitment::BlockCommitmentCache},
-    std::{
-        net::SocketAddr,
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            Arc, RwLock,
-        },
-        thread::{self, Builder, JoinHandle},
+use crate::banks_server::start_tcp_server;
+use futures::{future::FutureExt, pin_mut, prelude::stream::StreamExt, select};
+use solana_runtime::{bank_forks::BankForks, commitment::BlockCommitmentCache};
+use std::{
+    net::SocketAddr,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, RwLock,
     },
-    tokio::{
-        runtime::Runtime,
-        time::{self, Duration},
-    },
-    tokio_stream::wrappers::IntervalStream,
+    thread::{self, Builder, JoinHandle},
 };
+use tokio::{
+    runtime::Runtime,
+    time::{self, Duration},
+};
+use tokio_stream::wrappers::IntervalStream;
 
 pub struct RpcBanksService {
     thread_hdl: JoinHandle<()>,
@@ -103,7 +101,8 @@ impl RpcBanksService {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, solana_runtime::bank::Bank};
+    use super::*;
+    use solana_runtime::bank::Bank;
 
     #[test]
     fn test_rpc_banks_server_exit() {

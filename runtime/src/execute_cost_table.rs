@@ -4,7 +4,8 @@
 /// When its capacity limit is reached, it prunes old and less-used programs
 /// to make room for new ones.
 use log::*;
-use {solana_sdk::pubkey::Pubkey, std::collections::HashMap};
+use solana_sdk::pubkey::Pubkey;
+use std::collections::HashMap;
 
 // prune is rather expensive op, free up bulk space in each operation
 // would be more efficient. PRUNE_RATIO defines the after prune table

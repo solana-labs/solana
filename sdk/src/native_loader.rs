@@ -1,9 +1,7 @@
-use crate::{
-    account::{
-        Account, AccountSharedData, InheritableAccountFields, DUMMY_INHERITABLE_ACCOUNT_FIELDS,
-    },
-    clock::INITIAL_RENT_EPOCH,
+use crate::account::{
+    Account, AccountSharedData, InheritableAccountFields, DUMMY_INHERITABLE_ACCOUNT_FIELDS,
 };
+use crate::clock::INITIAL_RENT_EPOCH;
 
 crate::declare_id!("NativeLoader1111111111111111111111111111111");
 

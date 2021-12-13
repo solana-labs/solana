@@ -3,17 +3,16 @@ pub mod config_instruction;
 pub mod config_processor;
 pub mod date_instruction;
 
-pub use solana_sdk::config::program::id;
-use {
-    bincode::{deserialize, serialize, serialized_size},
-    serde_derive::{Deserialize, Serialize},
-    solana_sdk::{
-        account::{Account, AccountSharedData},
-        pubkey::Pubkey,
-        short_vec,
-        stake::config::Config as StakeConfig,
-    },
+use bincode::{deserialize, serialize, serialized_size};
+use serde_derive::{Deserialize, Serialize};
+use solana_sdk::{
+    account::{Account, AccountSharedData},
+    pubkey::Pubkey,
+    short_vec,
+    stake::config::Config as StakeConfig,
 };
+
+pub use solana_sdk::config::program::id;
 
 pub trait ConfigState: serde::Serialize + Default {
     /// Maximum space that the serialized representation will require

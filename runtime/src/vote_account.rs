@@ -1,21 +1,15 @@
-use {
-    serde::{
-        de::{Deserialize, Deserializer},
-        ser::{Serialize, Serializer},
-    },
-    solana_sdk::{
-        account::{Account, AccountSharedData},
-        instruction::InstructionError,
-        pubkey::Pubkey,
-    },
-    solana_vote_program::vote_state::VoteState,
-    std::{
-        cmp::Ordering,
-        collections::{hash_map::Entry, HashMap},
-        iter::FromIterator,
-        ops::Deref,
-        sync::{Arc, Once, RwLock, RwLockReadGuard},
-    },
+use serde::de::{Deserialize, Deserializer};
+use serde::ser::{Serialize, Serializer};
+use solana_sdk::{
+    account::Account, account::AccountSharedData, instruction::InstructionError, pubkey::Pubkey,
+};
+use solana_vote_program::vote_state::VoteState;
+use std::{
+    cmp::Ordering,
+    collections::{hash_map::Entry, HashMap},
+    iter::FromIterator,
+    ops::Deref,
+    sync::{Arc, Once, RwLock, RwLockReadGuard},
 };
 
 // The value here does not matter. It will be overwritten
@@ -321,14 +315,12 @@ impl<'de> Deserialize<'de> for VoteAccounts {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        bincode::Options,
-        rand::Rng,
-        solana_sdk::{pubkey::Pubkey, sysvar::clock::Clock},
-        solana_vote_program::vote_state::{VoteInit, VoteStateVersions},
-        std::iter::repeat_with,
-    };
+    use super::*;
+    use bincode::Options;
+    use rand::Rng;
+    use solana_sdk::{pubkey::Pubkey, sysvar::clock::Clock};
+    use solana_vote_program::vote_state::{VoteInit, VoteStateVersions};
+    use std::iter::repeat_with;
 
     fn new_rand_vote_account<R: Rng>(
         rng: &mut R,

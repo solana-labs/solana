@@ -1,8 +1,9 @@
 #![allow(clippy::integer_arithmetic)]
-use {
-    crate::{clock::DEFAULT_MS_PER_SLOT, ed25519_program, message::Message, secp256k1_program},
-    log::*,
-};
+use crate::clock::DEFAULT_MS_PER_SLOT;
+use crate::ed25519_program;
+use crate::message::Message;
+use crate::secp256k1_program;
+use log::*;
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, AbiExample)]
 #[serde(rename_all = "camelCase")]
@@ -179,10 +180,8 @@ impl FeeRateGovernor {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        crate::{pubkey::Pubkey, system_instruction},
-    };
+    use super::*;
+    use crate::{pubkey::Pubkey, system_instruction};
 
     #[test]
     fn test_fee_rate_governor_burn() {

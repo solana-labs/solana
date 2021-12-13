@@ -1,11 +1,9 @@
-use {
-    crate::clock::Slot,
-    bincode::Result,
-    serde::Serialize,
-    std::{
-        fmt, io,
-        net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
-    },
+use crate::clock::Slot;
+use bincode::Result;
+use serde::Serialize;
+use std::{
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
+    {fmt, io},
 };
 
 /// Maximum over-the-wire size of a Transaction

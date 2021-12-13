@@ -1,20 +1,18 @@
-use {
-    crate::{
-        parse_account_data::{ParsableAccount, ParseAccountError},
-        StringAmount, UiFeeCalculator,
-    },
-    bincode::deserialize,
-    bv::BitVec,
-    solana_sdk::{
-        clock::{Clock, Epoch, Slot, UnixTimestamp},
-        epoch_schedule::EpochSchedule,
-        pubkey::Pubkey,
-        rent::Rent,
-        slot_hashes::SlotHashes,
-        slot_history::{self, SlotHistory},
-        stake_history::{StakeHistory, StakeHistoryEntry},
-        sysvar::{self, fees::Fees, recent_blockhashes::RecentBlockhashes, rewards::Rewards},
-    },
+use crate::{
+    parse_account_data::{ParsableAccount, ParseAccountError},
+    StringAmount, UiFeeCalculator,
+};
+use bincode::deserialize;
+use bv::BitVec;
+use solana_sdk::{
+    clock::{Clock, Epoch, Slot, UnixTimestamp},
+    epoch_schedule::EpochSchedule,
+    pubkey::Pubkey,
+    rent::Rent,
+    slot_hashes::SlotHashes,
+    slot_history::{self, SlotHistory},
+    stake_history::{StakeHistory, StakeHistoryEntry},
+    sysvar::{self, fees::Fees, recent_blockhashes::RecentBlockhashes, rewards::Rewards},
 };
 
 pub fn parse_sysvar(data: &[u8], pubkey: &Pubkey) -> Result<SysvarAccountType, ParseAccountError> {
@@ -214,12 +212,10 @@ pub struct UiStakeHistoryEntry {
 
 #[cfg(test)]
 mod test {
-    use {
-        super::*,
-        solana_sdk::{
-            account::create_account_for_test, fee_calculator::FeeCalculator, hash::Hash,
-            sysvar::recent_blockhashes::IterItem,
-        },
+    use super::*;
+    use solana_sdk::{
+        account::create_account_for_test, fee_calculator::FeeCalculator, hash::Hash,
+        sysvar::recent_blockhashes::IterItem,
     };
 
     #[test]

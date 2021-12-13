@@ -2,27 +2,26 @@
 
 #![cfg(feature = "full")]
 
-use {
-    crate::{
-        ed25519_instruction::verify_signatures,
-        feature_set,
-        hash::Hash,
-        instruction::{CompiledInstruction, Instruction, InstructionError},
-        message::Message,
-        nonce::NONCED_TX_MARKER_IX_INDEX,
-        program_utils::limited_deserialize,
-        pubkey::Pubkey,
-        sanitize::{Sanitize, SanitizeError},
-        secp256k1_instruction::verify_eth_addresses,
-        short_vec,
-        signature::{Signature, SignerError},
-        signers::Signers,
-        system_instruction::SystemInstruction,
-        system_program,
-    },
-    std::{result, sync::Arc},
-    thiserror::Error,
+use crate::sanitize::{Sanitize, SanitizeError};
+use crate::secp256k1_instruction::verify_eth_addresses;
+use crate::{
+    ed25519_instruction::verify_signatures,
+    feature_set,
+    hash::Hash,
+    instruction::{CompiledInstruction, Instruction, InstructionError},
+    message::Message,
+    nonce::NONCED_TX_MARKER_IX_INDEX,
+    program_utils::limited_deserialize,
+    pubkey::Pubkey,
+    short_vec,
+    signature::{Signature, SignerError},
+    signers::Signers,
+    system_instruction::SystemInstruction,
+    system_program,
 };
+use std::result;
+use std::sync::Arc;
+use thiserror::Error;
 
 /// Reasons a transaction might be rejected.
 #[derive(
@@ -520,17 +519,15 @@ pub fn get_nonce_pubkey_from_instruction<'a>(
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        crate::{
-            hash::hash,
-            instruction::AccountMeta,
-            signature::{Keypair, Presigner, Signer},
-            system_instruction,
-        },
-        bincode::{deserialize, serialize, serialized_size},
-        std::mem::size_of,
+    use super::*;
+    use crate::{
+        hash::hash,
+        instruction::AccountMeta,
+        signature::{Keypair, Presigner, Signer},
+        system_instruction,
     };
+    use bincode::{deserialize, serialize, serialized_size};
+    use std::mem::size_of;
 
     fn get_program_id(tx: &Transaction, instruction_index: usize) -> &Pubkey {
         let message = tx.message();

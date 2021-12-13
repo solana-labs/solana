@@ -1,9 +1,8 @@
-use {
-    crate::alloc,
-    alloc::{Alloc, AllocErr},
-    solana_rbpf::aligned_memory::AlignedMemory,
-    std::alloc::Layout,
-};
+use crate::alloc;
+
+use alloc::{Alloc, AllocErr};
+use solana_rbpf::aligned_memory::AlignedMemory;
+use std::alloc::Layout;
 
 #[derive(Debug)]
 pub struct BpfAllocator {

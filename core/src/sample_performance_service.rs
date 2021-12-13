@@ -1,14 +1,12 @@
-use {
-    solana_ledger::{blockstore::Blockstore, blockstore_meta::PerfSample},
-    solana_runtime::bank_forks::BankForks,
-    std::{
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            Arc, RwLock,
-        },
-        thread::{self, sleep, Builder, JoinHandle},
-        time::{Duration, Instant},
+use solana_ledger::{blockstore::Blockstore, blockstore_meta::PerfSample};
+use solana_runtime::bank_forks::BankForks;
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, RwLock,
     },
+    thread::{self, sleep, Builder, JoinHandle},
+    time::{Duration, Instant},
 };
 
 const SAMPLE_INTERVAL: u64 = 60;

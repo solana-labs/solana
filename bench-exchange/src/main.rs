@@ -3,13 +3,11 @@ pub mod bench;
 mod cli;
 pub mod order_book;
 
-use {
-    crate::bench::{airdrop_lamports, create_client_accounts_file, do_bench_exchange, Config},
-    log::*,
-    solana_gossip::gossip_service::{discover_cluster, get_multi_client},
-    solana_sdk::signature::Signer,
-    solana_streamer::socket::SocketAddrSpace,
-};
+use crate::bench::{airdrop_lamports, create_client_accounts_file, do_bench_exchange, Config};
+use log::*;
+use solana_gossip::gossip_service::{discover_cluster, get_multi_client};
+use solana_sdk::signature::Signer;
+use solana_streamer::socket::SocketAddrSpace;
 
 fn main() {
     solana_logger::setup();

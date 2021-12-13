@@ -2,18 +2,17 @@
 //! BPFLoader.  For more information see './bpf_loader.rs'
 
 extern crate alloc;
-use {
-    crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey},
-    alloc::vec::Vec,
-    std::{
-        alloc::Layout,
-        cell::RefCell,
-        mem::size_of,
-        ptr::null_mut,
-        rc::Rc,
-        result::Result as ResultGeneric,
-        slice::{from_raw_parts, from_raw_parts_mut},
-    },
+use crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
+use alloc::vec::Vec;
+use std::{
+    alloc::Layout,
+    cell::RefCell,
+    mem::size_of,
+    ptr::null_mut,
+    rc::Rc,
+    // Hide Result from bindgen gets confused about generics in non-generic type declarations
+    result::Result as ResultGeneric,
+    slice::{from_raw_parts, from_raw_parts_mut},
 };
 
 pub type ProgramResult = ResultGeneric<(), ProgramError>;
@@ -355,7 +354,8 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
 
 #[cfg(test)]
 mod test {
-    use {super::*, std::alloc::GlobalAlloc};
+    use super::*;
+    use std::alloc::GlobalAlloc;
 
     #[test]
     fn test_bump_allocator() {

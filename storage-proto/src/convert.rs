@@ -3,11 +3,13 @@ use {
     solana_account_decoder::parse_token::{real_number_string_trimmed, UiTokenAmount},
     solana_sdk::{
         hash::Hash,
-        instruction::{CompiledInstruction, InstructionError},
+        instruction::CompiledInstruction,
+        instruction::InstructionError,
         message::{Message, MessageHeader},
         pubkey::Pubkey,
         signature::Signature,
-        transaction::{Transaction, TransactionError},
+        transaction::Transaction,
+        transaction::TransactionError,
     },
     solana_transaction_status::{
         ConfirmedBlock, InnerInstructions, Reward, RewardType, TransactionByAddrInfo,

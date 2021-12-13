@@ -1,53 +1,52 @@
-use {
-    crate::{
-        cluster::{Cluster, ClusterValidatorInfo, ValidatorInfo},
-        cluster_tests,
-        validator_configs::*,
+use crate::{
+    cluster::{Cluster, ClusterValidatorInfo, ValidatorInfo},
+    cluster_tests,
+    validator_configs::*,
+};
+use itertools::izip;
+use log::*;
+use solana_client::thin_client::{create_client, ThinClient};
+use solana_core::validator::{Validator, ValidatorConfig, ValidatorStartProgress};
+use solana_gossip::{
+    cluster_info::{Node, VALIDATOR_PORT_RANGE},
+    contact_info::ContactInfo,
+    gossip_service::discover_cluster,
+};
+use solana_ledger::create_new_tmp_ledger;
+use solana_runtime::genesis_utils::{
+    create_genesis_config_with_vote_accounts_and_cluster_type, GenesisConfigInfo,
+    ValidatorVoteKeypairs,
+};
+use solana_sdk::{
+    account::Account,
+    account::AccountSharedData,
+    client::SyncClient,
+    clock::{DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
+    commitment_config::CommitmentConfig,
+    epoch_schedule::EpochSchedule,
+    genesis_config::{ClusterType, GenesisConfig},
+    message::Message,
+    poh_config::PohConfig,
+    pubkey::Pubkey,
+    signature::{Keypair, Signer},
+    stake::{
+        config as stake_config, instruction as stake_instruction,
+        state::{Authorized, Lockup},
     },
-    itertools::izip,
-    log::*,
-    solana_client::thin_client::{create_client, ThinClient},
-    solana_core::validator::{Validator, ValidatorConfig, ValidatorStartProgress},
-    solana_gossip::{
-        cluster_info::{Node, VALIDATOR_PORT_RANGE},
-        contact_info::ContactInfo,
-        gossip_service::discover_cluster,
-    },
-    solana_ledger::create_new_tmp_ledger,
-    solana_runtime::genesis_utils::{
-        create_genesis_config_with_vote_accounts_and_cluster_type, GenesisConfigInfo,
-        ValidatorVoteKeypairs,
-    },
-    solana_sdk::{
-        account::{Account, AccountSharedData},
-        client::SyncClient,
-        clock::{DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
-        commitment_config::CommitmentConfig,
-        epoch_schedule::EpochSchedule,
-        genesis_config::{ClusterType, GenesisConfig},
-        message::Message,
-        poh_config::PohConfig,
-        pubkey::Pubkey,
-        signature::{Keypair, Signer},
-        stake::{
-            config as stake_config, instruction as stake_instruction,
-            state::{Authorized, Lockup},
-        },
-        system_transaction,
-        transaction::Transaction,
-    },
-    solana_stake_program::{config::create_account as create_stake_config_account, stake_state},
-    solana_streamer::socket::SocketAddrSpace,
-    solana_vote_program::{
-        vote_instruction,
-        vote_state::{VoteInit, VoteState},
-    },
-    std::{
-        collections::HashMap,
-        io::{Error, ErrorKind, Result},
-        iter,
-        sync::{Arc, RwLock},
-    },
+    system_transaction,
+    transaction::Transaction,
+};
+use solana_stake_program::{config::create_account as create_stake_config_account, stake_state};
+use solana_streamer::socket::SocketAddrSpace;
+use solana_vote_program::{
+    vote_instruction,
+    vote_state::{VoteInit, VoteState},
+};
+use std::{
+    collections::HashMap,
+    io::{Error, ErrorKind, Result},
+    iter,
+    sync::{Arc, RwLock},
 };
 
 #[derive(Debug)]
@@ -747,7 +746,8 @@ impl Drop for LocalCluster {
 
 #[cfg(test)]
 mod test {
-    use {super::*, solana_sdk::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH};
+    use super::*;
+    use solana_sdk::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH;
 
     #[test]
     fn test_local_cluster_start_and_exit() {

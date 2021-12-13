@@ -1,10 +1,6 @@
 //! The solana-program-test provides a BanksClient-based test framework BPF programs
 #![allow(clippy::integer_arithmetic)]
 
-// Export types so test clients can limit their solana crate dependencies
-pub use solana_banks_client::BanksClient;
-// Export tokio for test clients
-pub use tokio;
 use {
     async_trait::async_trait,
     chrono_humanize::{Accuracy, HumanTime, Tense},
@@ -27,7 +23,8 @@ use {
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
-        instruction::{Instruction, InstructionError},
+        instruction::Instruction,
+        instruction::InstructionError,
         message::Message,
         native_token::sol_to_lamports,
         poh_config::PohConfig,
@@ -63,6 +60,12 @@ use {
     thiserror::Error,
     tokio::task::JoinHandle,
 };
+
+// Export types so test clients can limit their solana crate dependencies
+pub use solana_banks_client::BanksClient;
+
+// Export tokio for test clients
+pub use tokio;
 
 pub mod programs;
 

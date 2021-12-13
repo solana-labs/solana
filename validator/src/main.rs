@@ -1,6 +1,4 @@
 #![allow(clippy::integer_arithmetic)]
-#[cfg(not(target_env = "msvc"))]
-use jemallocator::Jemalloc;
 use {
     clap::{
         crate_description, crate_name, value_t, value_t_or_exit, values_t, values_t_or_exit, App,
@@ -79,6 +77,9 @@ use {
         time::{Duration, Instant, SystemTime},
     },
 };
+
+#[cfg(not(target_env = "msvc"))]
+use jemallocator::Jemalloc;
 
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]

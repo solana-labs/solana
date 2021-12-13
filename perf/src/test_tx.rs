@@ -1,15 +1,13 @@
-use {
-    solana_sdk::{
-        hash::Hash,
-        instruction::CompiledInstruction,
-        signature::{Keypair, Signer},
-        stake,
-        system_instruction::SystemInstruction,
-        system_program, system_transaction,
-        transaction::Transaction,
-    },
-    solana_vote_program::vote_transaction,
+use solana_sdk::{
+    hash::Hash,
+    instruction::CompiledInstruction,
+    signature::{Keypair, Signer},
+    stake,
+    system_instruction::SystemInstruction,
+    system_program, system_transaction,
+    transaction::Transaction,
 };
+use solana_vote_program::vote_transaction;
 
 pub fn test_tx() -> Transaction {
     let keypair1 = Keypair::new();

@@ -9,50 +9,47 @@ pub mod upgradeable;
 pub mod upgradeable_with_jit;
 pub mod with_jit;
 
-use {
-    crate::{
-        bpf_verifier::VerifierError,
-        serialization::{deserialize_parameters, serialize_parameters},
-        syscalls::SyscallError,
-    },
-    log::{log_enabled, trace, Level::Trace},
-    solana_measure::measure::Measure,
-    solana_rbpf::{
-        aligned_memory::AlignedMemory,
-        ebpf::{HOST_ALIGN, MM_HEAP_START},
-        error::{EbpfError, UserDefinedError},
-        memory_region::MemoryRegion,
-        static_analysis::Analysis,
-        vm::{Config, EbpfVm, Executable, InstructionMeter},
-    },
-    solana_runtime::message_processor::MessageProcessor,
-    solana_sdk::{
-        account::{ReadableAccount, WritableAccount},
-        account_utils::State,
-        bpf_loader, bpf_loader_deprecated,
-        bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-        clock::Clock,
-        entrypoint::{HEAP_LENGTH, SUCCESS},
-        feature_set::{
-            add_missing_program_error_mappings, close_upgradeable_program_accounts,
-            fix_write_privs, reduce_required_deploy_balance, requestable_heap_size,
-            upgradeable_close_instruction,
-        },
-        ic_logger_msg, ic_msg,
-        instruction::{AccountMeta, InstructionError},
-        keyed_account::{from_keyed_account, keyed_account_at_index, KeyedAccount},
-        loader_instruction::LoaderInstruction,
-        loader_upgradeable_instruction::UpgradeableLoaderInstruction,
-        process_instruction::{stable_log, ComputeMeter, Executor, InvokeContext, Logger},
-        program_error::{ACCOUNT_NOT_RENT_EXEMPT, BORSH_IO_ERROR},
-        program_utils::limited_deserialize,
-        pubkey::Pubkey,
-        rent::Rent,
-        system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
-    },
-    std::{cell::RefCell, fmt::Debug, rc::Rc, sync::Arc},
-    thiserror::Error,
+use crate::{
+    bpf_verifier::VerifierError,
+    serialization::{deserialize_parameters, serialize_parameters},
+    syscalls::SyscallError,
 };
+use log::{log_enabled, trace, Level::Trace};
+use solana_measure::measure::Measure;
+use solana_rbpf::{
+    aligned_memory::AlignedMemory,
+    ebpf::{HOST_ALIGN, MM_HEAP_START},
+    error::{EbpfError, UserDefinedError},
+    memory_region::MemoryRegion,
+    static_analysis::Analysis,
+    vm::{Config, EbpfVm, Executable, InstructionMeter},
+};
+use solana_runtime::message_processor::MessageProcessor;
+use solana_sdk::{
+    account::{ReadableAccount, WritableAccount},
+    account_utils::State,
+    bpf_loader, bpf_loader_deprecated,
+    bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+    clock::Clock,
+    entrypoint::{HEAP_LENGTH, SUCCESS},
+    feature_set::{
+        add_missing_program_error_mappings, close_upgradeable_program_accounts, fix_write_privs,
+        reduce_required_deploy_balance, requestable_heap_size, upgradeable_close_instruction,
+    },
+    ic_logger_msg, ic_msg,
+    instruction::{AccountMeta, InstructionError},
+    keyed_account::{from_keyed_account, keyed_account_at_index, KeyedAccount},
+    loader_instruction::LoaderInstruction,
+    loader_upgradeable_instruction::UpgradeableLoaderInstruction,
+    process_instruction::{stable_log, ComputeMeter, Executor, InvokeContext, Logger},
+    program_error::{ACCOUNT_NOT_RENT_EXEMPT, BORSH_IO_ERROR},
+    program_utils::limited_deserialize,
+    pubkey::Pubkey,
+    rent::Rent,
+    system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
+};
+use std::{cell::RefCell, fmt::Debug, rc::Rc, sync::Arc};
+use thiserror::Error;
 
 solana_sdk::declare_builtin!(
     solana_sdk::bpf_loader::ID,
@@ -1002,35 +999,34 @@ impl Executor for BpfExecutor {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        rand::Rng,
-        solana_runtime::{bank::Bank, bank_client::BankClient},
-        solana_sdk::{
-            account::{
-                create_account_shared_data_for_test as create_account_for_test, AccountSharedData,
-            },
-            account_utils::StateMut,
-            client::SyncClient,
-            clock::Clock,
-            feature_set::FeatureSet,
-            genesis_config::create_genesis_config,
-            instruction::{AccountMeta, Instruction, InstructionError},
-            keyed_account::KeyedAccount,
-            message::Message,
-            native_token::LAMPORTS_PER_SOL,
-            process_instruction::{
-                BpfComputeBudget, InvokeContextStackFrame, MockComputeMeter, MockInvokeContext,
-                MockLogger,
-            },
-            pubkey::Pubkey,
-            rent::Rent,
-            signature::{Keypair, Signer},
-            system_program, sysvar,
-            transaction::TransactionError,
+    use super::*;
+    use rand::Rng;
+    use solana_runtime::{bank::Bank, bank_client::BankClient};
+    use solana_sdk::{
+        account::{
+            create_account_shared_data_for_test as create_account_for_test, AccountSharedData,
         },
-        std::{cell::RefCell, fs::File, io::Read, ops::Range, rc::Rc, sync::Arc},
+        account_utils::StateMut,
+        client::SyncClient,
+        clock::Clock,
+        feature_set::FeatureSet,
+        genesis_config::create_genesis_config,
+        instruction::Instruction,
+        instruction::{AccountMeta, InstructionError},
+        keyed_account::KeyedAccount,
+        message::Message,
+        native_token::LAMPORTS_PER_SOL,
+        process_instruction::{
+            BpfComputeBudget, InvokeContextStackFrame, MockComputeMeter, MockInvokeContext,
+            MockLogger,
+        },
+        pubkey::Pubkey,
+        rent::Rent,
+        signature::{Keypair, Signer},
+        system_program, sysvar,
+        transaction::TransactionError,
     };
+    use std::{cell::RefCell, fs::File, io::Read, ops::Range, rc::Rc, sync::Arc};
 
     struct TestInstructionMeter {
         remaining: u64,

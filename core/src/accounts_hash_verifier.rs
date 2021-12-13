@@ -4,25 +4,23 @@
 // hash on gossip. Monitor gossip for messages from validators in the `--known-validator`s
 // set and halt the node if a mismatch is detected.
 
-use {
-    crate::snapshot_packager_service::PendingSnapshotPackage,
-    rayon::ThreadPool,
-    solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES},
-    solana_runtime::{
-        accounts_db,
-        snapshot_package::{AccountsPackage, AccountsPackagePre, AccountsPackageReceiver},
+use crate::snapshot_packager_service::PendingSnapshotPackage;
+use rayon::ThreadPool;
+use solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
+use solana_runtime::{
+    accounts_db,
+    snapshot_package::{AccountsPackage, AccountsPackagePre, AccountsPackageReceiver},
+};
+use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
+use std::collections::{HashMap, HashSet};
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::RecvTimeoutError,
+        Arc,
     },
-    solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey},
-    std::{
-        collections::{HashMap, HashSet},
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            mpsc::RecvTimeoutError,
-            Arc,
-        },
-        thread::{self, Builder, JoinHandle},
-        time::Duration,
-    },
+    thread::{self, Builder, JoinHandle},
+    time::Duration,
 };
 
 pub struct AccountsHashVerifier {
@@ -131,10 +129,8 @@ impl AccountsHashVerifier {
             && accounts_package.slot % fault_injection_rate_slots == 0
         {
             // For testing, publish an invalid hash to gossip.
-            use {
-                rand::{thread_rng, Rng},
-                solana_sdk::hash::extend_and_hash,
-            };
+            use rand::{thread_rng, Rng};
+            use solana_sdk::hash::extend_and_hash;
             warn!("inserting fault at slot: {}", accounts_package.slot);
             let rand = thread_rng().gen_range(0, 10);
             let hash = extend_and_hash(&hash, &[rand]);
@@ -219,16 +215,15 @@ impl AccountsHashVerifier {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        solana_gossip::{cluster_info::make_accounts_hashes_message, contact_info::ContactInfo},
-        solana_runtime::{bank_forks::ArchiveFormat, snapshot_utils::SnapshotVersion},
-        solana_sdk::{
-            hash::hash,
-            signature::{Keypair, Signer},
-        },
-        solana_streamer::socket::SocketAddrSpace,
+    use super::*;
+    use solana_gossip::{cluster_info::make_accounts_hashes_message, contact_info::ContactInfo};
+    use solana_runtime::bank_forks::ArchiveFormat;
+    use solana_runtime::snapshot_utils::SnapshotVersion;
+    use solana_sdk::{
+        hash::hash,
+        signature::{Keypair, Signer},
     };
+    use solana_streamer::socket::SocketAddrSpace;
 
     fn new_test_cluster_info(contact_info: ContactInfo) -> ClusterInfo {
         ClusterInfo::new(
@@ -274,7 +269,8 @@ mod tests {
     #[test]
     fn test_max_hashes() {
         solana_logger::setup();
-        use {std::path::PathBuf, tempfile::TempDir};
+        use std::path::PathBuf;
+        use tempfile::TempDir;
         let keypair = Keypair::new();
 
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);

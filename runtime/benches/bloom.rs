@@ -1,18 +1,17 @@
 #![feature(test)]
 
 extern crate test;
-use {
-    bv::BitVec,
-    fnv::FnvHasher,
-    rand::Rng,
-    solana_runtime::bloom::{AtomicBloom, Bloom, BloomHashIndex},
-    solana_sdk::{
-        hash::{hash, Hash},
-        signature::Signature,
-    },
-    std::{collections::HashSet, hash::Hasher},
-    test::Bencher,
+use bv::BitVec;
+use fnv::FnvHasher;
+use rand::Rng;
+use solana_runtime::bloom::{AtomicBloom, Bloom, BloomHashIndex};
+use solana_sdk::{
+    hash::{hash, Hash},
+    signature::Signature,
 };
+use std::collections::HashSet;
+use std::hash::Hasher;
+use test::Bencher;
 
 #[bench]
 #[ignore]

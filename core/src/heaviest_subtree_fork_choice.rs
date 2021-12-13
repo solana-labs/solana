@@ -1,26 +1,24 @@
+use crate::{
+    consensus::Tower, fork_choice::ForkChoice,
+    latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
+    progress_map::ProgressMap, tree_diff::TreeDiff,
+};
+use solana_measure::measure::Measure;
+use solana_runtime::{bank::Bank, bank_forks::BankForks, epoch_stakes::EpochStakes};
+use solana_sdk::{
+    clock::{Epoch, Slot},
+    epoch_schedule::EpochSchedule,
+    hash::Hash,
+    pubkey::Pubkey,
+};
+use std::{
+    borrow::Borrow,
+    collections::{hash_map::Entry, BTreeMap, HashMap, HashSet, VecDeque},
+    sync::{Arc, RwLock},
+    time::Instant,
+};
 #[cfg(test)]
 use trees::{Tree, TreeWalk};
-use {
-    crate::{
-        consensus::Tower, fork_choice::ForkChoice,
-        latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
-        progress_map::ProgressMap, tree_diff::TreeDiff,
-    },
-    solana_measure::measure::Measure,
-    solana_runtime::{bank::Bank, bank_forks::BankForks, epoch_stakes::EpochStakes},
-    solana_sdk::{
-        clock::{Epoch, Slot},
-        epoch_schedule::EpochSchedule,
-        hash::Hash,
-        pubkey::Pubkey,
-    },
-    std::{
-        borrow::Borrow,
-        collections::{hash_map::Entry, BTreeMap, HashMap, HashSet, VecDeque},
-        sync::{Arc, RwLock},
-        time::Instant,
-    },
-};
 
 pub type ForkWeight = u64;
 pub type SlotHashKey = (Slot, Hash);
@@ -1046,14 +1044,12 @@ impl<'a> Iterator for AncestorIterator<'a> {
 
 #[cfg(test)]
 mod test {
-    use {
-        super::*,
-        crate::consensus::test::VoteSimulator,
-        solana_runtime::{bank::Bank, bank_utils},
-        solana_sdk::{hash::Hash, slot_history::SlotHistory},
-        std::{collections::HashSet, ops::Range},
-        trees::tr,
-    };
+    use super::*;
+    use crate::consensus::test::VoteSimulator;
+    use solana_runtime::{bank::Bank, bank_utils};
+    use solana_sdk::{hash::Hash, slot_history::SlotHistory};
+    use std::{collections::HashSet, ops::Range};
+    use trees::tr;
 
     #[test]
     fn test_max_by_weight() {

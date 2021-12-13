@@ -1,7 +1,8 @@
 #![allow(deprecated)]
 #![cfg(feature = "full")]
 
-use {std::str::FromStr, thiserror::Error};
+use std::str::FromStr;
+use thiserror::Error;
 
 #[derive(Serialize, Deserialize, Default, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]

@@ -1,7 +1,5 @@
-use {
-    sha2::{Digest, Sha256},
-    std::{convert::TryFrom, fmt},
-};
+use sha2::{Digest, Sha256};
+use std::{convert::TryFrom, fmt};
 
 const HASH_BYTES: usize = 32;
 #[derive(AbiExample)]

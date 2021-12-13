@@ -1,15 +1,13 @@
-use {
-    crate::{
-        decode_error::DecodeError,
-        instruction::{AccountMeta, Instruction, InstructionError},
-        nonce,
-        pubkey::Pubkey,
-        system_program,
-        sysvar::{recent_blockhashes, rent},
-    },
-    num_derive::{FromPrimitive, ToPrimitive},
-    thiserror::Error,
+use crate::{
+    decode_error::DecodeError,
+    instruction::{AccountMeta, Instruction, InstructionError},
+    nonce,
+    pubkey::Pubkey,
+    system_program,
+    sysvar::{recent_blockhashes, rent},
 };
+use num_derive::{FromPrimitive, ToPrimitive};
+use thiserror::Error;
 
 #[derive(Error, Debug, Serialize, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum SystemError {
@@ -569,11 +567,9 @@ pub fn authorize_nonce_account(
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        crate::instruction::{Instruction, InstructionError},
-        num_traits::ToPrimitive,
-    };
+    use super::*;
+    use crate::instruction::{Instruction, InstructionError};
+    use num_traits::ToPrimitive;
 
     fn get_keys(instruction: &Instruction) -> Vec<Pubkey> {
         instruction.accounts.iter().map(|x| x.pubkey).collect()

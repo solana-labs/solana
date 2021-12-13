@@ -1,17 +1,15 @@
-use {
-    crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
-    solana_ledger::blockstore::Blockstore,
-    solana_runtime::bank::RewardInfo,
-    solana_sdk::{clock::Slot, pubkey::Pubkey},
-    solana_transaction_status::Reward,
-    std::{
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            Arc,
-        },
-        thread::{self, Builder, JoinHandle},
-        time::Duration,
+use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
+use solana_ledger::blockstore::Blockstore;
+use solana_runtime::bank::RewardInfo;
+use solana_sdk::{clock::Slot, pubkey::Pubkey};
+use solana_transaction_status::Reward;
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
     },
+    thread::{self, Builder, JoinHandle},
+    time::Duration,
 };
 
 pub type RewardsRecorderReceiver = Receiver<(Slot, Vec<(Pubkey, RewardInfo)>)>;

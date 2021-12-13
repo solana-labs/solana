@@ -3,10 +3,8 @@
 
 #![cfg(feature = "full")]
 
-use {
-    byteorder::{ByteOrder, LittleEndian},
-    solana_sdk::clock::Slot,
-};
+use byteorder::{ByteOrder, LittleEndian};
+use solana_sdk::clock::Slot;
 
 #[derive(Default, Clone, Debug, Deserialize, Serialize, AbiExample, PartialEq, Eq)]
 pub struct HardForks {

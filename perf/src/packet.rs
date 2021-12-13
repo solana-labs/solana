@@ -1,11 +1,9 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
+use crate::{cuda_runtime::PinnedVec, recycler::Recycler};
+use bincode::config::Options;
+use serde::Serialize;
 pub use solana_sdk::packet::{Meta, Packet, PACKET_DATA_SIZE};
-use {
-    crate::{cuda_runtime::PinnedVec, recycler::Recycler},
-    bincode::config::Options,
-    serde::Serialize,
-    std::net::SocketAddr,
-};
+use std::net::SocketAddr;
 
 pub const NUM_PACKETS: usize = 1024 * 8;
 
@@ -133,14 +131,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        solana_sdk::{
-            hash::Hash,
-            signature::{Keypair, Signer},
-            system_transaction,
-        },
-    };
+    use super::*;
+    use solana_sdk::hash::Hash;
+    use solana_sdk::signature::{Keypair, Signer};
+    use solana_sdk::system_transaction;
 
     #[test]
     fn test_to_packets() {

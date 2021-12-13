@@ -1,74 +1,73 @@
 //! The `replay_stage` replays transactions broadcast by the leader.
 
-use {
-    crate::{
-        broadcast_stage::RetransmitSlotsSender,
-        cache_block_meta_service::CacheBlockMetaSender,
-        cluster_info_vote_listener::{
-            GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver, VoteTracker,
-        },
-        cluster_slot_state_verifier::*,
-        cluster_slots::ClusterSlots,
-        cluster_slots_service::ClusterSlotsUpdateSender,
-        commitment_service::{AggregateCommitmentService, CommitmentAggregationData},
-        consensus::{
-            ComputedBankState, Stake, SwitchForkDecision, Tower, VotedStakes, SWITCH_FORK_THRESHOLD,
-        },
-        cost_update_service::CostUpdate,
-        fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
-        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
-        latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
-        progress_map::{ForkProgress, ProgressMap, PropagatedStats},
-        repair_service::DuplicateSlotsResetReceiver,
-        rewards_recorder_service::RewardsRecorderSender,
-        unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
-        voting_service::VoteOp,
-        window_service::DuplicateSlotReceiver,
+use crate::{
+    broadcast_stage::RetransmitSlotsSender,
+    cache_block_meta_service::CacheBlockMetaSender,
+    cluster_info_vote_listener::{
+        GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver, VoteTracker,
     },
-    solana_client::rpc_response::SlotUpdate,
-    solana_gossip::cluster_info::ClusterInfo,
-    solana_ledger::{
-        block_error::BlockError,
-        blockstore::Blockstore,
-        blockstore_processor::{self, BlockstoreProcessorError, TransactionStatusSender},
-        entry::VerifyRecyclers,
-        leader_schedule_cache::LeaderScheduleCache,
+    cluster_slot_state_verifier::*,
+    cluster_slots::ClusterSlots,
+    cluster_slots_service::ClusterSlotsUpdateSender,
+    commitment_service::{AggregateCommitmentService, CommitmentAggregationData},
+    consensus::{
+        ComputedBankState, Stake, SwitchForkDecision, Tower, VotedStakes, SWITCH_FORK_THRESHOLD,
     },
-    solana_measure::measure::Measure,
-    solana_metrics::inc_new_counter_info,
-    solana_poh::poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
-    solana_rpc::{
-        optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
-        rpc_subscriptions::RpcSubscriptions,
+    cost_update_service::CostUpdate,
+    fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
+    heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
+    latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
+    progress_map::{ForkProgress, ProgressMap, PropagatedStats},
+    repair_service::DuplicateSlotsResetReceiver,
+    rewards_recorder_service::RewardsRecorderSender,
+    unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
+    voting_service::VoteOp,
+    window_service::DuplicateSlotReceiver,
+};
+use solana_client::rpc_response::SlotUpdate;
+use solana_gossip::cluster_info::ClusterInfo;
+use solana_ledger::{
+    block_error::BlockError,
+    blockstore::Blockstore,
+    blockstore_processor::{self, BlockstoreProcessorError, TransactionStatusSender},
+    entry::VerifyRecyclers,
+    leader_schedule_cache::LeaderScheduleCache,
+};
+use solana_measure::measure::Measure;
+use solana_metrics::inc_new_counter_info;
+use solana_poh::poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS};
+use solana_rpc::{
+    optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
+    rpc_subscriptions::RpcSubscriptions,
+};
+use solana_runtime::{
+    accounts_background_service::AbsRequestSender,
+    bank::{Bank, ExecuteTimings, NewBankOptions},
+    bank_forks::BankForks,
+    commitment::BlockCommitmentCache,
+    vote_sender_types::ReplayVoteSender,
+};
+use solana_sdk::{
+    clock::{Slot, MAX_PROCESSING_AGE, NUM_CONSECUTIVE_LEADER_SLOTS},
+    genesis_config::ClusterType,
+    hash::Hash,
+    pubkey::Pubkey,
+    signature::Signature,
+    signature::{Keypair, Signer},
+    timing::timestamp,
+    transaction::Transaction,
+};
+use solana_vote_program::vote_state::Vote;
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    result,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::{Receiver, RecvTimeoutError, Sender},
+        Arc, Mutex, RwLock,
     },
-    solana_runtime::{
-        accounts_background_service::AbsRequestSender,
-        bank::{Bank, ExecuteTimings, NewBankOptions},
-        bank_forks::BankForks,
-        commitment::BlockCommitmentCache,
-        vote_sender_types::ReplayVoteSender,
-    },
-    solana_sdk::{
-        clock::{Slot, MAX_PROCESSING_AGE, NUM_CONSECUTIVE_LEADER_SLOTS},
-        genesis_config::ClusterType,
-        hash::Hash,
-        pubkey::Pubkey,
-        signature::{Keypair, Signature, Signer},
-        timing::timestamp,
-        transaction::Transaction,
-    },
-    solana_vote_program::vote_state::Vote,
-    std::{
-        collections::{BTreeMap, HashMap, HashSet},
-        result,
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            mpsc::{Receiver, RecvTimeoutError, Sender},
-            Arc, Mutex, RwLock,
-        },
-        thread::{self, Builder, JoinHandle},
-        time::{Duration, Instant},
-    },
+    thread::{self, Builder, JoinHandle},
+    time::{Duration, Instant},
 };
 
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
@@ -2562,62 +2561,60 @@ impl ReplayStage {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        crate::{
-            consensus::{
-                test::{initialize_state, VoteSimulator},
-                Tower,
-            },
-            progress_map::ValidatorStakeInfo,
-            replay_stage::ReplayStage,
-        },
-        crossbeam_channel::unbounded,
-        solana_gossip::{cluster_info::Node, crds::Cursor},
-        solana_ledger::{
-            blockstore::{entries_to_test_shreds, make_slot_entries, BlockstoreError},
-            create_new_tmp_ledger,
-            entry::{self, Entry},
-            genesis_utils::{create_genesis_config, create_genesis_config_with_leader},
-            get_tmp_ledger_path,
-            shred::{
-                CodingShredHeader, DataShredHeader, Shred, ShredCommonHeader, DATA_COMPLETE_SHRED,
-                SIZE_OF_COMMON_SHRED_HEADER, SIZE_OF_DATA_SHRED_HEADER, SIZE_OF_DATA_SHRED_PAYLOAD,
-            },
-        },
-        solana_rpc::{
-            optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
-            rpc::create_test_transactions_and_populate_blockstore,
-        },
-        solana_runtime::{
-            accounts_background_service::AbsRequestSender,
-            commitment::BlockCommitment,
-            genesis_utils::{GenesisConfigInfo, ValidatorVoteKeypairs},
-        },
-        solana_sdk::{
-            clock::NUM_CONSECUTIVE_LEADER_SLOTS,
-            genesis_config,
-            hash::{hash, Hash},
-            instruction::InstructionError,
-            packet::PACKET_DATA_SIZE,
-            poh_config::PohConfig,
-            signature::{Keypair, Signer},
-            system_transaction,
-            transaction::TransactionError,
-        },
-        solana_streamer::socket::SocketAddrSpace,
-        solana_transaction_status::TransactionWithStatusMeta,
-        solana_vote_program::{
-            vote_state::{VoteState, VoteStateVersions},
-            vote_transaction,
-        },
-        std::{
-            fs::remove_dir_all,
-            iter,
-            sync::{atomic::AtomicU64, mpsc::channel, Arc, RwLock},
-        },
-        trees::{tr, Tree},
+    use super::*;
+    use crate::{
+        consensus::test::{initialize_state, VoteSimulator},
+        consensus::Tower,
+        progress_map::ValidatorStakeInfo,
+        replay_stage::ReplayStage,
     };
+    use crossbeam_channel::unbounded;
+    use solana_gossip::{cluster_info::Node, crds::Cursor};
+    use solana_ledger::{
+        blockstore::make_slot_entries,
+        blockstore::{entries_to_test_shreds, BlockstoreError},
+        create_new_tmp_ledger,
+        entry::{self, Entry},
+        genesis_utils::{create_genesis_config, create_genesis_config_with_leader},
+        get_tmp_ledger_path,
+        shred::{
+            CodingShredHeader, DataShredHeader, Shred, ShredCommonHeader, DATA_COMPLETE_SHRED,
+            SIZE_OF_COMMON_SHRED_HEADER, SIZE_OF_DATA_SHRED_HEADER, SIZE_OF_DATA_SHRED_PAYLOAD,
+        },
+    };
+    use solana_rpc::{
+        optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
+        rpc::create_test_transactions_and_populate_blockstore,
+    };
+    use solana_runtime::{
+        accounts_background_service::AbsRequestSender,
+        commitment::BlockCommitment,
+        genesis_utils::{GenesisConfigInfo, ValidatorVoteKeypairs},
+    };
+    use solana_sdk::{
+        clock::NUM_CONSECUTIVE_LEADER_SLOTS,
+        genesis_config,
+        hash::{hash, Hash},
+        instruction::InstructionError,
+        packet::PACKET_DATA_SIZE,
+        poh_config::PohConfig,
+        signature::{Keypair, Signer},
+        system_transaction,
+        transaction::TransactionError,
+    };
+    use solana_streamer::socket::SocketAddrSpace;
+    use solana_transaction_status::TransactionWithStatusMeta;
+    use solana_vote_program::{
+        vote_state::{VoteState, VoteStateVersions},
+        vote_transaction,
+    };
+    use std::sync::mpsc::channel;
+    use std::{
+        fs::remove_dir_all,
+        iter,
+        sync::{atomic::AtomicU64, Arc, RwLock},
+    };
+    use trees::{tr, Tree};
 
     #[test]
     fn test_is_partition_detected() {

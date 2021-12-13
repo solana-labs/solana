@@ -1,30 +1,29 @@
 #![allow(clippy::implicit_hasher)]
-use {
-    crate::shred::{ShredType, SIZE_OF_NONCE},
-    rayon::{
-        iter::{
-            IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator,
-            ParallelIterator,
-        },
-        ThreadPool,
+use crate::shred::{ShredType, SIZE_OF_NONCE};
+use rayon::{
+    iter::{
+        IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator,
     },
-    sha2::{Digest, Sha512},
-    solana_metrics::inc_new_counter_debug,
-    solana_perf::{
-        cuda_runtime::PinnedVec,
-        packet::{limited_deserialize, Packet, Packets},
-        perf_libs,
-        recycler_cache::RecyclerCache,
-        sigverify::{self, batch_size, TxOffset},
-    },
-    solana_rayon_threadlimit::get_thread_count,
-    solana_sdk::{
-        clock::Slot,
-        pubkey::Pubkey,
-        signature::{Keypair, Signature, Signer},
-    },
-    std::{collections::HashMap, mem::size_of, sync::Arc},
+    ThreadPool,
 };
+use sha2::{Digest, Sha512};
+use solana_metrics::inc_new_counter_debug;
+use solana_perf::{
+    cuda_runtime::PinnedVec,
+    packet::{limited_deserialize, Packet, Packets},
+    perf_libs,
+    recycler_cache::RecyclerCache,
+    sigverify::{self, batch_size, TxOffset},
+};
+use solana_rayon_threadlimit::get_thread_count;
+use solana_sdk::{
+    clock::Slot,
+    pubkey::Pubkey,
+    signature::Signature,
+    signature::{Keypair, Signer},
+};
+use std::sync::Arc;
+use std::{collections::HashMap, mem::size_of};
 
 pub const SIGN_SHRED_GPU_MIN: usize = 256;
 
@@ -452,11 +451,9 @@ pub fn sign_shreds_gpu(
 
 #[cfg(test)]
 pub mod tests {
-    use {
-        super::*,
-        crate::shred::{Shred, Shredder, SIZE_OF_DATA_SHRED_PAYLOAD},
-        solana_sdk::signature::{Keypair, Signer},
-    };
+    use super::*;
+    use crate::shred::{Shred, Shredder, SIZE_OF_DATA_SHRED_PAYLOAD};
+    use solana_sdk::signature::{Keypair, Signer};
 
     fn run_test_sigverify_shred_cpu(slot: Slot) {
         solana_logger::setup();

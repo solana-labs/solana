@@ -1,14 +1,12 @@
-use {
-    itertools::Itertools,
-    solana_sdk::{
-        account::AccountSharedData,
-        instruction::{CompiledInstruction, Instruction, InstructionError},
-        keyed_account::{create_keyed_accounts_unified, KeyedAccount},
-        pubkey::Pubkey,
-        sysvar::Sysvar,
-    },
-    std::{cell::RefCell, collections::HashSet, fmt::Debug, rc::Rc, sync::Arc},
+use itertools::Itertools;
+use solana_sdk::{
+    account::AccountSharedData,
+    instruction::{CompiledInstruction, Instruction, InstructionError},
+    keyed_account::{create_keyed_accounts_unified, KeyedAccount},
+    pubkey::Pubkey,
+    sysvar::Sysvar,
 };
+use std::{cell::RefCell, collections::HashSet, fmt::Debug, rc::Rc, sync::Arc};
 
 /// Prototype of a native loader entry point
 ///
