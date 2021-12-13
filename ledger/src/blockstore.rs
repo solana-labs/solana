@@ -3268,6 +3268,24 @@ fn get_index_meta_entry<'a>(
     res
 }
 
+/// Obtain the SlotMeta from the in-memory slot_meta_working_set or load
+/// it from the database if it does not exist in slot_meta_working_set.
+///
+/// In case none of the above has the specified SlotMeta, a new one will
+/// be created.
+///
+/// Note that this function will also update the parent slot of the specified
+/// slot.
+///
+/// Arguments:
+/// - `db`: the database
+/// - `slot_meta_working_set`: a in-memory structure for storing the cached
+///   SlotMeta.
+/// - `slot`: the slot for loading its meta.
+/// - `parent_slot`: the parent slot to be assigned to the specified slot meta
+///
+/// This function returns the matched `SlotMetaWorkingSetEntry`.  If such entry
+/// does not exist in the database, a new entry will be created.
 fn get_slot_meta_entry<'a>(
     db: &Database,
     slot_meta_working_set: &'a mut HashMap<u64, SlotMetaWorkingSetEntry>,
