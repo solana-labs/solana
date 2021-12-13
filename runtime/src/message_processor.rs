@@ -1,8 +1,7 @@
 use {
     crate::{
-        accounts::Accounts, ancestors::Ancestors, bank::TransactionAccountRefCell,
-        instruction_recorder::InstructionRecorder, log_collector::LogCollector,
-        native_loader::NativeLoader, rent_collector::RentCollector,
+        accounts::Accounts, ancestors::Ancestors, instruction_recorder::InstructionRecorder,
+        log_collector::LogCollector, native_loader::NativeLoader, rent_collector::RentCollector,
     },
     log::*,
     serde::{Deserialize, Serialize},
@@ -282,7 +281,7 @@ pub struct ThisInvokeContext<'a> {
     invoke_stack: Vec<InvokeContextStackFrame<'a>>,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
-    accounts: &'a [TransactionAccountRefCell],
+    accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
     programs: &'a [(Pubkey, ProcessInstructionWithContext)],
     logger: Rc<RefCell<dyn Logger>>,
     bpf_compute_budget: BpfComputeBudget,
@@ -305,8 +304,8 @@ impl<'a> ThisInvokeContext<'a> {
         rent: Rent,
         message: &'a Message,
         instruction: &'a CompiledInstruction,
-        executable_accounts: &'a [TransactionAccountRefCell],
-        accounts: &'a [TransactionAccountRefCell],
+        executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         programs: &'a [(Pubkey, ProcessInstructionWithContext)],
         log_collector: Option<Rc<LogCollector>>,
         bpf_compute_budget: BpfComputeBudget,
@@ -422,7 +421,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn verify_and_update(
         &mut self,
         instruction: &CompiledInstruction,
-        accounts: &[TransactionAccountRefCell],
+        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         write_privileges: &[bool],
     ) -> Result<(), InstructionError> {
         let stack_frame = self
@@ -645,8 +644,8 @@ impl MessageProcessor {
     fn create_keyed_accounts<'a>(
         message: &'a Message,
         instruction: &'a CompiledInstruction,
-        executable_accounts: &'a [TransactionAccountRefCell],
-        accounts: &'a [TransactionAccountRefCell],
+        executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         demote_program_write_locks: bool,
     ) -> Vec<(bool, bool, &'a Pubkey, &'a RefCell<AccountSharedData>)> {
         executable_accounts
@@ -973,8 +972,8 @@ impl MessageProcessor {
     /// This method calls the instruction's program entrypoint function
     pub fn process_cross_program_instruction(
         message: &Message,
-        executable_accounts: &[TransactionAccountRefCell],
-        accounts: &[TransactionAccountRefCell],
+        executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         caller_write_privileges: &[bool],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
@@ -1033,7 +1032,7 @@ impl MessageProcessor {
     pub fn create_pre_accounts(
         message: &Message,
         instruction: &CompiledInstruction,
-        accounts: &[TransactionAccountRefCell],
+        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
     ) -> Vec<PreAccount> {
         let mut pre_accounts = Vec::with_capacity(instruction.accounts.len());
         {
@@ -1052,7 +1051,7 @@ impl MessageProcessor {
 
     /// Verify there are no outstanding borrows
     pub fn verify_account_references(
-        accounts: &[TransactionAccountRefCell],
+        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
     ) -> Result<(), InstructionError> {
         for (_, account) in accounts.iter() {
             account
@@ -1068,8 +1067,8 @@ impl MessageProcessor {
         message: &Message,
         instruction: &CompiledInstruction,
         pre_accounts: &[PreAccount],
-        executable_accounts: &[TransactionAccountRefCell],
-        accounts: &[TransactionAccountRefCell],
+        executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         rent: &Rent,
         timings: &mut ExecuteDetailsTimings,
         logger: Rc<RefCell<dyn Logger>>,
@@ -1130,7 +1129,7 @@ impl MessageProcessor {
     fn verify_and_update(
         instruction: &CompiledInstruction,
         pre_accounts: &mut [PreAccount],
-        accounts: &[TransactionAccountRefCell],
+        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         program_id: &Pubkey,
         rent: &Rent,
         write_privileges: &[bool],
@@ -1198,8 +1197,8 @@ impl MessageProcessor {
         &self,
         message: &Message,
         instruction: &CompiledInstruction,
-        executable_accounts: &[TransactionAccountRefCell],
-        accounts: &[TransactionAccountRefCell],
+        executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
@@ -1215,9 +1214,9 @@ impl MessageProcessor {
         // Fixup the special instructions key if present
         // before the account pre-values are taken care of
         if feature_set.is_active(&instructions_sysvar_enabled::id()) {
-            for (pubkey, account) in accounts.iter().take(message.account_keys.len()) {
+            for (pubkey, accont) in accounts.iter().take(message.account_keys.len()) {
                 if instructions::check_id(pubkey) {
-                    let mut mut_account_ref = account.borrow_mut();
+                    let mut mut_account_ref = accont.borrow_mut();
                     instructions::store_current_index(
                         mut_account_ref.data_as_mut_slice(),
                         instruction_index as u16,
@@ -1299,8 +1298,8 @@ impl MessageProcessor {
     pub fn process_message(
         &self,
         message: &Message,
-        loaders: &[Vec<TransactionAccountRefCell>],
-        accounts: &[TransactionAccountRefCell],
+        loaders: &[Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>],
+        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
@@ -1348,7 +1347,6 @@ mod tests {
         super::*,
         solana_sdk::{
             account::Account,
-            account::{AccountSharedData, ReadableAccount},
             instruction::{AccountMeta, Instruction, InstructionError},
             message::Message,
             native_loader::create_loadable_account_for_test,
