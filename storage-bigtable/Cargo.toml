@@ -23,7 +23,7 @@ prost-types = "0.8.0"
 rand_core = "0.6.2"
 serde = "1.0.122"
 serde_derive = "1.0.103"
-smpl_jwt = "0.6.1"
+smpl_jwt = "0.6.0"
 solana-metrics = { path = "../metrics", version = "=1.8.7" }
 solana-sdk = { path = "../sdk", version = "=1.8.7" }
 solana-storage-proto = { path = "../storage-proto", version = "=1.8.7" }
@@ -32,11 +32,6 @@ thiserror = "1.0"
 futures = "0.3.8"
 tonic = { version = "0.5.0", features = ["tls", "transport"] }
 zstd = "0.5.1"
-
-# openssl is a dependency of the goauth and smpl_jwt crates, but explicitly
-# declare it here as well to activate the "vendored" feature that builds OpenSSL
-# statically
-openssl = { version = "0.10", features = ["vendored"] }
 
 [lib]
 crate-type = ["lib"]
