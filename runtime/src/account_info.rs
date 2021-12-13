@@ -10,7 +10,7 @@ pub struct AccountInfo {
 
     /// needed to track shrink candidacy in bytes. Used to update the number
     /// of alive bytes in an AppendVec as newer slots purge outdated entries
-    pub stored_size: usize,
+    stored_size: usize,
 
     /// lamports in the account used when squashing kept for optimization
     /// purposes to remove accounts with zero balance.
@@ -31,5 +31,9 @@ impl AccountInfo {
             stored_size,
             lamports,
         }
+    }
+
+    pub fn stored_size(&self) -> usize {
+        self.stored_size
     }
 }
