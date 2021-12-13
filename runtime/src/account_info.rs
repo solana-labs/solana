@@ -6,7 +6,7 @@ pub struct AccountInfo {
     pub store_id: AppendVecId,
 
     /// offset into the storage
-    pub offset: usize,
+    offset: usize,
 
     /// needed to track shrink candidacy in bytes. Used to update the number
     /// of alive bytes in an AppendVec as newer slots purge outdated entries
@@ -31,6 +31,10 @@ impl AccountInfo {
             stored_size,
             lamports,
         }
+    }
+
+    pub fn offset(&self) -> usize {
+        self.offset
     }
 
     pub fn stored_size(&self) -> usize {

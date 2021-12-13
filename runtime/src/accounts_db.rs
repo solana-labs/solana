@@ -2233,7 +2233,7 @@ impl AccountsDb {
                 // `clean_accounts_older_than_root()`
                 let was_reclaimed = removed_accounts
                     .get(&account_info.store_id)
-                    .map(|store_removed| store_removed.contains(&account_info.offset))
+                    .map(|store_removed| store_removed.contains(&account_info.offset()))
                     .unwrap_or(false);
                 if was_reclaimed {
                     return false;
@@ -2589,7 +2589,7 @@ impl AccountsDb {
             if let Some(locked_entry) = lookup {
                 let is_alive = locked_entry.slot_list().iter().any(|(_slot, i)| {
                     i.store_id == stored_account.store_id
-                        && i.offset == stored_account.account.offset
+                        && i.offset() == stored_account.account.offset
                 });
                 if !is_alive {
                     // This pubkey was found in the storage, but no longer exists in the index.
@@ -3087,7 +3087,12 @@ impl AccountsDb {
             bank_id,
             |pubkey, (account_info, slot)| {
                 let account_slot = self
-                    .get_account_accessor(slot, pubkey, account_info.store_id, account_info.offset)
+                    .get_account_accessor(
+                        slot,
+                        pubkey,
+                        account_info.store_id,
+                        account_info.offset(),
+                    )
                     .get_loaded_account()
                     .map(|loaded_account| (pubkey, loaded_account.take_account(), slot));
                 scan_func(&mut collector, account_slot)
@@ -3115,7 +3120,12 @@ impl AccountsDb {
             ancestors,
             |pubkey, (account_info, slot)| {
                 if let Some(loaded_account) = self
-                    .get_account_accessor(slot, pubkey, account_info.store_id, account_info.offset)
+                    .get_account_accessor(
+                        slot,
+                        pubkey,
+                        account_info.store_id,
+                        account_info.offset(),
+                    )
                     .get_loaded_account()
                 {
                     scan_func(&mut collector, (pubkey, loaded_account, slot));
@@ -3156,7 +3166,12 @@ impl AccountsDb {
                 // changes to the index entry.
                 // For details, see the comment in retry_to_get_account_accessor()
                 let account_slot = self
-                    .get_account_accessor(slot, pubkey, account_info.store_id, account_info.offset)
+                    .get_account_accessor(
+                        slot,
+                        pubkey,
+                        account_info.store_id,
+                        account_info.offset(),
+                    )
                     .get_loaded_account()
                     .map(|loaded_account| (pubkey, loaded_account.take_account(), slot))
                     .unwrap();
@@ -3197,7 +3212,12 @@ impl AccountsDb {
             index_key,
             |pubkey, (account_info, slot)| {
                 let account_slot = self
-                    .get_account_accessor(slot, pubkey, account_info.store_id, account_info.offset)
+                    .get_account_accessor(
+                        slot,
+                        pubkey,
+                        account_info.store_id,
+                        account_info.offset(),
+                    )
                     .get_loaded_account()
                     .map(|loaded_account| (pubkey, loaded_account.take_account(), slot));
                 scan_func(&mut collector, account_slot)
@@ -3327,13 +3347,9 @@ impl AccountsDb {
         };
 
         let slot_list = lock.slot_list();
-        let (
-            slot,
-            AccountInfo {
-                store_id, offset, ..
-            },
-        ) = slot_list[index];
-
+        let (slot, info) = slot_list[index];
+        let store_id = info.store_id;
+        let offset = info.offset();
         let some_from_slow_path = if clone_in_lock {
             // the fast path must have failed.... so take the slower approach
             // of copying potentially large Account::data inside the lock.
@@ -5120,7 +5136,7 @@ impl AccountsDb {
                                         *slot,
                                         pubkey,
                                         account_info.store_id,
-                                        account_info.offset,
+                                        account_info.offset(),
                                     )
                                     .get_loaded_account()
                                     .and_then(
@@ -6002,7 +6018,7 @@ impl AccountsDb {
                 reclaimed_offsets
                     .entry(account_info.store_id)
                     .or_default()
-                    .insert(account_info.offset);
+                    .insert(account_info.offset());
             }
             if let Some(expected_slot) = expected_slot {
                 assert_eq!(*slot, expected_slot);
@@ -7076,7 +7092,7 @@ impl AccountsDb {
                             .storage
                             .get_account_storage_entry(*slot, account_info.store_id);
                         let mut accessor = LoadedAccountAccessor::Stored(
-                            maybe_storage_entry.map(|entry| (entry, account_info.offset)),
+                            maybe_storage_entry.map(|entry| (entry, account_info.offset())),
                         );
                         let loaded_account = accessor.check_and_get_loaded_account();
                         let account = loaded_account.take_account();
