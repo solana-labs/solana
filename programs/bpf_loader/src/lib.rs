@@ -1,6 +1,7 @@
 #![allow(clippy::integer_arithmetic)]
 pub mod alloc;
 pub mod allocator_bump;
+pub mod bpf_verifier;
 pub mod deprecated;
 pub mod serialization;
 pub mod syscalls;
@@ -10,6 +11,7 @@ pub mod with_jit;
 
 use {
     crate::{
+        bpf_verifier::VerifierError,
         serialization::{deserialize_parameters, serialize_parameters},
         syscalls::SyscallError,
     },
@@ -21,7 +23,6 @@ use {
         error::{EbpfError, UserDefinedError},
         memory_region::MemoryRegion,
         static_analysis::Analysis,
-        verifier::{self, VerifierError},
         vm::{Config, EbpfVm, Executable, InstructionMeter},
     },
     solana_runtime::message_processor::MessageProcessor,
@@ -102,8 +103,8 @@ pub fn create_executor(
     let (_, elf_bytes) = executable
         .get_text_bytes()
         .map_err(|e| map_ebpf_error(invoke_context, e))?;
-    verifier::check(elf_bytes)
-        .map_err(|e| map_ebpf_error(invoke_context, EbpfError::UserError(e.into())))?;
+    bpf_verifier::check(elf_bytes)
+        .map_err(|e| map_ebpf_error(invoke_context, EbpfError::UserError(e)))?;
     executable.set_syscall_registry(syscall_registry);
     if use_jit {
         if let Err(err) = executable.jit_compile() {
@@ -1070,12 +1071,12 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "LDDWCannotBeLast")]
+    #[should_panic(expected = "VerifierError(LDDWCannotBeLast)")]
     fn test_bpf_loader_check_load_dw() {
         let prog = &[
             0x18, 0x00, 0x00, 0x00, 0x88, 0x77, 0x66, 0x55, // first half of lddw
         ];
-        verifier::check(prog).unwrap();
+        bpf_verifier::check(prog).unwrap();
     }
 
     #[test]
