@@ -22,7 +22,7 @@
 use std::{thread::sleep, time::Duration};
 use {
     crate::{
-        account_info::AccountInfo,
+        account_info::{AccountInfo, StorageLocation},
         accounts_background_service::{DroppedSlotsSender, SendDroppedBankCallback},
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
         accounts_hash::{AccountsHash, CalculateHashIntermediate, HashStats, PreviousPass},
@@ -114,7 +114,7 @@ const MAX_ITEMS_PER_CHUNK: Slot = 2_500;
 // operations that take a storage entry can maintain a common interface
 // when interacting with cached accounts. This id is "virtual" in that it
 // doesn't actually refer to an actual storage entry.
-const CACHE_VIRTUAL_STORAGE_ID: AppendVecId = AppendVecId::MAX;
+pub(crate) const CACHE_VIRTUAL_STORAGE_ID: AppendVecId = AppendVecId::MAX;
 
 // A specially reserved write version (identifier for ordering writes in an AppendVec)
 // for entries in the cache, so that  operations that take a storage entry can maintain
@@ -126,7 +126,7 @@ const CACHE_VIRTUAL_WRITE_VERSION: StoredMetaWriteVersion = 0;
 // for entries in the cache, so that  operations that take a storage entry can maintain
 // a common interface when interacting with cached accounts. This version is "virtual" in
 // that it doesn't actually map to an entry in an AppendVec.
-const CACHE_VIRTUAL_OFFSET: usize = 0;
+pub(crate) const CACHE_VIRTUAL_OFFSET: usize = 0;
 const CACHE_VIRTUAL_STORED_SIZE: usize = 0;
 
 pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
@@ -301,12 +301,6 @@ impl GenerateIndexTimings {
                 i64
             ),
         );
-    }
-}
-
-impl IsCached for AccountInfo {
-    fn is_cached(&self) -> bool {
-        self.store_id == CACHE_VIRTUAL_STORAGE_ID
     }
 }
 
@@ -4476,8 +4470,7 @@ impl AccountsDb {
                 storage.add_account(stored_size);
 
                 infos.push(AccountInfo::new(
-                    storage.append_vec_id(),
-                    offsets[0],
+                    StorageLocation::AppendVec(storage.append_vec_id(), offsets[0]),
                     stored_size,
                     account
                         .map(|account| account.lamports())
@@ -4895,8 +4888,7 @@ impl AccountsDb {
                     .map(|account| account.to_account_shared_data())
                     .unwrap_or_default();
                 let account_info = AccountInfo::new(
-                    CACHE_VIRTUAL_STORAGE_ID,
-                    CACHE_VIRTUAL_OFFSET,
+                    StorageLocation::Cached,
                     CACHE_VIRTUAL_STORED_SIZE,
                     account.lamports(),
                 );
@@ -6013,7 +6005,7 @@ impl AccountsDb {
         let mut measure = Measure::start("remove");
         for (slot, account_info) in reclaims {
             // No cached accounts should make it here
-            assert_ne!(account_info.store_id, CACHE_VIRTUAL_STORAGE_ID);
+            assert!(!account_info.is_cached());
             if let Some(ref mut reclaimed_offsets) = reclaimed_offsets {
                 reclaimed_offsets
                     .entry(account_info.store_id)
@@ -6716,8 +6708,7 @@ impl AccountsDb {
                 (
                     pubkey,
                     AccountInfo::new(
-                        store_id,
-                        stored_account.offset,
+                        StorageLocation::AppendVec(store_id, stored_account.offset), // will never be cached
                         stored_account.stored_size,
                         stored_account.account_meta.lamports,
                     ),
@@ -6967,8 +6958,10 @@ impl AccountsDb {
                                     if slot2 == slot {
                                         count += 1;
                                         let ai = AccountInfo::new(
-                                            account_info.store_id,
-                                            account_info.stored_account.offset,
+                                            StorageLocation::AppendVec(
+                                                account_info.store_id,
+                                                account_info.stored_account.offset,
+                                            ), // will never be cached
                                             account_info.stored_account.stored_size,
                                             account_info.stored_account.account_meta.lamports,
                                         );
@@ -11012,10 +11005,10 @@ pub mod tests {
         let key0 = Pubkey::new_from_array([0u8; 32]);
         let key1 = Pubkey::new_from_array([1u8; 32]);
         let key2 = Pubkey::new_from_array([2u8; 32]);
-        let info0 = AccountInfo::new(0, 0, 0, 0);
-        let info1 = AccountInfo::new(1, 0, 0, 0);
-        let info2 = AccountInfo::new(2, 0, 0, 0);
-        let info3 = AccountInfo::new(3, 0, 0, 0);
+        let info0 = AccountInfo::new(StorageLocation::AppendVec(0, 0), 0, 0);
+        let info1 = AccountInfo::new(StorageLocation::AppendVec(1, 0), 0, 0);
+        let info2 = AccountInfo::new(StorageLocation::AppendVec(2, 0), 0, 0);
+        let info3 = AccountInfo::new(StorageLocation::AppendVec(3, 0), 0, 0);
         let mut reclaims = vec![];
         accounts_index.upsert(
             0,
@@ -13324,7 +13317,7 @@ pub mod tests {
         }
 
         let do_test = |test_params: TestParameters| {
-            let account_info = AccountInfo::new(42, 123, 234, 0);
+            let account_info = AccountInfo::new(StorageLocation::AppendVec(42, 123), 234, 0);
             let pubkey = solana_sdk::pubkey::new_rand();
             let mut key_set = HashSet::default();
             key_set.insert(pubkey);
