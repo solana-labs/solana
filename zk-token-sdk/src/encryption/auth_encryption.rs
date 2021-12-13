@@ -1,6 +1,9 @@
 #[cfg(not(target_arch = "bpf"))]
 use {
-    aes_gcm::{aead::Aead, Aes128Gcm, NewAead},
+    aes_gcm_siv::{
+        aead::{Aead, NewAead},
+        Aes128GcmSiv,
+    },
     rand::{rngs::OsRng, CryptoRng, Rng, RngCore},
 };
 use {
@@ -16,35 +19,36 @@ use {
     zeroize::Zeroize,
 };
 
-struct Aes;
-impl Aes {
+struct AuthenticatedEncryption;
+impl AuthenticatedEncryption {
     #[cfg(not(target_arch = "bpf"))]
     #[allow(clippy::new_ret_no_self)]
-    fn keygen<T: RngCore + CryptoRng>(rng: &mut T) -> AesKey {
-        let random_bytes = rng.gen::<[u8; 16]>();
-        AesKey(random_bytes)
+    fn keygen<T: RngCore + CryptoRng>(rng: &mut T) -> AeKey {
+        AeKey(rng.gen::<[u8; 16]>())
     }
 
     #[cfg(not(target_arch = "bpf"))]
-    fn encrypt(sk: &AesKey, amount: u64) -> AesCiphertext {
-        let plaintext = amount.to_le_bytes();
-        let nonce = OsRng.gen::<[u8; 12]>();
+    fn encrypt(key: &AeKey, balance: u64) -> AeCiphertext {
+        let mut plaintext = balance.to_le_bytes();
+        let nonce: Nonce = OsRng.gen::<[u8; 12]>();
 
-        // TODO: it seems like encryption cannot fail, but will need to double check
-        let ciphertext = Aes128Gcm::new(&sk.0.into())
+        // The balance and the nonce have fixed length and therefore, encryption should not fail.
+        let ciphertext = Aes128GcmSiv::new(&key.0.into())
             .encrypt(&nonce.into(), plaintext.as_ref())
-            .unwrap();
+            .expect("authenticated encryption");
 
-        AesCiphertext {
+        plaintext.zeroize();
+
+        AeCiphertext {
             nonce,
             ciphertext: ciphertext.try_into().unwrap(),
         }
     }
 
     #[cfg(not(target_arch = "bpf"))]
-    fn decrypt(sk: &AesKey, ct: &AesCiphertext) -> Option<u64> {
+    fn decrypt(key: &AeKey, ct: &AeCiphertext) -> Option<u64> {
         let plaintext =
-            Aes128Gcm::new(&sk.0.into()).decrypt(&ct.nonce.into(), ct.ciphertext.as_ref());
+            Aes128GcmSiv::new(&key.0.into()).decrypt(&ct.nonce.into(), ct.ciphertext.as_ref());
 
         if let Ok(plaintext) = plaintext {
             let amount_bytes: [u8; 8] = plaintext.try_into().unwrap();
@@ -56,11 +60,11 @@ impl Aes {
 }
 
 #[derive(Debug, Zeroize)]
-pub struct AesKey([u8; 16]);
-impl AesKey {
+pub struct AeKey([u8; 16]);
+impl AeKey {
     pub fn new(signer: &dyn Signer, address: &Pubkey) -> Result<Self, SignerError> {
         let message = Message::new(
-            &[Instruction::new_with_bytes(*address, b"AesKey", vec![])],
+            &[Instruction::new_with_bytes(*address, b"AeKey", vec![])],
             Some(&signer.try_pubkey()?),
         );
         let signature = signer.try_sign_message(&message.serialize())?;
@@ -70,31 +74,37 @@ impl AesKey {
         if signature == Signature::default() {
             Err(SignerError::Custom("Rejecting default signature".into()))
         } else {
-            Ok(AesKey(signature.as_ref()[..16].try_into().unwrap()))
+            Ok(AeKey(signature.as_ref()[..16].try_into().unwrap()))
         }
     }
 
     pub fn random<T: RngCore + CryptoRng>(rng: &mut T) -> Self {
-        Aes::keygen(rng)
+        AuthenticatedEncryption::keygen(rng)
     }
 
-    pub fn encrypt(&self, amount: u64) -> AesCiphertext {
-        Aes::encrypt(self, amount)
+    pub fn encrypt(&self, amount: u64) -> AeCiphertext {
+        AuthenticatedEncryption::encrypt(self, amount)
     }
 
-    pub fn decrypt(&self, ct: &AesCiphertext) -> Option<u64> {
-        Aes::decrypt(self, ct)
+    pub fn decrypt(&self, ct: &AeCiphertext) -> Option<u64> {
+        AuthenticatedEncryption::decrypt(self, ct)
     }
 }
 
+/// For the purpose of encrypting balances for ZK-Token accounts, the nonce and ciphertext sizes
+/// should always be fixed.
+pub type Nonce = [u8; 12];
+pub type Ciphertext = [u8; 24];
+
+/// Authenticated encryption nonce and ciphertext
 #[derive(Debug)]
-pub struct AesCiphertext {
-    pub nonce: [u8; 12],
-    pub ciphertext: [u8; 24],
+pub struct AeCiphertext {
+    pub nonce: Nonce,
+    pub ciphertext: Ciphertext,
 }
-impl AesCiphertext {
-    pub fn decrypt(&self, key: &AesKey) -> Option<u64> {
-        Aes::decrypt(key, self)
+impl AeCiphertext {
+    pub fn decrypt(&self, key: &AeKey) -> Option<u64> {
+        AuthenticatedEncryption::decrypt(key, self)
     }
 
     pub fn to_bytes(&self) -> [u8; 36] {
@@ -104,23 +114,24 @@ impl AesCiphertext {
         buf
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Option<AesCiphertext> {
+    pub fn from_bytes(bytes: &[u8]) -> Option<AeCiphertext> {
         if bytes.len() != 36 {
             return None;
         }
 
         let bytes = array_ref![bytes, 0, 36];
         let (nonce, ciphertext) = array_refs![bytes, 12, 24];
-        Some(AesCiphertext {
+
+        Some(AeCiphertext {
             nonce: *nonce,
             ciphertext: *ciphertext,
         })
     }
 }
 
-impl Default for AesCiphertext {
+impl Default for AeCiphertext {
     fn default() -> Self {
-        AesCiphertext {
+        AeCiphertext {
             nonce: [0_u8; 12],
             ciphertext: [0_u8; 24],
         }
@@ -136,7 +147,7 @@ mod tests {
 
     #[test]
     fn test_aes_encrypt_decrypt_correctness() {
-        let key = AesKey::random(&mut OsRng);
+        let key = AeKey::random(&mut OsRng);
         let amount = 55;
 
         let ct = key.encrypt(amount);
@@ -151,11 +162,11 @@ mod tests {
         let keypair2 = Keypair::new();
 
         assert_ne!(
-            AesKey::new(&keypair1, &Pubkey::default()).unwrap().0,
-            AesKey::new(&keypair2, &Pubkey::default()).unwrap().0,
+            AeKey::new(&keypair1, &Pubkey::default()).unwrap().0,
+            AeKey::new(&keypair2, &Pubkey::default()).unwrap().0,
         );
 
         let null_signer = NullSigner::new(&Pubkey::default());
-        assert!(AesKey::new(&null_signer, &Pubkey::default()).is_err());
+        assert!(AeKey::new(&null_signer, &Pubkey::default()).is_err());
     }
 }
