@@ -16,7 +16,7 @@ blake3 = "1.2.0"
 bv = { version = "0.11.1", features = ["serde"] }
 byteorder = "1.4.3"
 bzip2 = "0.4.3"
-dashmap = { version = "4.0.2", features = ["rayon", "raw-api"] }
+dashmap = { version = "5.0.0", features = ["rayon", "raw-api"] }
 crossbeam-channel = "0.5"
 dir-diff = "0.3.2"
 flate2 = "1.0.22"
