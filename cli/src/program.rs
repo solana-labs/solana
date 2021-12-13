@@ -24,7 +24,10 @@ use {
         rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
         tpu_client::{TpuClient, TpuClientConfig},
     },
-    solana_rbpf::{elf::Executable, verifier, vm::Config},
+    solana_rbpf::{
+        verifier,
+        vm::{Config, Executable},
+    },
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_sdk::{
         account::Account,
@@ -1986,7 +1989,7 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     let mut invoke_context = MockInvokeContext::new(vec![]);
 
     // Verify the program
-    Executable::<BpfError, ThisInstructionMeter>::from_elf(
+    <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
         &program_data,
         Some(verifier::check),
         Config {

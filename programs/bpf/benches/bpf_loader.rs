@@ -11,7 +11,7 @@ use solana_bpf_loader_program::{
     ThisInstructionMeter,
 };
 use solana_measure::measure::Measure;
-use solana_rbpf::{elf::Executable, vm::{Config, InstructionMeter, SyscallRegistry}};
+use solana_rbpf::vm::{Config, Executable, InstructionMeter, SyscallRegistry};
 use solana_runtime::{
     bank::Bank,
     bank_client::BankClient,
@@ -75,7 +75,7 @@ fn bench_program_create_executable(bencher: &mut Bencher) {
     let elf = load_elf("bench_alu").unwrap();
 
     bencher.iter(|| {
-        let _ = Executable::<BpfError, ThisInstructionMeter>::from_elf(
+        let _ = <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
             &elf,
             None,
             Config::default(),
@@ -98,7 +98,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
     let mut invoke_context = MockInvokeContext::new(vec![]);
 
     let elf = load_elf("bench_alu").unwrap();
-    let mut executable = Executable::<BpfError, ThisInstructionMeter>::from_elf(
+    let mut executable = <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
         &elf,
         None,
         Config::default(),
@@ -110,7 +110,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
     let mut instruction_meter = ThisInstructionMeter { compute_meter };
     let mut vm = create_vm(
         &loader_id,
-        &executable,
+        executable.as_ref(),
         &mut inner_iter,
         &mut invoke_context,
     )
@@ -229,7 +229,7 @@ fn bench_create_vm(bencher: &mut Bencher) {
     .unwrap();
 
     let elf = load_elf("noop").unwrap();
-    let executable = Executable::<BpfError, ThisInstructionMeter>::from_elf(
+    let executable = <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
         &elf,
         None,
         Config::default(),
@@ -240,7 +240,7 @@ fn bench_create_vm(bencher: &mut Bencher) {
     bencher.iter(|| {
         let _ = create_vm(
             &loader_id,
-            &executable,
+            executable.as_ref(),
             serialized.as_slice_mut(),
             &mut invoke_context,
         )
@@ -280,7 +280,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     .unwrap();
 
     let elf = load_elf("tuner").unwrap();
-    let executable = Executable::<BpfError, ThisInstructionMeter>::from_elf(
+    let executable = <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
         &elf,
         None,
         Config::default(),
@@ -291,7 +291,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     let mut instruction_meter = ThisInstructionMeter { compute_meter };
     let mut vm = create_vm(
         &loader_id,
-        &executable,
+        executable.as_ref(),
         serialized.as_slice_mut(),
         &mut invoke_context,
     )
