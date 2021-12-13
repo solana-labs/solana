@@ -213,10 +213,6 @@ fn run_program(
 
     let config = Config {
         enable_instruction_tracing: true,
-        reject_unresolved_syscalls: true,
-        reject_section_virtual_address_file_offset_mismatch: true,
-        verify_mul64_imm_nonzero: false,
-        verify_shift32_imm: true,
         ..Config::default()
     };
     let mut executable = Executable::<BpfError, ThisInstructionMeter>::from_elf(
