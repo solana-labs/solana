@@ -1008,6 +1008,28 @@ pub fn process_vote<S: std::hash::BuildHasher>(
     vote_account.set_state(&VoteStateVersions::new_current(vote_state))
 }
 
+<<<<<<< HEAD
+=======
+pub fn process_vote_state_update<S: std::hash::BuildHasher>(
+    vote_account: &KeyedAccount,
+    slot_hashes: &[SlotHash],
+    clock: &Clock,
+    vote_state_update: VoteStateUpdate,
+    signers: &HashSet<Pubkey, S>,
+) -> Result<(), InstructionError> {
+    let mut vote_state = verify_and_get_vote_state(vote_account, clock, signers)?;
+
+    vote_state.check_slots_are_valid(&vote_state_update, slot_hashes)?;
+    vote_state.process_new_vote_state(
+        vote_state_update.lockouts,
+        vote_state_update.root,
+        vote_state_update.timestamp,
+        clock.epoch,
+    )?;
+    vote_account.set_state(&VoteStateVersions::new_current(vote_state))
+}
+
+>>>>>>> 4bc5bfb2d (Addressing leftover comments from #21531 (#21782))
 pub fn create_account_with_authorized(
     node_pubkey: &Pubkey,
     authorized_voter: &Pubkey,

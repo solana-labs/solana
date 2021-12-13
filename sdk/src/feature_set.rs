@@ -255,6 +255,7 @@ pub mod evict_invalid_stakes_cache_entries {
     solana_sdk::declare_id!("EMX9Q7TVFAmQ9V1CggAkhMzhXSg8ECp7fHrWQX2G1chf");
 }
 
+<<<<<<< HEAD
 pub mod cap_accounts_data_len {
     solana_sdk::declare_id!("capRxUrBjNkkCpjrJxPGfPaWijB7q3JoDfsWXAnt46r");
 }
@@ -293,6 +294,10 @@ pub mod disable_bpf_deprecated_load_instructions {
 
 pub mod disable_bpf_unresolved_symbols_at_runtime {
     solana_sdk::declare_id!("4yuaYAj2jGMGTh1sSmi4G2eFscsDq8qjugJXZoBN6YEa");
+=======
+pub mod allow_votes_to_directly_update_vote_state {
+    solana_sdk::declare_id!("Ff8b1fBeB86q8cjq47ZhsQLgv5EkHu3G1C99zjUfAzrq");
+>>>>>>> 4bc5bfb2d (Addressing leftover comments from #21531 (#21782))
 }
 
 lazy_static! {
@@ -353,6 +358,7 @@ lazy_static! {
         (reject_empty_instruction_without_program::id(), "fail instructions which have native_loader as program_id directly"),
         (reject_non_rent_exempt_vote_withdraws::id(), "fail vote withdraw instructions which leave the account non-rent-exempt"),
         (evict_invalid_stakes_cache_entries::id(), "evict invalid stakes cache entries on epoch boundaries"),
+<<<<<<< HEAD
         (cap_accounts_data_len::id(), "cap the accounts data len"),
         (max_tx_account_locks::id(), "enforce max number of locked accounts per transaction"),
         (require_rent_exempt_accounts::id(), "require all new transaction accounts with data to be rent-exempt"),
@@ -363,6 +369,9 @@ lazy_static! {
         (bank_tranaction_count_fix::id(), "Fixes Bank::transaction_count to include all committed transactions, not just successful ones"),
         (disable_bpf_deprecated_load_instructions::id(), "Disable ldabs* and ldind* BPF instructions"),
         (disable_bpf_unresolved_symbols_at_runtime::id(), "Disable reporting of unresolved BPF symbols at runtime"),
+=======
+        (allow_votes_to_directly_update_vote_state::id(), "enable direct vote state update"),
+>>>>>>> 4bc5bfb2d (Addressing leftover comments from #21531 (#21782))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

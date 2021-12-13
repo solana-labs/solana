@@ -159,6 +159,23 @@ pub enum VoteInstruction {
     ///   2. `[SIGNER]` Vote or withdraw authority
     ///   3. `[SIGNER]` New vote or withdraw authority
     AuthorizeChecked(VoteAuthorize),
+<<<<<<< HEAD
+=======
+
+    /// Update the onchain vote state for the signer.
+    ///
+    /// # Account references
+    ///   0. `[Write]` Vote account to vote with
+    ///   1. `[SIGNER]` Vote authority
+    UpdateVoteState(VoteStateUpdate),
+
+    /// Update the onchain vote state for the signer along with a switching proof.
+    ///
+    /// # Account references
+    ///   0. `[Write]` Vote account to vote with
+    ///   1. `[SIGNER]` Vote authority
+    UpdateVoteStateSwitch(VoteStateUpdate, Hash),
+>>>>>>> 4bc5bfb2d (Addressing leftover comments from #21531 (#21782))
 }
 
 fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction {
@@ -316,6 +333,44 @@ pub fn vote_switch(
     )
 }
 
+<<<<<<< HEAD
+=======
+pub fn update_vote_state(
+    vote_pubkey: &Pubkey,
+    authorized_voter_pubkey: &Pubkey,
+    vote_state_update: VoteStateUpdate,
+) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*vote_pubkey, false),
+        AccountMeta::new_readonly(*authorized_voter_pubkey, true),
+    ];
+
+    Instruction::new_with_bincode(
+        id(),
+        &VoteInstruction::UpdateVoteState(vote_state_update),
+        account_metas,
+    )
+}
+
+pub fn update_vote_state_switch(
+    vote_pubkey: &Pubkey,
+    authorized_voter_pubkey: &Pubkey,
+    vote_state_update: VoteStateUpdate,
+    proof_hash: Hash,
+) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*vote_pubkey, false),
+        AccountMeta::new_readonly(*authorized_voter_pubkey, true),
+    ];
+
+    Instruction::new_with_bincode(
+        id(),
+        &VoteInstruction::UpdateVoteStateSwitch(vote_state_update, proof_hash),
+        account_metas,
+    )
+}
+
+>>>>>>> 4bc5bfb2d (Addressing leftover comments from #21531 (#21782))
 pub fn withdraw(
     vote_pubkey: &Pubkey,
     authorized_withdrawer_pubkey: &Pubkey,
@@ -428,6 +483,7 @@ pub fn process_instruction(
         }
         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
             inc_new_counter_info!("vote-native", 1);
+<<<<<<< HEAD
             let slot_hashes = get_sysvar_with_keyed_account_check::slot_hashes(
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
                 invoke_context,
@@ -437,6 +493,41 @@ pub fn process_instruction(
                 invoke_context,
             )?;
             vote_state::process_vote(me, &slot_hashes, &clock, &vote, &signers)
+=======
+            vote_state::process_vote(
+                me,
+                &from_keyed_account::<SlotHashes>(keyed_account_at_index(
+                    keyed_accounts,
+                    first_instruction_account + 1,
+                )?)?,
+                &from_keyed_account::<Clock>(keyed_account_at_index(
+                    keyed_accounts,
+                    first_instruction_account + 2,
+                )?)?,
+                &vote,
+                &signers,
+            )
+        }
+        VoteInstruction::UpdateVoteState(vote_state_update)
+        | VoteInstruction::UpdateVoteStateSwitch(vote_state_update, _) => {
+            if invoke_context
+                .feature_set
+                .is_active(&feature_set::allow_votes_to_directly_update_vote_state::id())
+            {
+                inc_new_counter_info!("vote-state-native", 1);
+                let slot_hashes: SlotHashes =
+                    invoke_context.get_sysvar(&sysvar::slot_hashes::id())?;
+                vote_state::process_vote_state_update(
+                    me,
+                    slot_hashes.slot_hashes(),
+                    &invoke_context.get_sysvar(&sysvar::clock::id())?,
+                    vote_state_update,
+                    &signers,
+                )
+            } else {
+                Err(InstructionError::InvalidInstructionData)
+            }
+>>>>>>> 4bc5bfb2d (Addressing leftover comments from #21531 (#21782))
         }
         VoteInstruction::Withdraw(lamports) => {
             let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
@@ -559,16 +650,32 @@ mod tests {
             .map(|(meta, account)| (meta.is_signer, meta.is_writable, meta.pubkey, account))
             .collect();
 
+<<<<<<< HEAD
         let mut sysvar_cache = SysvarCache::default();
         sysvar_cache.set_rent(Rent::free());
         sysvar_cache.set_clock(Clock::default());
         sysvar_cache.set_slot_hashes(SlotHashes::default());
+=======
+        let rent = Rent::default();
+        let rent_sysvar = (sysvar::rent::id(), bincode::serialize(&rent).unwrap());
+        let clock = Clock::default();
+        let clock_sysvar = (sysvar::clock::id(), bincode::serialize(&clock).unwrap());
+        let slot_hashes = SlotHashes::default();
+        let slot_hashes_sysvar = (
+            sysvar::slot_hashes::id(),
+            bincode::serialize(&slot_hashes).unwrap(),
+        );
+>>>>>>> 4bc5bfb2d (Addressing leftover comments from #21531 (#21782))
         solana_program_runtime::invoke_context::mock_process_instruction_with_sysvars(
             &id(),
             Vec::new(),
             &instruction.data,
             &keyed_accounts,
+<<<<<<< HEAD
             &sysvar_cache,
+=======
+            &[rent_sysvar, clock_sysvar, slot_hashes_sysvar],
+>>>>>>> 4bc5bfb2d (Addressing leftover comments from #21531 (#21782))
             super::process_instruction,
         )
     }
