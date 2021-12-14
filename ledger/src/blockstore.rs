@@ -1414,7 +1414,12 @@ impl Blockstore {
         }
 
         let last_root = *last_root.read().unwrap();
-        verify_shred_slots(slot, slot_meta.parent_slot, last_root)
+        // TODO Shouldn't this use shred.parent() instead and update
+        // slot_meta.parent_slot accordingly?
+        slot_meta
+            .parent_slot
+            .map(|parent_slot| verify_shred_slots(slot, parent_slot, last_root))
+            .unwrap_or_default()
     }
 
     fn insert_data_shred(
@@ -1873,8 +1878,12 @@ impl Blockstore {
                         }
                         transaction
                     });
-                let parent_slot_entries = self
-                    .get_slot_entries(slot_meta.parent_slot, 0)
+                let parent_slot_entries = slot_meta
+                    .parent_slot
+                    .and_then(|parent_slot| {
+                        self.get_slot_entries(parent_slot, /*shred_start_index:*/ 0)
+                            .ok()
+                    })
                     .unwrap_or_default();
                 if parent_slot_entries.is_empty() && require_previous_blockhash {
                     return Err(BlockstoreError::ParentEntriesUnavailable);
@@ -1900,7 +1909,9 @@ impl Blockstore {
                 let block = ConfirmedBlock {
                     previous_blockhash: previous_blockhash.to_string(),
                     blockhash: blockhash.to_string(),
-                    parent_slot: slot_meta.parent_slot,
+                    // If the slot is full it should have parent_slot populated
+                    // from shreds received.
+                    parent_slot: slot_meta.parent_slot.unwrap(),
                     transactions: self
                         .map_transactions_to_statuses(slot, slot_transaction_iterator)?,
                     rewards,
@@ -3226,18 +3237,18 @@ fn get_slot_meta_entry<'a>(
         // Store a 2-tuple of the metadata (working copy, backup copy)
         if let Some(mut meta) = meta_cf.get(slot).expect("Expect database get to succeed") {
             let backup = Some(meta.clone());
-            // If parent_slot == std::u64::MAX, then this is one of the orphans inserted
+            // If parent_slot == None, then this is one of the orphans inserted
             // during the chaining process, see the function find_slot_meta_in_cached_state()
             // for details. Slots that are orphans are missing a parent_slot, so we should
             // fill in the parent now that we know it.
             if is_orphan(&meta) {
-                meta.parent_slot = parent_slot;
+                meta.parent_slot = Some(parent_slot);
             }
 
             SlotMetaWorkingSetEntry::new(Rc::new(RefCell::new(meta)), backup)
         } else {
             SlotMetaWorkingSetEntry::new(
-                Rc::new(RefCell::new(SlotMeta::new(slot, parent_slot))),
+                Rc::new(RefCell::new(SlotMeta::new(slot, Some(parent_slot)))),
                 None,
             )
         }
@@ -3408,8 +3419,8 @@ fn handle_chaining_for_slot(
         // 1) This is a new slot
         // 2) slot != 0
         // then try to chain this slot to a previous slot
-        if slot != 0 {
-            let prev_slot = meta_mut.parent_slot;
+        if slot != 0 && meta_mut.parent_slot.is_some() {
+            let prev_slot = meta_mut.parent_slot.unwrap();
 
             // Check if the slot represented by meta_mut is either a new slot or a orphan.
             // In both cases we need to run the chaining logic b/c the parent on the slot was
@@ -3503,7 +3514,7 @@ where
 fn is_orphan(meta: &SlotMeta) -> bool {
     // If we have no parent, then this is the head of a detached chain of
     // slots
-    !meta.is_parent_set()
+    meta.parent_slot.is_none()
 }
 
 // 1) Chain current_slot to the previous slot defined by prev_slot_meta
@@ -4038,9 +4049,9 @@ pub mod tests {
                 assert_eq!(meta.next_slots, vec![i + 1]);
             }
             if i == 0 {
-                assert_eq!(meta.parent_slot, 0);
+                assert_eq!(meta.parent_slot, Some(0));
             } else {
-                assert_eq!(meta.parent_slot, i - 1);
+                assert_eq!(meta.parent_slot, Some(i - 1));
             }
 
             assert_eq!(
@@ -4098,7 +4109,7 @@ pub mod tests {
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         // Test meta column family
-        let meta = SlotMeta::new(0, 1);
+        let meta = SlotMeta::new(0, Some(1));
         blockstore.meta_cf.put(0, &meta).unwrap();
         let result = blockstore
             .meta_cf
@@ -4255,7 +4266,7 @@ pub mod tests {
             .expect("Expected new metadata object to exist");
         assert_eq!(meta.consumed, num_shreds);
         assert_eq!(meta.received, num_shreds);
-        assert_eq!(meta.parent_slot, 0);
+        assert_eq!(meta.parent_slot, Some(0));
         assert_eq!(meta.last_index, Some(num_shreds - 1));
         assert!(meta.next_slots.is_empty());
         assert!(meta.is_connected);
@@ -4286,7 +4297,7 @@ pub mod tests {
                 assert_eq!(result.len(), 0);
                 assert!(meta.consumed == 0 && meta.received == num_shreds as u64);
             } else {
-                assert_eq!(meta.parent_slot, 0);
+                assert_eq!(meta.parent_slot, Some(0));
                 assert_eq!(result, entries);
                 assert!(meta.consumed == num_shreds as u64 && meta.received == num_shreds as u64);
             }
@@ -4474,7 +4485,7 @@ pub mod tests {
             let meta = blockstore.meta(slot).unwrap().unwrap();
             assert_eq!(meta.received, num_shreds);
             assert_eq!(meta.consumed, num_shreds);
-            assert_eq!(meta.parent_slot, parent_slot);
+            assert_eq!(meta.parent_slot, Some(parent_slot));
             assert_eq!(meta.last_index, Some(num_shreds - 1));
         }
     }
@@ -4728,7 +4739,7 @@ pub mod tests {
         assert!(s1.next_slots.is_empty());
         // Slot 1 is not trunk because slot 0 hasn't been inserted yet
         assert!(!s1.is_connected);
-        assert_eq!(s1.parent_slot, 0);
+        assert_eq!(s1.parent_slot, Some(0));
         assert_eq!(s1.last_index, Some(shreds_per_slot as u64 - 1));
 
         // 2) Write to the second slot
@@ -4740,7 +4751,7 @@ pub mod tests {
         assert!(s2.next_slots.is_empty());
         // Slot 2 is not trunk because slot 0 hasn't been inserted yet
         assert!(!s2.is_connected);
-        assert_eq!(s2.parent_slot, 1);
+        assert_eq!(s2.parent_slot, Some(1));
         assert_eq!(s2.last_index, Some(shreds_per_slot as u64 - 1));
 
         // Check the first slot again, it should chain to the second slot,
@@ -4748,7 +4759,7 @@ pub mod tests {
         let s1 = blockstore.meta(1).unwrap().unwrap();
         assert_eq!(s1.next_slots, vec![2]);
         assert!(!s1.is_connected);
-        assert_eq!(s1.parent_slot, 0);
+        assert_eq!(s1.parent_slot, Some(0));
         assert_eq!(s1.last_index, Some(shreds_per_slot as u64 - 1));
 
         // 3) Write to the zeroth slot, check that every slot
@@ -4761,9 +4772,9 @@ pub mod tests {
                 assert_eq!(s.next_slots, vec![i + 1]);
             }
             if i == 0 {
-                assert_eq!(s.parent_slot, 0);
+                assert_eq!(s.parent_slot, Some(0));
             } else {
-                assert_eq!(s.parent_slot, i - 1);
+                assert_eq!(s.parent_slot, Some(i - 1));
             }
             assert_eq!(s.last_index, Some(shreds_per_slot as u64 - 1));
             assert!(s.is_connected);
@@ -4813,10 +4824,10 @@ pub mod tests {
             let s = blockstore.meta(i as u64).unwrap().unwrap();
             if i % 2 == 0 {
                 assert_eq!(s.next_slots, vec![i as u64 + 1]);
-                assert_eq!(s.parent_slot, std::u64::MAX);
+                assert_eq!(s.parent_slot, None);
             } else {
                 assert!(s.next_slots.is_empty());
-                assert_eq!(s.parent_slot, i - 1);
+                assert_eq!(s.parent_slot, Some(i - 1));
             }
 
             if i == 0 {
@@ -4842,9 +4853,9 @@ pub mod tests {
             }
 
             if i == 0 {
-                assert_eq!(s.parent_slot, 0);
+                assert_eq!(s.parent_slot, Some(0));
             } else {
-                assert_eq!(s.parent_slot, i - 1);
+                assert_eq!(s.parent_slot, Some(i - 1));
             }
             assert_eq!(s.last_index, Some(shreds_per_slot as u64 - 1));
             assert!(s.is_connected);
@@ -4890,9 +4901,9 @@ pub mod tests {
             }
 
             if i == 0 {
-                assert_eq!(s.parent_slot, 0);
+                assert_eq!(s.parent_slot, Some(0));
             } else {
-                assert_eq!(s.parent_slot, i - 1);
+                assert_eq!(s.parent_slot, Some(i - 1));
             }
 
             assert_eq!(s.last_index, Some(shreds_per_slot as u64 - 1));
@@ -4926,9 +4937,9 @@ pub mod tests {
                     }
 
                     if i == 0 {
-                        assert_eq!(s.parent_slot, 0);
+                        assert_eq!(s.parent_slot, Some(0));
                     } else {
-                        assert_eq!(s.parent_slot, i - 1);
+                        assert_eq!(s.parent_slot, Some(i - 1));
                     }
 
                     assert_eq!(s.last_index, Some(shreds_per_slot as u64 - 1));
@@ -5010,7 +5021,7 @@ pub mod tests {
                         (slot - 1) / branching_factor
                     }
                 };
-                assert_eq!(slot_meta.parent_slot, slot_parent);
+                assert_eq!(slot_meta.parent_slot, Some(slot_parent));
 
                 let expected_children: HashSet<_> = {
                     if slot >= last_level {
@@ -5044,7 +5055,7 @@ pub mod tests {
         // Slot doesn't exist
         assert!(blockstore.get_slots_since(&[0]).unwrap().is_empty());
 
-        let mut meta0 = SlotMeta::new(0, 0);
+        let mut meta0 = SlotMeta::new(0, Some(0));
         blockstore.meta_cf.put(0, &meta0).unwrap();
 
         // Slot exists, chains to nothing
@@ -5058,7 +5069,7 @@ pub mod tests {
         assert_eq!(blockstore.get_slots_since(&[0]).unwrap(), expected);
         assert_eq!(blockstore.get_slots_since(&[0, 1]).unwrap(), expected);
 
-        let mut meta3 = SlotMeta::new(3, 1);
+        let mut meta3 = SlotMeta::new(3, Some(1));
         meta3.next_slots = vec![10, 5];
         blockstore.meta_cf.put(3, &meta3).unwrap();
         let expected: HashMap<u64, Vec<u64>> = vec![(0, vec![1, 2]), (3, vec![10, 5])]
@@ -5187,10 +5198,10 @@ pub mod tests {
             assert_eq!(meta.received, 1);
             assert_eq!(meta.last_index, Some(0));
             if i != 0 {
-                assert_eq!(meta.parent_slot, i - 1);
+                assert_eq!(meta.parent_slot, Some(i - 1));
                 assert_eq!(meta.consumed, 1);
             } else {
-                assert_eq!(meta.parent_slot, 0);
+                assert_eq!(meta.parent_slot, Some(0));
                 assert_eq!(meta.consumed, num_shreds_per_slot);
             }
         }
@@ -6016,10 +6027,7 @@ pub mod tests {
             .set_roots(vec![slot - 1, slot, slot + 1].iter())
             .unwrap();
 
-        let parent_meta = SlotMeta {
-            parent_slot: std::u64::MAX,
-            ..SlotMeta::default()
-        };
+        let parent_meta = SlotMeta::default();
         blockstore
             .put_meta_bytes(slot - 1, &serialize(&parent_meta).unwrap())
             .unwrap();
@@ -6554,13 +6562,13 @@ pub mod tests {
         //    2 (root)
         //    |
         //    3
-        let meta0 = SlotMeta::new(0, 0);
+        let meta0 = SlotMeta::new(0, Some(0));
         blockstore.meta_cf.put(0, &meta0).unwrap();
-        let meta1 = SlotMeta::new(1, 0);
+        let meta1 = SlotMeta::new(1, Some(0));
         blockstore.meta_cf.put(1, &meta1).unwrap();
-        let meta2 = SlotMeta::new(2, 0);
+        let meta2 = SlotMeta::new(2, Some(0));
         blockstore.meta_cf.put(2, &meta2).unwrap();
-        let meta3 = SlotMeta::new(3, 2);
+        let meta3 = SlotMeta::new(3, Some(2));
         blockstore.meta_cf.put(3, &meta3).unwrap();
 
         blockstore.set_roots(vec![0, 2].iter()).unwrap();
@@ -6737,13 +6745,13 @@ pub mod tests {
         let signature2 = Signature::new(&[3u8; 64]);
 
         // Insert rooted slots 0..=3 with no fork
-        let meta0 = SlotMeta::new(0, 0);
+        let meta0 = SlotMeta::new(0, Some(0));
         blockstore.meta_cf.put(0, &meta0).unwrap();
-        let meta1 = SlotMeta::new(1, 0);
+        let meta1 = SlotMeta::new(1, Some(0));
         blockstore.meta_cf.put(1, &meta1).unwrap();
-        let meta2 = SlotMeta::new(2, 1);
+        let meta2 = SlotMeta::new(2, Some(1));
         blockstore.meta_cf.put(2, &meta2).unwrap();
-        let meta3 = SlotMeta::new(3, 2);
+        let meta3 = SlotMeta::new(3, Some(2));
         blockstore.meta_cf.put(3, &meta3).unwrap();
 
         blockstore.set_roots(vec![0, 1, 2, 3].iter()).unwrap();
@@ -8449,7 +8457,7 @@ pub mod tests {
             assert_eq!(blockstore.get_slot_entries(0, 0).unwrap(), vec![]);
             assert_eq!(meta.consumed, 0);
             assert_eq!(meta.received, last_index + 1);
-            assert_eq!(meta.parent_slot, 0);
+            assert_eq!(meta.parent_slot, Some(0));
             assert_eq!(meta.last_index, Some(last_index));
             assert!(!blockstore.is_full(0));
         }
@@ -8465,7 +8473,7 @@ pub mod tests {
         let meta = blockstore.meta(0).unwrap().unwrap();
         assert_eq!(meta.consumed, num_shreds);
         assert_eq!(meta.received, num_shreds);
-        assert_eq!(meta.parent_slot, 0);
+        assert_eq!(meta.parent_slot, Some(0));
         assert_eq!(meta.last_index, Some(num_shreds - 1));
         assert!(blockstore.is_full(0));
         assert!(!blockstore.is_dead(0));

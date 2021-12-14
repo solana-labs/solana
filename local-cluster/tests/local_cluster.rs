@@ -2761,7 +2761,7 @@ fn test_no_voting() {
         let meta = ledger.meta(i as u64).unwrap().unwrap();
         let parent = meta.parent_slot;
         let expected_parent = i.saturating_sub(1);
-        assert_eq!(parent, expected_parent as u64);
+        assert_eq!(parent, Some(expected_parent as u64));
     }
 }
 
