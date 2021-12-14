@@ -186,7 +186,11 @@ fn output_slot(
                 println!(" Slot Meta {:?}", meta);
             } else {
                 println!(
+<<<<<<< HEAD
                     " num_shreds: {} parent_slot: {} num_entries: {}",
+=======
+                    " num_shreds: {}, parent_slot: {:?}, num_entries: {}, is_full: {}",
+>>>>>>> 8d980f07b (uses Option<Slot> for SlotMeta.parent_slot (#21808))
                     num_shreds,
                     meta.parent_slot,
                     entries.len()
