@@ -12,14 +12,7 @@ use {
         blockstore_meta::*,
         leader_schedule_cache::LeaderScheduleCache,
         next_slots_iterator::NextSlotsIterator,
-<<<<<<< HEAD
-        shred::{Result as ShredResult, Shred, ShredType, Shredder, SHRED_PAYLOAD_SIZE},
-=======
-        shred::{
-            max_ticks_per_n_shreds, Result as ShredResult, Shred, ShredId, ShredType, Shredder,
-            SHRED_PAYLOAD_SIZE,
-        },
->>>>>>> 4ceb2689f (adds ShredId uniquely identifying each shred (#21820))
+        shred::{Result as ShredResult, Shred, ShredId, ShredType, Shredder, SHRED_PAYLOAD_SIZE},
     },
     bincode::deserialize,
     log::*,
