@@ -12,7 +12,7 @@ use {
             atomic::{AtomicBool, Ordering},
             Arc, Mutex,
         },
-        thread::{self, sleep, Builder, JoinHandle},
+        thread::{self, Builder, JoinHandle},
         time::{Duration, Instant},
     },
 };
@@ -160,14 +160,20 @@ impl PohService {
         poh_exit: &AtomicBool,
         record_receiver: Receiver<Record>,
     ) {
+        let mut last_tick = Instant::now();
         while !poh_exit.load(Ordering::Relaxed) {
+            let remaining_tick_time = poh_config
+                .target_tick_duration
+                .saturating_sub(last_tick.elapsed());
             Self::read_record_receiver_and_process(
                 &poh_recorder,
                 &record_receiver,
-                Duration::from_millis(0),
+                remaining_tick_time,
             );
-            sleep(poh_config.target_tick_duration);
-            poh_recorder.lock().unwrap().tick();
+            if remaining_tick_time.is_zero() {
+                last_tick = Instant::now();
+                poh_recorder.lock().unwrap().tick();
+            }
         }
     }
 
@@ -199,14 +205,23 @@ impl PohService {
         record_receiver: Receiver<Record>,
     ) {
         let mut warned = false;
-        for _ in 0..poh_config.target_tick_count.unwrap() {
+        let mut elapsed_ticks = 0;
+        let mut last_tick = Instant::now();
+        let num_ticks = poh_config.target_tick_count.unwrap();
+        while elapsed_ticks < num_ticks {
+            let remaining_tick_time = poh_config
+                .target_tick_duration
+                .saturating_sub(last_tick.elapsed());
             Self::read_record_receiver_and_process(
                 &poh_recorder,
                 &record_receiver,
                 Duration::from_millis(0),
             );
-            sleep(poh_config.target_tick_duration);
-            poh_recorder.lock().unwrap().tick();
+            if remaining_tick_time.is_zero() {
+                last_tick = Instant::now();
+                poh_recorder.lock().unwrap().tick();
+                elapsed_ticks += 1;
+            }
             if poh_exit.load(Ordering::Relaxed) && !warned {
                 warned = true;
                 warn!("exit signal is ignored because PohService is scheduled to exit soon");
@@ -370,7 +385,7 @@ mod tests {
         solana_sdk::{
             clock, hash::hash, pubkey::Pubkey, timing, transaction::VersionedTransaction,
         },
-        std::time::Duration,
+        std::{thread::sleep, time::Duration},
     };
 
     #[test]
