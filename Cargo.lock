@@ -1651,6 +1651,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "gen-syscall-list"
+version = "1.10.0"
+dependencies = [
+ "regex",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4599,7 +4606,6 @@ dependencies = [
  "libsecp256k1 0.6.0",
  "log 0.4.14",
  "rand 0.7.3",
- "regex",
  "solana-measure",
  "solana-program-runtime",
  "solana-runtime",
