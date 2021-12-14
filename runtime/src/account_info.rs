@@ -11,9 +11,43 @@ use crate::{
 pub type Offset = usize;
 
 /// specify where account data is located
+#[derive(Debug)]
 pub enum StorageLocation {
     AppendVec(AppendVecId, Offset),
     Cached,
+}
+
+impl StorageLocation {
+    pub fn is_offset_equal(&self, other: &StorageLocation) -> bool {
+        match self {
+            StorageLocation::Cached => {
+                matches!(other, StorageLocation::Cached) // technically, 2 cached entries match in offset
+            }
+            StorageLocation::AppendVec(_, offset) => {
+                match other {
+                    StorageLocation::Cached => {
+                        false // 1 cached, 1 not
+                    }
+                    StorageLocation::AppendVec(_, other_offset) => other_offset == offset,
+                }
+            }
+        }
+    }
+    pub fn is_store_id_equal(&self, other: &StorageLocation) -> bool {
+        match self {
+            StorageLocation::Cached => {
+                matches!(other, StorageLocation::Cached) // 2 cached entries are same store id
+            }
+            StorageLocation::AppendVec(store_id, _) => {
+                match other {
+                    StorageLocation::Cached => {
+                        false // 1 cached, 1 not
+                    }
+                    StorageLocation::AppendVec(other_store_id, _) => other_store_id == store_id,
+                }
+            }
+        }
+    }
 }
 
 #[derive(Default, Debug, PartialEq, Clone, Copy)]
@@ -45,6 +79,12 @@ impl IsCached for AccountInfo {
     }
 }
 
+impl IsCached for StorageLocation {
+    fn is_cached(&self) -> bool {
+        matches!(self, StorageLocation::Cached)
+    }
+}
+
 impl AccountInfo {
     pub fn new(storage_location: StorageLocation, mut stored_size: usize, lamports: u64) -> Self {
         let (store_id, offset) = match storage_location {
@@ -73,5 +113,13 @@ impl AccountInfo {
     pub fn stored_size(&self) -> usize {
         // elminate the special bit that indicates the info references an account with zero lamports
         self.stored_size & !ZERO_LAMPORT_BIT
+    }
+
+    pub fn storage_location(&self) -> StorageLocation {
+        if self.is_cached() {
+            StorageLocation::Cached
+        } else {
+            StorageLocation::AppendVec(self.store_id, self.offset)
+        }
     }
 }
