@@ -114,7 +114,7 @@ CREATE TYPE "TransactionMessage" AS (
 );
 
 CREATE TYPE "TransactionMessageAddressTableLookup" AS (
-    account_key: BYTEA[],
+    account_key BYTEA[],
     writable_indexes SMALLINT[],
     readonly_indexes SMALLINT[]
 );
