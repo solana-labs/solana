@@ -16,7 +16,6 @@ pub const PACKET_DATA_SIZE: usize = 1280 - 40 - 8;
 
 pub const EXTENDED_PACKET_DATA_SIZE: usize = PACKET_DATA_SIZE * 2;
 
-
 // TODO: Expose a second concrete instance of PacketInterface that uses updated size
 // pub const DOUBLE_DATA_SIZE: usize = PACKET_DATA_SIZE * 2;
 
@@ -38,6 +37,11 @@ pub trait PacketInterface: Clone + Default + Sized + Send + Sync + fmt::Debug {
         dest: Option<&SocketAddr>,
         data: &T,
     ) -> Result<()>;
+
+    // used to distinguish between extended and standard packets
+    // for gpu sigverify
+    // todo: is there a better way to do this?
+    fn is_extended(&self) -> bool;
 }
 
 #[derive(Clone, Default, Debug, PartialEq)]
@@ -63,7 +67,7 @@ pub struct Packet {
     pub meta: Meta,
 }
 
-// TODO: can we de-duplicate some if this Packet and ExtendedPacket code?
+// TODO: can we de-duplicate some of this Packet and ExtendedPacket code?
 #[derive(Clone)]
 #[repr(C)]
 pub struct ExtendedPacket {
@@ -108,8 +112,11 @@ impl PacketInterface for ExtendedPacket {
         }
         Ok(())
     }
-}
 
+    fn is_extended(&self) -> bool {
+        true
+    }
+}
 
 impl PacketInterface for Packet {
     fn get_data(&self) -> &[u8] {
@@ -147,6 +154,10 @@ impl PacketInterface for Packet {
             packet.meta.set_addr(dest);
         }
         Ok(())
+    }
+
+    fn is_extended(&self) -> bool {
+        false
     }
 }
 

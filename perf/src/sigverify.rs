@@ -9,7 +9,7 @@ use solana_sdk::transaction::Transaction;
 use {
     crate::{
         cuda_runtime::PinnedVec,
-        packet::{Packet, PacketBatch, PacketInterface},
+        packet::{ExtendedPacket, Packet, PacketBatch, PacketInterface},
         perf_libs,
         recycler::Recycler,
     },
@@ -509,6 +509,17 @@ pub fn mark_disabled<P: PacketInterface>(batches: &mut [PacketBatch<P>], r: &[Ve
     });
 }
 
+#[cfg(test)]
+pub fn make_packet_from_transaction(tx: Transaction) -> Packet {
+    use bincode::serialize;
+
+    let tx_bytes = serialize(&tx).unwrap();
+    let mut packet = Packet::default();
+    packet.meta.size = tx_bytes.len();
+    packet.data[..packet.meta.size].copy_from_slice(&tx_bytes);
+    packet
+}
+
 pub fn ed25519_verify<P: PacketInterface>(
     batches: &mut [PacketBatch<P>],
     recycler: &Recycler<TxOffset>,
@@ -524,12 +535,16 @@ pub fn ed25519_verify<P: PacketInterface>(
     use crate::packet::PACKET_DATA_SIZE;
     let packet_count = count_packets_in_batches(batches);
 
+    let is_extended = batches
+        .iter()
+        .any(|packets| packets.packets.iter().any(|packet| packet.is_extended()));
+
     // micro-benchmarks show GPU time for smallest batch around 15-20ms
     // and CPU speed for 64-128 sigverifies around 10-20ms. 64 is a nice
     // power-of-two number around that accounting for the fact that the CPU
     // may be busy doing other things while being a real validator
     // TODO: dynamically adjust this crossover
-    if packet_count < 64 {
+    if packet_count < 64 || is_extended {
         return ed25519_verify_cpu(batches, reject_non_vote);
     }
 
