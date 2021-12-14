@@ -15,7 +15,7 @@ pub enum StorageLocation {
 #[derive(Default, Debug, PartialEq, Clone, Copy)]
 pub struct AccountInfo {
     /// index identifying the append storage
-    pub store_id: AppendVecId,
+    store_id: AppendVecId,
 
     /// offset into the storage
     offset: Offset,
@@ -53,6 +53,10 @@ impl AccountInfo {
             stored_size,
             lamports,
         }
+    }
+
+    pub fn store_id(&self) -> usize {
+        self.store_id
     }
 
     pub fn offset(&self) -> usize {

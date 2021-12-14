@@ -1826,10 +1826,10 @@ impl AccountsDb {
                         "calc_delete_dependencies()
                         storage id: {},
                         count len: {}",
-                        account_info.store_id,
-                        store_counts.get(&account_info.store_id).unwrap().0,
+                        account_info.store_id(),
+                        store_counts.get(&account_info.store_id()).unwrap().0,
                     );
-                    if store_counts.get(&account_info.store_id).unwrap().0 != 0 {
+                    if store_counts.get(&account_info.store_id()).unwrap().0 != 0 {
                         no_delete = true;
                         break;
                     }
@@ -1839,8 +1839,8 @@ impl AccountsDb {
             if no_delete {
                 let mut pending_store_ids = HashSet::new();
                 for (_bank_id, account_info) in account_infos {
-                    if !already_counted.contains(&account_info.store_id) {
-                        pending_store_ids.insert(account_info.store_id);
+                    if !already_counted.contains(&account_info.store_id()) {
+                        pending_store_ids.insert(account_info.store_id());
                     }
                 }
                 while !pending_store_ids.is_empty() {
@@ -1855,8 +1855,8 @@ impl AccountsDb {
                     let affected_pubkeys = &store_counts.get(&id).unwrap().1;
                     for key in affected_pubkeys {
                         for (_slot, account_info) in &purges.get(key).unwrap().0 {
-                            if !already_counted.contains(&account_info.store_id) {
-                                pending_store_ids.insert(account_info.store_id);
+                            if !already_counted.contains(&account_info.store_id()) {
+                                pending_store_ids.insert(account_info.store_id());
                             }
                         }
                     }
@@ -2226,13 +2226,13 @@ impl AccountsDb {
                 // Check if this update in `slot` to the account with `key` was reclaimed earlier by
                 // `clean_accounts_older_than_root()`
                 let was_reclaimed = removed_accounts
-                    .get(&account_info.store_id)
+                    .get(&account_info.store_id())
                     .map(|store_removed| store_removed.contains(&account_info.offset()))
                     .unwrap_or(false);
                 if was_reclaimed {
                     return false;
                 }
-                if let Some(store_count) = store_counts.get_mut(&account_info.store_id) {
+                if let Some(store_count) = store_counts.get_mut(&account_info.store_id()) {
                     store_count.0 -= 1;
                     store_count.1.insert(*key);
                 } else {
@@ -2246,14 +2246,14 @@ impl AccountsDb {
                     );
                     let count = self
                         .storage
-                        .slot_store_count(*slot, account_info.store_id)
+                        .slot_store_count(*slot, account_info.store_id())
                         .unwrap()
                         - 1;
                     debug!(
                         "store_counts, inserting slot: {}, store id: {}, count: {}",
-                        slot, account_info.store_id, count
+                        slot, account_info.store_id(), count
                     );
-                    store_counts.insert(account_info.store_id, (count, key_set));
+                    store_counts.insert(account_info.store_id(), (count, key_set));
                 }
                 true
             });
@@ -2497,7 +2497,7 @@ impl AccountsDb {
             // Only keep purges_zero_lamports where the entire history of the account in the root set
             // can be purged. All AppendVecs for those updates are dead.
             for (_slot, account_info) in slot_account_infos.iter() {
-                if store_counts.get(&account_info.store_id).unwrap().0 != 0 {
+                if store_counts.get(&account_info.store_id()).unwrap().0 != 0 {
                     return false;
                 }
             }
@@ -2582,7 +2582,7 @@ impl AccountsDb {
             let lookup = self.accounts_index.get_account_read_entry(pubkey);
             if let Some(locked_entry) = lookup {
                 let is_alive = locked_entry.slot_list().iter().any(|(_slot, i)| {
-                    i.store_id == stored_account.store_id
+                    i.store_id() == stored_account.store_id
                         && i.offset() == stored_account.account.offset
                 });
                 if !is_alive {
@@ -3084,7 +3084,7 @@ impl AccountsDb {
                     .get_account_accessor(
                         slot,
                         pubkey,
-                        account_info.store_id,
+                        account_info.store_id(),
                         account_info.offset(),
                     )
                     .get_loaded_account()
@@ -3117,7 +3117,7 @@ impl AccountsDb {
                     .get_account_accessor(
                         slot,
                         pubkey,
-                        account_info.store_id,
+                        account_info.store_id(),
                         account_info.offset(),
                     )
                     .get_loaded_account()
@@ -3163,7 +3163,7 @@ impl AccountsDb {
                     .get_account_accessor(
                         slot,
                         pubkey,
-                        account_info.store_id,
+                        account_info.store_id(),
                         account_info.offset(),
                     )
                     .get_loaded_account()
@@ -3209,7 +3209,7 @@ impl AccountsDb {
                     .get_account_accessor(
                         slot,
                         pubkey,
-                        account_info.store_id,
+                        account_info.store_id(),
                         account_info.offset(),
                     )
                     .get_loaded_account()
@@ -3339,7 +3339,7 @@ impl AccountsDb {
 
         let slot_list = lock.slot_list();
         let (slot, info) = slot_list[index];
-        let store_id = info.store_id;
+        let store_id = info.store_id();
         let offset = info.offset();
         let some_from_slow_path = if clone_in_lock {
             // the fast path must have failed.... so take the slower approach
@@ -5124,7 +5124,7 @@ impl AccountsDb {
                                     self.get_account_accessor(
                                         *slot,
                                         pubkey,
-                                        account_info.store_id,
+                                        account_info.store_id(),
                                         account_info.offset(),
                                     )
                                     .get_loaded_account()
@@ -6005,7 +6005,7 @@ impl AccountsDb {
             assert!(!account_info.is_cached());
             if let Some(ref mut reclaimed_offsets) = reclaimed_offsets {
                 reclaimed_offsets
-                    .entry(account_info.store_id)
+                    .entry(account_info.store_id())
                     .or_default()
                     .insert(account_info.offset());
             }
@@ -6014,7 +6014,7 @@ impl AccountsDb {
             }
             if let Some(store) = self
                 .storage
-                .get_account_storage_entry(*slot, account_info.store_id)
+                .get_account_storage_entry(*slot, account_info.store_id())
             {
                 assert_eq!(
                     *slot, store.slot(),
@@ -7080,7 +7080,7 @@ impl AccountsDb {
                     .for_each(|(slot, account_info)| {
                         let maybe_storage_entry = self
                             .storage
-                            .get_account_storage_entry(*slot, account_info.store_id);
+                            .get_account_storage_entry(*slot, account_info.store_id());
                         let mut accessor = LoadedAccountAccessor::Stored(
                             maybe_storage_entry.map(|entry| (entry, account_info.offset())),
                         );
@@ -7263,7 +7263,7 @@ impl AccountsDb {
     pub fn get_append_vec_id(&self, pubkey: &Pubkey, slot: Slot) -> Option<AppendVecId> {
         let ancestors = vec![(slot, 1)].into_iter().collect();
         let result = self.accounts_index.get(pubkey, Some(&ancestors), None);
-        result.map(|(list, index)| list.slot_list()[index].1.store_id)
+        result.map(|(list, index)| list.slot_list()[index].1.store_id())
     }
 
     pub fn alive_account_count_in_slot(&self, slot: Slot) -> usize {
@@ -8698,7 +8698,7 @@ pub mod tests {
                 .accounts_index
                 .get(&pubkey, Some(&ancestors), None)
                 .unwrap();
-            lock.slot_list()[idx].1.store_id
+            lock.slot_list()[idx].1.store_id()
         };
         accounts.get_accounts_delta_hash(0);
         accounts.add_root(1);
@@ -8788,7 +8788,7 @@ pub mod tests {
             .unwrap();
         assert_eq!(slot1, 0);
         assert_eq!(slot1, slot2);
-        assert_eq!(account_info1.store_id, account_info2.store_id);
+        assert_eq!(account_info1.store_id(), account_info2.store_id());
 
         // Update account 1 in slot 1
         accounts.store_uncached(1, &[(&pubkey1, &account)]);
@@ -9349,7 +9349,7 @@ pub mod tests {
             .unwrap();
         assert_eq!(slot1, current_slot);
         assert_eq!(slot1, slot2);
-        assert_eq!(account_info1.store_id, account_info2.store_id);
+        assert_eq!(account_info1.store_id(), account_info2.store_id());
 
         // Step B
         current_slot += 1;
@@ -13320,7 +13320,7 @@ pub mod tests {
             key_set.insert(pubkey);
             let store_count = 0;
             let mut store_counts = HashMap::default();
-            store_counts.insert(account_info.store_id, (store_count, key_set));
+            store_counts.insert(account_info.store_id(), (store_count, key_set));
             let mut purges_zero_lamports = HashMap::default();
             purges_zero_lamports.insert(pubkey, (vec![(slot, account_info)], 1));
 
