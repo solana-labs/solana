@@ -2919,6 +2919,18 @@ impl Bank {
         }
     }
 
+<<<<<<< HEAD
+=======
+    fn burn_and_purge_account(&self, program_id: &Pubkey, mut account: AccountSharedData) {
+        self.capitalization.fetch_sub(account.lamports(), Relaxed);
+        // Both resetting account balance to 0 and zeroing the account data
+        // is needed to really purge from AccountsDb and flush the Stakes cache
+        account.set_lamports(0);
+        account.data_as_mut_slice().fill(0);
+        self.store_account(program_id, &account);
+    }
+
+>>>>>>> c92c09a8b (Remove activated feature for removing inactive delegations from stakes cache (#21732))
     // NOTE: must hold idempotent for the same set of arguments
     pub fn add_native_program(&self, name: &str, program_id: &Pubkey, must_replace: bool) {
         let existing_genuine_program =
@@ -4751,6 +4763,7 @@ impl Bank {
             .accounts
             .store_slow_cached(self.slot(), pubkey, account);
 
+<<<<<<< HEAD
         if Stakes::is_stake(account) {
             self.stakes.write().unwrap().store(
                 pubkey,
@@ -4758,6 +4771,9 @@ impl Bank {
                 self.stakes_remove_delegation_if_inactive_enabled(),
             );
         }
+=======
+        self.stakes_cache.check_and_store(pubkey, account);
+>>>>>>> c92c09a8b (Remove activated feature for removing inactive delegations from stakes cache (#21732))
     }
 
     pub fn force_flush_accounts_cache(&self) {
@@ -5435,11 +5451,15 @@ impl Bank {
                 .zip(loaded_transaction.accounts.iter())
                 .filter(|(_i, (_pubkey, account))| (Stakes::is_stake(account)))
             {
+<<<<<<< HEAD
                 self.stakes.write().unwrap().store(
                     pubkey,
                     account,
                     self.stakes_remove_delegation_if_inactive_enabled(),
                 );
+=======
+                self.stakes_cache.check_and_store(pubkey, account);
+>>>>>>> c92c09a8b (Remove activated feature for removing inactive delegations from stakes cache (#21732))
             }
         }
     }
@@ -5668,9 +5688,15 @@ impl Bank {
             .is_active(&feature_set::demote_program_write_locks::id())
     }
 
+<<<<<<< HEAD
     pub fn stakes_remove_delegation_if_inactive_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::stakes_remove_delegation_if_inactive::id())
+=======
+    pub fn leave_nonce_on_success(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::leave_nonce_on_success::id())
+>>>>>>> c92c09a8b (Remove activated feature for removing inactive delegations from stakes cache (#21732))
     }
 
     pub fn send_to_tpu_vote_port_enabled(&self) -> bool {

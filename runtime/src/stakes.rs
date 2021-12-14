@@ -5,6 +5,7 @@ use rayon::{
     iter::{IntoParallelRefIterator, ParallelIterator},
     ThreadPool,
 };
+<<<<<<< HEAD
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
     clock::Epoch,
@@ -18,6 +19,123 @@ use solana_sdk::{
 use solana_stake_program::stake_state;
 use solana_vote_program::vote_state::VoteState;
 use std::collections::HashMap;
+=======
+
+#[derive(Debug, Clone, PartialEq, ToPrimitive)]
+pub enum InvalidCacheEntryReason {
+    Missing,
+    BadState,
+    WrongOwner,
+}
+
+#[derive(Default, Debug, Deserialize, Serialize, AbiExample)]
+pub struct StakesCache(RwLock<Stakes>);
+
+impl StakesCache {
+    pub fn new(stakes: Stakes) -> Self {
+        Self(RwLock::new(stakes))
+    }
+
+    pub fn stakes(&self) -> RwLockReadGuard<Stakes> {
+        self.0.read().unwrap()
+    }
+
+    pub fn is_stake(account: &AccountSharedData) -> bool {
+        solana_vote_program::check_id(account.owner())
+            || stake::program::check_id(account.owner())
+                && account.data().len() >= std::mem::size_of::<StakeState>()
+    }
+
+    pub fn check_and_store(&self, pubkey: &Pubkey, account: &AccountSharedData) {
+        if solana_vote_program::check_id(account.owner()) {
+            let new_vote_account = if account.lamports() != 0
+                && VoteState::is_correct_size_and_initialized(account.data())
+            {
+                let vote_account = VoteAccount::from(account.clone());
+                {
+                    // Called to eagerly deserialize vote state
+                    let _res = vote_account.vote_state();
+                }
+                Some(vote_account)
+            } else {
+                None
+            };
+
+            self.0
+                .write()
+                .unwrap()
+                .update_vote_account(pubkey, new_vote_account);
+        } else if solana_stake_program::check_id(account.owner()) {
+            let new_delegation = stake_state::delegation_from(account).map(|delegation| {
+                let stakes = self.stakes();
+                let stake = if account.lamports() != 0 {
+                    delegation.stake(stakes.epoch, Some(&stakes.stake_history))
+                } else {
+                    // when account is removed (lamports == 0), this special `else` clause ensures
+                    // resetting cached stake value below, even if the account happens to be
+                    // still staked for some (odd) reason
+                    0
+                };
+                (stake, delegation)
+            });
+
+            self.0
+                .write()
+                .unwrap()
+                .update_stake_delegation(pubkey, new_delegation);
+        }
+    }
+
+    pub fn activate_epoch(&self, next_epoch: Epoch, thread_pool: &ThreadPool) {
+        let mut stakes = self.0.write().unwrap();
+        stakes.activate_epoch(next_epoch, thread_pool)
+    }
+
+    pub fn handle_invalid_keys(
+        &self,
+        invalid_stake_keys: DashMap<Pubkey, InvalidCacheEntryReason>,
+        invalid_vote_keys: DashMap<Pubkey, InvalidCacheEntryReason>,
+        should_evict_invalid_entries: bool,
+        current_slot: Slot,
+    ) {
+        if invalid_stake_keys.is_empty() && invalid_vote_keys.is_empty() {
+            return;
+        }
+
+        // Prune invalid stake delegations and vote accounts that were
+        // not properly evicted in normal operation.
+        let mut maybe_stakes = if should_evict_invalid_entries {
+            Some(self.0.write().unwrap())
+        } else {
+            None
+        };
+
+        for (stake_pubkey, reason) in invalid_stake_keys {
+            if let Some(stakes) = maybe_stakes.as_mut() {
+                stakes.remove_stake_delegation(&stake_pubkey);
+            }
+            datapoint_warn!(
+                "bank-stake_delegation_accounts-invalid-account",
+                ("slot", current_slot as i64, i64),
+                ("stake-address", format!("{:?}", stake_pubkey), String),
+                ("reason", reason.to_i64().unwrap_or_default(), i64),
+            );
+        }
+
+        for (vote_pubkey, reason) in invalid_vote_keys {
+            if let Some(stakes) = maybe_stakes.as_mut() {
+                stakes.remove_vote_account(&vote_pubkey);
+            }
+            datapoint_warn!(
+                "bank-stake_delegation_accounts-invalid-account",
+                ("slot", current_slot as i64, i64),
+                ("vote-address", format!("{:?}", vote_pubkey), String),
+                ("reason", reason.to_i64().unwrap_or_default(), i64),
+            );
+        }
+    }
+}
+>>>>>>> c92c09a8b (Remove activated feature for removing inactive delegations from stakes cache (#21732))
 
 #[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize, AbiExample)]
 pub struct Stakes {
@@ -209,8 +327,35 @@ impl Stakes {
                     |v| v.0,
                 );
 
+<<<<<<< HEAD
                 self.vote_accounts
                     .insert(*pubkey, (stake, ArcVoteAccount::from(account.clone())));
+=======
+            self.vote_accounts
+                .insert(*vote_pubkey, (new_stake, new_vote_account));
+        }
+    }
+
+    pub fn update_stake_delegation(
+        &mut self,
+        stake_pubkey: &Pubkey,
+        new_delegation: Option<(u64, Delegation)>,
+    ) {
+        //  old_stake is stake lamports and voter_pubkey from the pre-store() version
+        let old_stake = self.stake_delegations.get(stake_pubkey).map(|delegation| {
+            (
+                delegation.voter_pubkey,
+                delegation.stake(self.epoch, Some(&self.stake_history)),
+            )
+        });
+
+        let new_stake = new_delegation.map(|(stake, delegation)| (delegation.voter_pubkey, stake));
+
+        // check if adjustments need to be made...
+        if new_stake != old_stake {
+            if let Some((voter_pubkey, stake)) = old_stake {
+                self.vote_accounts.sub_stake(&voter_pubkey, stake);
+>>>>>>> c92c09a8b (Remove activated feature for removing inactive delegations from stakes cache (#21732))
             }
         } else if stake::program::check_id(account.owner()) {
             //  old_stake is stake lamports and voter_pubkey from the pre-store() version
@@ -247,6 +392,7 @@ impl Stakes {
                 }
             }
 
+<<<<<<< HEAD
             let remove_delegation = if remove_delegation_on_inactive {
                 delegation.is_none()
             } else {
@@ -266,6 +412,15 @@ impl Stakes {
             // `pubkey` because this isn't possible, first of all.
             // Runtime always enforces an intermediary write of account.lamports == 0,
             // when not-System111-owned account.owner is swapped.
+=======
+        if let Some((_stake, delegation)) = new_delegation {
+            self.stake_delegations.insert(*stake_pubkey, delegation);
+        } else {
+            // when stake is no longer delegated, remove it from Stakes so that
+            // given `pubkey` can be used for any owner in the future, while not
+            // affecting Stakes.
+            self.stake_delegations.remove(stake_pubkey);
+>>>>>>> c92c09a8b (Remove activated feature for removing inactive delegations from stakes cache (#21732))
         }
     }
 
@@ -371,8 +526,13 @@ pub mod tests {
             let ((vote_pubkey, vote_account), (stake_pubkey, mut stake_account)) =
                 create_staked_node_accounts(10);
 
+<<<<<<< HEAD
             stakes.store(&vote_pubkey, &vote_account, true);
             stakes.store(&stake_pubkey, &stake_account, true);
+=======
+            stakes_cache.check_and_store(&vote_pubkey, &vote_account);
+            stakes_cache.check_and_store(&stake_pubkey, &stake_account);
+>>>>>>> c92c09a8b (Remove activated feature for removing inactive delegations from stakes cache (#21732))
             let stake = stake_state::stake_from(&stake_account).unwrap();
             {
                 let vote_accounts = stakes.vote_accounts();
@@ -384,7 +544,11 @@ pub mod tests {
             }
 
             stake_account.set_lamports(42);
+<<<<<<< HEAD
             stakes.store(&stake_pubkey, &stake_account, true);
+=======
+            stakes_cache.check_and_store(&stake_pubkey, &stake_account);
+>>>>>>> c92c09a8b (Remove activated feature for removing inactive delegations from stakes cache (#21732))
             {
                 let vote_accounts = stakes.vote_accounts();
                 assert!(vote_accounts.get(&vote_pubkey).is_some());
@@ -396,7 +560,11 @@ pub mod tests {
 
             // activate more
             let (_stake_pubkey, mut stake_account) = create_stake_account(42, &vote_pubkey);
+<<<<<<< HEAD
             stakes.store(&stake_pubkey, &stake_account, true);
+=======
+            stakes_cache.check_and_store(&stake_pubkey, &stake_account);
+>>>>>>> c92c09a8b (Remove activated feature for removing inactive delegations from stakes cache (#21732))
             let stake = stake_state::stake_from(&stake_account).unwrap();
             {
                 let vote_accounts = stakes.vote_accounts();
@@ -408,7 +576,11 @@ pub mod tests {
             }
 
             stake_account.set_lamports(0);
+<<<<<<< HEAD
             stakes.store(&stake_pubkey, &stake_account, true);
+=======
+            stakes_cache.check_and_store(&stake_pubkey, &stake_account);
+>>>>>>> c92c09a8b (Remove activated feature for removing inactive delegations from stakes cache (#21732))
             {
                 let vote_accounts = stakes.vote_accounts();
                 assert!(vote_accounts.get(&vote_pubkey).is_some());
@@ -426,14 +598,24 @@ pub mod tests {
         let ((vote_pubkey, vote_account), (stake_pubkey, stake_account)) =
             create_staked_node_accounts(10);
 
+<<<<<<< HEAD
         stakes.store(&vote_pubkey, &vote_account, true);
         stakes.store(&stake_pubkey, &stake_account, true);
+=======
+        stakes_cache.check_and_store(&vote_pubkey, &vote_account);
+        stakes_cache.check_and_store(&stake_pubkey, &stake_account);
+>>>>>>> c92c09a8b (Remove activated feature for removing inactive delegations from stakes cache (#21732))
 
         let ((vote11_pubkey, vote11_account), (stake11_pubkey, stake11_account)) =
             create_staked_node_accounts(20);
 
+<<<<<<< HEAD
         stakes.store(&vote11_pubkey, &vote11_account, true);
         stakes.store(&stake11_pubkey, &stake11_account, true);
+=======
+        stakes_cache.check_and_store(&vote11_pubkey, &vote11_account);
+        stakes_cache.check_and_store(&stake11_pubkey, &stake11_account);
+>>>>>>> c92c09a8b (Remove activated feature for removing inactive delegations from stakes cache (#21732))
 
         let vote11_node_pubkey = VoteState::from(&vote11_account).unwrap().node_pubkey;
 
@@ -450,8 +632,13 @@ pub mod tests {
         let ((vote_pubkey, mut vote_account), (stake_pubkey, stake_account)) =
             create_staked_node_accounts(10);
 
+<<<<<<< HEAD
         stakes.store(&vote_pubkey, &vote_account, true);
         stakes.store(&stake_pubkey, &stake_account, true);
+=======
+        stakes_cache.check_and_store(&vote_pubkey, &vote_account);
+        stakes_cache.check_and_store(&stake_pubkey, &stake_account);
+>>>>>>> c92c09a8b (Remove activated feature for removing inactive delegations from stakes cache (#21732))
 
         {
             let vote_accounts = stakes.vote_accounts();
@@ -460,7 +647,11 @@ pub mod tests {
         }
 
         vote_account.set_lamports(0);
+<<<<<<< HEAD
         stakes.store(&vote_pubkey, &vote_account, true);
+=======
+        stakes_cache.check_and_store(&vote_pubkey, &vote_account);
+>>>>>>> c92c09a8b (Remove activated feature for removing inactive delegations from stakes cache (#21732))
 
         {
             let vote_accounts = stakes.vote_accounts();
@@ -468,7 +659,11 @@ pub mod tests {
         }
 
         vote_account.set_lamports(1);
+<<<<<<< HEAD
         stakes.store(&vote_pubkey, &vote_account, true);
+=======
+        stakes_cache.check_and_store(&vote_pubkey, &vote_account);
+>>>>>>> c92c09a8b (Remove activated feature for removing inactive delegations from stakes cache (#21732))
 
         {
             let vote_accounts = stakes.vote_accounts();
@@ -481,7 +676,11 @@ pub mod tests {
         let mut pushed = vote_account.data().to_vec();
         pushed.push(0);
         vote_account.set_data(pushed);
+<<<<<<< HEAD
         stakes.store(&vote_pubkey, &vote_account, true);
+=======
+        stakes_cache.check_and_store(&vote_pubkey, &vote_account);
+>>>>>>> c92c09a8b (Remove activated feature for removing inactive delegations from stakes cache (#21732))
 
         {
             let vote_accounts = stakes.vote_accounts();
@@ -492,7 +691,11 @@ pub mod tests {
         let default_vote_state = VoteState::default();
         let versioned = VoteStateVersions::new_current(default_vote_state);
         VoteState::to(&versioned, &mut vote_account).unwrap();
+<<<<<<< HEAD
         stakes.store(&vote_pubkey, &vote_account, true);
+=======
+        stakes_cache.check_and_store(&vote_pubkey, &vote_account);
+>>>>>>> c92c09a8b (Remove activated feature for removing inactive delegations from stakes cache (#21732))
 
         {
             let vote_accounts = stakes.vote_accounts();
@@ -500,7 +703,11 @@ pub mod tests {
         }
 
         vote_account.set_data(cache_data);
+<<<<<<< HEAD
         stakes.store(&vote_pubkey, &vote_account, true);
+=======
+        stakes_cache.check_and_store(&vote_pubkey, &vote_account);
+>>>>>>> c92c09a8b (Remove activated feature for removing inactive delegations from stakes cache (#21732))
 
         {
             let vote_accounts = stakes.vote_accounts();
@@ -522,11 +729,19 @@ pub mod tests {
         let ((vote_pubkey2, vote_account2), (_stake_pubkey2, stake_account2)) =
             create_staked_node_accounts(10);
 
+<<<<<<< HEAD
         stakes.store(&vote_pubkey, &vote_account, true);
         stakes.store(&vote_pubkey2, &vote_account2, true);
 
         // delegates to vote_pubkey
         stakes.store(&stake_pubkey, &stake_account, true);
+=======
+        stakes_cache.check_and_store(&vote_pubkey, &vote_account);
+        stakes_cache.check_and_store(&vote_pubkey2, &vote_account2);
+
+        // delegates to vote_pubkey
+        stakes_cache.check_and_store(&stake_pubkey, &stake_account);
+>>>>>>> c92c09a8b (Remove activated feature for removing inactive delegations from stakes cache (#21732))
 
         let stake = stake_state::stake_from(&stake_account).unwrap();
 
@@ -542,7 +757,11 @@ pub mod tests {
         }
 
         // delegates to vote_pubkey2
+<<<<<<< HEAD
         stakes.store(&stake_pubkey, &stake_account2, true);
+=======
+        stakes_cache.check_and_store(&stake_pubkey, &stake_account2);
+>>>>>>> c92c09a8b (Remove activated feature for removing inactive delegations from stakes cache (#21732))
 
         {
             let vote_accounts = stakes.vote_accounts();
@@ -567,11 +786,19 @@ pub mod tests {
 
         let (stake_pubkey2, stake_account2) = create_stake_account(10, &vote_pubkey);
 
+<<<<<<< HEAD
         stakes.store(&vote_pubkey, &vote_account, true);
 
         // delegates to vote_pubkey
         stakes.store(&stake_pubkey, &stake_account, true);
         stakes.store(&stake_pubkey2, &stake_account2, true);
+=======
+        stakes_cache.check_and_store(&vote_pubkey, &vote_account);
+
+        // delegates to vote_pubkey
+        stakes_cache.check_and_store(&stake_pubkey, &stake_account);
+        stakes_cache.check_and_store(&stake_pubkey2, &stake_account2);
+>>>>>>> c92c09a8b (Remove activated feature for removing inactive delegations from stakes cache (#21732))
 
         {
             let vote_accounts = stakes.vote_accounts();
@@ -587,6 +814,7 @@ pub mod tests {
         let ((vote_pubkey, vote_account), (stake_pubkey, stake_account)) =
             create_staked_node_accounts(10);
 
+<<<<<<< HEAD
         stakes.store(&vote_pubkey, &vote_account, true);
         stakes.store(&stake_pubkey, &stake_account, true);
         let stake = stake_state::stake_from(&stake_account).unwrap();
@@ -618,6 +846,10 @@ pub mod tests {
 
         stakes.store(&vote_pubkey, &vote_account, true);
         stakes.store(&stake_pubkey, &stake_account, true);
+=======
+        stakes_cache.check_and_store(&vote_pubkey, &vote_account);
+        stakes_cache.check_and_store(&stake_pubkey, &stake_account);
+>>>>>>> c92c09a8b (Remove activated feature for removing inactive delegations from stakes cache (#21732))
         let stake = stake_state::stake_from(&stake_account).unwrap();
 
         {
@@ -648,8 +880,13 @@ pub mod tests {
         let ((vote_pubkey, vote_account), (stake_pubkey, stake_account)) =
             create_staked_node_accounts(10);
 
+<<<<<<< HEAD
         stakes.store(&vote_pubkey, &vote_account, true);
         stakes.store(&stake_pubkey, &stake_account, true);
+=======
+        stakes_cache.check_and_store(&vote_pubkey, &vote_account);
+        stakes_cache.check_and_store(&stake_pubkey, &stake_account);
+>>>>>>> c92c09a8b (Remove activated feature for removing inactive delegations from stakes cache (#21732))
 
         {
             let vote_accounts = stakes.vote_accounts();
@@ -661,7 +898,6 @@ pub mod tests {
         stakes.store(
             &stake_pubkey,
             &AccountSharedData::new(1, 0, &stake::program::id()),
-            true,
         );
         {
             let vote_accounts = stakes.vote_accounts();
@@ -691,8 +927,13 @@ pub mod tests {
         let genesis_epoch = 0;
         let ((vote_pubkey, vote_account), (stake_pubkey, stake_account)) =
             create_warming_staked_node_accounts(10, genesis_epoch);
+<<<<<<< HEAD
         stakes.store(&vote_pubkey, &vote_account, true);
         stakes.store(&stake_pubkey, &stake_account, true);
+=======
+        stakes_cache.check_and_store(&vote_pubkey, &vote_account);
+        stakes_cache.check_and_store(&stake_pubkey, &stake_account);
+>>>>>>> c92c09a8b (Remove activated feature for removing inactive delegations from stakes cache (#21732))
 
         assert_eq!(stakes.vote_balance_and_staked(), 11);
         assert_eq!(stakes.vote_balance_and_warmed_staked(), 1);
