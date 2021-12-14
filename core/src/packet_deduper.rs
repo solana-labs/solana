@@ -55,4 +55,9 @@ impl PacketDeduper {
                 Ordering::Relaxed,
             );
     }
+
+    pub fn reset(&self) {
+        let mut duplicates = self.0.lock().unwrap();
+        duplicates.0.clear();
+    }
 }

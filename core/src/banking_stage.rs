@@ -257,6 +257,7 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
         cost_model: Arc<RwLock<CostModel>>,
+        packet_deduper: PacketDeduper,
     ) -> Self {
         Self::new_num_threads(
             cluster_info,
@@ -268,6 +269,7 @@ impl BankingStage {
             transaction_status_sender,
             gossip_vote_sender,
             cost_model,
+            packet_deduper,
         )
     }
 
@@ -281,12 +283,12 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
         cost_model: Arc<RwLock<CostModel>>,
+        packet_deduper: PacketDeduper,
     ) -> Self {
         let batch_limit = TOTAL_BUFFERED_PACKETS / ((num_threads - 1) as usize * PACKETS_PER_BATCH);
         // Single thread to generate entries from many banks.
         // This thread talks to poh_service and broadcasts the entries once they have been recorded.
         // Once an entry has been recorded, its blockhash is registered with the bank.
-        let packet_deduper = PacketDeduper::default();
         let data_budget = Arc::new(DataBudget::default());
         let qos_service = Arc::new(QosService::new(cost_model));
         // Many banks that process transactions in parallel.
@@ -1606,6 +1608,7 @@ mod tests {
                 None,
                 gossip_vote_sender,
                 Arc::new(RwLock::new(CostModel::default())),
+                PacketDeduper::default(),
             );
             drop(verified_sender);
             drop(gossip_verified_vote_sender);
@@ -1655,6 +1658,7 @@ mod tests {
                 None,
                 gossip_vote_sender,
                 Arc::new(RwLock::new(CostModel::default())),
+                PacketDeduper::default(),
             );
             trace!("sending bank");
             drop(verified_sender);
@@ -1730,6 +1734,7 @@ mod tests {
                 None,
                 gossip_vote_sender,
                 Arc::new(RwLock::new(CostModel::default())),
+                PacketDeduper::default(),
             );
 
             // fund another account so we can send 2 good transactions in a single batch.
@@ -1881,6 +1886,7 @@ mod tests {
                     None,
                     gossip_vote_sender,
                     Arc::new(RwLock::new(CostModel::default())),
+                    PacketDeduper::default(),
                 );
 
                 // wait for banking_stage to eat the packets
