@@ -22,7 +22,7 @@
 use std::{thread::sleep, time::Duration};
 use {
     crate::{
-        account_info::{AccountInfo, StorageLocation},
+        account_info::{AccountInfo, StorageLocation, StoredSize},
         accounts_background_service::{DroppedSlotsSender, SendDroppedBankCallback},
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
         accounts_hash::{AccountsHash, CalculateHashIntermediate, HashStats, PreviousPass},
@@ -127,7 +127,7 @@ const CACHE_VIRTUAL_WRITE_VERSION: StoredMetaWriteVersion = 0;
 // a common interface when interacting with cached accounts. This version is "virtual" in
 // that it doesn't actually map to an entry in an AppendVec.
 pub(crate) const CACHE_VIRTUAL_OFFSET: usize = 0;
-const CACHE_VIRTUAL_STORED_SIZE: usize = 0;
+const CACHE_VIRTUAL_STORED_SIZE: StoredSize = 0;
 
 pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
@@ -527,7 +527,7 @@ impl<'a> LoadedAccount<'a> {
     pub fn stored_size(&self) -> usize {
         match self {
             LoadedAccount::Stored(stored_account_meta) => stored_account_meta.stored_size,
-            LoadedAccount::Cached(_) => CACHE_VIRTUAL_STORED_SIZE,
+            LoadedAccount::Cached(_) => CACHE_VIRTUAL_STORED_SIZE as usize,
         }
     }
 
@@ -4457,7 +4457,7 @@ impl AccountsDb {
 
                 infos.push(AccountInfo::new(
                     StorageLocation::AppendVec(storage.append_vec_id(), offsets[0]),
-                    stored_size,
+                    stored_size as StoredSize, // stored_size should never exceed StoredSize::MAX because of max data len const
                     account
                         .map(|account| account.lamports())
                         .unwrap_or_default(),
@@ -6009,7 +6009,8 @@ impl AccountsDb {
                     "AccountDB::accounts_index corrupted. Storage pointed to: {}, expected: {}, should only point to one slot",
                     store.slot(), *slot
                 );
-                let count = store.remove_account(account_info.stored_size(), reset_accounts);
+                let count =
+                    store.remove_account(account_info.stored_size() as usize, reset_accounts);
                 if count == 0 {
                     self.dirty_stores
                         .insert((*slot, store.append_vec_id()), store.clone());
@@ -6694,7 +6695,7 @@ impl AccountsDb {
                     pubkey,
                     AccountInfo::new(
                         StorageLocation::AppendVec(store_id, stored_account.offset), // will never be cached
-                        stored_account.stored_size,
+                        stored_account.stored_size as StoredSize, // stored_size should never exceed StoredSize::MAX because of max data len const
                         stored_account.account_meta.lamports,
                     ),
                 )
@@ -6947,7 +6948,7 @@ impl AccountsDb {
                                                 account_info.store_id,
                                                 account_info.stored_account.offset,
                                             ), // will never be cached
-                                            account_info.stored_account.stored_size,
+                                            account_info.stored_account.stored_size as StoredSize, // stored_size should never exceed StoredSize::MAX because of max data len const
                                             account_info.stored_account.account_meta.lamports,
                                         );
                                         assert_eq!(&ai, account_info2);
@@ -9779,7 +9780,7 @@ pub mod tests {
             account_meta: &account_meta,
             data: &data,
             offset,
-            stored_size: CACHE_VIRTUAL_STORED_SIZE,
+            stored_size: CACHE_VIRTUAL_STORED_SIZE as usize,
             hash: &hash,
         };
         let account = stored_account.clone_account();
@@ -11849,7 +11850,7 @@ pub mod tests {
             let removed_data_size = account_info.1.stored_size();
             // Fetching the account from storage should return the same
             // stored size as in the index.
-            assert_eq!(removed_data_size, account.stored_size);
+            assert_eq!(removed_data_size, account.stored_size as StoredSize);
             assert_eq!(account_info.0, slot);
             let reclaims = vec![account_info];
             accounts_db.remove_dead_accounts(&reclaims, None, None, true);
