@@ -1418,6 +1418,11 @@ impl ReplayStage {
             if !Self::check_propagation_for_start_leader(poh_slot, parent_slot, progress_map) {
                 let latest_unconfirmed_leader_slot = progress_map.get_latest_leader_slot(parent_slot)
                     .expect("In order for propagated check to fail, latest leader must exist in progress map");
+
+                let first_of_consecutive_leader_slots = (latest_unconfirmed_leader_slot
+                    / NUM_CONSECUTIVE_LEADER_SLOTS)
+                    * NUM_CONSECUTIVE_LEADER_SLOTS;
+
                 if poh_slot != skipped_slots_info.last_skipped_slot {
                     datapoint_info!(
                         "replay_stage-skip_leader_slot",
@@ -1432,23 +1437,31 @@ impl ReplayStage {
                     progress_map.log_propagated_stats(latest_unconfirmed_leader_slot, bank_forks);
                     skipped_slots_info.last_skipped_slot = poh_slot;
                 }
-                let bank = bank_forks
-                    .read()
-                    .unwrap()
-                    .get(latest_unconfirmed_leader_slot)
-                    .expect(
-                        "In order for propagated check to fail, \
-                            latest leader must exist in progress map, and thus also in BankForks",
-                    )
-                    .clone();
 
                 // Signal retransmit
-                if Self::should_retransmit(poh_slot, &mut skipped_slots_info.last_retransmit_slot) {
-                    datapoint_info!("replay_stage-retransmit", ("slot", bank.slot(), i64),);
-                    let _ = retransmit_slots_sender
-                        .send(vec![(bank.slot(), bank.clone())].into_iter().collect());
+                for check_slot in first_of_consecutive_leader_slots..=latest_unconfirmed_leader_slot
+                {
+                    if !progress_map.is_propagated(check_slot) {
+                        if Self::should_retransmit(
+                            poh_slot,
+                            &mut skipped_slots_info.last_retransmit_slot,
+                        ) {
+                            let bank = bank_forks
+                                .read()
+                                .unwrap()
+                                .get(latest_unconfirmed_leader_slot)
+                                .expect(
+                                    "In order for propagated check to fail, \
+                                        latest leader must exist in progress map, and thus also in BankForks",
+                                )
+                                .clone();
+                            datapoint_info!("replay_stage-retransmit", ("slot", bank.slot(), i64),);
+                            let _ = retransmit_slots_sender
+                                .send(vec![(bank.slot(), bank.clone())].into_iter().collect());
+                            return;
+                        }
+                    }
                 }
-                return;
             }
 
             let root_slot = bank_forks.read().unwrap().root();
