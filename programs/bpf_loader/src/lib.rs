@@ -33,9 +33,10 @@ use solana_sdk::{
     entrypoint::{HEAP_LENGTH, SUCCESS},
     feature_set::{
         add_missing_program_error_mappings, close_upgradeable_program_accounts, fix_write_privs,
-        reduce_required_deploy_balance, reject_deployment_of_unresolved_syscalls,
-        reject_section_virtual_address_file_offset_mismatch, requestable_heap_size,
-        start_verify_shift32_imm, stop_verify_mul64_imm_nonzero, upgradeable_close_instruction,
+        reduce_required_deploy_balance, reject_all_elf_rw,
+        reject_deployment_of_unresolved_syscalls,
+        reject_section_virtual_address_file_offset_mismatch, start_verify_shift32_imm,
+        stop_verify_mul64_imm_nonzero, upgradeable_close_instruction,
     },
     ic_logger_msg, ic_msg,
     instruction::{AccountMeta, InstructionError},
@@ -49,7 +50,7 @@ use solana_sdk::{
     rent::Rent,
     system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
 };
-use std::{cell::RefCell, fmt::Debug, rc::Rc, sync::Arc};
+use std::{cell::RefCell, fmt::Debug, pin::Pin, rc::Rc, sync::Arc};
 use thiserror::Error;
 
 solana_sdk::declare_builtin!(
@@ -97,6 +98,7 @@ pub fn create_executor(
         verify_mul64_imm_nonzero: !invoke_context
             .is_feature_active(&stop_verify_mul64_imm_nonzero::id()),
         verify_shift32_imm: invoke_context.is_feature_active(&start_verify_shift32_imm::id()),
+        reject_all_writable_sections: invoke_context.is_feature_active(&reject_all_elf_rw::id()),
         ..Config::default()
     };
     let mut executable = {
@@ -111,7 +113,8 @@ pub fn create_executor(
     verifier::check(text_bytes, &config)
         .map_err(|e| map_ebpf_error(invoke_context, EbpfError::UserError(e.into())))?;
     if use_jit {
-        if let Err(err) = executable.jit_compile() {
+        if let Err(err) = Executable::<BpfError, ThisInstructionMeter>::jit_compile(&mut executable)
+        {
             ic_msg!(invoke_context, "Failed to compile program {:?}", err);
             return Err(InstructionError::ProgramFailedToCompile);
         }
@@ -152,7 +155,7 @@ fn check_loader_id(id: &Pubkey) -> bool {
 /// Create the BPF virtual machine
 pub fn create_vm<'a>(
     loader_id: &'a Pubkey,
-    program: &'a Executable<BpfError, ThisInstructionMeter>,
+    program: &'a Pin<Box<Executable<BpfError, ThisInstructionMeter>>>,
     parameter_bytes: &mut [u8],
     invoke_context: &'a mut dyn InvokeContext,
 ) -> Result<EbpfVm<'a, BpfError, ThisInstructionMeter>, EbpfError<BpfError>> {
@@ -874,7 +877,7 @@ impl InstructionMeter for ThisInstructionMeter {
 
 /// BPF Loader's Executor implementation
 pub struct BpfExecutor {
-    executable: Executable<BpfError, ThisInstructionMeter>,
+    executable: Pin<Box<Executable<BpfError, ThisInstructionMeter>>>,
 }
 
 // Well, implement Debug for solana_rbpf::vm::Executable in solana-rbpf...
