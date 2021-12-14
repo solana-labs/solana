@@ -359,7 +359,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .validator(is_amount_or_all)
-                        .help("The amount to withdraw, in SOL; accepts keyword ALL"),
+                        .help("The amount to withdraw, in SOL; accepts keyword ALL, which for this command means account balance minus rent-exempt minimum"),
                 )
                 .arg(
                     Arg::with_name("authorized_withdrawer")
@@ -653,7 +653,13 @@ pub fn parse_withdraw_from_vote_account(
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
     let destination_account_pubkey =
         pubkey_of_signer(matches, "destination_account_pubkey", wallet_manager)?.unwrap();
-    let withdraw_amount = SpendAmount::new_from_matches(matches, "amount");
+    let mut withdraw_amount = SpendAmount::new_from_matches(matches, "amount");
+    // As a safeguard for vote accounts for running validators, `ALL` withdraws only the amount in
+    // excess of the rent-exempt minimum. In order to close the account with this subcommand, a
+    // validator must specify the withdrawal amount precisely.
+    if withdraw_amount == SpendAmount::All {
+        withdraw_amount = SpendAmount::RentExempt;
+    }
 
     let (withdraw_authority, withdraw_authority_pubkey) =
         signer_of(matches, "authorized_withdrawer", wallet_manager)?;
@@ -1990,7 +1996,7 @@ mod tests {
                     vote_account_pubkey: read_keypair_file(&keypair_file).unwrap().pubkey(),
                     destination_account_pubkey: pubkey,
                     withdraw_authority: 0,
-                    withdraw_amount: SpendAmount::All,
+                    withdraw_amount: SpendAmount::RentExempt,
                     sign_only: false,
                     dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
