@@ -537,7 +537,7 @@ impl Shred {
                 block.resize(size, 0u8);
             }
             ShredType::Code => {
-                // SIZE_OF_CODING_SHRED_HEADERS bytes at the begining of the
+                // SIZE_OF_CODING_SHRED_HEADERS bytes at the beginning of the
                 // coding shreds contains the header and is not part of erasure
                 // coding.
                 let offset = SIZE_OF_CODING_SHRED_HEADERS.min(block.len());
