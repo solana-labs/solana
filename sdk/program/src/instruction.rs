@@ -256,7 +256,7 @@ pub enum InstructionError {
 ///
 /// An instruction specifies which program it is calling, which accounts it may
 /// read or modify, and additional data that serves as input to the program. One
-/// ore more instructions are included in transactions submitted by Solana
+/// or more instructions are included in transactions submitted by Solana
 /// clients. Instructions are also used to describe [cross-program
 /// invocations][cpi].
 ///
@@ -302,7 +302,7 @@ pub enum InstructionError {
 /// include:
 ///
 /// - The program ID &mdash; it is a separate field of `Instruction`
-/// - The transaction's fee-paing acount &mdash; it is added during [`Message`]
+/// - The transaction's fee-paying account &mdash; it is added during [`Message`]
 ///   construction. A program may still require the fee payer as part of the
 ///   account list if it directly references it.
 ///
@@ -526,7 +526,7 @@ pub struct AccountMeta {
     pub pubkey: Pubkey,
     /// True if an `Instruction` requires a `Transaction` signature matching `pubkey`.
     pub is_signer: bool,
-    /// True if the account may be mutated, either its data or metadata, during program execution.
+    /// True if the account data or metadata may be mutated during program execution.
     pub is_writable: bool,
 }
 
