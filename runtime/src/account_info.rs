@@ -10,6 +10,9 @@ use crate::{
 /// offset within an append vec to account data
 pub type Offset = usize;
 
+/// bytes used to store this account in append vec
+pub type StoredSize = usize;
+
 /// specify where account data is located
 #[derive(Debug)]
 pub enum StorageLocation {
@@ -61,11 +64,11 @@ pub struct AccountInfo {
     /// needed to track shrink candidacy in bytes. Used to update the number
     /// of alive bytes in an AppendVec as newer slots purge outdated entries
     /// Note that highest bit is used for ZERO_LAMPORT_BIT
-    stored_size: usize,
+    stored_size: StoredSize,
 }
 
 /// presence of this bit in stored_size indicates this account info references an account with zero lamports
-const ZERO_LAMPORT_BIT: usize = 1 << (usize::BITS - 1);
+const ZERO_LAMPORT_BIT: StoredSize = 1 << (StoredSize::BITS - 1);
 
 impl ZeroLamport for AccountInfo {
     fn is_zero_lamport(&self) -> bool {
@@ -86,7 +89,11 @@ impl IsCached for StorageLocation {
 }
 
 impl AccountInfo {
-    pub fn new(storage_location: StorageLocation, mut stored_size: usize, lamports: u64) -> Self {
+    pub fn new(
+        storage_location: StorageLocation,
+        mut stored_size: StoredSize,
+        lamports: u64,
+    ) -> Self {
         let (store_id, offset) = match storage_location {
             StorageLocation::AppendVec(store_id, offset) => (store_id, offset),
             StorageLocation::Cached => (CACHE_VIRTUAL_STORAGE_ID, CACHE_VIRTUAL_OFFSET),
@@ -102,15 +109,15 @@ impl AccountInfo {
         }
     }
 
-    pub fn store_id(&self) -> usize {
+    pub fn store_id(&self) -> AppendVecId {
         self.store_id
     }
 
-    pub fn offset(&self) -> usize {
+    pub fn offset(&self) -> Offset {
         self.offset
     }
 
-    pub fn stored_size(&self) -> usize {
+    pub fn stored_size(&self) -> StoredSize {
         // elminate the special bit that indicates the info references an account with zero lamports
         self.stored_size & !ZERO_LAMPORT_BIT
     }
