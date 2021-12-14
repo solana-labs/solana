@@ -1,5 +1,5 @@
 use {
-    clap::{crate_name, value_t, value_t_or_exit, App, Arg},
+    clap::{crate_name, value_t, value_t_or_exit, values_t_or_exit, App, Arg},
     log::*,
     solana_clap_utils::{
         input_parsers::{pubkey_of, pubkeys_of, value_of},
@@ -281,6 +281,15 @@ fn main() {
                     "Give the faucet address this much SOL in genesis. \
                      If the ledger already exists then this parameter is silently ignored",
                 ),
+        )
+        .arg(
+            Arg::with_name("accountsdb_plugin_config")
+                .long("accountsdb-plugin-config")
+                .value_name("FILE")
+                .takes_value(true)
+                .multiple(true)
+                .hidden(true)
+                .help("Specify the configuration file for the AccountsDb plugin."),
         )
         .get_matches();
 
@@ -594,6 +603,15 @@ fn main() {
 
     if let Some(bind_address) = bind_address {
         genesis.bind_ip_addr(bind_address);
+    }
+
+    if matches.is_present("accountsdb_plugin_config") {
+        genesis.accountsdb_plugin_config_files = Some(
+            values_t_or_exit!(matches, "accountsdb_plugin_config", String)
+                .into_iter()
+                .map(PathBuf::from)
+                .collect(),
+        );
     }
 
     match genesis.start_with_mint_address(mint_address, socket_addr_space) {
