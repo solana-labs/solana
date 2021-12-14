@@ -119,7 +119,42 @@ impl BankingStageStats {
         }
     }
 
+    fn is_empty(&self) -> bool {
+        0 == self.process_packets_count.load(Ordering::Relaxed) as u64
+            + self.new_tx_count.load(Ordering::Relaxed) as u64
+            + self.dropped_packet_batches_count.load(Ordering::Relaxed) as u64
+            + self.dropped_packets_count.load(Ordering::Relaxed) as u64
+            + self
+                .dropped_duplicated_packets_count
+                .load(Ordering::Relaxed) as u64
+            + self.newly_buffered_packets_count.load(Ordering::Relaxed) as u64
+            + self.current_buffered_packets_count.load(Ordering::Relaxed) as u64
+            + self
+                .current_buffered_packet_batches_count
+                .load(Ordering::Relaxed) as u64
+            + self.rebuffered_packets_count.load(Ordering::Relaxed) as u64
+            + self.consumed_buffered_packets_count.load(Ordering::Relaxed) as u64
+            + self
+                .consume_buffered_packets_elapsed
+                .load(Ordering::Relaxed)
+            + self.process_packets_elapsed.load(Ordering::Relaxed)
+            + self
+                .handle_retryable_packets_elapsed
+                .load(Ordering::Relaxed)
+            + self.filter_pending_packets_elapsed.load(Ordering::Relaxed)
+            + self.packet_duplicate_check_elapsed.load(Ordering::Relaxed)
+            + self.packet_conversion_elapsed.load(Ordering::Relaxed)
+            + self
+                .unprocessed_packet_conversion_elapsed
+                .load(Ordering::Relaxed)
+            + self.transaction_processing_elapsed.load(Ordering::Relaxed)
+    }
+
     fn report(&self, report_interval_ms: u64) {
+        // skip repoting metrics if stats is empty
+        if self.is_empty() {
+            return;
+        }
         if self.last_report.should_update(report_interval_ms) {
             datapoint_info!(
                 "banking_stage-loop-stats",
