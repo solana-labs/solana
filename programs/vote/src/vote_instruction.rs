@@ -478,7 +478,7 @@ pub fn process_instruction(
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
                 invoke_context,
             )?;
-            vote_state::process_vote(me, &slot_hashes, &clock, &vote, &signers)
+            vote_state::process_vote(me, &slot_hashes, &clock, &vote, &signers, &invoke_context.feature_set,)
         }
         VoteInstruction::UpdateVoteState(vote_state_update)
         | VoteInstruction::UpdateVoteStateSwitch(vote_state_update, _) => {
