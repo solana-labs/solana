@@ -2296,7 +2296,8 @@ export class Connection {
   }
 
   /**
-   * Fetch all the token accounts owned by the specified account
+   * Fetch all the token accounts owned by the specified account.
+   * For parsed account data, see {@link getParsedTokenAccountsByOwner}.
    *
    * @return {Promise<RpcResponseAndContext<Array<{pubkey: PublicKey, account: AccountInfo<Buffer>}>>>}
    */
@@ -2334,6 +2335,10 @@ export class Connection {
    * Fetch parsed token accounts owned by the specified account
    *
    * @return {Promise<RpcResponseAndContext<Array<{pubkey: PublicKey, account: AccountInfo<ParsedAccountData>}>>>}
+   * @param {TokenAccountsFilter} filter - you can find `mint` addresses for SPL tokens via the `@solana/spl-token-registry`
+   *   package, which published its [token list](https://raw.githubusercontent.com/solana-labs/token-list/main/src/tokens/solana.tokenlist.json)
+   *   on [JSDelivr](https://cdn.jsdelivr.net/gh/solana-labs/token-list@main/src/tokens/solana.tokenlist.json).
+   *   Alternatively, you can look up the token's address by typing its name in the [Solana Explorer](https://explorer.solana.com).
    */
   async getParsedTokenAccountsByOwner(
     ownerAddress: PublicKey,
