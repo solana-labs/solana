@@ -7,6 +7,7 @@ repository = "https://github.com/solana-labs/rbpf"
 homepage = "https://solana.com/"
 keywords = ["BPF", "eBPF", "interpreter", "JIT"]
 edition = "2021"
+publish = false
 
 [dependencies]
 clap = "3.0.0-beta.2"
