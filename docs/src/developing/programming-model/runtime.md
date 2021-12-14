@@ -41,7 +41,7 @@ The policy is as follows:
   - And if the account is writable.
   - And if the account is not executable.
 - Executable is one-way (false->true) and only the account owner may set it.
-- No one modification to the rent_epoch associated with this account.
+- No one can make modifications to the rent_epoch associated with this account.
 
 ## Compute Budget
 
