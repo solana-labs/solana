@@ -48,6 +48,7 @@ pub const SNAPSHOT_STATUS_CACHE_FILE_NAME: &str = "status_cache";
 pub const DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = 100_000;
 pub const DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = 100;
 const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
+const MAX_SNAPSHOT_VERSION_FILE_SIZE: u64 = 128; // byte
 const VERSION_STRING_V1_2_0: &str = "1.2.0";
 const DEFAULT_SNAPSHOT_VERSION: SnapshotVersion = SnapshotVersion::V1_2_0;
 pub(crate) const TMP_BANK_SNAPSHOT_PREFIX: &str = "tmp-bank-snapshot-";
@@ -965,6 +966,19 @@ where
 
     let unpacked_version_file = unpack_dir.path().join("version");
     let snapshot_version = {
+        // Check size of snapshot_version file.
+        let file_size = fs::metadata(unpacked_version_file).and_then(|m| m.len())?;
+        if file_size > MAX_SNAPSHOT_VERSION_FILE_SIZE {
+            let error_message = format!(
+                "snapshot version file too large: {} has {} bytes (max size is {} bytes)",
+                unpacked_version_file.display(),
+                file_size,
+                MAX_SNAPSHOT_VERSION_FILE_SIZE,
+            );
+            return Err(get_io_error(&error_message));
+        }
+
+        // Read snapshot_version from file.
         let mut snapshot_version = String::new();
         File::open(unpacked_version_file)
             .and_then(|mut f| f.read_to_string(&mut snapshot_version))?;
