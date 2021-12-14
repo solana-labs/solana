@@ -1428,9 +1428,9 @@ dependencies = [
 
 [[package]]
 name = "fd-lock"
-version = "3.0.1"
+version = "3.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfc110fe50727d46a428eed832df40affe9bf74d077cac1bf3f2718e823f14c5"
+checksum = "a16910e685088843d53132b04e0f10a571fdb193224fc589685b3ba1ce4cb03d"
 dependencies = [
  "cfg-if 1.0.0",
  "libc",
