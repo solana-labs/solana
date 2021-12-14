@@ -110,7 +110,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
             register_syscalls(invoke_context).unwrap(),
         )
         .unwrap();
-        executable.jit_compile().unwrap();
+        Executable::<BpfError, ThisInstructionMeter>::jit_compile(&mut executable).unwrap();
         let compute_meter = invoke_context.get_compute_meter();
         let mut instruction_meter = ThisInstructionMeter { compute_meter };
         let mut vm = create_vm(&executable, &mut inner_iter, invoke_context, &[]).unwrap();
