@@ -110,12 +110,6 @@ pub const NUM_SCAN_PASSES_DEFAULT: usize = 2;
 // Metrics indicate a sweet spot in the 2.5k-5k range for mnb.
 const MAX_ITEMS_PER_CHUNK: Slot = 2_500;
 
-// A specially reserved storage id just for entries in the cache, so that
-// operations that take a storage entry can maintain a common interface
-// when interacting with cached accounts. This id is "virtual" in that it
-// doesn't actually refer to an actual storage entry.
-pub(crate) const CACHE_VIRTUAL_STORAGE_ID: AppendVecId = AppendVecId::MAX;
-
 // A specially reserved write version (identifier for ordering writes in an AppendVec)
 // for entries in the cache, so that  operations that take a storage entry can maintain
 // a common interface when interacting with cached accounts. This version is "virtual" in
@@ -3877,10 +3871,6 @@ impl AccountsDb {
             Self::page_align(size),
         ));
 
-        assert!(
-            store.append_vec_id() != CACHE_VIRTUAL_STORAGE_ID,
-            "We've run out of storage ids!"
-        );
         debug!(
             "creating store: {} slot: {} len: {} size: {} from: {} path: {:?}",
             store.append_vec_id(),

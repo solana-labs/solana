@@ -3,7 +3,7 @@
 //! AccountInfo is purely runtime state.
 //! Note that AccountInfo is saved to disk buckets during runtime, but disk buckets are recreated at startup.
 use crate::{
-    accounts_db::{AppendVecId, CACHE_VIRTUAL_OFFSET, CACHE_VIRTUAL_STORAGE_ID},
+    accounts_db::{AppendVecId, CACHE_VIRTUAL_OFFSET},
     accounts_index::{IsCached, ZeroLamport},
 };
 
@@ -70,6 +70,8 @@ pub struct AccountInfo {
 
 /// presence of this bit in stored_size indicates this account info references an account with zero lamports
 const ZERO_LAMPORT_BIT: StoredSize = 1 << (StoredSize::BITS - 1);
+const CACHED_STORE_ID_BIT: StoredSize = 1 << (StoredSize::BITS - 2);
+const ALL_BITS: StoredSize = ZERO_LAMPORT_BIT | CACHED_STORE_ID_BIT;
 
 impl ZeroLamport for AccountInfo {
     fn is_zero_lamport(&self) -> bool {
@@ -79,7 +81,7 @@ impl ZeroLamport for AccountInfo {
 
 impl IsCached for AccountInfo {
     fn is_cached(&self) -> bool {
-        self.store_id == CACHE_VIRTUAL_STORAGE_ID
+        self.stored_size & CACHED_STORE_ID_BIT == CACHED_STORE_ID_BIT
     }
 }
 
@@ -95,11 +97,16 @@ impl AccountInfo {
         mut stored_size: StoredSize,
         lamports: u64,
     ) -> Self {
+        assert_eq!(stored_size & ALL_BITS, 0);
         let (store_id, offset) = match storage_location {
             StorageLocation::AppendVec(store_id, offset) => (store_id, offset),
-            StorageLocation::Cached => (CACHE_VIRTUAL_STORAGE_ID, CACHE_VIRTUAL_OFFSET),
+            StorageLocation::Cached => {
+                stored_size |= CACHED_STORE_ID_BIT;
+                // We have to have SOME value for store_id when we are cached
+                const CACHE_VIRTUAL_STORAGE_ID: AppendVecId = AppendVecId::MAX;
+                (CACHE_VIRTUAL_STORAGE_ID, CACHE_VIRTUAL_OFFSET)
+            }
         };
-        assert!(stored_size < ZERO_LAMPORT_BIT);
         if lamports == 0 {
             stored_size |= ZERO_LAMPORT_BIT;
         }
@@ -111,6 +118,7 @@ impl AccountInfo {
     }
 
     pub fn store_id(&self) -> AppendVecId {
+        assert!(!self.is_cached());
         self.store_id
     }
 
@@ -120,7 +128,7 @@ impl AccountInfo {
 
     pub fn stored_size(&self) -> StoredSize {
         // elminate the special bit that indicates the info references an account with zero lamports
-        self.stored_size & !ZERO_LAMPORT_BIT
+        self.stored_size & !ALL_BITS
     }
 
     pub fn storage_location(&self) -> StorageLocation {
