@@ -222,7 +222,7 @@ fn run_program(name: &str) -> u64 {
             register_syscalls(invoke_context).unwrap(),
         )
         .unwrap();
-        executable.jit_compile().unwrap();
+        Executable::<BpfError, ThisInstructionMeter>::jit_compile(&mut executable).unwrap();
 
         let mut instruction_count = 0;
         let mut tracer = None;
