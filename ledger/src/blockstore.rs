@@ -12,7 +12,10 @@ use {
         blockstore_meta::*,
         leader_schedule_cache::LeaderScheduleCache,
         next_slots_iterator::NextSlotsIterator,
-        shred::{Result as ShredResult, Shred, ShredType, Shredder, SHRED_PAYLOAD_SIZE},
+        shred::{
+            max_ticks_per_n_shreds, Result as ShredResult, Shred, ShredType, Shredder,
+            SHRED_PAYLOAD_SIZE,
+        },
     },
     bincode::deserialize,
     log::*,
@@ -3822,6 +3825,18 @@ pub fn make_many_slot_entries(
     }
 
     (shreds, entries)
+}
+
+// used for tests only
+// Create `num_shreds` shreds for [start_slot, start_slot + num_slot) slots
+pub fn make_many_slot_shreds(
+    start_slot: u64,
+    num_slots: u64,
+    num_shreds_per_slot: u64,
+) -> (Vec<Shred>, Vec<Entry>) {
+    // Use `None` as shred_size so the default (full) value is used
+    let num_entries = max_ticks_per_n_shreds(num_shreds_per_slot, None);
+    make_many_slot_entries(start_slot, num_slots, num_entries)
 }
 
 // Create shreds for slots that have a parent-child relationship defined by the input `chain`

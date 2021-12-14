@@ -7,7 +7,7 @@ mod tests {
         log::*,
         solana_core::ledger_cleanup_service::LedgerCleanupService,
         solana_ledger::{
-            blockstore::{make_many_slot_entries, Blockstore},
+            blockstore::{make_many_slot_shreds, Blockstore},
             get_tmp_ledger_path,
         },
         solana_measure::measure::Measure,
@@ -26,9 +26,9 @@ mod tests {
     };
 
     const DEFAULT_BENCHMARK_SLOTS: u64 = 50;
-    const DEFAULT_BATCH_SIZE: u64 = 1;
+    const DEFAULT_BATCH_SIZE_SLOTS: u64 = 1;
     const DEFAULT_MAX_LEDGER_SHREDS: u64 = 50;
-    const DEFAULT_ENTRIES_PER_SLOT: u64 = 500;
+    const DEFAULT_SHREDS_PER_SLOT: u64 = 25;
     const DEFAULT_STOP_SIZE_BYTES: u64 = 0;
     const DEFAULT_STOP_SIZE_ITERATIONS: u64 = 0;
 
@@ -37,9 +37,9 @@ mod tests {
     #[derive(Debug)]
     struct BenchmarkConfig {
         benchmark_slots: u64,
-        batch_size: u64,
+        batch_size_slots: u64,
         max_ledger_shreds: u64,
-        entries_per_slot: u64,
+        shreds_per_slot: u64,
         stop_size_bytes: u64,
         stop_size_iterations: u64,
         pre_generate_data: bool,
@@ -153,9 +153,9 @@ mod tests {
 
     fn get_benchmark_config() -> BenchmarkConfig {
         let benchmark_slots = read_env("BENCHMARK_SLOTS", DEFAULT_BENCHMARK_SLOTS);
-        let batch_size = read_env("BATCH_SIZE", DEFAULT_BATCH_SIZE);
+        let batch_size_slots = read_env("BATCH_SIZE", DEFAULT_BATCH_SIZE_SLOTS);
         let max_ledger_shreds = read_env("MAX_LEDGER_SHREDS", DEFAULT_MAX_LEDGER_SHREDS);
-        let entries_per_slot = read_env("ENTRIES_PER_SLOT", DEFAULT_ENTRIES_PER_SLOT);
+        let shreds_per_slot = read_env("SHREDS_PER_SLOT", DEFAULT_SHREDS_PER_SLOT);
         let stop_size_bytes = read_env("STOP_SIZE_BYTES", DEFAULT_STOP_SIZE_BYTES);
         let stop_size_iterations = read_env("STOP_SIZE_ITERATIONS", DEFAULT_STOP_SIZE_ITERATIONS);
         let pre_generate_data = read_env("PRE_GENERATE_DATA", false);
@@ -171,9 +171,9 @@ mod tests {
 
         BenchmarkConfig {
             benchmark_slots,
-            batch_size,
+            batch_size_slots,
             max_ledger_shreds,
-            entries_per_slot,
+            shreds_per_slot,
             stop_size_bytes,
             stop_size_iterations,
             pre_generate_data,
@@ -186,7 +186,7 @@ mod tests {
     }
 
     fn emit_header() {
-        println!("TIME_MS,DELTA_MS,START_SLOT,BATCH_SIZE,ENTRIES,MAX,SIZE,DELTA_SIZE,CPU_USER,CPU_SYSTEM,CPU_IDLE");
+        println!("TIME_MS,DELTA_MS,START_SLOT,BATCH_SIZE,SHREDS,MAX,SIZE,DELTA_SIZE,CPU_USER,CPU_SYSTEM,CPU_IDLE");
     }
 
     fn emit_stats(
@@ -195,8 +195,8 @@ mod tests {
         storage_previous: &mut u64,
         start_slot: u64,
         batch_size: u64,
-        entries: u64,
-        max_slots: i64,
+        num_shreds: u64,
+        max_shreds: i64,
         blockstore: &Blockstore,
         cpu: &CpuStatsInner,
     ) {
@@ -210,8 +210,8 @@ mod tests {
             time_now.duration_since(*time_previous).as_millis(),
             start_slot,
             batch_size,
-            entries,
-            max_slots,
+            num_shreds,
+            max_shreds,
             storage_now,
             storage_now as i64 - *storage_previous as i64,
             cpu_user,
@@ -225,7 +225,7 @@ mod tests {
 
     /**
      * Example run command:
-     * BENCHMARK_SLOTS=10000 BATCH_SIZE=10 ENTRIES_PER_SLOT=1000 NUM_WRITERS=1 \
+     * BENCHMARK_SLOTS=10000 BATCH_SIZE=10 SHREDS_PER_SLOT=1000 NUM_WRITERS=1 \
      * PRE_GENERATE_DATA=true cargo test --release tests::test_ledger_cleanup_compaction \
      * -- --exact --nocapture
      */
@@ -244,16 +244,16 @@ mod tests {
         eprintln!("LEDGER_PATH: {:?}", &blockstore_path);
 
         let benchmark_slots = config.benchmark_slots;
-        let batch_size = config.batch_size;
+        let batch_size_slots = config.batch_size_slots;
         let max_ledger_shreds = config.max_ledger_shreds;
-        let entries_per_slot = config.entries_per_slot;
+        let shreds_per_slot = config.shreds_per_slot;
         let stop_size_bytes = config.stop_size_bytes;
         let stop_size_iterations = config.stop_size_iterations;
         let pre_generate_data = config.pre_generate_data;
         let compaction_interval = config.compaction_interval;
         let num_writers = config.num_writers;
 
-        let batches = benchmark_slots / batch_size;
+        let num_batches = benchmark_slots / batch_size_slots;
 
         let (sender, receiver) = channel();
         let exit = Arc::new(AtomicBool::new(false));
@@ -274,15 +274,24 @@ mod tests {
         if pre_generate_data {
             let t0 = Instant::now();
             eprintln!("PRE_GENERATE_DATA: (this may take a while)");
-            for i in 0..batches {
-                let start_slot = i * batch_size;
+            for i in 0..num_batches {
+                let start_slot = i * batch_size_slots;
                 let (new_shreds, _) =
-                    make_many_slot_entries(start_slot, batch_size, entries_per_slot);
+                    make_many_slot_shreds(start_slot, batch_size_slots, shreds_per_slot);
                 shreds.push_back(new_shreds);
             }
             eprintln!("PRE_GENERATE_DATA: took {} ms", t0.elapsed().as_millis());
         }
         let shreds = Arc::new(Mutex::new(shreds));
+
+        let (mut shreds_batch, entries) =
+            make_many_slot_shreds(0, batch_size_slots, shreds_per_slot);
+        info!(
+            "batch size (slots): {}, entries_per_slot: {}, shreds_per_slot: {}",
+            batch_size_slots,
+            entries.len() as u64 / batch_size_slots,
+            shreds_per_slot
+        );
 
         let time_initial = Instant::now();
         let mut time_previous = time_initial;
@@ -371,16 +380,8 @@ mod tests {
             insert_threads.push(insert_thread);
         }
 
-        let mut entries_batch = make_many_slot_entries(0, batch_size, entries_per_slot).0;
-        info!(
-            "batch size: {} entries_per_slot: {} shreds_per_slot: {}",
-            batch_size,
-            entries_per_slot,
-            entries_batch.len()
-        );
-
-        for i in 0..batches {
-            let start_slot = i * batch_size;
+        for i in 0..num_batches {
+            let start_slot = i * batch_size_slots;
 
             if time.elapsed().as_secs() > 0 {
                 warn!(
@@ -397,12 +398,12 @@ mod tests {
 
             if !pre_generate_data && shreds.lock().unwrap().len() < 50 {
                 let mut make_time = Measure::start("make_entries");
-                num_slots += batch_size;
-                total_slots += batch_size;
-                entries_batch
+                num_slots += batch_size_slots;
+                total_slots += batch_size_slots;
+                shreds_batch
                     .iter_mut()
-                    .for_each(|shred| shred.set_slot(shred.slot() + batch_size));
-                let new_shreds = entries_batch.clone();
+                    .for_each(|shred| shred.set_slot(shred.slot() + batch_size_slots));
+                let new_shreds = shreds_batch.clone();
                 shreds.lock().unwrap().push_back(new_shreds);
                 make_time.stop();
                 total_make += make_time.as_us();
@@ -415,8 +416,8 @@ mod tests {
                 &mut time_previous,
                 &mut storage_previous,
                 start_slot,
-                batch_size,
-                batch_size,
+                batch_size_slots,
+                shreds_per_slot,
                 max_ledger_shreds as i64,
                 &blockstore,
                 &sys.get_stats(),
@@ -525,12 +526,13 @@ mod tests {
         let blockstore = Arc::new(Blockstore::open(&blockstore_path).unwrap());
 
         let n = 10_000;
-        let batch_size = 100;
-        let batches = n / batch_size;
+        let batch_size_slots = 100;
+        let num_batches = n / batch_size_slots;
         let max_ledger_shreds = 100;
 
-        for i in 0..batches {
-            let (shreds, _) = make_many_slot_entries(i * batch_size, batch_size, 1);
+        for i in 0..num_batches {
+            let start_slot = i * batch_size_slots;
+            let (shreds, _) = make_many_slot_shreds(start_slot, batch_size_slots, 1);
             blockstore.insert_shreds(shreds, None, false).unwrap();
         }
 
