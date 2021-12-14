@@ -706,8 +706,8 @@ impl ServeRepair {
                 } else {
                     break;
                 }
-                if meta.is_parent_set() && res.packets.len() <= max_responses {
-                    slot = meta.parent_slot;
+                if meta.parent_slot.is_some() && res.packets.len() <= max_responses {
+                    slot = meta.parent_slot.unwrap();
                 } else {
                     break;
                 }
