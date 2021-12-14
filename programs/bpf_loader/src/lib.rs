@@ -129,7 +129,6 @@ pub fn create_executor(
     if use_jit {
         if let Err(err) = Executable::<BpfError, ThisInstructionMeter>::jit_compile(&mut executable)
         {
-            // if let Err(err) = executable.jit_compile() {
             ic_msg!(invoke_context, "Failed to compile program {:?}", err);
             return Err(InstructionError::ProgramFailedToCompile);
         }
