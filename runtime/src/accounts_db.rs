@@ -3332,10 +3332,7 @@ impl AccountsDb {
         let (lock, index) = match self.accounts_index.get(pubkey, Some(ancestors), max_root) {
             AccountIndexGetResult::Found(lock, index) => (lock, index),
             // we bail out pretty early for missing.
-            AccountIndexGetResult::NotFoundOnFork => {
-                return None;
-            }
-            AccountIndexGetResult::Missing(_) => {
+            AccountIndexGetResult::NotFound => {
                 return None;
             }
         };
