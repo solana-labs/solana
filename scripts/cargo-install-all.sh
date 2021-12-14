@@ -145,8 +145,12 @@ if [[ -d target/perf-libs ]]; then
   cp -a target/perf-libs "$installDir"/bin/perf-libs
 fi
 
-mkdir -p "$installDir"/bin/sdk/bpf
-cp -a sdk/bpf/* "$installDir"/bin/sdk/bpf
+if [[ -z "$validatorOnly" ]]; then
+  # shellcheck disable=SC2086 # Don't want to double quote $rust_version
+  "$cargo" $maybeRustVersion build --manifest-path programs/bpf_loader/gen-syscall-list/Cargo.toml
+  mkdir -p "$installDir"/bin/sdk/bpf
+  cp -a sdk/bpf/* "$installDir"/bin/sdk/bpf
+fi
 
 (
   set -x
