@@ -267,6 +267,10 @@ pub mod reject_section_virtual_address_file_offset_mismatch {
     solana_sdk::declare_id!("5N4NikcJLEiZNqwndhNyvZw15LvFXp1oF7AJQTNTZY5k");
 }
 
+pub mod reject_all_elf_rw {
+    solana_sdk::declare_id!("DeMpxgMq51j3rZfNK2hQKZyXknQvqevPSFPJFNTbXxsS");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -334,6 +338,7 @@ lazy_static! {
         (add_compute_budget_program::id(), "Add compute_budget_program"),
         (reject_deployment_of_unresolved_syscalls::id(), "Reject deployment of programs with unresolved syscall symbols"),
         (reject_section_virtual_address_file_offset_mismatch::id(), "enforce section virtual addresses and file offsets in ELF to be equal"),
+        (reject_all_elf_rw::id(), "reject all read-write data in program elfs"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
