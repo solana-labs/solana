@@ -86,17 +86,17 @@ fn get_unrepaired_path(
 ) -> Vec<Slot> {
     let mut path = Vec::new();
     let mut slot = start_slot;
-    while !visited.contains(&slot) {
-        visited.insert(slot);
+    while visited.insert(slot) {
         let slot_meta = slot_meta_cache
             .entry(slot)
             .or_insert_with(|| blockstore.meta(slot).unwrap());
         if let Some(slot_meta) = slot_meta {
-            if slot_meta.is_full() {
-                break;
+            if !slot_meta.is_full() {
+                path.push(slot);
+                if let Some(parent_slot) = slot_meta.parent_slot {
+                    slot = parent_slot
+                }
             }
-            path.push(slot);
-            slot = slot_meta.parent_slot;
         }
     }
     path.reverse();
