@@ -17,7 +17,7 @@ use {
         vm::{EbpfVm, SyscallObject, SyscallRegistry},
     },
     solana_sdk::{
-        account::{AccountSharedData, ReadableAccount, WritableAccount},
+        account::{ReadableAccount, WritableAccount},
         account_info::AccountInfo,
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         clock::Clock,
@@ -1667,10 +1667,7 @@ struct CallerAccount<'a> {
     executable: bool,
     rent_epoch: u64,
 }
-type TranslatedAccounts<'a> = (
-    Vec<usize>,
-    Vec<(Rc<RefCell<AccountSharedData>>, Option<CallerAccount<'a>>)>,
-);
+type TranslatedAccounts<'a> = (Vec<usize>, Vec<(usize, Option<CallerAccount<'a>>)>);
 
 /// Implemented by language specific data structure translators
 trait SyscallInvokeSigned<'a, 'b> {
@@ -2210,13 +2207,14 @@ where
     let mut account_indices = Vec::with_capacity(message.account_keys.len());
     let mut accounts = Vec::with_capacity(message.account_keys.len());
     for (i, account_key) in message.account_keys.iter().enumerate() {
-        if let Some((account_index, account)) = invoke_context.get_account(account_key) {
+        if let Some(account_index) = invoke_context.find_index_of_account(account_key) {
+            let account = invoke_context.get_account_at_index(account_index);
             if i == message.instructions[0].program_id_index as usize
                 || account.borrow().executable()
             {
                 // Use the known account
                 account_indices.push(account_index);
-                accounts.push((account, None));
+                accounts.push((account_index, None));
                 continue;
             } else if let Some(caller_account_index) =
                 account_info_keys.iter().position(|key| *key == account_key)
@@ -2265,7 +2263,7 @@ where
                     None
                 };
                 account_indices.push(account_index);
-                accounts.push((account, caller_account));
+                accounts.push((account_index, caller_account));
                 continue;
             }
         }
@@ -2400,9 +2398,11 @@ fn call<'a, 'b: 'a>(
         .map_err(SyscallError::InstructionError)?;
 
     // Copy results back to caller
-    for (callee_account, caller_account) in accounts.iter_mut() {
+    for (callee_account_index, caller_account) in accounts.iter_mut() {
         if let Some(caller_account) = caller_account {
-            let callee_account = callee_account.borrow();
+            let callee_account = invoke_context
+                .get_account_at_index(*callee_account_index)
+                .borrow();
             *caller_account.lamports = callee_account.lamports();
             *caller_account.owner = *callee_account.owner();
             let new_len = callee_account.data().len();
@@ -2672,7 +2672,9 @@ mod tests {
         solana_rbpf::{
             ebpf::HOST_ALIGN, memory_region::MemoryRegion, user_error::UserError, vm::Config,
         },
-        solana_sdk::{bpf_loader, fee_calculator::FeeCalculator, hash::hashv},
+        solana_sdk::{
+            account::AccountSharedData, bpf_loader, fee_calculator::FeeCalculator, hash::hashv,
+        },
         std::str::FromStr,
     };
 
