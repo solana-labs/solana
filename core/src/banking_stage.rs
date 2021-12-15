@@ -49,7 +49,7 @@ use {
     },
     std::{
         cmp,
-        collections::{HashMap, VecDeque},
+        collections::{HashMap, VecDeque, BinaryHeap},
         env,
         mem::size_of,
         net::{SocketAddr, UdpSocket},
@@ -61,13 +61,74 @@ use {
         thread::{self, Builder, JoinHandle},
         time::{Duration, Instant},
     },
+    dashmap::DashMap,
 };
 
 /// (packets, valid_indexes, forwarded)
 /// Set of packets with a list of which are valid and if this batch has been forwarded.
 type PacketsAndOffsets = (Packets, Vec<usize>, bool);
 
-pub type UnprocessedPackets = VecDeque<PacketsAndOffsets>;
+#[derive(PartialEq, Eq)]
+struct WeightedPacketLocation {
+    weight: u64,
+    batch_id: usize,
+    offset: usize,
+}
+
+impl Ord for WeightedPacketLocation {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.weight.cmp(&other.weight)
+    }
+}
+
+impl PartialOrd for WeightedPacketLocation {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+type PacketWeights = RwLock<BinaryHeap<WeightedPacketLocation>>;
+
+#[derive(Default)]
+struct UnprocessedPackets {
+    packets: DashMap<usize, PacketsAndOffsets>,
+    weights: PacketWeights,
+    current_id: AtomicUsize,
+}
+
+impl UnprocessedPackets {
+    fn pop_front(&self) -> Option<PacketsAndOffsets> {
+        let mut weights = self.weights.write().unwrap();
+        if let Some(lowest_packet) = weights.pop() {
+            if let Some(packet_batch) = self.packets.get(&lowest_packet.batch_id) {
+                packet_batch.1.retain(|x| *x != lowest_packet.offset);
+                if packet_batch.1.is_empty() {
+                    drop(packet_batch);
+                    self.packets.remove(&lowest_packet.batch_id);
+                }
+            }
+        }
+        None
+    }
+
+    fn insert(&self, packets: PacketsAndOffsets) {
+        let batch_id = self.current_id.fetch_add(1, Ordering::Relaxed);
+        self.packets.insert(batch_id, packets);
+    }
+
+    fn len(&self) -> usize {
+        self.packets.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.packets.is_empty()
+    }
+
+    fn clear(&self) {
+        self.packets.clear();
+        self.weights.write().unwrap().clear();
+    }
+}
 
 /// Transaction forwarding
 pub const FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET: u64 = 2;
@@ -298,19 +359,22 @@ impl BankingStage {
         let qos_service = Arc::new(QosService::new(cost_model));
         // Many banks that process transactions in parallel.
         assert!(num_threads >= NUM_VOTE_PROCESSING_THREADS + MIN_THREADS_BANKING);
+        let vote_buffered_packets = Arc::new(UnprocessedPackets::default());
+        let non_vote_buffered_packets = Arc::new(UnprocessedPackets::default());
         let bank_thread_hdls: Vec<JoinHandle<()>> = (0..num_threads)
             .map(|i| {
-                let (verified_receiver, forward_option) = match i {
+                let (verified_receiver, forward_option, buffered_packets) = match i {
                     0 => {
                         // Disable forwarding of vote transactions
                         // from gossip. Note - votes can also arrive from tpu
-                        (verified_vote_receiver.clone(), ForwardOption::NotForward)
+                        (verified_vote_receiver.clone(), ForwardOption::NotForward, vote_buffered_packets.clone())
                     }
                     1 => (
                         tpu_verified_vote_receiver.clone(),
                         ForwardOption::ForwardTpuVote,
+                        vote_buffered_packets.clone(),
                     ),
-                    _ => (verified_receiver.clone(), ForwardOption::ForwardTransaction),
+                    _ => (verified_receiver.clone(), ForwardOption::ForwardTransaction, non_vote_buffered_packets),
                 };
 
                 let poh_recorder = poh_recorder.clone();
@@ -337,6 +401,7 @@ impl BankingStage {
                             &duplicates,
                             &data_budget,
                             qos_service,
+                            &buffered_packets,
                         );
                     })
                     .unwrap()
@@ -345,24 +410,12 @@ impl BankingStage {
         Self { bank_thread_hdls }
     }
 
-    fn filter_valid_packets_for_forwarding<'a>(
-        all_packets: impl Iterator<Item = &'a PacketsAndOffsets>,
-    ) -> Vec<&'a Packet> {
-        all_packets
-            .filter(|(_p, _indexes, forwarded)| !forwarded)
-            .flat_map(|(p, valid_indexes, _forwarded)| {
-                valid_indexes.iter().map(move |x| &p.packets[*x])
-            })
-            .collect()
-    }
-
     fn forward_buffered_packets(
         socket: &std::net::UdpSocket,
         tpu_forwards: &std::net::SocketAddr,
         unprocessed_packets: &UnprocessedPackets,
         data_budget: &DataBudget,
     ) -> std::io::Result<()> {
-        let packets = Self::filter_valid_packets_for_forwarding(unprocessed_packets.iter());
         inc_new_counter_info!("banking_stage-forwarded_packets", packets.len());
         const INTERVAL_MS: u64 = 100;
         const MAX_BYTES_PER_SECOND: usize = 10_000 * 1200;
@@ -373,7 +426,7 @@ impl BankingStage {
         });
 
         let mut packet_vec = Vec::with_capacity(packets.len());
-        for p in packets {
+        while let Some(packet) = unprocessed_packets.get_best() {
             if data_budget.take(p.meta.size) {
                 packet_vec.push((&p.data[..p.meta.size], tpu_forwards));
             }
@@ -404,7 +457,7 @@ impl BankingStage {
         my_pubkey: &Pubkey,
         max_tx_ingestion_ns: u128,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        buffered_packets: &mut UnprocessedPackets,
+        buffered_packets: &UnprocessedPackets,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         test_fn: Option<impl Fn()>,
@@ -550,7 +603,7 @@ impl BankingStage {
         socket: &std::net::UdpSocket,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         cluster_info: &ClusterInfo,
-        buffered_packets: &mut UnprocessedPackets,
+        buffered_packets: &UnprocessedPackets,
         forward_option: &ForwardOption,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
@@ -631,7 +684,7 @@ impl BankingStage {
     fn handle_forwarding(
         forward_option: &ForwardOption,
         cluster_info: &ClusterInfo,
-        buffered_packets: &mut UnprocessedPackets,
+        buffered_packets: &UnprocessedPackets,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         socket: &UdpSocket,
         hold: bool,
@@ -678,10 +731,10 @@ impl BankingStage {
         duplicates: &Arc<Mutex<(LruCache<u64, ()>, PacketHasher)>>,
         data_budget: &DataBudget,
         qos_service: Arc<QosService>,
+        buffered_packets: &UnprocessedPackets,
     ) {
         let recorder = poh_recorder.lock().unwrap().recorder();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let mut buffered_packets = VecDeque::with_capacity(batch_limit);
         let banking_stage_stats = BankingStageStats::new(id);
         loop {
             let my_pubkey = cluster_info.id();
@@ -691,7 +744,7 @@ impl BankingStage {
                     &socket,
                     poh_recorder,
                     cluster_info,
-                    &mut buffered_packets,
+                    buffered_packets,
                     &forward_option,
                     transaction_status_sender.clone(),
                     &gossip_vote_sender,
@@ -729,7 +782,7 @@ impl BankingStage {
                 batch_limit,
                 transaction_status_sender.clone(),
                 &gossip_vote_sender,
-                &mut buffered_packets,
+                buffered_packets,
                 &banking_stage_stats,
                 duplicates,
                 &recorder,
@@ -1290,7 +1343,7 @@ impl BankingStage {
         batch_limit: usize,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
-        buffered_packets: &mut UnprocessedPackets,
+        buffered_packets: &UnprocessedPackets,
         banking_stage_stats: &BankingStageStats,
         duplicates: &Arc<Mutex<(LruCache<u64, ()>, PacketHasher)>>,
         recorder: &TransactionRecorder,
@@ -1446,7 +1499,7 @@ impl BankingStage {
     }
 
     fn push_unprocessed(
-        unprocessed_packets: &mut UnprocessedPackets,
+        unprocessed_packets: &UnprocessedPackets,
         packets: Packets,
         mut packet_indexes: Vec<usize>,
         dropped_packet_batches_count: &mut usize,
@@ -1472,16 +1525,16 @@ impl BankingStage {
                 }
             });
             packet_duplicate_check_time.stop();
-            banking_stage_stats
-                .packet_duplicate_check_elapsed
-                .fetch_add(packet_duplicate_check_time.as_us(), Ordering::Relaxed);
-            banking_stage_stats
-                .dropped_duplicated_packets_count
-                .fetch_add(
-                    original_packets_count.saturating_sub(packet_indexes.len()),
-                    Ordering::Relaxed,
-                );
         }
+        banking_stage_stats
+            .packet_duplicate_check_elapsed
+            .fetch_add(packet_duplicate_check_time.as_us(), Ordering::Relaxed);
+        banking_stage_stats
+            .dropped_duplicated_packets_count
+            .fetch_add(
+                original_packets_count.saturating_sub(packet_indexes.len()),
+                Ordering::Relaxed,
+            );
         if Self::packet_has_more_unprocessed_transactions(&packet_indexes) {
             if unprocessed_packets.len() >= batch_limit {
                 *dropped_packet_batches_count += 1;
@@ -1490,7 +1543,7 @@ impl BankingStage {
                 }
             }
             *newly_buffered_packets_count += packet_indexes.len();
-            unprocessed_packets.push_back((packets, packet_indexes, false));
+            unprocessed_packets.insert((packets, packet_indexes, false));
         }
     }
 
