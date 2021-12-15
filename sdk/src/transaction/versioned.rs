@@ -12,6 +12,7 @@ use {
         transaction::{Result, Transaction, TransactionError},
     },
     serde::Serialize,
+    std::cmp::Ordering,
 };
 
 // NOTE: Serialization-related changes must be paired with the direct read at sigverify.
@@ -29,11 +30,12 @@ impl Sanitize for VersionedTransaction {
     fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
         self.message.sanitize()?;
 
-        // Once the "verify_tx_signatures_len" feature is enabled, this may be
-        // updated to an equality check.
-        if usize::from(self.message.header().num_required_signatures) > self.signatures.len() {
-            return Err(SanitizeError::IndexOutOfBounds);
-        }
+        let num_required_signatures = usize::from(self.message.header().num_required_signatures);
+        match num_required_signatures.cmp(&self.signatures.len()) {
+            Ordering::Greater => Err(SanitizeError::IndexOutOfBounds),
+            Ordering::Less => Err(SanitizeError::InvalidValue),
+            Ordering::Equal => Ok(()),
+        }?;
 
         // Signatures are verified before message keys are mapped so all signers
         // must correspond to unmapped keys.

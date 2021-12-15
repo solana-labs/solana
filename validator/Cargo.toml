@@ -15,7 +15,7 @@ chrono = { version = "0.4.11", features = ["serde"] }
 clap = "2.33.1"
 console = "0.15.0"
 core_affinity = "0.5.10"
-fd-lock = "3.0.1"
+fd-lock = "3.0.2"
 indicatif = "0.16.2"
 jsonrpc-core = "18.0.0"
 jsonrpc-core-client = { version = "18.0.0", features = ["ipc", "ws"] }
@@ -55,7 +55,7 @@ symlink = "0.1.0"
 jemallocator = {package = "tikv-jemallocator", version = "0.4.1", features = ["unprefixed_malloc_on_supported_platforms"]}
 
 [target."cfg(unix)".dependencies]
-libc = "0.2.109"
+libc = "0.2.112"
 signal-hook = "0.3.12"
 sysctl = "0.4.3"
 

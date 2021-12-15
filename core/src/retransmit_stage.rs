@@ -24,7 +24,7 @@ use {
     solana_ledger::{
         blockstore::Blockstore,
         leader_schedule_cache::LeaderScheduleCache,
-        shred::{Shred, ShredType},
+        shred::{Shred, ShredId},
     },
     solana_measure::measure::Measure,
     solana_perf::packet::PacketBatch,
@@ -145,13 +145,13 @@ impl RetransmitStats {
 }
 
 // Map of shred (slot, index, type) => list of hash values seen for that key.
-type ShredFilter = LruCache<(Slot, u32, ShredType), Vec<u64>>;
+type ShredFilter = LruCache<ShredId, Vec<u64>>;
 
 type ShredFilterAndHasher = (ShredFilter, PacketHasher);
 
 // Returns true if shred is already received and should skip retransmit.
 fn should_skip_retransmit(shred: &Shred, shreds_received: &Mutex<ShredFilterAndHasher>) -> bool {
-    let key = (shred.slot(), shred.index(), shred.shred_type());
+    let key = shred.id();
     let mut shreds_received = shreds_received.lock().unwrap();
     let (cache, hasher) = shreds_received.deref_mut();
     match cache.get_mut(&key) {

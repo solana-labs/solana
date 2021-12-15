@@ -257,9 +257,9 @@ impl<'a> InvokeContext<'a> {
             self.pre_accounts = Vec::with_capacity(instruction.accounts.len());
             let mut work = |_unique_index: usize, account_index: usize| {
                 if account_index < self.accounts.len() {
-                    let account = self.accounts[account_index].1.borrow();
+                    let account = self.accounts[account_index].1.borrow().clone();
                     self.pre_accounts
-                        .push(PreAccount::new(&self.accounts[account_index].0, &account));
+                        .push(PreAccount::new(&self.accounts[account_index].0, account));
                     return Ok(());
                 }
                 Err(InstructionError::MissingAccount)
@@ -461,7 +461,7 @@ impl<'a> InvokeContext<'a> {
                             .checked_add(u128::from(account.lamports()))
                             .ok_or(InstructionError::UnbalancedInstruction)?;
                         if is_writable && !pre_account.executable() {
-                            pre_account.update(&account);
+                            pre_account.update(account.clone());
                         }
                         return Ok(());
                     }
@@ -489,12 +489,12 @@ impl<'a> InvokeContext<'a> {
         let mut account_indices = Vec::with_capacity(message.account_keys.len());
         let mut prev_account_sizes = Vec::with_capacity(message.account_keys.len());
         for account_key in message.account_keys.iter() {
-            let (account_index, account) = self
-                .get_account(account_key)
+            let account_index = self
+                .find_index_of_account(account_key)
                 .ok_or(InstructionError::MissingAccount)?;
-            let account_length = account.borrow().data().len();
+            let account_length = self.accounts[account_index].1.borrow().data().len();
             account_indices.push(account_index);
-            prev_account_sizes.push((account, account_length));
+            prev_account_sizes.push((account_index, account_length));
         }
 
         if let Some(instruction_recorder) = &self.instruction_recorder {
@@ -510,8 +510,10 @@ impl<'a> InvokeContext<'a> {
 
         // Verify the called program has not misbehaved
         let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
-        for (account, prev_size) in prev_account_sizes.iter() {
-            if !do_support_realloc && *prev_size != account.borrow().data().len() && *prev_size != 0
+        for (account_index, prev_size) in prev_account_sizes.into_iter() {
+            if !do_support_realloc
+                && prev_size != self.accounts[account_index].1.borrow().data().len()
+                && prev_size != 0
             {
                 // Only support for `CreateAccount` at this time.
                 // Need a way to limit total realloc size across multiple CPI calls
@@ -595,26 +597,27 @@ impl<'a> InvokeContext<'a> {
 
         // Find and validate executables / program accounts
         let callee_program_id = instruction.program_id;
-        let (program_account_index, program_account) = callee_keyed_accounts
+        let program_account_index = callee_keyed_accounts
             .iter()
             .find(|keyed_account| &callee_program_id == keyed_account.unsigned_key())
-            .and_then(|_keyed_account| self.get_account(&callee_program_id))
+            .and_then(|_keyed_account| self.find_index_of_account(&callee_program_id))
             .ok_or_else(|| {
                 ic_msg!(self, "Unknown program {}", callee_program_id);
                 InstructionError::MissingAccount
             })?;
-        if !program_account.borrow().executable() {
+        let program_account = self.accounts[program_account_index].1.borrow();
+        if !program_account.executable() {
             ic_msg!(self, "Account {} is not executable", callee_program_id);
             return Err(InstructionError::AccountNotExecutable);
         }
         let mut program_indices = vec![];
-        if program_account.borrow().owner() == &bpf_loader_upgradeable::id() {
+        if program_account.owner() == &bpf_loader_upgradeable::id() {
             if let UpgradeableLoaderState::Program {
                 programdata_address,
-            } = program_account.borrow().state()?
+            } = program_account.state()?
             {
-                if let Some((programdata_account_index, _programdata_account)) =
-                    self.get_account(&programdata_address)
+                if let Some(programdata_account_index) =
+                    self.find_index_of_account(&programdata_address)
                 {
                     program_indices.push(programdata_account_index);
                 } else {
@@ -797,14 +800,19 @@ impl<'a> InvokeContext<'a> {
         self.executors.borrow().get(pubkey)
     }
 
-    /// Find an account_index and account by its key
-    pub fn get_account(&self, pubkey: &Pubkey) -> Option<(usize, Rc<RefCell<AccountSharedData>>)> {
-        for (index, (key, account)) in self.accounts.iter().enumerate().rev() {
+    /// Finds an account_index by its key
+    pub fn find_index_of_account(&self, pubkey: &Pubkey) -> Option<usize> {
+        for (index, (key, _account)) in self.accounts.iter().enumerate().rev() {
             if key == pubkey {
-                return Some((index, account.clone()));
+                return Some(index);
             }
         }
         None
+    }
+
+    /// Returns an account by its account_index
+    pub fn get_account_at_index(&self, account_index: usize) -> &RefCell<AccountSharedData> {
+        &self.accounts[account_index].1
     }
 
     /// Get this invocation's compute budget

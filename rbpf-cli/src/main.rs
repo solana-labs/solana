@@ -257,7 +257,7 @@ native machine code before execting it in the virtual machine.",
         let text_bytes = executable.get_text_bytes().1;
         check(text_bytes, &config).unwrap();
     }
-    executable.jit_compile().unwrap();
+    Executable::<BpfError, ThisInstructionMeter>::jit_compile(&mut executable).unwrap();
     let analysis = Analysis::from_executable(&executable);
 
     match matches.value_of("use") {
