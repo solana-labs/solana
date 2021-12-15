@@ -531,7 +531,7 @@ fn main() {
         for (name, long) in &[
             ("bpf_program", "--bpf-program"),
             ("clone_account", "--clone"),
-            ("clone_account_from_file", "--clone-from-file"),
+            ("account", "--account"),
             ("mint_address", "--mint"),
             ("slots_per_epoch", "--slots-per-epoch"),
             ("faucet_sol", "--faucet-sol"),
