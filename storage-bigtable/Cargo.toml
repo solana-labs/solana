@@ -10,7 +10,7 @@ documentation = "https://docs.rs/solana-storage-bigtable"
 edition = "2021"
 
 [dependencies]
-backoff = { version = "0.3.0", features = ["tokio"] }
+backoff = { version = "0.4.0", features = ["tokio"] }
 bincode = "1.3.3"
 bzip2 = "0.4.3"
 enum-iterator = "0.7.0"
