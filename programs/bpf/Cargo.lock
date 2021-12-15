@@ -2637,7 +2637,6 @@ dependencies = [
  "byteorder 1.4.3",
  "libsecp256k1 0.6.0",
  "log",
- "regex",
  "solana-measure",
  "solana-program-runtime",
  "solana-sdk",

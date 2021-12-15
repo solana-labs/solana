@@ -181,14 +181,14 @@ checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 
 [[package]]
 name = "backoff"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9fe17f59a06fe8b87a6fc8bf53bb70b3aba76d7685f432487a68cd5552853625"
+checksum = "b62ddb9cb1ec0a098ad4bbf9344d0713fa193ae1a80af55febcff2627b6a00c1"
 dependencies = [
  "futures-core",
  "getrandom 0.2.3",
  "instant",
- "pin-project",
+ "pin-project-lite",
  "rand 0.8.4",
  "tokio",
 ]
@@ -1651,6 +1651,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "gen-syscall-list"
+version = "1.10.0"
+dependencies = [
+ "regex",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2845,9 +2852,9 @@ checksum = "28988d872ab76095a6e6ac88d99b54fd267702734fd7ffe610ca27f533ddb95a"
 
 [[package]]
 name = "openssl-src"
-version = "300.0.2+3.0.0"
+version = "300.0.4+3.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14a760a11390b1a5daf72074d4f6ff1a6e772534ae191f999f57e9ee8146d1fb"
+checksum = "216e1c6b4549e24182b9d7aa268f645414888a69daf44c7b2d8118da8e7b23e7"
 dependencies = [
  "cc",
 ]
@@ -4599,7 +4606,6 @@ dependencies = [
  "libsecp256k1 0.6.0",
  "log 0.4.14",
  "rand 0.7.3",
- "regex",
  "solana-measure",
  "solana-program-runtime",
  "solana-runtime",
@@ -5975,6 +5981,9 @@ version = "1.10.0"
 dependencies = [
  "base64 0.12.3",
  "log 0.4.14",
+ "serde_derive",
+ "serde_json",
+ "solana-cli-output",
  "solana-client",
  "solana-core",
  "solana-gossip",

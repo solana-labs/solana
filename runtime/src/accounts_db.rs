@@ -110,12 +110,6 @@ pub const NUM_SCAN_PASSES_DEFAULT: usize = 2;
 // Metrics indicate a sweet spot in the 2.5k-5k range for mnb.
 const MAX_ITEMS_PER_CHUNK: Slot = 2_500;
 
-// A specially reserved storage id just for entries in the cache, so that
-// operations that take a storage entry can maintain a common interface
-// when interacting with cached accounts. This id is "virtual" in that it
-// doesn't actually refer to an actual storage entry.
-pub(crate) const CACHE_VIRTUAL_STORAGE_ID: AppendVecId = AppendVecId::MAX;
-
 // A specially reserved write version (identifier for ordering writes in an AppendVec)
 // for entries in the cache, so that  operations that take a storage entry can maintain
 // a common interface when interacting with cached accounts. This version is "virtual" in
@@ -3877,10 +3871,6 @@ impl AccountsDb {
             Self::page_align(size),
         ));
 
-        assert!(
-            store.append_vec_id() != CACHE_VIRTUAL_STORAGE_ID,
-            "We've run out of storage ids!"
-        );
         debug!(
             "creating store: {} slot: {} len: {} size: {} from: {} path: {:?}",
             store.append_vec_id(),
@@ -8685,7 +8675,7 @@ pub mod tests {
         let id = {
             let (lock, idx) = accounts
                 .accounts_index
-                .get(&pubkey, Some(&ancestors), None)
+                .get_for_tests(&pubkey, Some(&ancestors), None)
                 .unwrap();
             lock.slot_list()[idx].1.store_id()
         };
@@ -8767,12 +8757,12 @@ pub mod tests {
         let ancestors = vec![(0, 1)].into_iter().collect();
         let (slot1, account_info1) = accounts
             .accounts_index
-            .get(&pubkey1, Some(&ancestors), None)
+            .get_for_tests(&pubkey1, Some(&ancestors), None)
             .map(|(account_list1, index1)| account_list1.slot_list()[index1])
             .unwrap();
         let (slot2, account_info2) = accounts
             .accounts_index
-            .get(&pubkey2, Some(&ancestors), None)
+            .get_for_tests(&pubkey2, Some(&ancestors), None)
             .map(|(account_list2, index2)| account_list2.slot_list()[index2])
             .unwrap();
         assert_eq!(slot1, 0);
@@ -8885,7 +8875,10 @@ pub mod tests {
 
         // zero lamport account, should no longer exist in accounts index
         // because it has been removed
-        assert!(accounts.accounts_index.get(&pubkey, None, None).is_none());
+        assert!(accounts
+            .accounts_index
+            .get_for_tests(&pubkey, None, None)
+            .is_none());
     }
 
     #[test]
@@ -9073,7 +9066,10 @@ pub mod tests {
 
         // `pubkey1`, a zero lamport account, should no longer exist in accounts index
         // because it has been removed by the clean
-        assert!(accounts.accounts_index.get(&pubkey1, None, None).is_none());
+        assert!(accounts
+            .accounts_index
+            .get_for_tests(&pubkey1, None, None)
+            .is_none());
 
         // Secondary index should have purged `pubkey1` as well
         let mut found_accounts = vec![];
@@ -9115,7 +9111,10 @@ pub mod tests {
         accounts.clean_accounts(Some(0), false, None);
         assert_eq!(accounts.alive_account_count_in_slot(0), 1);
         assert_eq!(accounts.alive_account_count_in_slot(1), 1);
-        assert!(accounts.accounts_index.get(&pubkey, None, None).is_some());
+        assert!(accounts
+            .accounts_index
+            .get_for_tests(&pubkey, None, None)
+            .is_some());
 
         // Now the account can be cleaned up
         accounts.clean_accounts(Some(1), false, None);
@@ -9124,7 +9123,10 @@ pub mod tests {
 
         // The zero lamport account, should no longer exist in accounts index
         // because it has been removed
-        assert!(accounts.accounts_index.get(&pubkey, None, None).is_none());
+        assert!(accounts
+            .accounts_index
+            .get_for_tests(&pubkey, None, None)
+            .is_none());
     }
 
     #[test]
@@ -9328,12 +9330,12 @@ pub mod tests {
         accounts.add_root(current_slot);
         let (slot1, account_info1) = accounts
             .accounts_index
-            .get(&pubkey, None, None)
+            .get_for_tests(&pubkey, None, None)
             .map(|(account_list1, index1)| account_list1.slot_list()[index1])
             .unwrap();
         let (slot2, account_info2) = accounts
             .accounts_index
-            .get(&pubkey2, None, None)
+            .get_for_tests(&pubkey2, None, None)
             .map(|(account_list2, index2)| account_list2.slot_list()[index2])
             .unwrap();
         assert_eq!(slot1, current_slot);
@@ -11061,11 +11063,11 @@ pub mod tests {
         accounts_index.add_root(2, false);
         accounts_index.add_root(3, false);
         let mut purges = HashMap::new();
-        let (key0_entry, _) = accounts_index.get(&key0, None, None).unwrap();
+        let (key0_entry, _) = accounts_index.get_for_tests(&key0, None, None).unwrap();
         purges.insert(key0, accounts_index.roots_and_ref_count(&key0_entry, None));
-        let (key1_entry, _) = accounts_index.get(&key1, None, None).unwrap();
+        let (key1_entry, _) = accounts_index.get_for_tests(&key1, None, None).unwrap();
         purges.insert(key1, accounts_index.roots_and_ref_count(&key1_entry, None));
-        let (key2_entry, _) = accounts_index.get(&key2, None, None).unwrap();
+        let (key2_entry, _) = accounts_index.get_for_tests(&key2, None, None).unwrap();
         purges.insert(key2, accounts_index.roots_and_ref_count(&key2_entry, None));
         for (key, (list, ref_count)) in &purges {
             info!(" purge {} ref_count {} =>", key, ref_count);
