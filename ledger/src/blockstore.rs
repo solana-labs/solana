@@ -972,6 +972,13 @@ impl Blockstore {
         Ok((newly_completed_data_sets, inserted_indices))
     }
 
+    /// Range-delete all entries which prefix matches the specified `slot` and
+    /// clear all the related `SlotMeta` except its next_slots.
+    ///
+    /// This function currently requires `insert_shreds_lock`, as both
+    /// `clear_unconfirmed_slot()` and `insert_shreds_handle_duplicate()`
+    /// try to perform read-modify-write operation on [`cf::SlotMeta`] column
+    /// family.
     pub fn clear_unconfirmed_slot(&self, slot: Slot) {
         let _lock = self.insert_shreds_lock.lock().unwrap();
         if let Some(mut slot_meta) = self
