@@ -17,7 +17,7 @@ fn bench_verify_account_changes_data(bencher: &mut Bencher) {
     let non_owner = pubkey::new_rand();
     let pre = PreAccount::new(
         &pubkey::new_rand(),
-        &AccountSharedData::new(0, BUFSIZE, &owner),
+        AccountSharedData::new(0, BUFSIZE, &owner),
     );
     let post = AccountSharedData::new(0, BUFSIZE, &owner);
     assert_eq!(
@@ -57,7 +57,7 @@ fn bench_verify_account_changes_data(bencher: &mut Bencher) {
 
     let pre = PreAccount::new(
         &pubkey::new_rand(),
-        &AccountSharedData::new(0, BUFSIZE, &owner),
+        AccountSharedData::new(0, BUFSIZE, &owner),
     );
     bencher.iter(|| {
         pre.verify(

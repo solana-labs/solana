@@ -328,7 +328,7 @@ impl AncestorHashesService {
         blockstore: &Blockstore,
     ) -> Option<(Slot, DuplicateAncestorDecision)> {
         let from_addr = packet.meta.addr();
-        limited_deserialize(&packet.data[..packet.meta.size - SIZE_OF_NONCE])
+        limited_deserialize(&packet.data[..packet.meta.size.saturating_sub(SIZE_OF_NONCE)])
             .ok()
             .and_then(|ancestor_hashes_response| {
                 // Verify the response
@@ -1033,15 +1033,6 @@ mod test {
             is_frozen,
         );
 
-        /*{
-            let w_bank_forks = bank_forks.write().unwrap();
-            assert!(w_bank_forks.get(dead_slot).is_none());
-            let parent = w_bank_forks.get(dead_slot - 1).unwrap().clone();
-            let dead_bank = Bank::new_from_parent(&parent, &Pubkey::default(), dead_slot);
-            bank_forks.insert(dead_bank);
-
-        }*/
-
         // Create slots [slot, slot + num_ancestors) with 5 shreds apiece
         let (shreds, _) = make_many_slot_entries(dead_slot, dead_slot, 5);
         blockstore
@@ -1367,6 +1358,34 @@ mod test {
         assert!(dead_slot_pool.is_empty());
         assert!(repairable_dead_slot_pool.is_empty());
         assert!(ancestor_hashes_request_statuses.is_empty());
+    }
+
+    #[test]
+    fn test_verify_and_process_ancestor_responses_invalid_packet() {
+        let bank0 = Bank::default_for_tests();
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
+
+        let ManageAncestorHashesState {
+            ancestor_hashes_request_statuses,
+            outstanding_requests,
+            ..
+        } = ManageAncestorHashesState::new(bank_forks);
+
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&ledger_path).unwrap();
+
+        // Create invalid packet with fewer bytes than the size of the nonce
+        let mut packet = Packet::default();
+        packet.meta.size = 0;
+
+        assert!(AncestorHashesService::verify_and_process_ancestor_response(
+            &packet,
+            &ancestor_hashes_request_statuses,
+            &mut AncestorHashesResponsesStats::default(),
+            &outstanding_requests,
+            &blockstore,
+        )
+        .is_none());
     }
 
     #[test]

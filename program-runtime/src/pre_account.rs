@@ -8,11 +8,7 @@ use {
         system_instruction::MAX_PERMITTED_DATA_LENGTH,
         system_program,
     },
-    std::{
-        cell::{Ref, RefCell},
-        fmt::Debug,
-        rc::Rc,
-    },
+    std::fmt::Debug,
 };
 
 // The relevant state of an account before an Instruction executes, used
@@ -20,14 +16,14 @@ use {
 #[derive(Clone, Debug, Default)]
 pub struct PreAccount {
     key: Pubkey,
-    account: Rc<RefCell<AccountSharedData>>,
+    account: AccountSharedData,
     changed: bool,
 }
 impl PreAccount {
-    pub fn new(key: &Pubkey, account: &AccountSharedData) -> Self {
+    pub fn new(key: &Pubkey, account: AccountSharedData) -> Self {
         Self {
             key: *key,
-            account: Rc::new(RefCell::new(account.clone())),
+            account,
             changed: false,
         }
     }
@@ -42,7 +38,7 @@ impl PreAccount {
         outermost_call: bool,
         do_support_realloc: bool,
     ) -> Result<(), InstructionError> {
-        let pre = self.account.borrow();
+        let pre = &self.account;
 
         // Only the owner of the account may change owner and
         //   only if the account is writable and
@@ -157,11 +153,10 @@ impl PreAccount {
         Ok(())
     }
 
-    pub fn update(&mut self, account: &AccountSharedData) {
-        let mut pre = self.account.borrow_mut();
-        let rent_epoch = pre.rent_epoch();
-        *pre = account.clone();
-        pre.set_rent_epoch(rent_epoch);
+    pub fn update(&mut self, account: AccountSharedData) {
+        let rent_epoch = self.account.rent_epoch();
+        self.account = account;
+        self.account.set_rent_epoch(rent_epoch);
 
         self.changed = true;
     }
@@ -170,16 +165,16 @@ impl PreAccount {
         &self.key
     }
 
-    pub fn data(&self) -> Ref<[u8]> {
-        Ref::map(self.account.borrow(), |account| account.data())
+    pub fn data(&self) -> &[u8] {
+        self.account.data()
     }
 
     pub fn lamports(&self) -> u64 {
-        self.account.borrow().lamports()
+        self.account.lamports()
     }
 
     pub fn executable(&self) -> bool {
-        self.account.borrow().executable()
+        self.account.executable()
     }
 
     pub fn is_zeroed(buf: &[u8]) -> bool {
@@ -236,10 +231,9 @@ mod tests {
                 is_writable: true,
                 pre: PreAccount::new(
                     &solana_sdk::pubkey::new_rand(),
-                    &AccountSharedData::from(Account {
+                    AccountSharedData::from(Account {
                         owner: *owner,
                         lamports: std::u64::MAX,
-                        data: vec![],
                         ..Account::default()
                     }),
                 ),
@@ -255,12 +249,12 @@ mod tests {
             self
         }
         pub fn executable(mut self, pre: bool, post: bool) -> Self {
-            self.pre.account.borrow_mut().set_executable(pre);
+            self.pre.account.set_executable(pre);
             self.post.set_executable(post);
             self
         }
         pub fn lamports(mut self, pre: u64, post: u64) -> Self {
-            self.pre.account.borrow_mut().set_lamports(pre);
+            self.pre.account.set_lamports(pre);
             self.post.set_lamports(post);
             self
         }
@@ -269,12 +263,12 @@ mod tests {
             self
         }
         pub fn data(mut self, pre: Vec<u8>, post: Vec<u8>) -> Self {
-            self.pre.account.borrow_mut().set_data(pre);
+            self.pre.account.set_data(pre);
             self.post.set_data(post);
             self
         }
         pub fn rent_epoch(mut self, pre: u64, post: u64) -> Self {
-            self.pre.account.borrow_mut().set_rent_epoch(pre);
+            self.pre.account.set_rent_epoch(pre);
             self.post.set_rent_epoch(post);
             self
         }

@@ -261,8 +261,8 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         let mut account_indices = Vec::with_capacity(message.account_keys.len());
         let mut accounts = Vec::with_capacity(message.account_keys.len());
         for (i, account_key) in message.account_keys.iter().enumerate() {
-            let ((account_index, account), account_info) = invoke_context
-                .get_account(account_key)
+            let (account_index, account_info) = invoke_context
+                .find_index_of_account(account_key)
                 .zip(
                     account_infos
                         .iter()
@@ -271,7 +271,9 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                 .ok_or(InstructionError::MissingAccount)
                 .unwrap();
             {
-                let mut account = account.borrow_mut();
+                let mut account = invoke_context
+                    .get_account_at_index(account_index)
+                    .borrow_mut();
                 account.copy_into_owner_from_slice(account_info.owner.as_ref());
                 account.set_data_from_slice(&account_info.try_borrow_data().unwrap());
                 account.set_lamports(account_info.lamports());
@@ -284,10 +286,9 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                 None
             };
             account_indices.push(account_index);
-            accounts.push((account, account_info));
+            accounts.push((account_index, account_info));
         }
-        let (program_account_index, _program_account) =
-            invoke_context.get_account(&program_id).unwrap();
+        let program_account_index = invoke_context.find_index_of_account(&program_id).unwrap();
         let program_indices = vec![program_account_index];
 
         // Check Signers
@@ -329,19 +330,20 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;
 
         // Copy writeable account modifications back into the caller's AccountInfos
-        for (account, account_info) in accounts.iter() {
+        for (account_index, account_info) in accounts.into_iter() {
             if let Some(account_info) = account_info {
-                **account_info.try_borrow_mut_lamports().unwrap() = account.borrow().lamports();
-                let mut data = account_info.try_borrow_mut_data()?;
+                let account = invoke_context.get_account_at_index(account_index);
                 let account_borrow = account.borrow();
+                **account_info.try_borrow_mut_lamports().unwrap() = account_borrow.lamports();
+                let mut data = account_info.try_borrow_mut_data()?;
                 let new_data = account_borrow.data();
-                if account_info.owner != account.borrow().owner() {
+                if account_info.owner != account_borrow.owner() {
                     // TODO Figure out a better way to allow the System Program to set the account owner
                     #[allow(clippy::transmute_ptr_to_ptr)]
                     #[allow(mutable_transmutes)]
                     let account_info_mut =
                         unsafe { transmute::<&Pubkey, &mut Pubkey>(account_info.owner) };
-                    *account_info_mut = *account.borrow().owner();
+                    *account_info_mut = *account_borrow.owner();
                 }
                 // TODO: Figure out how to allow the System Program to resize the account data
                 assert!(

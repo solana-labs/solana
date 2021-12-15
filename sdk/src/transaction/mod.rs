@@ -303,11 +303,6 @@ impl Transaction {
         Signature::default()
     }
 
-    /// Verify the length of signatures matches the value in the message header
-    pub fn verify_signatures_len(&self) -> bool {
-        self.signatures.len() == self.message.header.num_required_signatures as usize
-    }
-
     /// Verify the transaction and hash its message
     pub fn verify_and_hash_message(&self) -> Result<Hash> {
         let message_bytes = self.message_data();

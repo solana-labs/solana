@@ -248,10 +248,9 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
     }
 }
 
-pub enum AccountIndexGetResult<'a, T: IndexValue> {
+pub enum AccountIndexGetResult<T: IndexValue> {
     Found(ReadAccountMapEntry<T>, usize),
-    NotFoundOnFork,
-    Missing(AccountMapsReadLock<'a, T>),
+    NotFound,
 }
 
 #[self_referencing]
@@ -1523,7 +1522,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         pubkey: &Pubkey,
         ancestors: Option<&Ancestors>,
         max_root: Option<Slot>,
-    ) -> AccountIndexGetResult<'_, T> {
+    ) -> AccountIndexGetResult<T> {
         let read_lock = self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)]
             .read()
             .unwrap();
@@ -1538,10 +1537,10 @@ impl<T: IndexValue> AccountsIndex<T> {
                 let found_index = self.latest_slot(ancestors, slot_list, max_root);
                 match found_index {
                     Some(found_index) => AccountIndexGetResult::Found(locked_entry, found_index),
-                    None => AccountIndexGetResult::NotFoundOnFork,
+                    None => AccountIndexGetResult::NotFound,
                 }
             }
-            None => AccountIndexGetResult::Missing(read_lock),
+            None => AccountIndexGetResult::NotFound,
         }
     }
 
@@ -2029,7 +2028,7 @@ pub mod tests {
         }
     }
 
-    impl<'a, T: IndexValue> AccountIndexGetResult<'a, T> {
+    impl<T: IndexValue> AccountIndexGetResult<T> {
         pub fn unwrap(self) -> (ReadAccountMapEntry<T>, usize) {
             match self {
                 AccountIndexGetResult::Found(lock, size) => (lock, size),
@@ -2097,6 +2096,18 @@ pub mod tests {
                 }
                 PreAllocatedAccountMapEntry::Raw(raw) => PreAllocatedAccountMapEntry::Raw(*raw),
             }
+        }
+    }
+
+    impl<T: IndexValue> AccountsIndex<T> {
+        /// provides the ability to refactor this function on the api without bloody changes
+        pub fn get_for_tests(
+            &self,
+            pubkey: &Pubkey,
+            ancestors: Option<&Ancestors>,
+            max_root: Option<Slot>,
+        ) -> AccountIndexGetResult<T> {
+            self.get(pubkey, ancestors, max_root)
         }
     }
 
@@ -2747,8 +2758,9 @@ pub mod tests {
         let key = Keypair::new();
         let index = AccountsIndex::<bool>::default_for_tests();
         let ancestors = Ancestors::default();
-        assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_none());
-        assert!(index.get(&key.pubkey(), None, None).is_none());
+        let key = &key.pubkey();
+        assert!(index.get_for_tests(key, Some(&ancestors), None).is_none());
+        assert!(index.get_for_tests(key, None, None).is_none());
 
         let mut num = 0;
         index.unchecked_scan_accounts(
@@ -2825,8 +2837,10 @@ pub mod tests {
         assert!(gc.is_empty());
 
         let ancestors = Ancestors::default();
-        assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_none());
-        assert!(index.get(&key.pubkey(), None, None).is_none());
+        assert!(index
+            .get_for_tests(&key.pubkey(), Some(&ancestors), None)
+            .is_none());
+        assert!(index.get_for_tests(&key.pubkey(), None, None).is_none());
 
         let mut num = 0;
         index.unchecked_scan_accounts(
@@ -2864,8 +2878,10 @@ pub mod tests {
         index.insert_new_if_missing_into_primary_index(slot, items.len(), items.into_iter());
 
         let mut ancestors = Ancestors::default();
-        assert!(index.get(pubkey, Some(&ancestors), None).is_none());
-        assert!(index.get(pubkey, None, None).is_none());
+        assert!(index
+            .get_for_tests(pubkey, Some(&ancestors), None)
+            .is_none());
+        assert!(index.get_for_tests(pubkey, None, None).is_none());
 
         let mut num = 0;
         index.unchecked_scan_accounts(
@@ -2876,7 +2892,9 @@ pub mod tests {
         );
         assert_eq!(num, 0);
         ancestors.insert(slot, 0);
-        assert!(index.get(pubkey, Some(&ancestors), None).is_some());
+        assert!(index
+            .get_for_tests(pubkey, Some(&ancestors), None)
+            .is_some());
         assert_eq!(index.ref_count_from_storage(pubkey), 1);
         index.unchecked_scan_accounts(
             "",
@@ -2893,8 +2911,10 @@ pub mod tests {
         index.insert_new_if_missing_into_primary_index(slot, items.len(), items.into_iter());
 
         let mut ancestors = Ancestors::default();
-        assert!(index.get(pubkey, Some(&ancestors), None).is_none());
-        assert!(index.get(pubkey, None, None).is_none());
+        assert!(index
+            .get_for_tests(pubkey, Some(&ancestors), None)
+            .is_none());
+        assert!(index.get_for_tests(pubkey, None, None).is_none());
 
         let mut num = 0;
         index.unchecked_scan_accounts(
@@ -2905,7 +2925,9 @@ pub mod tests {
         );
         assert_eq!(num, 0);
         ancestors.insert(slot, 0);
-        assert!(index.get(pubkey, Some(&ancestors), None).is_some());
+        assert!(index
+            .get_for_tests(pubkey, Some(&ancestors), None)
+            .is_some());
         assert_eq!(index.ref_count_from_storage(pubkey), 0); // cached, so 0
         index.unchecked_scan_accounts(
             "",
@@ -3133,8 +3155,10 @@ pub mod tests {
         assert_eq!(1, account_maps_stats_len(&index));
 
         let mut ancestors = Ancestors::default();
-        assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_none());
-        assert!(index.get(&key.pubkey(), None, None).is_none());
+        assert!(index
+            .get_for_tests(&key.pubkey(), Some(&ancestors), None)
+            .is_none());
+        assert!(index.get_for_tests(&key.pubkey(), None, None).is_none());
 
         let mut num = 0;
         index.unchecked_scan_accounts(
@@ -3145,7 +3169,9 @@ pub mod tests {
         );
         assert_eq!(num, 0);
         ancestors.insert(slot, 0);
-        assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_some());
+        assert!(index
+            .get_for_tests(&key.pubkey(), Some(&ancestors), None)
+            .is_some());
         index.unchecked_scan_accounts(
             "",
             &ancestors,
@@ -3173,7 +3199,9 @@ pub mod tests {
         assert!(gc.is_empty());
 
         let ancestors = vec![(1, 1)].into_iter().collect();
-        assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_none());
+        assert!(index
+            .get_for_tests(&key.pubkey(), Some(&ancestors), None)
+            .is_none());
 
         let mut num = 0;
         index.unchecked_scan_accounts(
@@ -3203,7 +3231,9 @@ pub mod tests {
         assert!(gc.is_empty());
 
         let ancestors = vec![(0, 0)].into_iter().collect();
-        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors), None).unwrap();
+        let (list, idx) = index
+            .get_for_tests(&key.pubkey(), Some(&ancestors), None)
+            .unwrap();
         assert_eq!(list.slot_list()[idx], (0, true));
 
         let mut num = 0;
@@ -3428,7 +3458,7 @@ pub mod tests {
         assert!(gc.is_empty());
 
         index.add_root(0, false);
-        let (list, idx) = index.get(&key.pubkey(), None, None).unwrap();
+        let (list, idx) = index.get_for_tests(&key.pubkey(), None, None).unwrap();
         assert_eq!(list.slot_list()[idx], (0, true));
     }
 
@@ -3541,7 +3571,9 @@ pub mod tests {
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         assert!(gc.is_empty());
-        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors), None).unwrap();
+        let (list, idx) = index
+            .get_for_tests(&key.pubkey(), Some(&ancestors), None)
+            .unwrap();
         assert_eq!(list.slot_list()[idx], (0, true));
         drop(list);
 
@@ -3557,7 +3589,9 @@ pub mod tests {
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         assert_eq!(gc, vec![(0, true)]);
-        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors), None).unwrap();
+        let (list, idx) = index
+            .get_for_tests(&key.pubkey(), Some(&ancestors), None)
+            .unwrap();
         assert_eq!(list.slot_list()[idx], (0, false));
     }
 
@@ -3590,10 +3624,14 @@ pub mod tests {
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         assert!(gc.is_empty());
-        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors), None).unwrap();
+        let (list, idx) = index
+            .get_for_tests(&key.pubkey(), Some(&ancestors), None)
+            .unwrap();
         assert_eq!(list.slot_list()[idx], (0, true));
         let ancestors = vec![(1, 0)].into_iter().collect();
-        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors), None).unwrap();
+        let (list, idx) = index
+            .get_for_tests(&key.pubkey(), Some(&ancestors), None)
+            .unwrap();
         assert_eq!(list.slot_list()[idx], (1, false));
     }
 
@@ -3660,7 +3698,7 @@ pub mod tests {
         // Updating index should not purge older roots, only purges
         // previous updates within the same slot
         assert_eq!(gc, vec![]);
-        let (list, idx) = index.get(&key.pubkey(), None, None).unwrap();
+        let (list, idx) = index.get_for_tests(&key.pubkey(), None, None).unwrap();
         assert_eq!(list.slot_list()[idx], (3, true));
 
         let mut num = 0;

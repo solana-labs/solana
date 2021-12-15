@@ -2792,9 +2792,10 @@ impl Bank {
 
     fn burn_and_purge_account(&self, program_id: &Pubkey, mut account: AccountSharedData) {
         self.capitalization.fetch_sub(account.lamports(), Relaxed);
-        // Resetting account balance to 0 is needed to really purge from AccountsDb and
-        // flush the Stakes cache
+        // Both resetting account balance to 0 and zeroing the account data
+        // is needed to really purge from AccountsDb and flush the Stakes cache
         account.set_lamports(0);
+        account.data_as_mut_slice().fill(0);
         self.store_account(program_id, &account);
     }
 
@@ -4763,11 +4764,7 @@ impl Bank {
             .accounts
             .store_slow_cached(self.slot(), pubkey, account);
 
-        self.stakes_cache.check_and_store(
-            pubkey,
-            account,
-            self.stakes_remove_delegation_if_inactive_enabled(),
-        );
+        self.stakes_cache.check_and_store(pubkey, account);
     }
 
     pub fn force_flush_accounts_cache(&self) {
@@ -5264,10 +5261,6 @@ impl Bank {
             })
         }?;
 
-        if self.verify_tx_signatures_len_enabled() && !sanitized_tx.verify_signatures_len() {
-            return Err(TransactionError::SanitizeFailure);
-        }
-
         if verification_mode == TransactionVerificationMode::HashAndVerifyPrecompiles
             || verification_mode == TransactionVerificationMode::FullVerification
         {
@@ -5509,11 +5502,7 @@ impl Bank {
             for (_i, (pubkey, account)) in
                 (0..message.account_keys_len()).zip(loaded_transaction.accounts.iter())
             {
-                self.stakes_cache.check_and_store(
-                    pubkey,
-                    account,
-                    self.stakes_remove_delegation_if_inactive_enabled(),
-                );
+                self.stakes_cache.check_and_store(pubkey, account);
             }
         }
     }
@@ -5752,11 +5741,6 @@ impl Bank {
             .is_active(&feature_set::no_overflow_rent_distribution::id())
     }
 
-    pub fn verify_tx_signatures_len_enabled(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::verify_tx_signatures_len::id())
-    }
-
     pub fn versioned_tx_message_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::versioned_tx_message_enabled::id())
@@ -5775,11 +5759,6 @@ impl Bank {
     pub fn leave_nonce_on_success(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::leave_nonce_on_success::id())
-    }
-
-    pub fn stakes_remove_delegation_if_inactive_enabled(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::stakes_remove_delegation_if_inactive::id())
     }
 
     pub fn send_to_tpu_vote_port_enabled(&self) -> bool {
@@ -14994,12 +14973,14 @@ pub(crate) mod tests {
                 Some(TransactionError::SanitizeFailure),
             );
         }
-        // Too many signatures: Success without feature switch
+        // Too many signatures: Sanitization failure
         {
             let tx = make_transaction(TestCase::AddSignature);
-            assert!(bank
-                .verify_transaction(tx.into(), TransactionVerificationMode::FullVerification)
-                .is_ok());
+            assert_eq!(
+                bank.verify_transaction(tx.into(), TransactionVerificationMode::FullVerification)
+                    .err(),
+                Some(TransactionError::SanitizeFailure),
+            );
         }
     }
 
