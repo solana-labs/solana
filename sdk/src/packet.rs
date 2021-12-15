@@ -16,9 +16,6 @@ pub const PACKET_DATA_SIZE: usize = 1280 - 40 - 8;
 
 pub const EXTENDED_PACKET_DATA_SIZE: usize = PACKET_DATA_SIZE * 2;
 
-// TODO: Expose a second concrete instance of PacketInterface that uses updated size
-// pub const DOUBLE_DATA_SIZE: usize = PACKET_DATA_SIZE * 2;
-
 // Send + Sync needed to allow Rayon par_iter()
 /// Generic interface to support variable sized packtes
 pub trait PacketInterface: Clone + Default + Sized + Send + Sync + fmt::Debug {
@@ -30,13 +27,26 @@ pub trait PacketInterface: Clone + Default + Sized + Send + Sync + fmt::Debug {
 
     fn get_meta_mut(&mut self) -> &mut Meta;
 
-    fn from_data<T: Serialize>(dest: Option<&SocketAddr>, data: T) -> Result<Self>;
+    fn from_data<T: Serialize>(dest: Option<&SocketAddr>, data: T) -> Result<Self> {
+        let mut packet = Self::default();
+        Self::populate_packet(&mut packet, dest, &data)?;
+        Ok(packet)
+    }
 
     fn populate_packet<T: Serialize>(
         packet: &mut Self,
         dest: Option<&SocketAddr>,
         data: &T,
-    ) -> Result<()>;
+    ) -> Result<()> {
+        let mut wr = io::Cursor::new(&mut packet.get_data_mut()[..]);
+        bincode::serialize_into(&mut wr, data)?;
+        let len = wr.position() as usize;
+        packet.get_meta_mut().size = len;
+        if let Some(dest) = dest {
+            packet.get_meta_mut().set_addr(dest);
+        }
+        Ok(())
+    }
 
     // used to distinguish between extended and standard packets
     // for gpu sigverify
@@ -92,27 +102,6 @@ impl PacketInterface for ExtendedPacket {
         &mut self.meta
     }
 
-    fn from_data<T: Serialize>(dest: Option<&SocketAddr>, data: T) -> Result<Self> {
-        let mut packet = ExtendedPacket::default();
-        Self::populate_packet(&mut packet, dest, &data)?;
-        Ok(packet)
-    }
-
-    fn populate_packet<T: Serialize>(
-        packet: &mut Self,
-        dest: Option<&SocketAddr>,
-        data: &T,
-    ) -> Result<()> {
-        let mut wr = io::Cursor::new(&mut packet.get_data_mut()[..]);
-        bincode::serialize_into(&mut wr, data)?;
-        let len = wr.position() as usize;
-        packet.meta.size = len;
-        if let Some(dest) = dest {
-            packet.meta.set_addr(dest);
-        }
-        Ok(())
-    }
-
     fn is_extended(&self) -> bool {
         true
     }
@@ -135,60 +124,10 @@ impl PacketInterface for Packet {
         &mut self.meta
     }
 
-    fn from_data<T: Serialize>(dest: Option<&SocketAddr>, data: T) -> Result<Self> {
-        let mut packet = Packet::default();
-        Self::populate_packet(&mut packet, dest, &data)?;
-        Ok(packet)
-    }
-
-    fn populate_packet<T: Serialize>(
-        packet: &mut Self,
-        dest: Option<&SocketAddr>,
-        data: &T,
-    ) -> Result<()> {
-        let mut wr = io::Cursor::new(&mut packet.get_data_mut()[..]);
-        bincode::serialize_into(&mut wr, data)?;
-        let len = wr.position() as usize;
-        packet.meta.size = len;
-        if let Some(dest) = dest {
-            packet.meta.set_addr(dest);
-        }
-        Ok(())
-    }
-
     fn is_extended(&self) -> bool {
         false
     }
 }
-
-/*
-impl Packet {
-    pub fn new(data: [u8; PACKET_DATA_SIZE], meta: Meta) -> Self {
-        Self { data, meta }
-    }
-
-    pub fn from_data<T: Serialize>(dest: Option<&SocketAddr>, data: T) -> Result<Self> {
-        let mut packet = Packet::default();
-        Self::populate_packet(&mut packet, dest, &data)?;
-        Ok(packet)
-    }
-
-    fn populate_packet<T: Serialize>(
-        packet: &mut Self,
-        dest: Option<&SocketAddr>,
-        data: &T,
-    ) -> Result<()> {
-        let mut wr = io::Cursor::new(&mut packet.data[..]);
-        bincode::serialize_into(&mut wr, data)?;
-        let len = wr.position() as usize;
-        packet.meta.size = len;
-        if let Some(dest) = dest {
-            packet.meta.set_addr(dest);
-        }
-        Ok(())
-    }
-}
-*/
 
 impl fmt::Debug for Packet {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
