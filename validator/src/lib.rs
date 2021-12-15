@@ -13,7 +13,10 @@ use {
         thread::JoinHandle,
     },
 };
-pub use {solana_gossip::cluster_info::MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, solana_test_validator};
+pub use {
+    solana_gossip::cluster_info::MINIMUM_VALIDATOR_PORT_RANGE_WIDTH,
+    solana_test_validator as test_validator,
+};
 
 pub mod admin_rpc_service;
 pub mod bootstrap;
