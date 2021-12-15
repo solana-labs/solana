@@ -3360,6 +3360,23 @@ fn send_signals(
     }
 }
 
+/// For each slot in the slot_meta_working_set which has any change, include
+/// corresponding updates to cf::SlotMeta via the specified `write_batch`.
+/// The `write_batch` will later be atomically committed to the blockstore.
+///
+/// Arguments:
+/// - `slot_meta_working_set`: a map that maintains slot-id to its `SlotMeta`
+///   mapping.
+/// - `completed_slot_senders`: the units which are responsible for sending
+///   signals for completed slots.
+/// - `write_batch`: the write batch which includes all the updates of the
+///   the current write and ensures their atomicity.
+///
+/// On success, the function returns an Ok result with <should_signal,
+/// newly_completed_slots> pair where:
+///  - `should_signal`: a boolean flag indicating whether to send signal.
+///  - `newly_completed_slots`: a subset of slot_meta_working_set which are
+///    newly completed.
 fn commit_slot_meta_working_set(
     slot_meta_working_set: &HashMap<u64, SlotMetaWorkingSetEntry>,
     completed_slots_senders: &[SyncSender<Vec<u64>>],
