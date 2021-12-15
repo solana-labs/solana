@@ -240,7 +240,7 @@ impl ExecuteTimings {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "GcfJc94Hb3s7gzF7Uh4YxLSiQf1MvUtMmtU45BvinkVT")]
+#[frozen_abi(digest = "2pPboTQ9ixNuR1hvRt7McJriam5EHfd3vpBWfxnVbmF3")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 // Eager rent collection repeats in cyclic manner.
@@ -3609,6 +3609,7 @@ impl Bank {
                                 &*self.sysvar_cache.read().unwrap(),
                                 blockhash,
                                 lamports_per_signature,
+                                self.accounts_data_len.load(Acquire),
                             )
                             .map(|process_result| {
                                 self.update_accounts_data_len(

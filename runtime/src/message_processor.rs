@@ -65,6 +65,7 @@ impl MessageProcessor {
         sysvars: &[(Pubkey, Vec<u8>)],
         blockhash: Hash,
         lamports_per_signature: u64,
+        current_accounts_data_len: u64,
     ) -> Result<ProcessedMessageInfo, TransactionError> {
         let mut invoke_context = InvokeContext::new(
             rent,
@@ -78,6 +79,7 @@ impl MessageProcessor {
             feature_set,
             blockhash,
             lamports_per_signature,
+            current_accounts_data_len,
         );
 
         debug_assert_eq!(program_indices.len(), message.instructions.len());
@@ -139,7 +141,9 @@ impl MessageProcessor {
             );
             timings.accumulate(&invoke_context.timings);
         }
-        Ok(ProcessedMessageInfo::default())
+        Ok(ProcessedMessageInfo {
+            accounts_data_len_delta: invoke_context.get_accounts_data_meter().take().consumed(),
+        })
     }
 }
 
@@ -264,6 +268,7 @@ mod tests {
             &[],
             Hash::default(),
             0,
+            0,
         );
         assert!(result.is_ok());
         assert_eq!(accounts[0].1.borrow().lamports(), 100);
@@ -292,6 +297,7 @@ mod tests {
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
+            0,
             0,
         );
         assert_eq!(
@@ -325,6 +331,7 @@ mod tests {
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
+            0,
             0,
         );
         assert_eq!(
@@ -470,6 +477,7 @@ mod tests {
             &[],
             Hash::default(),
             0,
+            0,
         );
         assert_eq!(
             result,
@@ -503,6 +511,7 @@ mod tests {
             &[],
             Hash::default(),
             0,
+            0,
         );
         assert!(result.is_ok());
 
@@ -532,6 +541,7 @@ mod tests {
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
+            0,
             0,
         );
         assert!(result.is_ok());
@@ -589,6 +599,7 @@ mod tests {
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
+            0,
             0,
         );
         assert_eq!(

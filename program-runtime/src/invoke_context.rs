@@ -23,6 +23,8 @@ use {
     },
     std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, sync::Arc},
 };
+/// The maximum allowed size, in bytes, of the accounts data
+pub const MAX_ACCOUNTS_DATA_LEN: u64 = 128_000_000_000; // 128 GB
 
 pub type TransactionAccountRefCell = (Pubkey, RefCell<AccountSharedData>);
 pub type TransactionAccountRefCells = Vec<TransactionAccountRefCell>;
@@ -117,6 +119,46 @@ impl ComputeMeter {
     }
 }
 
+/// Meter and track the amount of space available in the accounts data
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
+pub struct AccountsDataMeter {
+    /// The amount of available space in the accounts data (i.e. max - current)
+    capacity: u64,
+    /// The amount of available space *consumed* from the accounts data.  This value is used to
+    /// update the Bank after transactions are successfully processed.  This value may be negative,
+    /// which indicates that the accounts data has shrunk.
+    consumed: i64,
+}
+impl AccountsDataMeter {
+    pub fn new_ref(capacity: u64) -> Rc<RefCell<Self>> {
+        Rc::new(RefCell::new(Self {
+            capacity,
+            consumed: 0,
+        }))
+    }
+    pub fn capacity(&self) -> u64 {
+        self.capacity
+    }
+    pub fn consumed(&self) -> i64 {
+        self.consumed
+    }
+    pub fn remaining(&self) -> i64 {
+        let capacity = self.capacity() as i64;
+        let consumed = self.consumed();
+        capacity.saturating_sub(consumed)
+    }
+    pub fn consume(&mut self, amount: i64) -> Result<(), InstructionError> {
+        if amount.is_positive() && amount > self.remaining() {
+            return Err(InstructionError::AccountsDataBudgetExceeded);
+        }
+        // SAFETY: We know that the consumed amount can never exceed MAX_ACCOUNTS_DATA_LEN (which
+        // is far below i64::MAX), and therefore we can never free/deallocate more than
+        // MAX_ACCOUNTS_DATA_LEN either, so we can be sure wrapping will not happen at either end.
+        self.consumed = self.consumed.wrapping_add(amount);
+        Ok(())
+    }
+}
+
 pub struct StackFrame<'a> {
     pub number_of_program_accounts: usize,
     pub keyed_accounts: Vec<KeyedAccount<'a>>,
@@ -154,6 +196,7 @@ pub struct InvokeContext<'a> {
     compute_budget: ComputeBudget,
     current_compute_budget: ComputeBudget,
     compute_meter: Rc<RefCell<ComputeMeter>>,
+    accounts_data_meter: Rc<RefCell<AccountsDataMeter>>,
     executors: Rc<RefCell<Executors>>,
     pub instruction_recorder: Option<Rc<RefCell<InstructionRecorder>>>,
     pub feature_set: Arc<FeatureSet>,
@@ -177,7 +220,14 @@ impl<'a> InvokeContext<'a> {
         feature_set: Arc<FeatureSet>,
         blockhash: Hash,
         lamports_per_signature: u64,
+        current_accounts_data_len: u64,
     ) -> Self {
+        let accounts_data_meter = {
+            debug_assert!(current_accounts_data_len <= MAX_ACCOUNTS_DATA_LEN);
+            AccountsDataMeter::new_ref(
+                MAX_ACCOUNTS_DATA_LEN.saturating_sub(current_accounts_data_len),
+            )
+        };
         Self {
             invoke_stack: Vec::with_capacity(compute_budget.max_invoke_depth),
             rent,
@@ -189,6 +239,7 @@ impl<'a> InvokeContext<'a> {
             current_compute_budget: compute_budget,
             compute_budget,
             compute_meter: ComputeMeter::new_ref(compute_budget.max_units),
+            accounts_data_meter,
             executors,
             instruction_recorder,
             feature_set,
@@ -214,6 +265,7 @@ impl<'a> InvokeContext<'a> {
             None,
             Arc::new(FeatureSet::all_enabled()),
             Hash::default(),
+            0,
             0,
         )
     }
@@ -839,6 +891,11 @@ impl<'a> InvokeContext<'a> {
     /// Get this invocation's ComputeMeter
     pub fn get_compute_meter(&self) -> Rc<RefCell<ComputeMeter>> {
         self.compute_meter.clone()
+    }
+
+    /// Get this invocation's AccountsDataMeter
+    pub fn get_accounts_data_meter(&self) -> Rc<RefCell<AccountsDataMeter>> {
+        Rc::clone(&self.accounts_data_meter)
     }
 
     /// Loaders may need to do work in order to execute a program. Cache

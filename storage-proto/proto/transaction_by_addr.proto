@@ -105,6 +105,7 @@ enum InstructionErrorType {
     ARITHMETIC_OVERFLOW = 47;
     UNSUPPORTED_SYSVAR = 48;
     ILLEGAL_OWNER = 49;
+    ACCOUNTS_DATA_BUDGET_EXCEEDED = 50;
 }
 
 message UnixTimestamp {
