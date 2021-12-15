@@ -1152,6 +1152,43 @@ impl Blockstore {
         None
     }
 
+    /// Create an entry to the specified `write_batch` that performs shred
+    /// insertion and associated metadata update.  The function also updates
+    /// its in-memory copy of the associated metadata.
+    ///
+    /// Currently, this function must be invoked while holding
+    /// `insert_shreds_lock` as it performs read-modify-write operations
+    /// on multiple column families.
+    ///
+    /// The resulting `write_batch` may include updates to [`cf::DeadSlots`]
+    /// and [`cf::ShredData`].  Note that it will also update the in-memory copy
+    /// of `erasure_metas` and `index_working_set`, which will later be
+    /// used to update other column families such as [`cf::ErasureMeta`] and
+    /// [`cf::Index`].
+    ///
+    /// Arguments:
+    /// - `shred`: the shred to be inserted
+    /// - `erasure_metas`: the in-memory hash-map that maintains the dirty
+    ///     copy of the erasure meta.  It will later be written to
+    ///     `cf::ErasureMeta` in insert_shreds_handle_duplicate().
+    /// - `index_working_set`: the in-memory hash-map that maintains the
+    ///     dirty copy of the index meta.  It will later be written to
+    ///     `cf::Index` in insert_shreds_handle_duplicate().
+    /// - `slot_meta_working_set`: the in-memory hash-map that maintains
+    ///     the dirty copy of the index meta.  It will later be written to
+    ///     `cf::SlotMeta` in insert_shreds_handle_duplicate().
+    /// - `write_batch`: the collection of the current writes which will
+    ///     be committed atomically.
+    /// - `just_inserted_data_shreds`: a (slot, shred index within the slot)
+    ///     to shred map which maintains which data shreds have been inserted.
+    /// - `index_meta_time`: the time spent on loading or creating the
+    ///     index meta entry from the db.
+    /// - `is_trusted`: if false, this function will check whether the
+    ///     input shred is dupliate.
+    /// - `handle_duplicate`: the function that handles duplication.
+    /// - `leader_schedule`: the leader schedule will be used to check
+    ///     whether it is okay to insert the input shred.
+    /// - `shred_source`: the source of the shred.
     #[allow(clippy::too_many_arguments)]
     fn check_insert_data_shred<F>(
         &self,
