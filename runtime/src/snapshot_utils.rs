@@ -967,7 +967,7 @@ where
     let unpacked_version_file = unpack_dir.path().join("version");
     let snapshot_version = {
         // Check size of snapshot_version file.
-        let file_size = fs::metadata(unpacked_version_file).and_then(|m| m.len())?;
+        let file_size = fs::metadata(&unpacked_version_file)?.len();
         if file_size > MAX_SNAPSHOT_VERSION_FILE_SIZE {
             let error_message = format!(
                 "snapshot version file too large: {} has {} bytes (max size is {} bytes)",
