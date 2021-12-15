@@ -236,6 +236,20 @@ pub struct Shred {
     pub payload: Vec<u8>,
 }
 
+/// Tuple which should uniquely identify a shred if it exists.
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+pub struct ShredId(Slot, /*shred index:*/ u32, ShredType);
+
+impl ShredId {
+    pub(crate) fn new(slot: Slot, index: u32, shred_type: ShredType) -> ShredId {
+        ShredId(slot, index, shred_type)
+    }
+
+    pub(crate) fn unwrap(&self) -> (Slot, /*shred index:*/ u32, ShredType) {
+        (self.0, self.1, self.2)
+    }
+}
+
 impl Shred {
     fn deserialize_obj<'de, T>(index: &mut usize, size: usize, buf: &'de [u8]) -> bincode::Result<T>
     where
@@ -438,6 +452,11 @@ impl Shred {
         )
     }
 
+    /// Unique identifier for each shred.
+    pub fn id(&self) -> ShredId {
+        ShredId(self.slot(), self.index(), self.shred_type())
+    }
+
     pub fn slot(&self) -> Slot {
         self.common_header.slot
     }
@@ -537,7 +556,7 @@ impl Shred {
                 block.resize(size, 0u8);
             }
             ShredType::Code => {
-                // SIZE_OF_CODING_SHRED_HEADERS bytes at the begining of the
+                // SIZE_OF_CODING_SHRED_HEADERS bytes at the beginning of the
                 // coding shreds contains the header and is not part of erasure
                 // coding.
                 let offset = SIZE_OF_CODING_SHRED_HEADERS.min(block.len());
