@@ -94,6 +94,7 @@ pub struct TestValidatorGenesis {
     pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
     pub max_ledger_shreds: Option<u64>,
     pub max_genesis_archive_unpacked_size: Option<u64>,
+    pub accountsdb_plugin_config_files: Option<Vec<PathBuf>>,
 }
 
 impl TestValidatorGenesis {
@@ -510,6 +511,7 @@ impl TestValidator {
         }
 
         let mut validator_config = ValidatorConfig {
+            accountsdb_plugin_config_files: config.accountsdb_plugin_config_files.clone(),
             rpc_addrs: Some((
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
                 SocketAddr::new(
