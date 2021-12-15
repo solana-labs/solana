@@ -9,20 +9,23 @@ use {
 
 type AccountsDbFields = super::AccountsDbFields<SerializableAccountStorageEntry>;
 
+/// the serialized type is fixed as usize
+pub type AppendVecIdSerialized = usize;
+
 // Serializable version of AccountStorageEntry for snapshot format
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub(super) struct SerializableAccountStorageEntry {
-    id: AppendVecId,
+    id: AppendVecIdSerialized,
     accounts_current_len: usize,
 }
 
 pub trait SerializableStorage {
-    fn id(&self) -> AppendVecId;
+    fn id(&self) -> AppendVecIdSerialized;
     fn current_len(&self) -> usize;
 }
 
 impl SerializableStorage for SerializableAccountStorageEntry {
-    fn id(&self) -> AppendVecId {
+    fn id(&self) -> AppendVecIdSerialized {
         self.id
     }
     fn current_len(&self) -> usize {
@@ -36,7 +39,7 @@ impl solana_frozen_abi::abi_example::IgnoreAsHelper for SerializableAccountStora
 impl From<&AccountStorageEntry> for SerializableAccountStorageEntry {
     fn from(rhs: &AccountStorageEntry) -> Self {
         Self {
-            id: rhs.append_vec_id(),
+            id: rhs.append_vec_id() as AppendVecIdSerialized,
             accounts_current_len: rhs.accounts.len(),
         }
     }
