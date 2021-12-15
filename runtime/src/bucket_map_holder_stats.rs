@@ -323,7 +323,7 @@ impl BucketMapHolderStats {
                 ),
                 (
                     "flush_grow_us",
-                    self.flush_remove_us.swap(0, Ordering::Relaxed),
+                    self.flush_grow_us.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
