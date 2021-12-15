@@ -305,6 +305,11 @@ fn main() {
                 .hidden(true)
                 .help("Specify the configuration file for the AccountsDb plugin."),
         )
+        .arg(
+            Arg::with_name("no_accounts_db_caching")
+                .long("no-accounts-db-caching")
+                .help("Disables accounts caching"),
+        )
         .get_matches();
 
     let output = if matches.is_present("quiet") {
@@ -550,6 +555,7 @@ fn main() {
     let mut genesis = TestValidatorGenesis::default();
     genesis.max_ledger_shreds = value_of(&matches, "limit_ledger_size");
     genesis.max_genesis_archive_unpacked_size = Some(u64::MAX);
+    genesis.accounts_db_caching_enabled = !matches.is_present("no_accounts_db_caching");
 
     let tower_storage = Arc::new(FileTowerStorage::new(ledger_path.clone()));
 
