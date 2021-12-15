@@ -22,7 +22,7 @@
 use std::{thread::sleep, time::Duration};
 use {
     crate::{
-        account_info::{AccountInfo, StorageLocation, StoredSize},
+        account_info::{AccountInfo, Offset, StorageLocation, StoredSize},
         accounts_background_service::{DroppedSlotsSender, SendDroppedBankCallback},
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
         accounts_hash::{AccountsHash, CalculateHashIntermediate, HashStats, PreviousPass},
@@ -120,7 +120,7 @@ const CACHE_VIRTUAL_WRITE_VERSION: StoredMetaWriteVersion = 0;
 // for entries in the cache, so that  operations that take a storage entry can maintain
 // a common interface when interacting with cached accounts. This version is "virtual" in
 // that it doesn't actually map to an entry in an AppendVec.
-pub(crate) const CACHE_VIRTUAL_OFFSET: usize = 0;
+pub(crate) const CACHE_VIRTUAL_OFFSET: Offset = 0;
 const CACHE_VIRTUAL_STORED_SIZE: StoredSize = 0;
 
 pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
@@ -13306,7 +13306,7 @@ pub mod tests {
         }
 
         let do_test = |test_params: TestParameters| {
-            let account_info = AccountInfo::new(StorageLocation::AppendVec(42, 123), 234, 0);
+            let account_info = AccountInfo::new(StorageLocation::AppendVec(42, 128), 234, 0);
             let pubkey = solana_sdk::pubkey::new_rand();
             let mut key_set = HashSet::default();
             key_set.insert(pubkey);
