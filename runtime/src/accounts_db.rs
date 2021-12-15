@@ -75,7 +75,7 @@ use {
         path::{Path, PathBuf},
         str::FromStr,
         sync::{
-            atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+            atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering},
             Arc, Condvar, Mutex, MutexGuard, RwLock,
         },
         thread::Builder,
@@ -353,8 +353,8 @@ impl<'a> MultiThreadProgress<'a> {
 }
 
 /// An offset into the AccountsDb::storage vector
-pub type AtomicAppendVecId = AtomicUsize;
-pub type AppendVecId = usize;
+pub type AtomicAppendVecId = AtomicU32;
+pub type AppendVecId = u32;
 pub type SnapshotStorage = Vec<Arc<AccountStorageEntry>>;
 pub type SnapshotStorages = Vec<SnapshotStorage>;
 
@@ -11253,6 +11253,58 @@ pub mod tests {
                 account_ref
             );
         }
+    }
+
+    #[test]
+    #[should_panic(expected = "We've run out of storage ids!")]
+    fn test_wrapping_append_vec_id() {
+        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let zero_lamport_account =
+            AccountSharedData::new(0, 0, AccountSharedData::default().owner());
+
+        // set 'next' id to the max possible value
+        db.next_id.store(AppendVecId::MAX, Ordering::Release);
+        let slots = 3;
+        let keys = (0..slots).map(|_| Pubkey::new_unique()).collect::<Vec<_>>();
+        // write unique keys to successive slots
+        keys.iter().enumerate().for_each(|(slot, key)| {
+            let slot = slot as Slot;
+            db.store_uncached(slot, &[(key, &zero_lamport_account)]);
+            db.get_accounts_delta_hash(slot);
+            db.add_root(slot);
+        });
+        assert_eq!(slots - 1, db.next_id.load(Ordering::Acquire));
+        let ancestors = Ancestors::default();
+        keys.iter().for_each(|key| {
+            assert!(db.load_without_fixed_root(&ancestors, key).is_some());
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "We've run out of storage ids!")]
+    fn test_reuse_append_vec_id() {
+        solana_logger::setup();
+        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let zero_lamport_account =
+            AccountSharedData::new(0, 0, AccountSharedData::default().owner());
+
+        // set 'next' id to the max possible value
+        db.next_id.store(AppendVecId::MAX, Ordering::Release);
+        let slots = 3;
+        let keys = (0..slots).map(|_| Pubkey::new_unique()).collect::<Vec<_>>();
+        // write unique keys to successive slots
+        keys.iter().enumerate().for_each(|(slot, key)| {
+            let slot = slot as Slot;
+            db.store_uncached(slot, &[(key, &zero_lamport_account)]);
+            db.get_accounts_delta_hash(slot);
+            db.add_root(slot);
+            // reset next_id to what it was previously to cause us to re-use the same id
+            db.next_id.store(AppendVecId::MAX, Ordering::Release);
+        });
+        let ancestors = Ancestors::default();
+        keys.iter().for_each(|key| {
+            assert!(db.load_without_fixed_root(&ancestors, key).is_some());
+        });
     }
 
     #[test]
