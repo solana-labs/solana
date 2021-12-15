@@ -1387,18 +1387,18 @@ fn assert_instruction_count() {
     {
         programs.extend_from_slice(&[
             ("alloc", 1237),
-            ("bpf_to_bpf", 96),
-            ("multiple_static", 52),
+            ("bpf_to_bpf", 313),
+            ("multiple_static", 208),
             ("noop", 5),
             ("noop++", 5),
-            ("relative_call", 26),
+            ("relative_call", 210),
             ("return_data", 980),
-            ("sanity", 1255),
-            ("sanity++", 1260),
+            ("sanity", 2378),
+            ("sanity++", 2278),
             ("secp256k1_recover", 25383),
-            ("sha", 1328),
+            ("sha", 1895),
             ("struct_pass", 108),
-            ("struct_ret", 28),
+            ("struct_ret", 122),
         ]);
     }
     #[cfg(feature = "bpf_rust")]
@@ -1410,14 +1410,14 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_dep_crate", 47),
             ("solana_bpf_rust_external_spend", 507),
             ("solana_bpf_rust_iter", 824),
-            ("solana_bpf_rust_many_args", 941),
-            ("solana_bpf_rust_mem", 3086),
+            ("solana_bpf_rust_many_args", 1289),
+            ("solana_bpf_rust_mem", 5997),
             ("solana_bpf_rust_membuiltins", 3976),
             ("solana_bpf_rust_noop", 481),
             ("solana_bpf_rust_param_passing", 146),
             ("solana_bpf_rust_rand", 488),
-            ("solana_bpf_rust_sanity", 8455),
-            ("solana_bpf_rust_secp256k1_recover", 25624),
+            ("solana_bpf_rust_sanity", 9126),
+            ("solana_bpf_rust_secp256k1_recover", 25889),
             ("solana_bpf_rust_sha", 30692),
         ]);
     }
