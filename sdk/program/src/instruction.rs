@@ -1,5 +1,17 @@
+//! Types for directing the execution of Solana programs.
+//!
+//! Every invocation of a Solana program executes a single instruction, as
+//! defined by the [`Instruction`] type. An instruction is primarily a vector of
+//! bytes, the contents of which are program-specific, and not interpreted by
+//! the Solana runtime. This allows flexibility in how programs behave, how they
+//! are controlled by client software, and what data encodings they use.
+//!
+//! Besides the instruction data, every account a program may read or write
+//! while executing a given instruction is also included in `Instruction`, as
+//! [`AccountMeta`] values. The runtime uses this information to efficiently
+//! schedule execution of transactions.
+
 #![allow(clippy::integer_arithmetic)]
-//! Defines a composable Instruction type and a memory-efficient CompiledInstruction.
 
 use {
     crate::{pubkey::Pubkey, sanitize::Sanitize, short_vec, wasm_bindgen},
@@ -240,42 +252,126 @@ pub enum InstructionError {
     // conversions must also be added
 }
 
+/// A directive for a single invocation of a Solana program.
+///
+/// An instruction specifies which program it is calling, which accounts it may
+/// read or modify, and additional data that serves as input to the program. One
+/// or more instructions are included in transactions submitted by Solana
+/// clients. Instructions are also used to describe [cross-program
+/// invocations][cpi].
+///
+/// [cpi]: https://docs.solana.com/developing/programming-model/calling-between-programs
+///
+/// During execution, a program will receive a list of account data as one of
+/// its arguments, in the same order as specified during `Instruction`
+/// construction.
+///
+/// While Solana is agnostic to the format of the instruction data, it has
+/// built-in support for serialization via [`borsh`] and [`bincode`].
+///
+/// [`borsh`]: https://docs.rs/borsh/latest/borsh/
+/// [`bincode`]: https://docs.rs/bincode/latest/bincode/
+///
+/// # Specifying account metadata
+///
+/// When constructing an [`Instruction`], a list of all accounts that may be
+/// read or written during the execution of that instruction must be supplied as
+/// [`AccountMeta`] values.
+///
+/// Any account whose data may be mutated by the program during execution must
+/// be specified as writable. During execution, writing to an account that was
+/// not specified as writable will cause the transaction to fail. Writing to an
+/// account that is not owned by the program will cause the transaction to fail.
+///
+/// Any account whose lamport balance may be mutated by the program during
+/// execution must be specified as writable. During execution, mutating the
+/// lamports of an account that was not specified as writable will cause the
+/// transaction to fail. While _subtracting_ lamports from an account not owned
+/// by the program will cause the transaction to fail, _adding_ lamports to any
+/// account is allowed, as long is it is mutable.
+///
+/// Accounts that are not read or written by the program may still be specified
+/// in an `Instruction`'s account list. These will affect scheduling of program
+/// execution by the runtime, but will otherwise be ignored.
+///
+/// When building a transaction, the Solana runtime coalesces all accounts used
+/// by all instructions in that transaction, along with accounts and permissions
+/// required by the runtime, into a single account list. Some accounts and
+/// account permissions required by the runtime to process a transaction are
+/// _not_ required to be included in an `Instruction`s account list. These
+/// include:
+///
+/// - The program ID &mdash; it is a separate field of `Instruction`
+/// - The transaction's fee-paying account &mdash; it is added during [`Message`]
+///   construction. A program may still require the fee payer as part of the
+///   account list if it directly references it.
+///
+/// [`Message`]: crate::message::Message
+///
+/// Programs may require signatures from some accounts, in which case they
+/// should be specified as signers during `Instruction` construction. The
+/// program must still validate during execution that the account is a signer.
 #[wasm_bindgen]
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct Instruction {
-    /// Pubkey of the instruction processor that executes this instruction
+    /// Pubkey of the program that executes this instruction.
     #[wasm_bindgen(skip)]
     pub program_id: Pubkey,
-    /// Metadata for what accounts should be passed to the instruction processor
+    /// Metadata describing accounts that should be passed to the program.
     #[wasm_bindgen(skip)]
     pub accounts: Vec<AccountMeta>,
-    /// Opaque data passed to the instruction processor
+    /// Opaque data passed to the program for its own interpretation.
     #[wasm_bindgen(skip)]
     pub data: Vec<u8>,
 }
 
 impl Instruction {
-    #[deprecated(
-        since = "1.6.0",
-        note = "Please use another Instruction constructor instead, such as `Instruction::new_with_bincode`"
-    )]
-    pub fn new<T: Serialize>(program_id: Pubkey, data: &T, accounts: Vec<AccountMeta>) -> Self {
-        Self::new_with_bincode(program_id, data, accounts)
-    }
-
-    pub fn new_with_bincode<T: Serialize>(
-        program_id: Pubkey,
-        data: &T,
-        accounts: Vec<AccountMeta>,
-    ) -> Self {
-        let data = serialize(data).unwrap();
-        Self {
-            program_id,
-            accounts,
-            data,
-        }
-    }
-
+    /// Create a new instruction from a value, encoded with [`borsh`].
+    ///
+    /// [`borsh`]: https://docs.rs/borsh/latest/borsh/
+    ///
+    /// `program_id` is the address of the program that will execute the instruction.
+    /// `accounts` contains a description of all accounts that may be accessed by the program.
+    ///
+    /// Borsh serialization is often prefered over bincode as it has a stable
+    /// [specification] and an [implementation in JavaScript][jsb], neither of
+    /// which are true of bincode.
+    ///
+    /// [specification]: https://borsh.io/
+    /// [jsb]: https://github.com/near/borsh-js
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use solana_program::{
+    /// #     pubkey::Pubkey,
+    /// #     instruction::{AccountMeta, Instruction},
+    /// # };
+    /// # use borsh::{BorshSerialize, BorshDeserialize};
+    /// #
+    /// #[derive(BorshSerialize, BorshDeserialize)]
+    /// pub struct MyInstruction {
+    ///     pub lamports: u64,
+    /// }
+    ///
+    /// pub fn create_instruction(
+    ///     program_id: &Pubkey,
+    ///     from: &Pubkey,
+    ///     to: &Pubkey,
+    ///     lamports: u64,
+    /// ) -> Instruction {
+    ///     let instr = MyInstruction { lamports };
+    ///
+    ///     Instruction::new_with_borsh(
+    ///         *program_id,
+    ///         &instr,
+    ///         vec![
+    ///             AccountMeta::new(*from, true),
+    ///             AccountMeta::new(*to, false),
+    ///         ],
+    ///    )
+    /// }
+    /// ```
     pub fn new_with_borsh<T: BorshSerialize>(
         program_id: Pubkey,
         data: &T,
@@ -289,6 +385,102 @@ impl Instruction {
         }
     }
 
+    /// Create a new instruction from a value, encoded with [`bincode`].
+    ///
+    /// [`bincode`]: https://docs.rs/bincode/latest/bincode/
+    ///
+    /// `program_id` is the address of the program that will execute the instruction.
+    /// `accounts` contains a description of all accounts that may be accessed by the program.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use solana_program::{
+    /// #     pubkey::Pubkey,
+    /// #     instruction::{AccountMeta, Instruction},
+    /// # };
+    /// # use serde::{Serialize, Deserialize};
+    /// #
+    /// #[derive(Serialize, Deserialize)]
+    /// pub struct MyInstruction {
+    ///     pub lamports: u64,
+    /// }
+    ///
+    /// pub fn create_instruction(
+    ///     program_id: &Pubkey,
+    ///     from: &Pubkey,
+    ///     to: &Pubkey,
+    ///     lamports: u64,
+    /// ) -> Instruction {
+    ///     let instr = MyInstruction { lamports };
+    ///
+    ///     Instruction::new_with_bincode(
+    ///         *program_id,
+    ///         &instr,
+    ///         vec![
+    ///             AccountMeta::new(*from, true),
+    ///             AccountMeta::new(*to, false),
+    ///         ],
+    ///    )
+    /// }
+    /// ```
+    pub fn new_with_bincode<T: Serialize>(
+        program_id: Pubkey,
+        data: &T,
+        accounts: Vec<AccountMeta>,
+    ) -> Self {
+        let data = serialize(data).unwrap();
+        Self {
+            program_id,
+            accounts,
+            data,
+        }
+    }
+
+    /// Create a new instruction from a byte slice.
+    ///
+    /// `program_id` is the address of the program that will execute the instruction.
+    /// `accounts` contains a description of all accounts that may be accessed by the program.
+    ///
+    /// The caller is responsible for ensuring the correct encoding of `data` as expected
+    /// by the callee program.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use solana_program::{
+    /// #     pubkey::Pubkey,
+    /// #     instruction::{AccountMeta, Instruction},
+    /// # };
+    /// # use borsh::{BorshSerialize, BorshDeserialize};
+    /// # use anyhow::Result;
+    /// #
+    /// #[derive(BorshSerialize, BorshDeserialize)]
+    /// pub struct MyInstruction {
+    ///     pub lamports: u64,
+    /// }
+    ///
+    /// pub fn create_instruction(
+    ///     program_id: &Pubkey,
+    ///     from: &Pubkey,
+    ///     to: &Pubkey,
+    ///     lamports: u64,
+    /// ) -> Result<Instruction> {
+    ///     let instr = MyInstruction { lamports };
+    ///
+    ///     let mut instr_in_bytes: Vec<u8> = Vec::new();
+    ///     instr.serialize(&mut instr_in_bytes)?;
+    ///
+    ///     Ok(Instruction::new_with_bytes(
+    ///         *program_id,
+    ///         &instr_in_bytes,
+    ///         vec![
+    ///             AccountMeta::new(*from, true),
+    ///             AccountMeta::new(*to, false),
+    ///         ],
+    ///    ))
+    /// }
+    /// ```
     pub fn new_with_bytes(program_id: Pubkey, data: &[u8], accounts: Vec<AccountMeta>) -> Self {
         Self {
             program_id,
@@ -296,24 +488,76 @@ impl Instruction {
             data: data.to_vec(),
         }
     }
+
+    #[deprecated(
+        since = "1.6.0",
+        note = "Please use another Instruction constructor instead, such as `Instruction::new_with_borsh`"
+    )]
+    pub fn new<T: Serialize>(program_id: Pubkey, data: &T, accounts: Vec<AccountMeta>) -> Self {
+        Self::new_with_bincode(program_id, data, accounts)
+    }
 }
 
+/// Addition that returns [`InstructionError::InsufficientFunds`] on overflow.
+///
+/// This is an internal utility function.
+#[doc(hidden)]
 pub fn checked_add(a: u64, b: u64) -> Result<u64, InstructionError> {
     a.checked_add(b).ok_or(InstructionError::InsufficientFunds)
 }
 
-/// Account metadata used to define Instructions
+/// Describes a single account read or written by a program during instruction
+/// execution.
+///
+/// When constructing an [`Instruction`], a list of all accounts that may be
+/// read or written during the execution of that instruction must be supplied.
+/// Any account that may be mutated by the program during execution, either its
+/// data or metadata such as held lamports, must be writable.
+///
+/// Note that because the Solana runtime schedules parallel transaction
+/// execution around which accounts are writable, care should be taken that only
+/// accounts which actually may be mutated are specified as writable. As the
+/// default [`AccountMeta::new`] constructor creates writable accounts, this is
+/// a minor hazard: use [`AccountMeta::new_readonly`] to specify that an account
+/// is not writable.
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct AccountMeta {
-    /// An account's public key
+    /// An account's public key.
     pub pubkey: Pubkey,
-    /// True if an Instruction requires a Transaction signature matching `pubkey`.
+    /// True if an `Instruction` requires a `Transaction` signature matching `pubkey`.
     pub is_signer: bool,
-    /// True if the `pubkey` can be loaded as a read-write account.
+    /// True if the account data or metadata may be mutated during program execution.
     pub is_writable: bool,
 }
 
 impl AccountMeta {
+    /// Construct metadata for a writable account.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use solana_program::{
+    /// #     pubkey::Pubkey,
+    /// #     instruction::{AccountMeta, Instruction},
+    /// # };
+    /// # use borsh::{BorshSerialize, BorshDeserialize};
+    /// #
+    /// # #[derive(BorshSerialize, BorshDeserialize)]
+    /// # pub struct MyInstruction;
+    /// #
+    /// # let instruction = MyInstruction;
+    /// # let from = Pubkey::new_unique();
+    /// # let to = Pubkey::new_unique();
+    /// # let program_id = Pubkey::new_unique();
+    /// let instr = Instruction::new_with_borsh(
+    ///     program_id,
+    ///     &instruction,
+    ///     vec![
+    ///         AccountMeta::new(from, true),
+    ///         AccountMeta::new(to, false),
+    ///     ],
+    /// );
+    /// ```
     pub fn new(pubkey: Pubkey, is_signer: bool) -> Self {
         Self {
             pubkey,
@@ -322,6 +566,35 @@ impl AccountMeta {
         }
     }
 
+    /// Construct metadata for a read-only account.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use solana_program::{
+    /// #     pubkey::Pubkey,
+    /// #     instruction::{AccountMeta, Instruction},
+    /// # };
+    /// # use borsh::{BorshSerialize, BorshDeserialize};
+    /// #
+    /// # #[derive(BorshSerialize, BorshDeserialize)]
+    /// # pub struct MyInstruction;
+    /// #
+    /// # let instruction = MyInstruction;
+    /// # let from = Pubkey::new_unique();
+    /// # let to = Pubkey::new_unique();
+    /// # let from_account_storage = Pubkey::new_unique();
+    /// # let program_id = Pubkey::new_unique();
+    /// let instr = Instruction::new_with_borsh(
+    ///     program_id,
+    ///     &instruction,
+    ///     vec![
+    ///         AccountMeta::new(from, true),
+    ///         AccountMeta::new(to, false),
+    ///         AccountMeta::new_readonly(from_account_storage, false),
+    ///     ],
+    /// );
+    /// ```
     pub fn new_readonly(pubkey: Pubkey, is_signer: bool) -> Self {
         Self {
             pubkey,
@@ -331,16 +604,22 @@ impl AccountMeta {
     }
 }
 
-/// An instruction to execute a program
+/// A compact encoding of an instruction.
+///
+/// A `CompiledInstruction` is a component of a multi-instruction [`Message`],
+/// which is the core of a Solana transaction. It is created during the
+/// construction of `Message`. Most users will not interact with it directly.
+///
+/// [`Message`]: crate::message::Message
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct CompiledInstruction {
-    /// Index into the transaction keys array indicating the program account that executes this instruction
+    /// Index into the transaction keys array indicating the program account that executes this instruction.
     pub program_id_index: u8,
-    /// Ordered indices into the transaction keys array indicating which accounts to pass to the program
+    /// Ordered indices into the transaction keys array indicating which accounts to pass to the program.
     #[serde(with = "short_vec")]
     pub accounts: Vec<u8>,
-    /// The program input data
+    /// The program input data.
     #[serde(with = "short_vec")]
     pub data: Vec<u8>,
 }
