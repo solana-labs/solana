@@ -2654,7 +2654,7 @@ impl AccountsDb {
             .accounts_loaded
             .fetch_add(len as u64, Ordering::Relaxed);
 
-        self.thread_pool.install(|| {
+        self.thread_pool_clean.install(|| {
             let chunk_size = 50; // # accounts/thread
             let chunks = len / chunk_size + 1;
             (0..chunks).into_par_iter().for_each(|chunk| {
@@ -2995,7 +2995,7 @@ impl AccountsDb {
 
         let mut measure_shrink_all_candidates = Measure::start("shrink_all_candidate_slots-ms");
         let num_candidates = shrink_slots.len();
-        let shrink_candidates_count: usize = self.thread_pool.install(|| {
+        let shrink_candidates_count: usize = self.thread_pool_clean.install(|| {
             shrink_slots
                 .into_par_iter()
                 .map(|(slot, slot_shrink_candidates)| {
