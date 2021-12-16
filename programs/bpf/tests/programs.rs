@@ -1377,38 +1377,38 @@ fn assert_instruction_count() {
     {
         programs.extend_from_slice(&[
             ("alloc", 1237),
-            ("bpf_to_bpf", 96),
-            ("multiple_static", 52),
+            ("bpf_to_bpf", 313),
+            ("multiple_static", 208),
             ("noop", 5),
             ("noop++", 5),
-            ("relative_call", 26),
+            ("relative_call", 210),
             ("return_data", 980),
-            ("sanity", 1255),
-            ("sanity++", 1260),
+            ("sanity", 2377),
+            ("sanity++", 2277),
             ("secp256k1_recover", 25383),
-            ("sha", 1328),
+            ("sha", 1204),
             ("struct_pass", 108),
-            ("struct_ret", 28),
+            ("struct_ret", 122),
         ]);
     }
     #[cfg(feature = "bpf_rust")]
     {
         programs.extend_from_slice(&[
             ("solana_bpf_rust_128bit", 584),
-            ("solana_bpf_rust_alloc", 8906),
-            ("solana_bpf_rust_custom_heap", 539),
+            ("solana_bpf_rust_alloc", 4853),
+            ("solana_bpf_rust_custom_heap", 457),
             ("solana_bpf_rust_dep_crate", 2),
-            ("solana_bpf_rust_external_spend", 521),
-            ("solana_bpf_rust_iter", 724),
-            ("solana_bpf_rust_many_args", 237),
-            ("solana_bpf_rust_mem", 3166),
-            ("solana_bpf_rust_membuiltins", 4069),
-            ("solana_bpf_rust_noop", 495),
-            ("solana_bpf_rust_param_passing", 46),
-            ("solana_bpf_rust_rand", 498),
-            ("solana_bpf_rust_sanity", 917),
-            ("solana_bpf_rust_secp256k1_recover", 306),
-            ("solana_bpf_rust_sha", 29131),
+            ("solana_bpf_rust_external_spend", 326),
+            ("solana_bpf_rust_iter", 108),
+            ("solana_bpf_rust_many_args", 1289),
+            ("solana_bpf_rust_mem", 5996),
+            ("solana_bpf_rust_membuiltins", 1854),
+            ("solana_bpf_rust_noop", 314),
+            ("solana_bpf_rust_param_passing", 146),
+            ("solana_bpf_rust_rand", 417),
+            ("solana_bpf_rust_sanity", 2375),
+            ("solana_bpf_rust_secp256k1_recover", 25889),
+            ("solana_bpf_rust_sha", 23897),
         ]);
     }
 

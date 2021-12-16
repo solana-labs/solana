@@ -1284,7 +1284,7 @@ mod tests {
             }],
             logger: MockLogger::default(),
             bpf_compute_budget: BpfComputeBudget::default(),
-            compute_meter: MockComputeMeter::default(),
+            compute_meter: Rc::new(RefCell::new(MockComputeMeter::default())),
             programs: vec![],
             accounts: vec![],
             sysvars: vec![],

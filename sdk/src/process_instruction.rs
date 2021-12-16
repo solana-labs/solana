@@ -379,7 +379,7 @@ pub struct MockInvokeContext<'a> {
     pub invoke_stack: Vec<InvokeContextStackFrame<'a>>,
     pub logger: MockLogger,
     pub bpf_compute_budget: BpfComputeBudget,
-    pub compute_meter: MockComputeMeter,
+    pub compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     pub programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
     pub accounts: Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
     pub sysvars: Vec<(Pubkey, Option<Rc<Vec<u8>>>)>,
@@ -394,9 +394,9 @@ impl<'a> MockInvokeContext<'a> {
             invoke_stack: Vec::with_capacity(bpf_compute_budget.max_invoke_depth),
             logger: MockLogger::default(),
             bpf_compute_budget,
-            compute_meter: MockComputeMeter {
+            compute_meter: Rc::new(RefCell::new(MockComputeMeter {
                 remaining: std::i64::MAX as u64,
-            },
+            })),
             programs: vec![],
             accounts: vec![],
             sysvars: vec![],
@@ -488,7 +488,7 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
         &self.bpf_compute_budget
     }
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
-        Rc::new(RefCell::new(self.compute_meter.clone()))
+        self.compute_meter.clone()
     }
     fn add_executor(&self, _pubkey: &Pubkey, _executor: Arc<dyn Executor>) {}
     fn get_executor(&self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {

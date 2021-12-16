@@ -24,7 +24,7 @@ use solana_sdk::{
         libsecp256k1_0_5_upgrade_enabled, mem_overlap_fix, memory_ops_syscalls,
         return_data_syscall_enabled, secp256k1_recover_syscall_enabled,
         set_upgrade_authority_via_cpi_enabled, sol_log_data_syscall_enabled, sysvar_via_syscall,
-        update_data_on_realloc,
+        update_data_on_realloc, update_syscall_base_costs,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -216,6 +216,8 @@ pub fn bind_syscall_context_objects<'a>(
     let bpf_compute_budget = invoke_context.get_bpf_compute_budget();
     let enforce_aligned_host_addrs =
         invoke_context.is_feature_active(&enforce_aligned_host_addrs::id());
+    let update_syscall_base_costs =
+        invoke_context.is_feature_active(&update_syscall_base_costs::id());
 
     // Syscall functions common across languages
 
@@ -225,15 +227,18 @@ pub fn bind_syscall_context_objects<'a>(
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
             enforce_aligned_host_addrs,
+            update_syscall_base_costs,
         }),
         None,
     )?;
     vm.bind_syscall_context_object(
         Box::new(SyscallLog {
+            min_cost: bpf_compute_budget.syscall_base_cost,
             compute_meter: invoke_context.get_compute_meter(),
             logger: invoke_context.get_logger(),
             loader_id,
             enforce_aligned_host_addrs,
+            update_syscall_base_costs,
         }),
         None,
     )?;
@@ -248,9 +253,10 @@ pub fn bind_syscall_context_objects<'a>(
 
     vm.bind_syscall_context_object(
         Box::new(SyscallLogBpfComputeUnits {
-            cost: 0,
+            cost: bpf_compute_budget.syscall_base_cost,
             compute_meter: invoke_context.get_compute_meter(),
             logger: invoke_context.get_logger(),
+            update_syscall_base_costs,
         }),
         None,
     )?;
@@ -293,11 +299,12 @@ pub fn bind_syscall_context_objects<'a>(
 
     vm.bind_syscall_context_object(
         Box::new(SyscallSha256 {
-            sha256_base_cost: bpf_compute_budget.sha256_base_cost,
-            sha256_byte_cost: bpf_compute_budget.sha256_byte_cost,
+            base_cost: bpf_compute_budget.sha256_base_cost,
+            byte_cost: bpf_compute_budget.sha256_byte_cost,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
             enforce_aligned_host_addrs,
+            update_syscall_base_costs,
         }),
         None,
     )?;
@@ -310,6 +317,7 @@ pub fn bind_syscall_context_objects<'a>(
             byte_cost: bpf_compute_budget.sha256_byte_cost,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
+            update_syscall_base_costs,
         }),
     );
 
@@ -317,37 +325,45 @@ pub fn bind_syscall_context_objects<'a>(
         vm,
         invoke_context.is_feature_active(&memory_ops_syscalls::id()),
         Box::new(SyscallMemcpy {
-            cost: invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
+            base_cost: invoke_context.get_bpf_compute_budget().syscall_base_cost,
+            bytes_per_unit: invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
             mem_overlap_fix: invoke_context.is_feature_active(&mem_overlap_fix::id()),
+            update_syscall_base_costs,
         }),
     );
     bind_feature_gated_syscall_context_object!(
         vm,
         invoke_context.is_feature_active(&memory_ops_syscalls::id()),
         Box::new(SyscallMemmove {
-            cost: invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
+            base_cost: invoke_context.get_bpf_compute_budget().syscall_base_cost,
+            bytes_per_unit: invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
+            update_syscall_base_costs,
         }),
     );
     bind_feature_gated_syscall_context_object!(
         vm,
         invoke_context.is_feature_active(&memory_ops_syscalls::id()),
         Box::new(SyscallMemcmp {
-            cost: invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
+            base_cost: invoke_context.get_bpf_compute_budget().syscall_base_cost,
+            bytes_per_unit: invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
+            update_syscall_base_costs,
         }),
     );
     bind_feature_gated_syscall_context_object!(
         vm,
         invoke_context.is_feature_active(&memory_ops_syscalls::id()),
         Box::new(SyscallMemset {
-            cost: invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
+            base_cost: invoke_context.get_bpf_compute_budget().syscall_base_cost,
+            bytes_per_unit: invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
+            update_syscall_base_costs,
         }),
     );
 
@@ -645,6 +661,7 @@ pub struct SyscallPanic<'a> {
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
     enforce_aligned_host_addrs: bool,
+    update_syscall_base_costs: bool,
 }
 impl<'a> SyscallObject<BpfError> for SyscallPanic<'a> {
     fn call(
@@ -657,7 +674,9 @@ impl<'a> SyscallObject<BpfError> for SyscallPanic<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        question_mark!(self.compute_meter.consume(len), result);
+        if !self.update_syscall_base_costs {
+            question_mark!(self.compute_meter.consume(len), result);
+        }
         *result = translate_string_and_do(
             memory_mapping,
             file,
@@ -671,10 +690,12 @@ impl<'a> SyscallObject<BpfError> for SyscallPanic<'a> {
 
 /// Log a user's info message
 pub struct SyscallLog<'a> {
+    min_cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     logger: Rc<RefCell<dyn Logger>>,
     loader_id: &'a Pubkey,
     enforce_aligned_host_addrs: bool,
+    update_syscall_base_costs: bool,
 }
 impl<'a> SyscallObject<BpfError> for SyscallLog<'a> {
     fn call(
@@ -687,7 +708,12 @@ impl<'a> SyscallObject<BpfError> for SyscallLog<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        question_mark!(self.compute_meter.consume(len), result);
+        let cost = if self.update_syscall_base_costs {
+            self.min_cost.max(len)
+        } else {
+            len
+        };
+        question_mark!(self.compute_meter.consume(cost), result);
         question_mark!(
             translate_string_and_do(
                 memory_mapping,
@@ -740,6 +766,7 @@ pub struct SyscallLogBpfComputeUnits {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     logger: Rc<RefCell<dyn Logger>>,
+    update_syscall_base_costs: bool,
 }
 impl SyscallObject<BpfError> for SyscallLogBpfComputeUnits {
     fn call(
@@ -752,7 +779,12 @@ impl SyscallObject<BpfError> for SyscallLogBpfComputeUnits {
         _memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        question_mark!(self.compute_meter.consume(self.cost), result);
+        let cost = if self.update_syscall_base_costs {
+            self.cost
+        } else {
+            0
+        };
+        question_mark!(self.compute_meter.consume(cost), result);
         let logger = question_mark!(
             self.logger
                 .try_borrow_mut()
@@ -1076,11 +1108,12 @@ impl<'a> SyscallObject<BpfError> for SyscallTryFindProgramAddress<'a> {
 
 /// SHA256
 pub struct SyscallSha256<'a> {
-    sha256_base_cost: u64,
-    sha256_byte_cost: u64,
+    base_cost: u64,
+    byte_cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
     enforce_aligned_host_addrs: bool,
+    update_syscall_base_costs: bool,
 }
 impl<'a> SyscallObject<BpfError> for SyscallSha256<'a> {
     fn call(
@@ -1093,7 +1126,7 @@ impl<'a> SyscallObject<BpfError> for SyscallSha256<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        question_mark!(self.compute_meter.consume(self.sha256_base_cost), result);
+        question_mark!(self.compute_meter.consume(self.base_cost), result);
         let hash_result = question_mark!(
             translate_slice_mut::<u8>(
                 memory_mapping,
@@ -1127,11 +1160,13 @@ impl<'a> SyscallObject<BpfError> for SyscallSha256<'a> {
                     ),
                     result
                 );
-                question_mark!(
-                    self.compute_meter
-                        .consume(self.sha256_byte_cost * (val.len() as u64 / 2)),
-                    result
-                );
+                let cost = if self.update_syscall_base_costs {
+                    self.base_cost
+                        .max(self.byte_cost.saturating_mul(val.len() as u64 / 2))
+                } else {
+                    self.byte_cost * (val.len() as u64 / 2)
+                };
+                question_mark!(self.compute_meter.consume(cost), result);
                 hasher.hash(bytes);
             }
         }
@@ -1274,6 +1309,7 @@ pub struct SyscallKeccak256<'a> {
     byte_cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
+    update_syscall_base_costs: bool,
 }
 impl<'a> SyscallObject<BpfError> for SyscallKeccak256<'a> {
     fn call(
@@ -1314,11 +1350,13 @@ impl<'a> SyscallObject<BpfError> for SyscallKeccak256<'a> {
                     ),
                     result
                 );
-                question_mark!(
-                    self.compute_meter
-                        .consume(self.byte_cost * (val.len() as u64 / 2)),
-                    result
-                );
+                let cost = if self.update_syscall_base_costs {
+                    self.base_cost
+                        .max(self.byte_cost.saturating_mul(val.len() as u64 / 2))
+                } else {
+                    self.byte_cost * (val.len() as u64 / 2)
+                };
+                question_mark!(self.compute_meter.consume(cost), result);
                 hasher.hash(bytes);
             }
         }
@@ -1332,12 +1370,29 @@ fn check_overlapping(src_addr: u64, dst_addr: u64, n: u64) -> bool {
         || (dst_addr <= src_addr && dst_addr + n > src_addr)
 }
 
+fn mem_op_consume(
+    mut compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    base_cost: u64,
+    bytes_per_unit: u64,
+    n: u64,
+    update_syscall_base_costs: bool,
+) -> Result<(), EbpfError<BpfError>> {
+    let cost = if update_syscall_base_costs {
+        base_cost.max(n / bytes_per_unit)
+    } else {
+        n / bytes_per_unit
+    };
+    compute_meter.consume(cost)
+}
+
 /// memcpy
 pub struct SyscallMemcpy<'a> {
-    cost: u64,
+    base_cost: u64,
+    bytes_per_unit: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
     mem_overlap_fix: bool,
+    update_syscall_base_costs: bool,
 }
 impl<'a> SyscallObject<BpfError> for SyscallMemcpy<'a> {
     fn call(
@@ -1350,6 +1405,14 @@ impl<'a> SyscallObject<BpfError> for SyscallMemcpy<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
+        if self.update_syscall_base_costs {
+            question_mark!(
+                self.compute_meter
+                    .consume(self.base_cost.max(n / self.bytes_per_unit)),
+                result
+            );
+        }
+
         if if self.mem_overlap_fix {
             check_overlapping(src_addr, dst_addr, n)
         } else {
@@ -1359,7 +1422,10 @@ impl<'a> SyscallObject<BpfError> for SyscallMemcpy<'a> {
             return;
         }
 
-        question_mark!(self.compute_meter.consume(n / self.cost), result);
+        if !self.update_syscall_base_costs {
+            question_mark!(self.compute_meter.consume(n / self.bytes_per_unit), result);
+        }
+
         let dst = question_mark!(
             translate_slice_mut::<u8>(memory_mapping, dst_addr, n, self.loader_id, true),
             result
@@ -1376,9 +1442,11 @@ impl<'a> SyscallObject<BpfError> for SyscallMemcpy<'a> {
 }
 /// memmove
 pub struct SyscallMemmove<'a> {
-    cost: u64,
+    base_cost: u64,
+    bytes_per_unit: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
+    update_syscall_base_costs: bool,
 }
 impl<'a> SyscallObject<BpfError> for SyscallMemmove<'a> {
     fn call(
@@ -1391,7 +1459,16 @@ impl<'a> SyscallObject<BpfError> for SyscallMemmove<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        question_mark!(self.compute_meter.consume(n / self.cost), result);
+        question_mark!(
+            mem_op_consume(
+                self.compute_meter.clone(),
+                self.base_cost,
+                self.bytes_per_unit,
+                n,
+                self.update_syscall_base_costs
+            ),
+            result
+        );
         let dst = question_mark!(
             translate_slice_mut::<u8>(memory_mapping, dst_addr, n, self.loader_id, true),
             result
@@ -1408,9 +1485,11 @@ impl<'a> SyscallObject<BpfError> for SyscallMemmove<'a> {
 }
 /// memcmp
 pub struct SyscallMemcmp<'a> {
-    cost: u64,
+    base_cost: u64,
+    bytes_per_unit: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
+    update_syscall_base_costs: bool,
 }
 impl<'a> SyscallObject<BpfError> for SyscallMemcmp<'a> {
     fn call(
@@ -1423,7 +1502,16 @@ impl<'a> SyscallObject<BpfError> for SyscallMemcmp<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        question_mark!(self.compute_meter.consume(n / self.cost), result);
+        question_mark!(
+            mem_op_consume(
+                self.compute_meter.clone(),
+                self.base_cost,
+                self.bytes_per_unit,
+                n,
+                self.update_syscall_base_costs
+            ),
+            result
+        );
         let s1 = question_mark!(
             translate_slice::<u8>(memory_mapping, s1_addr, n, self.loader_id, true),
             result
@@ -1453,9 +1541,11 @@ impl<'a> SyscallObject<BpfError> for SyscallMemcmp<'a> {
 }
 /// memset
 pub struct SyscallMemset<'a> {
-    cost: u64,
+    base_cost: u64,
+    bytes_per_unit: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
+    update_syscall_base_costs: bool,
 }
 impl<'a> SyscallObject<BpfError> for SyscallMemset<'a> {
     fn call(
@@ -1468,7 +1558,16 @@ impl<'a> SyscallObject<BpfError> for SyscallMemset<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        question_mark!(self.compute_meter.consume(n / self.cost), result);
+        question_mark!(
+            mem_op_consume(
+                self.compute_meter.clone(),
+                self.base_cost,
+                self.bytes_per_unit,
+                n,
+                self.update_syscall_base_costs
+            ),
+            result
+        );
         let s = question_mark!(
             translate_slice_mut::<u8>(memory_mapping, s_addr, n, self.loader_id, true),
             result
@@ -1487,7 +1586,6 @@ pub struct SyscallSecp256k1Recover<'a> {
     loader_id: &'a Pubkey,
     libsecp256k1_0_5_upgrade_enabled: bool,
 }
-
 impl<'a> SyscallObject<BpfError> for SyscallSecp256k1Recover<'a> {
     fn call(
         &mut self,
@@ -3116,6 +3214,7 @@ mod tests {
             compute_meter,
             loader_id: &bpf_loader::id(),
             enforce_aligned_host_addrs: true,
+            update_syscall_base_costs: true,
         };
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall_panic.call(
@@ -3142,6 +3241,7 @@ mod tests {
             compute_meter,
             loader_id: &bpf_loader::id(),
             enforce_aligned_host_addrs: true,
+            update_syscall_base_costs: true,
         };
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall_panic.call(
@@ -3167,10 +3267,12 @@ mod tests {
         let logger: Rc<RefCell<dyn Logger>> =
             Rc::new(RefCell::new(MockLogger { log: log.clone() }));
         let mut syscall_sol_log = SyscallLog {
+            min_cost: 100,
             compute_meter,
             logger,
             loader_id: &bpf_loader::id(),
             enforce_aligned_host_addrs: true,
+            update_syscall_base_costs: true,
         };
         let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
@@ -3236,15 +3338,15 @@ mod tests {
         );
 
         let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
-            Rc::new(RefCell::new(MockComputeMeter {
-                remaining: (string.len() as u64 * 2) - 1,
-            }));
+            Rc::new(RefCell::new(MockComputeMeter { remaining: 200 - 1 }));
         let logger: Rc<RefCell<dyn Logger>> = Rc::new(RefCell::new(MockLogger { log }));
         let mut syscall_sol_log = SyscallLog {
+            min_cost: 100,
             compute_meter,
             logger,
             loader_id: &bpf_loader::id(),
             enforce_aligned_host_addrs: true,
+            update_syscall_base_costs: true,
         };
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall_sol_log.call(
@@ -3547,11 +3649,12 @@ mod tests {
                 remaining: (bytes1.len() + bytes2.len()) as u64,
             }));
         let mut syscall = SyscallSha256 {
-            sha256_base_cost: 0,
-            sha256_byte_cost: 2,
+            base_cost: 0,
+            byte_cost: 2,
             compute_meter,
             loader_id: &bpf_loader_deprecated::id(),
             enforce_aligned_host_addrs: true,
+            update_syscall_base_costs: true,
         };
 
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
