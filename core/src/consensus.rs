@@ -1548,6 +1548,7 @@ pub mod test {
         }
 
         pub fn set_root(&mut self, new_root: Slot) {
+            let (bank_drop_sender, _bank_drop_receiver) = std::sync::mpsc::channel();
             ReplayStage::handle_new_root(
                 new_root,
                 &self.bank_forks,
@@ -1560,6 +1561,7 @@ pub mod test {
                 &mut UnfrozenGossipVerifiedVoteHashes::default(),
                 &mut true,
                 &mut Vec::new(),
+                &bank_drop_sender,
             )
         }
 
