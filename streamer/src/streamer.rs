@@ -256,6 +256,34 @@ fn recv_send(
     Ok(())
 }
 
+pub fn recv_vec_packet_batches(
+    recvr: &Receiver<Vec<PacketBatch>>,
+) -> Result<(Vec<PacketBatch>, usize, Duration)> {
+    let timer = Duration::new(1, 0);
+    let mut packet_batches = recvr.recv_timeout(timer)?;
+    let recv_start = Instant::now();
+    trace!("got packets");
+    let mut num_packets = packet_batches
+        .iter()
+        .map(|packets| packets.packets.len())
+        .sum::<usize>();
+    while let Ok(packet_batch) = recvr.try_recv() {
+        trace!("got more packets");
+        num_packets += packet_batch
+            .iter()
+            .map(|packets| packets.packets.len())
+            .sum::<usize>();
+        packet_batches.extend(packet_batch);
+    }
+    let recv_duration = recv_start.elapsed();
+    trace!(
+        "packet batches len: {}, num packets: {}",
+        packet_batches.len(),
+        num_packets
+    );
+    Ok((packet_batches, num_packets, recv_duration))
+}
+
 pub fn recv_packet_batches(
     recvr: &PacketBatchReceiver,
 ) -> Result<(Vec<PacketBatch>, usize, Duration)> {

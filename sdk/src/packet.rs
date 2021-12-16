@@ -32,6 +32,7 @@ pub struct Meta {
     pub addr: IpAddr,
     pub port: u16,
     pub flags: PacketFlags,
+    pub weight: u64,
 }
 
 #[derive(Clone)]
@@ -145,6 +146,7 @@ impl Default for Meta {
             addr: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
             port: 0,
             flags: PacketFlags::empty(),
+            weight: 0,
         }
     }
 }
