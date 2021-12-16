@@ -24,11 +24,10 @@ use {
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         epoch_schedule::EpochSchedule,
         feature_set::{
-            blake3_syscall_enabled, demote_program_write_locks, disable_fees_sysvar,
-            do_support_realloc, fixed_memcpy_nonoverlapping_check,
-            libsecp256k1_0_5_upgrade_enabled, prevent_calling_precompiles_as_programs,
-            return_data_syscall_enabled, secp256k1_recover_syscall_enabled,
-            sol_log_data_syscall_enabled,
+            blake3_syscall_enabled, disable_fees_sysvar, do_support_realloc,
+            fixed_memcpy_nonoverlapping_check, libsecp256k1_0_5_upgrade_enabled,
+            prevent_calling_precompiles_as_programs, return_data_syscall_enabled,
+            secp256k1_recover_syscall_enabled, sol_log_data_syscall_enabled,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{AccountMeta, Instruction, InstructionError},
@@ -2198,9 +2197,6 @@ fn get_translated_accounts<'a, T, F>(
 where
     F: Fn(&T, &InvokeContext) -> Result<CallerAccount<'a>, EbpfError<BpfError>>,
 {
-    let demote_program_write_locks = invoke_context
-        .feature_set
-        .is_active(&demote_program_write_locks::id());
     let keyed_accounts = invoke_context
         .get_instruction_keyed_accounts()
         .map_err(SyscallError::InstructionError)?;
@@ -2229,7 +2225,7 @@ where
                     account.set_executable(caller_account.executable);
                     account.set_rent_epoch(caller_account.rent_epoch);
                 }
-                let caller_account = if message.is_writable(i, demote_program_write_locks) {
+                let caller_account = if message.is_writable(i) {
                     if let Some(orig_data_len_index) = keyed_accounts
                         .iter()
                         .position(|keyed_account| keyed_account.unsigned_key() == account_key)

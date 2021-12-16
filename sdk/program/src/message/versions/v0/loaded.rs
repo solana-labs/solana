@@ -104,11 +104,10 @@ impl LoadedMessage {
     }
 
     /// Returns true if the account at the specified index was loaded as writable
-    pub fn is_writable(&self, key_index: usize, demote_program_write_locks: bool) -> bool {
+    pub fn is_writable(&self, key_index: usize) -> bool {
         if self.is_writable_index(key_index) {
             if let Some(key) = self.get_account_key(key_index) {
-                let demote_program_id = demote_program_write_locks
-                    && self.is_key_called_as_program(key_index)
+                let demote_program_id = self.is_key_called_as_program(key_index)
                     && !self.is_upgradeable_loader_present();
                 return !(sysvar::is_sysvar_id(key)
                     || BUILTIN_PROGRAMS_KEYS.contains(key)
@@ -269,11 +268,11 @@ mod tests {
 
         message.message.account_keys[0] = sysvar::clock::id();
         assert!(message.is_writable_index(0));
-        assert!(!message.is_writable(0, /*demote_program_write_locks=*/ true));
+        assert!(!message.is_writable(0));
 
         message.message.account_keys[0] = system_program::id();
         assert!(message.is_writable_index(0));
-        assert!(!message.is_writable(0, /*demote_program_write_locks=*/ true));
+        assert!(!message.is_writable(0));
     }
 
     #[test]
@@ -303,6 +302,6 @@ mod tests {
         };
 
         assert!(message.is_writable_index(2));
-        assert!(!message.is_writable(2, /*demote_program_write_locks=*/ true));
+        assert!(!message.is_writable(2));
     }
 }
