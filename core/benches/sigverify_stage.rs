@@ -159,7 +159,7 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
         for _ in 0..batches.len() {
             if let Some(batch) = batches.pop() {
                 sent_len += batch.packets.len();
-                packet_s.send(batch).unwrap();
+                packet_s.send(vec![batch]).unwrap();
             }
         }
         let mut received = 0;
