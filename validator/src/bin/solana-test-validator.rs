@@ -506,6 +506,7 @@ fn main() {
 
     let mut genesis = TestValidatorGenesis::default();
     genesis.max_ledger_shreds = value_of(&matches, "limit_ledger_size");
+    genesis.max_genesis_archive_unpacked_size = Some(u64::MAX);
 
     admin_rpc_service::run(
         &ledger_path,
