@@ -151,10 +151,10 @@ impl Index {
         &self.coding
     }
 
-    pub fn data_mut(&mut self) -> &mut ShredIndex {
+    pub(crate) fn data_mut(&mut self) -> &mut ShredIndex {
         &mut self.data
     }
-    pub fn coding_mut(&mut self) -> &mut ShredIndex {
+    pub(crate) fn coding_mut(&mut self) -> &mut ShredIndex {
         &mut self.coding
     }
 }
@@ -164,30 +164,19 @@ impl ShredIndex {
         self.index.len()
     }
 
-    pub fn present_in_bounds(&self, bounds: impl RangeBounds<u64>) -> usize {
-        self.index.range(bounds).count()
+    pub(crate) fn range<R>(&self, bounds: R) -> impl Iterator<Item = &u64>
+    where
+        R: RangeBounds<u64>,
+    {
+        self.index.range(bounds)
     }
 
-    pub fn is_present(&self, index: u64) -> bool {
+    pub(crate) fn contains(&self, index: u64) -> bool {
         self.index.contains(&index)
     }
 
-    pub fn set_present(&mut self, index: u64, presence: bool) {
-        if presence {
-            self.index.insert(index);
-        } else {
-            self.index.remove(&index);
-        }
-    }
-
-    pub fn set_many_present(&mut self, presence: impl IntoIterator<Item = (u64, bool)>) {
-        for (idx, present) in presence.into_iter() {
-            self.set_present(idx, present);
-        }
-    }
-
-    pub fn largest(&self) -> Option<u64> {
-        self.index.iter().rev().next().copied()
+    pub(crate) fn insert(&mut self, index: u64) {
+        self.index.insert(index);
     }
 }
 
@@ -301,10 +290,8 @@ impl ErasureMeta {
     pub(crate) fn status(&self, index: &Index) -> ErasureMetaStatus {
         use ErasureMetaStatus::*;
 
-        let num_coding = index
-            .coding()
-            .present_in_bounds(self.coding_shreds_indices());
-        let num_data = index.data().present_in_bounds(self.data_shreds_indices());
+        let num_coding = index.coding().range(self.coding_shreds_indices()).count();
+        let num_data = index.data().range(self.data_shreds_indices()).count();
 
         let (data_missing, num_needed) = (
             self.config.num_data().saturating_sub(num_data),
@@ -355,7 +342,6 @@ mod test {
     use {
         super::*,
         rand::{seq::SliceRandom, thread_rng},
-        std::iter::repeat,
     };
 
     #[test]
@@ -379,35 +365,35 @@ mod test {
 
         assert_eq!(e_meta.status(&index), StillNeed(erasure_config.num_data()));
 
-        index
-            .data_mut()
-            .set_many_present(data_indexes.clone().zip(repeat(true)));
+        for ix in data_indexes.clone() {
+            index.data_mut().insert(ix);
+        }
 
         assert_eq!(e_meta.status(&index), DataFull);
 
-        index
-            .coding_mut()
-            .set_many_present(coding_indexes.clone().zip(repeat(true)));
+        for ix in coding_indexes.clone() {
+            index.coding_mut().insert(ix);
+        }
 
         for &idx in data_indexes
             .clone()
             .collect::<Vec<_>>()
             .choose_multiple(&mut rng, erasure_config.num_data())
         {
-            index.data_mut().set_present(idx, false);
+            index.data_mut().index.remove(&idx);
 
             assert_eq!(e_meta.status(&index), CanRecover);
         }
 
-        index
-            .data_mut()
-            .set_many_present(data_indexes.zip(repeat(true)));
+        for ix in data_indexes {
+            index.data_mut().insert(ix);
+        }
 
         for &idx in coding_indexes
             .collect::<Vec<_>>()
             .choose_multiple(&mut rng, erasure_config.num_coding())
         {
-            index.coding_mut().set_present(idx, false);
+            index.coding_mut().index.remove(&idx);
 
             assert_eq!(e_meta.status(&index), DataFull);
         }
