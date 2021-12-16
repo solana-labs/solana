@@ -1971,7 +1971,7 @@ Result:
 ### getSignaturesForAddress
 
 
-Returns confirmed signatures for transactions when the address is present in the compact-array of account addresses of a transaction. Returns signatures backwards in time from the provided signature or most recent confirmed block
+Returns signatures for confirmed transactions that include the given address in their `accountKeys` list. Returns signatures backwards in time from the provided signature or most recent confirmed block
 
 #### Parameters:
 * `<string>` - account address as base-58 encoded string
