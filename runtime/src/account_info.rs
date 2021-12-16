@@ -129,7 +129,6 @@ impl AccountInfo {
     }
 
     pub fn store_id(&self) -> AppendVecId {
-        assert!(!self.is_cached());
         self.store_id
     }
 
