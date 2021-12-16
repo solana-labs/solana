@@ -346,7 +346,7 @@ fn all_digits(v: &str) -> bool {
         return false;
     }
     for x in v.chars() {
-        if !x.is_numeric() {
+        if !x.is_digit(10) {
             return false;
         }
     }
@@ -357,7 +357,7 @@ fn like_storage(v: &str) -> bool {
     let mut periods = 0;
     let mut saw_numbers = false;
     for x in v.chars() {
-        if !x.is_numeric() {
+        if !x.is_digit(10) {
             if x == '.' {
                 if periods > 0 || !saw_numbers {
                     return false;
@@ -522,6 +522,10 @@ mod tests {
             tar::EntryType::Directory
         ));
         assert!(!is_valid_snapshot_archive_entry(
+            &["snapshots", "①"],
+            tar::EntryType::Directory
+        ));
+        assert!(!is_valid_snapshot_archive_entry(
             &["snapshots", "0", "aa"],
             tar::EntryType::Regular
         ));
@@ -565,6 +569,10 @@ mod tests {
         ));
         assert!(!is_valid_snapshot_archive_entry(
             &["accounts", "232323"],
+            tar::EntryType::Regular
+        ));
+        assert!(!is_valid_snapshot_archive_entry(
+            &["accounts", "৬.¾"],
             tar::EntryType::Regular
         ));
     }
