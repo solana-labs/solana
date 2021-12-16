@@ -4,7 +4,7 @@ use crate::{
     parse_nonce::parse_nonce,
     parse_stake::parse_stake,
     parse_sysvar::parse_sysvar,
-    parse_token::{parse_token, spl_token_id_v2_0},
+    parse_token::{parse_token, spl_token_id},
     parse_vote::parse_vote,
 };
 use inflector::Inflector;
@@ -19,7 +19,7 @@ lazy_static! {
     static ref STAKE_PROGRAM_ID: Pubkey = stake::program::id();
     static ref SYSTEM_PROGRAM_ID: Pubkey = system_program::id();
     static ref SYSVAR_PROGRAM_ID: Pubkey = sysvar::id();
-    static ref TOKEN_PROGRAM_ID: Pubkey = spl_token_id_v2_0();
+    static ref TOKEN_PROGRAM_ID: Pubkey = spl_token_id();
     static ref VOTE_PROGRAM_ID: Pubkey = solana_vote_program::id();
     pub static ref PARSABLE_PROGRAM_IDS: HashMap<Pubkey, ParsableAccount> = {
         let mut m = HashMap::new();
