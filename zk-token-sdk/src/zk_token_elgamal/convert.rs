@@ -20,7 +20,7 @@ mod target_arch {
                 elgamal::{ElGamalCiphertext, ElGamalPubkey},
                 pedersen::{PedersenCommitment, PedersenDecryptHandle},
             },
-            sigma_proofs::{equality_proof::EqualityProof, validity_proof::ValidityProof},
+            sigma_proofs::{equality_proof::EqualityProof, validity_proof::ValidityProof, zero_balance_proof::ZeroBalanceProof},
             errors::ProofError,
             range_proof::RangeProof,
         },
@@ -165,6 +165,20 @@ mod target_arch {
         type Error = ProofError;
 
         fn try_from(pod: pod::ValidityProof) -> Result<Self, Self::Error> {
+            Self::from_bytes(&pod.0)
+        }
+    }
+
+    impl From<ZeroBalanceProof> for pod::ZeroBalanceProof {
+        fn from(proof: ZeroBalanceProof) -> Self {
+            Self(proof.to_bytes())
+        }
+    }
+
+    impl TryFrom<pod::ZeroBalanceProof> for ZeroBalanceProof {
+        type Error = ProofError;
+
+        fn try_from(pod: pod::ZeroBalanceProof) -> Result<Self, Self::Error> {
             Self::from_bytes(&pod.0)
         }
     }

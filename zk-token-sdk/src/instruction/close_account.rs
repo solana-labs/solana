@@ -11,6 +11,7 @@ use {
         },
         errors::ProofError,
         instruction::Verifiable,
+        sigma_proofs::zero_balance_proof::ZeroBalanceProof,
         transcript::TranscriptProtocol,
     },
     curve25519_dalek::{
@@ -71,9 +72,7 @@ impl Verifiable for CloseAccountData {
 #[repr(C)]
 #[allow(non_snake_case)]
 pub struct CloseAccountProof {
-    pub Y_P: pod::CompressedRistretto, // 32 bytes
-    pub Y_D: pod::CompressedRistretto, // 32 bytes
-    pub z: pod::Scalar,                // 32 bytes
+    pub proof: pod::ZeroBalanceProof,
 }
 
 #[allow(non_snake_case)]
@@ -88,6 +87,8 @@ impl CloseAccountProof {
 
         // add a domain separator to record the start of the protocol
         transcript.close_account_proof_domain_sep();
+
+        
 
         // extract the relevant scalar and Ristretto points from the input
         let P = source_keypair.public.get_point();
