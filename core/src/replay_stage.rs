@@ -1432,21 +1432,14 @@ impl ReplayStage {
                     progress_map.log_propagated_stats(latest_unconfirmed_leader_slot, bank_forks);
                     skipped_slots_info.last_skipped_slot = poh_slot;
                 }
-                let bank = bank_forks
-                    .read()
-                    .unwrap()
-                    .get(latest_unconfirmed_leader_slot)
-                    .expect(
-                        "In order for propagated check to fail, \
-                            latest leader must exist in progress map, and thus also in BankForks",
-                    )
-                    .clone();
 
                 // Signal retransmit
                 if Self::should_retransmit(poh_slot, &mut skipped_slots_info.last_retransmit_slot) {
-                    datapoint_info!("replay_stage-retransmit", ("slot", bank.slot(), i64),);
-                    let _ = retransmit_slots_sender
-                        .send(vec![(bank.slot(), bank.clone())].into_iter().collect());
+                    datapoint_info!(
+                        "replay_stage-retransmit",
+                        ("slot", latest_unconfirmed_leader_slot, i64),
+                    );
+                    let _ = retransmit_slots_sender.send(latest_unconfirmed_leader_slot);
                 }
                 return;
             }
