@@ -83,6 +83,7 @@ pub struct TestValidatorGenesis {
     pub start_progress: Arc<RwLock<ValidatorStartProgress>>,
     pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
     pub max_ledger_shreds: Option<u64>,
+    pub max_genesis_archive_unpacked_size: Option<u64>,
 }
 
 impl TestValidatorGenesis {
@@ -413,7 +414,9 @@ impl TestValidator {
                 let _ = create_new_ledger(
                     ledger_path,
                     &genesis_config,
-                    MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+                    config
+                        .max_genesis_archive_unpacked_size
+                        .unwrap_or(MAX_GENESIS_ARCHIVE_UNPACKED_SIZE),
                     solana_ledger::blockstore_db::AccessType::PrimaryOnly,
                 )
                 .map_err(|err| {
