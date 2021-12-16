@@ -236,7 +236,7 @@ pub struct Shred {
     pub payload: Vec<u8>,
 }
 
-/// Tuple which should uniquely identify a shred if it exists.
+/// Tuple which uniquely identifies a shred should it exists.
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct ShredId(Slot, /*shred index:*/ u32, ShredType);
 
@@ -247,6 +247,21 @@ impl ShredId {
 
     pub(crate) fn unwrap(&self) -> (Slot, /*shred index:*/ u32, ShredType) {
         (self.0, self.1, self.2)
+    }
+}
+
+/// Tuple which identifies erasure coding set that the shred belongs to.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(crate) struct ErasureSetId(Slot, /*fec_set_index:*/ u32);
+
+impl ErasureSetId {
+    pub(crate) fn slot(&self) -> Slot {
+        self.0
+    }
+
+    // Storage key for ErasureMeta in blockstore db.
+    pub(crate) fn store_key(&self) -> (Slot, /*fec_set_index:*/ u64) {
+        (self.0, u64::from(self.1))
     }
 }
 
@@ -516,6 +531,11 @@ impl Shred {
 
     pub fn version(&self) -> u16 {
         self.common_header.version
+    }
+
+    // Identifier for the erasure coding set that the shred belongs to.
+    pub(crate) fn erasure_set(&self) -> ErasureSetId {
+        ErasureSetId(self.slot(), self.fec_set_index())
     }
 
     // Returns the block index within the erasure coding set.
