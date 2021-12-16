@@ -45,12 +45,13 @@ use {
         accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult},
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::{Ancestors, AncestorsForSerialization},
+        block_cost_limits::MAX_BLOCK_UNITS,
         blockhash_queue::BlockhashQueue,
         builtins::{self, ActivationType, Builtin, Builtins},
         cost_tracker::CostTracker,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         inline_spl_token,
-        message_processor::MessageProcessor,
+        message_processor::{MessageProcessor, ProcessMessageResult},
         rent_collector::RentCollector,
         stake_weighted_timestamp::{
             calculate_stake_weighted_timestamp, MaxAllowableDrift, MAX_ALLOWABLE_DRIFT_PERCENTAGE,
@@ -98,7 +99,8 @@ use {
         epoch_schedule::EpochSchedule,
         feature,
         feature_set::{
-            self, disable_fee_calculator, nonce_must_be_writable, tx_wide_compute_cap, FeatureSet,
+            self, disable_fee_calculator, nonce_must_be_writable, tx_wide_compute_cap,
+            update_fees_by_block_compute_usage, FeatureSet,
         },
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig},
@@ -722,8 +724,7 @@ pub(crate) struct BankFieldsToDeserialize {
     pub(crate) ns_per_slot: u128,
     pub(crate) genesis_creation_time: UnixTimestamp,
     pub(crate) slots_per_year: f64,
-    #[allow(dead_code)]
-    pub(crate) unused: u64,
+    pub(crate) consumed_compute_units: u64,
     pub(crate) slot: Slot,
     pub(crate) epoch: Epoch,
     pub(crate) block_height: u64,
@@ -762,7 +763,7 @@ pub(crate) struct BankFieldsToSerialize<'a> {
     pub(crate) ns_per_slot: u128,
     pub(crate) genesis_creation_time: UnixTimestamp,
     pub(crate) slots_per_year: f64,
-    pub(crate) unused: u64,
+    pub(crate) consumed_compute_units: u64,
     pub(crate) slot: Slot,
     pub(crate) epoch: Epoch,
     pub(crate) block_height: u64,
@@ -801,7 +802,8 @@ impl PartialEq for Bank {
             && self.ns_per_slot == other.ns_per_slot
             && self.genesis_creation_time == other.genesis_creation_time
             && self.slots_per_year == other.slots_per_year
-            && self.unused == other.unused
+            && self.consumed_compute_units.load(Relaxed)
+                == other.consumed_compute_units.load(Relaxed)
             && self.slot == other.slot
             && self.epoch == other.epoch
             && self.block_height == other.block_height
@@ -953,8 +955,8 @@ pub struct Bank {
     /// The number of slots per year, used for inflation
     slots_per_year: f64,
 
-    /// Unused
-    unused: u64,
+    /// Current compute unit consumption. Used to dynamically adjust transaction fees.
+    consumed_compute_units: AtomicU64,
 
     /// Bank slot (i.e. block)
     slot: Slot,
@@ -1156,7 +1158,7 @@ impl Bank {
             ns_per_slot: u128::default(),
             genesis_creation_time: UnixTimestamp::default(),
             slots_per_year: f64::default(),
-            unused: u64::default(),
+            consumed_compute_units: AtomicU64::default(),
             slot: Slot::default(),
             bank_id: BankId::default(),
             epoch: Epoch::default(),
@@ -1365,8 +1367,26 @@ impl Bank {
             status_cache: parent.src.status_cache.clone(),
         };
 
-        let fee_rate_governor =
-            FeeRateGovernor::new_derived(&parent.fee_rate_governor, parent.signature_count());
+        let mut base_fee_rate_governor = parent.fee_rate_governor.clone();
+        let update_fees_by_block_compute_usage = parent
+            .feature_set
+            .is_active(&update_fees_by_block_compute_usage::id());
+
+        // Once the feature is activated in a new epoch, the second block will
+        // have its fees dynamically adjusted by the first block's compute usage.
+        if update_fees_by_block_compute_usage {
+            base_fee_rate_governor.set_target_compute_units_per_slot(MAX_BLOCK_UNITS);
+        } else if base_fee_rate_governor.target_lamports_per_signature > 0 {
+            // We may have deserialized a fee rate governor which had the target
+            // compute units per slot feature initialized with garbage.
+            base_fee_rate_governor.set_target_compute_units_per_slot(0);
+        }
+
+        let fee_rate_governor = FeeRateGovernor::new_derived(
+            base_fee_rate_governor,
+            parent.signature_count(),
+            parent.consumed_compute_units(),
+        );
 
         let fee_calculator = if parent.feature_set.is_active(&disable_fee_calculator::id()) {
             FeeCalculator::default()
@@ -1388,7 +1408,7 @@ impl Bank {
             ticks_per_slot: parent.ticks_per_slot,
             ns_per_slot: parent.ns_per_slot,
             genesis_creation_time: parent.genesis_creation_time,
-            unused: parent.unused,
+            consumed_compute_units: AtomicU64::new(0),
             slots_per_year: parent.slots_per_year,
             epoch_schedule,
             collected_rent: AtomicU64::new(0),
@@ -1583,7 +1603,7 @@ impl Bank {
             ns_per_slot: fields.ns_per_slot,
             genesis_creation_time: fields.genesis_creation_time,
             slots_per_year: fields.slots_per_year,
-            unused: genesis_config.unused,
+            consumed_compute_units: AtomicU64::new(fields.consumed_compute_units),
             slot: fields.slot,
             bank_id: 0,
             epoch: fields.epoch,
@@ -1642,7 +1662,7 @@ impl Bank {
                 * genesis_config.ticks_per_slot as u128
         );
         assert_eq!(bank.genesis_creation_time, genesis_config.creation_time);
-        assert_eq!(bank.unused, genesis_config.unused);
+        assert_eq!(bank.consumed_compute_units.load(Relaxed), 0);
         assert_eq!(bank.max_tick_height, (bank.slot + 1) * bank.ticks_per_slot);
         assert_eq!(
             bank.slots_per_year,
@@ -1688,7 +1708,7 @@ impl Bank {
             ns_per_slot: self.ns_per_slot,
             genesis_creation_time: self.genesis_creation_time,
             slots_per_year: self.slots_per_year,
-            unused: self.unused,
+            consumed_compute_units: self.consumed_compute_units.load(Relaxed),
             slot: self.slot,
             epoch: self.epoch,
             block_height: self.block_height,
@@ -2763,14 +2783,13 @@ impl Bank {
 
         self.blockhash_queue.write().unwrap().genesis_hash(
             &genesis_config.hash(),
-            self.fee_rate_governor.get_lamports_per_signature(),
+            self.fee_rate_governor.lamports_per_signature(),
         );
 
         self.hashes_per_tick = genesis_config.hashes_per_tick();
         self.ticks_per_slot = genesis_config.ticks_per_slot();
         self.ns_per_slot = genesis_config.ns_per_slot();
         self.genesis_creation_time = genesis_config.creation_time;
-        self.unused = genesis_config.unused;
         self.max_tick_height = (self.slot + 1) * self.ticks_per_slot;
         self.slots_per_year = genesis_config.slots_per_year();
 
@@ -2919,7 +2938,7 @@ impl Bank {
     }
 
     pub fn get_lamports_per_signature(&self) -> u64 {
-        self.fee_rate_governor.get_lamports_per_signature()
+        self.fee_rate_governor.lamports_per_signature()
     }
 
     pub fn get_lamports_per_signature_for_blockhash(&self, hash: &Hash) -> Option<u64> {
@@ -3044,8 +3063,7 @@ impl Bank {
         inc_new_counter_debug!("bank-register_tick-registered", 1);
         let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
         if self.is_block_boundary(self.tick_height.load(Relaxed) + 1) {
-            w_blockhash_queue
-                .register_hash(hash, self.fee_rate_governor.get_lamports_per_signature());
+            w_blockhash_queue.register_hash(hash, self.fee_rate_governor.lamports_per_signature());
             self.update_recent_blockhashes_locked(&w_blockhash_queue);
         }
         // ReplayStage will start computing the accounts delta hash when it
@@ -3601,27 +3619,28 @@ impl Bank {
                             self.last_blockhash_and_lamports_per_signature();
 
                         if let Some(legacy_message) = tx.message().legacy_message() {
-                            process_result = MessageProcessor::process_message(
-                                &self.builtin_programs.vec,
-                                legacy_message,
-                                &loaded_transaction.program_indices,
-                                &account_refcells,
-                                self.rent_collector.rent,
-                                log_collector.clone(),
-                                executors.clone(),
-                                instruction_recorders.as_deref(),
-                                feature_set,
-                                compute_budget,
-                                &mut timings.details,
-                                &*self.sysvar_cache.read().unwrap(),
-                                blockhash,
-                                lamports_per_signature,
-                            )
-                            .map(|process_result| {
-                                self.update_accounts_data_len(
-                                    process_result.accounts_data_len_delta,
-                                )
-                            });
+                            let ProcessMessageResult { result, info } =
+                                MessageProcessor::process_message(
+                                    &self.builtin_programs.vec,
+                                    legacy_message,
+                                    &loaded_transaction.program_indices,
+                                    &account_refcells,
+                                    self.rent_collector.rent,
+                                    log_collector.clone(),
+                                    executors.clone(),
+                                    instruction_recorders.as_deref(),
+                                    feature_set,
+                                    compute_budget,
+                                    &mut timings.details,
+                                    &*self.sysvar_cache.read().unwrap(),
+                                    blockhash,
+                                    lamports_per_signature,
+                                );
+
+                            self.update_accounts_data_len(info.accounts_data_len_delta);
+                            self.record_consumed_compute_units(info.consumed_compute_units);
+
+                            process_result = result;
                         } else {
                             // TODO: support versioned messages
                             process_result = Err(TransactionError::UnsupportedVersion);
@@ -3792,6 +3811,14 @@ impl Bank {
         } else {
             self.accounts_data_len.fetch_sub(delta.abs() as u64, AcqRel);
         }
+    }
+
+    /// Update the bank's accounts_data_len field based on the `delta`.
+    fn record_consumed_compute_units(&self, compute_units: u64) {
+        if compute_units == 0 {
+            return;
+        }
+        self.consumed_compute_units.fetch_add(compute_units, AcqRel);
     }
 
     /// Calculate fee for `SanitizedMessage`
@@ -5119,6 +5146,10 @@ impl Bank {
 
     pub fn signature_count(&self) -> u64 {
         self.signature_count.load(Relaxed)
+    }
+
+    pub fn consumed_compute_units(&self) -> u64 {
+        self.consumed_compute_units.load(Relaxed)
     }
 
     fn increment_signature_count(&self, signature_count: u64) {
@@ -8644,7 +8675,7 @@ pub(crate) mod tests {
     #[test]
     fn test_detect_failed_duplicate_transactions() {
         let (mut genesis_config, mint_keypair) = create_genesis_config(2);
-        genesis_config.fee_rate_governor = FeeRateGovernor::new(1, 0);
+        genesis_config.fee_rate_governor = FeeRateGovernor::new(1, 0, 0);
         let bank = Bank::new_for_tests(&genesis_config);
 
         let dest = Keypair::new();
@@ -8829,7 +8860,7 @@ pub(crate) mod tests {
             mint_keypair,
             ..
         } = create_genesis_config_with_leader(mint, &leader, 3);
-        genesis_config.fee_rate_governor = FeeRateGovernor::new(4, 0); // something divisible by 2
+        genesis_config.fee_rate_governor = FeeRateGovernor::new(4, 0, 0); // something divisible by 2
 
         let expected_fee_paid = genesis_config
             .fee_rate_governor
@@ -8983,7 +9014,7 @@ pub(crate) mod tests {
             mint_keypair,
             ..
         } = create_genesis_config_with_leader(100, &leader, 3);
-        genesis_config.fee_rate_governor = FeeRateGovernor::new(2, 0);
+        genesis_config.fee_rate_governor = FeeRateGovernor::new(2, 0, 0);
         let bank = Bank::new_for_tests(&genesis_config);
 
         let key = Keypair::new();
@@ -9019,7 +9050,7 @@ pub(crate) mod tests {
             initial_balance
                 + bank
                     .fee_rate_governor
-                    .burn(bank.fee_rate_governor.lamports_per_signature * 2)
+                    .burn(bank.fee_rate_governor.lamports_per_signature() * 2)
                     .0
         );
         assert_eq!(results[0], Ok(()));
@@ -9928,7 +9959,8 @@ pub(crate) mod tests {
         solana_logger::setup();
         let (genesis_config, mint_keypair) = create_genesis_config(500);
         let mut bank = Bank::new_for_tests(&genesis_config);
-        bank.fee_rate_governor.lamports_per_signature = 2;
+        #[allow(deprecated)]
+        bank.fee_rate_governor.override_lamports_per_signature(2);
         let key = Keypair::new();
 
         let mut transfer_instruction =
@@ -10160,13 +10192,13 @@ pub(crate) mod tests {
     #[test]
     fn test_bank_fees_account() {
         let (mut genesis_config, _) = create_genesis_config(500);
-        genesis_config.fee_rate_governor = FeeRateGovernor::new(12345, 0);
+        genesis_config.fee_rate_governor = FeeRateGovernor::new(12345, 0, 0);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
 
         let fees_account = bank.get_account(&sysvar::fees::id()).unwrap();
         let fees = from_account::<Fees, _>(&fees_account).unwrap();
         assert_eq!(
-            bank.fee_rate_governor.lamports_per_signature,
+            bank.fee_rate_governor.lamports_per_signature(),
             fees.fee_calculator.lamports_per_signature
         );
         assert_eq!(fees.fee_calculator.lamports_per_signature, 12345);
@@ -11345,7 +11377,7 @@ pub(crate) mod tests {
     #[test]
     fn test_pre_post_transaction_balances() {
         let (mut genesis_config, _mint_keypair) = create_genesis_config(500);
-        let fee_rate_governor = FeeRateGovernor::new(1, 0);
+        let fee_rate_governor = FeeRateGovernor::new(1, 0, 0);
         genesis_config.fee_rate_governor = fee_rate_governor;
         let parent = Arc::new(Bank::new_for_tests(&genesis_config));
         let bank0 = Arc::new(new_from_parent(&parent));

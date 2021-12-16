@@ -46,16 +46,33 @@ lazy_static! {
     .collect();
 }
 
+// This assertion must not be changed because it is used to set the initial
+// target compute units per block for the fee rate governor. Once the feature
+// for dynamic fees from compute consumption is activated, this can be changed
+// if needed.
+#[cfg(test)]
+static_assertions::const_assert_eq!(MAX_BLOCK_UNITS, 160_000_000);
+
+// This assertion is just a loose check that the target compute unit consumption
+// per block for the fee governor is in line with the max block units constant
+// used by the qos service. They don't need to be equal but should be.
+#[cfg(test)]
+static_assertions::const_assert_eq!(
+    MAX_BLOCK_UNITS,
+    solana_sdk::fee_calculator::DEFAULT_TARGET_COMPUTE_UNITS_PER_SLOT
+);
+
 /// Statically computed data:
 ///
 /// Number of compute units that a block is allowed. A block's compute units are
-/// accumualted by Transactions added to it; A transaction's compute units are
-/// calculated by cost_model, based on transaction's signarures, write locks,
-/// data size and built-in and BPF instructinos.
+/// accumulated by Transactions added to it; A transaction's compute units are
+/// calculated by cost_model, based on transaction's signatures, write locks,
+/// data size and built-in and BPF instructions.
 pub const MAX_BLOCK_UNITS: u64 =
     MAX_BLOCK_REPLAY_TIME_US * COMPUTE_UNIT_TO_US_RATIO * MAX_CONCURRENCY;
+
 /// Number of compute units that a writable account in a block is allowed. The
-/// limit is to prevent too many transactions write to same account, threrefore
+/// limit is to prevent too many transactions write to same account, therefore
 /// reduce block's paralellism.
 pub const MAX_WRITABLE_ACCOUNT_UNITS: u64 = MAX_BLOCK_REPLAY_TIME_US * COMPUTE_UNIT_TO_US_RATIO;
 

@@ -3,7 +3,10 @@ use {
     solana_measure::measure::Measure,
     solana_program_runtime::{
         instruction_recorder::InstructionRecorder,
-        invoke_context::{BuiltinProgram, Executors, InvokeContext, TransactionAccountRefCell},
+        invoke_context::{
+            BuiltinProgram, Executors, InvokeContext, ProcessInstructionResult,
+            TransactionAccountRefCell,
+        },
         log_collector::LogCollector,
         timings::ExecuteDetailsTimings,
     },
@@ -37,8 +40,25 @@ impl ::solana_frozen_abi::abi_example::AbiExample for MessageProcessor {
 /// Resultant information gathered from calling process_message()
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct ProcessedMessageInfo {
+    /// The total compute units consumed
+    pub consumed_compute_units: u64,
     /// The amount that the accounts data len has changed
     pub accounts_data_len_delta: i64,
+}
+
+impl ProcessedMessageInfo {
+    fn accumulate_compute_units(&mut self, compute_units: u64) {
+        self.consumed_compute_units = self.consumed_compute_units.saturating_add(compute_units);
+    }
+}
+
+/// Transaction result and info from message processing
+#[derive(PartialEq, Debug)]
+pub struct ProcessMessageResult {
+    /// Processing info
+    pub info: ProcessedMessageInfo,
+    /// Result of transaction processing
+    pub result: Result<(), TransactionError>,
 }
 
 impl MessageProcessor {
@@ -63,7 +83,7 @@ impl MessageProcessor {
         sysvars: &[(Pubkey, Vec<u8>)],
         blockhash: Hash,
         lamports_per_signature: u64,
-    ) -> Result<ProcessedMessageInfo, TransactionError> {
+    ) -> ProcessMessageResult {
         let mut invoke_context = InvokeContext::new(
             rent,
             accounts,
@@ -77,6 +97,7 @@ impl MessageProcessor {
             lamports_per_signature,
         );
 
+        let mut processing_info = ProcessedMessageInfo::default();
         debug_assert_eq!(program_indices.len(), message.instructions.len());
         for (instruction_index, (instruction, program_indices)) in message
             .instructions
@@ -111,19 +132,41 @@ impl MessageProcessor {
                 invoke_context.instruction_recorder =
                     Some(&instruction_recorders[instruction_index]);
             }
+
             let mut time = Measure::start("execute_instruction");
-            let compute_meter_consumption = invoke_context
-                .process_instruction(message, instruction, program_indices, &[], &[])
-                .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
+            let ProcessInstructionResult {
+                result,
+                consumed_compute_units,
+            } = invoke_context.process_instruction(message, instruction, program_indices, &[], &[]);
             time.stop();
-            timings.accumulate_program(
-                instruction.program_id(&message.account_keys),
-                time.as_us(),
-                compute_meter_consumption,
-            );
-            timings.accumulate(&invoke_context.timings);
+
+            // If consumed compute units is 0, it means that the runtime rejected the
+            // program invocation for some reason or that the invoked program is a
+            // native program.
+            if consumed_compute_units > 0 {
+                processing_info.accumulate_compute_units(consumed_compute_units);
+                timings.accumulate_program(
+                    instruction.program_id(&message.account_keys),
+                    time.as_us(),
+                    consumed_compute_units,
+                );
+                timings.accumulate(&invoke_context.timings);
+            }
+
+            if let Err(instruction_err) = result {
+                return ProcessMessageResult {
+                    result: Err(TransactionError::InstructionError(
+                        instruction_index as u8,
+                        instruction_err,
+                    )),
+                    info: processing_info,
+                };
+            }
         }
-        Ok(ProcessedMessageInfo::default())
+        ProcessMessageResult {
+            result: Ok(()),
+            info: processing_info,
+        }
     }
 }
 
@@ -249,7 +292,13 @@ mod tests {
             Hash::default(),
             0,
         );
-        assert!(result.is_ok());
+        assert_eq!(
+            result,
+            ProcessMessageResult {
+                result: Ok(()),
+                info: ProcessedMessageInfo::default(),
+            },
+        );
         assert_eq!(accounts[0].1.borrow().lamports(), 100);
         assert_eq!(accounts[1].1.borrow().lamports(), 0);
 
@@ -280,10 +329,13 @@ mod tests {
         );
         assert_eq!(
             result,
-            Err(TransactionError::InstructionError(
-                0,
-                InstructionError::ReadonlyLamportChange
-            ))
+            ProcessMessageResult {
+                result: Err(TransactionError::InstructionError(
+                    0,
+                    InstructionError::ReadonlyLamportChange
+                )),
+                info: ProcessedMessageInfo::default(),
+            },
         );
 
         let message = Message::new(
@@ -313,10 +365,13 @@ mod tests {
         );
         assert_eq!(
             result,
-            Err(TransactionError::InstructionError(
-                0,
-                InstructionError::ReadonlyDataModified
-            ))
+            ProcessMessageResult {
+                result: Err(TransactionError::InstructionError(
+                    0,
+                    InstructionError::ReadonlyDataModified
+                )),
+                info: ProcessedMessageInfo::default(),
+            },
         );
     }
 
@@ -457,10 +512,13 @@ mod tests {
         );
         assert_eq!(
             result,
-            Err(TransactionError::InstructionError(
-                0,
-                InstructionError::AccountBorrowFailed
-            ))
+            ProcessMessageResult {
+                result: Err(TransactionError::InstructionError(
+                    0,
+                    InstructionError::AccountBorrowFailed
+                )),
+                info: ProcessedMessageInfo::default(),
+            }
         );
 
         // Try to borrow mut the same account in a safe way
@@ -488,7 +546,13 @@ mod tests {
             Hash::default(),
             0,
         );
-        assert!(result.is_ok());
+        assert_eq!(
+            result,
+            ProcessMessageResult {
+                result: Ok(()),
+                info: ProcessedMessageInfo::default(),
+            }
+        );
 
         // Do work on the same account but at different location in keyed_accounts[]
         let message = Message::new(
@@ -518,7 +582,13 @@ mod tests {
             Hash::default(),
             0,
         );
-        assert!(result.is_ok());
+        assert_eq!(
+            result,
+            ProcessMessageResult {
+                result: Ok(()),
+                info: ProcessedMessageInfo::default(),
+            },
+        );
         assert_eq!(accounts[0].1.borrow().lamports(), 80);
         assert_eq!(accounts[1].1.borrow().lamports(), 20);
         assert_eq!(accounts[0].1.borrow().data(), &vec![42]);
@@ -577,10 +647,13 @@ mod tests {
         );
         assert_eq!(
             result,
-            Err(TransactionError::InstructionError(
-                1,
-                InstructionError::Custom(0xbabb1e)
-            ))
+            ProcessMessageResult {
+                result: Err(TransactionError::InstructionError(
+                    1,
+                    InstructionError::Custom(0xbabb1e)
+                )),
+                info: ProcessedMessageInfo::default(),
+            }
         );
     }
 }

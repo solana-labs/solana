@@ -380,7 +380,7 @@ impl TestValidator {
         socket_addr_space: SocketAddrSpace,
     ) -> Self {
         TestValidatorGenesis::default()
-            .fee_rate_governor(FeeRateGovernor::new(0, 0))
+            .fee_rate_governor(FeeRateGovernor::new(0, 0, 0))
             .rent(Rent {
                 lamports_per_byte_year: 1,
                 exemption_threshold: 1.0,
@@ -402,7 +402,7 @@ impl TestValidator {
         socket_addr_space: SocketAddrSpace,
     ) -> Self {
         TestValidatorGenesis::default()
-            .fee_rate_governor(FeeRateGovernor::new(target_lamports_per_signature, 0))
+            .fee_rate_governor(FeeRateGovernor::new(target_lamports_per_signature, 0, 0))
             .rent(Rent {
                 lamports_per_byte_year: 1,
                 exemption_threshold: 1.0,

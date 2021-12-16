@@ -1002,7 +1002,7 @@ mod tests {
     #[test]
     fn test_bench_tps_fund_keys_with_fees() {
         let (mut genesis_config, id) = create_genesis_config(10_000);
-        let fee_rate_governor = FeeRateGovernor::new(11, 0);
+        let fee_rate_governor = FeeRateGovernor::new(11, 0, 0);
         genesis_config.fee_rate_governor = fee_rate_governor;
         let bank = Bank::new_for_tests(&genesis_config);
         let client = Arc::new(BankClient::new(bank));

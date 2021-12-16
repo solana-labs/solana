@@ -136,6 +136,12 @@ impl<'a> StackFrame<'a> {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub struct ProcessInstructionResult {
+    pub result: Result<(), InstructionError>,
+    pub consumed_compute_units: u64,
+}
+
 pub struct InvokeContext<'a> {
     invoke_stack: Vec<StackFrame<'a>>,
     rent: Rent,
@@ -499,7 +505,8 @@ impl<'a> InvokeContext<'a> {
             &program_indices,
             &account_indices,
             &caller_write_privileges,
-        )?;
+        )
+        .result?;
 
         // Verify the called program has not misbehaved
         let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
@@ -643,11 +650,20 @@ impl<'a> InvokeContext<'a> {
         program_indices: &[usize],
         account_indices: &[usize],
         caller_write_privileges: &[bool],
-    ) -> Result<u64, InstructionError> {
+    ) -> ProcessInstructionResult {
+        let mut consumed_compute_units = 0;
+
         let is_lowest_invocation_level = self.invoke_stack.is_empty();
         if !is_lowest_invocation_level {
             // Verify the calling program hasn't misbehaved
-            self.verify_and_update(instruction, account_indices, caller_write_privileges)?;
+            if let Err(err) =
+                self.verify_and_update(instruction, account_indices, caller_write_privileges)
+            {
+                return ProcessInstructionResult {
+                    result: Err(err),
+                    consumed_compute_units,
+                };
+            }
         }
 
         let result = self
@@ -655,25 +671,33 @@ impl<'a> InvokeContext<'a> {
             .and_then(|_| {
                 self.return_data = (*instruction.program_id(&message.account_keys), Vec::new());
                 let pre_remaining_units = self.compute_meter.borrow().get_remaining();
-                self.process_executable_chain(&instruction.data)?;
+                let result = self.process_executable_chain(&instruction.data);
                 let post_remaining_units = self.compute_meter.borrow().get_remaining();
 
-                // Verify the called program has not misbehaved
-                if is_lowest_invocation_level {
-                    self.verify(message, instruction, program_indices)?;
-                } else {
-                    let write_privileges: Vec<bool> = (0..message.account_keys.len())
-                        .map(|i| message.is_writable(i))
-                        .collect();
-                    self.verify_and_update(instruction, account_indices, &write_privileges)?;
-                }
+                // Doesn't matter if the instruction succeed or failed, its compute unit usage
+                // should be tracked in the cost tracker for cost estimation.
+                consumed_compute_units = pre_remaining_units.saturating_sub(post_remaining_units);
 
-                Ok(pre_remaining_units.saturating_sub(post_remaining_units))
+                result.and_then(|_| {
+                    // Verify the called program has not misbehaved
+                    if is_lowest_invocation_level {
+                        self.verify(message, instruction, program_indices)
+                    } else {
+                        let write_privileges: Vec<bool> = (0..message.account_keys.len())
+                            .map(|i| message.is_writable(i))
+                            .collect();
+                        self.verify_and_update(instruction, account_indices, &write_privileges)
+                    }
+                })
             });
 
         // Pop the invoke_stack to restore previous state
         self.pop();
-        result
+
+        ProcessInstructionResult {
+            result,
+            consumed_compute_units,
+        }
     }
 
     /// Calls the instruction's program entrypoint method
@@ -1274,7 +1298,10 @@ mod tests {
                 &account_indices,
                 &caller_write_privileges,
             ),
-            Err(InstructionError::ExternalAccountDataModified)
+            ProcessInstructionResult {
+                result: Err(InstructionError::ExternalAccountDataModified),
+                consumed_compute_units: 0,
+            },
         );
         accounts[0].1.borrow_mut().data_as_mut_slice()[0] = 0;
 
@@ -1288,19 +1315,22 @@ mod tests {
                 &account_indices,
                 &caller_write_privileges,
             ),
-            Err(InstructionError::ReadonlyDataModified)
+            ProcessInstructionResult {
+                result: Err(InstructionError::ReadonlyDataModified),
+                consumed_compute_units: 0,
+            },
         );
         accounts[2].1.borrow_mut().data_as_mut_slice()[0] = 0;
 
         invoke_context.pop();
 
         let cases = vec![
-            (MockInstruction::NoopSuccess, Ok(0)),
+            (MockInstruction::NoopSuccess, Ok(())),
             (
                 MockInstruction::NoopFail,
                 Err(InstructionError::GenericError),
             ),
-            (MockInstruction::ModifyOwned, Ok(0)),
+            (MockInstruction::ModifyOwned, Ok(())),
             (
                 MockInstruction::ModifyNotOwned,
                 Err(InstructionError::ExternalAccountDataModified),
@@ -1327,7 +1357,10 @@ mod tests {
                     &account_indices,
                     &caller_write_privileges,
                 ),
-                case.1
+                ProcessInstructionResult {
+                    result: case.1,
+                    consumed_compute_units: 0,
+                },
             );
             invoke_context.pop();
         }

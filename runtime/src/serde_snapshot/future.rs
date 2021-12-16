@@ -83,6 +83,7 @@ pub(crate) struct DeserializableVersionedBank {
     pub(crate) unused_accounts: UnusedAccounts,
     pub(crate) epoch_stakes: HashMap<Epoch, EpochStakes>,
     pub(crate) is_delta: bool,
+    pub(crate) consumed_compute_units: u64,
 }
 
 impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
@@ -104,7 +105,7 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
             ns_per_slot: dvb.ns_per_slot,
             genesis_creation_time: dvb.genesis_creation_time,
             slots_per_year: dvb.slots_per_year,
-            unused: dvb.unused,
+            consumed_compute_units: dvb.consumed_compute_units,
             slot: dvb.slot,
             epoch: dvb.epoch,
             block_height: dvb.block_height,
@@ -143,7 +144,7 @@ pub(crate) struct SerializableVersionedBank<'a> {
     pub(crate) ns_per_slot: u128,
     pub(crate) genesis_creation_time: UnixTimestamp,
     pub(crate) slots_per_year: f64,
-    pub(crate) unused: u64,
+    pub(crate) consumed_compute_units: u64,
     pub(crate) slot: Slot,
     pub(crate) epoch: Epoch,
     pub(crate) block_height: u64,
@@ -183,7 +184,7 @@ impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedB
             ns_per_slot: rhs.ns_per_slot,
             genesis_creation_time: rhs.genesis_creation_time,
             slots_per_year: rhs.slots_per_year,
-            unused: rhs.unused,
+            consumed_compute_units: rhs.consumed_compute_units,
             slot: rhs.slot,
             epoch: rhs.epoch,
             block_height: rhs.block_height,

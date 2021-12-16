@@ -107,11 +107,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let (
         default_target_lamports_per_signature,
         default_target_signatures_per_slot,
+        default_target_compute_units_per_slot,
         default_fee_burn_percentage,
     ) = {
         (
             &fee_rate_governor.target_lamports_per_signature.to_string(),
             &fee_rate_governor.target_signatures_per_slot.to_string(),
+            &fee_rate_governor.target_compute_units_per_slot.to_string(),
             &fee_rate_governor.burn_percent.to_string(),
         )
     };
@@ -296,6 +298,20 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
         )
         .arg(
+            Arg::with_name("target_compute_units_per_slot")
+                .long("target-compute-units-per-slot")
+                .value_name("NUMBER")
+                .takes_value(true)
+                .default_value(default_target_compute_units_per_slot)
+                .help(
+                    "Used to estimate the desired processing capacity of the cluster. \
+                    As the compute units consumed for recent slots are smaller/larger \
+                    than this value, lamports_per_signature will decrease/increase for \
+                    the next slot. A value of 0 disables lamports_per_signature fee \
+                    adjustments",
+                ),
+        )
+        .arg(
             Arg::with_name("target_tick_duration")
                 .long("target-tick-duration")
                 .value_name("MILLIS")
@@ -443,6 +459,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut fee_rate_governor = FeeRateGovernor::new(
         value_t_or_exit!(matches, "target_lamports_per_signature", u64),
         value_t_or_exit!(matches, "target_signatures_per_slot", u64),
+        value_t_or_exit!(matches, "target_compute_units_per_slot", u64),
     );
     fee_rate_governor.burn_percent = value_t_or_exit!(matches, "fee_burn_percentage", u8);
 

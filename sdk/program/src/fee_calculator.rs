@@ -55,12 +55,26 @@ pub struct FeeRateGovernor {
     // signatures
     pub target_lamports_per_signature: u64,
 
-    // Used to estimate the desired processing capacity of the cluster.  As the signatures for
+    // Used to estimate the desired processing capacity of the cluster. As the signatures for
     // recent slots are fewer/greater than this value, lamports_per_signature will decrease/increase
-    // for the next slot.  A value of 0 disables lamports_per_signature fee adjustments
+    // for the next slot. A value of 0 disables lamports_per_signature fee adjustments
     pub target_signatures_per_slot: u64,
 
+    // Used to estimate the desired processing capacity of the cluster. As the compute units consumed
+    // for recent slots are smaller/larger than this value, lamports_per_signature will decrease/increase
+    // for the next slot. A value of 0 disables lamports_per_signature fee adjustments
+    pub target_compute_units_per_slot: u64,
+
+    // Previously used to serialize the `max_lamports_per_signature` field, now available for
+    // serializing other info.
+    pub unused: u64,
+
+    // These fields used to be serialized into snapshots but since they are
+    // always recomputed, we don't deserialize them anymore to allow for
+    // serializing other data in a compatible way.
+    #[serde(skip)]
     pub min_lamports_per_signature: u64,
+    #[serde(skip)]
     pub max_lamports_per_signature: u64,
 
     // What portion of collected fees are to be destroyed, as a fraction of std::u8::MAX
@@ -69,6 +83,7 @@ pub struct FeeRateGovernor {
 
 pub const DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE: u64 = 10_000;
 pub const DEFAULT_TARGET_SIGNATURES_PER_SLOT: u64 = 50 * DEFAULT_MS_PER_SLOT;
+pub const DEFAULT_TARGET_COMPUTE_UNITS_PER_SLOT: u64 = 160_000_000;
 
 // Percentage of tx fees to burn
 pub const DEFAULT_BURN_PERCENT: u8 = 50;
@@ -78,6 +93,9 @@ impl Default for FeeRateGovernor {
         Self {
             lamports_per_signature: 0,
             target_lamports_per_signature: DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE,
+            target_compute_units_per_slot: DEFAULT_TARGET_COMPUTE_UNITS_PER_SLOT,
+            // Not used, default to zero
+            unused: 0,
             target_signatures_per_slot: DEFAULT_TARGET_SIGNATURES_PER_SLOT,
             min_lamports_per_signature: 0,
             max_lamports_per_signature: 0,
@@ -87,47 +105,90 @@ impl Default for FeeRateGovernor {
 }
 
 impl FeeRateGovernor {
-    pub fn new(target_lamports_per_signature: u64, target_signatures_per_slot: u64) -> Self {
+    pub fn new(
+        target_lamports_per_signature: u64,
+        target_signatures_per_slot: u64,
+        target_compute_units_per_slot: u64,
+    ) -> Self {
         let base_fee_rate_governor = Self {
             target_lamports_per_signature,
             lamports_per_signature: target_lamports_per_signature,
             target_signatures_per_slot,
+            target_compute_units_per_slot,
             ..FeeRateGovernor::default()
         };
 
-        Self::new_derived(&base_fee_rate_governor, 0)
+        Self::new_derived(base_fee_rate_governor, 0, 0)
+    }
+
+    fn dynamic_fees_enabled(&self) -> bool {
+        self.target_signatures_per_slot > 0 || self.target_compute_units_per_slot > 0
+    }
+
+    fn calculate_desired_lamports_per_signature(
+        &self,
+        parent_block_signature_count: u64,
+        parent_block_consumed_compute_units: u64,
+    ) -> Option<u64> {
+        let mut numerator = 1u128;
+        let mut denominator = 1u128;
+
+        // If non-zero, indicates that fees are dynamically adjusted by how
+        // much compute is used in a block.
+        if self.target_compute_units_per_slot > 0 {
+            numerator = numerator.checked_mul(parent_block_consumed_compute_units as u128)?;
+            denominator = denominator.checked_mul(self.target_compute_units_per_slot as u128)?;
+        }
+
+        // If non-zero, indicates that fees are dynamically adjusted by how
+        // many signatures are verified in a block.
+        if self.target_signatures_per_slot > 0 {
+            numerator = numerator.checked_mul(parent_block_signature_count as u128)?;
+            denominator = denominator.checked_mul(self.target_signatures_per_slot as u128)?;
+        }
+
+        let lamports_per_signature = u128::from(self.target_lamports_per_signature)
+            .checked_mul(numerator)?
+            .checked_div(denominator)?
+            .try_into()
+            .ok()?;
+
+        let clamped_lamports_per_signature = self
+            .max_lamports_per_signature
+            .min(self.min_lamports_per_signature.max(lamports_per_signature));
+
+        Some(clamped_lamports_per_signature)
     }
 
     pub fn new_derived(
-        base_fee_rate_governor: &FeeRateGovernor,
-        latest_signatures_per_slot: u64,
+        base_fee_rate_governor: FeeRateGovernor,
+        parent_block_signature_count: u64,
+        parent_block_consumed_compute_units: u64,
     ) -> Self {
-        let mut me = base_fee_rate_governor.clone();
-
-        if me.target_signatures_per_slot > 0 {
+        let mut me = base_fee_rate_governor;
+        if me.dynamic_fees_enabled() {
             // lamports_per_signature can range from 50% to 1000% of
             // target_lamports_per_signature
             me.min_lamports_per_signature = std::cmp::max(1, me.target_lamports_per_signature / 2);
             me.max_lamports_per_signature = me.target_lamports_per_signature * 10;
 
-            // What the cluster should charge at `latest_signatures_per_slot`
-            let desired_lamports_per_signature =
-                me.max_lamports_per_signature
-                    .min(me.min_lamports_per_signature.max(
-                        me.target_lamports_per_signature
-                            * std::cmp::min(latest_signatures_per_slot, std::u32::MAX as u64)
-                                as u64
-                            / me.target_signatures_per_slot as u64,
-                    ));
+            // What the cluster should adjust transaction fees to
+            let desired_lamports_per_signature = me
+                .calculate_desired_lamports_per_signature(
+                    parent_block_signature_count,
+                    parent_block_consumed_compute_units,
+                )
+                .unwrap_or_else(|| {
+                    warn!("Failed to calculate new fee due to overflow");
+                    me.target_compute_units_per_slot
+                });
 
             trace!(
                 "desired_lamports_per_signature: {}",
                 desired_lamports_per_signature
             );
 
-            let gap = desired_lamports_per_signature as i64
-                - base_fee_rate_governor.lamports_per_signature as i64;
-
+            let gap = desired_lamports_per_signature as i64 - me.lamports_per_signature as i64;
             if gap == 0 {
                 me.lamports_per_signature = desired_lamports_per_signature;
             } else {
@@ -142,15 +203,13 @@ impl FeeRateGovernor {
                     gap_adjust
                 );
 
-                me.lamports_per_signature =
-                    me.max_lamports_per_signature
-                        .min(me.min_lamports_per_signature.max(
-                            (base_fee_rate_governor.lamports_per_signature as i64 + gap_adjust)
-                                as u64,
-                        ));
+                me.lamports_per_signature = me.max_lamports_per_signature.min(
+                    me.min_lamports_per_signature
+                        .max((me.lamports_per_signature as i64 + gap_adjust) as u64),
+                );
             }
         } else {
-            me.lamports_per_signature = base_fee_rate_governor.target_lamports_per_signature;
+            me.lamports_per_signature = me.target_lamports_per_signature;
             me.min_lamports_per_signature = me.target_lamports_per_signature;
             me.max_lamports_per_signature = me.target_lamports_per_signature;
         }
@@ -161,13 +220,21 @@ impl FeeRateGovernor {
         me
     }
 
+    /// Set the target number of compute units that should be consumed in a slot.
+    /// If the target is non-zero, fees will be dynamically adjusted depending on
+    /// whether the actual compute units consumed is smaller or larger than the
+    /// target.
+    pub fn set_target_compute_units_per_slot(&mut self, target_compute_units_per_slot: u64) {
+        self.target_compute_units_per_slot = target_compute_units_per_slot;
+    }
+
     #[deprecated(note = "Remove after `disable_fee_calculator` feature is activated")]
     pub fn override_lamports_per_signature(&mut self, lamports_per_signature: u64) {
         self.lamports_per_signature = lamports_per_signature;
     }
 
     /// get current lamports per signature
-    pub fn get_lamports_per_signature(&self) -> u64 {
+    pub fn lamports_per_signature(&self) -> u64 {
         self.lamports_per_signature
     }
 
@@ -275,7 +342,11 @@ mod tests {
         );
         assert_eq!(f0.lamports_per_signature, 0);
 
-        let f1 = FeeRateGovernor::new_derived(&f0, DEFAULT_TARGET_SIGNATURES_PER_SLOT);
+        let f1 = FeeRateGovernor::new_derived(
+            f0,
+            DEFAULT_TARGET_SIGNATURES_PER_SLOT,
+            DEFAULT_TARGET_COMPUTE_UNITS_PER_SLOT,
+        );
         assert_eq!(
             f1.target_signatures_per_slot,
             DEFAULT_TARGET_SIGNATURES_PER_SLOT
@@ -299,14 +370,14 @@ mod tests {
             target_signatures_per_slot: 100,
             ..FeeRateGovernor::default()
         };
-        f = FeeRateGovernor::new_derived(&f, 0);
+        f = FeeRateGovernor::new_derived(f.clone(), 0, 0);
 
         // Ramp fees up
         let mut count = 0;
         loop {
             let last_lamports_per_signature = f.lamports_per_signature;
 
-            f = FeeRateGovernor::new_derived(&f, std::u64::MAX);
+            f = FeeRateGovernor::new_derived(f.clone(), std::u64::MAX, std::u64::MAX);
             info!("[up] f.lamports_per_signature={}", f.lamports_per_signature);
 
             // some maximum target reached
@@ -322,7 +393,7 @@ mod tests {
         let mut count = 0;
         loop {
             let last_lamports_per_signature = f.lamports_per_signature;
-            f = FeeRateGovernor::new_derived(&f, 0);
+            f = FeeRateGovernor::new_derived(f.clone(), 0, 0);
 
             info!(
                 "[down] f.lamports_per_signature={}",
@@ -342,7 +413,11 @@ mod tests {
         // Arrive at target rate
         let mut count = 0;
         while f.lamports_per_signature != f.target_lamports_per_signature {
-            f = FeeRateGovernor::new_derived(&f, f.target_signatures_per_slot);
+            f = FeeRateGovernor::new_derived(
+                f.clone(),
+                f.target_signatures_per_slot,
+                f.target_compute_units_per_slot,
+            );
             info!(
                 "[target] f.lamports_per_signature={}",
                 f.lamports_per_signature

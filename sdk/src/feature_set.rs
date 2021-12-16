@@ -283,6 +283,10 @@ pub mod reject_all_elf_rw {
     solana_sdk::declare_id!("DeMpxgMq51j3rZfNK2hQKZyXknQvqevPSFPJFNTbXxsS");
 }
 
+pub mod update_fees_by_block_compute_usage {
+    solana_sdk::declare_id!("E3nU1SNJDeMQwAc9UvDqtyRmDCwoeWnqhpZdTg4nBi7F");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -348,6 +352,7 @@ lazy_static! {
         (evict_invalid_stakes_cache_entries::id(), "evict invalid stakes cache entries on epoch boundaries"),
         (allow_votes_to_directly_update_vote_state::id(), "enable direct vote state update"),
         (reject_all_elf_rw::id(), "reject all read-write data in program elfs"),
+        (update_fees_by_block_compute_usage::id(), "dynamically update fees according to block compute usage"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

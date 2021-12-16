@@ -5764,6 +5764,7 @@ dependencies = [
  "solana-sdk",
  "solana-stake-program",
  "solana-vote-program",
+ "static_assertions",
  "symlink",
  "tar",
  "tempfile",
