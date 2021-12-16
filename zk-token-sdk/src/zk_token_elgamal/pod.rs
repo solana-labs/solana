@@ -72,7 +72,7 @@ unsafe impl Pod for ValidityProof {}
 /// Serialization of zero balance proofs
 #[derive(Clone, Copy)]
 #[repr(transparent)]
-pub struct ZeroBalanceProof(pub [u8; 160]);
+pub struct ZeroBalanceProof(pub [u8; 96]);
 
 // `ZeroBalanceProof` is a Pod and Zeroable.
 // Add the marker traits manually because `bytemuck` only adds them for some `u8` arrays
