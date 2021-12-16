@@ -1516,7 +1516,10 @@ impl ReplayStage {
                             .send(vec![(bank.slot(), bank.clone())].into_iter().collect());
                         retransmit_info.increment_retry_iteration();
                     } else {
-                        info!("Bypass retransmit: {:?}", &retransmit_info);
+                        info!(
+                            "Bypassing retransmit of my leader slot retransmit_info={:?}",
+                            &retransmit_info
+                        );
                     }
                 }
                 return;
