@@ -1971,8 +1971,7 @@ Result:
 ### getSignaturesForAddress
 
 
-Returns confirmed signatures for transactions involving an
-address backwards in time from the provided signature or most recent confirmed block
+Returns confirmed signatures for transactions when the address is present in the compact-array of account addresses of a transaction. Returns signatures backwards in time from the provided signature or most recent confirmed block
 
 #### Parameters:
 * `<string>` - account address as base-58 encoded string
@@ -4367,8 +4366,7 @@ Result:
 **DEPRECATED: Please use [getSignaturesForAddress](jsonrpc-api.md#getsignaturesforaddress) instead**
 This method is expected to be removed in solana-core v2.0
 
-Returns confirmed signatures for transactions involving an
-address backwards in time from the provided signature or most recent confirmed block
+Returns confirmed signatures for transactions when the address is present in the compact-array of account addresses of a transaction. Returns signatures backwards in time from the provided signature or most recent confirmed block
 
 #### Parameters:
 * `<string>` - account address as base-58 encoded string
