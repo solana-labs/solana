@@ -710,6 +710,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         assert!(self.get_stop_flush()); // caller should be controlling the lifetime of how long this needs to be present
         let m = Measure::start("range");
 
+        let mut added_to_mem = 0;
         // load from disk
         if let Some(disk) = self.bucket.as_ref() {
             let mut map = self.map().write().unwrap();
@@ -724,11 +725,13 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     }
                     Entry::Vacant(vacant) => {
                         vacant.insert(self.disk_to_cache_entry(item.slot_list, item.ref_count));
-                        self.stats().insert_or_delete_mem(true, self.bin);
+                        added_to_mem += 1;
                     }
                 }
             }
         }
+        self.stats()
+            .insert_or_delete_mem_count(true, self.bin, added_to_mem);
 
         Self::update_time_stat(&self.stats().get_range_us, m);
     }
