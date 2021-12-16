@@ -5,10 +5,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
-    solana_core::{
-        banking_stage::BankingStage,
-        packet_deduper::PacketDeduper,
-    },
+    solana_core::{banking_stage::BankingStage, packet_deduper::PacketDeduper},
     solana_gossip::cluster_info::{ClusterInfo, Node},
     solana_ledger::{
         blockstore::Blockstore,
