@@ -10,7 +10,7 @@ homepage = "https://solana.com/"
 publish = false
 
 [dependencies]
-clap = "2.33.1"
+clap = "3.0.0-rc"
 serde = "1.0.131"
 serde_json = "1.0.73"
 solana-clap-utils = { path = "../clap-utils", version = "=1.10.0" }

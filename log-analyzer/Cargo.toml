@@ -11,7 +11,7 @@ publish = false
 
 [dependencies]
 byte-unit = "4.0.13"
-clap = "2.33.1"
+clap = "3.0.0-rc"
 serde = "1.0.131"
 serde_json = "1.0.73"
 solana-logger = { path = "../logger", version = "=1.10.0" }
