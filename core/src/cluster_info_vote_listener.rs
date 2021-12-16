@@ -1,53 +1,56 @@
-use crate::{
-    optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
-    replay_stage::DUPLICATE_THRESHOLD,
-    result::{Error, Result},
-    sigverify,
-    verified_vote_packets::VerifiedVotePackets,
-    vote_stake_tracker::VoteStakeTracker,
-};
-use crossbeam_channel::{
-    unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Select, Sender as CrossbeamSender,
-};
-use itertools::izip;
-use log::*;
-use solana_gossip::{
-    cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
-    crds::Cursor,
-    crds_value::CrdsValueLabel,
-};
-use solana_ledger::blockstore::Blockstore;
-use solana_metrics::inc_new_counter_debug;
-use solana_perf::packet::{self, Packets};
-use solana_poh::poh_recorder::PohRecorder;
-use solana_rpc::{
-    optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
-    rpc_subscriptions::RpcSubscriptions,
-};
-use solana_runtime::{
-    bank::Bank,
-    bank_forks::BankForks,
-    commitment::VOTE_THRESHOLD_SIZE,
-    epoch_stakes::{EpochAuthorizedVoters, EpochStakes},
-    stakes::Stakes,
-    vote_sender_types::{ReplayVoteReceiver, ReplayedVote},
-};
-use solana_sdk::{
-    clock::{Epoch, Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT},
-    epoch_schedule::EpochSchedule,
-    hash::Hash,
-    pubkey::Pubkey,
-    transaction::Transaction,
-};
-use solana_vote_program::{self, vote_state::Vote, vote_transaction};
-use std::{
-    collections::HashMap,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        {Arc, Mutex, RwLock},
+use {
+    crate::{
+        optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
+        replay_stage::DUPLICATE_THRESHOLD,
+        result::{Error, Result},
+        sigverify,
+        verified_vote_packets::VerifiedVotePackets,
+        vote_stake_tracker::VoteStakeTracker,
     },
-    thread::{self, sleep, Builder, JoinHandle},
-    time::{Duration, Instant},
+    crossbeam_channel::{
+        unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Select,
+        Sender as CrossbeamSender,
+    },
+    itertools::izip,
+    log::*,
+    solana_gossip::{
+        cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
+        crds::Cursor,
+        crds_value::CrdsValueLabel,
+    },
+    solana_ledger::blockstore::Blockstore,
+    solana_metrics::inc_new_counter_debug,
+    solana_perf::packet::{self, Packets},
+    solana_poh::poh_recorder::PohRecorder,
+    solana_rpc::{
+        optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
+        rpc_subscriptions::RpcSubscriptions,
+    },
+    solana_runtime::{
+        bank::Bank,
+        bank_forks::BankForks,
+        commitment::VOTE_THRESHOLD_SIZE,
+        epoch_stakes::{EpochAuthorizedVoters, EpochStakes},
+        stakes::Stakes,
+        vote_sender_types::{ReplayVoteReceiver, ReplayedVote},
+    },
+    solana_sdk::{
+        clock::{Epoch, Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT},
+        epoch_schedule::EpochSchedule,
+        hash::Hash,
+        pubkey::Pubkey,
+        transaction::Transaction,
+    },
+    solana_vote_program::{self, vote_state::Vote, vote_transaction},
+    std::{
+        collections::HashMap,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, Mutex, RwLock,
+        },
+        thread::{self, sleep, Builder, JoinHandle},
+        time::{Duration, Instant},
+    },
 };
 
 // Map from a vote account to the authorized voter for an epoch
@@ -835,21 +838,23 @@ impl ClusterInfoVoteListener {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_perf::packet;
-    use solana_rpc::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank;
-    use solana_runtime::{
-        bank::Bank,
-        commitment::BlockCommitmentCache,
-        genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs},
-        vote_sender_types::ReplayVoteSender,
+    use {
+        super::*,
+        solana_perf::packet,
+        solana_rpc::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
+        solana_runtime::{
+            bank::Bank,
+            commitment::BlockCommitmentCache,
+            genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs},
+            vote_sender_types::ReplayVoteSender,
+        },
+        solana_sdk::{
+            hash::Hash,
+            signature::{Keypair, Signature, Signer},
+        },
+        solana_vote_program::vote_state::Vote,
+        std::collections::BTreeSet,
     };
-    use solana_sdk::{
-        hash::Hash,
-        signature::{Keypair, Signature, Signer},
-    };
-    use solana_vote_program::vote_state::Vote;
-    use std::collections::BTreeSet;
 
     #[test]
     fn test_max_vote_tx_fits() {

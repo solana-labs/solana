@@ -1,15 +1,18 @@
 #![allow(clippy::integer_arithmetic)]
-use console::Emoji;
-use indicatif::{ProgressBar, ProgressStyle};
-use log::*;
-use solana_runtime::{bank_forks::ArchiveFormat, snapshot_utils};
-use solana_sdk::{clock::Slot, genesis_config::DEFAULT_GENESIS_ARCHIVE, hash::Hash};
-use std::fs::{self, File};
-use std::io;
-use std::io::Read;
-use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use {
+    console::Emoji,
+    indicatif::{ProgressBar, ProgressStyle},
+    log::*,
+    solana_runtime::{bank_forks::ArchiveFormat, snapshot_utils},
+    solana_sdk::{clock::Slot, genesis_config::DEFAULT_GENESIS_ARCHIVE, hash::Hash},
+    std::{
+        fs::{self, File},
+        io::{self, Read},
+        net::SocketAddr,
+        path::{Path, PathBuf},
+        time::{Duration, Instant},
+    },
+};
 
 static TRUCK: Emoji = Emoji("🚚 ", "");
 static SPARKLE: Emoji = Emoji("✨ ", "");

@@ -1,10 +1,12 @@
 #![allow(clippy::integer_arithmetic)]
-use serde::{
-    de::{self, Deserializer, SeqAccess, Visitor},
-    ser::{self, SerializeTuple, Serializer},
-    {Deserialize, Serialize},
+use {
+    serde::{
+        de::{self, Deserializer, SeqAccess, Visitor},
+        ser::{self, SerializeTuple, Serializer},
+        Deserialize, Serialize,
+    },
+    std::{convert::TryFrom, fmt, marker::PhantomData},
 };
-use std::{convert::TryFrom, fmt, marker::PhantomData};
 
 /// Same as u16, but serialized with 1 to 3 bytes. If the value is above
 /// 0x7f, the top bit is set and the remaining value is stored in the next
@@ -265,9 +267,11 @@ pub fn decode_shortu16_len(bytes: &[u8]) -> Result<(usize, usize), ()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use assert_matches::assert_matches;
-    use bincode::{deserialize, serialize};
+    use {
+        super::*,
+        assert_matches::assert_matches,
+        bincode::{deserialize, serialize},
+    };
 
     /// Return the serialized length.
     fn encode_len(len: u16) -> Vec<u8> {

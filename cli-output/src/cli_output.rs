@@ -2525,14 +2525,16 @@ impl VerboseDisplay for CliGossipNodes {}
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use clap::{App, Arg};
-    use solana_sdk::{
-        message::Message,
-        pubkey::Pubkey,
-        signature::{keypair_from_seed, NullSigner, Signature, Signer, SignerError},
-        system_instruction,
-        transaction::Transaction,
+    use {
+        super::*,
+        clap::{App, Arg},
+        solana_sdk::{
+            message::Message,
+            pubkey::Pubkey,
+            signature::{keypair_from_seed, NullSigner, Signature, Signer, SignerError},
+            system_instruction,
+            transaction::Transaction,
+        },
     };
 
     #[test]

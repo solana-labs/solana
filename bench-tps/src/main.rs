@@ -1,14 +1,20 @@
 #![allow(clippy::integer_arithmetic)]
-use log::*;
-use solana_bench_tps::bench::{do_bench_tps, generate_and_fund_keypairs, generate_keypairs};
-use solana_bench_tps::cli;
-use solana_genesis::Base64Account;
-use solana_gossip::gossip_service::{discover_cluster, get_client, get_multi_client};
-use solana_sdk::fee_calculator::FeeRateGovernor;
-use solana_sdk::signature::{Keypair, Signer};
-use solana_sdk::system_program;
-use solana_streamer::socket::SocketAddrSpace;
-use std::{collections::HashMap, fs::File, io::prelude::*, path::Path, process::exit, sync::Arc};
+use {
+    log::*,
+    solana_bench_tps::{
+        bench::{do_bench_tps, generate_and_fund_keypairs, generate_keypairs},
+        cli,
+    },
+    solana_genesis::Base64Account,
+    solana_gossip::gossip_service::{discover_cluster, get_client, get_multi_client},
+    solana_sdk::{
+        fee_calculator::FeeRateGovernor,
+        signature::{Keypair, Signer},
+        system_program,
+    },
+    solana_streamer::socket::SocketAddrSpace,
+    std::{collections::HashMap, fs::File, io::prelude::*, path::Path, process::exit, sync::Arc},
+};
 
 /// Number of signatures for all transactions in ~1 week at ~100K TPS
 pub const NUM_SIGNATURES_FOR_TXS: u64 = 100_000 * 60 * 60 * 24 * 7;

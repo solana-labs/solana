@@ -1,11 +1,13 @@
-use crate::{
-    account::{AccountSharedData, ReadableAccount},
-    account_utils::StateMut,
-    fee_calculator::FeeCalculator,
-    hash::Hash,
-    nonce::{state::Versions, State},
+use {
+    crate::{
+        account::{AccountSharedData, ReadableAccount},
+        account_utils::StateMut,
+        fee_calculator::FeeCalculator,
+        hash::Hash,
+        nonce::{state::Versions, State},
+    },
+    std::cell::RefCell,
 };
-use std::cell::RefCell;
 
 pub fn create_account(lamports: u64) -> RefCell<AccountSharedData> {
     RefCell::new(
@@ -41,8 +43,7 @@ pub fn fee_calculator_of(account: &AccountSharedData) -> Option<FeeCalculator> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::pubkey::Pubkey;
+    use {super::*, crate::pubkey::Pubkey};
 
     #[test]
     fn test_verify_bad_account_owner_fails() {

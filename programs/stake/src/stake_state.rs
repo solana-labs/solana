@@ -3,6 +3,11 @@
 //! * keep track of rewards
 //! * own mining pools
 
+#[deprecated(
+    since = "1.7.2",
+    note = "Please use `solana_sdk::stake::state` or `solana_program::stake::state` instead"
+)]
+pub use solana_sdk::stake::state::*;
 use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
@@ -25,12 +30,6 @@ use {
     solana_vote_program::vote_state::{VoteState, VoteStateVersions},
     std::{collections::HashSet, convert::TryFrom},
 };
-
-#[deprecated(
-    since = "1.7.2",
-    note = "Please use `solana_sdk::stake::state` or `solana_program::stake::state` instead"
-)]
-pub use solana_sdk::stake::state::*;
 
 #[derive(Debug)]
 pub enum SkippedReason {
@@ -1371,18 +1370,20 @@ fn do_create_account(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use proptest::prelude::*;
-    use solana_sdk::{
-        account::{AccountSharedData, WritableAccount},
-        clock::UnixTimestamp,
-        native_token,
-        process_instruction::MockInvokeContext,
-        pubkey::Pubkey,
-        system_program,
+    use {
+        super::*,
+        proptest::prelude::*,
+        solana_sdk::{
+            account::{AccountSharedData, WritableAccount},
+            clock::UnixTimestamp,
+            native_token,
+            process_instruction::MockInvokeContext,
+            pubkey::Pubkey,
+            system_program,
+        },
+        solana_vote_program::vote_state,
+        std::{cell::RefCell, iter::FromIterator},
     };
-    use solana_vote_program::vote_state;
-    use std::{cell::RefCell, iter::FromIterator};
 
     #[test]
     fn test_authorized_authorize() {

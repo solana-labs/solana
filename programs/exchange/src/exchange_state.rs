@@ -1,6 +1,8 @@
-use serde_derive::{Deserialize, Serialize};
-use solana_sdk::pubkey::Pubkey;
-use std::{error, fmt};
+use {
+    serde_derive::{Deserialize, Serialize},
+    solana_sdk::pubkey::Pubkey,
+    std::{error, fmt},
+};
 
 /// Fixed-point scaler, 10 = one base 10 digit to the right of the decimal, 100 = 2, ...
 /// Used by both price and amount in their fixed point representation

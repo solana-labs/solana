@@ -1,14 +1,16 @@
-use crate::{config_instruction, ConfigState};
 ///
 /// A library for creating a trusted date oracle.
 ///
 use bincode::{deserialize, serialized_size};
-use chrono::{
-    prelude::{Date, DateTime, TimeZone, Utc},
-    serde::ts_seconds,
+use {
+    crate::{config_instruction, ConfigState},
+    chrono::{
+        prelude::{Date, DateTime, TimeZone, Utc},
+        serde::ts_seconds,
+    },
+    serde_derive::{Deserialize, Serialize},
+    solana_sdk::{instruction::Instruction, pubkey::Pubkey},
 };
-use serde_derive::{Deserialize, Serialize};
-use solana_sdk::{instruction::Instruction, pubkey::Pubkey};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct DateConfig {

@@ -1,8 +1,6 @@
 #![allow(clippy::upper_case_acronyms)]
 
-use crate::BpfError;
-use solana_rbpf::ebpf;
-use thiserror::Error;
+use {crate::BpfError, solana_rbpf::ebpf, thiserror::Error};
 
 /// Error definitions
 #[derive(Debug, Error, PartialEq)]

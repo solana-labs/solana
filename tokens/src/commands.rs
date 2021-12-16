@@ -1,52 +1,56 @@
-use crate::{
-    args::{BalancesArgs, DistributeTokensArgs, SenderStakeArgs, StakeArgs, TransactionLogArgs},
-    db::{self, TransactionInfo},
-    spl_token::*,
-    token_display::Token,
-};
-use chrono::prelude::*;
-use console::style;
-use csv::{ReaderBuilder, Trim};
-use indexmap::IndexMap;
-use indicatif::{ProgressBar, ProgressStyle};
-use pickledb::PickleDb;
-use serde::{Deserialize, Serialize};
-use solana_account_decoder::parse_token::{
-    pubkey_from_spl_token, real_number_string, spl_token_pubkey,
-};
-use solana_client::{
-    client_error::{ClientError, Result as ClientResult},
-    rpc_client::RpcClient,
-    rpc_config::RpcSendTransactionConfig,
-    rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
-    rpc_response::Fees,
-};
-use solana_sdk::{
-    clock::Slot,
-    commitment_config::CommitmentConfig,
-    instruction::Instruction,
-    message::Message,
-    native_token::{lamports_to_sol, sol_to_lamports},
-    signature::{unique_signers, Signature, Signer},
-    stake::{
-        instruction::{self as stake_instruction, LockupArgs},
-        state::{Authorized, Lockup, StakeAuthorize},
+use {
+    crate::{
+        args::{
+            BalancesArgs, DistributeTokensArgs, SenderStakeArgs, StakeArgs, TransactionLogArgs,
+        },
+        db::{self, TransactionInfo},
+        spl_token::*,
+        token_display::Token,
     },
-    system_instruction,
-    transaction::Transaction,
-};
-use solana_transaction_status::TransactionStatus;
-use spl_associated_token_account::get_associated_token_address;
-use spl_token::solana_program::program_error::ProgramError;
-use std::{
-    cmp::{self},
-    io,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
+    chrono::prelude::*,
+    console::style,
+    csv::{ReaderBuilder, Trim},
+    indexmap::IndexMap,
+    indicatif::{ProgressBar, ProgressStyle},
+    pickledb::PickleDb,
+    serde::{Deserialize, Serialize},
+    solana_account_decoder::parse_token::{
+        pubkey_from_spl_token, real_number_string, spl_token_pubkey,
     },
-    thread::sleep,
-    time::Duration,
+    solana_client::{
+        client_error::{ClientError, Result as ClientResult},
+        rpc_client::RpcClient,
+        rpc_config::RpcSendTransactionConfig,
+        rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
+        rpc_response::Fees,
+    },
+    solana_sdk::{
+        clock::Slot,
+        commitment_config::CommitmentConfig,
+        instruction::Instruction,
+        message::Message,
+        native_token::{lamports_to_sol, sol_to_lamports},
+        signature::{unique_signers, Signature, Signer},
+        stake::{
+            instruction::{self as stake_instruction, LockupArgs},
+            state::{Authorized, Lockup, StakeAuthorize},
+        },
+        system_instruction,
+        transaction::Transaction,
+    },
+    solana_transaction_status::TransactionStatus,
+    spl_associated_token_account::get_associated_token_address,
+    spl_token::solana_program::program_error::ProgramError,
+    std::{
+        cmp::{self},
+        io,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
+        thread::sleep,
+        time::Duration,
+    },
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -864,9 +868,11 @@ pub fn process_transaction_log(args: &TransactionLogArgs) -> Result<(), Error> {
     Ok(())
 }
 
-use crate::db::check_output_file;
-use solana_sdk::{pubkey::Pubkey, signature::Keypair};
-use tempfile::{tempdir, NamedTempFile};
+use {
+    crate::db::check_output_file,
+    solana_sdk::{pubkey::Pubkey, signature::Keypair},
+    tempfile::{tempdir, NamedTempFile},
+};
 pub fn test_process_distribute_tokens_with_client(
     client: &RpcClient,
     sender_keypair: Keypair,
@@ -1206,14 +1212,16 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_core::test_validator::TestValidator;
-    use solana_sdk::{
-        signature::{read_keypair_file, write_keypair_file, Signer},
-        stake::instruction::StakeInstruction,
+    use {
+        super::*,
+        solana_core::test_validator::TestValidator,
+        solana_sdk::{
+            signature::{read_keypair_file, write_keypair_file, Signer},
+            stake::instruction::StakeInstruction,
+        },
+        solana_streamer::socket::SocketAddrSpace,
+        solana_transaction_status::TransactionConfirmationStatus,
     };
-    use solana_streamer::socket::SocketAddrSpace;
-    use solana_transaction_status::TransactionConfirmationStatus;
 
     #[test]
     fn test_process_token_allocations() {

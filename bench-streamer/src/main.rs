@@ -1,16 +1,22 @@
 #![allow(clippy::integer_arithmetic)]
-use clap::{crate_description, crate_name, App, Arg};
-use solana_streamer::packet::{Packet, Packets, PacketsRecycler, PACKET_DATA_SIZE};
-use solana_streamer::streamer::{receiver, PacketReceiver};
-use std::cmp::max;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::mpsc::channel;
-use std::sync::Arc;
-use std::thread::sleep;
-use std::thread::{spawn, JoinHandle, Result};
-use std::time::Duration;
-use std::time::SystemTime;
+use {
+    clap::{crate_description, crate_name, App, Arg},
+    solana_streamer::{
+        packet::{Packet, Packets, PacketsRecycler, PACKET_DATA_SIZE},
+        streamer::{receiver, PacketReceiver},
+    },
+    std::{
+        cmp::max,
+        net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
+        sync::{
+            atomic::{AtomicBool, AtomicUsize, Ordering},
+            mpsc::channel,
+            Arc,
+        },
+        thread::{sleep, spawn, JoinHandle, Result},
+        time::{Duration, SystemTime},
+    },
+};
 
 fn producer(addr: &SocketAddr, exit: Arc<AtomicBool>) -> JoinHandle<()> {
     let send = UdpSocket::bind("0.0.0.0:0").unwrap();

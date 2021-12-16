@@ -1,10 +1,12 @@
-use solana_ledger::{
-    blockstore::Blockstore,
-    shred::{Nonce, SIZE_OF_NONCE},
+use {
+    solana_ledger::{
+        blockstore::Blockstore,
+        shred::{Nonce, SIZE_OF_NONCE},
+    },
+    solana_perf::packet::limited_deserialize,
+    solana_sdk::{clock::Slot, packet::Packet},
+    std::{io, net::SocketAddr},
 };
-use solana_perf::packet::limited_deserialize;
-use solana_sdk::{clock::Slot, packet::Packet};
-use std::{io, net::SocketAddr};
 
 pub fn repair_response_packet(
     blockstore: &Blockstore,
@@ -48,15 +50,17 @@ pub fn nonce(buf: &[u8]) -> Option<Nonce> {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use solana_ledger::{
-        shred::{Shred, Shredder},
-        sigverify_shreds::verify_shred_cpu,
-    };
-    use solana_sdk::signature::{Keypair, Signer};
-    use std::{
-        collections::HashMap,
-        net::{IpAddr, Ipv4Addr},
+    use {
+        super::*,
+        solana_ledger::{
+            shred::{Shred, Shredder},
+            sigverify_shreds::verify_shred_cpu,
+        },
+        solana_sdk::signature::{Keypair, Signer},
+        std::{
+            collections::HashMap,
+            net::{IpAddr, Ipv4Addr},
+        },
     };
 
     fn run_test_sigverify_shred_cpu_repair(slot: Slot) {

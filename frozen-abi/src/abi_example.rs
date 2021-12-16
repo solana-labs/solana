@@ -1,9 +1,9 @@
-use crate::abi_digester::{AbiDigester, DigestError, DigestResult};
-
-use log::*;
-
-use serde::Serialize;
-use std::any::type_name;
+use {
+    crate::abi_digester::{AbiDigester, DigestError, DigestResult},
+    log::*,
+    serde::Serialize,
+    std::any::type_name,
+};
 
 pub trait AbiExample: Sized {
     fn example() -> Self;
