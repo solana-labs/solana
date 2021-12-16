@@ -116,21 +116,22 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
     }
 
-    pub fn items<R>(&self, range: &Option<&R>) -> Vec<(K, AccountMapEntry<T>)>
+    pub fn items<R>(&self, range: &R) -> Vec<(K, AccountMapEntry<T>)>
     where
         R: RangeBounds<Pubkey> + std::fmt::Debug,
     {
-        self.start_stop_flush(true);
-        self.put_range_in_cache(range); // check range here to see if our items are already held in the cache
-        Self::update_stat(&self.stats().items, 1);
+        let m = Measure::start("items");
+        self.hold_range_in_memory(range, true);
         let map = self.map().read().unwrap();
         let mut result = Vec::with_capacity(map.len());
         map.iter().for_each(|(k, v)| {
-            if range.map(|range| range.contains(k)).unwrap_or(true) {
+            if range.contains(k) {
                 result.push((*k, Arc::clone(v)));
             }
         });
-        self.start_stop_flush(false);
+        self.hold_range_in_memory(range, false);
+        Self::update_stat(&self.stats().items, 1);
+        Self::update_time_stat(&self.stats().items_us, m);
         result
     }
 
