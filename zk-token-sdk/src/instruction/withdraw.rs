@@ -9,7 +9,7 @@ use {
             elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
             pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
         },
-        equality_proof::EqualityProof,
+        sigma_proofs::equality_proof::EqualityProof,
         errors::ProofError,
         instruction::Verifiable,
         range_proof::RangeProof,
