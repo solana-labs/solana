@@ -69,6 +69,16 @@ pub struct ValidityProof(pub [u8; 160]);
 unsafe impl Zeroable for ValidityProof {}
 unsafe impl Pod for ValidityProof {}
 
+/// Serialization of zero balance proofs
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct ZeroBalanceProof(pub [u8; 160]);
+
+// `ZeroBalanceProof` is a Pod and Zeroable.
+// Add the marker traits manually because `bytemuck` only adds them for some `u8` arrays
+unsafe impl Zeroable for ZeroBalanceProof {}
+unsafe impl Pod for ZeroBalanceProof {}
+
 /// Serialization of range proofs for 64-bit numbers (for `Withdraw` instruction)
 #[derive(Clone, Copy)]
 #[repr(transparent)]
