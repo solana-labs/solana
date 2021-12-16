@@ -252,8 +252,8 @@ unsafe impl std::alloc::GlobalAlloc for BumpAllocator {
 /// Maximum number of bytes a program may add to an account during a single realloc
 pub const MAX_PERMITTED_DATA_INCREASE: usize = 1_024 * 10;
 
-// Parameters passed to the entrypoint input buffer are aligned on 8-byte boundaries
-pub const PARAMETER_ALIGNMENT: usize = 8;
+/// `assert_eq(std::mem::align_of::<u128>(), 8)` is true for BPF but not for some host machines
+pub const BPF_ALIGN_OF_U128: usize = 8;
 
 /// Deserialize the input arguments
 ///
@@ -312,7 +312,7 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
                 from_raw_parts_mut(input.add(offset), data_len)
             }));
             offset += data_len + MAX_PERMITTED_DATA_INCREASE;
-            offset += (offset as *const u8).align_offset(PARAMETER_ALIGNMENT); // padding
+            offset += (offset as *const u8).align_offset(BPF_ALIGN_OF_U128); // padding
 
             #[allow(clippy::cast_ptr_alignment)]
             let rent_epoch = *(input.add(offset) as *const u64);
