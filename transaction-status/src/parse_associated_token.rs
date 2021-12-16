@@ -6,10 +6,10 @@ use {
     solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey},
 };
 
-// A helper function to convert spl_associated_token_account_v1_0::id() as spl_sdk::pubkey::Pubkey
+// A helper function to convert spl_associated_token_account::id() as spl_sdk::pubkey::Pubkey
 // to solana_sdk::pubkey::Pubkey
-pub fn spl_associated_token_id_v1_0() -> Pubkey {
-    Pubkey::new_from_array(spl_associated_token_account_v1_0::id().to_bytes())
+pub fn spl_associated_token_id() -> Pubkey {
+    Pubkey::new_from_array(spl_associated_token_account::id().to_bytes())
 }
 
 pub fn parse_associated_token(
@@ -51,7 +51,7 @@ fn check_num_associated_token_accounts(
 mod test {
     use {
         super::*,
-        spl_associated_token_account_v1_0::{
+        spl_associated_token_account::{
             create_associated_token_account,
             solana_program::{
                 instruction::CompiledInstruction as SplAssociatedTokenCompiledInstruction,

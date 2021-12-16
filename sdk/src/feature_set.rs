@@ -271,6 +271,10 @@ pub mod reject_all_elf_rw {
     solana_sdk::declare_id!("DeMpxgMq51j3rZfNK2hQKZyXknQvqevPSFPJFNTbXxsS");
 }
 
+pub mod spl_token_v3_3_0_release {
+    solana_sdk::declare_id!("Ftok2jhqAqxUWEiCVRrfRs9DPppWP8cgTB7NQNKL88mS");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -339,6 +343,7 @@ lazy_static! {
         (reject_deployment_of_unresolved_syscalls::id(), "Reject deployment of programs with unresolved syscall symbols"),
         (reject_section_virtual_address_file_offset_mismatch::id(), "enforce section virtual addresses and file offsets in ELF to be equal"),
         (reject_all_elf_rw::id(), "reject all read-write data in program elfs"),
+        (spl_token_v3_3_0_release::id(), "spl-token v3.3.0 release"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
