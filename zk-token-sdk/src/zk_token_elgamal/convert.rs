@@ -20,9 +20,12 @@ mod target_arch {
                 elgamal::{ElGamalCiphertext, ElGamalPubkey},
                 pedersen::{PedersenCommitment, PedersenDecryptHandle},
             },
-            sigma_proofs::{equality_proof::EqualityProof, validity_proof::ValidityProof, zero_balance_proof::ZeroBalanceProof},
             errors::ProofError,
             range_proof::RangeProof,
+            sigma_proofs::{
+                equality_proof::EqualityProof, validity_proof::ValidityProof,
+                zero_balance_proof::ZeroBalanceProof,
+            },
         },
         curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar},
         std::convert::TryFrom,

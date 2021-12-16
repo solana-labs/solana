@@ -5,22 +5,13 @@ use {
 #[cfg(not(target_arch = "bpf"))]
 use {
     crate::{
-        encryption::{
-            elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
-            pedersen::PedersenBase,
-        },
+        encryption::elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
         errors::ProofError,
         instruction::Verifiable,
         sigma_proofs::zero_balance_proof::ZeroBalanceProof,
         transcript::TranscriptProtocol,
     },
-    curve25519_dalek::{
-        ristretto::RistrettoPoint,
-        scalar::Scalar,
-        traits::{IsIdentity, MultiscalarMul},
-    },
     merlin::Transcript,
-    rand::rngs::OsRng,
     std::convert::TryInto,
 };
 
@@ -84,42 +75,15 @@ impl CloseAccountProof {
 
     pub fn new(source_keypair: &ElGamalKeypair, balance: &ElGamalCiphertext) -> Self {
         let mut transcript = Self::transcript_new();
+        // TODO: Add ciphertext to transcript
 
         // add a domain separator to record the start of the protocol
         transcript.close_account_proof_domain_sep();
 
-        
-
-        // extract the relevant scalar and Ristretto points from the input
-        let P = source_keypair.public.get_point();
-        let s = source_keypair.secret.get_scalar();
-
-        let C = balance.message_comm.get_point();
-        let D = balance.decrypt_handle.get_point();
-
-        // record ElGamal pubkey and ciphertext in the transcript
-        transcript.append_point(b"P", &P.compress());
-        transcript.append_point(b"C", &C.compress());
-        transcript.append_point(b"D", &D.compress());
-
-        // generate a random masking factor that also serves as a nonce
-        let y = Scalar::random(&mut OsRng);
-        let Y_P = (y * P).compress();
-        let Y_D = (y * D).compress();
-
-        // record Y in transcript and receive a challenge scalar
-        transcript.append_point(b"Y_P", &Y_P);
-        transcript.append_point(b"Y_D", &Y_D);
-        let c = transcript.challenge_scalar(b"c");
-        transcript.challenge_scalar(b"w");
-
-        // compute the masked secret key
-        let z = c * s + y;
+        let proof = ZeroBalanceProof::new(source_keypair, balance, &mut transcript);
 
         CloseAccountProof {
-            Y_P: Y_P.into(),
-            Y_D: Y_D.into(),
-            z: z.into(),
+            proof: proof.into(),
         }
     }
 
@@ -133,44 +97,9 @@ impl CloseAccountProof {
         // add a domain separator to record the start of the protocol
         transcript.close_account_proof_domain_sep();
 
-        // extract the relevant scalar and Ristretto points from the input
-        let P = elgamal_pubkey.get_point();
-        let C = balance.message_comm.get_point();
-        let D = balance.decrypt_handle.get_point();
-
-        let H = PedersenBase::default().H;
-
-        let Y_P = self.Y_P.into();
-        let Y_D = self.Y_D.into();
-        let z = self.z.into();
-
-        // record ElGamal pubkey and ciphertext in the transcript
-        transcript.validate_and_append_point(b"P", &P.compress())?;
-        transcript.append_point(b"C", &C.compress());
-        transcript.append_point(b"D", &D.compress());
-
-        // record Y in transcript and receive challenge scalars
-        transcript.validate_and_append_point(b"Y_P", &Y_P)?;
-        transcript.append_point(b"Y_D", &Y_D);
-
-        let c = transcript.challenge_scalar(b"c");
-        let w = transcript.challenge_scalar(b"w"); // w used for multiscalar multiplication verification
-
-        // decompress R or return verification error
-        let Y_P = Y_P.decompress().ok_or(ProofError::VerificationError)?;
-        let Y_D = Y_D.decompress().ok_or(ProofError::VerificationError)?;
-
-        // check the required algebraic relation
-        let check = RistrettoPoint::multiscalar_mul(
-            vec![z, -c, -Scalar::one(), w * z, -w * c, -w],
-            vec![P, H, Y_P, D, C, Y_D],
-        );
-
-        if check.is_identity() {
-            Ok(())
-        } else {
-            Err(ProofError::VerificationError)
-        }
+        // verify zero balance proof
+        let proof: ZeroBalanceProof = self.proof.try_into()?;
+        proof.verify(elgamal_pubkey, balance, &mut transcript)
     }
 }
 

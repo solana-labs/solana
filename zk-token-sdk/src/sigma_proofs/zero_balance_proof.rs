@@ -34,7 +34,6 @@ impl ZeroBalanceProof {
         elgamal_ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Self {
-
         // extract the relevant scalar and Ristretto points from the input
         let P = elgamal_keypair.public.get_point();
         let s = elgamal_keypair.secret.get_scalar();
@@ -61,11 +60,7 @@ impl ZeroBalanceProof {
         // compute the masked secret key
         let z = c * s + y;
 
-        Self {
-            Y_P,
-            Y_D,
-            z,
-        }
+        Self { Y_P, Y_D, z }
     }
 
     pub fn verify(
@@ -128,18 +123,17 @@ impl ZeroBalanceProof {
 
         let z = Scalar::from_canonical_bytes(*z).ok_or(ProofError::FormatError)?;
 
-        Ok(ZeroBalanceProof {
-            Y_P,
-            Y_D,
-            z,
-        })
+        Ok(ZeroBalanceProof { Y_P, Y_D, z })
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::encryption::{elgamal::ElGamalKeypair, pedersen::Pedersen};
+    use crate::encryption::{
+        elgamal::ElGamalKeypair,
+        pedersen::{Pedersen, PedersenDecryptHandle, PedersenOpening},
+    };
 
     #[test]
     fn test_zero_balance_proof() {
@@ -150,18 +144,34 @@ mod test {
 
         // general case: encryption of 0
         let elgamal_ciphertext = source_keypair.public.encrypt(0_u64);
-        let proof = ZeroBalanceProof::new(&source_keypair, &elgamal_ciphertext, &mut transcript_prover);
-        assert!(proof.verify(&source_keypair.public, &elgamal_ciphertext, &mut transcript_verifier).is_ok());
+        let proof =
+            ZeroBalanceProof::new(&source_keypair, &elgamal_ciphertext, &mut transcript_prover);
+        assert!(proof
+            .verify(
+                &source_keypair.public,
+                &elgamal_ciphertext,
+                &mut transcript_verifier
+            )
+            .is_ok());
 
         // general case: encryption of > 0
         let elgamal_ciphertext = source_keypair.public.encrypt(1_u64);
-        let proof = ZeroBalanceProof::new(&source_keypair, &elgamal_ciphertext, &mut transcript_prover);
-        assert!(proof.verify(&source_keypair.public, &elgamal_ciphertext, &mut transcript_verifier).is_err());
+        let proof =
+            ZeroBalanceProof::new(&source_keypair, &elgamal_ciphertext, &mut transcript_prover);
+        assert!(proof
+            .verify(
+                &source_keypair.public,
+                &elgamal_ciphertext,
+                &mut transcript_verifier
+            )
+            .is_err());
 
         // // edge case: all zero ciphertext - such ciphertext should always be a valid encryption of 0
         let zeroed_ct = ElGamalCiphertext::default();
         let proof = ZeroBalanceProof::new(&source_keypair, &zeroed_ct, &mut transcript_prover);
-        assert!(proof.verify(&source_keypair.public, &zeroed_ct, &mut transcript_verifier).is_ok());
+        assert!(proof
+            .verify(&source_keypair.public, &zeroed_ct, &mut transcript_verifier)
+            .is_ok());
 
         // edge cases: only C or D is zero - such ciphertext is always invalid
         let zeroed_comm = Pedersen::with(0_u64, &PedersenOpening::default());
@@ -172,9 +182,17 @@ mod test {
             decrypt_handle: handle,
         };
 
-        let proof = ZeroBalanceProof::new(&source_keypair, &zeroed_comm_ciphertext, &mut transcript_prover);
+        let proof = ZeroBalanceProof::new(
+            &source_keypair,
+            &zeroed_comm_ciphertext,
+            &mut transcript_prover,
+        );
         assert!(proof
-            .verify(&source_keypair.public, &zeroed_comm_ciphertext, &mut transcript_verifier)
+            .verify(
+                &source_keypair.public,
+                &zeroed_comm_ciphertext,
+                &mut transcript_verifier
+            )
             .is_err());
 
         let (zero_comm, _) = Pedersen::new(0_u64);
@@ -183,9 +201,17 @@ mod test {
             decrypt_handle: PedersenDecryptHandle::default(),
         };
 
-        let proof = ZeroBalanceProof::new(&source_keypair, &zeroed_handle_ciphertext, &mut transcript_prover);
+        let proof = ZeroBalanceProof::new(
+            &source_keypair,
+            &zeroed_handle_ciphertext,
+            &mut transcript_prover,
+        );
         assert!(proof
-            .verify(&source_keypair.public, &zeroed_handle_ciphertext, &mut transcript_verifier)
+            .verify(
+                &source_keypair.public,
+                &zeroed_handle_ciphertext,
+                &mut transcript_verifier
+            )
             .is_err());
     }
 }
