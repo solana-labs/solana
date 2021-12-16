@@ -5,11 +5,11 @@
 //!
 
 pub use solana_perf::sigverify::{
-    batch_size, ed25519_verify_cpu, ed25519_verify_disabled, init, TxOffset,
+    count_packets_in_batches, ed25519_verify_cpu, ed25519_verify_disabled, init, TxOffset,
 };
 use {
     crate::sigverify_stage::SigVerifier,
-    solana_perf::{cuda_runtime::PinnedVec, packet::Packets, recycler::Recycler, sigverify},
+    solana_perf::{cuda_runtime::PinnedVec, packet::PacketBatch, recycler::Recycler, sigverify},
 };
 
 #[derive(Clone)]
@@ -40,13 +40,13 @@ impl Default for TransactionSigVerifier {
 }
 
 impl SigVerifier for TransactionSigVerifier {
-    fn verify_batch(&self, mut batch: Vec<Packets>) -> Vec<Packets> {
+    fn verify_batches(&self, mut batches: Vec<PacketBatch>) -> Vec<PacketBatch> {
         sigverify::ed25519_verify(
-            &mut batch,
+            &mut batches,
             &self.recycler,
             &self.recycler_out,
             self.reject_non_vote,
         );
-        batch
+        batches
     }
 }
