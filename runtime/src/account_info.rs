@@ -130,6 +130,8 @@ impl AccountInfo {
     }
 
     pub fn store_id(&self) -> AppendVecId {
+        // if the account is in a cached store, the store_id is meaningless
+        assert!(!self.is_cached());
         self.store_id
     }
 
