@@ -1,11 +1,13 @@
-use crate::{
-    bank::{Bank, TransactionResults},
-    genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs},
-    hashed_transaction::HashedTransaction,
-    vote_sender_types::ReplayVoteSender,
+use {
+    crate::{
+        bank::{Bank, TransactionResults},
+        genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs},
+        hashed_transaction::HashedTransaction,
+        vote_sender_types::ReplayVoteSender,
+    },
+    solana_sdk::{pubkey::Pubkey, signature::Signer},
+    solana_vote_program::vote_transaction,
 };
-use solana_sdk::{pubkey::Pubkey, signature::Signer};
-use solana_vote_program::vote_transaction;
 
 pub fn setup_bank_and_vote_pubkeys(num_vote_accounts: usize, stake: u64) -> (Bank, Vec<Pubkey>) {
     // Create some voters at genesis

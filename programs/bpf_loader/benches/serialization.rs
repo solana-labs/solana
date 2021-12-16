@@ -2,16 +2,19 @@
 
 extern crate test;
 
-use solana_bpf_loader_program::serialization::{
-    serialize_parameters_aligned, serialize_parameters_unaligned,
+use {
+    solana_bpf_loader_program::serialization::{
+        serialize_parameters_aligned, serialize_parameters_unaligned,
+    },
+    solana_sdk::{
+        account::{Account, AccountSharedData},
+        bpf_loader,
+        keyed_account::KeyedAccount,
+        pubkey::Pubkey,
+    },
+    std::cell::RefCell,
+    test::Bencher,
 };
-use solana_sdk::{
-    account::{Account, AccountSharedData},
-    bpf_loader,
-};
-use solana_sdk::{keyed_account::KeyedAccount, pubkey::Pubkey};
-use std::cell::RefCell;
-use test::Bencher;
 
 fn create_inputs() -> (
     Pubkey,

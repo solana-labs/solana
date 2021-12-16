@@ -1,10 +1,13 @@
 //! Exchange program
 
-use crate::exchange_state::*;
-use crate::id;
-use serde_derive::{Deserialize, Serialize};
-use solana_sdk::instruction::{AccountMeta, Instruction};
-use solana_sdk::pubkey::Pubkey;
+use {
+    crate::{exchange_state::*, id},
+    serde_derive::{Deserialize, Serialize},
+    solana_sdk::{
+        instruction::{AccountMeta, Instruction},
+        pubkey::Pubkey,
+    },
+};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct OrderRequestInfo {

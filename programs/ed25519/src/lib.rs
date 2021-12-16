@@ -13,15 +13,17 @@ pub fn process_instruction(
 
 #[cfg(test)]
 pub mod test {
-    use rand::{thread_rng, Rng};
-    use solana_sdk::{
-        ed25519_instruction::new_ed25519_instruction,
-        feature_set::FeatureSet,
-        hash::Hash,
-        signature::{Keypair, Signer},
-        transaction::Transaction,
+    use {
+        rand::{thread_rng, Rng},
+        solana_sdk::{
+            ed25519_instruction::new_ed25519_instruction,
+            feature_set::FeatureSet,
+            hash::Hash,
+            signature::{Keypair, Signer},
+            transaction::Transaction,
+        },
+        std::sync::Arc,
     };
-    use std::sync::Arc;
 
     #[test]
     fn test_ed25519() {

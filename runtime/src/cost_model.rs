@@ -4,10 +4,12 @@
 //!
 //! The main function is `calculate_cost` which returns &TransactionCost.
 //!
-use crate::{block_cost_limits::*, execute_cost_table::ExecuteCostTable};
-use log::*;
-use solana_sdk::{pubkey::Pubkey, transaction::Transaction};
-use std::collections::HashMap;
+use {
+    crate::{block_cost_limits::*, execute_cost_table::ExecuteCostTable},
+    log::*,
+    solana_sdk::{pubkey::Pubkey, transaction::Transaction},
+    std::collections::HashMap,
+};
 
 const MAX_WRITABLE_ACCOUNTS: usize = 256;
 
@@ -180,24 +182,26 @@ impl CostModel {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{
-        bank::Bank,
-        genesis_utils::{create_genesis_config, GenesisConfigInfo},
-    };
-    use solana_sdk::{
-        bpf_loader,
-        hash::Hash,
-        instruction::CompiledInstruction,
-        message::Message,
-        signature::{Keypair, Signer},
-        system_instruction::{self},
-        system_program, system_transaction,
-    };
-    use std::{
-        str::FromStr,
-        sync::{Arc, RwLock},
-        thread::{self, JoinHandle},
+    use {
+        super::*,
+        crate::{
+            bank::Bank,
+            genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        },
+        solana_sdk::{
+            bpf_loader,
+            hash::Hash,
+            instruction::CompiledInstruction,
+            message::Message,
+            signature::{Keypair, Signer},
+            system_instruction::{self},
+            system_program, system_transaction,
+        },
+        std::{
+            str::FromStr,
+            sync::{Arc, RwLock},
+            thread::{self, JoinHandle},
+        },
     };
 
     fn test_setup() -> (Keypair, Hash) {

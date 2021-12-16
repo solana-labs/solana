@@ -1,39 +1,41 @@
-use crate::{
-    accounts::Accounts, ancestors::Ancestors, instruction_recorder::InstructionRecorder,
-    log_collector::LogCollector, native_loader::NativeLoader, rent_collector::RentCollector,
-};
-use log::*;
-use serde::{Deserialize, Serialize};
-use solana_measure::measure::Measure;
-use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount, WritableAccount},
-    account_utils::StateMut,
-    bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    feature_set::{
-        demote_program_write_locks, fix_write_privs, instructions_sysvar_enabled,
-        neon_evm_compute_budget, remove_native_loader, requestable_heap_size, tx_wide_compute_cap,
-        updated_verify_policy, FeatureSet,
+use {
+    crate::{
+        accounts::Accounts, ancestors::Ancestors, instruction_recorder::InstructionRecorder,
+        log_collector::LogCollector, native_loader::NativeLoader, rent_collector::RentCollector,
     },
-    ic_logger_msg, ic_msg,
-    instruction::{CompiledInstruction, Instruction, InstructionError},
-    keyed_account::{create_keyed_accounts_unified, keyed_account_at_index, KeyedAccount},
-    message::Message,
-    native_loader,
-    process_instruction::{
-        BpfComputeBudget, ComputeMeter, Executor, InvokeContext, InvokeContextStackFrame, Logger,
-        ProcessInstructionWithContext,
+    log::*,
+    serde::{Deserialize, Serialize},
+    solana_measure::measure::Measure,
+    solana_sdk::{
+        account::{AccountSharedData, ReadableAccount, WritableAccount},
+        account_utils::StateMut,
+        bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+        feature_set::{
+            demote_program_write_locks, fix_write_privs, instructions_sysvar_enabled,
+            neon_evm_compute_budget, remove_native_loader, requestable_heap_size,
+            tx_wide_compute_cap, updated_verify_policy, FeatureSet,
+        },
+        ic_logger_msg, ic_msg,
+        instruction::{CompiledInstruction, Instruction, InstructionError},
+        keyed_account::{create_keyed_accounts_unified, keyed_account_at_index, KeyedAccount},
+        message::Message,
+        native_loader,
+        process_instruction::{
+            BpfComputeBudget, ComputeMeter, Executor, InvokeContext, InvokeContextStackFrame,
+            Logger, ProcessInstructionWithContext,
+        },
+        pubkey::Pubkey,
+        rent::Rent,
+        system_program,
+        sysvar::instructions,
+        transaction::TransactionError,
     },
-    pubkey::Pubkey,
-    rent::Rent,
-    system_program,
-    sysvar::instructions,
-    transaction::TransactionError,
-};
-use std::{
-    cell::{Ref, RefCell},
-    collections::HashMap,
-    rc::Rc,
-    sync::Arc,
+    std::{
+        cell::{Ref, RefCell},
+        collections::HashMap,
+        rc::Rc,
+        sync::Arc,
+    },
 };
 
 pub struct Executors {
@@ -1341,13 +1343,15 @@ impl MessageProcessor {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_sdk::{
-        account::Account,
-        instruction::{AccountMeta, Instruction, InstructionError},
-        message::Message,
-        native_loader::create_loadable_account_for_test,
-        process_instruction::MockComputeMeter,
+    use {
+        super::*,
+        solana_sdk::{
+            account::Account,
+            instruction::{AccountMeta, Instruction, InstructionError},
+            message::Message,
+            native_loader::create_loadable_account_for_test,
+            process_instruction::MockComputeMeter,
+        },
     };
 
     #[test]

@@ -1,9 +1,13 @@
-use serde_json::Value;
-use std::collections::HashMap;
-use std::env;
-use std::fs::File;
-use std::io::{BufRead, BufReader};
-use std::process::Command;
+use {
+    serde_json::Value,
+    std::{
+        collections::HashMap,
+        env,
+        fs::File,
+        io::{BufRead, BufReader},
+        process::Command,
+    },
+};
 
 fn get_last_metrics(metric: &str, db: &str, name: &str, branch: &str) -> Result<String, String> {
     let query = format!(

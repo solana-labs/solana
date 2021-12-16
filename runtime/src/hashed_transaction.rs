@@ -1,5 +1,7 @@
-use solana_sdk::{hash::Hash, transaction::Transaction, vote};
-use std::borrow::Cow;
+use {
+    solana_sdk::{hash::Hash, transaction::Transaction, vote},
+    std::borrow::Cow,
+};
 
 /// Transaction and the hash of its message
 #[derive(Debug, Clone)]

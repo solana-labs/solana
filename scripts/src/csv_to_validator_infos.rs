@@ -3,10 +3,10 @@
 // Usage:
 //   cargo run --bin solana-csv-to-validator-infos < validators.csv
 
-use serde::Deserialize;
-use std::error::Error;
-use std::io;
-use std::process;
+use {
+    serde::Deserialize,
+    std::{error::Error, io, process},
+};
 
 #[derive(Debug, Deserialize)]
 struct ValidatorRecord {

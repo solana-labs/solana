@@ -108,9 +108,11 @@ macro_rules! impl_sysvar_get {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{clock::Epoch, program_error::ProgramError, pubkey::Pubkey};
-    use std::{cell::RefCell, rc::Rc};
+    use {
+        super::*,
+        crate::{clock::Epoch, program_error::ProgramError, pubkey::Pubkey},
+        std::{cell::RefCell, rc::Rc},
+    };
 
     #[repr(C)]
     #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]

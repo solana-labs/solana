@@ -3,7 +3,6 @@
 //! this account carries the Bank's most recent bank hashes for some N parents
 //!
 pub use crate::slot_hashes::SlotHashes;
-
 use crate::{account_info::AccountInfo, program_error::ProgramError, sysvar::Sysvar};
 
 crate::declare_sysvar_id!("SysvarS1otHashes111111111111111111111111111", SlotHashes);
@@ -22,8 +21,10 @@ impl Sysvar for SlotHashes {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{clock::Slot, hash::Hash, slot_hashes::MAX_ENTRIES};
+    use {
+        super::*,
+        crate::{clock::Slot, hash::Hash, slot_hashes::MAX_ENTRIES},
+    };
 
     #[test]
     fn test_size_of() {

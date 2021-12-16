@@ -2,36 +2,40 @@
 //! unique ID that is the hash of the Entry before it, plus the hash of the
 //! transactions within it. Entries cannot be reordered, and its field `num_hashes`
 //! represents an approximate amount of time since the last Entry was created.
-use crate::poh::Poh;
-use dlopen::symbor::{Container, SymBorApi, Symbol};
-use dlopen_derive::SymBorApi;
-use log::*;
-use rand::{thread_rng, Rng};
-use rayon::prelude::*;
-use rayon::ThreadPool;
-use serde::{Deserialize, Serialize};
-use solana_measure::measure::Measure;
-use solana_merkle_tree::MerkleTree;
-use solana_metrics::*;
-use solana_perf::cuda_runtime::PinnedVec;
-use solana_perf::perf_libs;
-use solana_perf::recycler::Recycler;
-use solana_rayon_threadlimit::get_thread_count;
-use solana_runtime::hashed_transaction::HashedTransaction;
-use solana_sdk::hash::Hash;
-use solana_sdk::packet::PACKET_DATA_SIZE;
-use solana_sdk::timing;
-use solana_sdk::transaction::Transaction;
-use solana_sdk::{feature_set, feature_set::FeatureSet};
-use std::borrow::Cow;
-use std::cell::RefCell;
-use std::ffi::OsStr;
-use std::sync::mpsc::{Receiver, Sender};
-use std::sync::Once;
-use std::sync::{Arc, Mutex};
-use std::thread::JoinHandle;
-use std::time::Instant;
-use std::{cmp, thread};
+use {
+    crate::poh::Poh,
+    dlopen::symbor::{Container, SymBorApi, Symbol},
+    dlopen_derive::SymBorApi,
+    log::*,
+    rand::{thread_rng, Rng},
+    rayon::{prelude::*, ThreadPool},
+    serde::{Deserialize, Serialize},
+    solana_measure::measure::Measure,
+    solana_merkle_tree::MerkleTree,
+    solana_metrics::*,
+    solana_perf::{cuda_runtime::PinnedVec, perf_libs, recycler::Recycler},
+    solana_rayon_threadlimit::get_thread_count,
+    solana_runtime::hashed_transaction::HashedTransaction,
+    solana_sdk::{
+        feature_set::{self, FeatureSet},
+        hash::Hash,
+        packet::PACKET_DATA_SIZE,
+        timing,
+        transaction::Transaction,
+    },
+    std::{
+        borrow::Cow,
+        cell::RefCell,
+        cmp,
+        ffi::OsStr,
+        sync::{
+            mpsc::{Receiver, Sender},
+            Arc, Mutex, Once,
+        },
+        thread::{self, JoinHandle},
+        time::Instant,
+    },
+};
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
@@ -729,16 +733,18 @@ pub fn next_entry(prev_hash: &Hash, num_hashes: u64, transactions: Vec<Transacti
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::entry::Entry;
-    use solana_sdk::{
-        hash::{hash, new_rand as hash_new_rand, Hash},
-        message::Message,
-        packet::PACKET_DATA_SIZE,
-        pubkey::Pubkey,
-        signature::{Keypair, Signer},
-        system_instruction, system_transaction,
-        transaction::Transaction,
+    use {
+        super::*,
+        crate::entry::Entry,
+        solana_sdk::{
+            hash::{hash, new_rand as hash_new_rand, Hash},
+            message::Message,
+            packet::PACKET_DATA_SIZE,
+            pubkey::Pubkey,
+            signature::{Keypair, Signer},
+            system_instruction, system_transaction,
+            transaction::Transaction,
+        },
     };
 
     #[test]

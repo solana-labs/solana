@@ -1,19 +1,20 @@
-use solana_sdk::{
-    account::Account,
-    account::AccountSharedData,
-    feature::{self, Feature},
-    feature_set::FeatureSet,
-    fee_calculator::FeeRateGovernor,
-    genesis_config::{ClusterType, GenesisConfig},
-    pubkey::Pubkey,
-    rent::Rent,
-    signature::{Keypair, Signer},
-    stake::state::StakeState,
-    system_program,
+use {
+    solana_sdk::{
+        account::{Account, AccountSharedData},
+        feature::{self, Feature},
+        feature_set::FeatureSet,
+        fee_calculator::FeeRateGovernor,
+        genesis_config::{ClusterType, GenesisConfig},
+        pubkey::Pubkey,
+        rent::Rent,
+        signature::{Keypair, Signer},
+        stake::state::StakeState,
+        system_program,
+    },
+    solana_stake_program::stake_state,
+    solana_vote_program::vote_state,
+    std::borrow::Borrow,
 };
-use solana_stake_program::stake_state;
-use solana_vote_program::vote_state;
-use std::borrow::Borrow;
 
 // Default amount received by the validator
 const VALIDATOR_LAMPORTS: u64 = 42;

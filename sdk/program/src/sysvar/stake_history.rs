@@ -3,7 +3,6 @@
 //! this account carries history about stake activations and de-activations
 //!
 pub use crate::stake_history::StakeHistory;
-
 use crate::sysvar::Sysvar;
 
 crate::declare_sysvar_id!("SysvarStakeHistory1111111111111111111111111", StakeHistory);
@@ -18,8 +17,7 @@ impl Sysvar for StakeHistory {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::stake_history::*;
+    use {super::*, crate::stake_history::*};
 
     #[test]
     fn test_size_of() {

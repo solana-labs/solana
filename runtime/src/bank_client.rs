@@ -1,28 +1,30 @@
-use crate::bank::Bank;
-use solana_sdk::{
-    account::Account,
-    client::{AsyncClient, Client, SyncClient},
-    commitment_config::CommitmentConfig,
-    epoch_info::EpochInfo,
-    fee_calculator::{FeeCalculator, FeeRateGovernor},
-    hash::Hash,
-    instruction::Instruction,
-    message::Message,
-    pubkey::Pubkey,
-    signature::{Keypair, Signature, Signer},
-    signers::Signers,
-    system_instruction,
-    transaction::{self, Transaction},
-    transport::{Result, TransportError},
-};
-use std::{
-    io,
-    sync::{
-        mpsc::{channel, Receiver, Sender},
-        Arc, Mutex,
+use {
+    crate::bank::Bank,
+    solana_sdk::{
+        account::Account,
+        client::{AsyncClient, Client, SyncClient},
+        commitment_config::CommitmentConfig,
+        epoch_info::EpochInfo,
+        fee_calculator::{FeeCalculator, FeeRateGovernor},
+        hash::Hash,
+        instruction::Instruction,
+        message::Message,
+        pubkey::Pubkey,
+        signature::{Keypair, Signature, Signer},
+        signers::Signers,
+        system_instruction,
+        transaction::{self, Transaction},
+        transport::{Result, TransportError},
     },
-    thread::{sleep, Builder},
-    time::{Duration, Instant},
+    std::{
+        io,
+        sync::{
+            mpsc::{channel, Receiver, Sender},
+            Arc, Mutex,
+        },
+        thread::{sleep, Builder},
+        time::{Duration, Instant},
+    },
 };
 
 pub struct BankClient {
@@ -307,8 +309,10 @@ impl BankClient {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_sdk::{genesis_config::create_genesis_config, instruction::AccountMeta};
+    use {
+        super::*,
+        solana_sdk::{genesis_config::create_genesis_config, instruction::AccountMeta},
+    };
 
     #[test]
     fn test_bank_client_new_with_keypairs() {
