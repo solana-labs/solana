@@ -1881,7 +1881,8 @@ mod tests {
             system_transaction,
             transaction::SanitizedTransaction,
         },
-        std::mem::size_of,
+        std::{convert::TryFrom, mem::size_of},
+        tempfile::NamedTempFile,
     };
 
     #[test]
@@ -2014,6 +2015,29 @@ mod tests {
             },
         );
         assert_matches!(result, Err(SnapshotError::Io(ref message)) if message.to_string().starts_with("invalid snapshot data file"));
+    }
+
+    #[test]
+    fn test_snapshot_version_from_file_under_limit() {
+        let file_content = format!("v{}", DEFAULT_SNAPSHOT_VERSION);
+        let mut file = NamedTempFile::new().unwrap();
+        file.write_all(file_content.as_bytes()).unwrap();
+        let version_from_file = snapshot_version_from_file(file.path()).unwrap();
+        assert_eq!(version_from_file, file_content);
+    }
+
+    #[test]
+    fn test_snapshot_version_from_file_over_limit() {
+        // Verify `as usize` below is safe.
+        usize::try_from(MAX_SNAPSHOT_VERSION_FILE_SIZE + 1).unwrap();
+
+        let file_content = [7u8; (MAX_SNAPSHOT_VERSION_FILE_SIZE + 1) as usize];
+        let mut file = NamedTempFile::new().unwrap();
+        file.write_all(&file_content).unwrap();
+        assert_matches!(
+            snapshot_version_from_file(file.path()),
+            Err(SnapshotError::Io(ref message)) if message.to_string().starts_with("snapshot version file too large")
+        );
     }
 
     #[test]
