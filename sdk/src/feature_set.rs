@@ -277,6 +277,10 @@ pub mod spl_token_v3_3_0_release {
     solana_sdk::declare_id!("Ftok2jhqAqxUWEiCVRrfRs9DPppWP8cgTB7NQNKL88mS");
 }
 
+pub mod reject_non_rent_exempt_vote_withdraws {
+    solana_sdk::declare_id!("7txXZZD6Um59YoLMF7XUNimbMjsqsWhc7g2EniiTrmp1");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -346,6 +350,7 @@ lazy_static! {
         (reject_section_virtual_address_file_offset_mismatch::id(), "enforce section virtual addresses and file offsets in ELF to be equal"),
         (reject_all_elf_rw::id(), "reject all read-write data in program elfs"),
         (spl_token_v3_3_0_release::id(), "spl-token v3.3.0 release"),
+        (reject_non_rent_exempt_vote_withdraws::id(), "fail vote withdraw instructions which leave the account non-rent-exempt"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
