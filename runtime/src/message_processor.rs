@@ -111,17 +111,15 @@ impl MessageProcessor {
                 invoke_context.instruction_recorder =
                     Some(&instruction_recorders[instruction_index]);
             }
-            let pre_remaining_units = invoke_context.get_compute_meter().borrow().get_remaining();
             let mut time = Measure::start("execute_instruction");
-            invoke_context
+            let compute_meter_consumption = invoke_context
                 .process_instruction(message, instruction, program_indices, &[], &[])
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
             time.stop();
-            let post_remaining_units = invoke_context.get_compute_meter().borrow().get_remaining();
             timings.accumulate_program(
                 instruction.program_id(&message.account_keys),
                 time.as_us(),
-                pre_remaining_units - post_remaining_units,
+                compute_meter_consumption,
             );
             timings.accumulate(&invoke_context.timings);
         }
