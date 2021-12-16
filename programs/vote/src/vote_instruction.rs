@@ -16,7 +16,7 @@ use {
         hash::Hash,
         instruction::{AccountMeta, Instruction, InstructionError},
         keyed_account::{from_keyed_account, get_signers, keyed_account_at_index, KeyedAccount},
-        process_instruction::InvokeContext,
+        process_instruction::{get_sysvar, InvokeContext},
         program_utils::limited_deserialize,
         pubkey::Pubkey,
         system_instruction,
@@ -366,7 +366,14 @@ pub fn process_instruction(
         }
         VoteInstruction::Withdraw(lamports) => {
             let to = keyed_account_at_index(keyed_accounts, 1)?;
-            vote_state::withdraw(me, lamports, to, &signers)
+            let rent_sysvar = if invoke_context
+                .is_feature_active(&feature_set::reject_non_rent_exempt_vote_withdraws::id())
+            {
+                Some(get_sysvar(invoke_context, &sysvar::rent::id())?)
+            } else {
+                None
+            };
+            vote_state::withdraw(me, lamports, to, &signers, rent_sysvar)
         }
         VoteInstruction::AuthorizeChecked(vote_authorize) => {
             if invoke_context.is_feature_active(&feature_set::vote_stake_checked_instructions::id())
@@ -395,7 +402,7 @@ mod tests {
         bincode::serialize,
         solana_sdk::{
             account::{self, Account, AccountSharedData},
-            process_instruction::MockInvokeContext,
+            process_instruction::{mock_set_sysvar, MockInvokeContext},
             rent::Rent,
         },
         std::{cell::RefCell, str::FromStr},
@@ -454,11 +461,14 @@ mod tests {
                 .zip(accounts.iter())
                 .map(|(meta, account)| KeyedAccount::new(&meta.pubkey, meta.is_signer, account))
                 .collect();
-            super::process_instruction(
-                &Pubkey::default(),
-                &instruction.data,
-                &mut MockInvokeContext::new(keyed_accounts),
+            let mut invoke_context = MockInvokeContext::new(keyed_accounts);
+            mock_set_sysvar(
+                &mut invoke_context,
+                sysvar::rent::id(),
+                sysvar::rent::Rent::default(),
             )
+            .unwrap();
+            super::process_instruction(&Pubkey::default(), &instruction.data, &mut invoke_context)
         }
     }
 
