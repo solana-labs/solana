@@ -49,7 +49,7 @@ pub struct FeeRateGovernor {
     // The current cost of a signature  This amount may increase/decrease over time based on
     // cluster processing load.
     #[serde(skip)]
-    pub lamports_per_signature: u64,
+    lamports_per_signature: u64,
 
     // The target cost of a signature when the cluster is operating around target_signatures_per_slot
     // signatures
@@ -159,6 +159,16 @@ impl FeeRateGovernor {
             me.lamports_per_signature
         );
         me
+    }
+
+    #[deprecated(note = "Remove after `disable_fee_calculator` feature is activated")]
+    pub fn override_lamports_per_signature(&mut self, lamports_per_signature: u64) {
+        self.lamports_per_signature = lamports_per_signature;
+    }
+
+    /// get current lamports per signature
+    pub fn get_lamports_per_signature(&self) -> u64 {
+        self.lamports_per_signature
     }
 
     /// calculate unburned fee from a fee total, returns (unburned, burned)

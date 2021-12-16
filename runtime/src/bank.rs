@@ -1655,8 +1655,9 @@ impl Bank {
         assert_eq!(bank.epoch_schedule, genesis_config.epoch_schedule);
         assert_eq!(bank.epoch, bank.epoch_schedule.get_epoch(bank.slot));
         if !bank.feature_set.is_active(&disable_fee_calculator::id()) {
-            bank.fee_rate_governor.lamports_per_signature =
-                bank.fee_calculator.lamports_per_signature;
+            #[allow(deprecated)]
+            bank.fee_rate_governor
+                .override_lamports_per_signature(bank.fee_calculator.lamports_per_signature);
             assert_eq!(
                 bank.fee_rate_governor.create_fee_calculator(),
                 bank.fee_calculator
@@ -2762,7 +2763,7 @@ impl Bank {
 
         self.blockhash_queue.write().unwrap().genesis_hash(
             &genesis_config.hash(),
-            self.fee_rate_governor.lamports_per_signature,
+            self.fee_rate_governor.get_lamports_per_signature(),
         );
 
         self.hashes_per_tick = genesis_config.hashes_per_tick();
@@ -2918,7 +2919,7 @@ impl Bank {
     }
 
     pub fn get_lamports_per_signature(&self) -> u64 {
-        self.fee_rate_governor.lamports_per_signature
+        self.fee_rate_governor.get_lamports_per_signature()
     }
 
     pub fn get_lamports_per_signature_for_blockhash(&self, hash: &Hash) -> Option<u64> {
@@ -3043,7 +3044,8 @@ impl Bank {
         inc_new_counter_debug!("bank-register_tick-registered", 1);
         let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
         if self.is_block_boundary(self.tick_height.load(Relaxed) + 1) {
-            w_blockhash_queue.register_hash(hash, self.fee_rate_governor.lamports_per_signature);
+            w_blockhash_queue
+                .register_hash(hash, self.fee_rate_governor.get_lamports_per_signature());
             self.update_recent_blockhashes_locked(&w_blockhash_queue);
         }
         // ReplayStage will start computing the accounts delta hash when it
