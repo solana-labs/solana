@@ -371,13 +371,12 @@ fn reconstruct_single_storage<E>(
     slot: &Slot,
     append_vec_path: &Path,
     storage_entry: &E,
-    remapped_append_vec_id: Option<AppendVecId>,
+    append_vec_id: AppendVecId,
     new_slot_storage: &mut HashMap<AppendVecId, Arc<AccountStorageEntry>>,
 ) -> Result<(), Error>
 where
     E: SerializableStorage,
 {
-    let append_vec_id = remapped_append_vec_id.unwrap_or_else(|| storage_entry.id());
     let (accounts, num_accounts) =
         AppendVec::new_from_file(append_vec_path, storage_entry.current_len())?;
     let u_storage_entry =
@@ -488,7 +487,7 @@ where
                     slot,
                     &remapped_append_vec_path,
                     storage_entry,
-                    Some(remapped_append_vec_id),
+                    remapped_append_vec_id,
                     &mut new_slot_storage,
                 )?;
             }
