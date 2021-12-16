@@ -13,7 +13,7 @@ use {
         result::{Error, Result},
     },
     crossbeam_channel::{
-        Receiver as CrossbeamReceiver, RecvTimeoutError as CrossbeamRecvTimeoutError, Select,
+        Receiver as CrossbeamReceiver, RecvTimeoutError as CrossbeamRecvTimeoutError,
         Sender as CrossbeamSender,
     },
     itertools::Itertools,
@@ -34,7 +34,7 @@ use {
         socket::SocketAddrSpace,
     },
     std::{
-        collections::HashMap,
+        collections::{HashMap, HashSet},
         iter::repeat,
         net::UdpSocket,
         sync::{
@@ -217,7 +217,6 @@ impl BroadcastStage {
                 }
                 Error::RecvTimeout(RecvTimeoutError::Timeout)
                 | Error::CrossbeamRecvTimeout(CrossbeamRecvTimeoutError::Timeout)
-                | Error::ReadyTimeout
                 | Error::ClusterInfo(ClusterInfoError::NoPeers) => (), // TODO: Why are the unit-tests throwing hundreds of these?
                 _ => {
                     inc_new_counter_error!("streamer-broadcaster-error", 1, 1);
@@ -343,12 +342,13 @@ impl BroadcastStage {
         retransmit_slots_receiver: &RetransmitSlotsReceiver,
         socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
     ) -> Result<()> {
-        let mut sel = Select::new();
-        sel.recv(retransmit_slots_receiver);
-        let _ = sel.ready_timeout(Duration::from_millis(100))?;
+        const RECV_TIMEOUT: Duration = Duration::from_millis(100);
+        let retransmit_slots: HashSet<Slot> =
+            std::iter::once(retransmit_slots_receiver.recv_timeout(RECV_TIMEOUT)?)
+                .chain(retransmit_slots_receiver.try_iter())
+                .collect();
 
-        // Check for a retransmit signal
-        while let Ok(new_retransmit_slot) = retransmit_slots_receiver.try_recv() {
+        for new_retransmit_slot in retransmit_slots {
             let data_shreds = Arc::new(
                 blockstore
                     .get_data_shreds_for_slot(new_retransmit_slot, 0)
