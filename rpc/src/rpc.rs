@@ -3223,38 +3223,37 @@ pub mod rpc_full {
                     return Err(Error::invalid_params("base58 encoding not supported"));
                 }
 
-                if config_accounts.addresses.len() > post_simulation_accounts.len() {
+                let number_of_accounts = transaction.message.account_keys.len();
+                if config_accounts.addresses.len() > number_of_accounts {
                     return Err(Error::invalid_params(format!(
                         "Too many accounts provided; max {}",
-                        post_simulation_accounts.len()
+                        number_of_accounts
                     )));
                 }
 
-                let mut accounts = vec![];
-                for address_str in config_accounts.addresses {
-                    let address = verify_pubkey(&address_str)?;
-                    accounts.push(if result.is_err() {
-                        None
-                    } else {
-                        (0..transaction.message.account_keys.len())
-                            .position(|i| {
-                                post_simulation_accounts
-                                    .get(i)
-                                    .map(|(key, _account)| *key == address)
-                                    .unwrap_or(false)
-                            })
-                            .map(|i| {
-                                UiAccount::encode(
-                                    &address,
-                                    &post_simulation_accounts[i].1,
-                                    accounts_encoding,
-                                    None,
-                                    None,
-                                )
-                            })
-                    });
+                if result.is_err() {
+                    Some(vec![None; config_accounts.addresses.len()])
+                } else {
+                    let mut accounts = vec![];
+                    for address_str in config_accounts.addresses {
+                        let address = verify_pubkey(&address_str)?;
+                        accounts.push(
+                            post_simulation_accounts
+                                .iter()
+                                .find(|(key, _account)| key == &address)
+                                .map(|(pubkey, account)| {
+                                    UiAccount::encode(
+                                        pubkey,
+                                        account,
+                                        accounts_encoding,
+                                        None,
+                                        None,
+                                    )
+                                }),
+                        );
+                    }
+                    Some(accounts)
                 }
-                Some(accounts)
             } else {
                 None
             };
