@@ -130,6 +130,7 @@ pub fn to_packet_batch_with_destination<T: Serialize, P: PacketInterface>(
     out
 }
 
+// TODO (ryleung): Fix this to work with ExtendedPacket too
 pub fn limited_deserialize<T>(data: &[u8]) -> bincode::Result<T>
 where
     T: serde::de::DeserializeOwned,
