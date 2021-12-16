@@ -8,7 +8,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     solana_core::{sigverify::TransactionSigVerifier, sigverify_stage::SigVerifyStage},
-    solana_perf::{packet::to_packets_chunked, test_tx::test_tx},
+    solana_perf::{packet::to_packet_batches, test_tx::test_tx},
     solana_sdk::{
         hash::Hash,
         signature::{Keypair, Signer},
@@ -28,7 +28,7 @@ fn bench_packet_discard(bencher: &mut Bencher) {
     let len = 30 * 1000;
     let chunk_size = 1024;
     let tx = test_tx();
-    let mut batches = to_packets_chunked(&vec![tx; len], chunk_size);
+    let mut batches = to_packet_batches(&vec![tx; len], chunk_size);
 
     let mut total = 0;
 
@@ -74,7 +74,7 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
     let chunk_size = 1024;
     let mut batches = if use_same_tx {
         let tx = test_tx();
-        to_packets_chunked(&vec![tx; len], chunk_size)
+        to_packet_batches(&vec![tx; len], chunk_size)
     } else {
         let from_keypair = Keypair::new();
         let to_keypair = Keypair::new();
@@ -89,7 +89,7 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
                 )
             })
             .collect();
-        to_packets_chunked(&txs, chunk_size)
+        to_packet_batches(&txs, chunk_size)
     };
 
     trace!(

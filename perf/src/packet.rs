@@ -13,13 +13,13 @@ pub const PACKETS_PER_BATCH: usize = 128;
 pub const NUM_RCVMMSGS: usize = 128;
 
 #[derive(Debug, Default, Clone)]
-pub struct Packets {
+pub struct PacketBatch {
     pub packets: PinnedVec<Packet>,
 }
 
-pub type PacketsRecycler = Recycler<PinnedVec<Packet>>;
+pub type PacketBatchRecycler = Recycler<PinnedVec<Packet>>;
 
-impl Packets {
+impl PacketBatch {
     pub fn new(packets: Vec<Packet>) -> Self {
         let packets = PinnedVec::from_vec(packets);
         Self { packets }
@@ -27,48 +27,52 @@ impl Packets {
 
     pub fn with_capacity(capacity: usize) -> Self {
         let packets = PinnedVec::with_capacity(capacity);
-        Packets { packets }
+        PacketBatch { packets }
     }
 
     pub fn new_unpinned_with_recycler(
-        recycler: PacketsRecycler,
+        recycler: PacketBatchRecycler,
         size: usize,
         name: &'static str,
     ) -> Self {
         let mut packets = recycler.allocate(name);
         packets.reserve(size);
-        Packets { packets }
+        PacketBatch { packets }
     }
 
-    pub fn new_with_recycler(recycler: PacketsRecycler, size: usize, name: &'static str) -> Self {
+    pub fn new_with_recycler(
+        recycler: PacketBatchRecycler,
+        size: usize,
+        name: &'static str,
+    ) -> Self {
         let mut packets = recycler.allocate(name);
         packets.reserve_and_pin(size);
-        Packets { packets }
+        PacketBatch { packets }
     }
 
     pub fn new_with_recycler_data(
-        recycler: &PacketsRecycler,
+        recycler: &PacketBatchRecycler,
         name: &'static str,
         mut packets: Vec<Packet>,
     ) -> Self {
-        let mut vec = Self::new_with_recycler(recycler.clone(), packets.len(), name);
-        vec.packets.append(&mut packets);
-        vec
+        let mut batch = Self::new_with_recycler(recycler.clone(), packets.len(), name);
+        batch.packets.append(&mut packets);
+        batch
     }
 
     pub fn new_unpinned_with_recycler_data(
-        recycler: &PacketsRecycler,
+        recycler: &PacketBatchRecycler,
         name: &'static str,
         mut packets: Vec<Packet>,
     ) -> Self {
-        let mut vec = Self::new_unpinned_with_recycler(recycler.clone(), packets.len(), name);
-        vec.packets.append(&mut packets);
-        vec
+        let mut batch = Self::new_unpinned_with_recycler(recycler.clone(), packets.len(), name);
+        batch.packets.append(&mut packets);
+        batch
     }
 
     pub fn set_addr(&mut self, addr: &SocketAddr) {
-        for m in self.packets.iter_mut() {
-            m.meta.set_addr(addr);
+        for p in self.packets.iter_mut() {
+            p.meta.set_addr(addr);
         }
     }
 
@@ -77,32 +81,32 @@ impl Packets {
     }
 }
 
-pub fn to_packets_chunked<T: Serialize>(xs: &[T], chunks: usize) -> Vec<Packets> {
+pub fn to_packet_batches<T: Serialize>(xs: &[T], chunks: usize) -> Vec<PacketBatch> {
     let mut out = vec![];
     for x in xs.chunks(chunks) {
-        let mut p = Packets::with_capacity(x.len());
-        p.packets.resize(x.len(), Packet::default());
-        for (i, o) in x.iter().zip(p.packets.iter_mut()) {
-            Packet::populate_packet(o, None, i).expect("serialize request");
+        let mut batch = PacketBatch::with_capacity(x.len());
+        batch.packets.resize(x.len(), Packet::default());
+        for (i, packet) in x.iter().zip(batch.packets.iter_mut()) {
+            Packet::populate_packet(packet, None, i).expect("serialize request");
         }
-        out.push(p);
+        out.push(batch);
     }
     out
 }
 
 #[cfg(test)]
-pub fn to_packets<T: Serialize>(xs: &[T]) -> Vec<Packets> {
-    to_packets_chunked(xs, NUM_PACKETS)
+pub fn to_packet_batches_for_tests<T: Serialize>(xs: &[T]) -> Vec<PacketBatch> {
+    to_packet_batches(xs, NUM_PACKETS)
 }
 
-pub fn to_packets_with_destination<T: Serialize>(
-    recycler: PacketsRecycler,
+pub fn to_packet_batch_with_destination<T: Serialize>(
+    recycler: PacketBatchRecycler,
     dests_and_data: &[(SocketAddr, T)],
-) -> Packets {
-    let mut out = Packets::new_unpinned_with_recycler(
+) -> PacketBatch {
+    let mut out = PacketBatch::new_unpinned_with_recycler(
         recycler,
         dests_and_data.len(),
-        "to_packets_with_destination",
+        "to_packet_batch_with_destination",
     );
     out.packets.resize(dests_and_data.len(), Packet::default());
     for (dest_and_data, o) in dests_and_data.iter().zip(out.packets.iter_mut()) {
@@ -143,21 +147,21 @@ mod tests {
     };
 
     #[test]
-    fn test_to_packets() {
+    fn test_to_packet_batches() {
         let keypair = Keypair::new();
         let hash = Hash::new(&[1; 32]);
         let tx = system_transaction::transfer(&keypair, &keypair.pubkey(), 1, hash);
-        let rv = to_packets(&[tx.clone(); 1]);
+        let rv = to_packet_batches_for_tests(&[tx.clone(); 1]);
         assert_eq!(rv.len(), 1);
         assert_eq!(rv[0].packets.len(), 1);
 
         #[allow(clippy::useless_vec)]
-        let rv = to_packets(&vec![tx.clone(); NUM_PACKETS]);
+        let rv = to_packet_batches_for_tests(&vec![tx.clone(); NUM_PACKETS]);
         assert_eq!(rv.len(), 1);
         assert_eq!(rv[0].packets.len(), NUM_PACKETS);
 
         #[allow(clippy::useless_vec)]
-        let rv = to_packets(&vec![tx; NUM_PACKETS + 1]);
+        let rv = to_packet_batches_for_tests(&vec![tx; NUM_PACKETS + 1]);
         assert_eq!(rv.len(), 2);
         assert_eq!(rv[0].packets.len(), NUM_PACKETS);
         assert_eq!(rv[1].packets.len(), 1);
@@ -165,9 +169,10 @@ mod tests {
 
     #[test]
     fn test_to_packets_pinning() {
-        let recycler = PacketsRecycler::default();
+        let recycler = PacketBatchRecycler::default();
         for i in 0..2 {
-            let _first_packets = Packets::new_with_recycler(recycler.clone(), i + 1, "first one");
+            let _first_packets =
+                PacketBatch::new_with_recycler(recycler.clone(), i + 1, "first one");
         }
     }
 }

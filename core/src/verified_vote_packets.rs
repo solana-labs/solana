@@ -1,7 +1,7 @@
 use {
     crate::{cluster_info_vote_listener::VerifiedLabelVotePacketsReceiver, result::Result},
     solana_gossip::crds_value::CrdsValueLabel,
-    solana_perf::packet::Packets,
+    solana_perf::packet::PacketBatch,
     solana_sdk::clock::Slot,
     std::{
         collections::{hash_map::Entry, HashMap},
@@ -10,7 +10,7 @@ use {
 };
 
 #[derive(Default)]
-pub struct VerifiedVotePackets(HashMap<CrdsValueLabel, (u64, Slot, Packets)>);
+pub struct VerifiedVotePackets(HashMap<CrdsValueLabel, (u64, Slot, PacketBatch)>);
 
 impl VerifiedVotePackets {
     pub fn receive_and_process_vote_packets(
@@ -41,11 +41,11 @@ impl VerifiedVotePackets {
     }
 
     #[cfg(test)]
-    fn get_vote_packets(&self, key: &CrdsValueLabel) -> Option<&(u64, Slot, Packets)> {
+    fn get_vote_packets(&self, key: &CrdsValueLabel) -> Option<&(u64, Slot, PacketBatch)> {
         self.0.get(key)
     }
 
-    pub fn get_latest_votes(&self, last_update_version: u64) -> (u64, Packets) {
+    pub fn get_latest_votes(&self, last_update_version: u64) -> (u64, PacketBatch) {
         let mut new_update_version = last_update_version;
         let mut votes = HashMap::new();
         for (label, (version, slot, packets)) in &self.0 {
@@ -70,7 +70,7 @@ impl VerifiedVotePackets {
             .flat_map(|(_, (_, packets))| &packets.packets)
             .cloned()
             .collect();
-        (new_update_version, Packets::new(packets))
+        (new_update_version, PacketBatch::new(packets))
     }
 }
 
@@ -98,14 +98,14 @@ mod tests {
             ..Packet::default()
         };
 
-        let none_empty_packets = Packets::new(vec![data, Packet::default()]);
+        let none_empty_packets = PacketBatch::new(vec![data, Packet::default()]);
 
         verified_vote_packets
             .0
             .insert(label1, (2, 42, none_empty_packets));
         verified_vote_packets
             .0
-            .insert(label2, (1, 23, Packets::default()));
+            .insert(label2, (1, 23, PacketBatch::default()));
 
         // Both updates have timestamps greater than 0, so both should be returned
         let (new_update_version, updates) = verified_vote_packets.get_latest_votes(0);
@@ -132,9 +132,9 @@ mod tests {
         let label1 = CrdsValueLabel::Vote(0, pubkey);
         let label2 = CrdsValueLabel::Vote(1, pubkey);
         let mut update_version = 0;
-        s.send(vec![(label1.clone(), 17, Packets::default())])
+        s.send(vec![(label1.clone(), 17, PacketBatch::default())])
             .unwrap();
-        s.send(vec![(label2.clone(), 23, Packets::default())])
+        s.send(vec![(label2.clone(), 23, PacketBatch::default())])
             .unwrap();
 
         let data = Packet {
@@ -145,7 +145,7 @@ mod tests {
             ..Packet::default()
         };
 
-        let later_packets = Packets::new(vec![data, Packet::default()]);
+        let later_packets = PacketBatch::new(vec![data, Packet::default()]);
         s.send(vec![(label1.clone(), 42, later_packets)]).unwrap();
         let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
         verified_vote_packets
@@ -180,7 +180,7 @@ mod tests {
         );
 
         // Test timestamp for next batch overwrites the original
-        s.send(vec![(label2.clone(), 51, Packets::default())])
+        s.send(vec![(label2.clone(), 51, PacketBatch::default())])
             .unwrap();
         verified_vote_packets
             .receive_and_process_vote_packets(&r, &mut update_version, true)

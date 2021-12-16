@@ -20,7 +20,7 @@ use {
     },
     solana_ledger::blockstore::Blockstore,
     solana_metrics::inc_new_counter_debug,
-    solana_perf::packet::{self, Packets},
+    solana_perf::packet::{self, PacketBatch},
     solana_poh::poh_recorder::PohRecorder,
     solana_rpc::{
         optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
@@ -56,8 +56,9 @@ use {
 // Map from a vote account to the authorized voter for an epoch
 pub type ThresholdConfirmedSlots = Vec<(Slot, Hash)>;
 pub type VotedHashUpdates = HashMap<Hash, Vec<Pubkey>>;
-pub type VerifiedLabelVotePacketsSender = CrossbeamSender<Vec<(CrdsValueLabel, Slot, Packets)>>;
-pub type VerifiedLabelVotePacketsReceiver = CrossbeamReceiver<Vec<(CrdsValueLabel, Slot, Packets)>>;
+pub type VerifiedLabelVotePacketsSender = CrossbeamSender<Vec<(CrdsValueLabel, Slot, PacketBatch)>>;
+pub type VerifiedLabelVotePacketsReceiver =
+    CrossbeamReceiver<Vec<(CrdsValueLabel, Slot, PacketBatch)>>;
 pub type VerifiedVoteTransactionsSender = CrossbeamSender<Vec<Transaction>>;
 pub type VerifiedVoteTransactionsReceiver = CrossbeamReceiver<Vec<Transaction>>;
 pub type VerifiedVoteSender = CrossbeamSender<(Pubkey, Vec<Slot>)>;
@@ -253,7 +254,7 @@ impl ClusterInfoVoteListener {
     pub fn new(
         exit: &Arc<AtomicBool>,
         cluster_info: Arc<ClusterInfo>,
-        verified_packets_sender: CrossbeamSender<Vec<Packets>>,
+        verified_packets_sender: CrossbeamSender<Vec<PacketBatch>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         vote_tracker: Arc<VoteTracker>,
         bank_forks: Arc<RwLock<BankForks>>,
@@ -352,35 +353,35 @@ impl ClusterInfoVoteListener {
     fn verify_votes(
         votes: Vec<Transaction>,
         labels: Vec<CrdsValueLabel>,
-    ) -> (Vec<Transaction>, Vec<(CrdsValueLabel, Slot, Packets)>) {
-        let mut msgs = packet::to_packets_chunked(&votes, 1);
+    ) -> (Vec<Transaction>, Vec<(CrdsValueLabel, Slot, PacketBatch)>) {
+        let mut packet_batches = packet::to_packet_batches(&votes, 1);
 
         // Votes should already be filtered by this point.
         let reject_non_vote = false;
-        sigverify::ed25519_verify_cpu(&mut msgs, reject_non_vote);
+        sigverify::ed25519_verify_cpu(&mut packet_batches, reject_non_vote);
 
-        let (vote_txs, packets) = izip!(labels.into_iter(), votes.into_iter(), msgs,)
-            .filter_map(|(label, vote, packet)| {
+        let (vote_txs, packet_batch) = izip!(labels.into_iter(), votes.into_iter(), packet_batches)
+            .filter_map(|(label, vote, packet_batch)| {
                 let slot = vote_transaction::parse_vote_transaction(&vote)
                     .and_then(|(_, vote, _)| vote.slots.last().copied())?;
 
-                // to_packets_chunked() above split into 1 packet long chunks
-                assert_eq!(packet.packets.len(), 1);
-                if !packet.packets[0].meta.discard {
-                    Some((vote, (label, slot, packet)))
+                // to_packet_batches() above split into 1 packet long chunks
+                assert_eq!(packet_batch.packets.len(), 1);
+                if !packet_batch.packets[0].meta.discard {
+                    Some((vote, (label, slot, packet_batch)))
                 } else {
                     None
                 }
             })
             .unzip();
-        (vote_txs, packets)
+        (vote_txs, packet_batch)
     }
 
     fn bank_send_loop(
         exit: Arc<AtomicBool>,
         verified_vote_label_packets_receiver: VerifiedLabelVotePacketsReceiver,
         poh_recorder: Arc<Mutex<PohRecorder>>,
-        verified_packets_sender: &CrossbeamSender<Vec<Packets>>,
+        verified_packets_sender: &CrossbeamSender<Vec<PacketBatch>>,
     ) -> Result<()> {
         let mut verified_vote_packets = VerifiedVotePackets::default();
         let mut time_since_lock = Instant::now();
@@ -414,10 +415,11 @@ impl ClusterInfoVoteListener {
                 let bank = poh_recorder.lock().unwrap().bank();
                 if let Some(bank) = bank {
                     let last_version = bank.last_vote_sync.load(Ordering::Relaxed);
-                    let (new_version, msgs) = verified_vote_packets.get_latest_votes(last_version);
-                    inc_new_counter_info!("bank_send_loop_batch_size", msgs.packets.len());
+                    let (new_version, packet_batch) =
+                        verified_vote_packets.get_latest_votes(last_version);
+                    inc_new_counter_info!("bank_send_loop_batch_size", packet_batch.packets.len());
                     inc_new_counter_info!("bank_send_loop_num_batches", 1);
-                    verified_packets_sender.send(vec![msgs])?;
+                    verified_packets_sender.send(vec![packet_batch])?;
                     #[allow(deprecated)]
                     bank.last_vote_sync.compare_and_swap(
                         last_version,
@@ -876,9 +878,9 @@ mod tests {
         use bincode::serialized_size;
         info!("max vote size {}", serialized_size(&vote_tx).unwrap());
 
-        let msgs = packet::to_packets_chunked(&[vote_tx], 1); // panics if won't fit
+        let packet_batches = packet::to_packet_batches(&[vote_tx], 1); // panics if won't fit
 
-        assert_eq!(msgs.len(), 1);
+        assert_eq!(packet_batches.len(), 1);
     }
 
     fn run_vote_contains_authorized_voter(hash: Option<Hash>) {
@@ -1706,8 +1708,11 @@ mod tests {
         assert!(packets.is_empty());
     }
 
-    fn verify_packets_len(packets: &[(CrdsValueLabel, Slot, Packets)], ref_value: usize) {
-        let num_packets: usize = packets.iter().map(|(_, _, p)| p.packets.len()).sum();
+    fn verify_packets_len(packets: &[(CrdsValueLabel, Slot, PacketBatch)], ref_value: usize) {
+        let num_packets: usize = packets
+            .iter()
+            .map(|(_, _, batch)| batch.packets.len())
+            .sum();
         assert_eq!(num_packets, ref_value);
     }
 
