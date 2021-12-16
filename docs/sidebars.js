@@ -91,6 +91,7 @@ module.exports = {
       },
       "developing/test-validator",
       "developing/backwards-compatibility",
+      "developing/plugins/accountsdb_plugin"
     ],
     Integrating: ["integrations/exchange"],
     Validating: [
