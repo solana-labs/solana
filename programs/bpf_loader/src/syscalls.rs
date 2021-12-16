@@ -24,15 +24,10 @@ use {
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         epoch_schedule::EpochSchedule,
         feature_set::{
-<<<<<<< HEAD
-            blake3_syscall_enabled, demote_program_write_locks, disable_fees_sysvar,
-            do_support_realloc, libsecp256k1_0_5_upgrade_enabled,
-=======
             blake3_syscall_enabled, disable_fees_sysvar, do_support_realloc,
-            fixed_memcpy_nonoverlapping_check, libsecp256k1_0_5_upgrade_enabled,
->>>>>>> 6ff0be6a8 (Clean up demote program write lock feature (#21949))
-            prevent_calling_precompiles_as_programs, return_data_syscall_enabled,
-            secp256k1_recover_syscall_enabled, sol_log_data_syscall_enabled,
+            libsecp256k1_0_5_upgrade_enabled, prevent_calling_precompiles_as_programs,
+            return_data_syscall_enabled, secp256k1_recover_syscall_enabled,
+            sol_log_data_syscall_enabled,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{AccountMeta, Instruction, InstructionError},

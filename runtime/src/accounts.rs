@@ -994,22 +994,12 @@ impl Accounts {
         let keys: Vec<_> = txs
             .zip(results)
             .filter_map(|(tx, res)| match res {
-<<<<<<< HEAD
                 Err(TransactionError::AccountInUse) => None,
                 Err(TransactionError::SanitizeFailure) => None,
                 Err(TransactionError::AccountLoadedTwice) => None,
                 Err(TransactionError::WouldExceedMaxBlockCostLimit) => None,
                 Err(TransactionError::WouldExceedMaxAccountCostLimit) => None,
-                _ => Some(tx.get_account_locks(demote_program_write_locks)),
-=======
-                Err(TransactionError::AccountInUse)
-                | Err(TransactionError::SanitizeFailure)
-                | Err(TransactionError::AccountLoadedTwice)
-                | Err(TransactionError::WouldExceedMaxBlockCostLimit)
-                | Err(TransactionError::WouldExceedMaxAccountCostLimit)
-                | Err(TransactionError::WouldExceedMaxAccountDataCostLimit) => None,
                 _ => Some(tx.get_account_locks()),
->>>>>>> 6ff0be6a8 (Clean up demote program write lock feature (#21949))
             })
             .collect();
         let mut account_locks = self.account_locks.lock().unwrap();
