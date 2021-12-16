@@ -639,7 +639,7 @@ impl<'a> InvokeContext<'a> {
         Ok((message, caller_write_privileges, program_indices))
     }
 
-    /// Process a cross-program instruction
+    /// Processes a cross-program instruction and returns how many compute units were used
     pub fn process_instruction(
         &mut self,
         message: &Message,
@@ -647,7 +647,7 @@ impl<'a> InvokeContext<'a> {
         program_indices: &[usize],
         account_indices: &[usize],
         caller_write_privileges: &[bool],
-    ) -> Result<(), InstructionError> {
+    ) -> Result<u64, InstructionError> {
         let is_lowest_invocation_level = self.invoke_stack.is_empty();
         if !is_lowest_invocation_level {
             // Verify the calling program hasn't misbehaved
@@ -658,11 +658,13 @@ impl<'a> InvokeContext<'a> {
             .push(message, instruction, program_indices, account_indices)
             .and_then(|_| {
                 self.return_data = (*instruction.program_id(&message.account_keys), Vec::new());
+                let pre_remaining_units = self.compute_meter.borrow().get_remaining();
                 self.process_executable_chain(&instruction.data)?;
+                let post_remaining_units = self.compute_meter.borrow().get_remaining();
 
                 // Verify the called program has not misbehaved
                 if is_lowest_invocation_level {
-                    self.verify(message, instruction, program_indices)
+                    self.verify(message, instruction, program_indices)?;
                 } else {
                     let demote_program_write_locks = self
                         .feature_set
@@ -670,8 +672,10 @@ impl<'a> InvokeContext<'a> {
                     let write_privileges: Vec<bool> = (0..message.account_keys.len())
                         .map(|i| message.is_writable(i, demote_program_write_locks))
                         .collect();
-                    self.verify_and_update(instruction, account_indices, &write_privileges)
+                    self.verify_and_update(instruction, account_indices, &write_privileges)?;
                 }
+
+                Ok(pre_remaining_units.saturating_sub(post_remaining_units))
             });
 
         // Pop the invoke_stack to restore previous state
@@ -1293,12 +1297,12 @@ mod tests {
         invoke_context.pop();
 
         let cases = vec![
-            (MockInstruction::NoopSuccess, Ok(())),
+            (MockInstruction::NoopSuccess, Ok(0)),
             (
                 MockInstruction::NoopFail,
                 Err(InstructionError::GenericError),
             ),
-            (MockInstruction::ModifyOwned, Ok(())),
+            (MockInstruction::ModifyOwned, Ok(0)),
             (
                 MockInstruction::ModifyNotOwned,
                 Err(InstructionError::ExternalAccountDataModified),
