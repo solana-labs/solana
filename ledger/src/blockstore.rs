@@ -13,8 +13,8 @@ use {
         leader_schedule_cache::LeaderScheduleCache,
         next_slots_iterator::NextSlotsIterator,
         shred::{
-            max_ticks_per_n_shreds, Result as ShredResult, Shred, ShredId, ShredType, Shredder,
-            SHRED_PAYLOAD_SIZE,
+            max_ticks_per_n_shreds, ErasureSetId, Result as ShredResult, Shred, ShredId, ShredType,
+            Shredder, SHRED_PAYLOAD_SIZE,
         },
     },
     bincode::deserialize,
@@ -551,8 +551,8 @@ impl Blockstore {
         false
     }
 
-    pub fn erasure_meta(&self, slot: Slot, set_index: u64) -> Result<Option<ErasureMeta>> {
-        self.erasure_meta_cf.get((slot, set_index))
+    fn erasure_meta(&self, erasure_set: ErasureSetId) -> Result<Option<ErasureMeta>> {
+        self.erasure_meta_cf.get(erasure_set.store_key())
     }
 
     pub fn orphan(&self, slot: Slot) -> Result<Option<bool>> {
@@ -731,7 +731,7 @@ impl Blockstore {
 
     fn try_shred_recovery(
         db: &Database,
-        erasure_metas: &HashMap<(Slot, /*fec set index:*/ u64), ErasureMeta>,
+        erasure_metas: &HashMap<ErasureSetId, ErasureMeta>,
         index_working_set: &mut HashMap<u64, IndexMetaWorkingSetEntry>,
         prev_inserted_shreds: &HashMap<ShredId, Shred>,
     ) -> Vec<Shred> {
@@ -743,7 +743,8 @@ impl Blockstore {
         // 2. For new data shreds, check if an erasure set exists. If not, don't try recovery
         // 3. Before trying recovery, check if enough number of shreds have been received
         // 3a. Enough number of shreds = (#data + #coding shreds) > erasure.num_data
-        for (&(slot, _fec_set_index), erasure_meta) in erasure_metas.iter() {
+        for (erasure_set, erasure_meta) in erasure_metas.iter() {
+            let slot = erasure_set.slot();
             let index_meta_entry = index_working_set.get_mut(&slot).expect("Index");
             let index = &mut index_meta_entry.index;
             match erasure_meta.status(index) {
@@ -940,8 +941,8 @@ impl Blockstore {
             &mut write_batch,
         )?;
 
-        for ((slot, set_index), erasure_meta) in erasure_metas {
-            write_batch.put::<cf::ErasureMeta>((slot, set_index), &erasure_meta)?;
+        for (erasure_set, erasure_meta) in erasure_metas {
+            write_batch.put::<cf::ErasureMeta>(erasure_set.store_key(), &erasure_meta)?;
         }
 
         for (&slot, index_working_set_entry) in index_working_set.iter() {
@@ -972,6 +973,13 @@ impl Blockstore {
         Ok((newly_completed_data_sets, inserted_indices))
     }
 
+    /// Range-delete all entries which prefix matches the specified `slot` and
+    /// clear all the related `SlotMeta` except its next_slots.
+    ///
+    /// This function currently requires `insert_shreds_lock`, as both
+    /// `clear_unconfirmed_slot()` and `insert_shreds_handle_duplicate()`
+    /// try to perform read-modify-write operation on [`cf::SlotMeta`] column
+    /// family.
     pub fn clear_unconfirmed_slot(&self, slot: Slot) {
         let _lock = self.insert_shreds_lock.lock().unwrap();
         if let Some(mut slot_meta) = self
@@ -1025,7 +1033,7 @@ impl Blockstore {
     fn check_insert_coding_shred<F>(
         &self,
         shred: Shred,
-        erasure_metas: &mut HashMap<(Slot, /*fec set index:*/ u64), ErasureMeta>,
+        erasure_metas: &mut HashMap<ErasureSetId, ErasureMeta>,
         index_working_set: &mut HashMap<u64, IndexMetaWorkingSetEntry>,
         write_batch: &mut WriteBatch,
         just_received_shreds: &mut HashMap<ShredId, Shred>,
@@ -1062,9 +1070,9 @@ impl Blockstore {
             }
         }
 
-        let set_index = u64::from(shred.fec_set_index());
-        let erasure_meta = erasure_metas.entry((slot, set_index)).or_insert_with(|| {
-            self.erasure_meta(slot, set_index)
+        let erasure_set = shred.erasure_set();
+        let erasure_meta = erasure_metas.entry(erasure_set).or_insert_with(|| {
+            self.erasure_meta(erasure_set)
                 .expect("Expect database get to succeed")
                 .unwrap_or_else(|| ErasureMeta::from_coding_shred(&shred).unwrap())
         });
@@ -1093,8 +1101,8 @@ impl Blockstore {
             // ToDo: This is a potential slashing condition
             warn!("Received multiple erasure configs for the same erasure set!!!");
             warn!(
-                "Slot: {}, shred index: {}, set_index: {}, is_duplicate: {}, stored config: {:#?}, new config: {:#?}",
-                slot, shred.index(), set_index, self.has_duplicate_shreds_in_slot(slot), erasure_meta.config(), shred.coding_header,
+                "Slot: {}, shred index: {}, erasure_set: {:?}, is_duplicate: {}, stored config: {:#?}, new config: {:#?}",
+                slot, shred.index(), erasure_set, self.has_duplicate_shreds_in_slot(slot), erasure_meta.config(), shred.coding_header,
             );
 
             return false;
@@ -1152,11 +1160,48 @@ impl Blockstore {
         None
     }
 
+    /// Create an entry to the specified `write_batch` that performs shred
+    /// insertion and associated metadata update.  The function also updates
+    /// its in-memory copy of the associated metadata.
+    ///
+    /// Currently, this function must be invoked while holding
+    /// `insert_shreds_lock` as it performs read-modify-write operations
+    /// on multiple column families.
+    ///
+    /// The resulting `write_batch` may include updates to [`cf::DeadSlots`]
+    /// and [`cf::ShredData`].  Note that it will also update the in-memory copy
+    /// of `erasure_metas` and `index_working_set`, which will later be
+    /// used to update other column families such as [`cf::ErasureMeta`] and
+    /// [`cf::Index`].
+    ///
+    /// Arguments:
+    /// - `shred`: the shred to be inserted
+    /// - `erasure_metas`: the in-memory hash-map that maintains the dirty
+    ///     copy of the erasure meta.  It will later be written to
+    ///     `cf::ErasureMeta` in insert_shreds_handle_duplicate().
+    /// - `index_working_set`: the in-memory hash-map that maintains the
+    ///     dirty copy of the index meta.  It will later be written to
+    ///     `cf::Index` in insert_shreds_handle_duplicate().
+    /// - `slot_meta_working_set`: the in-memory hash-map that maintains
+    ///     the dirty copy of the index meta.  It will later be written to
+    ///     `cf::SlotMeta` in insert_shreds_handle_duplicate().
+    /// - `write_batch`: the collection of the current writes which will
+    ///     be committed atomically.
+    /// - `just_inserted_data_shreds`: a (slot, shred index within the slot)
+    ///     to shred map which maintains which data shreds have been inserted.
+    /// - `index_meta_time`: the time spent on loading or creating the
+    ///     index meta entry from the db.
+    /// - `is_trusted`: if false, this function will check whether the
+    ///     input shred is dupliate.
+    /// - `handle_duplicate`: the function that handles duplication.
+    /// - `leader_schedule`: the leader schedule will be used to check
+    ///     whether it is okay to insert the input shred.
+    /// - `shred_source`: the source of the shred.
     #[allow(clippy::too_many_arguments)]
     fn check_insert_data_shred<F>(
         &self,
         shred: Shred,
-        erasure_metas: &mut HashMap<(Slot, /*fec set index:*/ u64), ErasureMeta>,
+        erasure_metas: &mut HashMap<ErasureSetId, ErasureMeta>,
         index_working_set: &mut HashMap<u64, IndexMetaWorkingSetEntry>,
         slot_meta_working_set: &mut HashMap<u64, SlotMetaWorkingSetEntry>,
         write_batch: &mut WriteBatch,
@@ -1220,7 +1265,7 @@ impl Blockstore {
             }
         }
 
-        let set_index = u64::from(shred.fec_set_index());
+        let erasure_set = shred.erasure_set();
         let newly_completed_data_sets = self.insert_data_shred(
             slot_meta,
             index_meta.data_mut(),
@@ -1231,8 +1276,8 @@ impl Blockstore {
         just_inserted_shreds.insert(shred.id(), shred);
         index_meta_working_set_entry.did_insert_occur = true;
         slot_meta_entry.did_insert_occur = true;
-        if let HashMapEntry::Vacant(entry) = erasure_metas.entry((slot, set_index)) {
-            if let Some(meta) = self.erasure_meta(slot, set_index).unwrap() {
+        if let HashMapEntry::Vacant(entry) = erasure_metas.entry(erasure_set) {
+            if let Some(meta) = self.erasure_meta(erasure_set).unwrap() {
                 entry.insert(meta);
             }
         }
@@ -3224,6 +3269,24 @@ fn get_index_meta_entry<'a>(
     res
 }
 
+/// Obtain the SlotMeta from the in-memory slot_meta_working_set or load
+/// it from the database if it does not exist in slot_meta_working_set.
+///
+/// In case none of the above has the specified SlotMeta, a new one will
+/// be created.
+///
+/// Note that this function will also update the parent slot of the specified
+/// slot.
+///
+/// Arguments:
+/// - `db`: the database
+/// - `slot_meta_working_set`: a in-memory structure for storing the cached
+///   SlotMeta.
+/// - `slot`: the slot for loading its meta.
+/// - `parent_slot`: the parent slot to be assigned to the specified slot meta
+///
+/// This function returns the matched `SlotMetaWorkingSetEntry`.  If such entry
+/// does not exist in the database, a new entry will be created.
 fn get_slot_meta_entry<'a>(
     db: &Database,
     slot_meta_working_set: &'a mut HashMap<u64, SlotMetaWorkingSetEntry>,
@@ -3298,6 +3361,23 @@ fn send_signals(
     }
 }
 
+/// For each slot in the slot_meta_working_set which has any change, include
+/// corresponding updates to cf::SlotMeta via the specified `write_batch`.
+/// The `write_batch` will later be atomically committed to the blockstore.
+///
+/// Arguments:
+/// - `slot_meta_working_set`: a map that maintains slot-id to its `SlotMeta`
+///   mapping.
+/// - `completed_slot_senders`: the units which are responsible for sending
+///   signals for completed slots.
+/// - `write_batch`: the write batch which includes all the updates of the
+///   the current write and ensures their atomicity.
+///
+/// On success, the function returns an Ok result with <should_signal,
+/// newly_completed_slots> pair where:
+///  - `should_signal`: a boolean flag indicating whether to send signal.
+///  - `newly_completed_slots`: a subset of slot_meta_working_set which are
+///    newly completed.
 fn commit_slot_meta_working_set(
     slot_meta_working_set: &HashMap<u64, SlotMetaWorkingSetEntry>,
     completed_slots_senders: &[SyncSender<Vec<u64>>],

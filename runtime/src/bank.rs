@@ -148,7 +148,7 @@ use {
         sync::{
             atomic::{
                 AtomicBool, AtomicU64,
-                Ordering::{Acquire, Relaxed, Release},
+                Ordering::{AcqRel, Acquire, Relaxed, Release},
             },
             Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard,
         },
@@ -3626,7 +3626,12 @@ impl Bank {
                                 &*self.sysvar_cache.read().unwrap(),
                                 blockhash,
                                 lamports_per_signature,
-                            );
+                            )
+                            .map(|process_result| {
+                                self.update_accounts_data_len(
+                                    process_result.accounts_data_len_delta,
+                                )
+                            });
                         } else {
                             // TODO: support versioned messages
                             process_result = Err(TransactionError::UnsupportedVersion);
@@ -3785,6 +3790,18 @@ impl Bank {
             tx_count,
             signature_count,
         )
+    }
+
+    /// Update the bank's accounts_data_len field based on the `delta`.
+    fn update_accounts_data_len(&self, delta: i64) {
+        if delta == 0 {
+            return;
+        }
+        if delta > 0 {
+            self.accounts_data_len.fetch_add(delta as u64, AcqRel);
+        } else {
+            self.accounts_data_len.fetch_sub(delta.abs() as u64, AcqRel);
+        }
     }
 
     /// Calculate fee for `SanitizedMessage`
