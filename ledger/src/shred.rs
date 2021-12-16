@@ -759,9 +759,12 @@ impl Shredder {
         entries: &[Entry],
         is_last_in_slot: bool,
         next_shred_index: u32,
-    ) -> (Vec<Shred>, Vec<Shred>, u32) {
+    ) -> (
+        Vec<Shred>, // data shreds
+        Vec<Shred>, // coding shreds
+    ) {
         let mut stats = ProcessShredsStats::default();
-        let (data_shreds, last_shred_index) = self.entries_to_data_shreds(
+        let data_shreds = self.entries_to_data_shreds(
             keypair,
             entries,
             is_last_in_slot,
@@ -772,7 +775,7 @@ impl Shredder {
         let coding_shreds =
             Self::data_shreds_to_coding_shreds(keypair, &data_shreds, is_last_in_slot, &mut stats)
                 .unwrap();
-        (data_shreds, coding_shreds, last_shred_index)
+        (data_shreds, coding_shreds)
     }
 
     // Each FEC block has maximum MAX_DATA_SHREDS_PER_FEC_BLOCK shreds.
@@ -794,7 +797,7 @@ impl Shredder {
         // Shred index offset at which FEC sets are generated.
         fec_set_offset: u32,
         process_stats: &mut ProcessShredsStats,
-    ) -> (Vec<Shred>, u32) {
+    ) -> Vec<Shred> {
         let mut serialize_time = Measure::start("shred_serialize");
         let serialized_shreds =
             bincode::serialize(entries).expect("Expect to serialize all entries");
@@ -842,7 +845,7 @@ impl Shredder {
         process_stats.serialize_elapsed += serialize_time.as_us();
         process_stats.gen_data_elapsed += gen_data_time.as_us();
 
-        (data_shreds, last_shred_index + 1)
+        data_shreds
     }
 
     pub fn data_shreds_to_coding_shreds(
@@ -1305,8 +1308,9 @@ pub mod tests {
             .saturating_sub(num_expected_data_shreds as usize)
             .max(num_expected_data_shreds as usize);
         let start_index = 0;
-        let (data_shreds, coding_shreds, next_index) =
+        let (data_shreds, coding_shreds) =
             shredder.entries_to_shreds(&keypair, &entries, true, start_index);
+        let next_index = data_shreds.last().unwrap().index() + 1;
         assert_eq!(next_index as u64, num_expected_data_shreds);
 
         let mut data_shred_indexes = HashSet::new();
@@ -1458,8 +1462,7 @@ pub mod tests {
             })
             .collect();
 
-        let (data_shreds, coding_shreds, _) =
-            shredder.entries_to_shreds(&keypair, &entries, true, 0);
+        let (data_shreds, coding_shreds) = shredder.entries_to_shreds(&keypair, &entries, true, 0);
 
         for (i, s) in data_shreds.iter().enumerate() {
             verify_test_data_shred(
@@ -1507,7 +1510,7 @@ pub mod tests {
             .collect();
 
         let serialized_entries = bincode::serialize(&entries).unwrap();
-        let (data_shreds, coding_shreds, _) = shredder.entries_to_shreds(
+        let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
             &keypair,
             &entries,
             is_last_in_slot,
@@ -1638,8 +1641,7 @@ pub mod tests {
         // Test5: Try recovery/reassembly with non zero index full slot with 3 missing data shreds
         // and 2 missing coding shreds. Hint: should work
         let serialized_entries = bincode::serialize(&entries).unwrap();
-        let (data_shreds, coding_shreds, _) =
-            shredder.entries_to_shreds(&keypair, &entries, true, 25);
+        let (data_shreds, coding_shreds) = shredder.entries_to_shreds(&keypair, &entries, true, 25);
         // We should have 10 shreds now
         assert_eq!(data_shreds.len(), num_data_shreds);
 
@@ -1723,7 +1725,7 @@ pub mod tests {
         )
         .unwrap();
         let next_shred_index = rng.gen_range(1, 1024);
-        let (data_shreds, coding_shreds, _) =
+        let (data_shreds, coding_shreds) =
             shredder.entries_to_shreds(&keypair, &[entry], is_last_in_slot, next_shred_index);
         let num_data_shreds = data_shreds.len();
         let mut shreds = coding_shreds;
@@ -1777,8 +1779,7 @@ pub mod tests {
             })
             .collect();
 
-        let (data_shreds, coding_shreds, _next_index) =
-            shredder.entries_to_shreds(&keypair, &entries, true, 0);
+        let (data_shreds, coding_shreds) = shredder.entries_to_shreds(&keypair, &entries, true, 0);
         assert!(!data_shreds
             .iter()
             .chain(coding_shreds.iter())
@@ -1826,7 +1827,7 @@ pub mod tests {
             .collect();
 
         let start_index = 0x12;
-        let (data_shreds, coding_shreds, _next_index) =
+        let (data_shreds, coding_shreds) =
             shredder.entries_to_shreds(&keypair, &entries, true, start_index);
 
         let max_per_block = MAX_DATA_SHREDS_PER_FEC_BLOCK as usize;
@@ -1863,7 +1864,7 @@ pub mod tests {
 
         let mut stats = ProcessShredsStats::default();
         let start_index = 0x12;
-        let (data_shreds, _next_index) = shredder.entries_to_data_shreds(
+        let data_shreds = shredder.entries_to_data_shreds(
             &keypair,
             &entries,
             true, // is_last_in_slot
