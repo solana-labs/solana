@@ -30,14 +30,14 @@ use {
 
 // Data placement should be aligned at the next boundary. Without alignment accessing the memory may
 // crash on some architectures.
-const ALIGN_BOUNDARY_OFFSET: usize = mem::size_of::<u64>();
+pub const ALIGN_BOUNDARY_OFFSET: usize = mem::size_of::<u64>();
 macro_rules! u64_align {
     ($addr: expr) => {
         ($addr + (ALIGN_BOUNDARY_OFFSET - 1)) & !(ALIGN_BOUNDARY_OFFSET - 1)
     };
 }
 
-const MAXIMUM_APPEND_VEC_FILE_SIZE: u64 = 16 * 1024 * 1024 * 1024; // 16 GiB
+pub const MAXIMUM_APPEND_VEC_FILE_SIZE: u64 = 16 * 1024 * 1024 * 1024; // 16 GiB
 
 pub type StoredMetaWriteVersion = u64;
 

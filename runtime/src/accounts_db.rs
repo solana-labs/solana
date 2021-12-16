@@ -22,7 +22,7 @@
 use std::{thread::sleep, time::Duration};
 use {
     crate::{
-        account_info::{AccountInfo, StorageLocation, StoredSize},
+        account_info::{AccountInfo, Offset, StorageLocation, StoredSize},
         accounts_background_service::{DroppedSlotsSender, SendDroppedBankCallback},
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
         accounts_hash::{AccountsHash, CalculateHashIntermediate, HashStats, PreviousPass},
@@ -110,12 +110,6 @@ pub const NUM_SCAN_PASSES_DEFAULT: usize = 2;
 // Metrics indicate a sweet spot in the 2.5k-5k range for mnb.
 const MAX_ITEMS_PER_CHUNK: Slot = 2_500;
 
-// A specially reserved storage id just for entries in the cache, so that
-// operations that take a storage entry can maintain a common interface
-// when interacting with cached accounts. This id is "virtual" in that it
-// doesn't actually refer to an actual storage entry.
-pub(crate) const CACHE_VIRTUAL_STORAGE_ID: AppendVecId = AppendVecId::MAX;
-
 // A specially reserved write version (identifier for ordering writes in an AppendVec)
 // for entries in the cache, so that  operations that take a storage entry can maintain
 // a common interface when interacting with cached accounts. This version is "virtual" in
@@ -126,7 +120,7 @@ const CACHE_VIRTUAL_WRITE_VERSION: StoredMetaWriteVersion = 0;
 // for entries in the cache, so that  operations that take a storage entry can maintain
 // a common interface when interacting with cached accounts. This version is "virtual" in
 // that it doesn't actually map to an entry in an AppendVec.
-pub(crate) const CACHE_VIRTUAL_OFFSET: usize = 0;
+pub(crate) const CACHE_VIRTUAL_OFFSET: Offset = 0;
 const CACHE_VIRTUAL_STORED_SIZE: StoredSize = 0;
 
 pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
@@ -1720,13 +1714,14 @@ impl AccountsDb {
         }
     }
 
+    fn next_id(&self) -> AppendVecId {
+        let next_id = self.next_id.fetch_add(1, Ordering::AcqRel);
+        assert!(next_id != AppendVecId::MAX, "We've run out of storage ids!");
+        next_id
+    }
+
     fn new_storage_entry(&self, slot: Slot, path: &Path, size: u64) -> AccountStorageEntry {
-        AccountStorageEntry::new(
-            path,
-            slot,
-            self.next_id.fetch_add(1, Ordering::AcqRel),
-            size,
-        )
+        AccountStorageEntry::new(path, slot, self.next_id(), size)
     }
 
     pub fn expected_cluster_type(&self) -> ClusterType {
@@ -3738,7 +3733,7 @@ impl AccountsDb {
                     let ret = recycle_stores.remove_entry(i);
                     drop(recycle_stores);
                     let old_id = ret.append_vec_id();
-                    ret.recycle(slot, self.next_id.fetch_add(1, Ordering::AcqRel));
+                    ret.recycle(slot, self.next_id());
                     debug!(
                         "recycling store: {} {:?} old_id: {}",
                         ret.append_vec_id(),
@@ -3877,10 +3872,6 @@ impl AccountsDb {
             Self::page_align(size),
         ));
 
-        assert!(
-            store.append_vec_id() != CACHE_VIRTUAL_STORAGE_ID,
-            "We've run out of storage ids!"
-        );
         debug!(
             "creating store: {} slot: {} len: {} size: {} from: {} path: {:?}",
             store.append_vec_id(),
@@ -13315,7 +13306,7 @@ pub mod tests {
         }
 
         let do_test = |test_params: TestParameters| {
-            let account_info = AccountInfo::new(StorageLocation::AppendVec(42, 123), 234, 0);
+            let account_info = AccountInfo::new(StorageLocation::AppendVec(42, 128), 234, 0);
             let pubkey = solana_sdk::pubkey::new_rand();
             let mut key_set = HashSet::default();
             key_set.insert(pubkey);

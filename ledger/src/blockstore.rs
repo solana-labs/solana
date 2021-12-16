@@ -3268,6 +3268,24 @@ fn get_index_meta_entry<'a>(
     res
 }
 
+/// Obtain the SlotMeta from the in-memory slot_meta_working_set or load
+/// it from the database if it does not exist in slot_meta_working_set.
+///
+/// In case none of the above has the specified SlotMeta, a new one will
+/// be created.
+///
+/// Note that this function will also update the parent slot of the specified
+/// slot.
+///
+/// Arguments:
+/// - `db`: the database
+/// - `slot_meta_working_set`: a in-memory structure for storing the cached
+///   SlotMeta.
+/// - `slot`: the slot for loading its meta.
+/// - `parent_slot`: the parent slot to be assigned to the specified slot meta
+///
+/// This function returns the matched `SlotMetaWorkingSetEntry`.  If such entry
+/// does not exist in the database, a new entry will be created.
 fn get_slot_meta_entry<'a>(
     db: &Database,
     slot_meta_working_set: &'a mut HashMap<u64, SlotMetaWorkingSetEntry>,
@@ -3342,6 +3360,23 @@ fn send_signals(
     }
 }
 
+/// For each slot in the slot_meta_working_set which has any change, include
+/// corresponding updates to cf::SlotMeta via the specified `write_batch`.
+/// The `write_batch` will later be atomically committed to the blockstore.
+///
+/// Arguments:
+/// - `slot_meta_working_set`: a map that maintains slot-id to its `SlotMeta`
+///   mapping.
+/// - `completed_slot_senders`: the units which are responsible for sending
+///   signals for completed slots.
+/// - `write_batch`: the write batch which includes all the updates of the
+///   the current write and ensures their atomicity.
+///
+/// On success, the function returns an Ok result with <should_signal,
+/// newly_completed_slots> pair where:
+///  - `should_signal`: a boolean flag indicating whether to send signal.
+///  - `newly_completed_slots`: a subset of slot_meta_working_set which are
+///    newly completed.
 fn commit_slot_meta_working_set(
     slot_meta_working_set: &HashMap<u64, SlotMetaWorkingSetEntry>,
     completed_slots_senders: &[SyncSender<Vec<u64>>],
