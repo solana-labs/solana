@@ -654,7 +654,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             ranges.push(inclusive_range);
         } else {
             // find the matching range and delete it since we don't want to hold it anymore
-            for (i, r) in ranges.iter().enumerate() {
+            // search backwards, assuming LIFO ordering
+            for (i, r) in ranges.iter().enumerate().rev() {
                 if let (Bound::Included(start_found), Bound::Included(end_found)) =
                     (r.start_bound(), r.end_bound())
                 {
