@@ -2576,9 +2576,11 @@ impl AccountsDb {
         iter.for_each(|(pubkey, stored_account)| {
             let lookup = self.accounts_index.get_account_read_entry(pubkey);
             if let Some(locked_entry) = lookup {
-                let is_alive = locked_entry.slot_list().iter().any(|(_slot, i)| {
-                    i.store_id() == stored_account.store_id
-                        && i.offset() == stored_account.account.offset
+                let is_alive = locked_entry.slot_list().iter().any(|(_slot, acct_info)| {
+                    acct_info.matches_storage_location(
+                        stored_account.store_id,
+                        stored_account.account.offset,
+                    )
                 });
                 if !is_alive {
                     // This pubkey was found in the storage, but no longer exists in the index.
