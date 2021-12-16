@@ -9,7 +9,7 @@ use solana_sdk::transaction::Transaction;
 use {
     crate::{
         cuda_runtime::PinnedVec,
-        packet::{ExtendedPacket, Packet, PacketBatch, PacketInterface},
+        packet::{Packet, PacketBatch, PacketInterface},
         perf_libs,
         recycler::Recycler,
     },
@@ -535,16 +535,12 @@ pub fn ed25519_verify<P: PacketInterface>(
     use crate::packet::PACKET_DATA_SIZE;
     let packet_count = count_packets_in_batches(batches);
 
-    let is_extended = batches
-        .iter()
-        .any(|packets| packets.packets.iter().any(|packet| packet.is_extended()));
-
     // micro-benchmarks show GPU time for smallest batch around 15-20ms
     // and CPU speed for 64-128 sigverifies around 10-20ms. 64 is a nice
     // power-of-two number around that accounting for the fact that the CPU
     // may be busy doing other things while being a real validator
     // TODO: dynamically adjust this crossover
-    if packet_count < 64 || is_extended {
+    if packet_count < 64 {
         return ed25519_verify_cpu(batches, reject_non_vote);
     }
 
@@ -561,9 +557,8 @@ pub fn ed25519_verify<P: PacketInterface>(
     let mut num_packets: usize = 0;
     for batch in batches.iter() {
         elems.push(perf_libs::Elems {
-            // TODO: This is a VERY dirty hack for compilation; this will work fine if P
-            //       is Packet type, but will need a proper solution for other impl's of P
-            elems: batch.packets.as_ptr().cast::<Packet>(),
+            // todo: verify
+            elems: batch.packets.as_ptr().cast::<u8>(),
             num: batch.packets.len() as u32,
         });
         let mut v = Vec::new();
@@ -574,14 +569,18 @@ pub fn ed25519_verify<P: PacketInterface>(
     out.resize(signature_offsets.len(), 0);
     trace!("Starting verify num packets: {}", num_packets);
     trace!("elem len: {}", elems.len() as u32);
-    trace!("packet sizeof: {}", size_of::<Packet>() as u32);
+    trace!("packet sizeof: {}", size_of::<P>() as u32);
+    // todo: figure out what this means; the data field max size
+    // does not actually seem to be used in figuring out any of the offsets
+    // (which would make sense, as we don't modify the meta
+    // directly on the GPU)...
     trace!("len offset: {}", PACKET_DATA_SIZE as u32);
     const USE_NON_DEFAULT_STREAM: u8 = 1;
     unsafe {
         let res = (api.ed25519_verify_many)(
             elems.as_ptr(),
             elems.len() as u32,
-            size_of::<Packet>() as u32,
+            size_of::<P>() as u32,
             num_packets as u32,
             signature_offsets.len() as u32,
             msg_sizes.as_ptr(),
