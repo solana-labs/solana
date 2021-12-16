@@ -48,6 +48,7 @@ mod tests {
         compaction_interval: Option<u64>,
         no_compaction: bool,
         num_writers: u64,
+        num_generators: u64,
     }
 
     #[derive(Clone, Copy, Debug)]
@@ -168,6 +169,7 @@ mod tests {
         };
         let no_compaction = read_env("NO_COMPACTION", false);
         let num_writers = read_env("NUM_WRITERS", 1);
+        let num_generators = read_env("NUM_GENERATORS", 1);
 
         BenchmarkConfig {
             benchmark_slots,
@@ -182,6 +184,7 @@ mod tests {
             compaction_interval,
             no_compaction,
             num_writers,
+            num_generators,
         }
     }
 
@@ -253,6 +256,7 @@ mod tests {
         let pre_generate_data = config.pre_generate_data;
         let compaction_interval = config.compaction_interval;
         let num_writers = config.num_writers;
+        let num_generators = config.num_generators;
 
         let num_batches = benchmark_slots / batch_size_slots;
         let num_shreds_total = benchmark_slots * shreds_per_slot;
@@ -286,8 +290,8 @@ mod tests {
             info!("{}", pre_generate_data_timer);
         }
         let shreds = Arc::new(Mutex::new(shreds));
+        let sender = Arc::new(Mutex::new(sender));
 
-        let (mut shreds_batch, _) = make_many_slot_shreds(0, batch_size_slots, shreds_per_slot);
         info!(
             "Bench info num_batches: {}, batch size (slots): {}, shreds_per_slot: {}, num_shreds_total: {}",
             num_batches,
@@ -314,10 +318,56 @@ mod tests {
             &sys.get_stats(),
         );
 
-        let mut total_make = 0;
-        let mut num_slots = 0;
-        let mut total_slots = 0;
-        let mut time = Instant::now();
+        let mut generator_threads = vec![];
+        let num_slots = Arc::new(AtomicU64::new(0));
+        let total_slots = Arc::new(AtomicU64::new(0));
+        let total_make = Arc::new(AtomicU64::new(0));
+        let current_slot = Arc::new(AtomicU64::new(0));
+        let generator_exit = Arc::new(AtomicBool::new(false));
+        let queue_size_limit = 100 * num_writers * batch_size_slots * shreds_per_slot;
+        for g in 0..num_generators {
+            let shared_generator_exit = generator_exit.clone();
+            let shared_num_slots = num_slots.clone();
+            let shared_total_slots = total_slots.clone();
+            let shared_total_make = total_make.clone();
+            let shared_shreds = shreds.clone();
+            let shared_sender = sender.clone();
+            let shared_current_slot = current_slot.clone();
+            let generator_thread = Builder::new()
+                .name(format!("generator_shreds-{}", g))
+                .spawn(move || {
+                    let mut i = g;
+                    while i < num_batches {
+                        let start_slot = i * batch_size_slots;
+                        if !pre_generate_data {
+                            while shared_shreds.lock().unwrap().len() >= (queue_size_limit).try_into().unwrap() {
+                                warn!("Generator-{} sleeps for 200 millis with queue > {} in size", g, queue_size_limit);
+                                thread::sleep(Duration::from_millis(200));
+                            }
+
+                            let mut make_time = Measure::start("make_entries");
+                            let (new_shreds, _) =
+                                make_many_slot_shreds(start_slot, batch_size_slots, shreds_per_slot);
+                            shared_shreds.lock().unwrap().push_back(new_shreds);
+                            make_time.stop();
+
+                            shared_total_make.fetch_add(make_time.as_us(), Ordering::SeqCst);
+                            shared_num_slots.fetch_add(batch_size_slots, Ordering::SeqCst);
+                            shared_total_slots.fetch_add(batch_size_slots, Ordering::SeqCst);
+                            shared_current_slot.fetch_max(start_slot, Ordering::SeqCst);
+                        }
+                        i += num_generators;
+
+                        shared_sender.lock().unwrap().send(start_slot).unwrap();
+                        if shared_generator_exit.load(Ordering::Relaxed) {
+                            info!("Stop-size reached.  Generator-{} exiting.", g);
+                        }
+                    }
+                })
+                .unwrap();
+            generator_threads.push(generator_thread);
+        }
+
         let mut insert_threads = vec![];
         let insert_exit = Arc::new(AtomicBool::new(false));
 
@@ -325,13 +375,13 @@ mod tests {
         let mut insert_timer = Measure::start("Shred insertion");
 
         for i in 0..num_writers {
-            let cloned_insert_exit = insert_exit.clone();
-            let cloned_blockstore = blockstore.clone();
-            let cloned_shreds = shreds.clone();
+            let shared_insert_exit = insert_exit.clone();
+            let shared_blockstore = blockstore.clone();
+            let shared_shreds = shreds.clone();
             let insert_thread = Builder::new()
                 .name(format!("insert_shreds-{}", i))
                 .spawn(move || {
-                    let start = Instant::now();
+                    let thread_start = Instant::now();
                     let mut now = Instant::now();
                     let mut total = 0;
                     let mut total_batches = 0;
@@ -341,7 +391,7 @@ mod tests {
                     let mut min_speed = f32::MAX;
                     loop {
                         let (new_shreds, len) = {
-                            let mut sl = cloned_shreds.lock().unwrap();
+                            let mut sl = shared_shreds.lock().unwrap();
                             (sl.pop_front(), sl.len())
                         };
                         // as_secs() returns whole number of seconds, so this runs every second
@@ -352,7 +402,7 @@ mod tests {
                                 i, total, total_inserted_shreds, total_batches, len, shreds_per_second,
                             );
                             let average_speed =
-                                total_inserted_shreds as f32 / start.elapsed().as_secs() as f32;
+                                total_inserted_shreds as f32 / thread_start.elapsed().as_secs() as f32;
                             max_speed = max_speed.max(shreds_per_second);
                             min_speed = min_speed.min(shreds_per_second);
                             warn!(
@@ -365,7 +415,7 @@ mod tests {
                         if let Some(new_shreds) = new_shreds {
                             total += new_shreds.len();
                             total_batches += 1;
-                            let br = cloned_blockstore.insert_shreds(
+                            let br = shared_blockstore.insert_shreds(
                                 new_shreds, None, false).unwrap();
                             total_inserted_shreds += br.1.len();
                             num_shreds += br.1.len();
@@ -373,7 +423,7 @@ mod tests {
                             warn!("insert-{} sleeping for 200ms", i);
                             thread::sleep(Duration::from_millis(200));
                         }
-                        if cloned_insert_exit.load(Ordering::Relaxed) {
+                        if shared_insert_exit.load(Ordering::Relaxed) {
                             if max_speed > 0.0 {
                                 info!(
                                     "insert-{} exiting highest shreds/s: {}, lowest shreds/s: {}",
@@ -386,7 +436,6 @@ mod tests {
                                     i
                                 );
                             }
-
                             break;
                         }
                     }
@@ -395,48 +444,28 @@ mod tests {
             insert_threads.push(insert_thread);
         }
 
-        for i in 0..num_batches {
-            let start_slot = i * batch_size_slots;
-
-            if time.elapsed().as_secs() > 0 {
-                warn!(
-                    "total slots: {}, slots: {}, make: {}ms {:.2}",
-                    total_slots,
-                    num_slots,
-                    total_make / (1000),
-                    num_slots as f32 / time.elapsed().as_secs() as f32,
-                );
-                num_slots = 0;
-                total_make = 0;
-                time = Instant::now();
-            }
-
-            if !pre_generate_data && shreds.lock().unwrap().len() < 50 {
-                let mut make_time = Measure::start("make_entries");
-                num_slots += batch_size_slots;
-                total_slots += batch_size_slots;
-                shreds_batch
-                    .iter_mut()
-                    .for_each(|shred| shred.set_slot(shred.slot() + batch_size_slots));
-                let new_shreds = shreds_batch.clone();
-                shreds.lock().unwrap().push_back(new_shreds);
-                make_time.stop();
-                total_make += make_time.as_us();
-            }
-
-            sender.send(start_slot).unwrap();
+        // perform stats emission in the main thread
+        loop {
+            // +1 as the slot begin with 0
+            let num_slots_generated = current_slot.load(Ordering::SeqCst) + 1;
+            let current_slot_progress =
+                num_slots_generated - (shreds.lock().unwrap().len() as u64);
 
             emit_stats(
                 time_initial,
                 &mut time_previous,
                 &mut storage_previous,
-                start_slot,
+                current_slot_progress,
                 batch_size_slots,
                 shreds_per_slot,
                 max_ledger_shreds as i64,
                 &blockstore,
                 &sys.get_stats(),
             );
+
+            if current_slot_progress * batch_size_slots >= num_batches {
+                break;
+            }
 
             if stop_size_bytes > 0 {
                 if storage_previous >= stop_size_bytes {
@@ -446,10 +475,19 @@ mod tests {
                 }
 
                 if stop_size_bytes_exceeded_iterations > stop_size_iterations {
+                    generator_exit.store(true, Ordering::Relaxed);
                     break;
                 }
             }
+            std::thread::sleep(Duration::from_millis(100));
         }
+
+        // Join all the threads which generates the input shreds
+        while let Some(thread) = generator_threads.pop() {
+            thread.join().unwrap();
+        }
+
+        // Wait until the input shreds queue is empty
         let mut now = Instant::now();
         loop {
             if now.elapsed().as_secs() > 1 {
@@ -467,6 +505,7 @@ mod tests {
         }
         insert_exit.store(true, Ordering::Relaxed);
 
+        // Join all the shred insertion threads
         while let Some(thread) = insert_threads.pop() {
             thread.join().unwrap();
         }
@@ -479,8 +518,9 @@ mod tests {
         );
         let u1 = storage_previous;
 
-        // send final `ledger_cleanup` notification (since iterations above are zero-based)
-        sender.send(benchmark_slots).unwrap();
+        // send final `ledger_cleanup` notification (since iterations above
+        // are zero-based)
+        sender.lock().unwrap().send(benchmark_slots).unwrap();
 
         emit_stats(
             time_initial,
@@ -534,7 +574,11 @@ mod tests {
 
         if config.cleanup_blockstore {
             drop(blockstore);
-            Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
+            Blockstore::destroy(&ledger_path)
+                .expect("Expected successful database destruction");
+        } else {
+            info!("cleanup_blockstore disabled.  Ledger path:{:?}",
+                &ledger_path);
         }
     }
 
