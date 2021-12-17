@@ -1204,6 +1204,12 @@ pub fn main() {
                 .help("PubSub worker threads"),
         )
         .arg(
+            Arg::with_name("rpc_pubsub_enable_block_subscription")
+                .long("rpc-pubsub-enable-block-subscription")
+                .takes_value(false)
+                .help("Enable the unstable RPC PubSub `blockSubscribe` subscription"),
+        )
+        .arg(
             Arg::with_name("rpc_pubsub_enable_vote_subscription")
                 .long("rpc-pubsub-enable-vote-subscription")
                 .takes_value(false)
@@ -2217,6 +2223,7 @@ pub fn main() {
             )
         }),
         pubsub_config: PubSubConfig {
+            enable_block_subscription: matches.is_present("rpc_pubsub_enable_block_subscription"),
             enable_vote_subscription: matches.is_present("rpc_pubsub_enable_vote_subscription"),
             max_active_subscriptions: value_t_or_exit!(
                 matches,

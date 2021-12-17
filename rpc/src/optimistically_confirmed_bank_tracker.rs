@@ -321,6 +321,7 @@ mod tests {
             accounts_background_service::AbsRequestSender, commitment::BlockCommitmentCache,
         },
         solana_sdk::pubkey::Pubkey,
+        std::sync::atomic::AtomicU64,
     };
 
     #[test]
@@ -343,8 +344,10 @@ mod tests {
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
 
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
+        let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
+            max_complete_transaction_status_slot,
             bank_forks.clone(),
             block_commitment_cache,
             optimistically_confirmed_bank.clone(),

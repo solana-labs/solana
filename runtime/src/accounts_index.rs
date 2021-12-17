@@ -668,7 +668,7 @@ impl<'a, T: IndexValue> AccountsIndexIterator<'a, T> {
     where
         R: RangeBounds<Pubkey> + std::fmt::Debug,
     {
-        let mut result = map.items(&Some(&range));
+        let mut result = map.items(&range);
         if !collect_all_unsorted {
             result.sort_unstable_by(|a, b| a.0.cmp(&b.0));
         }

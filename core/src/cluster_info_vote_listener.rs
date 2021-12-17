@@ -963,7 +963,10 @@ mod tests {
             signature::{Keypair, Signature, Signer},
         },
         solana_vote_program::vote_state::Vote,
-        std::{collections::BTreeSet, sync::Arc},
+        std::{
+            collections::BTreeSet,
+            sync::{atomic::AtomicU64, Arc},
+        },
     };
 
     #[test]
@@ -1650,8 +1653,10 @@ mod tests {
         let vote_tracker = VoteTracker::new(&bank);
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
+        let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
+            max_complete_transaction_status_slot,
             bank_forks,
             Arc::new(RwLock::new(BlockCommitmentCache::default())),
             optimistically_confirmed_bank,
@@ -1769,8 +1774,10 @@ mod tests {
         let bank = bank_forks.read().unwrap().get(0).unwrap().clone();
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
+        let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
+            max_complete_transaction_status_slot,
             bank_forks,
             Arc::new(RwLock::new(BlockCommitmentCache::default())),
             optimistically_confirmed_bank,
