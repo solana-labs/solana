@@ -26,7 +26,6 @@ use {
         compute_budget::ComputeBudget,
         entrypoint::{ProgramResult, SUCCESS},
         epoch_schedule::EpochSchedule,
-        feature_set::demote_program_write_locks,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
@@ -244,15 +243,12 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         let message = Message::new(&[instruction.clone()], None);
         let program_id_index = message.instructions[0].program_id_index as usize;
         let program_id = message.account_keys[program_id_index];
-        let demote_program_write_locks = invoke_context
-            .feature_set
-            .is_active(&demote_program_write_locks::id());
         // TODO don't have the caller's keyed_accounts so can't validate writer or signer escalation or deescalation yet
         let caller_privileges = message
             .account_keys
             .iter()
             .enumerate()
-            .map(|(i, _)| message.is_writable(i, demote_program_write_locks))
+            .map(|(i, _)| message.is_writable(i))
             .collect::<Vec<bool>>();
 
         stable_log::program_invoke(&log_collector, &program_id, invoke_context.invoke_depth());
@@ -280,7 +276,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                 account.set_executable(account_info.executable);
                 account.set_rent_epoch(account_info.rent_epoch);
             }
-            let account_info = if message.is_writable(i, demote_program_write_locks) {
+            let account_info = if message.is_writable(i) {
                 Some(account_info)
             } else {
                 None

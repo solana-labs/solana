@@ -78,13 +78,12 @@ impl QosService {
     pub fn compute_transaction_costs<'a>(
         &self,
         transactions: impl Iterator<Item = &'a SanitizedTransaction>,
-        demote_program_write_locks: bool,
     ) -> Vec<TransactionCost> {
         let mut compute_cost_time = Measure::start("compute_cost_time");
         let cost_model = self.cost_model.read().unwrap();
         let txs_costs: Vec<_> = transactions
             .map(|tx| {
-                let cost = cost_model.calculate_cost(tx, demote_program_write_locks);
+                let cost = cost_model.calculate_cost(tx);
                 debug!(
                     "transaction {:?}, cost {:?}, cost sum {}",
                     tx,
@@ -261,7 +260,7 @@ mod tests {
 
         let cost_model = Arc::new(RwLock::new(CostModel::default()));
         let qos_service = QosService::new(cost_model.clone());
-        let txs_costs = qos_service.compute_transaction_costs(txs.iter(), false);
+        let txs_costs = qos_service.compute_transaction_costs(txs.iter());
 
         // verify the size of txs_costs and its contents
         assert_eq!(txs_costs.len(), txs.len());
@@ -271,11 +270,7 @@ mod tests {
             .map(|(index, cost)| {
                 assert_eq!(
                     cost.sum(),
-                    cost_model
-                        .read()
-                        .unwrap()
-                        .calculate_cost(&txs[index], false)
-                        .sum()
+                    cost_model.read().unwrap().calculate_cost(&txs[index]).sum()
                 );
             })
             .collect_vec();
@@ -306,14 +301,14 @@ mod tests {
         let transfer_tx_cost = cost_model
             .read()
             .unwrap()
-            .calculate_cost(&transfer_tx, false)
+            .calculate_cost(&transfer_tx)
             .sum();
 
         // make a vec of txs
         let txs = vec![transfer_tx.clone(), vote_tx.clone(), transfer_tx, vote_tx];
 
         let qos_service = QosService::new(cost_model);
-        let txs_costs = qos_service.compute_transaction_costs(txs.iter(), false);
+        let txs_costs = qos_service.compute_transaction_costs(txs.iter());
 
         // set cost tracker limit to fit 1 transfer tx, vote tx bypasses limit check
         let cost_limit = transfer_tx_cost;
@@ -359,7 +354,7 @@ mod tests {
             .name("test-producer-1".to_string())
             .spawn(move || {
                 debug!("thread 1 starts with {} txs", txs_1.len());
-                let tx_costs = qos_service_1.compute_transaction_costs(txs_1.iter(), false);
+                let tx_costs = qos_service_1.compute_transaction_costs(txs_1.iter());
                 assert_eq!(txs_count, tx_costs.len());
                 debug!(
                     "thread 1 done, generated {} count, see service count as {}",
@@ -376,7 +371,7 @@ mod tests {
             .name("test-producer-2".to_string())
             .spawn(move || {
                 debug!("thread 2 starts with {} txs", txs_2.len());
-                let tx_costs = qos_service_2.compute_transaction_costs(txs_2.iter(), false);
+                let tx_costs = qos_service_2.compute_transaction_costs(txs_2.iter());
                 assert_eq!(txs_count, tx_costs.len());
                 debug!(
                     "thread 2 done, generated {} count, see service count as {}",

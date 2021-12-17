@@ -5,6 +5,7 @@
 use crate::{
     accounts_db::{AppendVecId, CACHE_VIRTUAL_OFFSET},
     accounts_index::{IsCached, ZeroLamport},
+    append_vec::ALIGN_BOUNDARY_OFFSET,
 };
 
 /// offset within an append vec to account data
@@ -54,13 +55,19 @@ impl StorageLocation {
     }
 }
 
+/// how large the offset we store in AccountInfo is
+/// Note this is a smaller datatype than 'Offset'
+/// AppendVecs store accounts aligned to u64, so offset is always a multiple of 8 (sizeof(u64))
+pub type OffsetReduced = u32;
+
 #[derive(Default, Debug, PartialEq, Clone, Copy)]
 pub struct AccountInfo {
     /// index identifying the append storage
     store_id: AppendVecId,
 
-    /// offset into the storage
-    offset: Offset,
+    /// offset = 'reduced_offset' / ALIGN_BOUNDARY_OFFSET into the storage
+    /// Note this is a smaller type than 'Offset'
+    reduced_offset: OffsetReduced,
 
     /// needed to track shrink candidacy in bytes. Used to update the number
     /// of alive bytes in an AppendVec as newer slots purge outdated entries
@@ -95,36 +102,39 @@ impl IsCached for StorageLocation {
     }
 }
 
+/// We have to have SOME value for store_id when we are cached
+const CACHE_VIRTUAL_STORAGE_ID: AppendVecId = AppendVecId::MAX;
+
 impl AccountInfo {
     pub fn new(storage_location: StorageLocation, stored_size: StoredSize, lamports: u64) -> Self {
         assert_eq!(stored_size & ALL_FLAGS, 0);
         let mut stored_size_mask = stored_size;
-        let (store_id, offset) = match storage_location {
+        let (store_id, raw_offset) = match storage_location {
             StorageLocation::AppendVec(store_id, offset) => (store_id, offset),
             StorageLocation::Cached => {
                 stored_size_mask |= IS_CACHED_STORE_ID_FLAG;
-                // We have to have SOME value for store_id when we are cached
-                const CACHE_VIRTUAL_STORAGE_ID: AppendVecId = AppendVecId::MAX;
                 (CACHE_VIRTUAL_STORAGE_ID, CACHE_VIRTUAL_OFFSET)
             }
         };
         if lamports == 0 {
             stored_size_mask |= IS_ZERO_LAMPORT_FLAG;
         }
-        Self {
+        let reduced_offset: OffsetReduced = (raw_offset / ALIGN_BOUNDARY_OFFSET) as OffsetReduced;
+        let result = Self {
             store_id,
-            offset,
+            reduced_offset,
             stored_size_mask,
-        }
+        };
+        assert_eq!(result.offset(), raw_offset, "illegal offset");
+        result
     }
 
     pub fn store_id(&self) -> AppendVecId {
-        assert!(!self.is_cached());
         self.store_id
     }
 
     pub fn offset(&self) -> Offset {
-        self.offset
+        (self.reduced_offset as Offset) * ALIGN_BOUNDARY_OFFSET
     }
 
     pub fn stored_size(&self) -> StoredSize {
@@ -132,11 +142,64 @@ impl AccountInfo {
         self.stored_size_mask & !ALL_FLAGS
     }
 
+    /// true iff store_id and offset match self AND self is not cached
+    /// If self is cached, then store_id and offset are meaningless.
+    pub fn matches_storage_location(&self, store_id: AppendVecId, offset: Offset) -> bool {
+        // order is set for best short circuit
+        self.store_id == store_id && self.offset() == offset && !self.is_cached()
+    }
+
     pub fn storage_location(&self) -> StorageLocation {
         if self.is_cached() {
             StorageLocation::Cached
         } else {
-            StorageLocation::AppendVec(self.store_id, self.offset)
+            StorageLocation::AppendVec(self.store_id, self.offset())
         }
+    }
+}
+#[cfg(test)]
+mod test {
+    use {super::*, crate::append_vec::MAXIMUM_APPEND_VEC_FILE_SIZE};
+
+    #[test]
+    fn test_limits() {
+        for offset in [
+            MAXIMUM_APPEND_VEC_FILE_SIZE as Offset,
+            0,
+            ALIGN_BOUNDARY_OFFSET,
+            4 * ALIGN_BOUNDARY_OFFSET,
+        ] {
+            let info = AccountInfo::new(StorageLocation::AppendVec(0, offset), 0, 0);
+            assert!(info.offset() == offset);
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "illegal offset")]
+    fn test_alignment() {
+        let offset = 1; // not aligned
+        AccountInfo::new(StorageLocation::AppendVec(0, offset), 0, 0);
+    }
+
+    #[test]
+    fn test_matches_storage_location() {
+        let offset = 0;
+        let id = 0;
+        let info = AccountInfo::new(StorageLocation::AppendVec(id, offset), 0, 0);
+        assert!(info.matches_storage_location(id, offset));
+
+        // wrong offset
+        let offset = ALIGN_BOUNDARY_OFFSET;
+        assert!(!info.matches_storage_location(id, offset));
+
+        // wrong id
+        let offset = 0;
+        let id = 1;
+        assert!(!info.matches_storage_location(id, offset));
+
+        // is cached
+        let id = CACHE_VIRTUAL_STORAGE_ID;
+        let info = AccountInfo::new(StorageLocation::Cached, 0, 0);
+        assert!(!info.matches_storage_location(id, offset));
     }
 }

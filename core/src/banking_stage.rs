@@ -935,8 +935,7 @@ impl BankingStage {
         gossip_vote_sender: &ReplayVoteSender,
         qos_service: &Arc<QosService>,
     ) -> (Result<usize, PohRecorderError>, Vec<usize>) {
-        let tx_costs =
-            qos_service.compute_transaction_costs(txs.iter(), bank.demote_program_write_locks());
+        let tx_costs = qos_service.compute_transaction_costs(txs.iter());
 
         let transactions_qos_results =
             qos_service.select_transactions_per_cost(txs.iter(), tx_costs.iter(), bank);
