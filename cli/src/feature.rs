@@ -5,7 +5,7 @@ use {
     },
     clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
     console::style,
-    serde::{Deserialize, Serialize},
+    serde::{Deserialize, Deserializer, Serialize, Serializer},
     solana_clap_utils::{input_parsers::*, input_validators::*, keypair::*},
     solana_cli_output::{QuietDisplay, VerboseDisplay},
     solana_client::{client_error::ClientError, rpc_client::RpcClient},
@@ -23,6 +23,7 @@ use {
         cmp::Ordering,
         collections::{HashMap, HashSet},
         fmt,
+        str::FromStr,
         sync::Arc,
     },
 };
@@ -104,6 +105,8 @@ impl Ord for CliFeature {
 pub struct CliFeatures {
     pub features: Vec<CliFeature>,
     pub feature_activation_allowed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cluster_feature_sets: Option<CliClusterFeatureSets>,
     #[serde(skip)]
     pub inactive: bool,
 }
@@ -135,6 +138,11 @@ impl fmt::Display for CliFeatures {
                 feature.description,
             )?;
         }
+
+        if let Some(feature_sets) = &self.cluster_feature_sets {
+            write!(f, "{}", feature_sets)?;
+        }
+
         if self.inactive && !self.feature_activation_allowed {
             writeln!(
                 f,
@@ -150,6 +158,191 @@ impl fmt::Display for CliFeatures {
 
 impl QuietDisplay for CliFeatures {}
 impl VerboseDisplay for CliFeatures {}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliClusterFeatureSets {
+    pub tool_feature_set: u32,
+    pub feature_sets: Vec<CliFeatureSet>,
+    #[serde(skip)]
+    pub stake_allowed: bool,
+    #[serde(skip)]
+    pub rpc_allowed: bool,
+}
+
+impl fmt::Display for CliClusterFeatureSets {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut tool_feature_set_matches_cluster = false;
+
+        let software_versions_title = "Software Version";
+        let feature_set_title = "Feature Set";
+        let stake_percent_title = "Stake";
+        let rpc_percent_title = "RPC";
+        let mut max_software_versions_len = software_versions_title.len();
+        let mut max_feature_set_len = feature_set_title.len();
+        let mut max_stake_percent_len = stake_percent_title.len();
+        let mut max_rpc_percent_len = rpc_percent_title.len();
+
+        let feature_sets: Vec<_> = self
+            .feature_sets
+            .iter()
+            .map(|feature_set_info| {
+                let me = if self.tool_feature_set == feature_set_info.feature_set {
+                    tool_feature_set_matches_cluster = true;
+                    true
+                } else {
+                    false
+                };
+                let software_versions: Vec<_> = feature_set_info
+                    .software_versions
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect();
+                let software_versions = software_versions.join(", ");
+                let feature_set = if feature_set_info.feature_set == 0 {
+                    "unknown".to_string()
+                } else {
+                    feature_set_info.feature_set.to_string()
+                };
+                let stake_percent = format!("{:.2}%", feature_set_info.stake_percent);
+                let rpc_percent = format!("{:.2}%", feature_set_info.rpc_percent);
+
+                max_software_versions_len = max_software_versions_len.max(software_versions.len());
+                max_feature_set_len = max_feature_set_len.max(feature_set.len());
+                max_stake_percent_len = max_stake_percent_len.max(stake_percent.len());
+                max_rpc_percent_len = max_rpc_percent_len.max(rpc_percent.len());
+
+                (
+                    software_versions,
+                    feature_set,
+                    stake_percent,
+                    rpc_percent,
+                    me,
+                )
+            })
+            .collect();
+
+        if !tool_feature_set_matches_cluster {
+            writeln!(
+                f,
+                "\n{}",
+                style("To activate features the tool and cluster feature sets must match, select a tool version that matches the cluster")
+                    .bold())?;
+        } else {
+            if !self.stake_allowed {
+                write!(
+                    f,
+                    "\n{}",
+                    style("To activate features the stake must be >= 95%")
+                        .bold()
+                        .red()
+                )?;
+            }
+            if !self.rpc_allowed {
+                write!(
+                    f,
+                    "\n{}",
+                    style("To activate features the RPC nodes must be >= 95%")
+                        .bold()
+                        .red()
+                )?;
+            }
+        }
+        writeln!(
+            f,
+            "\n\n{}",
+            style(format!("Tool Feature Set: {}", self.tool_feature_set)).bold()
+        )?;
+        writeln!(
+            f,
+            "{}",
+            style(format!(
+                "{1:<0$}  {3:<2$}  {5:<4$}  {7:<6$}",
+                max_software_versions_len,
+                software_versions_title,
+                max_feature_set_len,
+                feature_set_title,
+                max_stake_percent_len,
+                stake_percent_title,
+                max_rpc_percent_len,
+                rpc_percent_title,
+            ))
+            .bold(),
+        )?;
+        for (software_versions, feature_set, stake_percent, rpc_percent, me) in feature_sets {
+            writeln!(
+                f,
+                "{1:<0$}  {3:>2$}  {5:>4$} {7:>6$}  {8}",
+                max_software_versions_len,
+                software_versions,
+                max_feature_set_len,
+                feature_set,
+                max_stake_percent_len,
+                stake_percent,
+                max_rpc_percent_len,
+                rpc_percent,
+                if me { "<-- me" } else { "" },
+            )?;
+        }
+        writeln!(f)
+    }
+}
+
+impl QuietDisplay for CliClusterFeatureSets {}
+impl VerboseDisplay for CliClusterFeatureSets {}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliFeatureSet {
+    software_versions: Vec<CliVersion>,
+    feature_set: u32,
+    stake_percent: f64,
+    rpc_percent: f32,
+}
+
+#[derive(Eq, PartialEq, Ord, PartialOrd)]
+struct CliVersion(Option<semver::Version>);
+
+impl fmt::Display for CliVersion {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match &self.0 {
+            None => "unknown".to_string(),
+            Some(version) => version.to_string(),
+        };
+        write!(f, "{}", s)
+    }
+}
+
+impl FromStr for CliVersion {
+    type Err = semver::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let version_option = if s == "unknown" {
+            None
+        } else {
+            Some(semver::Version::from_str(s)?)
+        };
+        Ok(CliVersion(version_option))
+    }
+}
+
+impl Serialize for CliVersion {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for CliVersion {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s: &str = Deserialize::deserialize(deserializer)?;
+        CliVersion::from_str(s).map_err(serde::de::Error::custom)
+    }
+}
 
 pub trait FeatureSubCommands {
     fn feature_subcommands(self) -> Self;
@@ -367,7 +560,10 @@ fn feature_set_stats(rpc_client: &RpcClient) -> Result<FeatureSetStats, ClientEr
 }
 
 // Feature activation is only allowed when 95% of the active stake is on the current feature set
-fn feature_activation_allowed(rpc_client: &RpcClient, quiet: bool) -> Result<bool, ClientError> {
+fn feature_activation_allowed(
+    rpc_client: &RpcClient,
+    quiet: bool,
+) -> Result<(bool, Option<CliClusterFeatureSets>), ClientError> {
     let my_feature_set = solana_version::Version::default().feature_set;
 
     let feature_set_stats = feature_set_stats(rpc_client)?;
@@ -383,54 +579,43 @@ fn feature_activation_allowed(rpc_client: &RpcClient, quiet: bool) -> Result<boo
         )
         .unwrap_or((false, false));
 
-    if !quiet {
-        if feature_set_stats.get(&my_feature_set).is_none() {
-            println!(
-                "{}",
-                style("To activate features the tool and cluster feature sets must match, select a tool version that matches the cluster")
-                    .bold());
-        } else {
-            if !stake_allowed {
-                print!(
-                    "\n{}",
-                    style("To activate features the stake must be >= 95%")
-                        .bold()
-                        .red()
-                );
-            }
-            if !rpc_allowed {
-                print!(
-                    "\n{}",
-                    style("To activate features the RPC nodes must be >= 95%")
-                        .bold()
-                        .red()
-                );
-            }
-        }
-        println!(
-            "\n\n{}",
-            style(format!("Tool Feature Set: {}", my_feature_set)).bold()
-        );
-
-        let mut feature_set_stats = feature_set_stats.into_iter().collect::<Vec<_>>();
-        feature_set_stats.sort_by(|l, r| {
-            match l.1.software_versions[0]
-                .cmp(&r.1.software_versions[0])
+    let cluster_feature_sets = if quiet {
+        None
+    } else {
+        let mut feature_sets = feature_set_stats
+            .into_iter()
+            .map(
+                |(
+                    feature_set,
+                    FeatureSetStatsEntry {
+                        stake_percent,
+                        rpc_nodes_percent: rpc_percent,
+                        software_versions,
+                    },
+                )| {
+                    CliFeatureSet {
+                        software_versions: software_versions.into_iter().map(CliVersion).collect(),
+                        feature_set,
+                        stake_percent,
+                        rpc_percent,
+                    }
+                },
+            )
+            .collect::<Vec<_>>();
+        feature_sets.sort_by(|l, r| {
+            match l.software_versions[0]
+                .cmp(&r.software_versions[0])
                 .reverse()
             {
                 Ordering::Equal => {
                     match l
-                        .1
                         .stake_percent
-                        .partial_cmp(&r.1.stake_percent)
+                        .partial_cmp(&r.stake_percent)
                         .unwrap()
                         .reverse()
                     {
                         Ordering::Equal => {
-                            l.1.rpc_nodes_percent
-                                .partial_cmp(&r.1.rpc_nodes_percent)
-                                .unwrap()
-                                .reverse()
+                            l.rpc_percent.partial_cmp(&r.rpc_percent).unwrap().reverse()
                         }
                         o => o,
                     }
@@ -438,96 +623,15 @@ fn feature_activation_allowed(rpc_client: &RpcClient, quiet: bool) -> Result<boo
                 o => o,
             }
         });
+        Some(CliClusterFeatureSets {
+            tool_feature_set: my_feature_set,
+            feature_sets,
+            stake_allowed,
+            rpc_allowed,
+        })
+    };
 
-        let software_versions_title = "Software Version";
-        let feature_set_title = "Feature Set";
-        let stake_percent_title = "Stake";
-        let rpc_percent_title = "RPC";
-        let mut stats_output = Vec::new();
-        let mut max_software_versions_len = software_versions_title.len();
-        let mut max_feature_set_len = feature_set_title.len();
-        let mut max_stake_percent_len = stake_percent_title.len();
-        let mut max_rpc_percent_len = rpc_percent_title.len();
-        for (
-            feature_set,
-            FeatureSetStatsEntry {
-                stake_percent,
-                rpc_nodes_percent,
-                software_versions,
-            },
-        ) in feature_set_stats.into_iter()
-        {
-            let me = feature_set == my_feature_set;
-            let feature_set = if feature_set == 0 {
-                "unknown".to_string()
-            } else {
-                feature_set.to_string()
-            };
-            let stake_percent = format!("{:.2}%", stake_percent);
-            let rpc_percent = format!("{:.2}%", rpc_nodes_percent);
-
-            let mut has_unknown = false;
-            let mut software_versions = software_versions
-                .iter()
-                .filter_map(|v| {
-                    if v.is_none() {
-                        has_unknown = true;
-                    }
-                    v.as_ref()
-                })
-                .map(ToString::to_string)
-                .collect::<Vec<_>>();
-            if has_unknown {
-                software_versions.push("unknown".to_string());
-            }
-            let software_versions = software_versions.join(", ");
-            max_software_versions_len = max_software_versions_len.max(software_versions.len());
-
-            max_feature_set_len = max_feature_set_len.max(feature_set.len());
-            max_stake_percent_len = max_stake_percent_len.max(stake_percent.len());
-            max_rpc_percent_len = max_rpc_percent_len.max(rpc_percent.len());
-
-            stats_output.push((
-                software_versions,
-                feature_set,
-                stake_percent,
-                rpc_percent,
-                me,
-            ));
-        }
-        println!(
-            "{}",
-            style(format!(
-                "{1:<0$}  {3:<2$}  {5:<4$}  {7:<6$}",
-                max_software_versions_len,
-                software_versions_title,
-                max_feature_set_len,
-                feature_set_title,
-                max_stake_percent_len,
-                stake_percent_title,
-                max_rpc_percent_len,
-                rpc_percent_title,
-            ))
-            .bold(),
-        );
-        for (software_versions, feature_set, stake_percent, rpc_percent, me) in stats_output {
-            println!(
-                "{1:<0$}  {3:>2$}  {5:>4$} {7:>6$}  {8}",
-                max_software_versions_len,
-                software_versions,
-                max_feature_set_len,
-                feature_set,
-                max_stake_percent_len,
-                stake_percent,
-                max_rpc_percent_len,
-                rpc_percent,
-                if me { "<-- me" } else { "" },
-            );
-        }
-        println!();
-    }
-
-    Ok(stake_allowed && rpc_allowed)
+    Ok((stake_allowed && rpc_allowed, cluster_feature_sets))
 }
 
 fn status_from_account(account: Account) -> Option<CliFeatureStatus> {
@@ -589,10 +693,12 @@ fn process_status(
 
     features.sort_unstable();
 
-    let feature_activation_allowed = feature_activation_allowed(rpc_client, features.len() <= 1)?;
+    let (feature_activation_allowed, cluster_feature_sets) =
+        feature_activation_allowed(rpc_client, features.len() <= 1)?;
     let feature_set = CliFeatures {
         features,
         feature_activation_allowed,
+        cluster_feature_sets,
         inactive,
     };
     Ok(config.output_format.formatted_string(&feature_set))
@@ -616,7 +722,7 @@ fn process_activate(
         }
     }
 
-    if !feature_activation_allowed(rpc_client, false)? {
+    if !feature_activation_allowed(rpc_client, false)?.0 {
         match force {
         ForceActivation::Almost =>
             return Err("Add force argument once more to override the sanity check to force feature activation ".into()),
