@@ -3500,8 +3500,8 @@ mod tests {
         // Can't use VALIDATOR_PORT_RANGE because if this test runs in parallel with others, the
         // port returned by `bind_in_range()` might be snatched up before `Node::new_with_external_ip()` runs
         let port_range = (
-            VALIDATOR_PORT_RANGE.1 + 10,
-            VALIDATOR_PORT_RANGE.1 + 10 + MINIMUM_VALIDATOR_PORT_RANGE_WIDTH,
+            VALIDATOR_PORT_RANGE.1 + MINIMUM_VALIDATOR_PORT_RANGE_WIDTH,
+            VALIDATOR_PORT_RANGE.1 + (2 * MINIMUM_VALIDATOR_PORT_RANGE_WIDTH),
         );
 
         let ip = IpAddr::V4(Ipv4Addr::from(0));
