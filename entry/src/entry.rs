@@ -15,7 +15,10 @@ use {
     solana_metrics::*,
     solana_perf::{
         cuda_runtime::PinnedVec,
-        packet::{Packet, PacketBatch, PacketBatchRecycler, PacketInterface, PACKETS_PER_BATCH},
+        packet::{
+            ExtendedPacket, Packet, PacketBatch, PacketBatchRecycler, PacketInterface,
+            PACKETS_PER_BATCH,
+        },
         perf_libs,
         recycler::Recycler,
         sigverify,
@@ -260,6 +263,7 @@ pub struct EntryVerificationState {
 
 pub struct GpuSigVerificationData {
     thread_h: Option<JoinHandle<(bool, u64)>>,
+    thread_h_extended: Option<JoinHandle<(bool, u64)>>,
 }
 
 pub enum DeviceSigVerificationData {
@@ -283,13 +287,18 @@ impl<'a> EntrySigVerificationState {
             DeviceSigVerificationData::Gpu(verification_state) => {
                 let (verified, gpu_time_us) =
                     verification_state.thread_h.take().unwrap().join().unwrap();
-                self.gpu_verify_duration_us = gpu_time_us;
-                self.verification_status = if verified {
+                let (verified_extended, gpu_time_us_extended) = 
+                    verification_state.thread_h_extended.take().unwrap().join().unwrap();
+                // todo: improve this metric, perhaps by simply recording the start and end timestamps
+                // for both verifications and taking the difference of the most extreme of
+                // the start and end times for both
+                self.gpu_verify_duration_us = cmp::max(gpu_time_us, gpu_time_us_extended);
+                self.verification_status = if verified && verified_extended {
                     EntryVerificationStatus::Success
                 } else {
                     EntryVerificationStatus::Failure
                 };
-                verified
+                verified && verified_extended
             }
             DeviceSigVerificationData::Cpu() => {
                 self.verification_status == EntryVerificationStatus::Success
@@ -311,6 +320,7 @@ pub struct VerifyRecyclers {
     // TODO: Revisit - does the below one need to be generic? Don't think so
     //       because these should be shred packets which aren't variable in size
     packet_recycler: PacketBatchRecycler<Packet>,
+    extended_packet_recycler: PacketBatchRecycler<ExtendedPacket>,
     out_recycler: Recycler<PinnedVec<u8>>,
     tx_offset_recycler: Recycler<sigverify::TxOffset>,
 }
@@ -475,17 +485,34 @@ pub fn start_verify_transactions(
     let entries = verify_transactions(entries, Arc::new(verify_func));
     match entries {
         Ok(entries) => {
-            let num_transactions: usize = entries
+            //todo: de-duplicate this code as much as possible
+            let entry_txs: Vec<&SanitizedTransaction> = entries
                 .iter()
-                .map(|entry: &EntryType| -> usize {
-                    match entry {
-                        EntryType::Transactions(transactions) => transactions.len(),
-                        EntryType::Tick(_) => 0,
-                    }
+                .filter_map(|entry_type| match entry_type {
+                    EntryType::Tick(_) => None,
+                    EntryType::Transactions(transactions) => Some(
+                        transactions
+                            .iter()
+                            .filter(|transaction| !transaction.is_large_transaction()),
+                    ),
                 })
-                .sum();
+                .flatten()
+                .collect::<Vec<_>>();
 
-            if num_transactions == 0 {
+            let large_entry_txs: Vec<&SanitizedTransaction> = entries
+                .iter()
+                .filter_map(|entry_type| match entry_type {
+                    EntryType::Tick(_) => None,
+                    EntryType::Transactions(transactions) => Some(
+                        transactions
+                            .iter()
+                            .filter(|transaction| transaction.is_large_transaction()),
+                    ),
+                })
+                .flatten()
+                .collect::<Vec<_>>();
+
+            if entry_txs.len() == 0 && large_entry_txs.len() == 0 {
                 return Ok(EntrySigVerificationState {
                     verification_status: EntryVerificationStatus::Success,
                     entries: Some(entries),
@@ -493,28 +520,21 @@ pub fn start_verify_transactions(
                     gpu_verify_duration_us: 0,
                 });
             }
-            let entry_txs: Vec<&SanitizedTransaction> = entries
-                .iter()
-                .filter_map(|entry_type| match entry_type {
-                    EntryType::Tick(_) => None,
-                    EntryType::Transactions(transactions) => Some(transactions),
-                })
-                .flatten()
-                .collect::<Vec<_>>();
+
             let mut packet_batches = entry_txs
                 .par_iter()
                 .chunks(PACKETS_PER_BATCH)
                 .map(|slice| {
                     let vec_size = slice.len();
-                    let mut packet_batch = PacketBatch::new_with_recycler(
+                    let mut packet_batch = PacketBatch::<Packet>::new_with_recycler(
                         verify_recyclers.packet_recycler.clone(),
                         vec_size,
                         "entry-sig-verify",
                     );
-                    // We use set_len here instead of resize(num_transactions, Packet::default()), to save
+                    // We use set_len here instead of resize(vec_size, Packet::default()), to save
                     // memory bandwidth and avoid writing a large amount of data that will be overwritten
                     // soon afterwards. As well, Packet::default() actually leaves the packet data
-                    // uninitialized anyway, so the initilization would simply write junk into
+                    // uninitialized, so the initialization would simply write junk into
                     // the vector anyway.
                     unsafe {
                         packet_batch.packets.set_len(vec_size);
@@ -539,19 +559,85 @@ pub fn start_verify_transactions(
                 })
                 .collect::<Result<Vec<_>>>()?;
 
+            let mut extended_packet_batches = large_entry_txs
+                .par_iter()
+                .chunks(PACKETS_PER_BATCH)
+                .map(|slice| {
+                    let vec_size = slice.len();
+                    let mut packet_batch = PacketBatch::<ExtendedPacket>::new_with_recycler(
+                        verify_recyclers.extended_packet_recycler.clone(),
+                        vec_size,
+                        "entry-sig-verify",
+                    );
+                    // We use set_len here instead of resize(vec_size, Packet::default()), to save
+                    // memory bandwidth and avoid writing a large amount of data that will be overwritten
+                    // soon afterwards. As well, Packet::default() actually leaves the packet data
+                    // uninitialized, so the initialization would simply write junk into
+                    // the vector anyway.
+                    unsafe {
+                        packet_batch.packets.set_len(vec_size);
+                    }
+                    let entry_tx_iter = slice
+                        .into_par_iter()
+                        .map(|tx| tx.to_versioned_transaction());
+
+                    let res = packet_batch
+                        .packets
+                        .par_iter_mut()
+                        .zip(entry_tx_iter)
+                        .all(|pair| {
+                            pair.0.meta = Meta::default();
+                            ExtendedPacket::populate_packet(pair.0, None, &pair.1).is_ok()
+                        });
+                    if res {
+                        Ok(packet_batch)
+                    } else {
+                        Err(TransactionError::SanitizeFailure)
+                    }
+                })
+                .collect::<Result<Vec<_>>>()?;
+
             let tx_offset_recycler = verify_recyclers.tx_offset_recycler;
             let out_recycler = verify_recyclers.out_recycler;
-            let gpu_verify_thread = thread::spawn(move || {
+            let gpu_verify_thread = {
+                let tx_offset_recycler = tx_offset_recycler.clone();
+                let out_recycler = out_recycler.clone();
+                thread::spawn(move || {
+                    let mut verify_time = Measure::start("sigverify");
+                    let verified = if packet_batches.len() != 0 {
+                        sigverify::ed25519_verify(
+                            &mut packet_batches,
+                            &tx_offset_recycler,
+                            &out_recycler,
+                            false,
+                        );
+                        packet_batches
+                            .iter()
+                            .all(|batch| batch.packets.iter().all(|p| !p.meta.discard))
+                    } else {
+                        true
+                    };
+                    verify_time.stop();
+                    (verified, verify_time.as_us())
+                })
+            };
+
+            let gpu_extended_verify_thread = thread::spawn(move || {
                 let mut verify_time = Measure::start("sigverify");
-                sigverify::ed25519_verify(
-                    &mut packet_batches,
-                    &tx_offset_recycler,
-                    &out_recycler,
-                    false,
-                );
-                let verified = packet_batches
-                    .iter()
-                    .all(|batch| batch.packets.iter().all(|p| !p.meta.discard));
+                let verified = if extended_packet_batches.len() != 0 {
+                    //todo: verify that sigverify::ed25519_verify is thread-safe
+                    sigverify::ed25519_verify(
+                        &mut extended_packet_batches,
+                        &tx_offset_recycler,
+                        &out_recycler,
+                        false,
+                    );
+                    extended_packet_batches
+                        .iter()
+                        .all(|batch| batch.packets.iter().all(|p| !p.meta.discard))
+                } else {
+                    true
+                };
                 verify_time.stop();
                 (verified, verify_time.as_us())
             });
@@ -560,6 +646,7 @@ pub fn start_verify_transactions(
                 entries: Some(entries),
                 device_verification_data: DeviceSigVerificationData::Gpu(GpuSigVerificationData {
                     thread_h: Some(gpu_verify_thread),
+                    thread_h_extended : Some(gpu_extended_verify_thread),
                 }),
                 gpu_verify_duration_us: 0,
             })

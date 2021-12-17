@@ -109,7 +109,7 @@ use {
         native_loader,
         native_token::sol_to_lamports,
         nonce, nonce_account,
-        packet::PACKET_DATA_SIZE,
+        packet::EXTENDED_PACKET_DATA_SIZE,
         precompiles::get_precompiles,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
@@ -5232,7 +5232,7 @@ impl Bank {
         let sanitized_tx = {
             let size =
                 bincode::serialized_size(&tx).map_err(|_| TransactionError::SanitizeFailure)?;
-            if size > PACKET_DATA_SIZE as u64 {
+            if size > EXTENDED_PACKET_DATA_SIZE as u64 {
                 return Err(TransactionError::SanitizeFailure);
             }
             let message_hash = if verification_mode == TransactionVerificationMode::FullVerification

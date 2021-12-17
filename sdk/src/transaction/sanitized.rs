@@ -17,6 +17,7 @@ use {
         transaction::{Result, Transaction, TransactionError, VersionedTransaction},
     },
     solana_program::{system_instruction::SystemInstruction, system_program},
+    solana_sdk::packet::PACKET_DATA_SIZE,
     std::sync::Arc,
 };
 
@@ -26,6 +27,9 @@ pub struct SanitizedTransaction {
     message: SanitizedMessage,
     message_hash: Hash,
     is_simple_vote_tx: bool,
+    // Whether or not this transaction is too large
+    // to fit into a normal Packet
+    is_large_transaction: bool,
     signatures: Vec<Signature>,
 }
 
@@ -50,6 +54,10 @@ impl SanitizedTransaction {
     ) -> Result<Self> {
         tx.sanitize()?;
 
+        let size = bincode::serialized_size(&tx).map_err(|_| TransactionError::SanitizeFailure)?;
+
+        let is_large_transaction = size > (PACKET_DATA_SIZE as u64);
+
         let signatures = tx.signatures;
         let message = match tx.message {
             VersionedMessage::Legacy(message) => SanitizedMessage::Legacy(message),
@@ -72,6 +80,7 @@ impl SanitizedTransaction {
             message,
             message_hash,
             is_simple_vote_tx,
+            is_large_transaction,
             signatures,
         })
     }
@@ -87,6 +96,7 @@ impl SanitizedTransaction {
             message_hash: tx.message.hash(),
             message: SanitizedMessage::Legacy(tx.message),
             is_simple_vote_tx: false,
+            is_large_transaction: false,
             signatures: tx.signatures,
         })
     }
@@ -120,6 +130,10 @@ impl SanitizedTransaction {
     /// Return the hash of the signed message
     pub fn message_hash(&self) -> &Hash {
         &self.message_hash
+    }
+
+    pub fn is_large_transaction(&self) -> bool {
+        self.is_large_transaction
     }
 
     /// Returns true if this transaction is a simple vote
