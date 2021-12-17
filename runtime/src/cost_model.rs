@@ -106,15 +106,11 @@ impl CostModel {
         );
     }
 
-    pub fn calculate_cost(
-        &self,
-        transaction: &SanitizedTransaction,
-        demote_program_write_locks: bool,
-    ) -> TransactionCost {
+    pub fn calculate_cost(&self, transaction: &SanitizedTransaction) -> TransactionCost {
         let mut tx_cost = TransactionCost::new_with_capacity(MAX_WRITABLE_ACCOUNTS);
 
         tx_cost.signature_cost = self.get_signature_cost(transaction);
-        self.get_write_lock_cost(&mut tx_cost, transaction, demote_program_write_locks);
+        self.get_write_lock_cost(&mut tx_cost, transaction);
         tx_cost.data_bytes_cost = self.get_data_bytes_cost(transaction);
         tx_cost.execution_cost = self.get_transaction_cost(transaction);
         tx_cost.cost_weight = self.calculate_cost_weight(transaction);
@@ -148,11 +144,10 @@ impl CostModel {
         &self,
         tx_cost: &mut TransactionCost,
         transaction: &SanitizedTransaction,
-        demote_program_write_locks: bool,
     ) {
         let message = transaction.message();
         message.account_keys_iter().enumerate().for_each(|(i, k)| {
-            let is_writable = message.is_writable(i, demote_program_write_locks);
+            let is_writable = message.is_writable(i);
 
             if is_writable {
                 tx_cost.writable_accounts.push(*k);
@@ -381,7 +376,7 @@ mod tests {
         );
 
         let cost_model = CostModel::default();
-        let tx_cost = cost_model.calculate_cost(&tx, /*demote_program_write_locks=*/ true);
+        let tx_cost = cost_model.calculate_cost(&tx);
         assert_eq!(2 + 2, tx_cost.writable_accounts.len());
         assert_eq!(signer1.pubkey(), tx_cost.writable_accounts[0]);
         assert_eq!(signer2.pubkey(), tx_cost.writable_accounts[1]);
@@ -425,7 +420,7 @@ mod tests {
         cost_model
             .upsert_instruction_cost(&system_program::id(), expected_execution_cost)
             .unwrap();
-        let tx_cost = cost_model.calculate_cost(&tx, /*demote_program_write_locks=*/ true);
+        let tx_cost = cost_model.calculate_cost(&tx);
         assert_eq!(expected_account_cost, tx_cost.write_lock_cost);
         assert_eq!(expected_execution_cost, tx_cost.execution_cost);
         assert_eq!(2, tx_cost.writable_accounts.len());
@@ -494,8 +489,7 @@ mod tests {
                 } else {
                     thread::spawn(move || {
                         let cost_model = cost_model.write().unwrap();
-                        let tx_cost = cost_model
-                            .calculate_cost(&tx, /*demote_program_write_locks=*/ true);
+                        let tx_cost = cost_model.calculate_cost(&tx);
                         assert_eq!(3, tx_cost.writable_accounts.len());
                         assert_eq!(expected_account_cost, tx_cost.write_lock_cost);
                     })

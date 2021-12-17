@@ -3050,10 +3050,7 @@ impl Bank {
             .into_iter()
             .map(SanitizedTransaction::from_transaction_for_tests)
             .collect::<Vec<_>>();
-        let lock_results = self
-            .rc
-            .accounts
-            .lock_accounts(sanitized_txs.iter(), self.demote_program_write_locks());
+        let lock_results = self.rc.accounts.lock_accounts(sanitized_txs.iter());
         TransactionBatch::new(lock_results, self, Cow::Owned(sanitized_txs))
     }
 
@@ -3069,10 +3066,7 @@ impl Bank {
                 })
             })
             .collect::<Result<Vec<_>>>()?;
-        let lock_results = self
-            .rc
-            .accounts
-            .lock_accounts(sanitized_txs.iter(), self.demote_program_write_locks());
+        let lock_results = self.rc.accounts.lock_accounts(sanitized_txs.iter());
         Ok(TransactionBatch::new(
             lock_results,
             self,
@@ -3085,10 +3079,7 @@ impl Bank {
         &'a self,
         txs: &'b [SanitizedTransaction],
     ) -> TransactionBatch<'a, 'b> {
-        let lock_results = self
-            .rc
-            .accounts
-            .lock_accounts(txs.iter(), self.demote_program_write_locks());
+        let lock_results = self.rc.accounts.lock_accounts(txs.iter());
         TransactionBatch::new(lock_results, self, Cow::Borrowed(txs))
     }
 
@@ -3100,11 +3091,10 @@ impl Bank {
         transaction_results: impl Iterator<Item = Result<()>>,
     ) -> TransactionBatch<'a, 'b> {
         // this lock_results could be: Ok, AccountInUse, WouldExceedBlockMaxLimit or WouldExceedAccountMaxLimit
-        let lock_results = self.rc.accounts.lock_accounts_with_results(
-            transactions.iter(),
-            transaction_results,
-            self.demote_program_write_locks(),
-        );
+        let lock_results = self
+            .rc
+            .accounts
+            .lock_accounts_with_results(transactions.iter(), transaction_results);
         TransactionBatch::new(lock_results, self, Cow::Borrowed(transactions))
     }
 
@@ -3186,11 +3176,9 @@ impl Bank {
     pub fn unlock_accounts(&self, batch: &mut TransactionBatch) {
         if batch.needs_unlock {
             batch.needs_unlock = false;
-            self.rc.accounts.unlock_accounts(
-                batch.sanitized_transactions().iter(),
-                batch.lock_results(),
-                self.demote_program_write_locks(),
-            )
+            self.rc
+                .accounts
+                .unlock_accounts(batch.sanitized_transactions().iter(), batch.lock_results())
         }
     }
 
@@ -3885,7 +3873,6 @@ impl Bank {
             &blockhash,
             lamports_per_signature,
             self.rent_for_sysvars(),
-            self.demote_program_write_locks(),
             self.leave_nonce_on_success(),
         );
         let rent_debits = self.collect_rent(executed_results, loaded_txs);
@@ -5749,11 +5736,6 @@ impl Bank {
             .is_active(&feature_set::stake_program_advance_activating_credits_observed::id())
     }
 
-    pub fn demote_program_write_locks(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::demote_program_write_locks::id())
-    }
-
     pub fn leave_nonce_on_success(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::leave_nonce_on_success::id())
@@ -7254,10 +7236,7 @@ pub(crate) mod tests {
 
         assert_eq!(
             bank.process_transaction(&tx),
-            Err(TransactionError::InstructionError(
-                0,
-                InstructionError::ExecutableLamportChange
-            ))
+            Err(TransactionError::InvalidWritableAccount)
         );
         assert_eq!(bank.get_balance(&account_pubkey), account_balance);
     }
