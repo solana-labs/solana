@@ -7164,10 +7164,10 @@ impl AccountsDb {
         #[allow(clippy::stable_sort_primitive)]
         roots.sort();
         info!("{}: accounts_index roots: {:?}", label, roots,);
+        let full_pubkey_range = Pubkey::new(&[0; 32])..=Pubkey::new(&[0xff; 32]);
+
         self.accounts_index.account_maps.iter().for_each(|map| {
-            for (pubkey, account_entry) in
-                map.read().unwrap().items(&None::<&std::ops::Range<Pubkey>>)
-            {
+            for (pubkey, account_entry) in map.read().unwrap().items(&full_pubkey_range) {
                 info!("  key: {} ref_count: {}", pubkey, account_entry.ref_count(),);
                 info!(
                     "      slots: {:?}",
