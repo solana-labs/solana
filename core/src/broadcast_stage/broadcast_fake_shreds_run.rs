@@ -52,7 +52,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         )
         .expect("Expected to create a new shredder");
 
-        let (data_shreds, coding_shreds, _) = shredder.entries_to_shreds(
+        let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
             keypair,
             &receive_results.entries,
             last_tick_height == bank.max_tick_height(),
@@ -69,7 +69,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             .map(|_| Entry::new(&self.last_blockhash, 0, vec![]))
             .collect();
 
-        let (fake_data_shreds, fake_coding_shreds, _) = shredder.entries_to_shreds(
+        let (fake_data_shreds, fake_coding_shreds) = shredder.entries_to_shreds(
             keypair,
             &fake_entries,
             last_tick_height == bank.max_tick_height(),

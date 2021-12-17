@@ -119,17 +119,16 @@ impl StandardBroadcastRun {
                 None => (0, 0),
             },
         };
-        let (data_shreds, next_shred_index) =
-            Shredder::new(slot, parent_slot, reference_tick, self.shred_version)
-                .unwrap()
-                .entries_to_data_shreds(
-                    keypair,
-                    entries,
-                    is_slot_end,
-                    next_shred_index,
-                    fec_set_offset,
-                    process_stats,
-                );
+        let data_shreds = Shredder::new(slot, parent_slot, reference_tick, self.shred_version)
+            .unwrap()
+            .entries_to_data_shreds(
+                keypair,
+                entries,
+                is_slot_end,
+                next_shred_index,
+                fec_set_offset,
+                process_stats,
+            );
         let mut data_shreds_buffer = match &mut self.unfinished_slot {
             Some(state) => {
                 assert_eq!(state.slot, slot);
@@ -138,6 +137,10 @@ impl StandardBroadcastRun {
             None => Vec::default(),
         };
         data_shreds_buffer.extend(data_shreds.clone());
+        let next_shred_index = match data_shreds.iter().map(Shred::index).max() {
+            Some(index) => index + 1,
+            None => next_shred_index,
+        };
         self.unfinished_slot = Some(UnfinishedSlotInfo {
             next_shred_index,
             slot,
