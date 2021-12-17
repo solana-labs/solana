@@ -19,13 +19,32 @@ use {
 pub struct IndexEntry {
     pub key: Pubkey, // can this be smaller if we have reduced the keys into buckets already?
     pub ref_count: RefCount, // can this be smaller? Do we ever need more than 4B refcounts?
-    pub storage_offset: u64, // smaller? since these are variably sized, this could get tricky. well, actually accountinfo is not variable sized...
+    storage_offset: u64, // smaller? since these are variably sized, this could get tricky. well, actually accountinfo is not variable sized...
     // if the bucket doubled, the index can be recomputed using create_bucket_capacity_pow2
-    pub storage_capacity_when_created_pow2: u8, // see data_location
+    storage_capacity_when_created_pow2: u8, // see data_location
     pub num_slots: Slot, // can this be smaller? epoch size should ~ be the max len. this is the num elements in the slot list
 }
 
 impl IndexEntry {
+    pub fn init(&mut self, pubkey: &Pubkey) {
+        self.key = *pubkey;
+        self.ref_count = 0;
+        self.storage_offset = 0;
+        self.storage_capacity_when_created_pow2 = 0;
+        self.num_slots = 0;
+    }
+
+    pub fn set_storage_capacity_when_created_pow2(
+        &mut self,
+        storage_capacity_when_created_pow2: u8,
+    ) {
+        self.storage_capacity_when_created_pow2 = storage_capacity_when_created_pow2;
+    }
+
+    pub fn set_storage_offset(&mut self, storage_offset: u64) {
+        self.storage_offset = storage_offset;
+    }
+
     pub fn data_bucket_from_num_slots(num_slots: Slot) -> u64 {
         (num_slots as f64).log2().ceil() as u64 // use int log here?
     }

@@ -198,14 +198,10 @@ impl<T: Clone + Copy> Bucket<T> {
                 continue;
             }
             index.allocate(ii, elem_uid, is_resizing).unwrap();
-            let mut elem: &mut IndexEntry = index.get_mut(ii);
-            elem.key = *key;
-            // These will be overwritten after allocation by callers.
+            let elem: &mut IndexEntry = index.get_mut(ii);
+            // These fields will be overwritten after allocation by callers.
             // Since this part of the mmapped file could have previously been used by someone else, there can be garbage here.
-            elem.ref_count = 0;
-            elem.storage_offset = 0;
-            elem.storage_capacity_when_created_pow2 = 0;
-            elem.num_slots = 0;
+            elem.init(key);
             //debug!(                "INDEX ALLOC {:?} {} {} {}",                key, ii, index.capacity, elem_uid            );
             return Ok(ii);
         }
@@ -285,8 +281,8 @@ impl<T: Clone + Copy> Bucket<T> {
                     if elem.num_slots > 0 {
                         current_bucket.free(elem_loc, elem_uid);
                     }
-                    elem.storage_offset = ix;
-                    elem.storage_capacity_when_created_pow2 = best_bucket.capacity_pow2;
+                    elem.set_storage_offset(ix);
+                    elem.set_storage_capacity_when_created_pow2(best_bucket.capacity_pow2);
                     elem.num_slots = data.len() as u64;
                     //debug!(                        "DATA ALLOC {:?} {} {} {}",                        key, elem.data_location, best_bucket.capacity, elem_uid                    );
                     if elem.num_slots > 0 {
