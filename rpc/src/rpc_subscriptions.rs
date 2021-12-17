@@ -39,12 +39,8 @@ use {
         timing::timestamp,
         transaction,
     },
-<<<<<<< HEAD
-    solana_vote_program::vote_state::Vote,
-=======
     solana_transaction_status::ConfirmedBlock,
-    solana_vote_program::vote_state::VoteTransaction,
->>>>>>> 76098dd42 (RPC Block Subscription (#21787))
+    solana_vote_program::vote_state::Vote,
     std::{
         cell::RefCell,
         collections::{HashMap, VecDeque},
