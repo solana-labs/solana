@@ -1358,16 +1358,16 @@ mod tests {
             let map = map.read().unwrap();
             assert_eq!(
                 map.cache_ranges_held.read().unwrap().to_vec(),
-                vec![Some(range.clone())]
+                vec![range.clone()]
             );
         });
         accts.hold_range_in_memory(&range2, true);
         idx.account_maps.iter().enumerate().for_each(|(bin, map)| {
             let map = map.read().unwrap();
             let expected = if bin == 0 {
-                vec![Some(range.clone()), Some(range2_inclusive.clone())]
+                vec![range.clone(), range2_inclusive.clone()]
             } else {
-                vec![Some(range.clone())]
+                vec![range.clone()]
             };
             assert_eq!(
                 map.cache_ranges_held.read().unwrap().to_vec(),
