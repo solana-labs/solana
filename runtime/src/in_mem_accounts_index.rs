@@ -25,7 +25,7 @@ use {
     },
 };
 type K = Pubkey;
-type CacheRangesHeld = RwLock<Vec<Option<RangeInclusive<Pubkey>>>>;
+type CacheRangesHeld = RwLock<Vec<RangeInclusive<Pubkey>>>;
 pub type SlotT<T> = (Slot, T);
 
 type InMemMap<T> = HashMap<Pubkey, AccountMapEntry<T>>;
@@ -648,27 +648,19 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
         // this becomes inclusive - that is ok - we are just roughly holding a range of items.
         // inclusive is bigger than exclusive so we may hold 1 extra item worst case
-        let inclusive_range = Some(start..=end);
+        let inclusive_range = start..=end;
         let mut ranges = self.cache_ranges_held.write().unwrap();
         if start_holding {
             ranges.push(inclusive_range);
         } else {
             // find the matching range and delete it since we don't want to hold it anymore
-            let none = inclusive_range.is_none();
-            for (i, r) in ranges.iter().enumerate() {
-                if r.is_none() != none {
-                    continue;
-                }
-                if !none {
-                    // neither are none, so check values
-                    if let (Bound::Included(start_found), Bound::Included(end_found)) = r
-                        .as_ref()
-                        .map(|r| (r.start_bound(), r.end_bound()))
-                        .unwrap()
-                    {
-                        if start_found != &start || end_found != &end {
-                            continue;
-                        }
+            // search backwards, assuming LIFO ordering
+            for (i, r) in ranges.iter().enumerate().rev() {
+                if let (Bound::Included(start_found), Bound::Included(end_found)) =
+                    (r.start_bound(), r.end_bound())
+                {
+                    if start_found != &start || end_found != &end {
+                        continue;
                     }
                 }
                 // found a match. There may be dups, that's ok, we expect another call to remove the dup.
@@ -710,6 +702,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         assert!(self.get_stop_flush()); // caller should be controlling the lifetime of how long this needs to be present
         let m = Measure::start("range");
 
+        let mut added_to_mem = 0;
         // load from disk
         if let Some(disk) = self.bucket.as_ref() {
             let mut map = self.map().write().unwrap();
@@ -724,11 +717,13 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     }
                     Entry::Vacant(vacant) => {
                         vacant.insert(self.disk_to_cache_entry(item.slot_list, item.ref_count));
-                        self.stats().insert_or_delete_mem(true, self.bin);
+                        added_to_mem += 1;
                     }
                 }
             }
         }
+        self.stats()
+            .insert_or_delete_mem_count(true, self.bin, added_to_mem);
 
         Self::update_time_stat(&self.stats().get_range_us, m);
     }
@@ -897,9 +892,6 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
 
         let ranges = self.cache_ranges_held.read().unwrap().clone();
-        if ranges.iter().any(|range| range.is_none()) {
-            return false; // range said to hold 'all', so not completed
-        }
 
         let mut removed = 0;
         // consider chunking these so we don't hold the write lock too long
@@ -923,12 +915,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     continue;
                 }
 
-                if ranges.iter().any(|range| {
-                    range
-                        .as_ref()
-                        .map(|range| range.contains(&k))
-                        .unwrap_or(true) // None means 'full range', so true
-                }) {
+                if ranges.iter().any(|range| range.contains(&k)) {
                     // this item is held in mem by range, so don't remove
                     completed_scan = false;
                     continue;
@@ -1087,38 +1074,34 @@ mod tests {
             bucket.hold_range_in_memory(&range, true);
             assert_eq!(
                 bucket.cache_ranges_held.read().unwrap().to_vec(),
-                vec![Some(range.clone())]
+                vec![range.clone()]
             );
             bucket.hold_range_in_memory(&range, false);
             assert!(bucket.cache_ranges_held.read().unwrap().is_empty());
             bucket.hold_range_in_memory(&range, true);
             assert_eq!(
                 bucket.cache_ranges_held.read().unwrap().to_vec(),
-                vec![Some(range.clone())]
+                vec![range.clone()]
             );
             bucket.hold_range_in_memory(&range, true);
             assert_eq!(
                 bucket.cache_ranges_held.read().unwrap().to_vec(),
-                vec![Some(range.clone()), Some(range.clone())]
+                vec![range.clone(), range.clone()]
             );
             bucket.hold_range_in_memory(&ranges[0], true);
             assert_eq!(
                 bucket.cache_ranges_held.read().unwrap().to_vec(),
-                vec![
-                    Some(range.clone()),
-                    Some(range.clone()),
-                    Some(ranges[0].clone())
-                ]
+                vec![range.clone(), range.clone(), ranges[0].clone()]
             );
             bucket.hold_range_in_memory(&range, false);
             assert_eq!(
                 bucket.cache_ranges_held.read().unwrap().to_vec(),
-                vec![Some(range.clone()), Some(ranges[0].clone())]
+                vec![range.clone(), ranges[0].clone()]
             );
             bucket.hold_range_in_memory(&range, false);
             assert_eq!(
                 bucket.cache_ranges_held.read().unwrap().to_vec(),
-                vec![Some(ranges[0].clone())]
+                vec![ranges[0].clone()]
             );
             bucket.hold_range_in_memory(&ranges[0].clone(), false);
             assert!(bucket.cache_ranges_held.read().unwrap().is_empty());

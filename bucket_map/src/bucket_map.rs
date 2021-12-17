@@ -79,21 +79,14 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
         });
         let drives = Arc::new(drives);
 
-        let mut per_bucket_count = Vec::with_capacity(config.max_buckets);
-        per_bucket_count.resize_with(config.max_buckets, Arc::default);
-        let stats = Arc::new(BucketMapStats {
-            per_bucket_count,
-            ..BucketMapStats::default()
-        });
-        let buckets = stats
-            .per_bucket_count
-            .iter()
-            .map(|per_bucket_count| {
+        let stats = Arc::default();
+        let buckets = (0..config.max_buckets)
+            .into_iter()
+            .map(|_| {
                 Arc::new(BucketApi::new(
                     Arc::clone(&drives),
                     max_search,
                     Arc::clone(&stats),
-                    Arc::clone(per_bucket_count),
                 ))
             })
             .collect();

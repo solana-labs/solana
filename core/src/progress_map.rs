@@ -11,6 +11,7 @@ use {
     std::{
         collections::{BTreeMap, HashMap, HashSet},
         sync::{Arc, RwLock},
+        time::Instant,
     },
 };
 
@@ -188,12 +189,39 @@ impl ValidatorStakeInfo {
     }
 }
 
+pub const RETRANSMIT_BASE_DELAY_MS: u64 = 5_000;
+pub const RETRANSMIT_BACKOFF_CAP: u32 = 6;
+
+#[derive(Debug, Default)]
+pub struct RetransmitInfo {
+    pub retry_time: Option<Instant>,
+    pub retry_iteration: u32,
+}
+
+impl RetransmitInfo {
+    pub fn reached_retransmit_threshold(&self) -> bool {
+        let backoff = std::cmp::min(self.retry_iteration, RETRANSMIT_BACKOFF_CAP);
+        let backoff_duration_ms = 2_u64.pow(backoff) * RETRANSMIT_BASE_DELAY_MS;
+        self.retry_time
+            .map(|time| time.elapsed().as_millis() > backoff_duration_ms.into())
+            .unwrap_or(true)
+    }
+
+    pub fn increment_retry_iteration(&mut self) {
+        if self.retry_time.is_some() {
+            self.retry_iteration += 1;
+        }
+        self.retry_time = Some(Instant::now());
+    }
+}
+
 pub struct ForkProgress {
     pub is_dead: bool,
     pub fork_stats: ForkStats,
     pub propagated_stats: PropagatedStats,
     pub replay_stats: ReplaySlotStats,
     pub replay_progress: ConfirmationProgress,
+    pub retransmit_info: RetransmitInfo,
     // Note `num_blocks_on_fork` and `num_dropped_blocks_on_fork` only
     // count new blocks replayed since last restart, which won't include
     // blocks already existing in the ledger/before snapshot at start,
@@ -251,6 +279,7 @@ impl ForkProgress {
                 total_epoch_stake,
                 ..PropagatedStats::default()
             },
+            retransmit_info: RetransmitInfo::default(),
         }
     }
 
@@ -407,6 +436,12 @@ impl ProgressMap {
         self.progress_map
             .get_mut(&slot)
             .map(|fork_progress| &mut fork_progress.fork_stats)
+    }
+
+    pub fn get_retransmit_info(&mut self, slot: Slot) -> Option<&mut RetransmitInfo> {
+        self.progress_map
+            .get_mut(&slot)
+            .map(|fork_progress| &mut fork_progress.retransmit_info)
     }
 
     pub fn is_dead(&self, slot: Slot) -> Option<bool> {

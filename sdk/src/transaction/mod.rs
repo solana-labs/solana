@@ -410,7 +410,7 @@ pub fn uses_durable_nonce(tx: &Transaction) -> Option<&CompiledInstruction> {
             // Nonce account is writable
             && matches!(
                 instruction.accounts.get(0),
-                Some(index) if message.is_writable(*index as usize, true)
+                Some(index) if message.is_writable(*index as usize)
             )
         })
 }

@@ -10,9 +10,8 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         compute_budget::ComputeBudget,
         feature_set::{
-            demote_program_write_locks, do_support_realloc, neon_evm_compute_budget,
-            reject_empty_instruction_without_program, remove_native_loader, requestable_heap_size,
-            tx_wide_compute_cap, FeatureSet,
+            do_support_realloc, neon_evm_compute_budget, reject_empty_instruction_without_program,
+            remove_native_loader, requestable_heap_size, tx_wide_compute_cap, FeatureSet,
         },
         hash::Hash,
         instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
@@ -25,7 +24,7 @@ use {
     std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, sync::Arc},
 };
 
-pub type TransactionAccountRefCell = (Pubkey, Rc<RefCell<AccountSharedData>>);
+pub type TransactionAccountRefCell = (Pubkey, RefCell<AccountSharedData>);
 pub type TransactionAccountRefCells = Vec<TransactionAccountRefCell>;
 
 pub type ProcessInstructionWithContext =
@@ -282,9 +281,6 @@ impl<'a> InvokeContext<'a> {
         }
 
         // Create the KeyedAccounts that will be passed to the program
-        let demote_program_write_locks = self
-            .feature_set
-            .is_active(&demote_program_write_locks::id());
         let keyed_accounts = program_indices
             .iter()
             .map(|account_index| {
@@ -304,7 +300,7 @@ impl<'a> InvokeContext<'a> {
                 };
                 (
                     message.is_signer(index_in_instruction),
-                    message.is_writable(index_in_instruction, demote_program_write_locks),
+                    message.is_writable(index_in_instruction),
                     &self.accounts[account_index].0,
                     &self.accounts[account_index].1 as &RefCell<AccountSharedData>,
                 )
@@ -336,9 +332,6 @@ impl<'a> InvokeContext<'a> {
         program_indices: &[usize],
     ) -> Result<(), InstructionError> {
         let program_id = instruction.program_id(&message.account_keys);
-        let demote_program_write_locks = self
-            .feature_set
-            .is_active(&demote_program_write_locks::id());
         let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
 
         // Verify all executable accounts have zero outstanding refs
@@ -364,7 +357,7 @@ impl<'a> InvokeContext<'a> {
             pre_account
                 .verify(
                     program_id,
-                    message.is_writable(account_index, demote_program_write_locks),
+                    message.is_writable(account_index),
                     &self.rent,
                     &account,
                     &mut self.timings,
@@ -642,7 +635,7 @@ impl<'a> InvokeContext<'a> {
         Ok((message, caller_write_privileges, program_indices))
     }
 
-    /// Process a cross-program instruction
+    /// Processes a cross-program instruction and returns how many compute units were used
     pub fn process_instruction(
         &mut self,
         message: &Message,
@@ -650,7 +643,7 @@ impl<'a> InvokeContext<'a> {
         program_indices: &[usize],
         account_indices: &[usize],
         caller_write_privileges: &[bool],
-    ) -> Result<(), InstructionError> {
+    ) -> Result<u64, InstructionError> {
         let is_lowest_invocation_level = self.invoke_stack.is_empty();
         if !is_lowest_invocation_level {
             // Verify the calling program hasn't misbehaved
@@ -661,20 +654,21 @@ impl<'a> InvokeContext<'a> {
             .push(message, instruction, program_indices, account_indices)
             .and_then(|_| {
                 self.return_data = (*instruction.program_id(&message.account_keys), Vec::new());
+                let pre_remaining_units = self.compute_meter.borrow().get_remaining();
                 self.process_executable_chain(&instruction.data)?;
+                let post_remaining_units = self.compute_meter.borrow().get_remaining();
 
                 // Verify the called program has not misbehaved
                 if is_lowest_invocation_level {
-                    self.verify(message, instruction, program_indices)
+                    self.verify(message, instruction, program_indices)?;
                 } else {
-                    let demote_program_write_locks = self
-                        .feature_set
-                        .is_active(&demote_program_write_locks::id());
                     let write_privileges: Vec<bool> = (0..message.account_keys.len())
-                        .map(|i| message.is_writable(i, demote_program_write_locks))
+                        .map(|i| message.is_writable(i))
                         .collect();
-                    self.verify_and_update(instruction, account_indices, &write_privileges)
+                    self.verify_and_update(instruction, account_indices, &write_privileges)?;
                 }
+
+                Ok(pre_remaining_units.saturating_sub(post_remaining_units))
             });
 
         // Pop the invoke_stack to restore previous state
@@ -847,35 +841,23 @@ pub struct MockInvokeContextPreparation {
 pub fn prepare_mock_invoke_context(
     program_indices: &[usize],
     instruction_data: &[u8],
-    keyed_accounts: &[(bool, bool, Pubkey, Rc<RefCell<AccountSharedData>>)],
+    transaction_accounts: Vec<(Pubkey, AccountSharedData)>,
+    instruction_accounts: Vec<AccountMeta>,
 ) -> MockInvokeContextPreparation {
-    #[allow(clippy::type_complexity)]
-    let (accounts, mut metas): (TransactionAccountRefCells, Vec<AccountMeta>) = keyed_accounts
-        .iter()
-        .map(|(is_signer, is_writable, pubkey, account)| {
-            (
-                (*pubkey, account.clone()),
-                AccountMeta {
-                    pubkey: *pubkey,
-                    is_signer: *is_signer,
-                    is_writable: *is_writable,
-                },
-            )
-        })
-        .unzip();
+    let transaction_accounts: TransactionAccountRefCells = transaction_accounts
+        .into_iter()
+        .map(|(pubkey, account)| (pubkey, RefCell::new(account)))
+        .collect();
     let program_id = if let Some(program_index) = program_indices.last() {
-        accounts[*program_index].0
+        transaction_accounts[*program_index].0
     } else {
         Pubkey::default()
     };
-    for program_index in program_indices.iter().rev() {
-        metas.remove(*program_index);
-    }
     let message = Message::new(
         &[Instruction::new_with_bytes(
             program_id,
             instruction_data,
-            metas,
+            instruction_accounts,
         )],
         None,
     );
@@ -883,14 +865,14 @@ pub fn prepare_mock_invoke_context(
         .account_keys
         .iter()
         .map(|search_key| {
-            accounts
+            transaction_accounts
                 .iter()
                 .position(|(key, _account)| key == search_key)
-                .unwrap_or(accounts.len())
+                .unwrap_or(transaction_accounts.len())
         })
         .collect();
     MockInvokeContextPreparation {
-        accounts,
+        accounts: transaction_accounts,
         message,
         account_indices,
     }
@@ -902,27 +884,31 @@ pub fn with_mock_invoke_context<R, F: FnMut(&mut InvokeContext) -> R>(
     mut callback: F,
 ) -> R {
     let program_indices = vec![0, 1];
-    let keyed_accounts = [
+    let transaction_accounts = vec![
         (
-            false,
-            false,
             loader_id,
-            AccountSharedData::new_ref(0, 0, &solana_sdk::native_loader::id()),
+            AccountSharedData::new(0, 0, &solana_sdk::native_loader::id()),
         ),
         (
-            false,
-            false,
             Pubkey::new_unique(),
-            AccountSharedData::new_ref(1, 0, &loader_id),
+            AccountSharedData::new(1, 0, &loader_id),
         ),
         (
-            false,
-            false,
             Pubkey::new_unique(),
-            AccountSharedData::new_ref(2, account_size, &Pubkey::new_unique()),
+            AccountSharedData::new(2, account_size, &Pubkey::new_unique()),
         ),
     ];
-    let preparation = prepare_mock_invoke_context(&program_indices, &[], &keyed_accounts);
+    let instruction_accounts = vec![AccountMeta {
+        pubkey: transaction_accounts[2].0,
+        is_signer: false,
+        is_writable: false,
+    }];
+    let preparation = prepare_mock_invoke_context(
+        &program_indices,
+        &[],
+        transaction_accounts,
+        instruction_accounts,
+    );
     let mut invoke_context = InvokeContext::new_mock(&preparation.accounts, &[]);
     invoke_context
         .push(
@@ -939,38 +925,60 @@ pub fn mock_process_instruction_with_sysvars(
     loader_id: &Pubkey,
     mut program_indices: Vec<usize>,
     instruction_data: &[u8],
-    keyed_accounts: &[(bool, bool, Pubkey, Rc<RefCell<AccountSharedData>>)],
+    transaction_accounts: Vec<(Pubkey, AccountSharedData)>,
+    instruction_accounts: Vec<AccountMeta>,
+    expected_result: Result<(), InstructionError>,
     sysvars: &[(Pubkey, Vec<u8>)],
     process_instruction: ProcessInstructionWithContext,
-) -> Result<(), InstructionError> {
-    let mut preparation =
-        prepare_mock_invoke_context(&program_indices, instruction_data, keyed_accounts);
-    let processor_account = AccountSharedData::new_ref(0, 0, &solana_sdk::native_loader::id());
+) -> Vec<AccountSharedData> {
+    let mut preparation = prepare_mock_invoke_context(
+        &program_indices,
+        instruction_data,
+        transaction_accounts,
+        instruction_accounts,
+    );
+    let processor_account = RefCell::new(AccountSharedData::new(
+        0,
+        0,
+        &solana_sdk::native_loader::id(),
+    ));
     program_indices.insert(0, preparation.accounts.len());
     preparation.accounts.push((*loader_id, processor_account));
     let mut invoke_context = InvokeContext::new_mock(&preparation.accounts, &[]);
     invoke_context.sysvars = sysvars;
-    invoke_context.push(
-        &preparation.message,
-        &preparation.message.instructions[0],
-        &program_indices,
-        &preparation.account_indices,
-    )?;
-    process_instruction(1, instruction_data, &mut invoke_context)
+    let result = invoke_context
+        .push(
+            &preparation.message,
+            &preparation.message.instructions[0],
+            &program_indices,
+            &preparation.account_indices,
+        )
+        .and_then(|_| process_instruction(1, instruction_data, &mut invoke_context));
+    preparation.accounts.pop();
+    assert_eq!(result, expected_result);
+    preparation
+        .accounts
+        .into_iter()
+        .map(|(_key, account)| account.into_inner())
+        .collect()
 }
 
 pub fn mock_process_instruction(
     loader_id: &Pubkey,
     program_indices: Vec<usize>,
     instruction_data: &[u8],
-    keyed_accounts: &[(bool, bool, Pubkey, Rc<RefCell<AccountSharedData>>)],
+    transaction_accounts: Vec<(Pubkey, AccountSharedData)>,
+    instruction_accounts: Vec<AccountMeta>,
+    expected_result: Result<(), InstructionError>,
     process_instruction: ProcessInstructionWithContext,
-) -> Result<(), InstructionError> {
+) -> Vec<AccountSharedData> {
     mock_process_instruction_with_sysvars(
         loader_id,
         program_indices,
         instruction_data,
-        keyed_accounts,
+        transaction_accounts,
+        instruction_accounts,
+        expected_result,
         &[],
         process_instruction,
     )
@@ -1082,22 +1090,18 @@ mod tests {
             invoke_stack.push(solana_sdk::pubkey::new_rand());
             accounts.push((
                 solana_sdk::pubkey::new_rand(),
-                Rc::new(RefCell::new(AccountSharedData::new(
-                    i as u64,
-                    1,
-                    &invoke_stack[i],
-                ))),
+                RefCell::new(AccountSharedData::new(i as u64, 1, &invoke_stack[i])),
             ));
             metas.push(AccountMeta::new(accounts[i].0, false));
         }
         for program_id in invoke_stack.iter() {
             accounts.push((
                 *program_id,
-                Rc::new(RefCell::new(AccountSharedData::new(
+                RefCell::new(AccountSharedData::new(
                     1,
                     1,
                     &solana_sdk::pubkey::Pubkey::default(),
-                ))),
+                )),
             ));
             metas.push(AccountMeta::new(*program_id, false));
         }
@@ -1143,7 +1147,7 @@ mod tests {
                 None,
             );
             let write_privileges: Vec<bool> = (0..message.account_keys.len())
-                .map(|i| message.is_writable(i, /*demote_program_write_locks=*/ true))
+                .map(|i| message.is_writable(i))
                 .collect();
 
             // modify account owned by the program
@@ -1184,7 +1188,7 @@ mod tests {
     fn test_invoke_context_verify() {
         let accounts = vec![(
             solana_sdk::pubkey::new_rand(),
-            Rc::new(RefCell::new(AccountSharedData::default())),
+            RefCell::new(AccountSharedData::default()),
         )];
         let message = Message::new(
             &[Instruction::new_with_bincode(
@@ -1222,20 +1226,17 @@ mod tests {
         program_account.set_executable(true);
 
         let accounts = vec![
+            (solana_sdk::pubkey::new_rand(), RefCell::new(owned_account)),
             (
                 solana_sdk::pubkey::new_rand(),
-                Rc::new(RefCell::new(owned_account)),
+                RefCell::new(not_owned_account),
             ),
             (
                 solana_sdk::pubkey::new_rand(),
-                Rc::new(RefCell::new(not_owned_account)),
+                RefCell::new(readonly_account),
             ),
-            (
-                solana_sdk::pubkey::new_rand(),
-                Rc::new(RefCell::new(readonly_account)),
-            ),
-            (caller_program_id, Rc::new(RefCell::new(loader_account))),
-            (callee_program_id, Rc::new(RefCell::new(program_account))),
+            (caller_program_id, RefCell::new(loader_account)),
+            (callee_program_id, RefCell::new(program_account)),
         ];
         let account_indices = [0, 1, 2];
         let program_indices = [3, 4];
@@ -1265,14 +1266,11 @@ mod tests {
             .unwrap();
 
         // not owned account modified by the caller (before the invoke)
-        let demote_program_write_locks = invoke_context
-            .feature_set
-            .is_active(&demote_program_write_locks::id());
         let caller_write_privileges = message
             .account_keys
             .iter()
             .enumerate()
-            .map(|(i, _)| message.is_writable(i, demote_program_write_locks))
+            .map(|(i, _)| message.is_writable(i))
             .collect::<Vec<bool>>();
         accounts[0].1.borrow_mut().data_as_mut_slice()[0] = 1;
         assert_eq!(
@@ -1304,12 +1302,12 @@ mod tests {
         invoke_context.pop();
 
         let cases = vec![
-            (MockInstruction::NoopSuccess, Ok(())),
+            (MockInstruction::NoopSuccess, Ok(0)),
             (
                 MockInstruction::NoopFail,
                 Err(InstructionError::GenericError),
             ),
-            (MockInstruction::ModifyOwned, Ok(())),
+            (MockInstruction::ModifyOwned, Ok(0)),
             (
                 MockInstruction::ModifyNotOwned,
                 Err(InstructionError::ExternalAccountDataModified),
@@ -1326,7 +1324,7 @@ mod tests {
                 .account_keys
                 .iter()
                 .enumerate()
-                .map(|(i, _)| message.is_writable(i, demote_program_write_locks))
+                .map(|(i, _)| message.is_writable(i))
                 .collect::<Vec<bool>>();
             assert_eq!(
                 invoke_context.process_instruction(
@@ -1355,20 +1353,17 @@ mod tests {
         program_account.set_executable(true);
 
         let accounts = vec![
+            (solana_sdk::pubkey::new_rand(), RefCell::new(owned_account)),
             (
                 solana_sdk::pubkey::new_rand(),
-                Rc::new(RefCell::new(owned_account)),
+                RefCell::new(not_owned_account),
             ),
             (
                 solana_sdk::pubkey::new_rand(),
-                Rc::new(RefCell::new(not_owned_account)),
+                RefCell::new(readonly_account),
             ),
-            (
-                solana_sdk::pubkey::new_rand(),
-                Rc::new(RefCell::new(readonly_account)),
-            ),
-            (caller_program_id, Rc::new(RefCell::new(loader_account))),
-            (callee_program_id, Rc::new(RefCell::new(program_account))),
+            (caller_program_id, RefCell::new(loader_account)),
+            (callee_program_id, RefCell::new(program_account)),
         ];
         let program_indices = [3];
         let metas = vec![
@@ -1450,11 +1445,11 @@ mod tests {
         let accounts = vec![
             (
                 solana_sdk::pubkey::new_rand(),
-                Rc::new(RefCell::new(AccountSharedData::default())),
+                RefCell::new(AccountSharedData::default()),
             ),
             (
                 crate::neon_evm_program::id(),
-                Rc::new(RefCell::new(AccountSharedData::default())),
+                RefCell::new(AccountSharedData::default()),
             ),
         ];
 

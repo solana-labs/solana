@@ -22,7 +22,7 @@
 use std::{thread::sleep, time::Duration};
 use {
     crate::{
-        account_info::{AccountInfo, StorageLocation, StoredSize},
+        account_info::{AccountInfo, Offset, StorageLocation, StoredSize},
         accounts_background_service::{DroppedSlotsSender, SendDroppedBankCallback},
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
         accounts_hash::{AccountsHash, CalculateHashIntermediate, HashStats, PreviousPass},
@@ -120,7 +120,7 @@ const CACHE_VIRTUAL_WRITE_VERSION: StoredMetaWriteVersion = 0;
 // for entries in the cache, so that  operations that take a storage entry can maintain
 // a common interface when interacting with cached accounts. This version is "virtual" in
 // that it doesn't actually map to an entry in an AppendVec.
-pub(crate) const CACHE_VIRTUAL_OFFSET: usize = 0;
+pub(crate) const CACHE_VIRTUAL_OFFSET: Offset = 0;
 const CACHE_VIRTUAL_STORED_SIZE: StoredSize = 0;
 
 pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
@@ -1714,13 +1714,14 @@ impl AccountsDb {
         }
     }
 
+    fn next_id(&self) -> AppendVecId {
+        let next_id = self.next_id.fetch_add(1, Ordering::AcqRel);
+        assert!(next_id != AppendVecId::MAX, "We've run out of storage ids!");
+        next_id
+    }
+
     fn new_storage_entry(&self, slot: Slot, path: &Path, size: u64) -> AccountStorageEntry {
-        AccountStorageEntry::new(
-            path,
-            slot,
-            self.next_id.fetch_add(1, Ordering::AcqRel),
-            size,
-        )
+        AccountStorageEntry::new(path, slot, self.next_id(), size)
     }
 
     pub fn expected_cluster_type(&self) -> ClusterType {
@@ -2380,6 +2381,7 @@ impl AccountsDb {
                     .swap(0, Ordering::Relaxed),
                 i64
             ),
+            ("next_store_id", self.next_id.load(Ordering::Relaxed), i64),
         );
     }
 
@@ -2575,9 +2577,11 @@ impl AccountsDb {
         iter.for_each(|(pubkey, stored_account)| {
             let lookup = self.accounts_index.get_account_read_entry(pubkey);
             if let Some(locked_entry) = lookup {
-                let is_alive = locked_entry.slot_list().iter().any(|(_slot, i)| {
-                    i.store_id() == stored_account.store_id
-                        && i.offset() == stored_account.account.offset
+                let is_alive = locked_entry.slot_list().iter().any(|(_slot, acct_info)| {
+                    acct_info.matches_storage_location(
+                        stored_account.store_id,
+                        stored_account.account.offset,
+                    )
                 });
                 if !is_alive {
                     // This pubkey was found in the storage, but no longer exists in the index.
@@ -2653,7 +2657,7 @@ impl AccountsDb {
             .accounts_loaded
             .fetch_add(len as u64, Ordering::Relaxed);
 
-        self.thread_pool.install(|| {
+        self.thread_pool_clean.install(|| {
             let chunk_size = 50; // # accounts/thread
             let chunks = len / chunk_size + 1;
             (0..chunks).into_par_iter().for_each(|chunk| {
@@ -2994,7 +2998,7 @@ impl AccountsDb {
 
         let mut measure_shrink_all_candidates = Measure::start("shrink_all_candidate_slots-ms");
         let num_candidates = shrink_slots.len();
-        let shrink_candidates_count: usize = self.thread_pool.install(|| {
+        let shrink_candidates_count: usize = self.thread_pool_clean.install(|| {
             shrink_slots
                 .into_par_iter()
                 .map(|(slot, slot_shrink_candidates)| {
@@ -3732,7 +3736,7 @@ impl AccountsDb {
                     let ret = recycle_stores.remove_entry(i);
                     drop(recycle_stores);
                     let old_id = ret.append_vec_id();
-                    ret.recycle(slot, self.next_id.fetch_add(1, Ordering::AcqRel));
+                    ret.recycle(slot, self.next_id());
                     debug!(
                         "recycling store: {} {:?} old_id: {}",
                         ret.append_vec_id(),
@@ -13305,7 +13309,7 @@ pub mod tests {
         }
 
         let do_test = |test_params: TestParameters| {
-            let account_info = AccountInfo::new(StorageLocation::AppendVec(42, 123), 234, 0);
+            let account_info = AccountInfo::new(StorageLocation::AppendVec(42, 128), 234, 0);
             let pubkey = solana_sdk::pubkey::new_rand();
             let mut key_set = HashSet::default();
             key_set.insert(pubkey);

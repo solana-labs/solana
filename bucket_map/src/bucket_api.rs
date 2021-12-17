@@ -30,14 +30,13 @@ impl<T: Clone + Copy> BucketApi<T> {
         drives: Arc<Vec<PathBuf>>,
         max_search: MaxSearch,
         stats: Arc<BucketMapStats>,
-        count: Arc<AtomicU64>,
     ) -> Self {
         Self {
             drives,
             max_search,
             stats,
             bucket: RwLock::default(),
-            count,
+            count: Arc::default(),
         }
     }
 
@@ -73,12 +72,7 @@ impl<T: Clone + Copy> BucketApi<T> {
     }
 
     pub fn bucket_len(&self) -> u64 {
-        self.bucket
-            .read()
-            .unwrap()
-            .as_ref()
-            .map(|bucket| bucket.bucket_len())
-            .unwrap_or_default()
+        self.count.load(Ordering::Relaxed)
     }
 
     pub fn delete_key(&self, key: &Pubkey) {
@@ -95,11 +89,11 @@ impl<T: Clone + Copy> BucketApi<T> {
                 Arc::clone(&self.drives),
                 self.max_search,
                 Arc::clone(&self.stats),
+                Arc::clone(&self.count),
             ));
         } else {
             let write = bucket.as_mut().unwrap();
             write.handle_delayed_grows();
-            self.count.store(write.bucket_len(), Ordering::Relaxed);
         }
         bucket
     }
