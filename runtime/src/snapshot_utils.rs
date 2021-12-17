@@ -978,9 +978,9 @@ where
     })
 }
 
-// Reads the `snapshot_version` from a file. Before opening the file, its size is
-// compared to `MAX_SNAPSHOT_VERSION_FILE_SIZE`. If the size exceeds this
-// threshold, it is not opened and an error is returned.
+/// Reads the `snapshot_version` from a file. Before opening the file, its size
+/// is compared to `MAX_SNAPSHOT_VERSION_FILE_SIZE`. If the size exceeds this
+/// threshold, it is not opened and an error is returned.
 fn snapshot_version_from_file(path: impl AsRef<Path>) -> Result<String> {
     // Check file size.
     let file_size = fs::metadata(&path)?.len();
