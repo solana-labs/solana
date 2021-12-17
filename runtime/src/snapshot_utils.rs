@@ -48,6 +48,7 @@ pub const SNAPSHOT_STATUS_CACHE_FILE_NAME: &str = "status_cache";
 pub const DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = 100_000;
 pub const DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = 100;
 const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
+const MAX_SNAPSHOT_VERSION_FILE_SIZE: u64 = 8; // byte
 const VERSION_STRING_V1_2_0: &str = "1.2.0";
 const DEFAULT_SNAPSHOT_VERSION: SnapshotVersion = SnapshotVersion::V1_2_0;
 pub(crate) const TMP_BANK_SNAPSHOT_PREFIX: &str = "tmp-bank-snapshot-";
@@ -964,12 +965,7 @@ where
     info!("{}", measure_untar);
 
     let unpacked_version_file = unpack_dir.path().join("version");
-    let snapshot_version = {
-        let mut snapshot_version = String::new();
-        File::open(unpacked_version_file)
-            .and_then(|mut f| f.read_to_string(&mut snapshot_version))?;
-        snapshot_version.trim().to_string()
-    };
+    let snapshot_version = snapshot_version_from_file(&unpacked_version_file)?;
 
     Ok(UnarchivedSnapshot {
         unpack_dir,
@@ -980,6 +976,28 @@ where
         },
         measure_untar,
     })
+}
+
+/// Reads the `snapshot_version` from a file. Before opening the file, its size
+/// is compared to `MAX_SNAPSHOT_VERSION_FILE_SIZE`. If the size exceeds this
+/// threshold, it is not opened and an error is returned.
+fn snapshot_version_from_file(path: impl AsRef<Path>) -> Result<String> {
+    // Check file size.
+    let file_size = fs::metadata(&path)?.len();
+    if file_size > MAX_SNAPSHOT_VERSION_FILE_SIZE {
+        let error_message = format!(
+            "snapshot version file too large: {} has {} bytes (max size is {} bytes)",
+            path.as_ref().display(),
+            file_size,
+            MAX_SNAPSHOT_VERSION_FILE_SIZE,
+        );
+        return Err(get_io_error(&error_message));
+    }
+
+    // Read snapshot_version from file.
+    let mut snapshot_version = String::new();
+    File::open(path).and_then(|mut f| f.read_to_string(&mut snapshot_version))?;
+    Ok(snapshot_version.trim().to_string())
 }
 
 /// Check if an incremental snapshot is compatible with a full snapshot.  This is done by checking
@@ -1863,7 +1881,8 @@ mod tests {
             system_transaction,
             transaction::SanitizedTransaction,
         },
-        std::mem::size_of,
+        std::{convert::TryFrom, mem::size_of},
+        tempfile::NamedTempFile,
     };
 
     #[test]
@@ -1996,6 +2015,27 @@ mod tests {
             },
         );
         assert_matches!(result, Err(SnapshotError::Io(ref message)) if message.to_string().starts_with("invalid snapshot data file"));
+    }
+
+    #[test]
+    fn test_snapshot_version_from_file_under_limit() {
+        let file_content = format!("v{}", DEFAULT_SNAPSHOT_VERSION);
+        let mut file = NamedTempFile::new().unwrap();
+        file.write_all(file_content.as_bytes()).unwrap();
+        let version_from_file = snapshot_version_from_file(file.path()).unwrap();
+        assert_eq!(version_from_file, file_content);
+    }
+
+    #[test]
+    fn test_snapshot_version_from_file_over_limit() {
+        let over_limit_size = usize::try_from(MAX_SNAPSHOT_VERSION_FILE_SIZE + 1).unwrap();
+        let file_content = vec![7u8; over_limit_size];
+        let mut file = NamedTempFile::new().unwrap();
+        file.write_all(&file_content).unwrap();
+        assert_matches!(
+            snapshot_version_from_file(file.path()),
+            Err(SnapshotError::Io(ref message)) if message.to_string().starts_with("snapshot version file too large")
+        );
     }
 
     #[test]
