@@ -4688,7 +4688,12 @@ dependencies = [
  "serde_json",
  "serial_test",
  "solana-client",
+<<<<<<< HEAD
  "solana-logger 1.9.2",
+=======
+ "solana-ledger",
+ "solana-logger 1.10.0",
+>>>>>>> 76098dd42 (RPC Block Subscription (#21787))
  "solana-measure",
  "solana-merkle-tree",
  "solana-metrics",
@@ -4699,6 +4704,7 @@ dependencies = [
  "solana-sdk",
  "solana-streamer",
  "solana-test-validator",
+ "solana-transaction-status",
  "solana-version",
  "systemstat",
 ]
