@@ -2381,6 +2381,7 @@ impl AccountsDb {
                     .swap(0, Ordering::Relaxed),
                 i64
             ),
+            ("next_store_id", self.next_id.load(Ordering::Relaxed), i64),
         );
     }
 
