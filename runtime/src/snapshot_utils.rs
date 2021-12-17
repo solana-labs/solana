@@ -2028,10 +2028,8 @@ mod tests {
 
     #[test]
     fn test_snapshot_version_from_file_over_limit() {
-        // Verify `as usize` below is safe.
-        usize::try_from(MAX_SNAPSHOT_VERSION_FILE_SIZE + 1).unwrap();
-
-        let file_content = [7u8; (MAX_SNAPSHOT_VERSION_FILE_SIZE + 1) as usize];
+        let over_limit_size = usize::try_from(MAX_SNAPSHOT_VERSION_FILE_SIZE + 1).unwrap();
+        let file_content = vec![7u8; over_limit_size];
         let mut file = NamedTempFile::new().unwrap();
         file.write_all(&file_content).unwrap();
         assert_matches!(
