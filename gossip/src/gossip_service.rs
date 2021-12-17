@@ -19,7 +19,7 @@ use {
         net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
         sync::{
             atomic::{AtomicBool, Ordering},
-            mpsc::channel,
+            mpsc::{channel, Sender},
             Arc, RwLock,
         },
         thread::{self, sleep, JoinHandle},
@@ -38,6 +38,7 @@ impl GossipService {
         gossip_socket: UdpSocket,
         gossip_validators: Option<HashSet<Pubkey>>,
         should_check_duplicate_instance: bool,
+        stats_reporter_sender: Option<Sender<Box<dyn FnOnce() + Send>>>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
         let (request_sender, request_receiver) = channel();
@@ -88,6 +89,7 @@ impl GossipService {
             gossip_socket,
             response_receiver,
             socket_addr_space,
+            stats_reporter_sender,
         );
         let thread_hdls = vec![
             t_receiver,
@@ -331,6 +333,7 @@ pub fn make_gossip_node(
         gossip_socket,
         None,
         should_check_duplicate_instance,
+        None,
         exit,
     );
     (gossip_service, ip_echo, cluster_info)
@@ -362,6 +365,7 @@ mod tests {
             tn.sockets.gossip,
             None,
             true, // should_check_duplicate_instance
+            None,
             &exit,
         );
         exit.store(true, Ordering::Relaxed);

@@ -10,6 +10,7 @@ documentation = "https://docs.rs/solana-streamer"
 edition = "2021"
 
 [dependencies]
+histogram = "0.6.9"
 itertools = "0.10.3"
 log = "0.4.14"
 solana-metrics = { path = "../metrics", version = "=1.10.0" }

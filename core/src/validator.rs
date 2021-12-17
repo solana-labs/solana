@@ -14,6 +14,7 @@ use {
         serve_repair_service::ServeRepairService,
         sigverify,
         snapshot_packager_service::SnapshotPackagerService,
+        stats_reporter_service::StatsReporterService,
         system_monitor_service::{verify_udp_stats_access, SystemMonitorService},
         tower_storage::TowerStorage,
         tpu::{Tpu, DEFAULT_TPU_COALESCE_MS},
@@ -276,6 +277,7 @@ pub struct Validator {
     cache_block_meta_service: Option<CacheBlockMetaService>,
     system_monitor_service: Option<SystemMonitorService>,
     sample_performance_service: Option<SamplePerformanceService>,
+    stats_reporter_service: StatsReporterService,
     gossip_service: GossipService,
     serve_repair_service: ServeRepairService,
     completed_data_sets_service: CompletedDataSetsService,
@@ -697,12 +699,17 @@ impl Validator {
                 Some(node.info.shred_version),
             )),
         };
+
+        let (stats_reporter_sender, stats_reporter_receiver) = channel();
+        let stats_reporter_service = StatsReporterService::new(stats_reporter_receiver, &exit);
+
         let gossip_service = GossipService::new(
             &cluster_info,
             Some(bank_forks.clone()),
             node.sockets.gossip,
             config.gossip_validators.clone(),
             should_check_duplicate_instance,
+            Some(stats_reporter_sender.clone()),
             &exit,
         );
         let serve_repair = Arc::new(RwLock::new(ServeRepair::new(cluster_info.clone())));
@@ -711,6 +718,7 @@ impl Validator {
             Some(blockstore.clone()),
             node.sockets.serve_repair,
             socket_addr_space,
+            stats_reporter_sender,
             &exit,
         );
 
@@ -904,6 +912,7 @@ impl Validator {
 
         *start_progress.write().unwrap() = ValidatorStartProgress::Running;
         Self {
+            stats_reporter_service,
             gossip_service,
             serve_repair_service,
             json_rpc_service,
@@ -1028,6 +1037,9 @@ impl Validator {
         self.serve_repair_service
             .join()
             .expect("serve_repair_service");
+        self.stats_reporter_service
+            .join()
+            .expect("stats_reporter_service");
         self.tpu.join().expect("tpu");
         self.tvu.join().expect("tvu");
         self.completed_data_sets_service
