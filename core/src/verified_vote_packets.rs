@@ -1,6 +1,5 @@
 use {
     crate::{cluster_info_vote_listener::VerifiedLabelVotePacketsReceiver, result::Result},
-    crossbeam_channel::Select,
     solana_perf::packet::PacketBatch,
     solana_runtime::bank::Bank,
     solana_sdk::{
@@ -141,10 +140,10 @@ impl VerifiedVotePackets {
         vote_packets_receiver: &VerifiedLabelVotePacketsReceiver,
         would_be_leader: bool,
     ) -> Result<()> {
-        let mut sel = Select::new();
-        sel.recv(vote_packets_receiver);
-        let _ = sel.ready_timeout(Duration::from_millis(200))?;
-        for gossip_votes in vote_packets_receiver.try_iter() {
+        const RECV_TIMEOUT: Duration = Duration::from_millis(200);
+        let vote_packets = vote_packets_receiver.recv_timeout(RECV_TIMEOUT)?;
+        let vote_packets = std::iter::once(vote_packets).chain(vote_packets_receiver.try_iter());
+        for gossip_votes in vote_packets {
             if would_be_leader {
                 for verfied_vote_metadata in gossip_votes {
                     let VerifiedVoteMetadata {
@@ -284,7 +283,7 @@ mod tests {
         // No new messages, should time out
         assert_matches!(
             verified_vote_packets.receive_and_process_vote_packets(&r, true),
-            Err(Error::ReadyTimeout)
+            Err(Error::CrossbeamRecvTimeout(_))
         );
     }
 

@@ -97,11 +97,8 @@ impl AggregateCommitmentService {
                 return Ok(());
             }
 
-            let mut aggregation_data = receiver.recv_timeout(Duration::from_secs(1))?;
-
-            while let Ok(new_data) = receiver.try_recv() {
-                aggregation_data = new_data;
-            }
+            let aggregation_data = receiver.recv_timeout(Duration::from_secs(1))?;
+            let aggregation_data = receiver.try_iter().last().unwrap_or(aggregation_data);
 
             let ancestors = aggregation_data.bank.status_cache_ancestors();
             if ancestors.is_empty() {
