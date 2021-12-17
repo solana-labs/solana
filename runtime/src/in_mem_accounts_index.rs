@@ -633,10 +633,45 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
     }
 
-    pub fn just_set_hold_range_in_memory<R>(&self, range: &R, start_holding: bool)
+    /// Look at the currently held ranges. If 'range' is already included in what is
+    ///  being held, then add 'range' to the currently held list AND return true
+    /// If 'range' is NOT already included in what is being held, then return false
+    ///  withOUT adding 'range' to the list of what is currently held
+    fn add_hold_range_in_memory_if_already_held<R>(&self, range: &R) -> bool
     where
         R: RangeBounds<Pubkey>,
     {
+        let start_holding = true;
+        let only_add_if_already_held = true;
+        self.just_set_hold_range_in_memory_internal(range, start_holding, only_add_if_already_held)
+    }
+
+    fn just_set_hold_range_in_memory<R>(&self, range: &R, start_holding: bool)
+    where
+        R: RangeBounds<Pubkey>,
+    {
+        let only_add_if_already_held = false;
+        let _ = self.just_set_hold_range_in_memory_internal(
+            range,
+            start_holding,
+            only_add_if_already_held,
+        );
+    }
+
+    /// if 'start_holding', then caller wants to add 'range' to the list of ranges being held
+    /// if !'start_holding', then caller wants to remove 'range' to the list
+    /// if 'only_add_if_already_held', caller intends to only add 'range' to the list if the range is already held
+    /// returns true iff start_holding=true and the range we're asked to hold was already being held
+    fn just_set_hold_range_in_memory_internal<R>(
+        &self,
+        range: &R,
+        start_holding: bool,
+        only_add_if_already_held: bool,
+    ) -> bool
+    where
+        R: RangeBounds<Pubkey>,
+    {
+        assert!(!(only_add_if_already_held && !start_holding));
         let start = match range.start_bound() {
             Bound::Included(bound) | Bound::Excluded(bound) => *bound,
             Bound::Unbounded => Pubkey::new(&[0; 32]),
@@ -651,8 +686,19 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         // inclusive is bigger than exclusive so we may hold 1 extra item worst case
         let inclusive_range = start..=end;
         let mut ranges = self.cache_ranges_held.write().unwrap();
+        let mut already_held = false;
         if start_holding {
-            ranges.push(inclusive_range);
+            if only_add_if_already_held {
+                for r in ranges.iter() {
+                    if r.contains(&start) && r.contains(&end) {
+                        already_held = true;
+                        break;
+                    }
+                }
+            }
+            if already_held || !only_add_if_already_held {
+                ranges.push(inclusive_range);
+            }
         } else {
             // find the matching range and delete it since we don't want to hold it anymore
             // search backwards, assuming LIFO ordering
@@ -660,15 +706,15 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 if let (Bound::Included(start_found), Bound::Included(end_found)) =
                     (r.start_bound(), r.end_bound())
                 {
-                    if start_found != &start || end_found != &end {
-                        continue;
+                    if start_found == &start && end_found == &end {
+                        // found a match. There may be dups, that's ok, we expect another call to remove the dup.
+                        ranges.remove(i);
+                        break;
                     }
                 }
-                // found a match. There may be dups, that's ok, we expect another call to remove the dup.
-                ranges.remove(i);
-                break;
             }
         }
+        already_held
     }
 
     fn start_stop_flush(&self, stop: bool) {
@@ -686,12 +732,14 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     {
         self.start_stop_flush(true);
 
-        if start_holding {
-            // put everything in the cache and it will be held there
-            self.put_range_in_cache(&Some(range));
+        if !start_holding || !self.add_hold_range_in_memory_if_already_held(range) {
+            if start_holding {
+                // put everything in the cache and it will be held there
+                self.put_range_in_cache(&Some(range));
+            }
+            // do this AFTER items have been put in cache - that way anyone who finds this range can know that the items are already in the cache
+            self.just_set_hold_range_in_memory(range, start_holding);
         }
-        // do this AFTER items have been put in cache - that way anyone who finds this range can know that the items are already in the cache
-        self.just_set_hold_range_in_memory(range, start_holding);
 
         self.start_stop_flush(false);
     }
@@ -976,6 +1024,21 @@ mod tests {
         InMemAccountsIndex::new(&holder, bin)
     }
 
+    fn new_disk_buckets_for_test<T: IndexValue>() -> InMemAccountsIndex<T> {
+        let holder = Arc::new(BucketMapHolder::new(
+            BINS_FOR_TESTING,
+            &Some(AccountsIndexConfig {
+                index_limit_mb: Some(1),
+                ..AccountsIndexConfig::default()
+            }),
+            1,
+        ));
+        let bin = 0;
+        let bucket = InMemAccountsIndex::new(&holder, bin);
+        assert!(bucket.storage.is_disk_index_enabled());
+        bucket
+    }
+
     #[test]
     fn test_should_remove_from_mem() {
         solana_logger::setup();
@@ -1064,10 +1127,11 @@ mod tests {
 
     #[test]
     fn test_hold_range_in_memory() {
-        let bucket = new_for_test::<u64>();
+        let bucket = new_disk_buckets_for_test::<u64>();
         // 0x81 is just some other range
+        let all = Pubkey::new(&[0; 32])..=Pubkey::new(&[0xff; 32]);
         let ranges = [
-            Pubkey::new(&[0; 32])..=Pubkey::new(&[0xff; 32]),
+            all.clone(),
             Pubkey::new(&[0x81; 32])..=Pubkey::new(&[0xff; 32]),
         ];
         for range in ranges.clone() {
@@ -1077,6 +1141,10 @@ mod tests {
                 bucket.cache_ranges_held.read().unwrap().to_vec(),
                 vec![range.clone()]
             );
+            {
+                assert!(bucket.add_hold_range_in_memory_if_already_held(&range));
+                bucket.hold_range_in_memory(&range, false);
+            }
             bucket.hold_range_in_memory(&range, false);
             assert!(bucket.cache_ranges_held.read().unwrap().is_empty());
             bucket.hold_range_in_memory(&range, true);
@@ -1106,6 +1174,13 @@ mod tests {
             );
             bucket.hold_range_in_memory(&ranges[0].clone(), false);
             assert!(bucket.cache_ranges_held.read().unwrap().is_empty());
+
+            // hold all in mem first
+            assert!(bucket.cache_ranges_held.read().unwrap().is_empty());
+            bucket.hold_range_in_memory(&all, true);
+            assert!(bucket.add_hold_range_in_memory_if_already_held(&range));
+            bucket.hold_range_in_memory(&range, false);
+            bucket.hold_range_in_memory(&all, false);
         }
     }
 
