@@ -12,7 +12,7 @@ publish = false
 [dependencies]
 byte-unit = "4.0.13"
 clap = "2.33.1"
-serde = "1.0.131"
+serde = "1.0.132"
 serde_json = "1.0.73"
 solana-logger = { path = "../logger", version = "=1.10.0" }
 solana-version = { path = "../version", version = "=1.10.0" }
