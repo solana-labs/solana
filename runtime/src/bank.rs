@@ -1505,6 +1505,10 @@ impl Bank {
             .scan_results_limit_bytes
     }
 
+    pub fn proper_ancestors_set(&self) -> HashSet<Slot> {
+        HashSet::from_iter(self.proper_ancestors())
+    }
+
     /// Returns all ancestors excluding self.slot.
     pub(crate) fn proper_ancestors(&self) -> impl Iterator<Item = Slot> + '_ {
         self.ancestors

@@ -4798,6 +4798,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "solana-client",
+ "solana-ledger",
  "solana-logger 1.10.0",
  "solana-measure",
  "solana-merkle-tree",
@@ -4809,6 +4810,7 @@ dependencies = [
  "solana-sdk",
  "solana-streamer",
  "solana-test-validator",
+ "solana-transaction-status",
  "solana-version",
  "systemstat",
 ]
