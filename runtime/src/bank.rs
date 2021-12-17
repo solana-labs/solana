@@ -3403,11 +3403,10 @@ impl Bank {
     /// Converts Accounts into RefCell<AccountSharedData>, this involves moving
     /// ownership by draining the source
     fn accounts_to_refcells(accounts: &mut TransactionAccounts) -> TransactionAccountRefCells {
-        let account_refcells: Vec<_> = accounts
+        accounts
             .drain(..)
-            .map(|(pubkey, account)| (pubkey, Rc::new(RefCell::new(account))))
-            .collect();
-        account_refcells
+            .map(|(pubkey, account)| (pubkey, RefCell::new(account)))
+            .collect()
     }
 
     /// Converts back from RefCell<AccountSharedData> to AccountSharedData, this involves moving
@@ -3415,17 +3414,10 @@ impl Bank {
     fn refcells_to_accounts(
         accounts: &mut TransactionAccounts,
         mut account_refcells: TransactionAccountRefCells,
-    ) -> std::result::Result<(), TransactionError> {
+    ) {
         for (pubkey, account_refcell) in account_refcells.drain(..) {
-            accounts.push((
-                pubkey,
-                Rc::try_unwrap(account_refcell)
-                    .map_err(|_| TransactionError::AccountBorrowOutstanding)?
-                    .into_inner(),
-            ))
+            accounts.push((pubkey, account_refcell.into_inner()))
         }
-
-        Ok(())
     }
 
     /// Get any cached executors needed by the transaction
@@ -3641,13 +3633,10 @@ impl Bank {
                             });
                         inner_instructions.push(inner_instruction_list);
 
-                        if let Err(e) = Self::refcells_to_accounts(
+                        Self::refcells_to_accounts(
                             &mut loaded_transaction.accounts,
                             account_refcells,
-                        ) {
-                            warn!("Account lifetime mismanagement");
-                            process_result = Err(e);
-                        }
+                        );
 
                         if process_result.is_ok() {
                             self.update_executors(executors);

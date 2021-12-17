@@ -202,19 +202,19 @@ mod tests {
             process_instruction: mock_system_process_instruction,
         }];
 
-        let program_account = Rc::new(RefCell::new(create_loadable_account_for_test(
-            "mock_system_program",
-        )));
         let accounts = vec![
             (
                 solana_sdk::pubkey::new_rand(),
-                AccountSharedData::new_ref(100, 1, &mock_system_program_id),
+                RefCell::new(AccountSharedData::new(100, 1, &mock_system_program_id)),
             ),
             (
                 solana_sdk::pubkey::new_rand(),
-                AccountSharedData::new_ref(0, 1, &mock_system_program_id),
+                RefCell::new(AccountSharedData::new(0, 1, &mock_system_program_id)),
             ),
-            (mock_system_program_id, program_account),
+            (
+                mock_system_program_id,
+                RefCell::new(create_loadable_account_for_test("mock_system_program")),
+            ),
         ];
         let program_indices = vec![vec![2]];
 
@@ -406,19 +406,19 @@ mod tests {
             process_instruction: mock_system_process_instruction,
         }];
 
-        let program_account = Rc::new(RefCell::new(create_loadable_account_for_test(
-            "mock_system_program",
-        )));
         let accounts = vec![
             (
                 solana_sdk::pubkey::new_rand(),
-                AccountSharedData::new_ref(100, 1, &mock_program_id),
+                RefCell::new(AccountSharedData::new(100, 1, &mock_program_id)),
             ),
             (
                 solana_sdk::pubkey::new_rand(),
-                AccountSharedData::new_ref(0, 1, &mock_program_id),
+                RefCell::new(AccountSharedData::new(0, 1, &mock_program_id)),
             ),
-            (mock_program_id, program_account),
+            (
+                mock_program_id,
+                RefCell::new(create_loadable_account_for_test("mock_system_program")),
+            ),
         ];
         let program_indices = vec![vec![2]];
 
@@ -539,13 +539,13 @@ mod tests {
             process_instruction: mock_process_instruction,
         }];
 
-        let secp256k1_account = AccountSharedData::new_ref(1, 0, &native_loader::id());
-        secp256k1_account.borrow_mut().set_executable(true);
-        let mock_program_account = AccountSharedData::new_ref(1, 0, &native_loader::id());
-        mock_program_account.borrow_mut().set_executable(true);
+        let mut secp256k1_account = AccountSharedData::new(1, 0, &native_loader::id());
+        secp256k1_account.set_executable(true);
+        let mut mock_program_account = AccountSharedData::new(1, 0, &native_loader::id());
+        mock_program_account.set_executable(true);
         let accounts = vec![
-            (secp256k1_program::id(), secp256k1_account),
-            (mock_program_id, mock_program_account),
+            (secp256k1_program::id(), RefCell::new(secp256k1_account)),
+            (mock_program_id, RefCell::new(mock_program_account)),
         ];
 
         let message = Message::new(
