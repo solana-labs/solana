@@ -181,12 +181,18 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         )
         .expect("Expected to create a new shredder");
 
+<<<<<<< HEAD
         let (data_shreds, coding_shreds, last_shred_index) = shredder.entries_to_shreds(
+=======
+        let (data_shreds, _) = shredder.entries_to_shreds(
+            keypair,
+>>>>>>> 89d66c321 (removes next_shred_index from return value of entries to shreds api (#21961))
             &receive_results.entries,
             last_tick_height == bank.max_tick_height(),
             self.next_shred_index,
         );
 
+<<<<<<< HEAD
         let (duplicate_entries, next_duplicate_shred_index) =
             self.queue_or_create_duplicate_entries(&bank, &receive_results);
         let (duplicate_data_shreds, duplicate_coding_shreds, _) = if !duplicate_entries.is_empty() {
@@ -207,6 +213,17 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         } else {
             self.next_shred_index = last_shred_index;
         }
+=======
+        self.next_shred_index += data_shreds.len() as u32;
+        let last_shreds = last_entries.map(|(original_last_entry, duplicate_extra_last_entries)| {
+            let (original_last_data_shred, _) =
+                shredder.entries_to_shreds(keypair, &[original_last_entry], true, self.next_shred_index);
+
+            let (partition_last_data_shred, _) =
+                // Don't mark the last shred as last so that validators won't know that
+                // they've gotten all the shreds, and will continue trying to repair
+                shredder.entries_to_shreds(keypair, &duplicate_extra_last_entries, true, self.next_shred_index);
+>>>>>>> 89d66c321 (removes next_shred_index from return value of entries to shreds api (#21961))
 
         // Partition network with duplicate and real shreds based on stake
         let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());

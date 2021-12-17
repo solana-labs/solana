@@ -50,7 +50,12 @@ fn test_multi_fec_block_coding() {
         .collect();
 
     let serialized_entries = bincode::serialize(&entries).unwrap();
+<<<<<<< HEAD
     let (data_shreds, coding_shreds, next_index) = shredder.entries_to_shreds(&entries, true, 0);
+=======
+    let (data_shreds, coding_shreds) = shredder.entries_to_shreds(&keypair, &entries, true, 0);
+    let next_index = data_shreds.last().unwrap().index() + 1;
+>>>>>>> 89d66c321 (removes next_shred_index from return value of entries to shreds api (#21961))
     assert_eq!(next_index as usize, num_data_shreds);
     assert_eq!(data_shreds.len(), num_data_shreds);
     assert_eq!(coding_shreds.len(), num_data_shreds);
@@ -219,8 +224,13 @@ fn setup_different_sized_fec_blocks(
     let total_num_data_shreds: usize = 2 * num_shreds_per_iter;
     for i in 0..2 {
         let is_last = i == 1;
+<<<<<<< HEAD
         let (data_shreds, coding_shreds, new_next_index) =
             shredder.entries_to_shreds(&entries, is_last, next_index);
+=======
+        let (data_shreds, coding_shreds) =
+            shredder.entries_to_shreds(&keypair, &entries, is_last, next_index);
+>>>>>>> 89d66c321 (removes next_shred_index from return value of entries to shreds api (#21961))
         for shred in &data_shreds {
             if (shred.index() as usize) == total_num_data_shreds - 1 {
                 assert!(shred.data_complete());
@@ -233,7 +243,7 @@ fn setup_different_sized_fec_blocks(
             }
         }
         assert_eq!(data_shreds.len(), num_shreds_per_iter as usize);
-        next_index = new_next_index;
+        next_index = data_shreds.last().unwrap().index() + 1;
         sort_data_coding_into_fec_sets(
             data_shreds,
             coding_shreds,
