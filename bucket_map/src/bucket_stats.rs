@@ -14,5 +14,4 @@ pub struct BucketStats {
 pub struct BucketMapStats {
     pub index: Arc<BucketStats>,
     pub data: Arc<BucketStats>,
-    pub per_bucket_count: Vec<Arc<AtomicU64>>,
 }

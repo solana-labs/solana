@@ -64,7 +64,7 @@ pub struct BucketStorage {
     mmap: MmapMut,
     pub cell_size: u64,
     pub capacity_pow2: u8,
-    pub used: AtomicU64,
+    pub count: Arc<AtomicU64>,
     pub stats: Arc<BucketStats>,
     pub max_search: MaxSearch,
 }
@@ -88,6 +88,7 @@ impl BucketStorage {
         capacity_pow2: u8,
         max_search: MaxSearch,
         stats: Arc<BucketStats>,
+        count: Arc<AtomicU64>,
     ) -> Self {
         let cell_size = elem_size * num_elems + std::mem::size_of::<Header>() as u64;
         let (mmap, path) = Self::new_map(&drives, cell_size as usize, capacity_pow2, &stats);
@@ -95,7 +96,7 @@ impl BucketStorage {
             path,
             mmap,
             cell_size,
-            used: AtomicU64::new(0),
+            count,
             capacity_pow2,
             stats,
             max_search,
@@ -112,6 +113,7 @@ impl BucketStorage {
         elem_size: u64,
         max_search: MaxSearch,
         stats: Arc<BucketStats>,
+        count: Arc<AtomicU64>,
     ) -> Self {
         Self::new_with_capacity(
             drives,
@@ -120,6 +122,7 @@ impl BucketStorage {
             DEFAULT_CAPACITY_POW2,
             max_search,
             stats,
+            count,
         )
     }
 
@@ -133,20 +136,24 @@ impl BucketStorage {
         }
     }
 
-    pub fn allocate(&self, ix: u64, uid: Uid) -> Result<(), BucketStorageError> {
+    /// 'is_resizing' true if caller is resizing the index (so don't increment count)
+    /// 'is_resizing' false if caller is adding an item to the index (so increment count)
+    pub fn allocate(&self, ix: u64, uid: Uid, is_resizing: bool) -> Result<(), BucketStorageError> {
         assert!(ix < self.capacity(), "allocate: bad index size");
         assert!(UID_UNLOCKED != uid, "allocate: bad uid");
         let mut e = Err(BucketStorageError::AlreadyAllocated);
         let ix = (ix * self.cell_size) as usize;
         //debug!("ALLOC {} {}", ix, uid);
         let hdr_slice: &[u8] = &self.mmap[ix..ix + std::mem::size_of::<Header>()];
-        unsafe {
+        if unsafe {
             let hdr = hdr_slice.as_ptr() as *const Header;
-            if hdr.as_ref().unwrap().try_lock(uid) {
-                e = Ok(());
-                self.used.fetch_add(1, Ordering::Relaxed);
+            hdr.as_ref().unwrap().try_lock(uid)
+        } {
+            e = Ok(());
+            if !is_resizing {
+                self.count.fetch_add(1, Ordering::Relaxed);
             }
-        };
+        }
         e
     }
 
@@ -165,7 +172,7 @@ impl BucketStorage {
                 "free: unlocked a header with a differet uid: {}",
                 previous_uid
             );
-            self.used.fetch_sub(1, Ordering::Relaxed);
+            self.count.fetch_sub(1, Ordering::Relaxed);
         }
     }
 
@@ -324,6 +331,9 @@ impl BucketStorage {
             capacity_pow_2,
             max_search,
             Arc::clone(stats),
+            bucket
+                .map(|bucket| Arc::clone(&bucket.count))
+                .unwrap_or_default(),
         );
         if let Some(bucket) = bucket {
             new_bucket.copy_contents(bucket);
