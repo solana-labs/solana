@@ -2381,6 +2381,7 @@ impl AccountsDb {
                     .swap(0, Ordering::Relaxed),
                 i64
             ),
+            ("next_store_id", self.next_id.load(Ordering::Relaxed), i64),
         );
     }
 
@@ -2576,9 +2577,11 @@ impl AccountsDb {
         iter.for_each(|(pubkey, stored_account)| {
             let lookup = self.accounts_index.get_account_read_entry(pubkey);
             if let Some(locked_entry) = lookup {
-                let is_alive = locked_entry.slot_list().iter().any(|(_slot, i)| {
-                    i.store_id() == stored_account.store_id
-                        && i.offset() == stored_account.account.offset
+                let is_alive = locked_entry.slot_list().iter().any(|(_slot, acct_info)| {
+                    acct_info.matches_storage_location(
+                        stored_account.store_id,
+                        stored_account.account.offset,
+                    )
                 });
                 if !is_alive {
                     // This pubkey was found in the storage, but no longer exists in the index.
@@ -2654,7 +2657,7 @@ impl AccountsDb {
             .accounts_loaded
             .fetch_add(len as u64, Ordering::Relaxed);
 
-        self.thread_pool.install(|| {
+        self.thread_pool_clean.install(|| {
             let chunk_size = 50; // # accounts/thread
             let chunks = len / chunk_size + 1;
             (0..chunks).into_par_iter().for_each(|chunk| {
@@ -2995,7 +2998,7 @@ impl AccountsDb {
 
         let mut measure_shrink_all_candidates = Measure::start("shrink_all_candidate_slots-ms");
         let num_candidates = shrink_slots.len();
-        let shrink_candidates_count: usize = self.thread_pool.install(|| {
+        let shrink_candidates_count: usize = self.thread_pool_clean.install(|| {
             shrink_slots
                 .into_par_iter()
                 .map(|(slot, slot_shrink_candidates)| {

@@ -170,10 +170,9 @@ impl BucketMapHolderStats {
         let disk = storage.disk.as_ref();
         let disk_per_bucket_counts = disk
             .map(|disk| {
-                disk.stats
-                    .per_bucket_count
-                    .iter()
-                    .map(|count| count.load(Ordering::Relaxed) as usize)
+                (0..self.bins)
+                    .into_iter()
+                    .map(|i| disk.get_bucket_from_index(i as usize).bucket_len() as usize)
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
