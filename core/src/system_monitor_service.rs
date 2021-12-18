@@ -15,7 +15,7 @@ use {
 };
 
 const MS_PER_S: u64 = 1_000;
-const SAMPLE_INTERVAL_UDP_MS: u64 = MS_PER_S;
+const SAMPLE_INTERVAL_UDP_MS: u64 = 2 * MS_PER_S;
 const SAMPLE_INTERVAL_MEM_MS: u64 = MS_PER_S;
 const SLEEP_INTERVAL: Duration = Duration::from_millis(500);
 
