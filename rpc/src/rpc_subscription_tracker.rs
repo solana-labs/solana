@@ -11,6 +11,7 @@ use {
     solana_sdk::{
         clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Signature,
     },
+    solana_transaction_status::{TransactionDetails, UiTransactionEncoding},
     std::{
         collections::{
             hash_map::{Entry, HashMap},
@@ -44,6 +45,7 @@ impl From<SubscriptionId> for u64 {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SubscriptionParams {
     Account(AccountSubscriptionParams),
+    Block(BlockSubscriptionParams),
     Logs(LogsSubscriptionParams),
     Program(ProgramSubscriptionParams),
     Signature(SignatureSubscriptionParams),
@@ -62,6 +64,7 @@ impl SubscriptionParams {
             SubscriptionParams::Signature(_) => "signatureNotification",
             SubscriptionParams::Slot => "slotNotification",
             SubscriptionParams::SlotsUpdates => "slotsUpdatesNotification",
+            SubscriptionParams::Block(_) => "blockNotification",
             SubscriptionParams::Root => "rootNotification",
             SubscriptionParams::Vote => "voteNotification",
         }
@@ -73,6 +76,7 @@ impl SubscriptionParams {
             SubscriptionParams::Logs(params) => Some(params.commitment),
             SubscriptionParams::Program(params) => Some(params.commitment),
             SubscriptionParams::Signature(params) => Some(params.commitment),
+            SubscriptionParams::Block(params) => Some(params.commitment),
             SubscriptionParams::Slot
             | SubscriptionParams::SlotsUpdates
             | SubscriptionParams::Root
@@ -83,12 +87,13 @@ impl SubscriptionParams {
     fn is_commitment_watcher(&self) -> bool {
         let commitment = match self {
             SubscriptionParams::Account(params) => &params.commitment,
+            SubscriptionParams::Block(params) => &params.commitment,
             SubscriptionParams::Logs(params) => &params.commitment,
             SubscriptionParams::Program(params) => &params.commitment,
             SubscriptionParams::Signature(params) => &params.commitment,
-            SubscriptionParams::Slot
+            SubscriptionParams::Root
+            | SubscriptionParams::Slot
             | SubscriptionParams::SlotsUpdates
-            | SubscriptionParams::Root
             | SubscriptionParams::Vote => return false,
         };
         !commitment.is_confirmed()
@@ -97,12 +102,13 @@ impl SubscriptionParams {
     fn is_gossip_watcher(&self) -> bool {
         let commitment = match self {
             SubscriptionParams::Account(params) => &params.commitment,
+            SubscriptionParams::Block(params) => &params.commitment,
             SubscriptionParams::Logs(params) => &params.commitment,
             SubscriptionParams::Program(params) => &params.commitment,
             SubscriptionParams::Signature(params) => &params.commitment,
-            SubscriptionParams::Slot
+            SubscriptionParams::Root
+            | SubscriptionParams::Slot
             | SubscriptionParams::SlotsUpdates
-            | SubscriptionParams::Root
             | SubscriptionParams::Vote => return false,
         };
         commitment.is_confirmed()
@@ -125,6 +131,21 @@ pub struct AccountSubscriptionParams {
     pub encoding: UiAccountEncoding,
     pub data_slice: Option<UiDataSliceConfig>,
     pub commitment: CommitmentConfig,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BlockSubscriptionParams {
+    pub commitment: CommitmentConfig,
+    pub encoding: UiTransactionEncoding,
+    pub kind: BlockSubscriptionKind,
+    pub transaction_details: TransactionDetails,
+    pub show_rewards: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum BlockSubscriptionKind {
+    All,
+    MentionsAccountOrProgram(Pubkey),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -473,12 +494,15 @@ impl SubscriptionsTracker {
     ) -> &HashMap<Signature, HashMap<SubscriptionId, Arc<SubscriptionInfo>>> {
         &self.by_signature
     }
+
     pub fn commitment_watchers(&self) -> &HashMap<SubscriptionId, Arc<SubscriptionInfo>> {
         &self.commitment_watchers
     }
+
     pub fn gossip_watchers(&self) -> &HashMap<SubscriptionId, Arc<SubscriptionInfo>> {
         &self.gossip_watchers
     }
+
     pub fn node_progress_watchers(&self) -> &HashMap<SubscriptionParams, Arc<SubscriptionInfo>> {
         &self.node_progress_watchers
     }
