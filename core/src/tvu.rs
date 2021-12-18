@@ -82,6 +82,7 @@ pub struct Sockets {
     pub repair: UdpSocket,
     pub retransmit: Vec<UdpSocket>,
     pub forwards: Vec<UdpSocket>,
+    pub ancestor_hashes_requests: UdpSocket,
 }
 
 #[derive(Default)]
@@ -148,11 +149,13 @@ impl Tvu {
             fetch: fetch_sockets,
             retransmit: retransmit_sockets,
             forwards: tvu_forward_sockets,
+            ancestor_hashes_requests: ancestor_hashes_socket,
         } = sockets;
 
         let (fetch_sender, fetch_receiver) = channel();
 
         let repair_socket = Arc::new(repair_socket);
+        let ancestor_hashes_socket = Arc::new(ancestor_hashes_socket);
         let fetch_sockets: Vec<Arc<UdpSocket>> = fetch_sockets.into_iter().map(Arc::new).collect();
         let forward_sockets: Vec<Arc<UdpSocket>> =
             tvu_forward_sockets.into_iter().map(Arc::new).collect();
@@ -187,6 +190,7 @@ impl Tvu {
             cluster_info.clone(),
             Arc::new(retransmit_sockets),
             repair_socket,
+            ancestor_hashes_socket,
             verified_receiver,
             exit.clone(),
             cluster_slots_update_receiver,
@@ -461,6 +465,7 @@ pub mod tests {
                     retransmit: target1.sockets.retransmit_sockets,
                     fetch: target1.sockets.tvu,
                     forwards: target1.sockets.tvu_forwards,
+                    ancestor_hashes_requests: target1.sockets.ancestor_hashes_requests,
                 }
             },
             blockstore,
