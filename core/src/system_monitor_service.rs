@@ -11,7 +11,13 @@ use std::{
 #[cfg(target_os = "linux")]
 use std::{fs::File, io::BufReader, path::Path};
 
+<<<<<<< HEAD
 const SAMPLE_INTERVAL: Duration = Duration::from_secs(60);
+=======
+const MS_PER_S: u64 = 1_000;
+const SAMPLE_INTERVAL_UDP_MS: u64 = 2 * MS_PER_S;
+const SAMPLE_INTERVAL_MEM_MS: u64 = MS_PER_S;
+>>>>>>> 3fe942ab3 (new net-stats require a new table (#21996))
 const SLEEP_INTERVAL: Duration = Duration::from_millis(500);
 
 #[cfg(target_os = "linux")]
@@ -125,7 +131,7 @@ impl SystemMonitorService {
     #[cfg(target_os = "linux")]
     fn report_udp_stats(old_stats: &UdpStats, new_stats: &UdpStats) {
         datapoint_info!(
-            "net-stats",
+            "net-stats-validator",
             (
                 "in_datagrams_delta",
                 new_stats.in_datagrams - old_stats.in_datagrams,
