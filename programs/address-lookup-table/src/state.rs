@@ -22,12 +22,11 @@ pub enum ProgramState {
 }
 
 /// Address lookup table metadata
-#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Clone, AbiExample)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, AbiExample)]
 pub struct LookupTableMeta {
-    /// The slot used to derive the table's address. The table cannot
-    /// be closed until the derivation slot is no longer "recent"
-    /// (not accessible in the `SlotHashes` sysvar).
-    pub derivation_slot: Slot,
+    /// Lookup tables cannot be closed until the deactivation slot is
+    /// no longer "recent" (not accessible in the `SlotHashes` sysvar).
+    pub deactivation_slot: Slot,
     /// The slot that the table was last extended. Address tables may
     /// only be used to lookup addresses that were extended before
     /// the current bank's slot.
@@ -43,10 +42,21 @@ pub struct LookupTableMeta {
     // the account's data, starting from `LOOKUP_TABLE_META_SIZE`.
 }
 
+impl Default for LookupTableMeta {
+    fn default() -> Self {
+        Self {
+            deactivation_slot: Slot::MAX,
+            last_extended_slot: 0,
+            last_extended_slot_start_index: 0,
+            authority: None,
+            _padding: 0,
+        }
+    }
+}
+
 impl LookupTableMeta {
-    pub fn new(authority: Pubkey, derivation_slot: Slot) -> Self {
+    pub fn new(authority: Pubkey) -> Self {
         LookupTableMeta {
-            derivation_slot,
             authority: Some(authority),
             ..LookupTableMeta::default()
         }
