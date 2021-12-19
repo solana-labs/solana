@@ -99,8 +99,17 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     let keypair = Arc::new(Keypair::new());
     let slot = 0;
     let parent = 0;
+<<<<<<< HEAD
     let shredder = Shredder::new(slot, parent, keypair, 0, 0).unwrap();
     let mut data_shreds = shredder.entries_to_shreds(&entries, true, 0).0;
+=======
+    let shredder = Shredder::new(slot, parent, 0, 0).unwrap();
+    let (mut data_shreds, _) = shredder.entries_to_shreds(
+        &keypair, &entries, true, // is_last_in_slot
+        0,    // next_shred_index
+        0,    // next_code_index
+    );
+>>>>>>> 65d59f4ef (tracks erasure coding shreds' indices explicitly (#21822))
 
     let num_packets = data_shreds.len();
 

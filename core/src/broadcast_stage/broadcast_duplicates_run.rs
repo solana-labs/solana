@@ -30,6 +30,7 @@ pub(super) struct BroadcastDuplicatesRun {
     last_duplicate_entry_hash: Hash,
     last_broadcast_slot: Slot,
     next_shred_index: u32,
+    next_code_index: u32,
     shred_version: u16,
     keypair: Arc<Keypair>,
     cluster_nodes_cache: Arc<ClusterNodesCache<BroadcastStage>>,
@@ -53,8 +54,12 @@ impl BroadcastDuplicatesRun {
             duplicate_queue: BlockhashQueue::default(),
             duplicate_entries_buffer: vec![],
             next_shred_index: u32::MAX,
+<<<<<<< HEAD
             last_broadcast_slot: 0,
             last_duplicate_entry_hash: Hash::default(),
+=======
+            next_code_index: 0,
+>>>>>>> 65d59f4ef (tracks erasure coding shreds' indices explicitly (#21822))
             shred_version,
             keypair,
             cluster_nodes_cache,
@@ -158,12 +163,21 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         let bank = receive_results.bank.clone();
         let last_tick_height = receive_results.last_tick_height;
 
+<<<<<<< HEAD
         if self.next_shred_index == u32::MAX {
             self.next_shred_index = blockstore
                 .meta(bank.slot())
                 .expect("Database error")
                 .map(|meta| meta.consumed)
                 .unwrap_or(0) as u32
+=======
+        if bank.slot() != self.current_slot {
+            self.next_shred_index = 0;
+            self.next_code_index = 0;
+            self.current_slot = bank.slot();
+            self.prev_entry_hash = None;
+            self.num_slots_broadcasted += 1;
+>>>>>>> 65d59f4ef (tracks erasure coding shreds' indices explicitly (#21822))
         }
 
         // We were not the leader, but just became leader again
@@ -182,12 +196,18 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         .expect("Expected to create a new shredder");
 
         let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
+<<<<<<< HEAD
+=======
+            keypair,
+>>>>>>> 65d59f4ef (tracks erasure coding shreds' indices explicitly (#21822))
             &receive_results.entries,
             last_tick_height == bank.max_tick_height(),
             self.next_shred_index,
+            self.next_code_index,
         );
 
         self.next_shred_index += data_shreds.len() as u32;
+<<<<<<< HEAD
         let (duplicate_entries, next_duplicate_shred_index) =
             self.queue_or_create_duplicate_entries(&bank, &receive_results);
         let (duplicate_data_shreds, duplicate_coding_shreds) = if !duplicate_entries.is_empty() {
@@ -206,6 +226,19 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             self.duplicate_queue
                 .register_hash(&self.last_duplicate_entry_hash, &FeeCalculator::default());
         }
+=======
+        if let Some(index) = coding_shreds.iter().map(Shred::index).max() {
+            self.next_code_index = index + 1;
+        }
+        let last_shreds = last_entries.map(|(original_last_entry, duplicate_extra_last_entries)| {
+            let (original_last_data_shred, _) =
+                shredder.entries_to_shreds(keypair, &[original_last_entry], true, self.next_shred_index, self.next_code_index);
+
+            let (partition_last_data_shred, _) =
+                // Don't mark the last shred as last so that validators won't know that
+                // they've gotten all the shreds, and will continue trying to repair
+                shredder.entries_to_shreds(keypair, &duplicate_extra_last_entries, true, self.next_shred_index, self.next_code_index);
+>>>>>>> 65d59f4ef (tracks erasure coding shreds' indices explicitly (#21822))
 
         // Partition network with duplicate and real shreds based on stake
         let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
