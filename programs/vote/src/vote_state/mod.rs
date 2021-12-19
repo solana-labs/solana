@@ -19,7 +19,6 @@ use {
         sysvar::clock::Clock,
     },
     std::{
-        any::Any,
         boxed::Box,
         cmp::Ordering,
         collections::{HashSet, VecDeque},
@@ -41,63 +40,70 @@ pub const MAX_EPOCH_CREDITS_HISTORY: usize = 64;
 // Offset of VoteState::prior_voters, for determining initialization status without deserialization
 const DEFAULT_PRIOR_VOTERS_OFFSET: usize = 82;
 
-// VoteTransactionClone hack is done so that we can derive clone on the tower that uses the
-// VoteTransaction trait object. Clone doesn't work here because it returns Self which is not
-// allowed for trait objects
-#[typetag::serde{tag = "type"}]
-pub trait VoteTransaction: VoteTransactionClone + Debug + Send {
-    fn slot(&self, i: usize) -> Slot;
-    fn len(&self) -> usize;
-    fn hash(&self) -> Hash;
-    fn timestamp(&self) -> Option<UnixTimestamp>;
-    fn last_voted_slot(&self) -> Option<Slot>;
-    fn last_voted_slot_hash(&self) -> Option<(Slot, Hash)>;
-    fn set_timestamp(&mut self, ts: Option<UnixTimestamp>);
-
-    fn slots(&self) -> Vec<Slot> {
-        (0..self.len()).map(|i| self.slot(i)).collect()
-    }
-
-    fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    // Have to manually implement because deriving PartialEq returns Self
-    fn eq(&self, other: &dyn VoteTransaction) -> bool;
-    fn as_any(&self) -> &dyn Any;
+#[derive(Debug, PartialEq)]
+pub enum VoteTransaction {
+    Vote(Vote),
+    VoteStateUpdate(VoteStateUpdate),
 }
 
-pub trait VoteTransactionClone {
-    fn clone_box(&self) -> Box<dyn VoteTransaction>;
-}
+impl VoteTransaction {
+    pub fn slots(&self) -> Vec<Slot> {
+        match self {
+            VoteTransaction::Vote(vote) => vote.slots.clone(),
+            VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update
+                .lockouts
+                .iter()
+                .map(|lockout| lockout.slot)
+                .collect(),
+        }
+    }
 
-impl<T> VoteTransactionClone for T
-where
-    T: VoteTransaction + Clone + 'static,
-{
-    fn clone_box(&self) -> Box<dyn VoteTransaction> {
-        Box::new(self.clone())
+    pub fn is_empty(&self) -> bool {
+        match self {
+            VoteTransaction::Vote(vote) => vote.slots.is_empty(),
+            VoteTransaction::VoteStateUpdate(vote_state_update) => {
+                vote_state_update.lockouts.is_empty()
+            }
+        }
+    }
+
+    pub fn hash(&self) -> Hash {
+        match self {
+            VoteTransaction::Vote(vote) => vote.hash,
+            VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.hash,
+        }
+    }
+
+    pub fn timestamp(&self) -> Option<UnixTimestamp> {
+        match self {
+            VoteTransaction::Vote(vote) => vote.timestamp,
+            VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.timestamp,
+        }
+    }
+
+    pub fn last_voted_slot(&self) -> Option<Slot> {
+        match self {
+            VoteTransaction::Vote(vote) => vote.slots.last().copied(),
+            VoteTransaction::VoteStateUpdate(vote_state_update) => {
+                Some(vote_state_update.lockouts.back()?.slot)
+            }
+        }
+    }
+
+    pub fn last_voted_slot_hash(&self) -> Option<(Slot, Hash)> {
+        Some((self.last_voted_slot()?, self.hash()))
     }
 }
 
-impl Clone for Box<dyn VoteTransaction> {
-    fn clone(&self) -> Box<dyn VoteTransaction> {
-        self.clone_box()
+impl From<Vote> for VoteTransaction {
+    fn from(vote: Vote) -> Self {
+        VoteTransaction::Vote(vote)
     }
 }
 
-// Have to manually implement because derive returns Self
-impl<'a, 'b> PartialEq<dyn VoteTransaction + 'b> for dyn VoteTransaction + 'a {
-    fn eq(&self, other: &(dyn VoteTransaction + 'b)) -> bool {
-        VoteTransaction::eq(self, other)
-    }
-}
-
-// This is needed because of weirdness in the derive PartialEq macro
-// See rust issue #31740 for more info
-impl PartialEq<&Self> for Box<dyn VoteTransaction> {
-    fn eq(&self, other: &&Self) -> bool {
-        VoteTransaction::eq(self.as_ref(), other.as_ref())
+impl From<VoteStateUpdate> for VoteTransaction {
+    fn from(vote_state_update: VoteStateUpdate) -> Self {
+        VoteTransaction::VoteStateUpdate(vote_state_update)
     }
 }
 
@@ -119,48 +125,6 @@ impl Vote {
             hash,
             timestamp: None,
         }
-    }
-}
-
-#[typetag::serde]
-impl VoteTransaction for Vote {
-    fn slot(&self, i: usize) -> Slot {
-        self.slots[i]
-    }
-
-    fn len(&self) -> usize {
-        self.slots.len()
-    }
-
-    fn hash(&self) -> Hash {
-        self.hash
-    }
-
-    fn timestamp(&self) -> Option<UnixTimestamp> {
-        self.timestamp
-    }
-
-    fn last_voted_slot(&self) -> Option<Slot> {
-        self.slots.last().copied()
-    }
-
-    fn last_voted_slot_hash(&self) -> Option<(Slot, Hash)> {
-        self.slots.last().copied().map(|slot| (slot, self.hash))
-    }
-
-    fn set_timestamp(&mut self, ts: Option<UnixTimestamp>) {
-        self.timestamp = ts
-    }
-
-    fn eq(&self, other: &dyn VoteTransaction) -> bool {
-        other
-            .as_any()
-            .downcast_ref::<Self>()
-            .map_or(false, |x| x == self)
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }
 
@@ -215,51 +179,6 @@ impl VoteStateUpdate {
             hash,
             timestamp: None,
         }
-    }
-}
-
-#[typetag::serde]
-impl VoteTransaction for VoteStateUpdate {
-    fn slot(&self, i: usize) -> Slot {
-        self.lockouts[i].slot
-    }
-
-    fn len(&self) -> usize {
-        self.lockouts.len()
-    }
-
-    fn hash(&self) -> Hash {
-        self.hash
-    }
-
-    fn timestamp(&self) -> Option<UnixTimestamp> {
-        self.timestamp
-    }
-
-    fn last_voted_slot(&self) -> Option<Slot> {
-        self.lockouts.back().copied().map(|lockout| lockout.slot)
-    }
-
-    fn last_voted_slot_hash(&self) -> Option<(Slot, Hash)> {
-        self.lockouts
-            .back()
-            .copied()
-            .map(|lockout| (lockout.slot, self.hash))
-    }
-
-    fn set_timestamp(&mut self, ts: Option<UnixTimestamp>) {
-        self.timestamp = ts
-    }
-
-    fn eq(&self, other: &dyn VoteTransaction) -> bool {
-        other
-            .as_any()
-            .downcast_ref::<Self>()
-            .map_or(false, |x| x == self)
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }
 
@@ -465,7 +384,7 @@ impl VoteState {
 
     fn check_slots_are_valid(
         &self,
-        vote: &(impl VoteTransaction + Debug),
+        vote: &Vote,
         slot_hashes: &[(Slot, Hash)],
     ) -> Result<(), VoteError> {
         // index into the vote's slots, sarting at the newest
@@ -484,19 +403,19 @@ impl VoteState {
         //
         // 2) Conversely, `slot_hashes` is sorted from newest/largest vote to
         // the oldest/smallest vote
-        while i < vote.len() && j > 0 {
+        while i < vote.slots.len() && j > 0 {
             // 1) increment `i` to find the smallest slot `s` in `vote.slots`
             // where `s` >= `last_voted_slot`
             if self
                 .last_voted_slot()
-                .map_or(false, |last_voted_slot| vote.slot(i) <= last_voted_slot)
+                .map_or(false, |last_voted_slot| vote.slots[i] <= last_voted_slot)
             {
                 i += 1;
                 continue;
             }
 
             // 2) Find the hash for this slot `s`.
-            if vote.slot(i) != slot_hashes[j - 1].0 {
+            if vote.slots[i] != slot_hashes[j - 1].0 {
                 // Decrement `j` to find newer slots
                 j -= 1;
                 continue;
@@ -518,7 +437,7 @@ impl VoteState {
             );
             return Err(VoteError::VoteTooOld);
         }
-        if i != vote.len() {
+        if i != vote.slots.len() {
             // This means there existed some slot for which we couldn't find
             // a matching slot hash in step 2)
             info!(
@@ -528,16 +447,13 @@ impl VoteState {
             inc_new_counter_info!("dropped-vote-slot", 1);
             return Err(VoteError::SlotsMismatch);
         }
-        if slot_hashes[j].1 != vote.hash() {
+        if slot_hashes[j].1 != vote.hash {
             // This means the newest vote in the slot has a match that
             // doesn't match the expected hash for that slot on this
             // fork
             warn!(
                 "{} dropped vote {:?} failed to match hash {} {}",
-                self.node_pubkey,
-                vote,
-                vote.hash(),
-                slot_hashes[j].1
+                self.node_pubkey, vote, vote.hash, slot_hashes[j].1
             );
             inc_new_counter_info!("dropped-vote-hash", 1);
             return Err(VoteError::SlotHashMismatch);
@@ -1160,8 +1076,18 @@ pub fn process_vote_state_update<S: std::hash::BuildHasher>(
     signers: &HashSet<Pubkey, S>,
 ) -> Result<(), InstructionError> {
     let mut vote_state = verify_and_get_vote_state(vote_account, clock, signers)?;
-
-    vote_state.check_slots_are_valid(&vote_state_update, slot_hashes)?;
+    {
+        let vote = Vote {
+            slots: vote_state_update
+                .lockouts
+                .iter()
+                .map(|lockout| lockout.slot)
+                .collect(),
+            hash: vote_state_update.hash,
+            timestamp: vote_state_update.timestamp,
+        };
+        vote_state.check_slots_are_valid(&vote, slot_hashes)?;
+    }
     vote_state.process_new_vote_state(
         vote_state_update.lockouts,
         vote_state_update.root,

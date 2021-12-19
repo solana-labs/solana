@@ -677,7 +677,7 @@ impl ClusterInfoVoteListener {
 
     #[allow(clippy::too_many_arguments)]
     fn track_new_votes_and_notify_confirmations(
-        vote: Box<dyn VoteTransaction>,
+        vote: VoteTransaction,
         vote_pubkey: &Pubkey,
         vote_tracker: &VoteTracker,
         root_bank: &Bank,
@@ -792,7 +792,7 @@ impl ClusterInfoVoteListener {
     fn filter_gossip_votes(
         vote_tracker: &VoteTracker,
         vote_pubkey: &Pubkey,
-        vote: &dyn VoteTransaction,
+        vote: &VoteTransaction,
         gossip_tx: &Transaction,
     ) -> bool {
         if vote.is_empty() {
@@ -842,7 +842,7 @@ impl ClusterInfoVoteListener {
             .filter_map(|gossip_tx| {
                 vote_transaction::parse_vote_transaction(gossip_tx)
                     .filter(|(vote_pubkey, vote, _)| {
-                        Self::filter_gossip_votes(vote_tracker, vote_pubkey, &**vote, gossip_tx)
+                        Self::filter_gossip_votes(vote_tracker, vote_pubkey, vote, gossip_tx)
                     })
                     .map(|v| (true, v))
             })
@@ -1249,7 +1249,7 @@ mod tests {
                 replay_votes_sender
                     .send((
                         vote_keypair.pubkey(),
-                        Box::new(replay_vote.clone()),
+                        VoteTransaction::from(replay_vote.clone()),
                         switch_proof_hash,
                     ))
                     .unwrap();
@@ -1537,7 +1537,7 @@ mod tests {
                     replay_votes_sender
                         .send((
                             vote_keypair.pubkey(),
-                            Box::new(Vote::new(vec![vote_slot], Hash::default())),
+                            VoteTransaction::from(Vote::new(vec![vote_slot], Hash::default())),
                             switch_proof_hash,
                         ))
                         .unwrap();
@@ -1685,7 +1685,7 @@ mod tests {
             // Add gossip vote for same slot, should not affect outcome
             vec![(
                 validator0_keypairs.vote_keypair.pubkey(),
-                Box::new(Vote::new(vec![voted_slot], Hash::default())),
+                VoteTransaction::from(Vote::new(vec![voted_slot], Hash::default())),
                 None,
             )],
             &bank,
@@ -1741,7 +1741,7 @@ mod tests {
             vote_txs,
             vec![(
                 validator_keypairs[1].vote_keypair.pubkey(),
-                Box::new(Vote::new(vec![first_slot_in_new_epoch], Hash::default())),
+                VoteTransaction::from(Vote::new(vec![first_slot_in_new_epoch], Hash::default())),
                 None,
             )],
             &new_root_bank,
