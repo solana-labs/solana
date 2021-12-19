@@ -341,6 +341,7 @@ pub(crate) mod tests {
             &entries,
             true, // is_last_in_slot
             next_shred_index,
+            next_shred_index, // next_code_index
         );
         data_shreds.swap_remove(0)
     }
