@@ -4540,6 +4540,7 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "tarpc",
+ "thiserror",
  "tokio",
  "tokio-serde",
 ]
