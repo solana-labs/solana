@@ -12,7 +12,7 @@ use {
     serde_json,
     solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
         AccountsDbPlugin, AccountsDbPluginError, ReplicaAccountInfoVersions,
-        ReplicaTransactionInfoVersions, Result, SlotStatus,
+        ReplicaBlockInfoVersions, ReplicaTransactionInfoVersions, Result, SlotStatus,
     },
     solana_metrics::*,
     std::{fs::File, io::Read},
@@ -325,6 +325,31 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                     if let Err(err) = result {
                         return Err(AccountsDbPluginError::SlotStatusUpdateError{
                                 msg: format!("Failed to persist the transaction info to the PostgreSQL database. Error: {:?}", err)
+                            });
+                    }
+                }
+            },
+        }
+
+        Ok(())
+    }
+
+    fn notify_block_metadata(&mut self, block_info: ReplicaBlockInfoVersions) -> Result<()> {
+        match &mut self.client {
+            None => {
+                return Err(AccountsDbPluginError::Custom(Box::new(
+                    AccountsDbPluginPostgresError::DataStoreConnectionError {
+                        msg: "There is no connection to the PostgreSQL database.".to_string(),
+                    },
+                )));
+            }
+            Some(client) => match block_info {
+                ReplicaBlockInfoVersions::V0_0_1(block_info) => {
+                    let result = client.update_block_metadata(block_info);
+
+                    if let Err(err) = result {
+                        return Err(AccountsDbPluginError::SlotStatusUpdateError{
+                                msg: format!("Failed to persist the update of block metadata to the PostgreSQL database. Error: {:?}", err)
                             });
                     }
                 }

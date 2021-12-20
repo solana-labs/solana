@@ -8,6 +8,7 @@ DROP TABLE account_audit;
 DROP TABLE account;
 DROP TABLE slot;
 DROP TABLE transaction;
+DROP TABLE block;
 
 DROP TYPE "TransactionError" CASCADE;
 DROP TYPE "TransactionErrorCode" CASCADE;
