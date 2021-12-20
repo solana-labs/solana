@@ -31,7 +31,7 @@ pub enum ProgramInstruction {
         bump_seed: u8,
     },
 
-    /// Permanently freeze a address lookup table, making it immutable.
+    /// Permanently freeze an address lookup table, making it immutable.
     ///
     /// # Account references
     ///   0. `[WRITE]` Address lookup table account to freeze
@@ -46,6 +46,14 @@ pub enum ProgramInstruction {
     ///   2. `[SIGNER, WRITE]` Account that will fund the table reallocation
     ///   3. `[]` System program for CPI.
     ExtendLookupTable { new_addresses: Vec<Pubkey> },
+
+    /// Deactivate an address lookup table, making it unusable and
+    /// eligible for closure after a short period of time.
+    ///
+    /// # Account references
+    ///   0. `[WRITE]` Address lookup table account to deactivate
+    ///   1. `[SIGNER]` Current authority
+    DeactivateLookupTable,
 
     /// Close an address lookup table account
     ///
@@ -123,6 +131,23 @@ pub fn extend_lookup_table(
             AccountMeta::new_readonly(authority_address, true),
             AccountMeta::new(payer_address, true),
             AccountMeta::new_readonly(system_program::id(), false),
+        ],
+    )
+}
+
+/// Constructs an instruction that deactivates an address lookup
+/// table so that it cannot be extended again and will be unusable
+/// and eligible for closure after a short amount of time.
+pub fn deactivate_lookup_table(
+    lookup_table_address: Pubkey,
+    authority_address: Pubkey,
+) -> Instruction {
+    Instruction::new_with_bincode(
+        id(),
+        &ProgramInstruction::DeactivateLookupTable,
+        vec![
+            AccountMeta::new(lookup_table_address, false),
+            AccountMeta::new_readonly(authority_address, true),
         ],
     )
 }
