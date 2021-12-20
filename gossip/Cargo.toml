@@ -17,7 +17,7 @@ flate2 = "1.0"
 indexmap = { version = "1.7", features = ["rayon"] }
 itertools = "0.10.3"
 log = "0.4.14"
-lru = "0.7.0"
+lru = "0.7.1"
 matches = "0.1.9"
 num-traits = "0.2"
 rand = "0.7.0"
