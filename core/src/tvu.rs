@@ -496,6 +496,7 @@ pub mod tests {
             &Arc::new(RwLock::new(CostModel::default())),
             accounts_package_channel,
             None,
+            None,
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();
