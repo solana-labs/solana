@@ -836,6 +836,11 @@ impl Validator {
                     .iter()
                     .map(|s| s.try_clone().expect("Failed to clone TVU forwards Sockets"))
                     .collect(),
+                ancestor_hashes_requests: node
+                    .sockets
+                    .ancestor_hashes_requests
+                    .try_clone()
+                    .expect("Failed to clone ancestor_hashes_requests socket"),
             },
             blockstore.clone(),
             ledger_signal_receiver,
