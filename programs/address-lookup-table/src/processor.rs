@@ -47,6 +47,9 @@ pub fn process_instruction(
         ProgramInstruction::ExtendLookupTable { new_addresses } => {
             Processor::extend_lookup_table(invoke_context, first_instruction_account, new_addresses)
         }
+        ProgramInstruction::DeactivateLookupTable => {
+            Processor::deactivate_lookup_table(invoke_context, first_instruction_account)
+        }
         ProgramInstruction::CloseLookupTable => {
             Processor::close_lookup_table(invoke_context, first_instruction_account)
         }
@@ -152,7 +155,6 @@ impl Processor {
             keyed_account_at_index(keyed_accounts, first_instruction_account)?;
         lookup_table_account.set_state(&ProgramState::LookupTable(LookupTableMeta::new(
             authority_key,
-            derivation_slot,
         )))?;
 
         Ok(())
@@ -186,6 +188,10 @@ impl Processor {
         }
         if lookup_table.meta.authority != Some(*authority_account.unsigned_key()) {
             return Err(InstructionError::IncorrectAuthority);
+        }
+        if lookup_table.meta.deactivation_slot != Slot::MAX {
+            ic_msg!(invoke_context, "Deactivated tables cannot be frozen");
+            return Err(InstructionError::InvalidArgument);
         }
         if lookup_table.addresses.is_empty() {
             ic_msg!(invoke_context, "Empty lookup tables cannot be frozen");
@@ -243,6 +249,10 @@ impl Processor {
         }
         if lookup_table.meta.authority != Some(*authority_account.unsigned_key()) {
             return Err(InstructionError::IncorrectAuthority);
+        }
+        if lookup_table.meta.deactivation_slot != Slot::MAX {
+            ic_msg!(invoke_context, "Deactivated tables cannot be extended");
+            return Err(InstructionError::InvalidArgument);
         }
         if lookup_table.addresses.len() >= LOOKUP_TABLE_MAX_ADDRESSES {
             ic_msg!(
@@ -320,6 +330,56 @@ impl Processor {
         Ok(())
     }
 
+    fn deactivate_lookup_table(
+        invoke_context: &mut InvokeContext,
+        first_instruction_account: usize,
+    ) -> Result<(), InstructionError> {
+        let keyed_accounts = invoke_context.get_keyed_accounts()?;
+
+        let lookup_table_account =
+            keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+        if lookup_table_account.owner()? != crate::id() {
+            return Err(InstructionError::InvalidAccountOwner);
+        }
+
+        let authority_account =
+            keyed_account_at_index(keyed_accounts, checked_add(first_instruction_account, 1)?)?;
+        if authority_account.signer_key().is_none() {
+            return Err(InstructionError::MissingRequiredSignature);
+        }
+
+        let lookup_table_account_ref = lookup_table_account.try_account_ref()?;
+        let lookup_table_data = lookup_table_account_ref.data();
+        let lookup_table = AddressLookupTable::deserialize(lookup_table_data)?;
+
+        if lookup_table.meta.authority.is_none() {
+            ic_msg!(invoke_context, "Lookup table is frozen");
+            return Err(InstructionError::Immutable);
+        }
+        if lookup_table.meta.authority != Some(*authority_account.unsigned_key()) {
+            return Err(InstructionError::IncorrectAuthority);
+        }
+        if lookup_table.meta.deactivation_slot != Slot::MAX {
+            ic_msg!(invoke_context, "Lookup table is already deactivated");
+            return Err(InstructionError::InvalidArgument);
+        }
+
+        let mut lookup_table_meta = lookup_table.meta;
+        drop(lookup_table_account_ref);
+
+        let clock: Clock = invoke_context.get_sysvar(&clock::id())?;
+        lookup_table_meta.deactivation_slot = clock.slot;
+
+        AddressLookupTable::overwrite_meta_data(
+            lookup_table_account
+                .try_account_ref_mut()?
+                .data_as_mut_slice(),
+            lookup_table_meta,
+        )?;
+
+        Ok(())
+    }
+
     fn close_lookup_table(
         invoke_context: &mut InvokeContext,
         first_instruction_account: usize,
@@ -353,16 +413,24 @@ impl Processor {
         let lookup_table = AddressLookupTable::deserialize(lookup_table_data)?;
 
         if lookup_table.meta.authority.is_none() {
+            ic_msg!(invoke_context, "Lookup table is frozen");
             return Err(InstructionError::Immutable);
         }
         if lookup_table.meta.authority != Some(*authority_account.unsigned_key()) {
             return Err(InstructionError::IncorrectAuthority);
         }
+        if lookup_table.meta.deactivation_slot == Slot::MAX {
+            ic_msg!(invoke_context, "Lookup table is not deactivated");
+            return Err(InstructionError::InvalidArgument);
+        }
 
-        // Assert that the slot used in the derivation path of the lookup table address
-        // is no longer recent and can't be reused to initialize an account at the same address.
+        // Assert that the deactivation slot is no longer recent to give in-flight transactions
+        // enough time to land and to remove indeterminism caused by transactions loading
+        // addresses in the same slot when a table is closed. This enforced delay has a side
+        // effect of not allowing lookup tables to be recreated at the same derived address
+        // because tables must be created at an address derived from a recent slot.
         let slot_hashes: SlotHashes = invoke_context.get_sysvar(&slot_hashes::id())?;
-        if let Some(position) = slot_hashes.position(&lookup_table.meta.derivation_slot) {
+        if let Some(position) = slot_hashes.position(&lookup_table.meta.deactivation_slot) {
             let expiration = MAX_ENTRIES.saturating_sub(position);
             ic_msg!(
                 invoke_context,
