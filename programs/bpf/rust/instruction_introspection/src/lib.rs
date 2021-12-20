@@ -2,7 +2,6 @@
 
 extern crate solana_program;
 use solana_program::{
-    account_info::next_account_info,
     account_info::AccountInfo,
     entrypoint,
     entrypoint::ProgramResult,
@@ -25,8 +24,7 @@ fn process_instruction(
     }
 
     let secp_instruction_index = instruction_data[0];
-    let account_info_iter = &mut accounts.iter();
-    let instruction_accounts = next_account_info(account_info_iter)?;
+    let instruction_accounts = accounts.last().ok_or(ProgramError::NotEnoughAccountKeys)?;
     assert_eq!(*instruction_accounts.key, instructions::id());
     let data_len = instruction_accounts.try_borrow_data()?.len();
     if data_len < 2 {
@@ -56,7 +54,7 @@ fn process_instruction(
                 &[instruction_data[0], instruction_data[1], 1],
                 vec![AccountMeta::new_readonly(instructions::id(), false)],
             ),
-            &[instruction_accounts.clone()],
+            accounts,
         )?;
     }
 
