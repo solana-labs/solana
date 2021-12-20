@@ -53,7 +53,7 @@ const WORD_COUNT_ARG: ArgConstant<'static> = ArgConstant {
 const LANGUAGE_ARG: ArgConstant<'static> = ArgConstant {
     long: "language",
     name: "language",
-    help: "Specify the mnemonic lanaguage that will be present in the generated seed phrase",
+    help: "Specify the mnemonic language that will be present in the generated seed phrase",
 };
 
 const NO_PASSPHRASE_ARG: ArgConstant<'static> = ArgConstant {
