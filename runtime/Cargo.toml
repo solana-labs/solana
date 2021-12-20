@@ -39,7 +39,6 @@ solana-config-program = { path = "../programs/config", version = "=1.10.0" }
 solana-compute-budget-program = { path = "../programs/compute-budget", version = "=1.10.0" }
 solana-frozen-abi = { path = "../frozen-abi", version = "=1.10.0" }
 solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.10.0" }
-solana-logger = { path = "../logger", version = "=1.10.0" }
 solana-measure = { path = "../measure", version = "=1.10.0" }
 solana-metrics = { path = "../metrics", version = "=1.10.0" }
 solana-bucket-map = { path = "../bucket_map", version = "=1.10.0" }
@@ -62,6 +61,7 @@ name = "solana_runtime"
 ed25519-dalek = "=1.0.1"
 libsecp256k1 = "0.6.0"
 assert_matches = "1.5.0"
+solana-logger = { path = "../logger", version = "=1.10.0" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
