@@ -4172,7 +4172,33 @@ impl Bank {
         }
     }
 
+    /// hold a mod range of pubkeys in the accounts index to make retreiving a range much more efficient
+    fn hold_next_n_slots_in_partition(&self, partition: Partition) {
+        let (start, _end, partitions) = partition;
+        let n = 10;
+        let start = start.saturating_sub(start % n); // even boundary
+        let end = std::cmp::min(start.saturating_add(n), partitions.saturating_sub(1)); // 'n' items up to # partitions - 1
+
+        let subrange_new = Self::pubkey_range_from_partition((start, end, partitions));
+        let mut range = self
+            .rc
+            .accounts
+            .accounts_db
+            .last_range_held
+            .write()
+            .unwrap();
+        if let Some(held) = &*range {
+            if held == &subrange_new {
+                return;
+            }
+            self.rc.accounts.hold_range_in_memory(held, false);
+        }
+        self.rc.accounts.hold_range_in_memory(&subrange_new, true);
+        *range = Some(subrange_new);
+    }
+
     fn collect_rent_in_partition(&self, partition: Partition) -> usize {
+        self.hold_next_n_slots_in_partition(partition);
         let subrange = Self::pubkey_range_from_partition(partition);
 
         self.rc.accounts.hold_range_in_memory(&subrange, true);
