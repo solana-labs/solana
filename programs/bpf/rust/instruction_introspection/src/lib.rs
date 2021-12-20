@@ -24,19 +24,19 @@ fn process_instruction(
     }
 
     let secp_instruction_index = instruction_data[0];
-    let instruction_accounts = accounts.last().ok_or(ProgramError::NotEnoughAccountKeys)?;
-    assert_eq!(*instruction_accounts.key, instructions::id());
-    let data_len = instruction_accounts.try_borrow_data()?.len();
+    let instructions_account = accounts.last().ok_or(ProgramError::NotEnoughAccountKeys)?;
+    assert_eq!(*instructions_account.key, instructions::id());
+    let data_len = instructions_account.try_borrow_data()?.len();
     if data_len < 2 {
         return Err(ProgramError::InvalidAccountData);
     }
 
     let instruction = instructions::load_instruction_at_checked(
         secp_instruction_index as usize,
-        instruction_accounts,
+        instructions_account,
     )?;
 
-    let current_instruction = instructions::load_current_index_checked(instruction_accounts)?;
+    let current_instruction = instructions::load_current_index_checked(instructions_account)?;
     let my_index = instruction_data[1] as u16;
     assert_eq!(current_instruction, my_index);
 
