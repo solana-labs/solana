@@ -39,8 +39,8 @@ impl ::solana_frozen_abi::abi_example::AbiExample for MessageProcessor {
 /// Resultant information gathered from calling process_message()
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct ProcessedMessageInfo {
-    /// The amount that the accounts data len has changed
-    pub accounts_data_len_delta: i64,
+    /// The new accounts data len
+    pub accounts_data_len: u64,
 }
 
 impl MessageProcessor {
@@ -142,7 +142,7 @@ impl MessageProcessor {
             timings.accumulate(&invoke_context.timings);
         }
         Ok(ProcessedMessageInfo {
-            accounts_data_len_delta: invoke_context.get_accounts_data_meter().take().consumed(),
+            accounts_data_len: invoke_context.get_accounts_data_meter().take().finalize(),
         })
     }
 }

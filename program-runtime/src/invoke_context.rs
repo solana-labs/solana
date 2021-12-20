@@ -119,42 +119,51 @@ impl ComputeMeter {
     }
 }
 
-/// Meter and track the amount of space available in the accounts data
+/// Meter and track the amount of available accounts data space
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
 pub struct AccountsDataMeter {
-    /// The amount of available space in the accounts data (i.e. max - current)
-    capacity: u64,
-    /// The amount of available space *consumed* from the accounts data.  This value is used to
-    /// update the Bank after transactions are successfully processed.  This value may be negative,
-    /// which indicates that the accounts data has shrunk.
-    consumed: i64,
+    /// The maximum amount of accounts data space that can be used (in bytes)
+    maximum: u64,
+    /// The current amount of accounts data space used (in bytes)
+    current: u64,
 }
 impl AccountsDataMeter {
-    pub fn new_ref(capacity: u64) -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Self {
-            capacity,
-            consumed: 0,
-        }))
+    /// Make a new AccountsDataMeter, wrapped in an Rc & RefCell
+    pub fn new_ref(current_accounts_data_len: u64) -> Rc<RefCell<Self>> {
+        let accounts_data_meter = Self {
+            maximum: MAX_ACCOUNTS_DATA_LEN,
+            current: current_accounts_data_len,
+        };
+        debug_assert!(accounts_data_meter.current <= accounts_data_meter.maximum);
+        Rc::new(RefCell::new(accounts_data_meter))
     }
-    pub fn capacity(&self) -> u64 {
-        self.capacity
+    /// Consume the AccountsDataMeter and return the final (i.e. current) accounts data len
+    pub fn finalize(self) -> u64 {
+        self.current
     }
-    pub fn consumed(&self) -> i64 {
-        self.consumed
+    /// Get the remaining amount of accounts data space
+    pub fn remaining(&self) -> u64 {
+        self.maximum.saturating_sub(self.current)
     }
-    pub fn remaining(&self) -> i64 {
-        let capacity = self.capacity() as i64;
-        let consumed = self.consumed();
-        capacity.saturating_sub(consumed)
-    }
+    /// Consume accounts data space.  If `amount` is positive, we are *increasing* the amount of
+    /// accounts data space used.  If `amount` is negative, we are *decreasing* the amount of
+    /// accounts data space used.
     pub fn consume(&mut self, amount: i64) -> Result<(), InstructionError> {
-        if amount.is_positive() && amount > self.remaining() {
-            return Err(InstructionError::AccountsDataBudgetExceeded);
+        if amount == 0 {
+            // nothing to do here; lets us skip doing unnecessary work in the 'else' case
+            return Ok(());
         }
-        // SAFETY: We know that the consumed amount can never exceed MAX_ACCOUNTS_DATA_LEN (which
-        // is far below i64::MAX), and therefore we can never free/deallocate more than
-        // MAX_ACCOUNTS_DATA_LEN either, so we can be sure wrapping will not happen at either end.
-        self.consumed = self.consumed.wrapping_add(amount);
+
+        if amount.is_positive() {
+            let amount = amount as u64;
+            if amount > self.remaining() {
+                return Err(InstructionError::AccountsDataBudgetExceeded);
+            }
+            self.current = self.current.saturating_add(amount);
+        } else {
+            let amount = amount.abs() as u64;
+            self.current = self.current.saturating_sub(amount);
+        }
         Ok(())
     }
 }
@@ -222,12 +231,6 @@ impl<'a> InvokeContext<'a> {
         lamports_per_signature: u64,
         current_accounts_data_len: u64,
     ) -> Self {
-        let accounts_data_meter = {
-            debug_assert!(current_accounts_data_len <= MAX_ACCOUNTS_DATA_LEN);
-            AccountsDataMeter::new_ref(
-                MAX_ACCOUNTS_DATA_LEN.saturating_sub(current_accounts_data_len),
-            )
-        };
         Self {
             invoke_stack: Vec::with_capacity(compute_budget.max_invoke_depth),
             rent,
@@ -239,7 +242,7 @@ impl<'a> InvokeContext<'a> {
             current_compute_budget: compute_budget,
             compute_budget,
             compute_meter: ComputeMeter::new_ref(compute_budget.max_units),
-            accounts_data_meter,
+            accounts_data_meter: AccountsDataMeter::new_ref(current_accounts_data_len),
             executors,
             instruction_recorder,
             feature_set,
