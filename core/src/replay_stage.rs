@@ -2129,6 +2129,7 @@ impl ReplayStage {
                     bank.slot(),
                     bank_progress.replay_progress.num_entries,
                     bank_progress.replay_progress.num_shreds,
+                    bank.new_root_elapsed_ms(),
                 );
                 did_complete_bank = true;
                 info!("bank frozen: {}", bank.slot());

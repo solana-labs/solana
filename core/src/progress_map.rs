@@ -34,7 +34,13 @@ impl std::ops::DerefMut for ReplaySlotStats {
 }
 
 impl ReplaySlotStats {
-    pub fn report_stats(&self, slot: Slot, num_entries: usize, num_shreds: u64) {
+    pub fn report_stats(
+        &self,
+        slot: Slot,
+        num_entries: usize,
+        num_shreds: u64,
+        root_elapsed_ms: u64,
+    ) {
         datapoint_info!(
             "replay-slot-stats",
             ("slot", slot as i64, i64),
@@ -121,6 +127,7 @@ impl ReplaySlotStats {
                 self.execute_timings.details.data_size_changed,
                 i64
             ),
+            ("root_elapsed_ms", root_elapsed_ms, i64),
         );
 
         let mut per_pubkey_timings: Vec<_> = self
