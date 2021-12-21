@@ -7,6 +7,7 @@
 
 pub use solana_banks_interface::{BanksClient as TarpcClient, TransactionStatus};
 use {
+    crate::error::BanksClientError,
     borsh::BorshDeserialize,
     futures::{future::join_all, Future, FutureExt, TryFutureExt},
     solana_banks_interface::{BanksRequest, BanksResponse},
@@ -19,45 +20,19 @@ use {
         commitment_config::CommitmentLevel,
         message::Message,
         signature::Signature,
-        transaction::{self, Transaction, TransactionError},
+        transaction::{self, Transaction},
     },
-    std::io,
     tarpc::{
-        client::{self, NewClient, RequestDispatch, RpcError},
+        client::{self, NewClient, RequestDispatch},
         context::{self, Context},
         serde_transport::tcp,
         ClientMessage, Response, Transport,
     },
-    thiserror::Error,
     tokio::{net::ToSocketAddrs, time::Duration},
     tokio_serde::formats::Bincode,
 };
 
-/// Errors from BanksClient
-#[derive(Error, Debug)]
-pub enum BanksClientError {
-    #[error("client error: {0}")]
-    ClientError(&'static str),
-
-    #[error(transparent)]
-    Io(#[from] io::Error),
-
-    #[error(transparent)]
-    RpcError(#[from] RpcError),
-
-    #[error("transport transaction error: {0}")]
-    TransactionError(#[from] TransactionError),
-}
-
-impl BanksClientError {
-    pub fn unwrap(&self) -> TransactionError {
-        if let BanksClientError::TransactionError(err) = self {
-            err.clone()
-        } else {
-            panic!("unexpected transport error")
-        }
-    }
-}
+mod error;
 
 // This exists only for backward compatibility
 pub trait BanksClientExt {}
