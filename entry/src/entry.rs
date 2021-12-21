@@ -287,8 +287,12 @@ impl<'a> EntrySigVerificationState {
             DeviceSigVerificationData::Gpu(verification_state) => {
                 let (verified, gpu_time_us) =
                     verification_state.thread_h.take().unwrap().join().unwrap();
-                let (verified_extended, gpu_time_us_extended) = 
-                    verification_state.thread_h_extended.take().unwrap().join().unwrap();
+                let (verified_extended, gpu_time_us_extended) = verification_state
+                    .thread_h_extended
+                    .take()
+                    .unwrap()
+                    .join()
+                    .unwrap();
                 // todo: improve this metric, perhaps by simply recording the start and end timestamps
                 // for both verifications and taking the difference of the most extreme of
                 // the start and end times for both
@@ -512,7 +516,7 @@ pub fn start_verify_transactions(
                 .flatten()
                 .collect::<Vec<_>>();
 
-            if entry_txs.len() == 0 && large_entry_txs.len() == 0 {
+            if entry_txs.is_empty() && large_entry_txs.is_empty() {
                 return Ok(EntrySigVerificationState {
                     verification_status: EntryVerificationStatus::Success,
                     entries: Some(entries),
@@ -604,7 +608,7 @@ pub fn start_verify_transactions(
                 let out_recycler = out_recycler.clone();
                 thread::spawn(move || {
                     let mut verify_time = Measure::start("sigverify");
-                    let verified = if packet_batches.len() != 0 {
+                    let verified = if !packet_batches.is_empty() {
                         sigverify::ed25519_verify(
                             &mut packet_batches,
                             &tx_offset_recycler,
@@ -624,7 +628,7 @@ pub fn start_verify_transactions(
 
             let gpu_extended_verify_thread = thread::spawn(move || {
                 let mut verify_time = Measure::start("sigverify");
-                let verified = if extended_packet_batches.len() != 0 {
+                let verified = if !extended_packet_batches.is_empty() {
                     //todo: verify that sigverify::ed25519_verify is thread-safe
                     sigverify::ed25519_verify(
                         &mut extended_packet_batches,
@@ -646,7 +650,7 @@ pub fn start_verify_transactions(
                 entries: Some(entries),
                 device_verification_data: DeviceSigVerificationData::Gpu(GpuSigVerificationData {
                     thread_h: Some(gpu_verify_thread),
-                    thread_h_extended : Some(gpu_extended_verify_thread),
+                    thread_h_extended: Some(gpu_extended_verify_thread),
                 }),
                 gpu_verify_duration_us: 0,
             })

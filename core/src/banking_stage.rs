@@ -1179,7 +1179,7 @@ impl BankingStage {
 
     /// Read the transaction message from packet data
     fn packet_message<PacketType: 'static + PacketInterface>(packet: &PacketType) -> Option<&[u8]> {
-        let (sig_len, sig_size) = decode_shortu16_len(&packet.get_data()).ok()?;
+        let (sig_len, sig_size) = decode_shortu16_len(packet.get_data()).ok()?;
         let msg_start = sig_len
             .checked_mul(size_of::<Signature>())
             .and_then(|v| v.checked_add(sig_size))?;

@@ -70,6 +70,7 @@ impl FetchStage {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new_with_sender(
         tpu_tx_sockets: Vec<UdpSocket>,
         tpu_tx_forwards_sockets: Vec<UdpSocket>,
@@ -170,6 +171,7 @@ impl FetchStage {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn new_multi_socket(
         tpu_sockets: Vec<Arc<UdpSocket>>,
         tpu_forwards_sockets: Vec<Arc<UdpSocket>>,

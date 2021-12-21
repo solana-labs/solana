@@ -175,7 +175,7 @@ fn do_get_packet_offsets<P: PacketInterface>(
 
     // read the length of Transaction.signatures (serialized with short_vec)
     let (sig_len_untrusted, sig_size) =
-        decode_shortu16_len(&packet.get_data()).map_err(|_| PacketError::InvalidShortVec)?;
+        decode_shortu16_len(packet.get_data()).map_err(|_| PacketError::InvalidShortVec)?;
 
     // Using msg_start_offset which is based on sig_len_untrusted introduces uncertainty.
     // Ultimately, the actual sigverify will determine the uncertainty.

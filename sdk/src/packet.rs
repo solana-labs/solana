@@ -38,7 +38,7 @@ pub trait PacketInterface: Clone + Default + Sized + Send + Sync + fmt::Debug {
         dest: Option<&SocketAddr>,
         data: &T,
     ) -> Result<()> {
-        let mut wr = io::Cursor::new(&mut packet.get_data_mut()[..]);
+        let mut wr = io::Cursor::new(&mut *packet.get_data_mut());
         bincode::serialize_into(&mut wr, data)?;
         let len = wr.position() as usize;
         packet.get_meta_mut().size = len;
