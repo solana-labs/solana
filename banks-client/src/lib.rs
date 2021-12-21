@@ -374,9 +374,9 @@ impl BanksClient {
     ) -> impl Future<Output = Result<Hash, BanksClientError>> + '_ {
         self.get_latest_blockhash_with_commitment(CommitmentLevel::default())
             .map(|result| {
-                result?.map(|x| x.0).ok_or_else(|| {
-                    BanksClientError::Io(io::Error::new(io::ErrorKind::Other, "account not found"))
-                })
+                result?
+                    .map(|x| x.0)
+                    .ok_or(BanksClientError::ClientError("valid blockhash not found"))
             })
     }
 
