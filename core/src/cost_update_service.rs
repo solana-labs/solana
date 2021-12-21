@@ -69,8 +69,12 @@ impl CostUpdateServiceTiming {
 }
 
 pub enum CostUpdate {
-    FrozenBank { bank: Arc<Bank> },
-    ExecuteTiming { execute_timings: ExecuteTimings },
+    FrozenBank {
+        bank: Arc<Bank>,
+    },
+    ExecuteTiming {
+        execute_timings: Box<ExecuteTimings>,
+    },
 }
 
 pub type CostUpdateReceiver = Receiver<CostUpdate>;

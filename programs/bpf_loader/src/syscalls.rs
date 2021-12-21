@@ -6,6 +6,7 @@ use {
         ic_logger_msg, ic_msg,
         invoke_context::{ComputeMeter, InvokeContext},
         stable_log,
+        timings::ExecuteTimings,
     },
     solana_rbpf::{
         aligned_memory::AlignedMemory,
@@ -2634,6 +2635,7 @@ fn call<'a, 'b: 'a>(
             &instruction_accounts,
             &program_indices,
             &mut compute_units_consumed,
+            &mut ExecuteTimings::default(),
         )
         .map_err(SyscallError::InstructionError)?;
 
