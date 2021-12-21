@@ -53,10 +53,9 @@ impl Header {
             false
         }
     }
-    fn unlock(&mut self) -> Uid {
-        let old = self.lock;
+    fn unlock(&mut self, expected: Uid) {
+        assert_eq!(expected, self.lock);
         self.lock = UID_UNLOCKED;
-        old
     }
     fn uid(&self) -> Option<Uid> {
         if self.lock == UID_UNLOCKED {
@@ -188,12 +187,7 @@ impl BucketStorage {
     pub fn free(&mut self, ix: u64, uid: Uid) {
         assert!(ix < self.capacity(), "bad index size");
         assert!(UID_UNLOCKED != uid, "free: bad uid");
-        let previous_uid = self.header_mut_ptr(ix).unlock();
-        assert_eq!(
-            previous_uid, uid,
-            "free: unlocked a header with a differet uid: {}",
-            previous_uid
-        );
+        self.header_mut_ptr(ix).unlock(uid);
         self.count.fetch_sub(1, Ordering::Relaxed);
     }
 
