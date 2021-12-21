@@ -273,7 +273,12 @@ fn process_instruction_common(
             return Err(InstructionError::IncorrectProgramId);
         }
 
-        let executor = match invoke_context.get_executor(program_id) {
+        let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
+        let maybe_executor = invoke_context.get_executor(program_id);
+        get_or_create_executor_time.stop();
+        invoke_context.get_timings().get_or_create_executor_us +=
+            get_or_create_executor_time.as_us();
+        let executor = match maybe_executor {
             Some(executor) => executor,
             None => {
                 let executor =
@@ -282,6 +287,7 @@ fn process_instruction_common(
                 executor
             }
         };
+
         executor.execute(
             loader_id,
             program_id,
@@ -1053,6 +1059,7 @@ mod tests {
             account_utils::StateMut,
             client::SyncClient,
             clock::Clock,
+            execute_timings::ExecuteDetailsTimings,
             feature_set::FeatureSet,
             genesis_config::create_genesis_config,
             instruction::Instruction,
@@ -1330,6 +1337,7 @@ mod tests {
             sysvars: vec![],
             disabled_features: vec![].into_iter().collect(),
             return_data: None,
+            execute_timings: ExecuteDetailsTimings::default(),
         };
         assert_eq!(
             Err(InstructionError::ProgramFailedToComplete),

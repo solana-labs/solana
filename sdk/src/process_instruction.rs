@@ -2,6 +2,7 @@ use {
     itertools::Itertools,
     solana_sdk::{
         account::AccountSharedData,
+        execute_timings::ExecuteDetailsTimings,
         instruction::{CompiledInstruction, Instruction, InstructionError},
         keyed_account::{create_keyed_accounts_unified, KeyedAccount},
         pubkey::Pubkey,
@@ -109,6 +110,8 @@ pub trait InvokeContext {
     fn set_return_data(&mut self, return_data: Option<(Pubkey, Vec<u8>)>);
     /// Get the return data
     fn get_return_data(&self) -> &Option<(Pubkey, Vec<u8>)>;
+    /// Get timings
+    fn get_timings(&mut self) -> &mut ExecuteDetailsTimings;
 }
 
 /// Convenience macro to log a message with an `Rc<RefCell<dyn Logger>>`
@@ -389,6 +392,7 @@ pub struct MockInvokeContext<'a> {
     pub sysvars: Vec<(Pubkey, Option<Rc<Vec<u8>>>)>,
     pub disabled_features: HashSet<Pubkey>,
     pub return_data: Option<(Pubkey, Vec<u8>)>,
+    pub execute_timings: ExecuteDetailsTimings,
 }
 
 impl<'a> MockInvokeContext<'a> {
@@ -406,6 +410,7 @@ impl<'a> MockInvokeContext<'a> {
             sysvars: vec![],
             disabled_features: HashSet::default(),
             return_data: None,
+            execute_timings: ExecuteDetailsTimings::default(),
         };
         invoke_context
             .invoke_stack
@@ -529,5 +534,8 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     }
     fn get_return_data(&self) -> &Option<(Pubkey, Vec<u8>)> {
         &self.return_data
+    }
+    fn get_timings(&mut self) -> &mut ExecuteDetailsTimings {
+        &mut self.execute_timings
     }
 }

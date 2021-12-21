@@ -3533,8 +3533,11 @@ impl Bank {
                     };
 
                     if process_result.is_ok() {
+                        let mut get_executors_time = Measure::start("get_executors_time");
                         let executors =
                             self.get_executors(&tx.message, &loaded_transaction.loaders);
+                        get_executors_time.stop();
+                        timings.execute_accessories.get_executors_us += get_executors_time.as_us();
 
                         let (account_refcells, loader_refcells) = Self::accounts_to_refcells(
                             &mut loaded_transaction.accounts,
@@ -3560,6 +3563,7 @@ impl Bank {
                             bpf_compute_budget.max_units,
                         )));
 
+                        let mut process_message_time = Measure::start("process_message_time");
                         process_result = self.message_processor.process_message(
                             tx.message(),
                             &loader_refcells,
@@ -3571,10 +3575,13 @@ impl Bank {
                             feature_set,
                             bpf_compute_budget,
                             compute_meter,
-                            &mut timings.details,
+                            timings,
                             self.rc.accounts.clone(),
                             &self.ancestors,
                         );
+                        process_message_time.stop();
+                        timings.execute_accessories.process_message_us +=
+                            process_message_time.as_us();
 
                         transaction_log_messages.push(Self::collect_log_messages(log_collector));
                         inner_instructions.push(Self::compile_recorded_instructions(
@@ -3592,7 +3599,11 @@ impl Bank {
                             process_result = Err(e);
                         }
 
+                        let mut update_executors_time = Measure::start("update_executors_time");
                         self.update_executors(process_result.is_ok(), executors);
+                        update_executors_time.stop();
+                        timings.execute_accessories.update_executors_us +=
+                            update_executors_time.as_us();
                     } else {
                         transaction_log_messages.push(None);
                         inner_instructions.push(None);

@@ -11,7 +11,7 @@ use {
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-        execute_timings::ExecuteDetailsTimings,
+        execute_timings::{ExecuteDetailsTimings, ExecuteTimings},
         feature_set::{
             demote_program_write_locks, fix_write_privs, instructions_sysvar_enabled,
             neon_evm_compute_budget, remove_native_loader, requestable_heap_size,
@@ -539,6 +539,9 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     }
     fn get_return_data(&self) -> &Option<(Pubkey, Vec<u8>)> {
         &self.return_data
+    }
+    fn get_timings(&mut self) -> &mut ExecuteDetailsTimings {
+        &mut self.timings
     }
 }
 pub struct ThisLogger {
@@ -1212,7 +1215,7 @@ impl MessageProcessor {
         feature_set: Arc<FeatureSet>,
         bpf_compute_budget: BpfComputeBudget,
         compute_meter: Rc<RefCell<dyn ComputeMeter>>,
-        timings: &mut ExecuteDetailsTimings,
+        timings: &mut ExecuteTimings,
         account_db: Arc<Accounts>,
         ancestors: &Ancestors,
     ) -> Result<(), InstructionError> {
@@ -1278,7 +1281,7 @@ impl MessageProcessor {
                 executable_accounts,
                 accounts,
                 &rent_collector.rent,
-                timings,
+                &mut timings.details,
                 invoke_context.get_logger(),
                 invoke_context.is_feature_active(&updated_verify_policy::id()),
                 invoke_context.is_feature_active(&demote_program_write_locks::id()),
@@ -1288,14 +1291,18 @@ impl MessageProcessor {
         time.stop();
         let post_remaining_units = invoke_context.get_compute_meter().borrow().get_remaining();
         let compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
-        timings.accumulate_program(
+        timings.details.accumulate_program(
             program_id,
             time.as_us(),
             compute_units_consumed,
             execute_or_verify_result.is_err(),
         );
 
-        timings.accumulate(&invoke_context.timings);
+        timings.details.accumulate(&invoke_context.timings);
+        timings.execute_accessories.process_instructions_us = timings
+            .execute_accessories
+            .process_instructions_us
+            .saturating_add(time.as_us());
 
         execute_or_verify_result
     }
@@ -1317,7 +1324,7 @@ impl MessageProcessor {
         feature_set: Arc<FeatureSet>,
         bpf_compute_budget: BpfComputeBudget,
         compute_meter: Rc<RefCell<dyn ComputeMeter>>,
-        timings: &mut ExecuteDetailsTimings,
+        timings: &mut ExecuteTimings,
         account_db: Arc<Accounts>,
         ancestors: &Ancestors,
     ) -> Result<(), TransactionError> {
@@ -2025,7 +2032,7 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
-            &mut ExecuteDetailsTimings::default(),
+            &mut ExecuteTimings::default(),
             Arc::new(Accounts::default()),
             &ancestors,
         );
@@ -2053,7 +2060,7 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
-            &mut ExecuteDetailsTimings::default(),
+            &mut ExecuteTimings::default(),
             Arc::new(Accounts::default()),
             &ancestors,
         );
@@ -2085,7 +2092,7 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
-            &mut ExecuteDetailsTimings::default(),
+            &mut ExecuteTimings::default(),
             Arc::new(Accounts::default()),
             &ancestors,
         );
@@ -2209,7 +2216,7 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
-            &mut ExecuteDetailsTimings::default(),
+            &mut ExecuteTimings::default(),
             Arc::new(Accounts::default()),
             &ancestors,
         );
@@ -2241,7 +2248,7 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
-            &mut ExecuteDetailsTimings::default(),
+            &mut ExecuteTimings::default(),
             Arc::new(Accounts::default()),
             &ancestors,
         );
@@ -2271,7 +2278,7 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
-            &mut ExecuteDetailsTimings::default(),
+            &mut ExecuteTimings::default(),
             Arc::new(Accounts::default()),
             &ancestors,
         );
