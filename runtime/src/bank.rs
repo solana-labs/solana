@@ -4179,7 +4179,10 @@ impl Bank {
     fn collect_rent_in_partition(&self, partition: Partition) -> usize {
         let subrange = Self::pubkey_range_from_partition(partition);
 
-        self.rc.accounts.hold_range_in_memory(&subrange, true);
+        let thread_pool = &self.rc.accounts.accounts_db.thread_pool;
+        self.rc
+            .accounts
+            .hold_range_in_memory(&subrange, true, thread_pool);
 
         let accounts = self
             .rc
@@ -4213,7 +4216,9 @@ impl Bank {
             .unwrap()
             .extend(rent_debits.into_unordered_rewards_iter());
 
-        self.rc.accounts.hold_range_in_memory(&subrange, false);
+        self.rc
+            .accounts
+            .hold_range_in_memory(&subrange, false, thread_pool);
         account_count
     }
 
