@@ -1,9 +1,8 @@
 ---
-title: AccountsDb Plugins
+title: Plugins
 ---
 
-Overview
-========
+## Overview
 
 Validators under heavy RPC loads, such as when serving getProgramAccounts calls,
 can fall behind the network. To solve this problem, the validator has been
@@ -33,8 +32,7 @@ plugin implementation for the PostgreSQL database.
 [`solana-accountsdb-plugin-postgres`]: https://docs.rs/solana-accountsdb-plugin-postgres
 
 
-The Plugin Interface
-====================
+## The Plugin Interface
 
 The Plugin interface is declared in [`solana-accountsdb-plugin-interface`]. It
 is defined by the trait `AccountsDbPlugin`. The plugin should implement the
@@ -120,15 +118,14 @@ validator restarts the account data will be re-transmitted.
 For more details, please refer to the Rust documentation in
 [`solana-accountsdb-plugin-interface`].
 
-Example PostgreSQL Plugin
-=========================
+## Example PostgreSQL Plugin
 
 The [`solana-accountsdb-plugin-postgres`] crate implements a plugin storing
 account data to a PostgreSQL database to illustrate how a plugin can be
 developed.
 
 <a name="config">
-## Configuration File Format
+### Configuration File Format
 </a>
 
 The plugin is configured using the input configuration file. An example
@@ -167,7 +164,7 @@ startup, the plugin uses bulk inserts. The batch size is controlled by the
 The `panic_on_db_errors` can be used to panic the validator in case of database
 errors to ensure data consistency.
 
-## Account Selection
+### Account Selection
 
 The `accounts_selector` can be used to filter the accounts that should be persisted.
 
@@ -197,9 +194,9 @@ To select all accounts, use the wildcard character (*):
 ```
 
 
-## Database Setup
+### Database Setup
 
-### Install PostgreSQL Server
+#### Install PostgreSQL Server
 
 Please follow [PostgreSQL Ubuntu Installation](https://www.postgresql.org/download/linux/ubuntu/)
 on instructions to install the PostgreSQL database server. For example, to
@@ -211,7 +208,7 @@ wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-
 sudo apt-get update
 sudo apt-get -y install postgresql-14
 ```
-### Control the Database Access
+#### Control the Database Access
 
 Modify the pg_hba.conf as necessary to grant the plugin to access the database.
 For example, in /etc/postgresql/14/main/pg_hba.conf, the following entry allows
@@ -225,7 +222,7 @@ host    all             all             10.138.0.0/24           trust
 It is recommended to run the database server on a separate node from the validator for
 better performance.
 
-### Configure the Database Performance Parameters
+#### Configure the Database Performance Parameters
 
 Please refer to the [PostgreSQL Server Configuration](https://www.postgresql.org/docs/14/runtime-config.html)
 for configuration details. The referential implementation uses the following
@@ -246,7 +243,7 @@ max_wal_senders = 0                    # max number of walsender processes
 The sample [postgresql.conf](https://github.com/solana-labs/solana/blob/7ac43b16d2c766df61ae0a06d7aaf14ba61996ac/accountsdb-plugin-postgres/scripts/postgresql.conf)
 can be used for reference.
 
-### Create the Database Instance and the Role
+#### Create the Database Instance and the Role
 
 Start the server:
 
@@ -274,7 +271,7 @@ SQL commands can be entered:
 psql -U solana -p 5433 -h 10.138.0.9 -w -d solana
 ```
 
-### Create the Schema Objects
+#### Create the Schema Objects
 
 Use the [create_schema.sql](https://github.com/solana-labs/solana/blob/7ac43b16d2c766df61ae0a06d7aaf14ba61996ac/accountsdb-plugin-postgres/scripts/create_schema.sql)
 to create the objects for storing accounts and slots.
@@ -294,7 +291,7 @@ psql -U solana -p 5433 -h 10.138.0.9 -w -d solana -f create_schema.sql
 After this, start the validator with the plugin by using the `--accountsdb-plugin-config`
 argument mentioned above.
 
-### Destroy the Schema Objects
+#### Destroy the Schema Objects
 
 To destroy the database objects, created by `create_schema.sql`, use
 [drop_schema.sql](https://github.com/solana-labs/solana/blob/7ac43b16d2c766df61ae0a06d7aaf14ba61996ac/accountsdb-plugin-postgres/scripts/drop_schema.sql).
@@ -304,7 +301,7 @@ For example,
 psql -U solana -p 5433 -h 10.138.0.9 -w -d solana -f drop_schema.sql
 ```
 
-## Capture Historical Account Data
+### Capture Historical Account Data
 
 The account historical data is captured using a database trigger as shown in
 `create_schema.sql`,
@@ -349,7 +346,7 @@ delete from account_audit a2 where (pubkey, write_version) in
             where ranked.rnk > 1000)
 ```
 
-## Performance Considerations
+### Performance Considerations
 
 When a validator lacks sufficient compute power, the overhead of saving the
 account data can cause it to fall behind the network especially when all
