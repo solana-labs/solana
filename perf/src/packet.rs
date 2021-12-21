@@ -1,5 +1,5 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
-pub use solana_sdk::packet::{ExtendedPacket, Meta, Packet, PacketInterface, PACKET_DATA_SIZE};
+pub use solana_sdk::packet::{ExtendedPacket, Meta, Packet, PacketInterface, PACKET_DATA_SIZE, EXTENDED_PACKET_DATA_SIZE};
 use {
     crate::{cuda_runtime::PinnedVec, recycler::Recycler},
     bincode::config::Options,
@@ -132,13 +132,16 @@ pub fn to_packet_batch_with_destination<T: Serialize, P: PacketInterface>(
     out
 }
 
-// TODO (ryleung): Fix this to work with ExtendedPacket too
 pub fn limited_deserialize<T>(data: &[u8]) -> bincode::Result<T>
 where
     T: serde::de::DeserializeOwned,
 {
+    // TODO verify. It seems that if one were using this with a regular packet
+    // the smaller data field would imply the original PACKET_DATA_SIZE bound anyway.
+    // Is there any reason we would  not want to use EXTENDED_PACKET_DATA_SIZE here to
+    // be able to work with ExtendPacket as well?
     bincode::options()
-        .with_limit(PACKET_DATA_SIZE as u64)
+        .with_limit(EXTENDED_PACKET_DATA_SIZE as u64)
         .with_fixint_encoding()
         .allow_trailing_bytes()
         .deserialize_from(data)

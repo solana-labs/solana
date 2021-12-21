@@ -6,7 +6,11 @@ pub fn limited_deserialize<T>(instruction_data: &[u8]) -> Result<T, InstructionE
 where
     T: serde::de::DeserializeOwned,
 {
-    let limit = crate::packet::PACKET_DATA_SIZE as u64;
+    // TODO verify. It seems that if one were using this with a regular packet
+    // the smaller data field would imply the original PACKET_DATA_SIZE bound anyway.
+    // Is there any reason we would  not want to use EXTENDED_PACKET_DATA_SIZE here to
+    // be able to work with ExtendPacket as well?
+    let limit = crate::packet::EXTENDED_PACKET_DATA_SIZE as u64;
     bincode::options()
         .with_limit(limit)
         .with_fixint_encoding() // As per https://github.com/servo/bincode/issues/333, these two options are needed
