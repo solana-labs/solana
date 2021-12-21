@@ -52,7 +52,7 @@ async fn test_create_lookup_table() {
             Rent::default().minimum_balance(LOOKUP_TABLE_META_SIZE)
         );
         let lookup_table = AddressLookupTable::deserialize(&lookup_table_account.data).unwrap();
-        assert_eq!(lookup_table.meta.derivation_slot, test_recent_slot);
+        assert_eq!(lookup_table.meta.deactivation_slot, Slot::MAX);
         assert_eq!(lookup_table.meta.authority, Some(authority_address));
         assert_eq!(lookup_table.meta.last_extended_slot, 0);
         assert_eq!(lookup_table.meta.last_extended_slot_start_index, 0);
