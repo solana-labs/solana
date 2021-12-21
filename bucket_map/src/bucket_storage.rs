@@ -126,14 +126,19 @@ impl BucketStorage {
         )
     }
 
-    pub fn uid(&self, ix: u64) -> Uid {
-        assert!(ix < self.capacity(), "bad index size");
+    /// return ref to header of item 'ix' in mmapped file
+    fn header_ptr(&self, ix: u64) -> &Header {
         let ix = (ix * self.cell_size) as usize;
         let hdr_slice: &[u8] = &self.mmap[ix..ix + std::mem::size_of::<Header>()];
         unsafe {
             let hdr = hdr_slice.as_ptr() as *const Header;
-            return hdr.as_ref().unwrap().uid();
+            hdr.as_ref().unwrap()
         }
+    }
+
+    pub fn uid(&self, ix: u64) -> Uid {
+        assert!(ix < self.capacity(), "bad index size");
+        self.header_ptr(ix).uid()
     }
 
     /// 'is_resizing' true if caller is resizing the index (so don't increment count)
@@ -142,13 +147,8 @@ impl BucketStorage {
         assert!(ix < self.capacity(), "allocate: bad index size");
         assert!(UID_UNLOCKED != uid, "allocate: bad uid");
         let mut e = Err(BucketStorageError::AlreadyAllocated);
-        let ix = (ix * self.cell_size) as usize;
         //debug!("ALLOC {} {}", ix, uid);
-        let hdr_slice: &[u8] = &self.mmap[ix..ix + std::mem::size_of::<Header>()];
-        if unsafe {
-            let hdr = hdr_slice.as_ptr() as *const Header;
-            hdr.as_ref().unwrap().try_lock(uid)
-        } {
+        if self.header_ptr(ix).try_lock(uid) {
             e = Ok(());
             if !is_resizing {
                 self.count.fetch_add(1, Ordering::Relaxed);
@@ -160,20 +160,13 @@ impl BucketStorage {
     pub fn free(&self, ix: u64, uid: Uid) {
         assert!(ix < self.capacity(), "bad index size");
         assert!(UID_UNLOCKED != uid, "free: bad uid");
-        let ix = (ix * self.cell_size) as usize;
-        //debug!("FREE {} {}", ix, uid);
-        let hdr_slice: &[u8] = &self.mmap[ix..ix + std::mem::size_of::<Header>()];
-        unsafe {
-            let hdr = hdr_slice.as_ptr() as *const Header;
-            //debug!("FREE uid: {}", hdr.as_ref().unwrap().uid());
-            let previous_uid = hdr.as_ref().unwrap().unlock();
-            assert_eq!(
-                previous_uid, uid,
-                "free: unlocked a header with a differet uid: {}",
-                previous_uid
-            );
-            self.count.fetch_sub(1, Ordering::Relaxed);
-        }
+        let previous_uid = self.header_ptr(ix).unlock();
+        assert_eq!(
+            previous_uid, uid,
+            "free: unlocked a header with a differet uid: {}",
+            previous_uid
+        );
+        self.count.fetch_sub(1, Ordering::Relaxed);
     }
 
     pub fn get<T: Sized>(&self, ix: u64) -> &T {
