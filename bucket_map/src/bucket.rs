@@ -266,7 +266,7 @@ impl<T: Clone + Copy> Bucket<T> {
             let slice: &mut [T] = current_bucket.get_mut_cell_slice(elem_loc, data.len() as u64);
             assert!(current_bucket.uid(elem_loc) == elem_uid);
             elem.num_slots = data.len() as u64;
-            slice.clone_from_slice(data);
+            slice.copy_from_slice(data);
             Ok(())
         } else {
             // need to move the allocation to a best fit spot
