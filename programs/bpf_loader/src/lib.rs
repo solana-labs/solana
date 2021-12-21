@@ -291,6 +291,7 @@ fn process_instruction_common(
             0
         };
 
+        let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
         let executor = match invoke_context.get_executor(program_id) {
             Some(executor) => executor,
             None => {
@@ -306,6 +307,9 @@ fn process_instruction_common(
                 executor
             }
         };
+        get_or_create_executor_time.stop();
+        invoke_context.timings.get_or_create_executor_us += get_or_create_executor_time.as_us();
+
         executor.execute(
             next_first_instruction_account,
             instruction_data,

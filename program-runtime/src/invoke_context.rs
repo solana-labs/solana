@@ -1,9 +1,14 @@
 use {
     crate::{
-        accounts_data_meter::AccountsDataMeter, ic_logger_msg, ic_msg,
-        instruction_recorder::InstructionRecorder, log_collector::LogCollector,
-        native_loader::NativeLoader, pre_account::PreAccount, timings::ExecuteDetailsTimings,
+        accounts_data_meter::AccountsDataMeter,
+        ic_logger_msg, ic_msg,
+        instruction_recorder::InstructionRecorder,
+        log_collector::LogCollector,
+        native_loader::NativeLoader,
+        pre_account::PreAccount,
+        timings::{ExecuteDetailsTimings, ExecuteTimings},
     },
+    solana_measure::measure::Measure,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         account_utils::StateMut,
@@ -567,6 +572,7 @@ impl<'a> InvokeContext<'a> {
             &program_indices,
             &account_indices,
             &caller_write_privileges,
+            &mut ExecuteTimings::default(),
         )
         .result?;
 
@@ -709,12 +715,21 @@ impl<'a> InvokeContext<'a> {
         program_indices: &[usize],
         account_indices: &[usize],
         caller_write_privileges: &[bool],
+        timings: &mut ExecuteTimings,
     ) -> ProcessInstructionResult {
         let is_lowest_invocation_level = self.invoke_stack.is_empty();
         if !is_lowest_invocation_level {
             // Verify the calling program hasn't misbehaved
+            let mut verify_caller_time = Measure::start("verify_caller_time");
             let result =
                 self.verify_and_update(instruction, account_indices, caller_write_privileges);
+            verify_caller_time.stop();
+            timings
+                .execute_accessories
+                .process_instruction_verify_caller_us = timings
+                .execute_accessories
+                .process_instruction_verify_caller_us
+                .saturating_add(verify_caller_time.as_us());
             if result.is_err() {
                 return ProcessInstructionResult {
                     compute_units_consumed: 0,
@@ -727,22 +742,43 @@ impl<'a> InvokeContext<'a> {
         let result = self
             .push(message, instruction, program_indices, account_indices)
             .and_then(|_| {
+                let mut process_executable_chain_time =
+                    Measure::start("process_executable_chain_time");
                 self.return_data = (*instruction.program_id(&message.account_keys), Vec::new());
                 let pre_remaining_units = self.compute_meter.borrow().get_remaining();
                 let execution_result = self.process_executable_chain(&instruction.data);
                 let post_remaining_units = self.compute_meter.borrow().get_remaining();
                 compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
-                execution_result?;
+                process_executable_chain_time.stop();
 
                 // Verify the called program has not misbehaved
-                if is_lowest_invocation_level {
-                    self.verify(message, instruction, program_indices)
-                } else {
-                    let write_privileges: Vec<bool> = (0..message.account_keys.len())
-                        .map(|i| message.is_writable(i))
-                        .collect();
-                    self.verify_and_update(instruction, account_indices, &write_privileges)
-                }
+                let mut verify_callee_time = Measure::start("verify_callee_time");
+                let result = execution_result.and_then(|_| {
+                    if is_lowest_invocation_level {
+                        self.verify(message, instruction, program_indices)
+                    } else {
+                        let write_privileges: Vec<bool> = (0..message.account_keys.len())
+                            .map(|i| message.is_writable(i))
+                            .collect();
+                        self.verify_and_update(instruction, account_indices, &write_privileges)
+                    }
+                });
+                verify_callee_time.stop();
+
+                timings
+                    .execute_accessories
+                    .process_instruction_process_executable_chain_us = timings
+                    .execute_accessories
+                    .process_instruction_process_executable_chain_us
+                    .saturating_add(process_executable_chain_time.as_us());
+                timings
+                    .execute_accessories
+                    .process_instruction_verify_callee_us = timings
+                    .execute_accessories
+                    .process_instruction_verify_callee_us
+                    .saturating_add(verify_callee_time.as_us());
+
+                result
             });
 
         // Pop the invoke_stack to restore previous state
@@ -1387,6 +1423,7 @@ mod tests {
                     &program_indices[1..],
                     &account_indices,
                     &caller_write_privileges,
+                    &mut ExecuteTimings::default(),
                 )
                 .result,
             Err(InstructionError::ExternalAccountDataModified)
@@ -1403,6 +1440,7 @@ mod tests {
                     &program_indices[1..],
                     &account_indices,
                     &caller_write_privileges,
+                    &mut ExecuteTimings::default(),
                 )
                 .result,
             Err(InstructionError::ReadonlyDataModified)
@@ -1461,6 +1499,7 @@ mod tests {
                     &program_indices[1..],
                     &account_indices,
                     &caller_write_privileges,
+                    &mut ExecuteTimings::default(),
                 ),
                 case.1
             );
@@ -1712,6 +1751,7 @@ mod tests {
                 &program_indices[1..],
                 &account_indices,
                 &caller_write_privileges,
+                &mut ExecuteTimings::default(),
             );
 
             // Because the instruction had compute cost > 0, then regardless of the execution result,
@@ -1786,6 +1826,7 @@ mod tests {
                     &program_indices,
                     &account_indices,
                     &caller_write_privileges,
+                    &mut ExecuteTimings::default(),
                 )
                 .result;
 
@@ -1816,6 +1857,7 @@ mod tests {
                     &program_indices,
                     &account_indices,
                     &caller_write_privileges,
+                    &mut ExecuteTimings::default(),
                 )
                 .result;
 
@@ -1846,6 +1888,7 @@ mod tests {
                     &program_indices,
                     &account_indices,
                     &caller_write_privileges,
+                    &mut ExecuteTimings::default(),
                 )
                 .result;
 

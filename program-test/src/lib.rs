@@ -323,6 +323,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                 &program_indices,
                 &account_indices,
                 &caller_privileges,
+                &mut ExecuteTimings::default(),
             )
             .result
             .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;

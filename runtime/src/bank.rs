@@ -82,7 +82,7 @@ use {
             TransactionAccountRefCells, TransactionExecutor,
         },
         log_collector::LogCollector,
-        timings::{ExecuteDetailsTimings, ExecuteTimings},
+        timings::ExecuteTimings,
     },
     solana_sdk::{
         account::{
@@ -3577,7 +3577,7 @@ impl Bank {
         durable_nonce_fee: Option<DurableNonceFee>,
         enable_cpi_recording: bool,
         enable_log_recording: bool,
-        execute_details_timings: &mut ExecuteDetailsTimings,
+        timings: &mut ExecuteTimings,
         error_counters: &mut ErrorCounters,
     ) -> TransactionExecutionResult {
         let legacy_message = match tx.message().legacy_message() {
@@ -3590,11 +3590,14 @@ impl Bank {
             }
         };
 
+        let mut get_executors_time = Measure::start("get_executors_time");
         let executors = self.get_executors(
             tx.message(),
             &loaded_transaction.accounts,
             &loaded_transaction.program_indices,
         );
+        get_executors_time.stop();
+        timings.execute_accessories.get_executors_us += get_executors_time.as_us();
 
         let account_refcells = Self::accounts_to_refcells(&mut loaded_transaction.accounts);
 
@@ -3614,6 +3617,8 @@ impl Bank {
         };
 
         let (blockhash, lamports_per_signature) = self.last_blockhash_and_lamports_per_signature();
+
+        let mut process_message_time = Measure::start("process_message_time");
         let process_result = MessageProcessor::process_message(
             &self.builtin_programs.vec,
             legacy_message,
@@ -3625,14 +3630,19 @@ impl Bank {
             instruction_recorders.as_deref(),
             self.feature_set.clone(),
             compute_budget,
-            execute_details_timings,
+            timings,
             &*self.sysvar_cache.read().unwrap(),
             blockhash,
             lamports_per_signature,
             self.load_accounts_data_len(),
         );
+        process_message_time.stop();
+        timings.execute_accessories.process_message_us += process_message_time.as_us();
 
+        let mut update_executors_time = Measure::start("update_executors_time");
         self.update_executors(process_result.is_ok(), executors);
+        update_executors_time.stop();
+        timings.execute_accessories.update_executors_us += update_executors_time.as_us();
 
         let status = process_result
             .map(|info| {
@@ -3733,19 +3743,32 @@ impl Bank {
         let mut execution_time = Measure::start("execution_time");
         let mut signature_count: u64 = 0;
 
-        let execute_details_timings = &mut timings.details;
         let execution_results: Vec<TransactionExecutionResult> = loaded_txs
             .iter_mut()
             .zip(sanitized_txs.iter())
             .map(|(accs, tx)| match accs {
                 (Err(e), _nonce) => TransactionExecutionResult::NotExecuted(e.clone()),
                 (Ok(loaded_transaction), nonce) => {
+                    let mut feature_set_clone_time = Measure::start("feature_set_clone");
                     let feature_set = self.feature_set.clone();
+                    feature_set_clone_time.stop();
+                    timings.execute_accessories.feature_set_clone_us +=
+                        feature_set_clone_time.as_us();
+
                     signature_count += u64::from(tx.message().header().num_required_signatures);
 
                     let mut compute_budget = self.compute_budget.unwrap_or_else(ComputeBudget::new);
                     if feature_set.is_active(&tx_wide_compute_cap::id()) {
-                        if let Err(err) = compute_budget.process_transaction(tx, feature_set) {
+                        let mut compute_budget_process_transaction_time =
+                            Measure::start("compute_budget_process_transaction_time");
+                        let process_transaction_result =
+                            compute_budget.process_transaction(tx, feature_set);
+                        compute_budget_process_transaction_time.stop();
+                        timings
+                            .execute_accessories
+                            .compute_budget_process_transaction_us +=
+                            compute_budget_process_transaction_time.as_us();
+                        if let Err(err) = process_transaction_result {
                             return TransactionExecutionResult::NotExecuted(err);
                         }
                     }
@@ -3759,7 +3782,7 @@ impl Bank {
                         durable_nonce_fee,
                         enable_cpi_recording,
                         enable_log_recording,
-                        execute_details_timings,
+                        timings,
                         &mut error_counters,
                     )
                 }

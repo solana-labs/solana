@@ -8,7 +8,7 @@ use {
             TransactionAccountRefCell,
         },
         log_collector::LogCollector,
-        timings::ExecuteDetailsTimings,
+        timings::ExecuteTimings,
     },
     solana_sdk::{
         account::WritableAccount,
@@ -62,7 +62,7 @@ impl MessageProcessor {
         instruction_recorders: Option<&[InstructionRecorder]>,
         feature_set: Arc<FeatureSet>,
         compute_budget: ComputeBudget,
-        timings: &mut ExecuteDetailsTimings,
+        timings: &mut ExecuteTimings,
         sysvars: &[(Pubkey, Vec<u8>)],
         blockhash: Hash,
         lamports_per_signature: u64,
@@ -120,15 +120,23 @@ impl MessageProcessor {
             let ProcessInstructionResult {
                 compute_units_consumed,
                 result,
-            } = invoke_context.process_instruction(message, instruction, program_indices, &[], &[]);
+            } = invoke_context.process_instruction(
+                message,
+                instruction,
+                program_indices,
+                &[],
+                &[],
+                timings,
+            );
             time.stop();
-            timings.accumulate_program(
+            timings.details.accumulate_program(
                 instruction.program_id(&message.account_keys),
                 time.as_us(),
                 compute_units_consumed,
                 result.is_err(),
             );
-            timings.accumulate(&invoke_context.timings);
+            timings.details.accumulate(&invoke_context.timings);
+            timings.execute_accessories.process_instructions_us += time.as_us();
             result
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
@@ -255,7 +263,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            &mut ExecuteDetailsTimings::default(),
+            &mut ExecuteTimings::default(),
             &[],
             Hash::default(),
             0,
@@ -285,7 +293,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            &mut ExecuteDetailsTimings::default(),
+            &mut ExecuteTimings::default(),
             &[],
             Hash::default(),
             0,
@@ -319,7 +327,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            &mut ExecuteDetailsTimings::default(),
+            &mut ExecuteTimings::default(),
             &[],
             Hash::default(),
             0,
@@ -464,7 +472,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            &mut ExecuteDetailsTimings::default(),
+            &mut ExecuteTimings::default(),
             &[],
             Hash::default(),
             0,
@@ -498,7 +506,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            &mut ExecuteDetailsTimings::default(),
+            &mut ExecuteTimings::default(),
             &[],
             Hash::default(),
             0,
@@ -529,7 +537,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            &mut ExecuteDetailsTimings::default(),
+            &mut ExecuteTimings::default(),
             &[],
             Hash::default(),
             0,
@@ -587,7 +595,7 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
-            &mut ExecuteDetailsTimings::default(),
+            &mut ExecuteTimings::default(),
             &[],
             Hash::default(),
             0,

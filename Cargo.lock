@@ -5454,6 +5454,7 @@ dependencies = [
  "rustc_version 0.4.0",
  "serde",
  "solana-logger 1.9.4",
+ "solana-measure",
  "solana-sdk",
  "thiserror",
 ]
