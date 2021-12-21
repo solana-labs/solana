@@ -2607,6 +2607,7 @@ pub fn main() {
         // requests initiated by the node.  All other ports are unused.
         node.info.tpu = any;
         node.info.tpu_forwards = any;
+        node.info.tpu_extended_forwards = any;
         node.info.tvu = any;
         node.info.tvu_forwards = any;
         node.info.serve_repair = any;

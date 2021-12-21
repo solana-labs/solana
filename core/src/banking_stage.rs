@@ -759,7 +759,12 @@ impl BankingStage {
                 return;
             }
             ForwardOption::ForwardTransaction => {
-                next_leader_tpu_forwards(cluster_info, poh_recorder)
+                if PacketType::is_extended() {
+                    next_leader_tpu_extended_forwards(cluster_info, poh_recorder)
+                }
+                else {
+                    next_leader_tpu_forwards(cluster_info, poh_recorder)
+                }
             }
             ForwardOption::ForwardTpuVote => next_leader_tpu_vote(cluster_info, poh_recorder),
         };
@@ -1527,6 +1532,13 @@ fn next_leader_tpu_forwards(
     poh_recorder: &Mutex<PohRecorder>,
 ) -> Option<std::net::SocketAddr> {
     next_leader_x(cluster_info, poh_recorder, |leader| leader.tpu_forwards)
+}
+
+fn next_leader_tpu_extended_forwards(
+    cluster_info: &ClusterInfo,
+    poh_recorder: &Mutex<PohRecorder>,
+) -> Option<std::net::SocketAddr> {
+    next_leader_x(cluster_info, poh_recorder, |leader| leader.tpu_extended_forwards)
 }
 
 pub(crate) fn next_leader_tpu_vote(

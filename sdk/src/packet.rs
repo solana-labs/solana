@@ -47,6 +47,12 @@ pub trait PacketInterface: Clone + Default + Sized + Send + Sync + fmt::Debug {
         }
         Ok(())
     }
+
+    // Hack to allow the introduction of special logic
+    // in places where Rust's lack of generic specialization
+    // or similar "compile-time conditionals"
+    // TODO: is there a better way to do this (perhaps a macro of some sort?)?
+    fn is_extended() -> bool;
 }
 
 #[derive(Clone, Default, Debug, PartialEq)]
@@ -96,6 +102,10 @@ impl PacketInterface for ExtendedPacket {
     fn get_meta_mut(&mut self) -> &mut Meta {
         &mut self.meta
     }
+
+    fn is_extended() -> bool {
+        true
+    }
 }
 
 impl PacketInterface for Packet {
@@ -113,6 +123,10 @@ impl PacketInterface for Packet {
 
     fn get_meta_mut(&mut self) -> &mut Meta {
         &mut self.meta
+    }
+
+    fn is_extended() -> bool {
+        false
     }
 }
 

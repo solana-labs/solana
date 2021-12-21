@@ -48,6 +48,7 @@ fn run_dos(
                     "tvu_forwards" => Some(node.tvu_forwards),
                     "tpu" => Some(node.tpu),
                     "tpu_forwards" => Some(node.tpu_forwards),
+                    "tpu_extended_forwards" => Some(node.tpu_extended_forwards),
                     "repair" => Some(node.repair),
                     "serve_repair" => Some(node.serve_repair),
                     "rpc" => {
