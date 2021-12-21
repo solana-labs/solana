@@ -49,7 +49,7 @@ pub trait PacketInterface: Clone + Default + Sized + Send + Sync + fmt::Debug {
     }
 
     // Hack to allow the introduction of special logic
-    // in places where Rust's lack of generic specialization
+    // in necessary places and work around Rust's lack of generic specialization
     // or similar "compile-time conditionals"
     // TODO: is there a better way to do this (perhaps a macro of some sort?)?
     fn is_extended() -> bool;
