@@ -66,7 +66,7 @@ $ cargo test
 ```
 
 ### Starting a local testnet
-Start your testnet locally, instructions are in the [online docs](https://docs.solana.com/cluster/bench-tps).
+Start your own testnet locally, instructions are in the [online docs](https://docs.solana.com/cluster/bench-tps).
 
 ### Accessing the remote development cluster
 * `devnet` - stable public cluster for development accessible via
@@ -131,14 +131,15 @@ any such applications by the reader (a) in violation of export control
 or sanctions laws of the United States or any other applicable
 jurisdiction, (b) if the reader is located in or ordinarily resident in
 a country or territory subject to comprehensive sanctions administered
-by the U.S. Office of Foreign Assets Control (OFAC), or (c) if the reader is or is working on behalf of a Specially Designated National
+by the U.S. Office of Foreign Assets Control (OFAC), or (c) if the 
+reader is or is working on behalf of a Specially Designated National
 (SDN) or a person subject to similar blocking or denied party
 prohibitions.
 
 The reader should be aware that U.S. export control and sanctions laws
 prohibit U.S. persons (and other persons that are subject to such laws)
 from transacting with persons in certain countries and territories or
-that is on the SDN list. As a project-based primarily on open-source
+that are on the SDN list. As a project-based primarily on open-source
 software, it is possible that such sanctioned persons may nevertheless
 bypass prohibitions, obtain the code comprising the Solana blockchain
 protocol (or other project code or applications) and deploy, integrate,
