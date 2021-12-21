@@ -69,7 +69,7 @@ impl IndexEntry {
         let slice = if self.num_slots > 0 {
             let loc = self.data_loc(data_bucket);
             let uid = Self::key_uid(&self.key);
-            assert_eq!(uid, bucket.data[data_bucket_ix as usize].uid(loc));
+            assert_eq!(Some(uid), bucket.data[data_bucket_ix as usize].uid(loc));
             bucket.data[data_bucket_ix as usize].get_cell_slice(loc, self.num_slots)
         } else {
             // num_slots is 0. This means we don't have an actual allocation.

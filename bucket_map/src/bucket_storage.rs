@@ -35,7 +35,7 @@ use {
 pub const DEFAULT_CAPACITY_POW2: u8 = 5;
 
 /// A Header UID of 0 indicates that the header is unlocked
-pub(crate) const UID_UNLOCKED: Uid = 0;
+const UID_UNLOCKED: Uid = 0;
 
 pub(crate) type Uid = u64;
 
@@ -54,8 +54,13 @@ impl Header {
     fn unlock(&self) -> Uid {
         self.lock.swap(UID_UNLOCKED, Ordering::Release)
     }
-    fn uid(&self) -> Uid {
-        self.lock.load(Ordering::Acquire)
+    fn uid(&self) -> Option<Uid> {
+        let result = self.lock.load(Ordering::Acquire);
+        if result == UID_UNLOCKED {
+            None
+        } else {
+            Some(result)
+        }
     }
 }
 
@@ -136,9 +141,14 @@ impl BucketStorage {
         }
     }
 
-    pub fn uid(&self, ix: u64) -> Uid {
+    pub fn uid(&self, ix: u64) -> Option<Uid> {
         assert!(ix < self.capacity(), "bad index size");
         self.header_ptr(ix).uid()
+    }
+
+    /// caller knows id is not empty
+    pub fn uid_unchecked(&self, ix: u64) -> Uid {
+        self.uid(ix).unwrap()
     }
 
     /// 'is_resizing' true if caller is resizing the index (so don't increment count)
