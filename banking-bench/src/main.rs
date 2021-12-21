@@ -152,10 +152,8 @@ fn main() {
         )
         .get_matches();
 
-    //todo: get rid of this hack to reference Packet even though it's not used (maybe by
-    //getting rid of P: PacketInterface as a type parameter to BankingStage)
     let num_threads = value_t!(matches, "num_threads", usize)
-        .unwrap_or(BankingStage::<Packet>::num_threads() as usize);
+        .unwrap_or(BankingStage::num_threads() as usize);
     //   a multiple of packet chunk duplicates to avoid races
     let num_chunks = value_t!(matches, "num_chunks", usize).unwrap_or(16);
     let packets_per_chunk = value_t!(matches, "packets_per_chunk", usize).unwrap_or(192);
@@ -170,6 +168,8 @@ fn main() {
     } = create_genesis_config(mint_total);
 
     let (verified_sender, verified_receiver) = unbounded();
+    // TODO: Actually pump some stuff into _verified_extended_sender like verified_sender ?
+    let (verified_extended_sender, verified_extended_receiver) = unbounded();
     let (vote_sender, vote_receiver) = unbounded();
     let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
     let (replay_vote_sender, _replay_vote_receiver) = unbounded();
@@ -235,6 +235,7 @@ fn main() {
             &cluster_info,
             &poh_recorder,
             verified_receiver,
+            verified_extended_receiver,
             tpu_vote_receiver,
             vote_receiver,
             None,
@@ -393,6 +394,7 @@ fn main() {
         );
 
         drop(verified_sender);
+        drop(verified_extended_sender);
         drop(tpu_vote_sender);
         drop(vote_sender);
         exit.store(true, Ordering::Relaxed);

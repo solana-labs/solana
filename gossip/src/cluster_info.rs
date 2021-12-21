@@ -773,6 +773,7 @@ impl ClusterInfo {
                         }
                     };
                     let ip_addr = node.gossip.ip();
+                    // TODO: Add Extended ports to this printout
                     Some(format!(
                         "{:15} {:2}| {:5} | {:44} |{:^9}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {}\n",
                         if ContactInfo::is_valid_address(&node.gossip, &self.socket_addr_space) {
@@ -802,6 +803,7 @@ impl ClusterInfo {
             })
             .collect();
 
+        // TODO: Add Extended ports to this printout
         format!(
             "IP Address        |Age(ms)| Node identifier                              \
              | Version |Gossip|TPUvote| TPU  |TPUfwd| TVU  |TVUfwd|Repair|ServeR|ShredVer\n\
@@ -2740,6 +2742,8 @@ pub struct Sockets {
     pub tvu_forwards: Vec<UdpSocket>,
     pub tpu: Vec<UdpSocket>,
     pub tpu_forwards: Vec<UdpSocket>,
+    pub tpu_extended: Vec<UdpSocket>,
+    pub tpu_extended_forwards: Vec<UdpSocket>,
     pub tpu_vote: Vec<UdpSocket>,
     pub broadcast: Vec<UdpSocket>,
     pub repair: UdpSocket,
@@ -2768,6 +2772,8 @@ impl Node {
         let tvu = UdpSocket::bind("127.0.0.1:0").unwrap();
         let tvu_forwards = UdpSocket::bind("127.0.0.1:0").unwrap();
         let tpu_forwards = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let tpu_extended = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let tpu_extended_forwards = UdpSocket::bind("127.0.0.1:0").unwrap();
         let tpu_vote = UdpSocket::bind("127.0.0.1:0").unwrap();
         let repair = UdpSocket::bind("127.0.0.1:0").unwrap();
         let rpc_port = find_available_port_in_range(bind_ip_addr, (1024, 65535)).unwrap();
@@ -2789,6 +2795,8 @@ impl Node {
             repair: repair.local_addr().unwrap(),
             tpu: tpu.local_addr().unwrap(),
             tpu_forwards: tpu_forwards.local_addr().unwrap(),
+            tpu_extended: tpu_extended.local_addr().unwrap(),
+            tpu_extended_forwards: tpu_extended_forwards.local_addr().unwrap(),
             tpu_vote: tpu_vote.local_addr().unwrap(),
             rpc: rpc_addr,
             rpc_pubsub: rpc_pubsub_addr,
@@ -2805,6 +2813,8 @@ impl Node {
                 tvu_forwards: vec![tvu_forwards],
                 tpu: vec![tpu],
                 tpu_forwards: vec![tpu_forwards],
+                tpu_extended: vec![tpu_extended],
+                tpu_extended_forwards: vec![tpu_extended_forwards],
                 tpu_vote: vec![tpu_vote],
                 broadcast,
                 repair,
@@ -2847,6 +2857,9 @@ impl Node {
         let (tvu_forwards_port, tvu_forwards) = Self::bind(bind_ip_addr, port_range);
         let (tpu_port, tpu) = Self::bind(bind_ip_addr, port_range);
         let (tpu_forwards_port, tpu_forwards) = Self::bind(bind_ip_addr, port_range);
+        let (tpu_extended_port, tpu_extended) = Self::bind(bind_ip_addr, port_range);
+        let (tpu_extended_forwards_port, tpu_extended_forwards) =
+            Self::bind(bind_ip_addr, port_range);
         let (tpu_vote_port, tpu_vote) = Self::bind(bind_ip_addr, port_range);
         let (_, retransmit_socket) = Self::bind(bind_ip_addr, port_range);
         let (repair_port, repair) = Self::bind(bind_ip_addr, port_range);
@@ -2865,6 +2878,8 @@ impl Node {
             repair: SocketAddr::new(gossip_addr.ip(), repair_port),
             tpu: SocketAddr::new(gossip_addr.ip(), tpu_port),
             tpu_forwards: SocketAddr::new(gossip_addr.ip(), tpu_forwards_port),
+            tpu_extended: SocketAddr::new(gossip_addr.ip(), tpu_extended_port),
+            tpu_extended_forwards: SocketAddr::new(gossip_addr.ip(), tpu_extended_forwards_port),
             tpu_vote: SocketAddr::new(gossip_addr.ip(), tpu_vote_port),
             rpc: SocketAddr::new(gossip_addr.ip(), rpc_port),
             rpc_pubsub: SocketAddr::new(gossip_addr.ip(), rpc_pubsub_port),
@@ -2883,6 +2898,8 @@ impl Node {
                 tvu_forwards: vec![tvu_forwards],
                 tpu: vec![tpu],
                 tpu_forwards: vec![tpu_forwards],
+                tpu_extended: vec![tpu_extended],
+                tpu_extended_forwards: vec![tpu_extended_forwards],
                 tpu_vote: vec![tpu_vote],
                 broadcast: vec![broadcast],
                 repair,
@@ -2914,6 +2931,16 @@ impl Node {
         let (tpu_forwards_port, tpu_forwards_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 8).expect("tpu_forwards multi_bind");
 
+        // TODO: How many sockets (which translates to threds) should we set aside here ?
+        //       Currently have half as many as `tpu_sockets`
+        let (tpu_extended_port, tpu_extended_sockets) =
+            multi_bind_in_range(bind_ip_addr, port_range, 16).expect("tpu_extended multi_bind");
+
+        // TODO: How many sockets (which translates to threds) should we set aside here ?
+        //       Currently have half as many as `tpu_forwards_sockets`
+        let (tpu_extended_forwards_port, tpu_extended_forwards_sockets) =
+            multi_bind_in_range(bind_ip_addr, port_range, 4).expect("tpu_forwards multi_bind");
+
         let (tpu_vote_port, tpu_vote_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 1).expect("tpu_vote multi_bind");
 
@@ -2936,6 +2963,8 @@ impl Node {
             repair: SocketAddr::new(gossip_addr.ip(), repair_port),
             tpu: SocketAddr::new(gossip_addr.ip(), tpu_port),
             tpu_forwards: SocketAddr::new(gossip_addr.ip(), tpu_forwards_port),
+            tpu_extended: SocketAddr::new(gossip_addr.ip(), tpu_extended_port),
+            tpu_extended_forwards: SocketAddr::new(gossip_addr.ip(), tpu_extended_forwards_port),
             tpu_vote: SocketAddr::new(gossip_addr.ip(), tpu_vote_port),
             rpc: socketaddr_any!(),
             rpc_pubsub: socketaddr_any!(),
@@ -2953,6 +2982,8 @@ impl Node {
                 tvu_forwards: tvu_forwards_sockets,
                 tpu: tpu_sockets,
                 tpu_forwards: tpu_forwards_sockets,
+                tpu_extended: tpu_extended_sockets,
+                tpu_extended_forwards: tpu_extended_forwards_sockets,
                 tpu_vote: tpu_vote_sockets,
                 broadcast,
                 repair,

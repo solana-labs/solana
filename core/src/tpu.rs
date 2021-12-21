@@ -17,7 +17,7 @@ use {
     crossbeam_channel::unbounded,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender},
-    solana_perf::packet::{PacketBatch, StandardPackets},
+    solana_perf::packet::{ExtendedPacketBatch, StandardPackets},
     solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
     solana_rpc::{
         optimistically_confirmed_bank_tracker::BankNotificationSender,
@@ -28,7 +28,7 @@ use {
         cost_model::CostModel,
         vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
     },
-    solana_sdk::packet::{Packet, PacketInterface},
+    solana_sdk::packet::{ExtendedPacket, Packet},
     std::{
         net::UdpSocket,
         sync::{
@@ -42,24 +42,27 @@ use {
 
 pub const DEFAULT_TPU_COALESCE_MS: u64 = 5;
 
-pub struct Tpu<P: 'static + PacketInterface> {
-    fetch_stage: FetchStage<P>,
-    sigverify_stage: SigVerifyStage,
+pub struct Tpu {
+    fetch_stage: FetchStage,
+    tx_sigverify_stage: SigVerifyStage,
+    tx_extended_sigverify_stage: SigVerifyStage,
     vote_sigverify_stage: SigVerifyStage,
-    banking_stage: BankingStage<P>,
+    banking_stage: BankingStage,
     cluster_info_vote_listener: ClusterInfoVoteListener,
     broadcast_stage: BroadcastStage,
 }
 
-impl<P: 'static + PacketInterface> Tpu<P> {
+impl Tpu {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         entry_receiver: Receiver<WorkingBankEntry>,
         retransmit_slots_receiver: RetransmitSlotsReceiver,
-        transactions_sockets: Vec<UdpSocket>,
-        tpu_forwards_sockets: Vec<UdpSocket>,
+        tpu_tx_sockets: Vec<UdpSocket>,
+        tpu_tx_forwards_sockets: Vec<UdpSocket>,
+        tpu_tx_extended_sockets: Vec<UdpSocket>,
+        tpu_tx_extended_forwards_sockets: Vec<UdpSocket>,
         tpu_vote_sockets: Vec<UdpSocket>,
         broadcast_sockets: Vec<UdpSocket>,
         subscriptions: &Arc<RpcSubscriptions>,
@@ -80,27 +83,38 @@ impl<P: 'static + PacketInterface> Tpu<P> {
         cost_model: &Arc<RwLock<CostModel>>,
     ) -> Self {
         let (packet_sender, packet_receiver) = channel();
+        let (extended_sender, extended_receiver) = channel();
         let (vote_packet_sender, vote_packet_receiver) = channel();
-        let fetch_stage: FetchStage<P> = FetchStage::new_with_sender(
-            transactions_sockets,
-            tpu_forwards_sockets,
+
+        let fetch_stage: FetchStage = FetchStage::new_with_sender(
+            tpu_tx_sockets,
+            tpu_tx_forwards_sockets,
+            tpu_tx_extended_sockets,
+            tpu_tx_extended_forwards_sockets,
             tpu_vote_sockets,
             exit,
             &packet_sender,
+            &extended_sender,
             &vote_packet_sender,
             poh_recorder,
             tpu_coalesce_ms,
         );
-        let (verified_sender, verified_receiver) = unbounded::<Vec<PacketBatch<P>>>();
 
-        let sigverify_stage = {
-            let verifier = TransactionSigVerifier::<P>::default();
+        let (verified_sender, verified_receiver) = unbounded::<Vec<StandardPackets>>();
+        let tx_sigverify_stage = {
+            let verifier = TransactionSigVerifier::<Packet>::default();
             SigVerifyStage::new(packet_receiver, verified_sender, verifier)
+        };
+
+        let (verified_extended_sender, verified_extended_receiver) =
+            unbounded::<Vec<ExtendedPacketBatch>>();
+        let tx_extended_sigverify_stage = {
+            let verifier = TransactionSigVerifier::<ExtendedPacket>::default();
+            SigVerifyStage::new(extended_receiver, verified_extended_sender, verifier)
         };
 
         let (verified_tpu_vote_packets_sender, verified_tpu_vote_packets_receiver) =
             unbounded::<Vec<StandardPackets>>();
-
         let vote_sigverify_stage = {
             let verifier = TransactionSigVerifier::<Packet>::new_reject_non_vote();
             SigVerifyStage::new(
@@ -128,10 +142,11 @@ impl<P: 'static + PacketInterface> Tpu<P> {
             cluster_confirmed_slot_sender,
         );
 
-        let banking_stage: BankingStage<P> = BankingStage::new(
+        let banking_stage: BankingStage = BankingStage::new(
             cluster_info,
             poh_recorder,
             verified_receiver,
+            verified_extended_receiver,
             verified_tpu_vote_packets_receiver,
             verified_gossip_vote_packets_receiver,
             transaction_status_sender,
@@ -153,7 +168,8 @@ impl<P: 'static + PacketInterface> Tpu<P> {
 
         Self {
             fetch_stage,
-            sigverify_stage,
+            tx_sigverify_stage,
+            tx_extended_sigverify_stage,
             vote_sigverify_stage,
             banking_stage,
             cluster_info_vote_listener,
@@ -164,7 +180,8 @@ impl<P: 'static + PacketInterface> Tpu<P> {
     pub fn join(self) -> thread::Result<()> {
         let results = vec![
             self.fetch_stage.join(),
-            self.sigverify_stage.join(),
+            self.tx_sigverify_stage.join(),
+            self.tx_extended_sigverify_stage.join(),
             self.vote_sigverify_stage.join(),
             self.cluster_info_vote_listener.join(),
             self.banking_stage.join(),

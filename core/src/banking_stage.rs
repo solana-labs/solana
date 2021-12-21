@@ -14,7 +14,10 @@ use {
     solana_perf::{
         cuda_runtime::PinnedVec,
         data_budget::DataBudget,
-        packet::{limited_deserialize, PacketBatch, StandardPackets, PACKETS_PER_BATCH},
+        packet::{
+            limited_deserialize, ExtendedPacketBatch, PacketBatch, StandardPackets,
+            PACKETS_PER_BATCH,
+        },
         perf_libs,
     },
     solana_poh::poh_recorder::{BankStart, PohRecorder, PohRecorderError, TransactionRecorder},
@@ -51,7 +54,6 @@ use {
         cmp,
         collections::{HashMap, VecDeque},
         env,
-        marker::PhantomData,
         mem::size_of,
         net::{SocketAddr, UdpSocket},
         sync::{
@@ -74,14 +76,18 @@ pub const FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET: u64 = 2;
 pub const HOLD_TRANSACTIONS_SLOT_OFFSET: u64 = 20;
 
 // Fixed thread size seems to be fastest on GCP setup
-pub const NUM_THREADS: u32 = 4;
+pub const NUM_THREADS: u32 = 5;
 
 const TOTAL_BUFFERED_PACKETS: usize = 500_000;
 
 const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 128;
 
 const NUM_VOTE_PROCESSING_THREADS: u32 = 2;
-const MIN_THREADS_BANKING: u32 = 1;
+const MIN_THREADS_BANKING: u32 = 2;
+
+// TODO: Revisit values of NUM_THREADS and MIN_THREADS_BANKING; this changed bump each by 1
+//       Once values picked, make sure they map correctly to cases in new_num_threads()
+
 
 #[derive(Debug, Default)]
 pub struct BankingStageStats {
@@ -262,9 +268,8 @@ impl BankingStageStats {
 }
 
 /// Stores the stage's thread handle and output receiver.
-pub struct BankingStage<P: 'static + PacketInterface> {
+pub struct BankingStage {
     bank_thread_hdls: Vec<JoinHandle<()>>,
-    _phantom: PhantomData<P>,
 }
 
 #[derive(Debug, Clone)]
@@ -282,13 +287,14 @@ pub enum ForwardOption {
     ForwardTransaction,
 }
 
-impl<P: 'static + PacketInterface> BankingStage<P> {
+impl BankingStage {
     /// Create the stage using `bank`. Exit when `verified_receiver` is dropped.
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        verified_receiver: CrossbeamReceiver<Vec<PacketBatch<P>>>,
+        tpu_verified_receiver: CrossbeamReceiver<Vec<StandardPackets>>,
+        tpu_verified_extended_receiver: CrossbeamReceiver<Vec<ExtendedPacketBatch>>,
         tpu_verified_vote_receiver: CrossbeamReceiver<Vec<StandardPackets>>,
         verified_vote_receiver: CrossbeamReceiver<Vec<StandardPackets>>,
         transaction_status_sender: Option<TransactionStatusSender>,
@@ -299,7 +305,8 @@ impl<P: 'static + PacketInterface> BankingStage<P> {
         Self::new_num_threads(
             cluster_info,
             poh_recorder,
-            verified_receiver,
+            tpu_verified_receiver,
+            tpu_verified_extended_receiver,
             tpu_verified_vote_receiver,
             verified_vote_receiver,
             Self::num_threads(),
@@ -314,7 +321,8 @@ impl<P: 'static + PacketInterface> BankingStage<P> {
     fn new_num_threads(
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        verified_receiver: CrossbeamReceiver<Vec<PacketBatch<P>>>,
+        tpu_verified_receiver: CrossbeamReceiver<Vec<StandardPackets>>,
+        tpu_verified_extended_receiver: CrossbeamReceiver<Vec<ExtendedPacketBatch>>,
         tpu_verified_vote_receiver: CrossbeamReceiver<Vec<StandardPackets>>,
         verified_vote_receiver: CrossbeamReceiver<Vec<StandardPackets>>,
         num_threads: u32,
@@ -388,13 +396,35 @@ impl<P: 'static + PacketInterface> BankingStage<P> {
                             })
                             .unwrap()
                     }
-                    _ => {
-                        let verified_receiver = verified_receiver.clone();
+                    2 => {
+                        let tpu_verified_extended_receiver = tpu_verified_extended_receiver.clone();
                         Builder::new()
                             .name("solana-banking-stage-tx".to_string())
                             .spawn(move || {
                                 Self::process_loop(
-                                    &verified_receiver,
+                                    &tpu_verified_extended_receiver,
+                                    &poh_recorder,
+                                    &cluster_info,
+                                    &mut recv_start,
+                                    ForwardOption::ForwardTransaction,
+                                    i,
+                                    batch_limit,
+                                    transaction_status_sender,
+                                    gossip_vote_sender,
+                                    &duplicates,
+                                    &data_budget,
+                                    qos_service,
+                                );
+                            })
+                            .unwrap()
+                    }
+                    _ => {
+                        let tpu_verified_receiver = tpu_verified_receiver.clone();
+                        Builder::new()
+                            .name("solana-banking-stage-tx".to_string())
+                            .spawn(move || {
+                                Self::process_loop(
+                                    &tpu_verified_receiver,
                                     &poh_recorder,
                                     &cluster_info,
                                     &mut recv_start,
@@ -415,7 +445,6 @@ impl<P: 'static + PacketInterface> BankingStage<P> {
             .collect();
         Self {
             bank_thread_hdls,
-            _phantom: PhantomData::default(),
         }
     }
 
@@ -768,6 +797,7 @@ impl<P: 'static + PacketInterface> BankingStage<P> {
         cost_model: Arc<RwLock<CostModel>>,
     ) {
         let recorder = poh_recorder.lock().unwrap().recorder();
+        // TODO: Double check that 0.0.0.0 will be fine here with mixing packet sizes
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut buffered_packet_batches: UnprocessedPacketBatches<PacketType> =
             VecDeque::with_capacity(batch_limit);

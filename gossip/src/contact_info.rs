@@ -35,6 +35,13 @@ pub struct ContactInfo {
     pub rpc_pubsub: SocketAddr,
     /// address to send repair requests to
     pub serve_repair: SocketAddr,
+    // TODO: Logically, I'd like to put tpu_extended fields right after tpu / tpu_forwards;
+    //       however, it isn't clear to me if re-ordering will break things ?
+    // TODO: How do we "broadcast" the extended ports ?
+    /// address to send extended transactions to
+    pub tpu_extended: SocketAddr,
+    /// address to forward unprocessed extended transactions to
+    pub tpu_extended_forwards: SocketAddr,
     /// latest wallclock picked
     pub wallclock: u64,
     /// node shred version
@@ -80,6 +87,8 @@ impl Default for ContactInfo {
             rpc: socketaddr_any!(),
             rpc_pubsub: socketaddr_any!(),
             serve_repair: socketaddr_any!(),
+            tpu_extended: socketaddr_any!(),
+            tpu_extended_forwards: socketaddr_any!(),
             wallclock: 0,
             shred_version: 0,
         }
@@ -100,6 +109,8 @@ impl ContactInfo {
             rpc: socketaddr!("127.0.0.1:1241"),
             rpc_pubsub: socketaddr!("127.0.0.1:1242"),
             serve_repair: socketaddr!("127.0.0.1:1243"),
+            tpu_extended: socketaddr!("127.0.0.1:1244"),
+            tpu_extended_forwards: socketaddr!("127.0.0.1:1245"),
             wallclock: now,
             shred_version: 0,
         }
@@ -130,6 +141,8 @@ impl ContactInfo {
             rpc: addr,
             rpc_pubsub: addr,
             serve_repair: addr,
+            tpu_extended: addr,
+            tpu_extended_forwards: addr,
             wallclock: 0,
             shred_version: 0,
         }
@@ -153,6 +166,8 @@ impl ContactInfo {
         let rpc_pubsub = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PUBSUB_PORT);
         let serve_repair = next_port(bind_addr, 6);
         let tpu_vote = next_port(bind_addr, 7);
+        let tpu_extended = next_port(bind_addr, 8);
+        let tpu_extended_forwards = next_port(bind_addr, 9);
         Self {
             id: *pubkey,
             gossip,
@@ -165,6 +180,8 @@ impl ContactInfo {
             rpc,
             rpc_pubsub,
             serve_repair,
+            tpu_extended,
+            tpu_extended_forwards,
             wallclock: timestamp(),
             shred_version: 0,
         }
@@ -329,6 +346,8 @@ mod tests {
         assert_eq!(d1.repair, socketaddr!("127.0.0.1:1239"));
         assert_eq!(d1.serve_repair, socketaddr!("127.0.0.1:1240"));
         assert_eq!(d1.tpu_vote, socketaddr!("127.0.0.1:1241"));
+        assert_eq!(d1.tpu_extended, socketaddr!("127.0.0.1:1242"));
+        assert_eq!(d1.tpu_extended_forwards, socketaddr!("127.0.0.1:1243"));
     }
 
     #[test]
