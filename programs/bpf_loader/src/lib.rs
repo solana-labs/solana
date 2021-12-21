@@ -995,7 +995,7 @@ impl Executor for BpfExecutor {
         serialize_time.stop();
         let mut create_vm_time = Measure::start("create_vm");
         let mut execute_time;
-        let execuction_result = {
+        let execution_result = {
             let mut vm = match create_vm(
                 &self.executable,
                 parameter_bytes.as_slice_mut(),
@@ -1064,7 +1064,7 @@ impl Executor for BpfExecutor {
         execute_time.stop();
 
         let mut deserialize_time = Measure::start("deserialize");
-        let execute_or_deserialize_result = execuction_result.and_then(|_| {
+        let execute_or_deserialize_result = execution_result.and_then(|_| {
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             deserialize_parameters(
                 &loader_id,
@@ -1087,9 +1087,10 @@ impl Executor for BpfExecutor {
             .deserialize_us
             .saturating_add(deserialize_time.as_us());
 
-        execute_or_deserialize_result?;
-        stable_log::program_success(&log_collector, &program_id);
-        Ok(())
+        if execute_or_deserialize_result.is_ok() {
+            stable_log::program_success(&log_collector, &program_id);
+        }
+        execute_or_deserialize_result
     }
 }
 
