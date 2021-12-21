@@ -48,7 +48,7 @@ use {
         data_budget::DataBudget,
         packet::{
             limited_deserialize, to_packet_batch_with_destination, Packet, PacketInterface,
-            StandardPacketBatchRecycler, StandardPackets, PACKET_DATA_SIZE,
+            StandardPacketBatch, StandardPacketBatchRecycler, PACKET_DATA_SIZE,
         },
     },
     solana_rayon_threadlimit::get_thread_count,
@@ -1906,7 +1906,7 @@ impl ClusterInfo {
         &'a self,
         now: Instant,
         mut rng: &'a mut R,
-        packet_batch: &'a mut StandardPackets,
+        packet_batch: &'a mut StandardPacketBatch,
     ) -> impl FnMut(&PullData) -> bool + 'a
     where
         R: Rng + CryptoRng,
@@ -1949,7 +1949,7 @@ impl ClusterInfo {
         recycler: &StandardPacketBatchRecycler,
         requests: Vec<PullData>,
         stakes: &HashMap<Pubkey, u64>,
-    ) -> StandardPackets {
+    ) -> StandardPacketBatch {
         const DEFAULT_EPOCH_DURATION_MS: u64 = DEFAULT_SLOTS_PER_EPOCH * DEFAULT_MS_PER_SLOT;
         let mut time = Measure::start("handle_pull_requests");
         let callers = crds_value::filter_current(requests.iter().map(|r| &r.caller));
@@ -1960,7 +1960,7 @@ impl ClusterInfo {
         }
         let output_size_limit =
             self.update_data_budget(stakes.len()) / PULL_RESPONSE_MIN_SERIALIZED_SIZE;
-        let mut packet_batch = StandardPackets::new_unpinned_with_recycler(
+        let mut packet_batch = StandardPacketBatch::new_unpinned_with_recycler(
             recycler.clone(),
             64,
             "handle_pull_requests",
@@ -2184,7 +2184,7 @@ impl ClusterInfo {
         &self,
         pings: I,
         recycler: &StandardPacketBatchRecycler,
-    ) -> Option<StandardPackets>
+    ) -> Option<StandardPacketBatch>
     where
         I: IntoIterator<Item = (SocketAddr, Ping)>,
     {
@@ -2206,7 +2206,7 @@ impl ClusterInfo {
         if packets.is_empty() {
             None
         } else {
-            let packet_batch = StandardPackets::new_unpinned_with_recycler_data(
+            let packet_batch = StandardPacketBatch::new_unpinned_with_recycler_data(
                 recycler,
                 "handle_ping_messages",
                 packets,

@@ -152,8 +152,8 @@ fn main() {
         )
         .get_matches();
 
-    let num_threads = value_t!(matches, "num_threads", usize)
-        .unwrap_or(BankingStage::num_threads() as usize);
+    let num_threads =
+        value_t!(matches, "num_threads", usize).unwrap_or(BankingStage::num_threads() as usize);
     //   a multiple of packet chunk duplicates to avoid races
     let num_chunks = value_t!(matches, "num_chunks", usize).unwrap_or(16);
     let packets_per_chunk = value_t!(matches, "packets_per_chunk", usize).unwrap_or(192);

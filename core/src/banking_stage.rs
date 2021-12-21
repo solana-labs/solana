@@ -15,7 +15,7 @@ use {
         cuda_runtime::PinnedVec,
         data_budget::DataBudget,
         packet::{
-            limited_deserialize, ExtendedPacketBatch, PacketBatch, StandardPackets,
+            limited_deserialize, ExtendedPacketBatch, PacketBatch, StandardPacketBatch,
             PACKETS_PER_BATCH,
         },
         perf_libs,
@@ -87,7 +87,6 @@ const MIN_THREADS_BANKING: u32 = 2;
 
 // TODO: Revisit values of NUM_THREADS and MIN_THREADS_BANKING; this changed bump each by 1
 //       Once values picked, make sure they map correctly to cases in new_num_threads()
-
 
 #[derive(Debug, Default)]
 pub struct BankingStageStats {
@@ -293,10 +292,10 @@ impl BankingStage {
     pub fn new(
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        tpu_verified_receiver: CrossbeamReceiver<Vec<StandardPackets>>,
+        tpu_verified_receiver: CrossbeamReceiver<Vec<StandardPacketBatch>>,
         tpu_verified_extended_receiver: CrossbeamReceiver<Vec<ExtendedPacketBatch>>,
-        tpu_verified_vote_receiver: CrossbeamReceiver<Vec<StandardPackets>>,
-        verified_vote_receiver: CrossbeamReceiver<Vec<StandardPackets>>,
+        tpu_verified_vote_receiver: CrossbeamReceiver<Vec<StandardPacketBatch>>,
+        verified_vote_receiver: CrossbeamReceiver<Vec<StandardPacketBatch>>,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
         cost_model: Arc<RwLock<CostModel>>,
@@ -321,10 +320,10 @@ impl BankingStage {
     fn new_num_threads(
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        tpu_verified_receiver: CrossbeamReceiver<Vec<StandardPackets>>,
+        tpu_verified_receiver: CrossbeamReceiver<Vec<StandardPacketBatch>>,
         tpu_verified_extended_receiver: CrossbeamReceiver<Vec<ExtendedPacketBatch>>,
-        tpu_verified_vote_receiver: CrossbeamReceiver<Vec<StandardPackets>>,
-        verified_vote_receiver: CrossbeamReceiver<Vec<StandardPackets>>,
+        tpu_verified_vote_receiver: CrossbeamReceiver<Vec<StandardPacketBatch>>,
+        verified_vote_receiver: CrossbeamReceiver<Vec<StandardPacketBatch>>,
         num_threads: u32,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
@@ -443,9 +442,7 @@ impl BankingStage {
                 }
             })
             .collect();
-        Self {
-            bank_thread_hdls,
-        }
+        Self { bank_thread_hdls }
     }
 
     fn filter_valid_packets_for_forwarding<'a, PacketType: 'static + PacketInterface>(

@@ -17,9 +17,8 @@ pub struct PacketBatch<P: PacketInterface> {
     pub packets: PinnedVec<P>,
 }
 
-// TODO: Rename `StandardPackets` to `StandardPacketBatch`, also potentially examine
-//       if we want to call this something else besides "Standard"
-pub type StandardPackets = PacketBatch<Packet>;
+// TODO: Do we want to run with "Standard" for naming ? If so, rename "Packet" too ?
+pub type StandardPacketBatch = PacketBatch<Packet>;
 pub type ExtendedPacketBatch = PacketBatch<ExtendedPacket>;
 
 pub type PacketBatchRecycler<P> = Recycler<PinnedVec<P>>;

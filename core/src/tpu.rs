@@ -17,7 +17,7 @@ use {
     crossbeam_channel::unbounded,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender},
-    solana_perf::packet::{ExtendedPacketBatch, StandardPackets},
+    solana_perf::packet::{ExtendedPacketBatch, StandardPacketBatch},
     solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
     solana_rpc::{
         optimistically_confirmed_bank_tracker::BankNotificationSender,
@@ -100,7 +100,7 @@ impl Tpu {
             tpu_coalesce_ms,
         );
 
-        let (verified_sender, verified_receiver) = unbounded::<Vec<StandardPackets>>();
+        let (verified_sender, verified_receiver) = unbounded::<Vec<StandardPacketBatch>>();
         let tx_sigverify_stage = {
             let verifier = TransactionSigVerifier::<Packet>::default();
             SigVerifyStage::new(packet_receiver, verified_sender, verifier)
@@ -114,7 +114,7 @@ impl Tpu {
         };
 
         let (verified_tpu_vote_packets_sender, verified_tpu_vote_packets_receiver) =
-            unbounded::<Vec<StandardPackets>>();
+            unbounded::<Vec<StandardPacketBatch>>();
         let vote_sigverify_stage = {
             let verifier = TransactionSigVerifier::<Packet>::new_reject_non_vote();
             SigVerifyStage::new(
@@ -125,7 +125,7 @@ impl Tpu {
         };
 
         let (verified_gossip_vote_packets_sender, verified_gossip_vote_packets_receiver) =
-            unbounded::<Vec<StandardPackets>>();
+            unbounded::<Vec<StandardPacketBatch>>();
         let cluster_info_vote_listener = ClusterInfoVoteListener::new(
             exit.clone(),
             cluster_info.clone(),

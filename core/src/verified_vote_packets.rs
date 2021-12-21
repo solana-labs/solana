@@ -1,7 +1,7 @@
 use {
     crate::{cluster_info_vote_listener::VerifiedLabelVotePacketsReceiver, result::Result},
     crossbeam_channel::Select,
-    solana_perf::packet::StandardPackets,
+    solana_perf::packet::StandardPacketBatch,
     solana_runtime::bank::Bank,
     solana_sdk::{
         account::from_account, clock::Slot, hash::Hash, pubkey::Pubkey, signature::Signature,
@@ -20,7 +20,7 @@ const MAX_VOTES_PER_VALIDATOR: usize = 1000;
 pub struct VerifiedVoteMetadata {
     pub vote_account_key: Pubkey,
     pub vote: VoteTransaction,
-    pub packet_batch: StandardPackets,
+    pub packet_batch: StandardPacketBatch,
     pub signature: Signature,
 }
 
@@ -70,7 +70,7 @@ impl<'a> ValidatorGossipVotesIterator<'a> {
 ///
 /// Iterator is done after iterating through all vote accounts
 impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
-    type Item = Vec<StandardPackets>;
+    type Item = Vec<StandardPacketBatch>;
 
     fn next(&mut self) -> Option<Self::Item> {
         // TODO: Maybe prioritize by stake weight
@@ -116,7 +116,7 @@ impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
                                             None
                                         }
                                     })
-                                    .collect::<Vec<StandardPackets>>()
+                                    .collect::<Vec<StandardPacketBatch>>()
                             })
                         })
                 });
@@ -130,7 +130,7 @@ impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
     }
 }
 
-pub type SingleValidatorVotes = BTreeMap<(Slot, Hash), (StandardPackets, Signature)>;
+pub type SingleValidatorVotes = BTreeMap<(Slot, Hash), (StandardPacketBatch, Signature)>;
 
 #[derive(Default)]
 pub struct VerifiedVotePackets(HashMap<Pubkey, SingleValidatorVotes>);

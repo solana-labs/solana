@@ -14,7 +14,7 @@ use {
     solana_ledger::{blockstore::Blockstore, shred::SIZE_OF_NONCE},
     solana_measure::measure::Measure,
     solana_perf::{
-        packet::{limited_deserialize, Packet, StandardPackets},
+        packet::{limited_deserialize, Packet, StandardPacketBatch},
         recycler::Recycler,
     },
     solana_runtime::bank::Bank,
@@ -291,7 +291,7 @@ impl AncestorHashesService {
 
     fn process_packet_batch(
         ancestor_hashes_request_statuses: &DashMap<Slot, DeadSlotAncestorRequestStatus>,
-        packet_batch: StandardPackets,
+        packet_batch: StandardPacketBatch,
         stats: &mut AncestorHashesResponsesStats,
         outstanding_requests: &RwLock<OutstandingAncestorHashesRepairs>,
         blockstore: &Blockstore,

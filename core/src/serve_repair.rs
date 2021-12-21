@@ -25,7 +25,7 @@ use {
     },
     solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_debug,
-    solana_perf::packet::{limited_deserialize, StandardPacketBatchRecycler, StandardPackets},
+    solana_perf::packet::{limited_deserialize, StandardPacketBatch, StandardPacketBatchRecycler},
     solana_sdk::{
         clock::Slot, hash::Hash, packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::duration_as_ms,
     },
@@ -234,7 +234,7 @@ impl ServeRepair {
         blockstore: Option<&Arc<Blockstore>>,
         request: RepairProtocol,
         stats: &mut ServeRepairStats,
-    ) -> Option<StandardPackets> {
+    ) -> Option<StandardPacketBatch> {
         let now = Instant::now();
 
         let my_id = me.read().unwrap().my_id();
@@ -434,7 +434,7 @@ impl ServeRepair {
         me: &Arc<RwLock<Self>>,
         recycler: &StandardPacketBatchRecycler,
         blockstore: Option<&Arc<Blockstore>>,
-        packet_batch: StandardPackets,
+        packet_batch: StandardPacketBatch,
         response_sender: &StandardPacketSender,
         stats: &mut ServeRepairStats,
     ) {
@@ -617,7 +617,7 @@ impl ServeRepair {
         slot: Slot,
         shred_index: u64,
         nonce: Nonce,
-    ) -> Option<StandardPackets> {
+    ) -> Option<StandardPacketBatch> {
         if let Some(blockstore) = blockstore {
             // Try to find the requested index in one of the slots
             let packet = repair_response::repair_response_packet(
@@ -630,7 +630,7 @@ impl ServeRepair {
 
             if let Some(packet) = packet {
                 inc_new_counter_debug!("serve_repair-window-request-ledger", 1);
-                return Some(StandardPackets::new_unpinned_with_recycler_data(
+                return Some(StandardPacketBatch::new_unpinned_with_recycler_data(
                     recycler,
                     "run_window_request",
                     vec![packet],
@@ -657,7 +657,7 @@ impl ServeRepair {
         slot: Slot,
         highest_index: u64,
         nonce: Nonce,
-    ) -> Option<StandardPackets> {
+    ) -> Option<StandardPacketBatch> {
         let blockstore = blockstore?;
         // Try to find the requested index in one of the slots
         let meta = blockstore.meta(slot).ok()??;
@@ -670,7 +670,7 @@ impl ServeRepair {
                 from_addr,
                 nonce,
             )?;
-            return Some(StandardPackets::new_unpinned_with_recycler_data(
+            return Some(StandardPacketBatch::new_unpinned_with_recycler_data(
                 recycler,
                 "run_highest_window_request",
                 vec![packet],
@@ -686,9 +686,9 @@ impl ServeRepair {
         mut slot: Slot,
         max_responses: usize,
         nonce: Nonce,
-    ) -> Option<StandardPackets> {
+    ) -> Option<StandardPacketBatch> {
         let mut res =
-            StandardPackets::new_unpinned_with_recycler(recycler.clone(), 64, "run_orphan");
+            StandardPacketBatch::new_unpinned_with_recycler(recycler.clone(), 64, "run_orphan");
         if let Some(blockstore) = blockstore {
             // Try to find the next "n" parent slots of the input slot
             while let Ok(Some(meta)) = blockstore.meta(slot) {
@@ -726,7 +726,7 @@ impl ServeRepair {
         blockstore: Option<&Arc<Blockstore>>,
         slot: Slot,
         nonce: Nonce,
-    ) -> Option<StandardPackets> {
+    ) -> Option<StandardPacketBatch> {
         let blockstore = blockstore?;
         let ancestor_slot_hashes = if blockstore.is_duplicate_confirmed(slot) {
             let ancestor_iterator =
@@ -747,7 +747,7 @@ impl ServeRepair {
             from_addr,
             nonce,
         )?;
-        Some(StandardPackets::new_unpinned_with_recycler_data(
+        Some(StandardPacketBatch::new_unpinned_with_recycler_data(
             recycler,
             "run_ancestor_hashes",
             vec![packet],

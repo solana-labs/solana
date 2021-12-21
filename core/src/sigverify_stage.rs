@@ -9,7 +9,7 @@ use {
     crate::sigverify,
     crossbeam_channel::{SendError, Sender as CrossbeamSender},
     solana_measure::measure::Measure,
-    solana_perf::packet::{PacketBatch, StandardPackets},
+    solana_perf::packet::{PacketBatch, StandardPacketBatch},
     solana_sdk::packet::{Packet, PacketInterface},
     solana_sdk::timing,
     solana_streamer::streamer::{self, PacketBatchReceiver, StreamerError},
@@ -123,7 +123,7 @@ impl SigVerifierStats {
 }
 
 impl SigVerifier<Packet> for DisabledSigVerifier {
-    fn verify_batches(&self, mut batches: Vec<StandardPackets>) -> Vec<StandardPackets> {
+    fn verify_batches(&self, mut batches: Vec<StandardPacketBatch>) -> Vec<StandardPacketBatch> {
         sigverify::ed25519_verify_disabled(&mut batches);
         batches
     }
