@@ -41,25 +41,28 @@ pub(crate) type Uid = u64;
 
 #[repr(C)]
 struct Header {
-    lock: AtomicU64,
+    lock: u64,
 }
 
 impl Header {
-    fn try_lock(&self, uid: Uid) -> bool {
-        Ok(UID_UNLOCKED)
-            == self
-                .lock
-                .compare_exchange(UID_UNLOCKED, uid, Ordering::AcqRel, Ordering::Relaxed)
+    fn try_lock(&mut self, uid: Uid) -> bool {
+        if self.lock == UID_UNLOCKED {
+            self.lock = uid;
+            true
+        } else {
+            false
+        }
     }
-    fn unlock(&self) -> Uid {
-        self.lock.swap(UID_UNLOCKED, Ordering::Release)
+    fn unlock(&mut self) -> Uid {
+        let old = self.lock;
+        self.lock = UID_UNLOCKED;
+        old
     }
     fn uid(&self) -> Option<Uid> {
-        let result = self.lock.load(Ordering::Acquire);
-        if result == UID_UNLOCKED {
+        if self.lock == UID_UNLOCKED {
             None
         } else {
-            Some(result)
+            Some(self.lock)
         }
     }
 }
@@ -141,6 +144,16 @@ impl BucketStorage {
         }
     }
 
+    /// return ref to header of item 'ix' in mmapped file
+    fn header_mut_ptr(&mut self, ix: u64) -> &mut Header {
+        let ix = (ix * self.cell_size) as usize;
+        let hdr_slice: &mut [u8] = &mut self.mmap[ix..ix + std::mem::size_of::<Header>()];
+        unsafe {
+            let hdr = hdr_slice.as_mut_ptr() as *mut Header;
+            hdr.as_mut().unwrap()
+        }
+    }
+
     pub fn uid(&self, ix: u64) -> Option<Uid> {
         assert!(ix < self.capacity(), "bad index size");
         self.header_ptr(ix).uid()
@@ -153,12 +166,17 @@ impl BucketStorage {
 
     /// 'is_resizing' true if caller is resizing the index (so don't increment count)
     /// 'is_resizing' false if caller is adding an item to the index (so increment count)
-    pub fn allocate(&self, ix: u64, uid: Uid, is_resizing: bool) -> Result<(), BucketStorageError> {
+    pub fn allocate(
+        &mut self,
+        ix: u64,
+        uid: Uid,
+        is_resizing: bool,
+    ) -> Result<(), BucketStorageError> {
         assert!(ix < self.capacity(), "allocate: bad index size");
         assert!(UID_UNLOCKED != uid, "allocate: bad uid");
         let mut e = Err(BucketStorageError::AlreadyAllocated);
         //debug!("ALLOC {} {}", ix, uid);
-        if self.header_ptr(ix).try_lock(uid) {
+        if self.header_mut_ptr(ix).try_lock(uid) {
             e = Ok(());
             if !is_resizing {
                 self.count.fetch_add(1, Ordering::Relaxed);
@@ -167,10 +185,10 @@ impl BucketStorage {
         e
     }
 
-    pub fn free(&self, ix: u64, uid: Uid) {
+    pub fn free(&mut self, ix: u64, uid: Uid) {
         assert!(ix < self.capacity(), "bad index size");
         assert!(UID_UNLOCKED != uid, "free: bad uid");
-        let previous_uid = self.header_ptr(ix).unlock();
+        let previous_uid = self.header_mut_ptr(ix).unlock();
         assert_eq!(
             previous_uid, uid,
             "free: unlocked a header with a differet uid: {}",
