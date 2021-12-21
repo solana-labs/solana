@@ -11,7 +11,7 @@ license = "Apache-2.0"
 edition = "2021"
 
 [dependencies]
-num_cpus = "1.13.0"
+num_cpus = "1.13.1"
 lazy_static = "1.4.0"
 
 [package.metadata.docs.rs]
