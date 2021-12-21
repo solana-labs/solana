@@ -83,6 +83,7 @@ const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 128;
 const DEFAULT_LRU_SIZE: usize = 200_000;
 
 const NUM_VOTE_PROCESSING_THREADS: u32 = 2;
+
 const MIN_THREADS_BANKING: u32 = 1;
 
 #[derive(Debug, Default)]
