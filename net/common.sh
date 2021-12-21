@@ -18,7 +18,9 @@ SOLANA_ROOT="$netDir"/..
 # shellcheck source=scripts/configure-metrics.sh
 source "$SOLANA_ROOT"/scripts/configure-metrics.sh
 
+echo "netConfigDir is : $netConfigDir"
 configFile="$netConfigDir/config"
+cat "$netConfigDir/config"
 geoipConfigFile="$netConfigDir/geoip.yml"
 
 entrypointIp=
