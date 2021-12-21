@@ -303,6 +303,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                 &instruction_accounts,
                 &program_indices,
                 &mut compute_units_consumed,
+                &mut ExecuteTimings::default(),
             )
             .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;
 

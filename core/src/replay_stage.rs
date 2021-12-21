@@ -2248,7 +2248,9 @@ impl ReplayStage {
         // send accumulated excute-timings to cost_update_service
         if !execute_timings.details.per_program_timings.is_empty() {
             cost_update_sender
-                .send(CostUpdate::ExecuteTiming { execute_timings })
+                .send(CostUpdate::ExecuteTiming {
+                    execute_timings: Box::new(execute_timings),
+                })
                 .unwrap_or_else(|err| warn!("cost_update_sender failed: {:?}", err));
         }
 

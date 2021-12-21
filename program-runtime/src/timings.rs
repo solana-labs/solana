@@ -46,6 +46,7 @@ pub struct ExecuteTimings {
     pub num_execute_batches: u64,
     pub collect_logs_us: u64,
     pub details: ExecuteDetailsTimings,
+    pub execute_accessories: ExecuteAccessoryTimings,
 }
 
 impl ExecuteTimings {
@@ -65,6 +66,51 @@ impl ExecuteTimings {
             .saturating_add(other.num_execute_batches);
         self.collect_logs_us = self.collect_logs_us.saturating_add(other.collect_logs_us);
         self.details.accumulate(&other.details);
+        self.execute_accessories
+            .accumulate(&other.execute_accessories);
+    }
+}
+
+#[derive(Default, Debug)]
+pub struct ExecuteAccessoryTimings {
+    pub feature_set_clone_us: u64,
+    pub compute_budget_process_transaction_us: u64,
+    pub get_executors_us: u64,
+    pub process_message_us: u64,
+    pub update_executors_us: u64,
+    pub process_instructions_us: u64,
+    pub process_instruction_verify_caller_us: u64,
+    pub process_instruction_process_executable_chain_us: u64,
+    pub process_instruction_verify_callee_us: u64,
+}
+
+impl ExecuteAccessoryTimings {
+    pub fn accumulate(&mut self, other: &ExecuteAccessoryTimings) {
+        self.compute_budget_process_transaction_us = self
+            .feature_set_clone_us
+            .saturating_add(other.feature_set_clone_us);
+        self.compute_budget_process_transaction_us = self
+            .compute_budget_process_transaction_us
+            .saturating_add(other.compute_budget_process_transaction_us);
+        self.get_executors_us = self.get_executors_us.saturating_add(other.get_executors_us);
+        self.process_message_us = self
+            .process_message_us
+            .saturating_add(other.process_message_us);
+        self.update_executors_us = self
+            .update_executors_us
+            .saturating_add(other.update_executors_us);
+        self.process_instructions_us = self
+            .process_instructions_us
+            .saturating_add(other.process_instructions_us);
+        self.process_instruction_verify_caller_us = self
+            .process_instruction_verify_caller_us
+            .saturating_add(other.process_instruction_verify_caller_us);
+        self.process_instruction_process_executable_chain_us = self
+            .process_instruction_process_executable_chain_us
+            .saturating_add(other.process_instruction_process_executable_chain_us);
+        self.process_instruction_verify_callee_us = self
+            .process_instruction_verify_callee_us
+            .saturating_add(other.process_instruction_verify_callee_us);
     }
 }
 
@@ -74,6 +120,7 @@ pub struct ExecuteDetailsTimings {
     pub create_vm_us: u64,
     pub execute_us: u64,
     pub deserialize_us: u64,
+    pub get_or_create_executor_us: u64,
     pub changed_account_count: u64,
     pub total_account_count: u64,
     pub total_data_size: usize,
@@ -86,6 +133,9 @@ impl ExecuteDetailsTimings {
         self.create_vm_us = self.create_vm_us.saturating_add(other.create_vm_us);
         self.execute_us = self.execute_us.saturating_add(other.execute_us);
         self.deserialize_us = self.deserialize_us.saturating_add(other.deserialize_us);
+        self.get_or_create_executor_us = self
+            .get_or_create_executor_us
+            .saturating_add(other.get_or_create_executor_us);
         self.changed_account_count = self
             .changed_account_count
             .saturating_add(other.changed_account_count);
