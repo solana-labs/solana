@@ -727,9 +727,15 @@ impl<'a> InvokeContext<'a> {
 
     /// Get the owner of the currently executing program
     pub fn get_loader(&self) -> Result<Pubkey, InstructionError> {
-        self.get_instruction_keyed_accounts()
-            .and_then(|keyed_accounts| keyed_accounts.first().ok_or(InstructionError::CallDepth))
-            .and_then(|keyed_account| keyed_account.owner())
+        let frame = self
+            .invoke_stack
+            .last()
+            .ok_or(InstructionError::CallDepth)?;
+        let first_instruction_account = frame
+            .number_of_program_accounts
+            .checked_sub(1)
+            .ok_or(InstructionError::CallDepth)?;
+        frame.keyed_accounts[first_instruction_account].owner()
     }
 
     /// Removes the first keyed account
@@ -759,18 +765,13 @@ impl<'a> InvokeContext<'a> {
 
     /// Get the list of keyed accounts without the chain of program accounts
     ///
-    /// Note: The `KeyedAccount` at index `0` has the key `program_id` and
-    /// is followed by the `KeyedAccount`s passed by the caller.
+    /// Note: This only contains the `KeyedAccount`s passed by the caller.
     pub fn get_instruction_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError> {
         let frame = self
             .invoke_stack
             .last()
             .ok_or(InstructionError::CallDepth)?;
-        let first_instruction_account = frame
-            .number_of_program_accounts
-            .checked_sub(1)
-            .ok_or(InstructionError::CallDepth)?;
-        Ok(&frame.keyed_accounts[first_instruction_account..])
+        Ok(&frame.keyed_accounts[frame.number_of_program_accounts..])
     }
 
     /// Get this invocation's LogCollector

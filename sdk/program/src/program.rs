@@ -7,6 +7,8 @@ use crate::{
 /// Notes:
 /// - RefCell checking can be compute unit expensive, to avoid that expense use
 ///   `invoke_unchecked` instead, but at your own risk.
+/// - The program id of the instruction being issued must also be included in
+///   `account_infos`.
 pub fn invoke(instruction: &Instruction, account_infos: &[AccountInfo]) -> ProgramResult {
     invoke_signed(instruction, account_infos, &[])
 }
@@ -17,6 +19,8 @@ pub fn invoke(instruction: &Instruction, account_infos: &[AccountInfo]) -> Progr
 /// - The missing checks ensured that the invocation doesn't violate the borrow
 ///   rules of the `AccountInfo` fields that are wrapped in `RefCell`s.  To
 ///   include the checks call `invoke` instead.
+/// - The program id of the instruction being issued must also be included in
+///   `account_infos`.
 pub fn invoke_unchecked(instruction: &Instruction, account_infos: &[AccountInfo]) -> ProgramResult {
     invoke_signed_unchecked(instruction, account_infos, &[])
 }
@@ -26,6 +30,8 @@ pub fn invoke_unchecked(instruction: &Instruction, account_infos: &[AccountInfo]
 /// Notes:
 /// - RefCell checking can be compute unit expensive, to avoid that expense use
 ///   `invoke_signed_unchecked` instead, but at your own risk.
+/// - The program id of the instruction being issued must also be included in
+///   `account_infos`.
 pub fn invoke_signed(
     instruction: &Instruction,
     account_infos: &[AccountInfo],
@@ -57,6 +63,8 @@ pub fn invoke_signed(
 /// - The missing checks ensured that the invocation doesn't violate the borrow
 ///   rules of the `AccountInfo` fields that are wrapped in `RefCell`s.  To
 ///   include the checks call `invoke_signed` instead.
+/// - The program id of the instruction being issued must also be included in
+///   `account_infos`.
 pub fn invoke_signed_unchecked(
     instruction: &Instruction,
     account_infos: &[AccountInfo],
