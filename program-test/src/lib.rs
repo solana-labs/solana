@@ -11,7 +11,11 @@ use {
     log::*,
     solana_banks_client::start_client,
     solana_banks_server::banks_server::start_local_server,
-    solana_program_runtime::{ic_msg, invoke_context::ProcessInstructionWithContext, stable_log},
+    solana_program_runtime::{
+        ic_msg,
+        invoke_context::{InstructionAccount, ProcessInstructionWithContext},
+        stable_log,
+    },
     solana_runtime::{
         bank::{Bank, ExecuteTimings},
         bank_forks::BankForks,
@@ -254,7 +258,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         stable_log::program_invoke(&log_collector, &program_id, invoke_context.invoke_depth());
 
         // Convert AccountInfos into Accounts
-        let mut account_indices = Vec::with_capacity(message.account_keys.len());
+        let mut instruction_accounts = Vec::with_capacity(message.account_keys.len());
         let mut accounts = Vec::with_capacity(message.account_keys.len());
         for (i, account_key) in message.account_keys.iter().enumerate() {
             let (account_index, account_info) = invoke_context
@@ -281,7 +285,11 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             } else {
                 None
             };
-            account_indices.push(account_index);
+            instruction_accounts.push(InstructionAccount {
+                index: account_index,
+                is_signer: message.is_signer(i),
+                is_writable: message.is_writable(i),
+            });
             accounts.push((account_index, account_info));
         }
         let program_account_index = invoke_context.find_index_of_account(&program_id).unwrap();
@@ -314,14 +322,12 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         if let Some(instruction_recorder) = &invoke_context.instruction_recorder {
             instruction_recorder.record_instruction(instruction.clone());
         }
-
         invoke_context
             .process_instruction(
-                &message,
-                &message.instructions[0],
+                &instruction.data,
+                &instruction_accounts,
+                Some(&caller_privileges),
                 &program_indices,
-                &account_indices,
-                &caller_privileges,
             )
             .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;
 

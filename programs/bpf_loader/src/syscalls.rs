@@ -5,7 +5,7 @@ use {
     alloc::Alloc,
     solana_program_runtime::{
         ic_logger_msg, ic_msg,
-        invoke_context::{ComputeMeter, InvokeContext},
+        invoke_context::{ComputeMeter, InstructionAccount, InvokeContext},
         stable_log,
     },
     solana_rbpf::{
@@ -31,9 +31,7 @@ use {
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{AccountMeta, Instruction, InstructionError},
-        keccak,
-        message::Message,
-        native_loader,
+        keccak, native_loader,
         precompiles::is_precompile,
         program::MAX_RETURN_DATA,
         program_stubs::is_nonoverlapping,
@@ -1666,7 +1664,7 @@ struct CallerAccount<'a> {
     executable: bool,
     rent_epoch: u64,
 }
-type TranslatedAccounts<'a> = (Vec<usize>, Vec<(usize, Option<CallerAccount<'a>>)>);
+type TranslatedAccounts<'a> = Vec<(usize, Option<CallerAccount<'a>>)>;
 
 /// Implemented by language specific data structure translators
 trait SyscallInvokeSigned<'a, 'b> {
@@ -1681,7 +1679,8 @@ trait SyscallInvokeSigned<'a, 'b> {
     fn translate_accounts<'c>(
         &'c self,
         loader_id: &Pubkey,
-        message: &Message,
+        instruction_accounts: &[InstructionAccount],
+        program_indices: &[usize],
         account_infos_addr: u64,
         account_infos_len: u64,
         memory_mapping: &MemoryMapping,
@@ -1744,7 +1743,8 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
     fn translate_accounts<'c>(
         &'c self,
         loader_id: &Pubkey,
-        message: &Message,
+        instruction_accounts: &[InstructionAccount],
+        program_indices: &[usize],
         account_infos_addr: u64,
         account_infos_len: u64,
         memory_mapping: &MemoryMapping,
@@ -1839,7 +1839,8 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
         };
 
         get_translated_accounts(
-            message,
+            instruction_accounts,
+            program_indices,
             &account_info_keys,
             account_infos,
             invoke_context,
@@ -2033,7 +2034,8 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
     fn translate_accounts<'c>(
         &'c self,
         loader_id: &Pubkey,
-        message: &Message,
+        instruction_accounts: &[InstructionAccount],
+        program_indices: &[usize],
         account_infos_addr: u64,
         account_infos_len: u64,
         memory_mapping: &MemoryMapping,
@@ -2106,7 +2108,8 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
         };
 
         get_translated_accounts(
-            message,
+            instruction_accounts,
+            program_indices,
             &account_info_keys,
             account_infos,
             invoke_context,
@@ -2187,7 +2190,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallInvokeSignedC<'a, 'b> {
 }
 
 fn get_translated_accounts<'a, T, F>(
-    message: &Message,
+    instruction_accounts: &[InstructionAccount],
+    program_indices: &[usize],
     account_info_keys: &[&Pubkey],
     account_infos: &[T],
     invoke_context: &mut InvokeContext,
@@ -2200,78 +2204,78 @@ where
     let keyed_accounts = invoke_context
         .get_instruction_keyed_accounts()
         .map_err(SyscallError::InstructionError)?;
-    let mut account_indices = Vec::with_capacity(message.account_keys.len());
-    let mut accounts = Vec::with_capacity(message.account_keys.len());
-    for (i, account_key) in message.account_keys.iter().enumerate() {
-        if let Some(account_index) = invoke_context.find_index_of_account(account_key) {
-            let account = invoke_context.get_account_at_index(account_index);
-            if i == message.instructions[0].program_id_index as usize
-                || account.borrow().executable()
-            {
-                // Use the known account
-                account_indices.push(account_index);
-                accounts.push((account_index, None));
-                continue;
-            } else if let Some(caller_account_index) =
-                account_info_keys.iter().position(|key| *key == account_key)
-            {
-                let mut caller_account =
-                    do_translate(&account_infos[caller_account_index], invoke_context)?;
-                {
-                    let mut account = account.borrow_mut();
-                    account.copy_into_owner_from_slice(caller_account.owner.as_ref());
-                    account.set_data_from_slice(caller_account.data);
-                    account.set_lamports(*caller_account.lamports);
-                    account.set_executable(caller_account.executable);
-                    account.set_rent_epoch(caller_account.rent_epoch);
-                }
-                let caller_account = if message.is_writable(i) {
-                    if let Some(orig_data_len_index) = keyed_accounts
-                        .iter()
-                        .position(|keyed_account| keyed_account.unsigned_key() == account_key)
-                        .map(|index| {
-                            // index starts at first instruction account
-                            index - keyed_accounts.len().saturating_sub(orig_data_lens.len())
-                        })
-                        .and_then(|index| {
-                            if index >= orig_data_lens.len() {
-                                None
-                            } else {
-                                Some(index)
-                            }
-                        })
-                    {
-                        caller_account.original_data_len = orig_data_lens[orig_data_len_index];
-                    } else {
-                        ic_msg!(
-                            invoke_context,
-                            "Internal error: index mismatch for account {}",
-                            account_key
-                        );
-                        return Err(SyscallError::InstructionError(
-                            InstructionError::MissingAccount,
-                        )
-                        .into());
-                    }
+    let mut accounts = Vec::with_capacity(instruction_accounts.len().saturating_add(1));
 
-                    Some(caller_account)
-                } else {
-                    None
-                };
-                account_indices.push(account_index);
-                accounts.push((account_index, caller_account));
-                continue;
+    let program_account_index = program_indices
+        .last()
+        .ok_or(SyscallError::InstructionError(
+            InstructionError::MissingAccount,
+        ))?;
+    accounts.push((*program_account_index, None));
+
+    for instruction_account in instruction_accounts.iter() {
+        let account = invoke_context.get_account_at_index(instruction_account.index);
+        let account_key = invoke_context.get_account_key_at_index(instruction_account.index);
+        if account.borrow().executable() {
+            // Use the known account
+            accounts.push((instruction_account.index, None));
+        } else if let Some(caller_account_index) =
+            account_info_keys.iter().position(|key| *key == account_key)
+        {
+            let mut caller_account =
+                do_translate(&account_infos[caller_account_index], invoke_context)?;
+            {
+                let mut account = account.borrow_mut();
+                account.copy_into_owner_from_slice(caller_account.owner.as_ref());
+                account.set_data_from_slice(caller_account.data);
+                account.set_lamports(*caller_account.lamports);
+                account.set_executable(caller_account.executable);
+                account.set_rent_epoch(caller_account.rent_epoch);
             }
+            let caller_account = if instruction_account.is_writable {
+                if let Some(orig_data_len_index) = keyed_accounts
+                    .iter()
+                    .position(|keyed_account| keyed_account.unsigned_key() == account_key)
+                    .map(|index| {
+                        // index starts at first instruction account
+                        index - keyed_accounts.len().saturating_sub(orig_data_lens.len())
+                    })
+                    .and_then(|index| {
+                        if index >= orig_data_lens.len() {
+                            None
+                        } else {
+                            Some(index)
+                        }
+                    })
+                {
+                    caller_account.original_data_len = orig_data_lens[orig_data_len_index];
+                } else {
+                    ic_msg!(
+                        invoke_context,
+                        "Internal error: index mismatch for account {}",
+                        account_key
+                    );
+                    return Err(
+                        SyscallError::InstructionError(InstructionError::MissingAccount).into(),
+                    );
+                }
+
+                Some(caller_account)
+            } else {
+                None
+            };
+            accounts.push((instruction_account.index, caller_account));
+        } else {
+            ic_msg!(
+                invoke_context,
+                "Instruction references an unknown account {}",
+                account_key
+            );
+            return Err(SyscallError::InstructionError(InstructionError::MissingAccount).into());
         }
-        ic_msg!(
-            invoke_context,
-            "Instruction references an unknown account {}",
-            account_key
-        );
-        return Err(SyscallError::InstructionError(InstructionError::MissingAccount).into());
     }
 
-    Ok((account_indices, accounts))
+    Ok(accounts)
 }
 
 fn check_instruction_size(
@@ -2364,13 +2368,14 @@ fn call<'a, 'b: 'a>(
         signers_seeds_len,
         memory_mapping,
     )?;
-    let (message, caller_write_privileges, program_indices) = invoke_context
-        .create_message(&instruction, &signers)
+    let (instruction_accounts, caller_write_privileges, program_indices) = invoke_context
+        .prepare_instruction(&instruction, &signers)
         .map_err(SyscallError::InstructionError)?;
     check_authorized_program(&instruction.program_id, &instruction.data, *invoke_context)?;
-    let (account_indices, mut accounts) = syscall.translate_accounts(
+    let mut accounts = syscall.translate_accounts(
         &loader_id,
-        &message,
+        &instruction_accounts,
+        &program_indices,
         account_infos_addr,
         account_infos_len,
         memory_mapping,
@@ -2379,17 +2384,16 @@ fn call<'a, 'b: 'a>(
 
     // Record the instruction
     if let Some(instruction_recorder) = &invoke_context.instruction_recorder {
-        instruction_recorder.record_instruction(instruction);
+        instruction_recorder.record_instruction(instruction.clone());
     }
 
     // Process instruction
     invoke_context
         .process_instruction(
-            &message,
-            &message.instructions[0],
+            &instruction.data,
+            &instruction_accounts,
+            Some(&caller_write_privileges),
             &program_indices,
-            &account_indices,
-            &caller_write_privileges,
         )
         .map_err(SyscallError::InstructionError)?;
 
@@ -2982,14 +2986,8 @@ mod tests {
         let program_id = Pubkey::new_unique();
         let program_account = RefCell::new(AccountSharedData::new(0, 0, &bpf_loader::id()));
         let accounts = [(program_id, program_account)];
-        let message = Message::new(
-            &[Instruction::new_with_bytes(program_id, &[], vec![])],
-            None,
-        );
         let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
-        invoke_context
-            .push(&message, &message.instructions[0], &[0], &[])
-            .unwrap();
+        invoke_context.push(&[], &[0]).unwrap();
         let mut syscall_panic = SyscallPanic {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
         };
@@ -3059,14 +3057,8 @@ mod tests {
         let program_id = Pubkey::new_unique();
         let program_account = RefCell::new(AccountSharedData::new(0, 0, &bpf_loader::id()));
         let accounts = [(program_id, program_account)];
-        let message = Message::new(
-            &[Instruction::new_with_bytes(program_id, &[], vec![])],
-            None,
-        );
         let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
-        invoke_context
-            .push(&message, &message.instructions[0], &[0], &[])
-            .unwrap();
+        invoke_context.push(&[], &[0]).unwrap();
         let mut syscall_sol_log = SyscallLog {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
         };
@@ -3163,14 +3155,8 @@ mod tests {
         let program_id = Pubkey::new_unique();
         let program_account = RefCell::new(AccountSharedData::new(0, 0, &bpf_loader::id()));
         let accounts = [(program_id, program_account)];
-        let message = Message::new(
-            &[Instruction::new_with_bytes(program_id, &[], vec![])],
-            None,
-        );
         let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
-        invoke_context
-            .push(&message, &message.instructions[0], &[0], &[])
-            .unwrap();
+        invoke_context.push(&[], &[0]).unwrap();
         let cost = invoke_context.get_compute_budget().log_64_units;
         let mut syscall_sol_log_u64 = SyscallLogU64 {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -3205,14 +3191,8 @@ mod tests {
         let program_id = Pubkey::new_unique();
         let program_account = RefCell::new(AccountSharedData::new(0, 0, &bpf_loader::id()));
         let accounts = [(program_id, program_account)];
-        let message = Message::new(
-            &[Instruction::new_with_bytes(program_id, &[], vec![])],
-            None,
-        );
         let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
-        invoke_context
-            .push(&message, &message.instructions[0], &[0], &[])
-            .unwrap();
+        invoke_context.push(&[], &[0]).unwrap();
         let cost = invoke_context.get_compute_budget().log_pubkey_units;
         let mut syscall_sol_pubkey = SyscallLogPubkey {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -3418,10 +3398,8 @@ mod tests {
         let program_account =
             RefCell::new(AccountSharedData::new(0, 0, &bpf_loader_deprecated::id()));
         let accounts = [(program_id, program_account)];
-        let message = Message::new(
-            &[Instruction::new_with_bytes(program_id, &[], vec![])],
-            None,
-        );
+        let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
+        invoke_context.push(&[], &[0]).unwrap();
 
         let bytes1 = "Gaggablaghblagh!";
         let bytes2 = "flurbos";
@@ -3475,7 +3453,6 @@ mod tests {
         )
         .unwrap();
 
-        let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
         invoke_context
             .get_compute_meter()
             .borrow_mut()
@@ -3485,9 +3462,6 @@ mod tests {
                         * invoke_context.get_compute_budget().sha256_byte_cost)
                     * 4,
             );
-        invoke_context
-            .push(&message, &message.instructions[0], &[0], &[])
-            .unwrap();
         let mut syscall = SyscallSha256 {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
         };
@@ -3547,10 +3521,6 @@ mod tests {
         let program_id = Pubkey::new_unique();
         let program_account = RefCell::new(AccountSharedData::new(0, 0, &bpf_loader::id()));
         let accounts = [(program_id, program_account)];
-        let message = Message::new(
-            &[Instruction::new_with_bytes(program_id, &[], vec![])],
-            None,
-        );
 
         // Test clock sysvar
         {
@@ -3584,9 +3554,7 @@ mod tests {
             let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
             let sysvars = [(sysvar::clock::id(), data)];
             invoke_context.sysvars = &sysvars;
-            invoke_context
-                .push(&message, &message.instructions[0], &[0], &[])
-                .unwrap();
+            invoke_context.push(&[], &[0]).unwrap();
             let mut syscall = SyscallGetClockSysvar {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
             };
@@ -3629,9 +3597,7 @@ mod tests {
             let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
             let sysvars = [(sysvar::epoch_schedule::id(), data)];
             invoke_context.sysvars = &sysvars;
-            invoke_context
-                .push(&message, &message.instructions[0], &[0], &[])
-                .unwrap();
+            invoke_context.push(&[], &[0]).unwrap();
             let mut syscall = SyscallGetEpochScheduleSysvar {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
             };
@@ -3681,9 +3647,7 @@ mod tests {
             let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
             let sysvars = [(sysvar::fees::id(), data)];
             invoke_context.sysvars = &sysvars;
-            invoke_context
-                .push(&message, &message.instructions[0], &[0], &[])
-                .unwrap();
+            invoke_context.push(&[], &[0]).unwrap();
             let mut syscall = SyscallGetFeesSysvar {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
             };
@@ -3724,9 +3688,7 @@ mod tests {
             let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
             let sysvars = [(sysvar::rent::id(), data)];
             invoke_context.sysvars = &sysvars;
-            invoke_context
-                .push(&message, &message.instructions[0], &[0], &[])
-                .unwrap();
+            invoke_context.push(&[], &[0]).unwrap();
             let mut syscall = SyscallGetRentSysvar {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
             };
@@ -3857,14 +3819,8 @@ mod tests {
         let program_id = Pubkey::new_unique();
         let program_account = RefCell::new(AccountSharedData::new(0, 0, &bpf_loader::id()));
         let accounts = [(program_id, program_account)];
-        let message = Message::new(
-            &[Instruction::new_with_bytes(program_id, &[], vec![])],
-            None,
-        );
         let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
-        invoke_context
-            .push(&message, &message.instructions[0], &[0], &[])
-            .unwrap();
+        invoke_context.push(&[], &[0]).unwrap();
         let address = bpf_loader_upgradeable::id();
 
         let exceeded_seed = &[127; MAX_SEED_LEN + 1];
@@ -3973,14 +3929,8 @@ mod tests {
         let program_id = Pubkey::new_unique();
         let program_account = RefCell::new(AccountSharedData::new(0, 0, &bpf_loader::id()));
         let accounts = [(program_id, program_account)];
-        let message = Message::new(
-            &[Instruction::new_with_bytes(program_id, &[], vec![])],
-            None,
-        );
         let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
-        invoke_context
-            .push(&message, &message.instructions[0], &[0], &[])
-            .unwrap();
+        invoke_context.push(&[], &[0]).unwrap();
         let cost = invoke_context
             .get_compute_budget()
             .create_program_address_units;
