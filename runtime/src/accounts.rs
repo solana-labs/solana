@@ -870,13 +870,17 @@ impl Accounts {
         )
     }
 
-    pub fn hold_range_in_memory<R>(&self, range: &R, start_holding: bool)
-    where
-        R: RangeBounds<Pubkey> + std::fmt::Debug,
+    pub fn hold_range_in_memory<R>(
+        &self,
+        range: &R,
+        start_holding: bool,
+        thread_pool: &rayon::ThreadPool,
+    ) where
+        R: RangeBounds<Pubkey> + std::fmt::Debug + Sync,
     {
         self.accounts_db
             .accounts_index
-            .hold_range_in_memory(range, start_holding)
+            .hold_range_in_memory(range, start_holding, thread_pool)
     }
 
     pub fn load_to_collect_rent_eagerly<R: RangeBounds<Pubkey> + std::fmt::Debug>(
@@ -1331,12 +1335,12 @@ mod tests {
     fn test_hold_range_in_memory() {
         let accts = Accounts::default_for_tests();
         let range = Pubkey::new(&[0; 32])..=Pubkey::new(&[0xff; 32]);
-        accts.hold_range_in_memory(&range, true);
-        accts.hold_range_in_memory(&range, false);
-        accts.hold_range_in_memory(&range, true);
-        accts.hold_range_in_memory(&range, true);
-        accts.hold_range_in_memory(&range, false);
-        accts.hold_range_in_memory(&range, false);
+        accts.hold_range_in_memory(&range, true, &test_thread_pool());
+        accts.hold_range_in_memory(&range, false, &test_thread_pool());
+        accts.hold_range_in_memory(&range, true, &test_thread_pool());
+        accts.hold_range_in_memory(&range, true, &test_thread_pool());
+        accts.hold_range_in_memory(&range, false, &test_thread_pool());
+        accts.hold_range_in_memory(&range, false, &test_thread_pool());
     }
 
     #[test]
@@ -1353,7 +1357,7 @@ mod tests {
         let range2_inclusive = range2.start..=range2.end;
         assert_eq!(0, idx.bin_calculator.bin_from_pubkey(&range2.start));
         assert_eq!(0, idx.bin_calculator.bin_from_pubkey(&range2.end));
-        accts.hold_range_in_memory(&range, true);
+        accts.hold_range_in_memory(&range, true, &test_thread_pool());
         idx.account_maps.iter().enumerate().for_each(|(_bin, map)| {
             let map = map.read().unwrap();
             assert_eq!(
@@ -1361,7 +1365,7 @@ mod tests {
                 vec![range.clone()]
             );
         });
-        accts.hold_range_in_memory(&range2, true);
+        accts.hold_range_in_memory(&range2, true, &test_thread_pool());
         idx.account_maps.iter().enumerate().for_each(|(bin, map)| {
             let map = map.read().unwrap();
             let expected = if bin == 0 {
@@ -1376,8 +1380,12 @@ mod tests {
                 bin
             );
         });
-        accts.hold_range_in_memory(&range, false);
-        accts.hold_range_in_memory(&range2, false);
+        accts.hold_range_in_memory(&range, false, &test_thread_pool());
+        accts.hold_range_in_memory(&range2, false, &test_thread_pool());
+    }
+
+    fn test_thread_pool() -> rayon::ThreadPool {
+        crate::accounts_db::make_min_priority_thread_pool()
     }
 
     #[test]

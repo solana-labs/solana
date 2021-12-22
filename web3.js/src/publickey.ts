@@ -87,6 +87,10 @@ export class PublicKey extends Struct {
     return bs58.encode(this.toBytes());
   }
 
+  toJSON(): string {
+    return this.toBase58();
+  }
+
   /**
    * Return the byte array representation of the public key
    */

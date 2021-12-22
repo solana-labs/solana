@@ -472,7 +472,7 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
         eprintln!("Can't get home directory path: {}", err);
         exit(1);
     }));
-    let version = "v1.20";
+    let version = "v1.21";
     let package = "bpf-tools";
     let target_path = home_dir
         .join(".cache")
