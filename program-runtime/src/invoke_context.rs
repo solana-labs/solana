@@ -28,6 +28,7 @@ use {
 pub type ProcessInstructionWithContext =
     fn(usize, &[u8], &mut InvokeContext) -> Result<(), InstructionError>;
 
+#[derive(Debug, PartialEq)]
 pub struct ProcessInstructionResult {
     pub compute_units_consumed: u64,
     pub result: Result<(), InstructionError>,
@@ -1347,12 +1348,14 @@ mod tests {
             .borrow_mut()
             .data_as_mut_slice()[0] = 1;
         assert_eq!(
-            invoke_context.process_instruction(
-                &instruction.data,
-                &instruction_accounts,
-                None,
-                &program_indices[1..],
-            ),
+            invoke_context
+                .process_instruction(
+                    &instruction.data,
+                    &instruction_accounts,
+                    None,
+                    &program_indices[1..],
+                )
+                .result,
             Err(InstructionError::ExternalAccountDataModified)
         );
         transaction_context
@@ -1366,12 +1369,14 @@ mod tests {
             .borrow_mut()
             .data_as_mut_slice()[0] = 1;
         assert_eq!(
-            invoke_context.process_instruction(
-                &instruction.data,
-                &instruction_accounts,
-                None,
-                &program_indices[1..],
-            ),
+            invoke_context
+                .process_instruction(
+                    &instruction.data,
+                    &instruction_accounts,
+                    None,
+                    &program_indices[1..],
+                )
+                .result,
             Err(InstructionError::ReadonlyDataModified)
         );
         transaction_context
@@ -1382,15 +1387,33 @@ mod tests {
         invoke_context.pop();
 
         let cases = vec![
-            (MockInstruction::NoopSuccess, Ok(0)),
+            (
+                MockInstruction::NoopSuccess,
+                ProcessInstructionResult {
+                    result: Ok(()),
+                    compute_units_consumed: 0,
+                },
+            ),
             (
                 MockInstruction::NoopFail,
-                Err(InstructionError::GenericError),
+                ProcessInstructionResult {
+                    result: Err(InstructionError::GenericError),
+                    compute_units_consumed: 0,
+                },
             ),
-            (MockInstruction::ModifyOwned, Ok(0)),
+            (
+                MockInstruction::ModifyOwned,
+                ProcessInstructionResult {
+                    result: Ok(()),
+                    compute_units_consumed: 0,
+                },
+            ),
             (
                 MockInstruction::ModifyNotOwned,
-                Err(InstructionError::ExternalAccountDataModified),
+                ProcessInstructionResult {
+                    result: Err(InstructionError::ExternalAccountDataModified),
+                    compute_units_consumed: 0,
+                },
             ),
         ];
         for case in cases {
