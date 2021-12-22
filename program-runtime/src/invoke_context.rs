@@ -1054,6 +1054,10 @@ mod tests {
         ModifyOwned,
         ModifyNotOwned,
         ModifyReadonly,
+        ConsumeComputeUnits {
+            compute_units_consumed: u64,
+            desired_result: Result<(), InstructionError>,
+        },
     }
 
     #[test]
@@ -1166,6 +1170,17 @@ mod tests {
                     keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?
                         .try_account_ref_mut()?
                         .data_as_mut_slice()[0] = 1
+                }
+                MockInstruction::ConsumeComputeUnits {
+                    compute_units_consumed,
+                    desired_result,
+                } => {
+                    invoke_context
+                        .get_compute_meter()
+                        .borrow_mut()
+                        .consume(compute_units_consumed)
+                        .unwrap();
+                    return desired_result;
                 }
             }
         } else {
@@ -1583,5 +1598,90 @@ mod tests {
             ComputeBudget::default()
         );
         invoke_context.pop();
+    }
+
+    #[test]
+    fn test_process_instruction_compute_budget() {
+        let caller_program_id = solana_sdk::pubkey::new_rand();
+        let callee_program_id = solana_sdk::pubkey::new_rand();
+        let owned_account = AccountSharedData::new(42, 1, &callee_program_id);
+        let not_owned_account = AccountSharedData::new(84, 1, &solana_sdk::pubkey::new_rand());
+        let readonly_account = AccountSharedData::new(168, 1, &solana_sdk::pubkey::new_rand());
+        let loader_account = AccountSharedData::new(0, 0, &native_loader::id());
+        let mut program_account = AccountSharedData::new(1, 0, &native_loader::id());
+        program_account.set_executable(true);
+
+        let accounts = vec![
+            (solana_sdk::pubkey::new_rand(), RefCell::new(owned_account)),
+            (
+                solana_sdk::pubkey::new_rand(),
+                RefCell::new(not_owned_account),
+            ),
+            (
+                solana_sdk::pubkey::new_rand(),
+                RefCell::new(readonly_account),
+            ),
+            (caller_program_id, RefCell::new(loader_account)),
+            (callee_program_id, RefCell::new(program_account)),
+        ];
+        let account_indices = [0, 1, 2];
+        let program_indices = [3, 4];
+
+        let metas = vec![
+            AccountMeta::new(accounts[0].0, false),
+            AccountMeta::new(accounts[1].0, false),
+            AccountMeta::new_readonly(accounts[2].0, false),
+        ];
+
+        let builtin_programs = &[BuiltinProgram {
+            program_id: callee_program_id,
+            process_instruction: mock_process_instruction,
+        }];
+        let mut invoke_context = InvokeContext::new_mock(&accounts, builtin_programs);
+
+        let compute_units_consumed = 10;
+        let desired_results = vec![Ok(()), Err(InstructionError::GenericError)];
+
+        for desired_result in desired_results {
+            let caller_instruction =
+                CompiledInstruction::new(program_indices[0] as u8, &(), vec![0, 1, 2, 3, 4]);
+            let callee_instruction = Instruction::new_with_bincode(
+                callee_program_id,
+                &MockInstruction::ConsumeComputeUnits {
+                    compute_units_consumed,
+                    desired_result: desired_result.clone(),
+                },
+                metas.clone(),
+            );
+            let message = Message::new(&[callee_instruction.clone()], None);
+            invoke_context
+                .push(&message, &caller_instruction, &program_indices[..1], &[])
+                .unwrap();
+            let caller_write_privileges = message
+                .account_keys
+                .iter()
+                .enumerate()
+                .map(|(i, _)| message.is_writable(i))
+                .collect::<Vec<bool>>();
+            let result = invoke_context.process_instruction(
+                &message,
+                &message.instructions[0],
+                &program_indices[1..],
+                &account_indices,
+                &caller_write_privileges,
+            );
+
+            // Because the instruction had compute cost > 0, then regardless of the execution result,
+            // the number of compute units consumed should be a non-default which is something greater
+            // than zero.
+            assert!(result.compute_units_consumed > 0);
+            assert_eq!(
+                result,
+                ProcessInstructionResult {
+                    compute_units_consumed,
+                    result: desired_result,
+                }
+            );
+        }
     }
 }
