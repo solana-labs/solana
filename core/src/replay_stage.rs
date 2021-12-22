@@ -854,23 +854,30 @@ impl ReplayStage {
     ) {
         let start_slot = poh_recorder.lock().unwrap().start_slot();
         if let Some(latest_leader_slot) = progress.get_latest_leader_slot(start_slot) {
-            if !progress.is_propagated(latest_leader_slot) {
-                warn!("Slot not propagated: slot={}", latest_leader_slot);
-                let retransmit_info = progress.get_retransmit_info(latest_leader_slot).unwrap();
-                if retransmit_info.reached_retransmit_threshold() {
-                    info!(
-                        "Retrying retransmit: start_slot={} latest_leader_slot={} retransmit_info={:?}",
-                        start_slot, latest_leader_slot, &retransmit_info,
-                    );
-                    datapoint_info!(
-                        "replay_stage-retransmit-timing-based",
-                        ("slot", latest_leader_slot, i64),
-                        ("retry_iteration", retransmit_info.retry_iteration, i64),
-                    );
-                    let _ = retransmit_slots_sender.send(latest_leader_slot);
-                    retransmit_info.increment_retry_iteration();
-                } else {
-                    info!("Bypass retry: {:?}", &retransmit_info);
+            let first_of_consecutive_leader_slots = (latest_leader_slot
+                / NUM_CONSECUTIVE_LEADER_SLOTS)
+                * NUM_CONSECUTIVE_LEADER_SLOTS;
+            for slot in first_of_consecutive_leader_slots..=latest_leader_slot {
+                if !progress.is_propagated(slot) {
+                    warn!("Slot not propagated: slot={}", slot);
+                    let retransmit_info = progress.get_retransmit_info(slot).unwrap();
+                    if retransmit_info.reached_retransmit_threshold() {
+                        info!(
+                            "Retrying retransmit: start_slot={} latest_leader_slot={} retransmit_info={:?}",
+                            start_slot, slot, &retransmit_info,
+                        );
+                        datapoint_info!(
+                            "replay_stage-retransmit-timing-based",
+                            ("slot", slot, i64),
+                            ("retry_iteration", retransmit_info.retry_iteration, i64),
+                        );
+                        let _ = retransmit_slots_sender.send(slot);
+                        retransmit_info.increment_retry_iteration();
+                        // limit retransmission to one slot
+                        return;
+                    } else {
+                        info!("Bypass retry: {:?}", &retransmit_info);
+                    }
                 }
             }
         }
@@ -1507,6 +1514,8 @@ impl ReplayStage {
                             );
                             let _ = retransmit_slots_sender.send(latest_unconfirmed_leader_slot);
                             retransmit_info.increment_retry_iteration();
+                            // limit retransmission to one slot
+                            return;
                         } else {
                             info!(
                                 "Bypassing retransmit of my leader slot retransmit_info={:?}",
