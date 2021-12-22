@@ -310,8 +310,15 @@ impl SendTransactionService {
     fn send_transaction(
         send_socket: &UdpSocket,
         tpu_address: &SocketAddr,
+        tpu_extended_address: &SocketAddr,
         wire_transaction: &[u8],
     ) {
+        let tpu_address: &SocketAddr = if wire_transaction.len() > PACKET_DATA_SIZE {
+            tpu_extended_address
+        }
+        else {
+            tpu_address
+        };
         if let Err(err) = send_socket.send_to(wire_transaction, tpu_address) {
             warn!("Failed to send transaction to {}: {:?}", tpu_address, err);
         }
