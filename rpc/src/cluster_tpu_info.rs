@@ -13,7 +13,7 @@ use {
 pub struct ClusterTpuInfo {
     cluster_info: Arc<ClusterInfo>,
     poh_recorder: Arc<Mutex<PohRecorder>>,
-    recent_peers: HashMap<Pubkey, SocketAddr>,
+    recent_peers: HashMap<Pubkey, (SocketAddr, SocketAddr)>,
 }
 
 impl ClusterTpuInfo {
@@ -32,11 +32,11 @@ impl TpuInfo for ClusterTpuInfo {
             .cluster_info
             .tpu_peers()
             .into_iter()
-            .map(|ci| (ci.id, ci.tpu))
+            .map(|ci| (ci.id, (ci.tpu, ci.tpu_extended)))
             .collect();
     }
 
-    fn get_leader_tpus(&self, max_count: u64) -> Vec<&SocketAddr> {
+    fn get_leader_tpus(&self, extended: bool, max_count: u64) -> Vec<SocketAddr> {
         let recorder = self.poh_recorder.lock().unwrap();
         let leaders: Vec<_> = (0..max_count)
             .filter_map(|i| recorder.leader_after_n_slots(i * NUM_CONSECUTIVE_LEADER_SLOTS))
@@ -44,9 +44,16 @@ impl TpuInfo for ClusterTpuInfo {
         drop(recorder);
         let mut unique_leaders = vec![];
         for leader in leaders.iter() {
-            if let Some(addr) = self.recent_peers.get(leader) {
+            // TOOD: There was some funny business with pulling SocketAddr out of
+            // (SocketAddr, SocketAddr); figure that out and use borrows again
+            if let Some(addr_pair) = self.recent_peers.get(leader) {
+                let addr = if extended {
+                    addr_pair.1
+                } else {
+                    addr_pair.0
+                };
                 if !unique_leaders.contains(&addr) {
-                    unique_leaders.push(addr);
+                    unique_leaders.push(addr.clone());
                 }
             }
         }

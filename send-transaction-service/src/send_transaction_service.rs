@@ -3,7 +3,7 @@ use {
     log::*,
     solana_metrics::{datapoint_warn, inc_new_counter_info},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
-    solana_sdk::{hash::Hash, nonce_account, pubkey::Pubkey, signature::Signature},
+    solana_sdk::{hash::Hash, packet::PACKET_DATA_SIZE, nonce_account, pubkey::Pubkey, signature::Signature},
     std::{
         collections::HashMap,
         net::{SocketAddr, UdpSocket},
@@ -144,22 +144,23 @@ impl SendTransactionService {
                     Err(RecvTimeoutError::Timeout) => {}
                     Ok(transaction_info) => {
                         inc_new_counter_info!("send_transaction_service-recv-tx", 1);
+                        let extended = Self::requires_tpu_extended(&transaction_info);
                         let addresses = leader_info.as_ref().map(|leader_info| {
-                            leader_info.get_leader_tpus(config.leader_forward_count)
+                            leader_info.get_leader_tpus(extended, config.leader_forward_count)
                         });
                         let addresses = addresses
                             .map(|address_list| {
                                 if address_list.is_empty() {
-                                    vec![&tpu_address]
+                                    vec![tpu_address.clone()]
                                 } else {
                                     address_list
                                 }
                             })
-                            .unwrap_or_else(|| vec![&tpu_address]);
+                            .unwrap_or_else(|| vec![tpu_address.clone()]);
                         for address in addresses {
                             Self::send_transaction(
                                 &send_socket,
-                                address,
+                                &address,
                                 &transaction_info.wire_transaction,
                             );
                         }
@@ -269,22 +270,23 @@ impl SendTransactionService {
                     result.retried += 1;
                     transaction_info.retries += 1;
                     inc_new_counter_info!("send_transaction_service-retry", 1);
+                    let extended = Self::requires_tpu_extended(&transaction_info);
                     let addresses = leader_info.as_ref().map(|leader_info| {
-                        leader_info.get_leader_tpus(config.leader_forward_count)
+                        leader_info.get_leader_tpus(extended, config.leader_forward_count)
                     });
                     let addresses = addresses
                         .map(|address_list| {
                             if address_list.is_empty() {
-                                vec![tpu_address]
+                                vec![tpu_address.clone()]
                             } else {
                                 address_list
                             }
                         })
-                        .unwrap_or_else(|| vec![tpu_address]);
+                        .unwrap_or_else(|| vec![tpu_address.clone()]);
                     for address in addresses {
                         Self::send_transaction(
                             send_socket,
-                            address,
+                            &address,
                             &transaction_info.wire_transaction,
                         );
                     }
@@ -307,18 +309,15 @@ impl SendTransactionService {
         result
     }
 
+    fn requires_tpu_extended(transaction_info: &TransactionInfo) -> bool {
+        transaction_info.wire_transaction.len() <= PACKET_DATA_SIZE
+    }
+
     fn send_transaction(
         send_socket: &UdpSocket,
         tpu_address: &SocketAddr,
-        tpu_extended_address: &SocketAddr,
         wire_transaction: &[u8],
     ) {
-        let tpu_address: &SocketAddr = if wire_transaction.len() > PACKET_DATA_SIZE {
-            tpu_extended_address
-        }
-        else {
-            tpu_address
-        };
         if let Err(err) = send_socket.send_to(wire_transaction, tpu_address) {
             warn!("Failed to send transaction to {}: {:?}", tpu_address, err);
         }
