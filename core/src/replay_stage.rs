@@ -854,9 +854,8 @@ impl ReplayStage {
     ) {
         let start_slot = poh_recorder.lock().unwrap().start_slot();
         if let Some(latest_leader_slot) = progress.get_latest_leader_slot(start_slot) {
-            let first_of_consecutive_leader_slots = (latest_leader_slot
-                / NUM_CONSECUTIVE_LEADER_SLOTS)
-                * NUM_CONSECUTIVE_LEADER_SLOTS;
+            let first_of_consecutive_leader_slots =
+                (latest_leader_slot / NUM_CONSECUTIVE_LEADER_SLOTS) * NUM_CONSECUTIVE_LEADER_SLOTS;
             for slot in first_of_consecutive_leader_slots..=latest_leader_slot {
                 if !progress.is_propagated(slot) {
                     warn!("Slot not propagated: slot={}", slot);
