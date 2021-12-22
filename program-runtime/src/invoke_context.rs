@@ -28,6 +28,11 @@ use {
 pub type ProcessInstructionWithContext =
     fn(usize, &[u8], &mut InvokeContext) -> Result<(), InstructionError>;
 
+pub struct ProcessInstructionResult {
+    pub compute_units_consumed: u64,
+    pub result: Result<(), InstructionError>,
+}
+
 #[derive(Clone)]
 pub struct BuiltinProgram {
     pub program_id: Pubkey,
@@ -510,7 +515,8 @@ impl<'a> InvokeContext<'a> {
             &instruction_accounts,
             Some(&caller_write_privileges),
             &program_indices,
-        )?;
+        )
+        .result?;
 
         // Verify the called program has not misbehaved
         let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
@@ -691,7 +697,7 @@ impl<'a> InvokeContext<'a> {
         instruction_accounts: &[InstructionAccount],
         caller_write_privileges: Option<&[bool]>,
         program_indices: &[usize],
-    ) -> Result<u64, InstructionError> {
+    ) -> ProcessInstructionResult {
         let program_id = program_indices
             .last()
             .map(|index| *self.transaction_context.get_key_of_account_at_index(*index))
@@ -704,8 +710,13 @@ impl<'a> InvokeContext<'a> {
             }
         } else {
             // Verify the calling program hasn't misbehaved
-            self.verify_and_update(instruction_accounts, caller_write_privileges)?;
-
+            let result = self.verify_and_update(instruction_accounts, caller_write_privileges);
+            if result.is_err() {
+                return ProcessInstructionResult {
+                    compute_units_consumed: 0,
+                    result,
+                };
+            }
             // Record instruction
             if let Some(instruction_recorder) = &self.instruction_recorder {
                 let compiled_instruction = CompiledInstruction {
@@ -725,27 +736,31 @@ impl<'a> InvokeContext<'a> {
             }
         }
 
+        let mut compute_units_consumed = 0;
         let result = self
             .push(instruction_accounts, program_indices)
             .and_then(|_| {
                 self.return_data = (program_id, Vec::new());
                 let pre_remaining_units = self.compute_meter.borrow().get_remaining();
-                self.process_executable_chain(instruction_data)?;
+                let execution_result = self.process_executable_chain(instruction_data);
                 let post_remaining_units = self.compute_meter.borrow().get_remaining();
+                compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
+                execution_result?;
 
                 // Verify the called program has not misbehaved
                 if is_lowest_invocation_level {
-                    self.verify(instruction_accounts, program_indices)?;
+                    self.verify(instruction_accounts, program_indices)
                 } else {
-                    self.verify_and_update(instruction_accounts, None)?;
+                    self.verify_and_update(instruction_accounts, None)
                 }
-
-                Ok(pre_remaining_units.saturating_sub(post_remaining_units))
             });
 
         // Pop the invoke_stack to restore previous state
         self.pop();
-        result
+        ProcessInstructionResult {
+            compute_units_consumed,
+            result,
+        }
     }
 
     /// Calls the instruction's program entrypoint method
