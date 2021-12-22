@@ -10,9 +10,7 @@ publish = false
 
 [dependencies]
 clap = "2.33.1"
-solana-clap-utils = { path = "../clap-utils", version = "=1.10.0" }
 solana-streamer = { path = "../streamer", version = "=1.10.0" }
-solana-logger = { path = "../logger", version = "=1.10.0" }
 solana-net-utils = { path = "../net-utils", version = "=1.10.0" }
 solana-version = { path = "../version", version = "=1.10.0" }
 

@@ -135,12 +135,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "base32"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23ce669cd6c8588f79e15cf450314f9638f967fc5770ff1c7c1deb0925ea7cfa"
-
-[[package]]
 name = "base64"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -601,16 +595,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ctor"
-version = "0.1.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7fbaabec2c953050352311293be5c6aba8e141ba19d6811862b232d6fd020484"
-dependencies = [
- "quote 1.0.6",
- "syn 1.0.67",
-]
-
-[[package]]
 name = "curve25519-dalek"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -881,15 +865,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "erased-serde"
-version = "0.3.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3de9ad4541d99dc22b59134e7ff8dc3d6c988c89ecd7324bf10a8362b07a2afa"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "errno"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -977,12 +952,6 @@ dependencies = [
  "matches",
  "percent-encoding",
 ]
-
-[[package]]
-name = "fs_extra"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2022715d62ab30faffd124d40b76f4134a550a87792276512b18d63272333394"
 
 [[package]]
 name = "futures"
@@ -1124,17 +1093,6 @@ dependencies = [
  "cfg-if 1.0.0",
  "libc",
  "wasi 0.10.1+wasi-snapshot-preview1",
-]
-
-[[package]]
-name = "ghost"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a5bcf1bbeab73aa4cf2fde60a846858dc036163c7c33bec309f8d17de785479"
-dependencies = [
- "proc-macro2 1.0.24",
- "quote 1.0.6",
- "syn 1.0.67",
 ]
 
 [[package]]
@@ -1381,16 +1339,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61124eeebbd69b8190558df225adf7e4caafce0d743919e5d6b19652314ec5ec"
 dependencies = [
  "cfg-if 1.0.0",
-]
-
-[[package]]
-name = "inventory"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1367fed6750ff2a5bcb967a631528303bb85631f167a75eb1bf7762d57eb7678"
-dependencies = [
- "ctor",
- "ghost",
 ]
 
 [[package]]
@@ -2980,12 +2928,9 @@ dependencies = [
 name = "solana-bucket-map"
 version = "1.10.0"
 dependencies = [
- "fs_extra",
  "log",
  "memmap2 0.5.0",
  "rand 0.7.3",
- "rayon",
- "solana-logger 1.10.0",
  "solana-measure",
  "solana-sdk",
  "tempfile",
@@ -3148,7 +3093,6 @@ dependencies = [
  "serde_derive",
  "sha2 0.10.0",
  "solana-frozen-abi-macro 1.10.0",
- "solana-logger 1.10.0",
  "thiserror",
 ]
 
@@ -3206,7 +3150,6 @@ dependencies = [
 name = "solana-metrics"
 version = "1.10.0"
 dependencies = [
- "env_logger 0.9.0",
  "gethostname",
  "lazy_static",
  "log",
@@ -3249,7 +3192,6 @@ dependencies = [
  "rand 0.7.3",
  "rayon",
  "serde",
- "solana-logger 1.10.0",
  "solana-metrics",
  "solana-rayon-threadlimit",
  "solana-sdk",
@@ -3326,7 +3268,6 @@ dependencies = [
  "sha3 0.10.0",
  "solana-frozen-abi 1.10.0",
  "solana-frozen-abi-macro 1.10.0",
- "solana-logger 1.10.0",
  "solana-sdk-macro 1.10.0",
  "thiserror",
  "wasm-bindgen",
@@ -3346,7 +3287,6 @@ dependencies = [
  "num-traits",
  "rustc_version 0.4.0",
  "serde",
- "solana-logger 1.10.0",
  "solana-sdk",
  "thiserror",
 ]
@@ -3385,7 +3325,6 @@ dependencies = [
 name = "solana-remote-wallet"
 version = "1.10.0"
 dependencies = [
- "base32",
  "console",
  "dialoguer",
  "hidapi",
@@ -3435,7 +3374,6 @@ dependencies = [
  "solana-config-program",
  "solana-frozen-abi 1.10.0",
  "solana-frozen-abi-macro 1.10.0",
- "solana-logger 1.10.0",
  "solana-measure",
  "solana-metrics",
  "solana-program-runtime",
@@ -3527,7 +3465,6 @@ name = "solana-send-transaction-service"
 version = "1.10.0"
 dependencies = [
  "log",
- "solana-logger 1.10.0",
  "solana-metrics",
  "solana-runtime",
  "solana-sdk",
@@ -3605,12 +3542,10 @@ dependencies = [
  "serde_derive",
  "solana-frozen-abi 1.10.0",
  "solana-frozen-abi-macro 1.10.0",
- "solana-logger 1.10.0",
  "solana-metrics",
  "solana-program-runtime",
  "solana-sdk",
  "thiserror",
- "typetag",
 ]
 
 [[package]]
@@ -4083,30 +4018,6 @@ name = "typenum"
 version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "373c8a200f9e67a0c95e62a4f52fbf80c23b4381c05a17845531982fa99e6b33"
-
-[[package]]
-name = "typetag"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4080564c5b2241b5bff53ab610082234e0c57b0417f4bd10596f183001505b8a"
-dependencies = [
- "erased-serde",
- "inventory",
- "once_cell",
- "serde",
- "typetag-impl",
-]
-
-[[package]]
-name = "typetag-impl"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e60147782cc30833c05fba3bab1d9b5771b2685a2557672ac96fa5d154099c0e"
-dependencies = [
- "proc-macro2 1.0.24",
- "quote 1.0.6",
- "syn 1.0.67",
-]
 
 [[package]]
 name = "unicode-bidi"

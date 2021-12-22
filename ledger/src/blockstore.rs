@@ -775,6 +775,57 @@ impl Blockstore {
         recovered_data_shreds
     }
 
+    /// The main helper function that performs the shred insertion logic
+    /// and updates corresponding meta-data.
+    ///
+    /// This function updates the following column families:
+    ///   - [`cf::DeadSlots`]: mark a shred as "dead" if its meta-data indicates
+    ///     there is no need to replay this shred.  Specifically when both the
+    ///     following conditions satisfy,
+    ///     - We get a new shred N marked as the last shred in the slot S,
+    ///       but N.index() is less than the current slot_meta.received
+    ///       for slot S.
+    ///     - The slot is not currently full
+    ///     It means there's an alternate version of this slot. See
+    ///     `check_insert_data_shred` for more details.
+    ///   - [`cf::ShredData`]: stores data shreds (in check_insert_data_shreds).
+    ///   - [`cf::ShredCode`]: stores coding shreds (in check_insert_coding_shreds).
+    ///   - [`cf::SlotMeta`]: the SlotMeta of the input `shreds` and their related
+    ///     shreds are updated.  Specifically:
+    ///     - `handle_chaining()` updates `cf::SlotMeta` in two ways.  First, it
+    ///       updates the in-memory slot_meta_working_set, which will later be
+    ///       persisted in commit_slot_meta_working_set().  Second, for the newly
+    ///       chained slots (updated inside handle_chaining_for_slot()), it will
+    ///       directly persist their slot-meta into `cf::SlotMeta`.
+    ///     - In `commit_slot_meta_working_set()`, persists everything stored
+    ///       in the in-memory structure slot_meta_working_set, which is updated
+    ///       by both `check_insert_data_shred()` and `handle_chaining()`.
+    ///   - [`cf::Orphans`]: add or remove the ID of a slot to `cf::Orphans`
+    ///     if it becomes / is no longer an orphan slot in `handle_chaining()`.
+    ///   - [`cf::ErasureMeta`]: the associated ErasureMeta of the coding and data
+    ///     shreds inside `shreds` will be updated and committed to
+    ///     `cf::ErasureMeta`.
+    ///   - [`cf::Index`]: stores (slot id, index to the index_working_set_entry)
+    ///     pair to the `cf::Index` column family for each index_working_set_entry
+    ///     which insert did occur in this function call.
+    ///
+    /// Arguments:
+    ///  - `shreds`: the shreds to be inserted.
+    ///  - `is_repaired`: a boolean vector aligned with `shreds` where each
+    ///    boolean indicates whether the corresponding shred is repaired or not.
+    ///  - `leader_schedule`: the leader schedule
+    ///  - `is_trusted`: whether the shreds come from a trusted source. If this
+    ///    is set to true, then the function will skip the shred duplication and
+    ///    integrity checks.
+    ///  - `retransmit_sender`: the sender for transmitting any recovered
+    ///    data shreds.
+    ///  - `handle_duplicate`: a function for handling shreds that have the same slot
+    ///    and index.
+    ///  - `metrics`: the metric for reporting detailed stats
+    ///
+    /// On success, the function returns an Ok result with a vector of
+    /// `CompletedDataSetInfo` and a vector of its corresponding index in the
+    /// input `shreds` vector.
     pub fn insert_shreds_handle_duplicate<F>(
         &self,
         shreds: Vec<Shred>,
@@ -3465,7 +3516,25 @@ fn find_slot_meta_in_cached_state<'a>(
     }
 }
 
-// Chaining based on latest discussion here: https://github.com/solana-labs/solana/pull/2253
+/// For each entry in `working_set` whose `did_insert_occur` is true, this
+/// function handles its chaining effect by updating the SlotMeta of both
+/// the slot and its parent slot to reflect the slot descends from the
+/// parent slot.  In addition, when a slot is newly connected, it also
+/// checks whether any of its direct and indirect children slots are connected
+/// or not.
+///
+/// This function may update column families [`cf::SlotMeta`] and
+/// [`cf::Orphans`].
+///
+/// For more information about the chaining, check the previous discussion here:
+/// https://github.com/solana-labs/solana/pull/2253
+///
+/// Arguments:
+/// - `db`: the blockstore db that stores both shreds and their metadata.
+/// - `write_batch`: the write batch which includes all the updates of the
+///   the current write and ensures their atomicity.
+/// - `working_set`: a slot-id to SlotMetaWorkingSetEntry map.  This function
+///   will remove all entries which insertion did not actually occur.
 fn handle_chaining(
     db: &Database,
     write_batch: &mut WriteBatch,
@@ -3487,6 +3556,34 @@ fn handle_chaining(
     Ok(())
 }
 
+/// A helper function of handle_chaining which handles the chaining based
+/// on the `SlotMetaWorkingSetEntry` of the specified `slot`.  Specifically,
+/// it handles the following two things:
+///
+/// 1. based on the `SlotMetaWorkingSetEntry` for `slot`, check if `slot`
+/// did not previously have a parent slot but does now.  If `slot` satisfies
+/// this condition, update the Orphan property of both `slot` and its parent
+/// slot based on their current orphan status.  Specifically:
+///  - updates the orphan property of slot to no longer be an orphan because
+///    it has a parent.
+///  - adds the parent to the orphan column family if the parent's parent is
+///    currently unknown.
+///
+/// 2. if the `SlotMetaWorkingSetEntry` for `slot` indicates this slot
+/// is newly connected to a parent slot, then this function will update
+/// the is_connected property of all its direct and indirect children slots.
+///
+/// This function may update column family [`cf::Orphans`] and indirectly
+/// update SlotMeta from its output parameter `new_chained_slots`.
+///
+/// Arguments:
+/// `db`: the underlying db for blockstore
+/// `write_batch`: the write batch which includes all the updates of the
+///   the current write and ensures their atomicity.
+/// `working_set`: the working set which include the specified `slot`
+/// `new_chained_slots`: an output parameter which includes all the slots
+///   which connectivity have been updated.
+/// `slot`: the slot which we want to handle its chaining effect.
 fn handle_chaining_for_slot(
     db: &Database,
     write_batch: &mut WriteBatch,
@@ -3569,12 +3666,26 @@ fn handle_chaining_for_slot(
     Ok(())
 }
 
+/// Traverse all the direct and indirect children slots and apply the specified
+/// `slot_function`.
+///
+/// Arguments:
+/// `db`: the blockstore db that stores shreds and their metadata.
+/// `slot`: starting slot to traverse.
+/// `slot_meta`: the SlotMeta of the above `slot`.
+/// `working_set`: a slot-id to SlotMetaWorkingSetEntry map which is used
+///   to traverse the graph.
+/// `passed_visisted_slots`: all the traversed slots which have passed the
+///   slot_function.  This may also include the input `slot`.
+/// `slot_function`: a function which updates the SlotMeta of the visisted
+///   slots and determine whether to further traverse the children slots of
+///   a given slot.
 fn traverse_children_mut<F>(
     db: &Database,
     slot: Slot,
     slot_meta: &Rc<RefCell<SlotMeta>>,
     working_set: &HashMap<u64, SlotMetaWorkingSetEntry>,
-    new_chained_slots: &mut HashMap<u64, Rc<RefCell<SlotMeta>>>,
+    passed_visisted_slots: &mut HashMap<u64, Rc<RefCell<SlotMeta>>>,
     slot_function: F,
 ) -> Result<()>
 where
@@ -3590,7 +3701,7 @@ where
                 let next_slot = find_slot_meta_else_create(
                     db,
                     working_set,
-                    new_chained_slots,
+                    passed_visisted_slots,
                     *next_slot_index,
                 )?;
                 next_slots.push((*next_slot_index, next_slot));

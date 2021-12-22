@@ -93,7 +93,7 @@ impl From<NotificationEntry> for TimestampedNotificationEntry {
 pub enum NotificationEntry {
     Slot(SlotInfo),
     SlotUpdate(SlotUpdate),
-    Vote(Box<dyn VoteTransaction>),
+    Vote(VoteTransaction),
     Root(Slot),
     Bank(CommitmentSlots),
     Gossip(Slot),
@@ -677,8 +677,8 @@ impl RpcSubscriptions {
         self.enqueue_notification(NotificationEntry::SignaturesReceived(slot_signatures));
     }
 
-    pub fn notify_vote(&self, vote: Box<dyn VoteTransaction>) {
-        self.enqueue_notification(NotificationEntry::Vote(vote.clone()));
+    pub fn notify_vote(&self, vote: VoteTransaction) {
+        self.enqueue_notification(NotificationEntry::Vote(vote));
     }
 
     pub fn notify_roots(&self, mut rooted_slots: Vec<Slot>) {
