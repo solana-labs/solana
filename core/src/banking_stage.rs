@@ -398,7 +398,6 @@ impl BankingStage {
         data_budget: &DataBudget,
     ) -> std::io::Result<()> {
         let packets = Self::filter_valid_packets_for_forwarding(buffered_packet_batches.iter());
-        inc_new_counter_info!("banking_stage-forwarded_packets", packets.len());
         const INTERVAL_MS: u64 = 100;
         const MAX_BYTES_PER_SECOND: usize = 10_000 * 1200;
         const MAX_BYTES_PER_INTERVAL: usize = MAX_BYTES_PER_SECOND * INTERVAL_MS as usize / 1000;
@@ -407,14 +406,23 @@ impl BankingStage {
             std::cmp::min(bytes + MAX_BYTES_PER_INTERVAL, MAX_BYTES_BUDGET)
         });
 
-        let mut packet_vec = Vec::with_capacity(packets.len());
-        for p in packets {
-            if data_budget.take(p.meta.size) {
-                packet_vec.push((&p.data[..p.meta.size], tpu_forwards));
+        let packet_vec: Vec<_> = packets
+            .iter()
+            .filter_map(|p| {
+                if !p.meta.forwarded && data_budget.take(p.meta.size) {
+                    Some((&p.data[..p.meta.size], tpu_forwards))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if !packet_vec.is_empty() {
+            inc_new_counter_info!("banking_stage-forwarded_packets", packet_vec.len());
+            if let Err(SendPktsError::IoError(ioerr, _num_failed)) = batch_send(socket, &packet_vec)
+            {
+                return Err(ioerr);
             }
-        }
-        if let Err(SendPktsError::IoError(ioerr, _num_failed)) = batch_send(socket, &packet_vec) {
-            return Err(ioerr);
         }
 
         Ok(())

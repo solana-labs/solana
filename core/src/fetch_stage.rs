@@ -8,7 +8,7 @@ use {
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
     solana_perf::{packet::PacketBatchRecycler, recycler::Recycler},
     solana_poh::poh_recorder::PohRecorder,
-    solana_sdk::clock::DEFAULT_TICKS_PER_SLOT,
+    solana_sdk::{clock::DEFAULT_TICKS_PER_SLOT, packet::Packet},
     solana_streamer::streamer::{self, PacketBatchReceiver, PacketBatchSender},
     std::{
         net::UdpSocket,
@@ -83,10 +83,16 @@ impl FetchStage {
         sendr: &PacketBatchSender,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) -> Result<()> {
-        let packet_batch = recvr.recv()?;
+        let mark_forwarded = |packet: &mut Packet| {
+            packet.meta.forwarded = true;
+        };
+
+        let mut packet_batch = recvr.recv()?;
         let mut num_packets = packet_batch.packets.len();
+        packet_batch.packets.iter_mut().for_each(mark_forwarded);
         let mut packet_batches = vec![packet_batch];
-        while let Ok(packet_batch) = recvr.try_recv() {
+        while let Ok(mut packet_batch) = recvr.try_recv() {
+            packet_batch.packets.iter_mut().for_each(mark_forwarded);
             num_packets += packet_batch.packets.len();
             packet_batches.push(packet_batch);
             // Read at most 1K transactions in a loop

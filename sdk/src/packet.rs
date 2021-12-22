@@ -18,7 +18,7 @@ pub const PACKET_DATA_SIZE: usize = 1280 - 40 - 8;
 #[repr(C)]
 pub struct Meta {
     pub size: usize,
-    pub forward: bool,
+    pub forwarded: bool,
     pub repair: bool,
     pub discard: bool,
     pub addr: [u16; 8],
