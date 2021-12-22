@@ -105,7 +105,7 @@ impl<T: Clone + Copy> Bucket<T> {
     pub fn keys(&self) -> Vec<Pubkey> {
         let mut rv = vec![];
         for i in 0..self.index.capacity() {
-            if self.index.uid(i).is_none() {
+            if self.index.is_free(i) {
                 continue;
             }
             let ix: &IndexEntry = self.index.get(i);
@@ -121,7 +121,7 @@ impl<T: Clone + Copy> Bucket<T> {
         let mut result = Vec::with_capacity(self.index.count.load(Ordering::Relaxed) as usize);
         for i in 0..self.index.capacity() {
             let ii = i % self.index.capacity();
-            if self.index.uid(ii).is_none() {
+            if self.index.is_free(ii) {
                 continue;
             }
             let ix: &IndexEntry = self.index.get(ii);
@@ -154,7 +154,7 @@ impl<T: Clone + Copy> Bucket<T> {
         let ix = Self::bucket_index_ix(index, key, random);
         for i in ix..ix + index.max_search() {
             let ii = i % index.capacity();
-            if index.uid(ii).is_none() {
+            if index.is_free(ii) {
                 continue;
             }
             let elem: &mut IndexEntry = index.get_mut(ii);
@@ -173,7 +173,7 @@ impl<T: Clone + Copy> Bucket<T> {
         let ix = Self::bucket_index_ix(index, key, random);
         for i in ix..ix + index.max_search() {
             let ii = i % index.capacity();
-            if index.uid(ii).is_none() {
+            if index.is_free(ii) {
                 continue;
             }
             let elem: &IndexEntry = index.get(ii);
@@ -194,7 +194,7 @@ impl<T: Clone + Copy> Bucket<T> {
         let ix = Self::bucket_index_ix(index, key, random);
         for i in ix..ix + index.max_search() {
             let ii = i as u64 % index.capacity();
-            if index.uid(ii).is_some() {
+            if !index.is_free(ii) {
                 continue;
             }
             index.allocate(ii, elem_uid, is_resizing).unwrap();
@@ -277,7 +277,7 @@ impl<T: Clone + Copy> Bucket<T> {
             let pos = thread_rng().gen_range(0, cap);
             for i in pos..pos + self.index.max_search() {
                 let ix = i % cap;
-                if best_bucket.uid(ix).is_none() {
+                if best_bucket.is_free(ix) {
                     let elem_loc = elem.data_loc(current_bucket);
                     let old_slots = elem.num_slots;
                     elem.set_storage_offset(ix);
