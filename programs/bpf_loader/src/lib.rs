@@ -1041,24 +1041,20 @@ impl Executor for BpfExecutor {
                 stable_log::program_return(&log_collector, &program_id, return_data);
             }
             match result {
-                Ok(status) => {
-                    if status == SUCCESS {
-                        Ok(())
+                Ok(status) if status != SUCCESS => {
+                    let error: InstructionError = if status == ACCOUNTS_DATA_BUDGET_EXCEEDED
+                        && !invoke_context
+                            .feature_set
+                            .is_active(&cap_accounts_data_len::id())
+                    {
+                        // Until the cap_accounts_data_len feature is enabled, map the
+                        // ACCOUNTS_DATA_BUDGET_EXCEEDED error to InvalidError
+                        InstructionError::InvalidError
                     } else {
-                        let error: InstructionError = if status == ACCOUNTS_DATA_BUDGET_EXCEEDED
-                            && !invoke_context
-                                .feature_set
-                                .is_active(&cap_accounts_data_len::id())
-                        {
-                            // Until the cap_accounts_data_len feature is enabled, map the
-                            // ACCOUNTS_DATA_BUDGET_EXCEEDED error to InvalidError
-                            InstructionError::InvalidError
-                        } else {
-                            status.into()
-                        };
-                        stable_log::program_failure(&log_collector, &program_id, &error);
-                        Err(error)
-                    }
+                        status.into()
+                    };
+                    stable_log::program_failure(&log_collector, &program_id, &error);
+                    Err(error)
                 }
                 Err(error) => {
                     let error = match error {
@@ -1073,6 +1069,7 @@ impl Executor for BpfExecutor {
                     stable_log::program_failure(&log_collector, &program_id, &error);
                     Err(error)
                 }
+                _ => Ok(()),
             }
         };
         execute_time.stop();
