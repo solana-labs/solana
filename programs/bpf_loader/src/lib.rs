@@ -38,8 +38,8 @@ use {
         clock::Clock,
         entrypoint::{HEAP_LENGTH, SUCCESS},
         feature_set::{
-            do_support_realloc, reduce_required_deploy_balance, reject_all_elf_rw,
-            reject_deployment_of_unresolved_syscalls,
+            cap_accounts_data_len, do_support_realloc, reduce_required_deploy_balance,
+            reject_all_elf_rw, reject_deployment_of_unresolved_syscalls,
             reject_section_virtual_address_file_offset_mismatch, requestable_heap_size,
             start_verify_shift32_imm, stop_verify_mul64_imm_nonzero,
         },
@@ -47,6 +47,7 @@ use {
         keyed_account::{from_keyed_account, keyed_account_at_index, KeyedAccount},
         loader_instruction::LoaderInstruction,
         loader_upgradeable_instruction::UpgradeableLoaderInstruction,
+        program_error::ACCOUNTS_DATA_BUDGET_EXCEEDED,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
         rent::Rent,
@@ -1040,10 +1041,24 @@ impl Executor for BpfExecutor {
                 stable_log::program_return(&log_collector, &program_id, return_data);
             }
             match result {
-                Ok(status) if status != SUCCESS => {
-                    let error: InstructionError = status.into();
-                    stable_log::program_failure(&log_collector, &program_id, &error);
-                    Err(error)
+                Ok(status) => {
+                    if status == SUCCESS {
+                        Ok(())
+                    } else {
+                        let error: InstructionError = if status == ACCOUNTS_DATA_BUDGET_EXCEEDED
+                            && !invoke_context
+                                .feature_set
+                                .is_active(&cap_accounts_data_len::id())
+                        {
+                            // Until the cap_accounts_data_len feature is enabled, map the
+                            // ACCOUNTS_DATA_BUDGET_EXCEEDED error to InvalidError
+                            InstructionError::InvalidError
+                        } else {
+                            status.into()
+                        };
+                        stable_log::program_failure(&log_collector, &program_id, &error);
+                        Err(error)
+                    }
                 }
                 Err(error) => {
                     let error = match error {
@@ -1058,7 +1073,6 @@ impl Executor for BpfExecutor {
                     stable_log::program_failure(&log_collector, &program_id, &error);
                     Err(error)
                 }
-                _ => Ok(()),
             }
         };
         execute_time.stop();
