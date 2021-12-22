@@ -929,6 +929,7 @@ mod test {
             let t_listen = ServeRepair::listen(
                 responder_serve_repair,
                 Some(blockstore),
+                None,
                 requests_receiver,
                 response_sender,
                 &exit,

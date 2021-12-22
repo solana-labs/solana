@@ -279,6 +279,10 @@ pub mod allow_votes_to_directly_update_vote_state {
     solana_sdk::declare_id!("Ff8b1fBeB86q8cjq47ZhsQLgv5EkHu3G1C99zjUfAzrq");
 }
 
+pub mod broadcast_only_coding_shreds {
+    solana_sdk::declare_id!("2t3VfTd8juUfPQaHc3nxdE51MLmTDrWraxmEygrEWPDY");
+}
+
 pub mod reject_all_elf_rw {
     solana_sdk::declare_id!("DeMpxgMq51j3rZfNK2hQKZyXknQvqevPSFPJFNTbXxsS");
 }
@@ -347,6 +351,7 @@ lazy_static! {
         (reject_non_rent_exempt_vote_withdraws::id(), "fail vote withdraw instructions which leave the account non-rent-exempt"),
         (evict_invalid_stakes_cache_entries::id(), "evict invalid stakes cache entries on epoch boundaries"),
         (allow_votes_to_directly_update_vote_state::id(), "enable direct vote state update"),
+        (broadcast_only_coding_shreds::id(), "only broadcast coding shreds"),
         (reject_all_elf_rw::id(), "reject all read-write data in program elfs"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]

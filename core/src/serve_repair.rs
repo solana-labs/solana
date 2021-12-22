@@ -26,8 +26,10 @@ use {
     solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_debug,
     solana_perf::packet::{limited_deserialize, PacketBatch, PacketBatchRecycler},
+    solana_runtime::bank_forks::BankForks,
     solana_sdk::{
-        clock::Slot, hash::Hash, packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::duration_as_ms,
+        clock::Slot, feature_set, hash::Hash, packet::PACKET_DATA_SIZE, pubkey::Pubkey,
+        timing::duration_as_ms,
     },
     solana_streamer::streamer::{PacketBatchReceiver, PacketBatchSender},
     std::{
@@ -65,6 +67,7 @@ pub enum ShredRepairType {
     Orphan(Slot),
     HighestShred(Slot, u64),
     Shred(Slot, u64),
+    Coding(Slot, u64),
 }
 
 impl ShredRepairType {
@@ -73,6 +76,7 @@ impl ShredRepairType {
             ShredRepairType::Orphan(slot) => *slot,
             ShredRepairType::HighestShred(slot, _) => *slot,
             ShredRepairType::Shred(slot, _) => *slot,
+            ShredRepairType::Coding(slot, _) => *slot,
         }
     }
 }
@@ -84,16 +88,20 @@ impl RequestResponse for ShredRepairType {
             ShredRepairType::Orphan(_) => (MAX_ORPHAN_REPAIR_RESPONSES + 1) as u32, // run_orphan uses <= MAX_ORPHAN_REPAIR_RESPONSES
             ShredRepairType::HighestShred(_, _) => 1,
             ShredRepairType::Shred(_, _) => 1,
+            ShredRepairType::Coding(_, _) => 1,
         }
     }
     fn verify_response(&self, response_shred: &Shred) -> bool {
         match self {
             ShredRepairType::Orphan(slot) => response_shred.slot() <= *slot,
             ShredRepairType::HighestShred(slot, index) => {
-                response_shred.slot() as u64 == *slot && response_shred.index() as u64 >= *index
+                response_shred.slot() == *slot && response_shred.index() as u64 >= *index
             }
             ShredRepairType::Shred(slot, index) => {
-                response_shred.slot() as u64 == *slot && response_shred.index() as u64 == *index
+                response_shred.slot() == *slot && response_shred.index() as u64 == *index
+            }
+            ShredRepairType::Coding(slot, index) => {
+                response_shred.slot() == *slot && response_shred.index() as u64 == *index
             }
         }
     }
@@ -149,6 +157,7 @@ pub struct ServeRepairStats {
     pub window_index: usize,
     pub highest_window_index: usize,
     pub orphan: usize,
+    pub coding: usize,
     pub ancestor_hashes: usize,
 }
 
@@ -161,6 +170,7 @@ pub enum RepairProtocol {
     WindowIndexWithNonce(ContactInfo, Slot, u64, Nonce),
     HighestWindowIndexWithNonce(ContactInfo, Slot, u64, Nonce),
     OrphanWithNonce(ContactInfo, Slot, Nonce),
+    CodingWithNonce(ContactInfo, Slot, u64, Nonce),
     AncestorHashes(ContactInfo, Slot, Nonce),
 }
 
@@ -223,6 +233,7 @@ impl ServeRepair {
             RepairProtocol::WindowIndexWithNonce(ref from, _, _, _) => from,
             RepairProtocol::HighestWindowIndexWithNonce(ref from, _, _, _) => from,
             RepairProtocol::OrphanWithNonce(ref from, _, _) => from,
+            RepairProtocol::CodingWithNonce(ref from, _, _, _) => from,
             RepairProtocol::AncestorHashes(ref from, _, _) => from,
         }
     }
@@ -232,6 +243,7 @@ impl ServeRepair {
         recycler: &PacketBatchRecycler,
         from_addr: &SocketAddr,
         blockstore: Option<&Arc<Blockstore>>,
+        bank_forks: Option<&Arc<RwLock<BankForks>>>,
         request: RepairProtocol,
         stats: &mut ServeRepairStats,
     ) -> Option<PacketBatch> {
@@ -291,6 +303,23 @@ impl ServeRepair {
                         "OrphanWithNonce",
                     )
                 }
+                RepairProtocol::CodingWithNonce(_, slot, shred_index, nonce) => {
+                    stats.coding += 1;
+                    (
+                        Self::run_coding_request(
+                            recycler,
+                            from,
+                            from_addr,
+                            blockstore,
+                            bank_forks,
+                            &my_id,
+                            *slot,
+                            *shred_index,
+                            *nonce,
+                        ),
+                        "CodingWithNonce",
+                    )
+                }
                 RepairProtocol::AncestorHashes(_, slot, nonce) => {
                     stats.ancestor_hashes += 1;
                     (
@@ -319,6 +348,7 @@ impl ServeRepair {
         obj: &Arc<RwLock<Self>>,
         recycler: &PacketBatchRecycler,
         blockstore: Option<&Arc<Blockstore>>,
+        bank_forks: Option<&Arc<RwLock<BankForks>>>,
         requests_receiver: &PacketBatchReceiver,
         response_sender: &PacketBatchSender,
         stats: &mut ServeRepairStats,
@@ -345,7 +375,15 @@ impl ServeRepair {
 
         let mut time = Measure::start("repair::handle_packets");
         for reqs in reqs_v {
-            Self::handle_packets(obj, recycler, blockstore, reqs, response_sender, stats);
+            Self::handle_packets(
+                obj,
+                recycler,
+                blockstore,
+                bank_forks,
+                reqs,
+                response_sender,
+                stats,
+            );
         }
         time.stop();
         if total_packets >= *max_packets {
@@ -392,6 +430,7 @@ impl ServeRepair {
     pub fn listen(
         me: Arc<RwLock<Self>>,
         blockstore: Option<Arc<Blockstore>>,
+        bank_forks: Option<Arc<RwLock<BankForks>>>,
         requests_receiver: PacketBatchReceiver,
         response_sender: PacketBatchSender,
         exit: &Arc<AtomicBool>,
@@ -409,6 +448,7 @@ impl ServeRepair {
                         &me,
                         &recycler,
                         blockstore.as_ref(),
+                        bank_forks.as_ref(),
                         &requests_receiver,
                         &response_sender,
                         &mut stats,
@@ -434,6 +474,7 @@ impl ServeRepair {
         me: &Arc<RwLock<Self>>,
         recycler: &PacketBatchRecycler,
         blockstore: Option<&Arc<Blockstore>>,
+        bank_forks: Option<&Arc<RwLock<BankForks>>>,
         packet_batch: PacketBatch,
         response_sender: &PacketBatchSender,
         stats: &mut ServeRepairStats,
@@ -445,8 +486,9 @@ impl ServeRepair {
                 .into_iter()
                 .for_each(|request| {
                     stats.processed += 1;
-                    let rsp =
-                        Self::handle_repair(me, recycler, &from_addr, blockstore, request, stats);
+                    let rsp = Self::handle_repair(
+                        me, recycler, &from_addr, blockstore, bank_forks, request, stats,
+                    );
                     if let Some(rsp) = rsp {
                         let _ignore_disconnect = response_sender.send(rsp);
                     }
@@ -479,6 +521,17 @@ impl ServeRepair {
 
     fn orphan_bytes(&self, slot: Slot, nonce: Nonce) -> Result<Vec<u8>> {
         let req = RepairProtocol::OrphanWithNonce(self.my_info(), slot, nonce);
+        let out = serialize(&req)?;
+        Ok(out)
+    }
+
+    fn coding_index_request_bytes(
+        &self,
+        slot: Slot,
+        shred_index: u64,
+        nonce: Nonce,
+    ) -> Result<Vec<u8>> {
+        let req = RepairProtocol::CodingWithNonce(self.my_info(), slot, shred_index, nonce);
         let out = serialize(&req)?;
         Ok(out)
     }
@@ -583,6 +636,12 @@ impl ServeRepair {
             ShredRepairType::Orphan(slot) => {
                 repair_stats.orphan.update(repair_peer_id, *slot, 0);
                 Ok(self.orphan_bytes(*slot, nonce)?)
+            }
+            ShredRepairType::Coding(slot, shred_index) => {
+                repair_stats
+                    .coding
+                    .update(repair_peer_id, *slot, *shred_index);
+                Ok(self.coding_index_request_bytes(*slot, *shred_index, nonce)?)
             }
         }
     }
@@ -719,6 +778,75 @@ impl ServeRepair {
         Some(res)
     }
 
+    fn broadcast_only_coding_shreds_enabled(
+        bank_forks: Option<&Arc<RwLock<BankForks>>>,
+        slot: Slot,
+    ) -> bool {
+        if bank_forks.is_none() {
+            // enable for testing
+            return true;
+        }
+        let bank_forks = bank_forks.unwrap();
+
+        let working_bank = bank_forks.read().unwrap().working_bank();
+        let feature_slot = working_bank
+            .feature_set
+            .activated_slot(&feature_set::broadcast_only_coding_shreds::id());
+        if let Some(feature_slot) = feature_slot {
+            let epoch_schedule = working_bank.epoch_schedule();
+            let feature_epoch = epoch_schedule.get_epoch(feature_slot);
+            let slot_epoch = epoch_schedule.get_epoch(slot);
+            feature_epoch < slot_epoch
+        } else {
+            false
+        }
+    }
+
+    fn run_coding_request(
+        recycler: &PacketBatchRecycler,
+        from: &ContactInfo,
+        from_addr: &SocketAddr,
+        blockstore: Option<&Arc<Blockstore>>,
+        bank_forks: Option<&Arc<RwLock<BankForks>>>,
+        my_id: &Pubkey,
+        slot: Slot,
+        shred_index: u64,
+        nonce: Nonce,
+    ) -> Option<PacketBatch> {
+        if Self::broadcast_only_coding_shreds_enabled(bank_forks, slot) {
+            if let Some(blockstore) = blockstore {
+                // Try to find the requested index in one of the slots
+                let packet = repair_response::repair_coding_response_packet(
+                    blockstore,
+                    slot,
+                    shred_index,
+                    from_addr,
+                    nonce,
+                );
+
+                if let Some(packet) = packet {
+                    inc_new_counter_debug!("serve_repair-window-request-ledger", 1);
+                    return Some(PacketBatch::new_unpinned_with_recycler_data(
+                        recycler,
+                        "run_window_request",
+                        vec![packet],
+                    ));
+                }
+            }
+        }
+
+        inc_new_counter_debug!("serve_repair-window-request-fail", 1);
+        trace!(
+            "{}: failed WindowIndex {} {} {}",
+            my_id,
+            from.id,
+            slot,
+            shred_index,
+        );
+
+        None
+    }
+
     fn run_ancestor_hashes(
         recycler: &PacketBatchRecycler,
         from_addr: &SocketAddr,
@@ -764,7 +892,7 @@ mod tests {
             blockstore::make_many_slot_entries,
             blockstore_processor::fill_blockstore_slot_with_ticks,
             get_tmp_ledger_path,
-            shred::{max_ticks_per_n_shreds, Shred},
+            shred::{max_ticks_per_n_shreds, ProcessShredsStats, Shred, Shredder},
         },
         solana_perf::packet::Packet,
         solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Keypair, timing::timestamp},
@@ -841,6 +969,24 @@ mod tests {
         Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
+    fn setup_contact_info() -> ContactInfo {
+        ContactInfo {
+            id: solana_sdk::pubkey::new_rand(),
+            gossip: socketaddr!("127.0.0.1:1234"),
+            tvu: socketaddr!("127.0.0.1:1235"),
+            tvu_forwards: socketaddr!("127.0.0.1:1236"),
+            repair: socketaddr!("127.0.0.1:1237"),
+            tpu: socketaddr!("127.0.0.1:1238"),
+            tpu_forwards: socketaddr!("127.0.0.1:1239"),
+            tpu_vote: socketaddr!("127.0.0.1:1240"),
+            rpc: socketaddr!("127.0.0.1:1241"),
+            rpc_pubsub: socketaddr!("127.0.0.1:1242"),
+            serve_repair: socketaddr!("127.0.0.1:1243"),
+            wallclock: 0,
+            shred_version: 0,
+        }
+    }
+
     #[test]
     fn test_run_window_request() {
         run_window_request(2, 9);
@@ -853,21 +999,7 @@ mod tests {
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-            let me = ContactInfo {
-                id: solana_sdk::pubkey::new_rand(),
-                gossip: socketaddr!("127.0.0.1:1234"),
-                tvu: socketaddr!("127.0.0.1:1235"),
-                tvu_forwards: socketaddr!("127.0.0.1:1236"),
-                repair: socketaddr!("127.0.0.1:1237"),
-                tpu: socketaddr!("127.0.0.1:1238"),
-                tpu_forwards: socketaddr!("127.0.0.1:1239"),
-                tpu_vote: socketaddr!("127.0.0.1:1240"),
-                rpc: socketaddr!("127.0.0.1:1241"),
-                rpc_pubsub: socketaddr!("127.0.0.1:1242"),
-                serve_repair: socketaddr!("127.0.0.1:1243"),
-                wallclock: 0,
-                shred_version: 0,
-            };
+            let me = setup_contact_info();
             let rv = ServeRepair::run_window_request(
                 &recycler,
                 &me,
@@ -911,6 +1043,52 @@ mod tests {
             assert_eq!(rv[0].slot(), slot);
         }
 
+        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_run_coding_request() {
+        solana_logger::setup();
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let recycler = PacketBatchRecycler::default();
+            let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+            let keypair = Keypair::new();
+            let me = setup_contact_info();
+            let mut process_stats = ProcessShredsStats::default();
+            let slot = 2;
+            let nonce = 9;
+            let next_code_index = 1;
+
+            let shred = Shred::new_from_data(slot, 1, 1, None, true, true, 0, 2, 1);
+
+            let coding_shreds = Shredder::data_shreds_to_coding_shreds(
+                &keypair,
+                &vec![shred],
+                true,
+                next_code_index,
+                &mut process_stats,
+            )
+            .expect("coding shreds");
+
+            blockstore
+                .insert_shreds(coding_shreds, None, false)
+                .expect("Expect successful ledger write");
+
+            let batch = ServeRepair::run_coding_request(
+                &recycler,
+                &me,
+                &socketaddr_any!(),
+                Some(&blockstore),
+                None,
+                &me.id,
+                slot,
+                1,
+                nonce,
+            )
+            .expect("packet batch");
+            assert_eq!(batch.packets.len(), 1);
+        }
         Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
@@ -1312,6 +1490,7 @@ mod tests {
             ShredRepairType::Orphan(_) => (),
             ShredRepairType::HighestShred(_, _) => (),
             ShredRepairType::Shred(_, _) => (),
+            ShredRepairType::Coding(_, _) => (),
         };
 
         let slot = 9;

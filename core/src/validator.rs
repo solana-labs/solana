@@ -716,6 +716,7 @@ impl Validator {
         let serve_repair_service = ServeRepairService::new(
             &serve_repair,
             Some(blockstore.clone()),
+            Some(bank_forks.clone()),
             node.sockets.serve_repair,
             socket_addr_space,
             stats_reporter_sender,
