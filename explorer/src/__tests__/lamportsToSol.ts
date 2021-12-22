@@ -12,7 +12,7 @@ describe("lamportsToSol", () => {
     expect(lamportsToSol(new BN(-1))).to.eq(-0.000000001);
   });
 
-  it("1 SOL", () => {
+  it("1 UNIMOON", () => {
     expect(lamportsToSol(new BN(LAMPORTS_PER_SOL))).to.eq(1.0);
     expect(lamportsToSol(new BN(-LAMPORTS_PER_SOL))).to.eq(-1.0);
   });

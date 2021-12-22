@@ -411,7 +411,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .validator(is_amount)
                         .required(true)
-                        .help("The amount to move into the new stake account, in SOL")
+                        .help("The amount to move into the new stake account, in UNIMOON")
                 )
                 .arg(
                     Arg::with_name("seed")
@@ -466,7 +466,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS")
                         .required(true),
-                        "Recipient of withdrawn SOL")
+                        "Recipient of withdrawn UNIMOON")
                 )
                 .arg(
                     Arg::with_name("amount")
@@ -605,7 +605,7 @@ impl StakeSubCommands for App<'_, '_> {
                     Arg::with_name("lamports")
                         .long("lamports")
                         .takes_value(false)
-                        .help("Display balance in lamports instead of SOL")
+                        .help("Display balance in lamports instead of UNIMOON")
                 )
                 .arg(
                     Arg::with_name("with_rewards")
@@ -632,7 +632,7 @@ impl StakeSubCommands for App<'_, '_> {
                     Arg::with_name("lamports")
                         .long("lamports")
                         .takes_value(false)
-                        .help("Display balance in lamports instead of SOL")
+                        .help("Display balance in lamports instead of UNIMOON")
                 )
                 .arg(
                     Arg::with_name("limit")

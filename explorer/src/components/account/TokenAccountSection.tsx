@@ -403,7 +403,7 @@ function TokenAccountCard({
 
   let unit, balance;
   if (info.isNative) {
-    unit = "SOL";
+    unit = "UNIMOON";
     balance = (
       <>
         ◎
