@@ -378,7 +378,7 @@ fn run_transactions_dos(
                         let tx = Transaction::new(&signers, message, blockhash);
                         if !tested_size.load(Ordering::Relaxed) {
                             let ser_size = bincode::serialized_size(&tx).unwrap();
-                            assert!(ser_size < 1200, "{}", ser_size);
+                            assert!(ser_size < 1200*2, "{}", ser_size);
                             tested_size.store(true, Ordering::Relaxed);
                         }
                         tx
