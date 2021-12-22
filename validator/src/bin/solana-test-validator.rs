@@ -289,7 +289,7 @@ fn main() {
             Arg::with_name("faucet_sol")
                 .long("faucet-sol")
                 .takes_value(true)
-                .value_name("SOL")
+                .value_name("UNIMOON")
                 .default_value(default_faucet_sol.as_str())
                 .help(
                     "Give the faucet address this much SOL in genesis. \

@@ -2552,7 +2552,10 @@ fn main() {
                     for (pubkey, (account, slot)) in accounts.into_iter() {
                         let data_len = account.data().len();
                         println!("{}:", pubkey);
-                        println!("  - balance: {} SOL", lamports_to_sol(account.lamports()));
+			// modified by alex to change native token name
+                        // println!("  - balance: {} SOL", lamports_to_sol(account.lamports()));
+			println!("  - balance: {} UNIMOON", lamports_to_sol(account.lamports()));
+			// end modify
                         println!("  - owner: '{}'", account.owner());
                         println!("  - executable: {}", account.executable());
                         println!("  - slot: {}", slot);

@@ -107,11 +107,11 @@ fn get_config() -> Config {
         .arg(
             Arg::with_name("minimum_validator_identity_balance")
                 .long("minimum-validator-identity-balance")
-                .value_name("SOL")
+                .value_name("UNIMOON")
                 .takes_value(true)
                 .default_value("10")
                 .validator(is_parsable::<f64>)
-                .help("Alert when the validator identity balance is less than this amount of SOL")
+                .help("Alert when the validator identity balance is less than this amount of UNIMOON")
         )
         .arg(
             // Deprecated parameter, now always enabled

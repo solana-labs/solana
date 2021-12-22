@@ -44,7 +44,10 @@ where
         )
         .subcommand(
             SubCommand::with_name("distribute-tokens")
-                .about("Distribute SOL")
+		// modified by alex to change native token name
+                // .about("Distribute SOL"
+		.about("Distribute SOL")
+		// end modify
                 .arg(
                     Arg::with_name("db_path")
                         .long("db-path")
@@ -71,7 +74,10 @@ where
                         .takes_value(true)
                         .value_name("AMOUNT")
                         .validator(is_amount)
-                        .help("The amount to send to each recipient, in SOL"),
+			// modified by alex to change native token name
+                        //.help("The amount to send to each recipient, in SOL"),
+			.help("The amount to send to each recipient, in UNIMOON"),
+			// end modify
                 )
                 .arg(
                     Arg::with_name("dry_run")
