@@ -263,7 +263,7 @@ impl<'a> InvokeContext<'a> {
                 }
                 Err(InstructionError::MissingAccount)
             };
-            instruction.visit_each_account(&mut work)?;
+            visit_each_account_once(&instruction.accounts, &mut work)?;
         } else {
             let contains = self
                 .invoke_stack
@@ -381,7 +381,7 @@ impl<'a> InvokeContext<'a> {
                 .ok_or(InstructionError::UnbalancedInstruction)?;
             Ok(())
         };
-        instruction.visit_each_account(&mut work)?;
+        visit_each_account_once(&instruction.accounts, &mut work)?;
 
         // Verify that the total sum of all the lamports did not change
         if pre_sum != post_sum {
@@ -462,7 +462,7 @@ impl<'a> InvokeContext<'a> {
             }
             Err(InstructionError::MissingAccount)
         };
-        instruction.visit_each_account(&mut work)?;
+        visit_each_account_once(&instruction.accounts, &mut work)?;
 
         // Verify that the total sum of all the lamports did not change
         if pre_sum != post_sum {
@@ -985,6 +985,26 @@ pub fn mock_process_instruction(
     )
 }
 
+/// Visit each unique instruction account index once
+fn visit_each_account_once(
+    accounts: &[u8],
+    work: &mut dyn FnMut(usize, usize) -> Result<(), InstructionError>,
+) -> Result<(), InstructionError> {
+    let mut unique_index = 0;
+    'root: for (i, account_index) in accounts.iter().enumerate() {
+        // Note: This is an O(n^2) algorithm,
+        // but performed on a very small slice and requires no heap allocations
+        for account_index_before in accounts[..i].iter() {
+            if account_index_before == account_index {
+                continue 'root; // skip dups
+            }
+        }
+        work(unique_index, *account_index as usize)?;
+        unique_index += 1;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use {
@@ -1005,6 +1025,28 @@ mod tests {
         ModifyOwned,
         ModifyNotOwned,
         ModifyReadonly,
+    }
+
+    #[test]
+    fn test_visit_each_account_once() {
+        let do_work = |accounts: &[u8]| -> (usize, usize) {
+            let mut unique_total = 0;
+            let mut account_total = 0;
+            let mut work = |unique_index: usize, account_index: usize| {
+                unique_total += unique_index;
+                account_total += account_index;
+                Ok(())
+            };
+            visit_each_account_once(accounts, &mut work).unwrap();
+
+            (unique_total, account_total)
+        };
+
+        assert_eq!((6, 6), do_work(&[0, 1, 2, 3]));
+        assert_eq!((6, 6), do_work(&[0, 1, 1, 2, 3]));
+        assert_eq!((6, 6), do_work(&[0, 1, 2, 3, 3]));
+        assert_eq!((6, 6), do_work(&[0, 0, 1, 1, 2, 2, 3, 3]));
+        assert_eq!((0, 2), do_work(&[2, 2]));
     }
 
     #[test]
