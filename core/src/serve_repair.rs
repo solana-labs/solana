@@ -1064,7 +1064,7 @@ mod tests {
 
             let coding_shreds = Shredder::data_shreds_to_coding_shreds(
                 &keypair,
-                &vec![shred],
+                &[shred],
                 true,
                 next_code_index,
                 &mut process_stats,
