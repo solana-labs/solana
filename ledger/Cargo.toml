@@ -36,7 +36,6 @@ solana-entry = { path = "../entry", version = "=1.10.0" }
 solana-frozen-abi = { path = "../frozen-abi", version = "=1.10.0" }
 solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.10.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.10.0" }
-solana-logger = { path = "../logger", version = "=1.10.0" }
 solana-measure = { path = "../measure", version = "=1.10.0" }
 solana-metrics = { path = "../metrics", version = "=1.10.0" }
 solana-perf = { path = "../perf", version = "=1.10.0" }
@@ -64,6 +63,7 @@ features = ["lz4"]
 assert_matches = "1.5.0"
 matches = "0.1.9"
 solana-account-decoder = { path = "../account-decoder", version = "=1.10.0" }
+solana-logger = { path = "../logger", version = "=1.10.0" }
 
 [build-dependencies]
 rustc_version = "0.4"

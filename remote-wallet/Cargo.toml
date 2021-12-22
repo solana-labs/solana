@@ -10,7 +10,6 @@ homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-remote-wallet"
 
 [dependencies]
-base32 = "0.4.0"
 console = "0.15.0"
 dialoguer = "0.9.0"
 hidapi = { version = "1.3.0", default-features = false }

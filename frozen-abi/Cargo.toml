@@ -20,9 +20,11 @@ solana-frozen-abi-macro = { path = "macro", version = "=1.10.0" }
 thiserror = "1.0"
 
 [target.'cfg(not(target_arch = "bpf"))'.dependencies]
-solana-logger = { path = "../logger", version = "=1.10.0" }
 generic-array = { version = "0.14.4", default-features = false, features = ["serde", "more_lengths"]}
 memmap2 = "0.5.0"
+
+[target.'cfg(not(target_arch = "bpf"))'.dev-dependencies]
+solana-logger = { path = "../logger", version = "=1.10.0" }
 
 [build-dependencies]
 rustc_version = "0.4"
