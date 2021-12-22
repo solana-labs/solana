@@ -182,6 +182,7 @@ pub(crate) fn should_retransmit_and_persist(
     root: u64,
     shred_version: u16,
 ) -> bool {
+    // TODO consider filtering for feature here
     let slot_leader_pubkey = leader_schedule_cache.slot_leader_at(shred.slot(), bank.as_deref());
     if let Some(leader_id) = slot_leader_pubkey {
         if leader_id == *my_pubkey {

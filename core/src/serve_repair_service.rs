@@ -2,6 +2,7 @@ use {
     crate::serve_repair::ServeRepair,
     solana_ledger::blockstore::Blockstore,
     solana_perf::recycler::Recycler,
+    solana_runtime::bank_forks::BankForks,
     solana_streamer::{socket::SocketAddrSpace, streamer},
     std::{
         net::UdpSocket,
@@ -22,6 +23,7 @@ impl ServeRepairService {
     pub fn new(
         serve_repair: &Arc<RwLock<ServeRepair>>,
         blockstore: Option<Arc<Blockstore>>,
+        bank_forks: Option<Arc<RwLock<BankForks>>>,
         serve_repair_socket: UdpSocket,
         socket_addr_space: SocketAddrSpace,
         stats_reporter_sender: Sender<Box<dyn FnOnce() + Send>>,
@@ -54,6 +56,7 @@ impl ServeRepairService {
         let t_listen = ServeRepair::listen(
             serve_repair.clone(),
             blockstore,
+            bank_forks,
             request_receiver,
             response_sender,
             exit,
