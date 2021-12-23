@@ -193,7 +193,23 @@ impl SigVerifyStage {
         }
 
         let mut verify_batch_time = Measure::start("sigverify_batch_time");
-        sendr.send(verifier.verify_batches(batches))?;
+
+        let verified_packets = verifier.verify_batches(batches);
+        warn!(
+            "verifier::<{}>: num packets that failed sigverify: {}",
+            P::get_packet_type_name(),
+            verified_packets
+                .iter()
+                .map(|packets| -> usize {
+                    packets
+                        .packets
+                        .iter()
+                        .map(|packet| if packet.get_meta().discard { 1 } else { 0 })
+                        .sum()
+                })
+                .sum::<usize>()
+        );
+        sendr.send(verified_packets)?;
         verify_batch_time.stop();
 
         debug!(

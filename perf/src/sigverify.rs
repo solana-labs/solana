@@ -567,9 +567,13 @@ pub fn ed25519_verify<P: PacketInterface>(
         num_packets = num_packets.saturating_add(batch.packets.len());
     }
     out.resize(signature_offsets.len(), 0);
-    trace!("Starting verify num packets: {}", num_packets);
-    trace!("elem len: {}", elems.len() as u32);
-    trace!("packet sizeof: {}", size_of::<P>() as u32);
+    warn!(
+        "Starting verify {}, num packets: {}",
+        P::get_packet_type_name(),
+        num_packets
+    );
+    warn!("elem len: {}", elems.len() as u32);
+    warn!("packet sizeof: {}", size_of::<P>() as u32);
     // todo: figure out what this means; the data field max size
     // does not actually seem to be used in figuring out any of the offsets
     // (which would make sense, as we don't modify the meta

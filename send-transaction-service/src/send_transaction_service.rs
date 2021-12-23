@@ -175,6 +175,12 @@ impl SendTransactionService {
                                 }
                             })
                             .unwrap_or_else(|| vec![choose_tpu]);
+                            if extended {
+                                warn!("retry_thread: Forwarding large transaction to extended packet addresses {:?}", addresses);
+                            }
+                            else {
+                                warn!("retry_thread: Forwarding transaction to standard packet addresses {:?}", addresses);
+                            }
                         for address in addresses {
                             Self::send_transaction(
                                 &send_socket,
@@ -308,6 +314,12 @@ impl SendTransactionService {
                             }
                         })
                         .unwrap_or_else(|| vec![*choose_tpu]);
+                        if extended {
+                            warn!("process_transactions: Forwarding large transaction to extended packet addresses {:?}", addresses);
+                        }
+                        else {
+                            warn!("process_transactions: Forwarding transaction to standard packet addresses {:?}", addresses);
+                        }
                     for address in addresses {
                         Self::send_transaction(
                             send_socket,

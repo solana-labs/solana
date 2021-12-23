@@ -57,6 +57,9 @@ pub trait PacketInterface: Clone + Default + Sized + Send + Sync + fmt::Debug {
     // or similar "compile-time conditionals"
     // TODO: is there a better way to do this (perhaps a macro of some sort?)?
     fn is_extended() -> bool;
+
+    // todo: ideally, replace this with a macro or something
+    fn get_packet_type_name() -> &'static str;
 }
 
 #[derive(Clone, Default, Debug, PartialEq)]
@@ -110,6 +113,10 @@ impl PacketInterface for ExtendedPacket {
     fn is_extended() -> bool {
         true
     }
+
+    fn get_packet_type_name() -> &'static str {
+        "ExtendedPacket"
+    }
 }
 
 impl PacketInterface for Packet {
@@ -131,6 +138,10 @@ impl PacketInterface for Packet {
 
     fn is_extended() -> bool {
         false
+    }
+
+    fn get_packet_type_name() -> &'static str {
+        "Packet"
     }
 }
 

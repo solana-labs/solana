@@ -94,12 +94,18 @@ pub struct BankingStageStats {
     id: u32,
     receive_and_buffer_packets_count: AtomicUsize,
     dropped_packet_batches_count: AtomicUsize,
+    dropped_extended_packet_batches_count: AtomicUsize,
     dropped_packets_count: AtomicUsize,
     pub(crate) dropped_duplicated_packets_count: AtomicUsize,
     newly_buffered_packets_count: AtomicUsize,
+    newly_buffered_extended_packets_count: AtomicUsize,
     current_buffered_packets_count: AtomicUsize,
+    current_buffered_extended_packets_count: AtomicUsize,
+    current_buffered_extended_packet_batches_count: AtomicUsize,
     current_buffered_packet_batches_count: AtomicUsize,
+    rebuffered_extended_packets_count: AtomicUsize,
     rebuffered_packets_count: AtomicUsize,
+    consumed_buffered_extended_packets_count: AtomicUsize,
     consumed_buffered_packets_count: AtomicUsize,
 
     // Timing
@@ -176,8 +182,20 @@ impl BankingStageStats {
                     i64
                 ),
                 (
+                    "dropped_extended_packet_batches_count",
+                    self.dropped_extended_packet_batches_count
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
                     "dropped_packets_count",
                     self.dropped_packets_count.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "dropped_extended_packets_count",
+                    self.dropped_extended_packets_count
+                        .swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
@@ -187,13 +205,31 @@ impl BankingStageStats {
                     i64
                 ),
                 (
+                    "dropped_duplicated_extended_packets_count",
+                    self.dropped_duplicated_extended_packets_count
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
                     "newly_buffered_packets_count",
                     self.newly_buffered_packets_count.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
+                    "newly_buffered_extended_packets_count",
+                    self.newly_buffered_extended_packets_count
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
                     "current_buffered_packet_batches_count",
                     self.current_buffered_packet_batches_count
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "current_buffered_extended_packet_batches_count",
+                    self.current_buffered_extended_packet_batches_count
                         .swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
@@ -204,13 +240,31 @@ impl BankingStageStats {
                     i64
                 ),
                 (
+                    "current_buffered_extended_packets_count",
+                    self.current_buffered_extended_packets_count
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
                     "rebuffered_packets_count",
                     self.rebuffered_packets_count.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
+                    "rebuffered_extended_packets_count",
+                    self.rebuffered_extended_packets_count
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
                     "consumed_buffered_packets_count",
                     self.consumed_buffered_packets_count
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "consumed_buffered_extended_packets_count",
+                    self.consumed_buffered_extended_packets_count
                         .swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
@@ -529,6 +583,11 @@ impl BankingStage {
         let mut proc_start = Measure::start("consume_buffered_process");
         let mut reached_end_of_slot = None;
 
+        warn!(
+            "consume_buffered_packets::<{}>",
+            PacketType::get_packet_type_name()
+        );
+
         buffered_packet_batches.retain_mut(|buffered_packet_batch_and_offsets| {
             let (packet_batch, ref mut original_unprocessed_indexes, _forwarded) =
                 buffered_packet_batch_and_offsets;
@@ -614,15 +673,30 @@ impl BankingStage {
             (new_tx_count as f32) / (proc_start.as_s())
         );
 
+        //todo: it doesn't seem necessary to separate the timings
+        // for extended and normal packets, so we'll leave them mixed for now.
+        // in the future, possible add separate timings, and think about how meaningful
+        // a single "elapsed" packet processing time is, when standard and extended packets
+        // may be processed in parallel
         banking_stage_stats
             .consume_buffered_packets_elapsed
             .fetch_add(proc_start.as_us(), Ordering::Relaxed);
-        banking_stage_stats
-            .rebuffered_packets_count
-            .fetch_add(rebuffered_packet_count, Ordering::Relaxed);
-        banking_stage_stats
-            .consumed_buffered_packets_count
-            .fetch_add(new_tx_count, Ordering::Relaxed);
+
+        if PacketType::is_extended() {
+            banking_stage_stats
+                .rebuffered_extended_packets_count
+                .fetch_add(rebuffered_packet_count, Ordering::Relaxed);
+            banking_stage_stats
+                .consumed_buffered_extended_packets_count
+                .fetch_add(new_tx_count, Ordering::Relaxed);
+        } else {
+            banking_stage_stats
+                .rebuffered_packets_count
+                .fetch_add(rebuffered_packet_count, Ordering::Relaxed);
+            banking_stage_stats
+                .consumed_buffered_packets_count
+                .fetch_add(new_tx_count, Ordering::Relaxed);
+        }
     }
 
     fn consume_or_forward_packets(
@@ -768,7 +842,14 @@ impl BankingStage {
             ForwardOption::ForwardTpuVote => next_leader_tpu_vote(cluster_info, poh_recorder),
         };
         let addr = match addr {
-            Some(addr) => addr,
+            Some(addr) => {
+                warn!(
+                    "Forwarding {} to {}",
+                    PacketType::get_packet_type_name(),
+                    addr
+                );
+                addr
+            }
             None => return,
         };
         let _ = Self::forward_buffered_packets(socket, &addr, buffered_packet_batches, data_budget);
@@ -1198,7 +1279,7 @@ impl BankingStage {
         feature_set: &Arc<feature_set::FeatureSet>,
         votes_only: bool,
     ) -> (Vec<SanitizedTransaction>, Vec<usize>) {
-        transaction_indexes
+        let ret = transaction_indexes
             .iter()
             .filter_map(|tx_index| {
                 let p = &packet_batch.packets[*tx_index];
@@ -1220,7 +1301,12 @@ impl BankingStage {
                 tx.verify_precompiles(feature_set).ok()?;
                 Some((tx, *tx_index))
             })
-            .unzip()
+            .unzip();
+        warn!(
+            "transactions_from_packets::<{}> succeeded",
+            PacketType::get_packet_type_name()
+        );
+        ret
     }
 
     /// This function filters pending packets that are still valid
@@ -1286,6 +1372,11 @@ impl BankingStage {
 
         let tx_len = transactions.len();
 
+        warn!(
+            "process_packets_transactions::<{}> num transactions in batch: {}",
+            PacketType::get_packet_type_name(),
+            tx_len
+        );
         let mut process_tx_time = Measure::start("process_tx_time");
         let (processed, unprocessed_tx_indexes) = Self::process_transactions(
             bank,
@@ -1454,31 +1545,67 @@ impl BankingStage {
             packet_count,
             id,
         );
-        banking_stage_stats
-            .receive_and_buffer_packets_elapsed
-            .fetch_add(proc_start.as_us(), Ordering::Relaxed);
-        banking_stage_stats
-            .receive_and_buffer_packets_count
-            .fetch_add(packet_count, Ordering::Relaxed);
-        banking_stage_stats
-            .dropped_packet_batches_count
-            .fetch_add(dropped_packet_batches_count, Ordering::Relaxed);
-        banking_stage_stats
-            .dropped_packets_count
-            .fetch_add(dropped_packets_count, Ordering::Relaxed);
-        banking_stage_stats
-            .newly_buffered_packets_count
-            .fetch_add(newly_buffered_packets_count, Ordering::Relaxed);
-        banking_stage_stats
-            .current_buffered_packet_batches_count
-            .swap(buffered_packet_batches.len(), Ordering::Relaxed);
-        banking_stage_stats.current_buffered_packets_count.swap(
-            buffered_packet_batches
-                .iter()
-                .map(|packets| packets.1.len())
-                .sum(),
-            Ordering::Relaxed,
-        );
+        if PacketType::is_extended() {
+            banking_stage_stats
+                .process_packets_elapsed
+                .fetch_add(proc_start.as_us(), Ordering::Relaxed);
+            banking_stage_stats
+                .process_extended_packets_count
+                .fetch_add(packet_count, Ordering::Relaxed);
+            banking_stage_stats
+                .new_tx_count
+                .fetch_add(new_tx_count, Ordering::Relaxed);
+            banking_stage_stats
+                .dropped_extended_packet_batches_count
+                .fetch_add(dropped_packet_batches_count, Ordering::Relaxed);
+            banking_stage_stats
+                .dropped_extended_packets_count
+                .fetch_add(dropped_packets_count, Ordering::Relaxed);
+            banking_stage_stats
+                .newly_buffered_extended_packets_count
+                .fetch_add(newly_buffered_packets_count, Ordering::Relaxed);
+            banking_stage_stats
+                .current_buffered_extended_packet_batches_count
+                .swap(buffered_packet_batches.len(), Ordering::Relaxed);
+            banking_stage_stats
+                .current_buffered_extended_packets_count
+                .swap(
+                    buffered_packet_batches
+                        .iter()
+                        .map(|packets| packets.1.len())
+                        .sum(),
+                    Ordering::Relaxed,
+                );
+        } else {
+            banking_stage_stats
+                .process_packets_elapsed
+                .fetch_add(proc_start.as_us(), Ordering::Relaxed);
+            banking_stage_stats
+                .process_packets_count
+                .fetch_add(packet_count, Ordering::Relaxed);
+            banking_stage_stats
+                .new_tx_count
+                .fetch_add(new_tx_count, Ordering::Relaxed);
+            banking_stage_stats
+                .dropped_packet_batches_count
+                .fetch_add(dropped_packet_batches_count, Ordering::Relaxed);
+            banking_stage_stats
+                .dropped_packets_count
+                .fetch_add(dropped_packets_count, Ordering::Relaxed);
+            banking_stage_stats
+                .newly_buffered_packets_count
+                .fetch_add(newly_buffered_packets_count, Ordering::Relaxed);
+            banking_stage_stats
+                .current_buffered_packet_batches_count
+                .swap(buffered_packet_batches.len(), Ordering::Relaxed);
+            banking_stage_stats.current_buffered_packets_count.swap(
+                buffered_packet_batches
+                    .iter()
+                    .map(|packets| packets.1.len())
+                    .sum(),
+                Ordering::Relaxed,
+            );
+        }
         *recv_start = Instant::now();
         Ok(())
     }
