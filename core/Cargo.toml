@@ -72,6 +72,7 @@ spl-token-v2-0 = { package = "spl-token", version = "=3.2.0", features = ["no-en
 tempfile = "3.1.0"
 thiserror = "1.0"
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.8.12" }
+sys-info = "0.9.1"
 trees = "0.2.1"
 
 [dev-dependencies]
