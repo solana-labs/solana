@@ -27,6 +27,7 @@ pub struct RpcBanksService {
 async fn start_abortable_tcp_server(
     listen_addr: SocketAddr,
     tpu_addr: SocketAddr,
+    tpu_extended_addr: SocketAddr,
     bank_forks: Arc<RwLock<BankForks>>,
     block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     exit: Arc<AtomicBool>,
@@ -34,6 +35,7 @@ async fn start_abortable_tcp_server(
     let server = start_tcp_server(
         listen_addr,
         tpu_addr,
+        tpu_extended_addr,
         bank_forks.clone(),
         block_commitment_cache.clone(),
     )
@@ -56,6 +58,7 @@ impl RpcBanksService {
     fn run(
         listen_addr: SocketAddr,
         tpu_addr: SocketAddr,
+        tpu_extended_addr: SocketAddr,
         bank_forks: Arc<RwLock<BankForks>>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         exit: Arc<AtomicBool>,
@@ -63,6 +66,7 @@ impl RpcBanksService {
         let server = start_abortable_tcp_server(
             listen_addr,
             tpu_addr,
+            tpu_extended_addr,
             bank_forks,
             block_commitment_cache,
             exit,
@@ -73,6 +77,7 @@ impl RpcBanksService {
     pub fn new(
         listen_addr: SocketAddr,
         tpu_addr: SocketAddr,
+        tpu_extended_addr: SocketAddr,
         bank_forks: &Arc<RwLock<BankForks>>,
         block_commitment_cache: &Arc<RwLock<BlockCommitmentCache>>,
         exit: &Arc<AtomicBool>,
@@ -86,6 +91,7 @@ impl RpcBanksService {
                 Self::run(
                     listen_addr,
                     tpu_addr,
+                    tpu_extended_addr,
                     bank_forks,
                     block_commitment_cache,
                     exit,

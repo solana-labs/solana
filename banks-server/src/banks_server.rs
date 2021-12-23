@@ -373,6 +373,7 @@ pub async fn start_local_server(
 pub async fn start_tcp_server(
     listen_addr: SocketAddr,
     tpu_addr: SocketAddr,
+    tpu_extended_addr: SocketAddr,
     bank_forks: Arc<RwLock<BankForks>>,
     block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
 ) -> io::Result<()> {
@@ -396,6 +397,7 @@ pub async fn start_tcp_server(
 
             SendTransactionService::new::<NullTpuInfo>(
                 tpu_addr,
+                tpu_extended_addr,
                 &bank_forks,
                 None,
                 receiver,

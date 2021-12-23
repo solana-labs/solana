@@ -89,6 +89,7 @@ impl Default for Config {
 impl SendTransactionService {
     pub fn new<T: TpuInfo + std::marker::Send + 'static>(
         tpu_address: SocketAddr,
+        tpu_extended_address: SocketAddr,
         bank_forks: &Arc<RwLock<BankForks>>,
         leader_info: Option<T>,
         receiver: Receiver<TransactionInfo>,
@@ -100,11 +101,12 @@ impl SendTransactionService {
             leader_forward_count,
             ..Config::default()
         };
-        Self::new_with_config(tpu_address, bank_forks, leader_info, receiver, config)
+        Self::new_with_config(tpu_address, tpu_extended_address, bank_forks, leader_info, receiver, config)
     }
 
     pub fn new_with_config<T: TpuInfo + std::marker::Send + 'static>(
         tpu_address: SocketAddr,
+        tpu_extended_address: SocketAddr,
         bank_forks: &Arc<RwLock<BankForks>>,
         leader_info: Option<T>,
         receiver: Receiver<TransactionInfo>,
@@ -112,6 +114,7 @@ impl SendTransactionService {
     ) -> Self {
         let thread = Self::retry_thread(
             tpu_address,
+            tpu_extended_address,
             receiver,
             bank_forks.clone(),
             leader_info,
@@ -122,6 +125,7 @@ impl SendTransactionService {
 
     fn retry_thread<T: TpuInfo + std::marker::Send + 'static>(
         tpu_address: SocketAddr,
+        tpu_extended_address: SocketAddr,
         receiver: Receiver<TransactionInfo>,
         bank_forks: Arc<RwLock<BankForks>>,
         mut leader_info: Option<T>,
@@ -145,18 +149,23 @@ impl SendTransactionService {
                     Ok(transaction_info) => {
                         inc_new_counter_info!("send_transaction_service-recv-tx", 1);
                         let extended = Self::requires_tpu_extended(&transaction_info);
+                        let choose_tpu = if extended {
+                            tpu_extended_address
+                        } else {
+                            tpu_address
+                        };
                         let addresses = leader_info.as_ref().map(|leader_info| {
                             leader_info.get_leader_tpus(extended, config.leader_forward_count)
                         });
                         let addresses = addresses
                             .map(|address_list| {
                                 if address_list.is_empty() {
-                                    vec![tpu_address.clone()]
+                                    vec![choose_tpu.clone()]
                                 } else {
                                     address_list
                                 }
                             })
-                            .unwrap_or_else(|| vec![tpu_address.clone()]);
+                            .unwrap_or_else(|| vec![choose_tpu.clone()]);
                         for address in addresses {
                             Self::send_transaction(
                                 &send_socket,
@@ -192,6 +201,7 @@ impl SendTransactionService {
                             &root_bank,
                             &send_socket,
                             &tpu_address,
+                            &tpu_extended_address,
                             &mut transactions,
                             &leader_info,
                             &config,
@@ -214,6 +224,7 @@ impl SendTransactionService {
         root_bank: &Arc<Bank>,
         send_socket: &UdpSocket,
         tpu_address: &SocketAddr,
+        tpu_extended_address: &SocketAddr,
         transactions: &mut HashMap<Signature, TransactionInfo>,
         leader_info: &Option<T>,
         config: &Config,
@@ -271,18 +282,23 @@ impl SendTransactionService {
                     transaction_info.retries += 1;
                     inc_new_counter_info!("send_transaction_service-retry", 1);
                     let extended = Self::requires_tpu_extended(&transaction_info);
+                    let choose_tpu = if extended {
+                        tpu_extended_address
+                    } else {
+                        tpu_address
+                    };
                     let addresses = leader_info.as_ref().map(|leader_info| {
                         leader_info.get_leader_tpus(extended, config.leader_forward_count)
                     });
                     let addresses = addresses
                         .map(|address_list| {
                             if address_list.is_empty() {
-                                vec![tpu_address.clone()]
+                                vec![choose_tpu.clone()]
                             } else {
                                 address_list
                             }
                         })
-                        .unwrap_or_else(|| vec![tpu_address.clone()]);
+                        .unwrap_or_else(|| vec![choose_tpu.clone()]);
                     for address in addresses {
                         Self::send_transaction(
                             send_socket,
@@ -310,7 +326,7 @@ impl SendTransactionService {
     }
 
     fn requires_tpu_extended(transaction_info: &TransactionInfo) -> bool {
-        transaction_info.wire_transaction.len() <= PACKET_DATA_SIZE
+        transaction_info.wire_transaction.len() > PACKET_DATA_SIZE
     }
 
     fn send_transaction(

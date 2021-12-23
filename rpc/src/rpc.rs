@@ -301,9 +301,11 @@ impl JsonRpcRequestProcessor {
             socket_addr_space,
         ));
         let tpu_address = cluster_info.my_contact_info().tpu;
+        let tpu_extended_address = cluster_info.my_contact_info().tpu_extended;
         let (sender, receiver) = channel();
         SendTransactionService::new::<NullTpuInfo>(
             tpu_address,
+            tpu_extended_address,
             &bank_forks,
             None,
             receiver,

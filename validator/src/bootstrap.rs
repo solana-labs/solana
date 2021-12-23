@@ -150,6 +150,9 @@ fn verify_reachable_ports(
     if ContactInfo::is_valid_address(&node.info.tpu_forwards, socket_addr_space) {
         udp_sockets.extend(node.sockets.tpu_forwards.iter());
     }
+    if ContactInfo::is_valid_address(&node.info.tpu_extended, socket_addr_space) {
+        udp_sockets.extend(node.sockets.tpu_extended.iter());
+    }
     if ContactInfo::is_valid_address(&node.info.tpu_extended_forwards, socket_addr_space) {
         udp_sockets.extend(node.sockets.tpu_extended_forwards.iter());
     }
