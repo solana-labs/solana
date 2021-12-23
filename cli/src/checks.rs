@@ -99,7 +99,6 @@ pub fn get_fee_for_messages(
     Ok(messages
         .iter()
         .map(|message| {
-            println!("msg {:?}", message.recent_blockhash);
             rpc_client.get_fee_for_message(message)
         })
         .collect::<Result<Vec<_>, _>>()?
