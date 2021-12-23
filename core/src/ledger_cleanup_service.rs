@@ -164,12 +164,9 @@ impl LedgerCleanupService {
     }
 
     fn receive_new_roots(new_root_receiver: &Receiver<Slot>) -> Result<Slot, RecvTimeoutError> {
-        let mut root = new_root_receiver.recv_timeout(Duration::from_secs(1))?;
+        let root = new_root_receiver.recv_timeout(Duration::from_secs(1))?;
         // Get the newest root
-        while let Ok(new_root) = new_root_receiver.try_recv() {
-            root = new_root;
-        }
-        Ok(root)
+        Ok(new_root_receiver.try_iter().last().unwrap_or(root))
     }
 
     pub fn cleanup_ledger(

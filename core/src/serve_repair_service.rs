@@ -5,7 +5,11 @@ use {
     solana_streamer::{socket::SocketAddrSpace, streamer},
     std::{
         net::UdpSocket,
-        sync::{atomic::AtomicBool, mpsc::channel, Arc, RwLock},
+        sync::{
+            atomic::AtomicBool,
+            mpsc::{channel, Sender},
+            Arc, RwLock,
+        },
         thread::{self, JoinHandle},
     },
 };
@@ -20,6 +24,7 @@ impl ServeRepairService {
         blockstore: Option<Arc<Blockstore>>,
         serve_repair_socket: UdpSocket,
         socket_addr_space: SocketAddrSpace,
+        stats_reporter_sender: Sender<Box<dyn FnOnce() + Send>>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
         let (request_sender, request_receiver) = channel();
@@ -44,6 +49,7 @@ impl ServeRepairService {
             serve_repair_socket,
             response_receiver,
             socket_addr_space,
+            Some(stats_reporter_sender),
         );
         let t_listen = ServeRepair::listen(
             serve_repair.clone(),

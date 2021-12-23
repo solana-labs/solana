@@ -7,8 +7,9 @@
 
 pub use solana_banks_interface::{BanksClient as TarpcClient, TransactionStatus};
 use {
+    crate::error::BanksClientError,
     borsh::BorshDeserialize,
-    futures::{future::join_all, Future, FutureExt},
+    futures::{future::join_all, Future, FutureExt, TryFutureExt},
     solana_banks_interface::{BanksRequest, BanksResponse},
     solana_program::{
         clock::Slot, fee_calculator::FeeCalculator, hash::Hash, program_pack::Pack, pubkey::Pubkey,
@@ -22,7 +23,7 @@ use {
         transaction::{self, Transaction},
         transport,
     },
-    std::io::{self, Error, ErrorKind},
+    std::io,
     tarpc::{
         client::{self, NewClient, RequestDispatch},
         context::{self, Context},
@@ -32,6 +33,8 @@ use {
     tokio::{net::ToSocketAddrs, time::Duration},
     tokio_serde::formats::Bincode,
 };
+
+mod error;
 
 // This exists only for backward compatibility
 pub trait BanksClientExt {}
@@ -58,7 +61,10 @@ impl BanksClient {
         ctx: Context,
         transaction: Transaction,
     ) -> impl Future<Output = io::Result<()>> + '_ {
-        self.inner.send_transaction_with_context(ctx, transaction)
+        self.inner
+            .send_transaction_with_context(ctx, transaction)
+            .map_err(BanksClientError::from) // Remove this when return Err type updated to BanksClientError
+            .map_err(Into::into)
     }
 
     #[deprecated(
@@ -73,6 +79,8 @@ impl BanksClient {
         #[allow(deprecated)]
         self.inner
             .get_fees_with_commitment_and_context(ctx, commitment)
+            .map_err(BanksClientError::from) // Remove this when return Err type updated to BanksClientError
+            .map_err(Into::into)
     }
 
     pub fn get_transaction_status_with_context(
@@ -82,6 +90,8 @@ impl BanksClient {
     ) -> impl Future<Output = io::Result<Option<TransactionStatus>>> + '_ {
         self.inner
             .get_transaction_status_with_context(ctx, signature)
+            .map_err(BanksClientError::from) // Remove this when return Err type updated to BanksClientError
+            .map_err(Into::into)
     }
 
     pub fn get_slot_with_context(
@@ -89,7 +99,10 @@ impl BanksClient {
         ctx: Context,
         commitment: CommitmentLevel,
     ) -> impl Future<Output = io::Result<Slot>> + '_ {
-        self.inner.get_slot_with_context(ctx, commitment)
+        self.inner
+            .get_slot_with_context(ctx, commitment)
+            .map_err(BanksClientError::from) // Remove this when return Err type updated to BanksClientError
+            .map_err(Into::into)
     }
 
     pub fn get_block_height_with_context(
@@ -97,7 +110,10 @@ impl BanksClient {
         ctx: Context,
         commitment: CommitmentLevel,
     ) -> impl Future<Output = io::Result<Slot>> + '_ {
-        self.inner.get_block_height_with_context(ctx, commitment)
+        self.inner
+            .get_block_height_with_context(ctx, commitment)
+            .map_err(BanksClientError::from) // Remove this when return Err type updated to BanksClientError
+            .map_err(Into::into)
     }
 
     pub fn process_transaction_with_commitment_and_context(
@@ -108,6 +124,8 @@ impl BanksClient {
     ) -> impl Future<Output = io::Result<Option<transaction::Result<()>>>> + '_ {
         self.inner
             .process_transaction_with_commitment_and_context(ctx, transaction, commitment)
+            .map_err(BanksClientError::from) // Remove this when return Err type updated to BanksClientError
+            .map_err(Into::into)
     }
 
     pub fn get_account_with_commitment_and_context(
@@ -118,6 +136,8 @@ impl BanksClient {
     ) -> impl Future<Output = io::Result<Option<Account>>> + '_ {
         self.inner
             .get_account_with_commitment_and_context(ctx, address, commitment)
+            .map_err(BanksClientError::from) // Remove this when return Err type updated to BanksClientError
+            .map_err(Into::into)
     }
 
     /// Send a transaction and return immediately. The server will resend the
@@ -148,9 +168,13 @@ impl BanksClient {
     pub fn get_sysvar<T: Sysvar>(&mut self) -> impl Future<Output = io::Result<T>> + '_ {
         self.get_account(T::id()).map(|result| {
             let sysvar = result?
-                .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Sysvar not present"))?;
+                .ok_or(BanksClientError::ClientError("Sysvar not present"))
+                .map_err(io::Error::from)?; // Remove this map when return Err type updated to BanksClientError
             from_account::<T, _>(&sysvar)
-                .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to deserialize sysvar"))
+                .ok_or(BanksClientError::ClientError(
+                    "Failed to deserialize sysvar",
+                ))
+                .map_err(Into::into) // Remove this when return Err type updated to BanksClientError
         })
     }
 
@@ -164,7 +188,8 @@ impl BanksClient {
     /// method to get both a blockhash and the blockhash's last valid slot.
     #[deprecated(since = "1.9.0", note = "Please use `get_latest_blockhash` instead")]
     pub fn get_recent_blockhash(&mut self) -> impl Future<Output = io::Result<Hash>> + '_ {
-        self.get_latest_blockhash()
+        #[allow(deprecated)]
+        self.get_fees().map(|result| Ok(result?.1))
     }
 
     /// Send a transaction and return after the transaction has been rejected or
@@ -178,11 +203,12 @@ impl BanksClient {
         ctx.deadline += Duration::from_secs(50);
         self.process_transaction_with_commitment_and_context(ctx, transaction, commitment)
             .map(|result| match result? {
-                None => {
-                    Err(Error::new(ErrorKind::TimedOut, "invalid blockhash or fee-payer").into())
-                }
+                None => Err(BanksClientError::ClientError(
+                    "invalid blockhash or fee-payer",
+                )),
                 Some(transaction_result) => Ok(transaction_result?),
             })
+            .map_err(Into::into) // Remove this when return Err type updated to BanksClientError
     }
 
     /// Send a transaction and return until the transaction has been finalized or rejected.
@@ -255,10 +281,12 @@ impl BanksClient {
         address: Pubkey,
     ) -> impl Future<Output = io::Result<T>> + '_ {
         self.get_account(address).map(|result| {
-            let account =
-                result?.ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Account not found"))?;
+            let account = result?
+                .ok_or(BanksClientError::ClientError("Account not found"))
+                .map_err(io::Error::from)?; // Remove this map when return Err type updated to BanksClientError
             T::unpack_from_slice(&account.data)
-                .map_err(|_| io::Error::new(io::ErrorKind::Other, "Failed to deserialize account"))
+                .map_err(|_| BanksClientError::ClientError("Failed to deserialize account"))
+                .map_err(Into::into) // Remove this when return Err type updated to BanksClientError
         })
     }
 
@@ -269,9 +297,8 @@ impl BanksClient {
         address: Pubkey,
     ) -> impl Future<Output = io::Result<T>> + '_ {
         self.get_account(address).map(|result| {
-            let account =
-                result?.ok_or_else(|| io::Error::new(io::ErrorKind::Other, "account not found"))?;
-            T::try_from_slice(&account.data)
+            let account = result?.ok_or(BanksClientError::ClientError("Account not found"))?;
+            T::try_from_slice(&account.data).map_err(Into::into)
         })
     }
 
@@ -330,7 +357,8 @@ impl BanksClient {
             .map(|result| {
                 result?
                     .map(|x| x.0)
-                    .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "account not found"))
+                    .ok_or(BanksClientError::ClientError("valid blockhash not found"))
+                    .map_err(Into::into)
             })
     }
 
@@ -348,6 +376,8 @@ impl BanksClient {
     ) -> impl Future<Output = io::Result<Option<(Hash, u64)>>> + '_ {
         self.inner
             .get_latest_blockhash_with_commitment_and_context(ctx, commitment)
+            .map_err(BanksClientError::from) // Remove this when return Err type updated to BanksClientError
+            .map_err(Into::into)
     }
 
     pub fn get_fee_for_message_with_commitment_and_context(
@@ -358,6 +388,8 @@ impl BanksClient {
     ) -> impl Future<Output = io::Result<Option<u64>>> + '_ {
         self.inner
             .get_fee_for_message_with_commitment_and_context(ctx, commitment, message)
+            .map_err(BanksClientError::from) // Remove this when return Err type updated to BanksClientError
+            .map_err(Into::into)
     }
 }
 
@@ -399,7 +431,7 @@ mod tests {
     }
 
     #[test]
-    fn test_banks_server_transfer_via_server() -> io::Result<()> {
+    fn test_banks_server_transfer_via_server() -> Result<(), BanksClientError> {
         // This test shows the preferred way to interact with BanksServer.
         // It creates a runtime explicitly (no globals via tokio macros) and calls
         // `runtime.block_on()` just once, to run all the async code.
@@ -432,7 +464,7 @@ mod tests {
     }
 
     #[test]
-    fn test_banks_server_transfer_via_client() -> io::Result<()> {
+    fn test_banks_server_transfer_via_client() -> Result<(), BanksClientError> {
         // The caller may not want to hold the connection open until the transaction
         // is processed (or blockhash expires). In this test, we verify the
         // server-side functionality is available to the client.

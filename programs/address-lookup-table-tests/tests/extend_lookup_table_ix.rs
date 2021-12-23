@@ -1,6 +1,8 @@
 use {
     assert_matches::assert_matches,
-    common::{add_lookup_table_account, new_address_lookup_table, setup_test_context},
+    common::{
+        add_lookup_table_account, assert_ix_error, new_address_lookup_table, setup_test_context,
+    },
     solana_address_lookup_table_program::{
         instruction::extend_lookup_table,
         state::{AddressLookupTable, LookupTableMeta},
@@ -130,7 +132,7 @@ async fn test_extend_lookup_table() {
                         } else {
                             num_existing_addresses as u8
                         },
-                        derivation_slot: lookup_table.meta.derivation_slot,
+                        deactivation_slot: lookup_table.meta.deactivation_slot,
                         authority: lookup_table.meta.authority,
                         _padding: 0u16,
                     },
@@ -156,59 +158,111 @@ async fn test_extend_lookup_table() {
 }
 
 #[tokio::test]
-async fn test_extend_addresses_authority_errors() {
+async fn test_extend_lookup_table_with_wrong_authority() {
     let mut context = setup_test_context().await;
+
     let authority = Keypair::new();
+    let wrong_authority = Keypair::new();
+    let initialized_table = new_address_lookup_table(Some(authority.pubkey()), 0);
+    let lookup_table_address = Pubkey::new_unique();
+    add_lookup_table_account(&mut context, lookup_table_address, initialized_table).await;
 
-    for (existing_authority, ix_authority, use_signer, expected_err) in [
-        (
-            Some(authority.pubkey()),
-            Keypair::new(),
-            true,
-            InstructionError::IncorrectAuthority,
-        ),
-        (
-            Some(authority.pubkey()),
-            authority,
-            false,
-            InstructionError::MissingRequiredSignature,
-        ),
-        (None, Keypair::new(), true, InstructionError::Immutable),
-    ] {
-        let lookup_table = new_address_lookup_table(existing_authority, 0);
-        let lookup_table_address = Pubkey::new_unique();
-        let _ = add_lookup_table_account(&mut context, lookup_table_address, lookup_table.clone())
-            .await;
+    let new_addresses = vec![Pubkey::new_unique()];
+    let ix = extend_lookup_table(
+        lookup_table_address,
+        wrong_authority.pubkey(),
+        context.payer.pubkey(),
+        new_addresses,
+    );
 
-        let num_new_addresses = 1;
-        let mut new_addresses = Vec::with_capacity(num_new_addresses);
-        new_addresses.resize_with(num_new_addresses, Pubkey::new_unique);
-        let mut instruction = extend_lookup_table(
-            lookup_table_address,
-            ix_authority.pubkey(),
-            context.payer.pubkey(),
-            new_addresses.clone(),
-        );
-        if !use_signer {
-            instruction.accounts[1].is_signer = false;
-        }
+    assert_ix_error(
+        &mut context,
+        ix,
+        Some(&wrong_authority),
+        InstructionError::IncorrectAuthority,
+    )
+    .await;
+}
 
-        let mut expected_addresses: Vec<Pubkey> = lookup_table.addresses.to_vec();
-        expected_addresses.extend(new_addresses);
+#[tokio::test]
+async fn test_extend_lookup_table_without_signing() {
+    let mut context = setup_test_context().await;
 
-        let extra_signer = if use_signer {
-            Some(&ix_authority)
-        } else {
-            None
-        };
+    let authority = Keypair::new();
+    let initialized_table = new_address_lookup_table(Some(authority.pubkey()), 10);
+    let lookup_table_address = Pubkey::new_unique();
+    add_lookup_table_account(&mut context, lookup_table_address, initialized_table).await;
 
-        let test_case = TestCase {
-            lookup_table_address,
-            instruction,
-            extra_signer,
-            expected_result: Err(expected_err),
-        };
+    let new_addresses = vec![Pubkey::new_unique()];
+    let mut ix = extend_lookup_table(
+        lookup_table_address,
+        authority.pubkey(),
+        context.payer.pubkey(),
+        new_addresses,
+    );
+    ix.accounts[1].is_signer = false;
 
-        run_test_case(&mut context, test_case).await;
-    }
+    assert_ix_error(
+        &mut context,
+        ix,
+        None,
+        InstructionError::MissingRequiredSignature,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_extend_deactivated_lookup_table() {
+    let mut context = setup_test_context().await;
+
+    let authority = Keypair::new();
+    let initialized_table = {
+        let mut table = new_address_lookup_table(Some(authority.pubkey()), 0);
+        table.meta.deactivation_slot = 0;
+        table
+    };
+    let lookup_table_address = Pubkey::new_unique();
+    add_lookup_table_account(&mut context, lookup_table_address, initialized_table).await;
+
+    let new_addresses = vec![Pubkey::new_unique()];
+    let ix = extend_lookup_table(
+        lookup_table_address,
+        authority.pubkey(),
+        context.payer.pubkey(),
+        new_addresses,
+    );
+
+    assert_ix_error(
+        &mut context,
+        ix,
+        Some(&authority),
+        InstructionError::InvalidArgument,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_extend_immutable_lookup_table() {
+    let mut context = setup_test_context().await;
+
+    let authority = Keypair::new();
+    let initialized_table = new_address_lookup_table(None, 1);
+    let lookup_table_address = Pubkey::new_unique();
+    add_lookup_table_account(&mut context, lookup_table_address, initialized_table).await;
+
+    let new_addresses = vec![Pubkey::new_unique()];
+    let ix = extend_lookup_table(
+        lookup_table_address,
+        authority.pubkey(),
+        context.payer.pubkey(),
+        new_addresses,
+    );
+
+    assert_ix_error(
+        &mut context,
+        ix,
+        Some(&authority),
+        InstructionError::Immutable,
+    )
+    .await;
 }

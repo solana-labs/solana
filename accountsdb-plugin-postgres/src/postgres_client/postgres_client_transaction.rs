@@ -492,7 +492,15 @@ impl SimplePostgresClient {
     ) -> Result<Statement, AccountsDbPluginError> {
         let stmt = "INSERT INTO transaction AS txn (signature, is_vote, slot, message_type, legacy_message, \
         v0_loaded_message, signatures, message_hash, meta, updated_on) \
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)";
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
+        ON CONFLICT (slot, signature) DO UPDATE SET is_vote=excluded.is_vote, \
+        message_type=excluded.message_type, \
+        legacy_message=excluded.legacy_message, \
+        v0_loaded_message=excluded.v0_loaded_message, \
+        signatures=excluded.signatures, \
+        message_hash=excluded.message_hash, \
+        meta=excluded.meta, \
+        updated_on=excluded.updated_on";
 
         let stmt = client.prepare(stmt);
 

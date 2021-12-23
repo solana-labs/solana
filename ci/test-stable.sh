@@ -65,6 +65,9 @@ test-stable-bpf)
     fi
   done
 
+  # bpf-tools version
+  "$cargo_build_bpf" -V
+
   # BPF program instruction count assertion
   bpf_target_path=programs/bpf/target
   _ "$cargo" stable test \

@@ -2101,7 +2101,7 @@ fn verify_and_parse_signatures_for_address_params(
     Ok((address, before, until, limit))
 }
 
-fn check_is_at_least_confirmed(commitment: CommitmentConfig) -> Result<()> {
+pub(crate) fn check_is_at_least_confirmed(commitment: CommitmentConfig) -> Result<()> {
     if !commitment.is_at_least_confirmed() {
         return Err(Error::invalid_params(
             "Method does not support commitment below `confirmed`",
@@ -7807,9 +7807,10 @@ pub mod tests {
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let mut pending_optimistically_confirmed_banks = HashSet::new();
-
+        let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
+            max_complete_transaction_status_slot,
             bank_forks.clone(),
             block_commitment_cache.clone(),
             optimistically_confirmed_bank.clone(),

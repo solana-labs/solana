@@ -1,6 +1,5 @@
 use {
     crate::{cluster_info_vote_listener::VerifiedLabelVotePacketsReceiver, result::Result},
-    crossbeam_channel::Select,
     solana_perf::packet::PacketBatch,
     solana_runtime::bank::Bank,
     solana_sdk::{
@@ -19,7 +18,7 @@ const MAX_VOTES_PER_VALIDATOR: usize = 1000;
 
 pub struct VerifiedVoteMetadata {
     pub vote_account_key: Pubkey,
-    pub vote: Box<dyn VoteTransaction>,
+    pub vote: VoteTransaction,
     pub packet_batch: PacketBatch,
     pub signature: Signature,
 }
@@ -141,10 +140,10 @@ impl VerifiedVotePackets {
         vote_packets_receiver: &VerifiedLabelVotePacketsReceiver,
         would_be_leader: bool,
     ) -> Result<()> {
-        let mut sel = Select::new();
-        sel.recv(vote_packets_receiver);
-        let _ = sel.ready_timeout(Duration::from_millis(200))?;
-        for gossip_votes in vote_packets_receiver.try_iter() {
+        const RECV_TIMEOUT: Duration = Duration::from_millis(200);
+        let vote_packets = vote_packets_receiver.recv_timeout(RECV_TIMEOUT)?;
+        let vote_packets = std::iter::once(vote_packets).chain(vote_packets_receiver.try_iter());
+        for gossip_votes in vote_packets {
             if would_be_leader {
                 for verfied_vote_metadata in gossip_votes {
                     let VerifiedVoteMetadata {
@@ -199,7 +198,7 @@ mod tests {
         let vote = Vote::new(vec![vote_slot], vote_hash);
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
-            vote: Box::new(vote.clone()),
+            vote: VoteTransaction::from(vote.clone()),
             packet_batch: PacketBatch::default(),
             signature: Signature::new(&[1u8; 64]),
         }])
@@ -219,7 +218,7 @@ mod tests {
         // Same slot, same hash, should not be inserted
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
-            vote: Box::new(vote),
+            vote: VoteTransaction::from(vote),
             packet_batch: PacketBatch::default(),
             signature: Signature::new(&[1u8; 64]),
         }])
@@ -241,7 +240,7 @@ mod tests {
         let vote = Vote::new(vec![vote_slot], new_vote_hash);
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
-            vote: Box::new(vote),
+            vote: VoteTransaction::from(vote),
             packet_batch: PacketBatch::default(),
             signature: Signature::new(&[1u8; 64]),
         }])
@@ -264,7 +263,7 @@ mod tests {
         let vote = Vote::new(vec![vote_slot], vote_hash);
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
-            vote: Box::new(vote),
+            vote: VoteTransaction::from(vote),
             packet_batch: PacketBatch::default(),
             signature: Signature::new(&[2u8; 64]),
         }])
@@ -284,7 +283,7 @@ mod tests {
         // No new messages, should time out
         assert_matches!(
             verified_vote_packets.receive_and_process_vote_packets(&r, true),
-            Err(Error::ReadyTimeout)
+            Err(Error::CrossbeamRecvTimeout(_))
         );
     }
 
@@ -303,7 +302,7 @@ mod tests {
             let vote = Vote::new(vec![vote_slot], vote_hash);
             s.send(vec![VerifiedVoteMetadata {
                 vote_account_key,
-                vote: Box::new(vote),
+                vote: VoteTransaction::from(vote),
                 packet_batch: PacketBatch::default(),
                 signature: Signature::new(&[1u8; 64]),
             }])
@@ -340,7 +339,7 @@ mod tests {
             let vote = Vote::new(vec![vote_slot], vote_hash);
             s.send(vec![VerifiedVoteMetadata {
                 vote_account_key,
-                vote: Box::new(vote),
+                vote: VoteTransaction::from(vote),
                 packet_batch: PacketBatch::default(),
                 signature: Signature::new_unique(),
             }])
@@ -394,7 +393,7 @@ mod tests {
                 let vote = Vote::new(vec![*vote_slot], *vote_hash);
                 s.send(vec![VerifiedVoteMetadata {
                     vote_account_key,
-                    vote: Box::new(vote),
+                    vote: VoteTransaction::from(vote),
                     packet_batch: PacketBatch::new(vec![Packet::default(); num_packets]),
                     signature: Signature::new_unique(),
                 }])
@@ -458,7 +457,7 @@ mod tests {
             my_leader_bank.slot() + 1,
         ));
         let vote_account_key = vote_simulator.vote_pubkeys[1];
-        let vote = Box::new(Vote::new(vec![vote_slot], vote_hash));
+        let vote = VoteTransaction::from(Vote::new(vec![vote_slot], vote_hash));
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
             vote,

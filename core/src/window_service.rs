@@ -233,14 +233,10 @@ fn run_check_duplicate(
 
         Ok(())
     };
-    let timer = Duration::from_millis(200);
-    let shred = shred_receiver.recv_timeout(timer)?;
-    check_duplicate(shred)?;
-    while let Ok(shred) = shred_receiver.try_recv() {
-        check_duplicate(shred)?;
-    }
-
-    Ok(())
+    const RECV_TIMEOUT: Duration = Duration::from_millis(200);
+    std::iter::once(shred_receiver.recv_timeout(RECV_TIMEOUT)?)
+        .chain(shred_receiver.try_iter())
+        .try_for_each(check_duplicate)
 }
 
 fn verify_repair(
@@ -458,6 +454,7 @@ impl WindowService {
         verified_receiver: CrossbeamReceiver<Vec<PacketBatch>>,
         retransmit_sender: Sender<Vec<Shred>>,
         repair_socket: Arc<UdpSocket>,
+        ancestor_hashes_socket: Arc<UdpSocket>,
         exit: Arc<AtomicBool>,
         repair_info: RepairInfo,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
@@ -483,6 +480,7 @@ impl WindowService {
             blockstore.clone(),
             exit.clone(),
             repair_socket,
+            ancestor_hashes_socket,
             repair_info,
             verified_vote_receiver,
             outstanding_requests.clone(),
@@ -740,7 +738,12 @@ mod test {
         keypair: &Keypair,
     ) -> Vec<Shred> {
         let shredder = Shredder::new(slot, parent, 0, 0).unwrap();
-        shredder.entries_to_shreds(keypair, entries, true, 0).0
+        let (data_shreds, _) = shredder.entries_to_shreds(
+            keypair, entries, true, // is_last_in_slot
+            0,    // next_shred_index
+            0,    // next_code_index
+        );
+        data_shreds
     }
 
     #[test]

@@ -35,27 +35,42 @@ use {
 pub const DEFAULT_CAPACITY_POW2: u8 = 5;
 
 /// A Header UID of 0 indicates that the header is unlocked
-pub(crate) const UID_UNLOCKED: Uid = 0;
+const UID_UNLOCKED: Uid = 0;
 
 pub(crate) type Uid = u64;
 
 #[repr(C)]
 struct Header {
-    lock: AtomicU64,
+    lock: u64,
 }
 
 impl Header {
-    fn try_lock(&self, uid: Uid) -> bool {
-        Ok(UID_UNLOCKED)
-            == self
-                .lock
-                .compare_exchange(UID_UNLOCKED, uid, Ordering::AcqRel, Ordering::Relaxed)
+    /// try to lock this entry with 'uid'
+    /// return true if it could be locked
+    fn try_lock(&mut self, uid: Uid) -> bool {
+        if self.lock == UID_UNLOCKED {
+            self.lock = uid;
+            true
+        } else {
+            false
+        }
     }
-    fn unlock(&self) -> Uid {
-        self.lock.swap(UID_UNLOCKED, Ordering::Release)
+    /// mark this entry as unlocked
+    fn unlock(&mut self, expected: Uid) {
+        assert_eq!(expected, self.lock);
+        self.lock = UID_UNLOCKED;
     }
-    fn uid(&self) -> Uid {
-        self.lock.load(Ordering::Acquire)
+    /// uid that has locked this entry or None if unlocked
+    fn uid(&self) -> Option<Uid> {
+        if self.lock == UID_UNLOCKED {
+            None
+        } else {
+            Some(self.lock)
+        }
+    }
+    /// true if this entry is unlocked
+    fn is_unlocked(&self) -> bool {
+        self.lock == UID_UNLOCKED
     }
 }
 
@@ -64,7 +79,7 @@ pub struct BucketStorage {
     mmap: MmapMut,
     pub cell_size: u64,
     pub capacity_pow2: u8,
-    pub used: AtomicU64,
+    pub count: Arc<AtomicU64>,
     pub stats: Arc<BucketStats>,
     pub max_search: MaxSearch,
 }
@@ -88,6 +103,7 @@ impl BucketStorage {
         capacity_pow2: u8,
         max_search: MaxSearch,
         stats: Arc<BucketStats>,
+        count: Arc<AtomicU64>,
     ) -> Self {
         let cell_size = elem_size * num_elems + std::mem::size_of::<Header>() as u64;
         let (mmap, path) = Self::new_map(&drives, cell_size as usize, capacity_pow2, &stats);
@@ -95,7 +111,7 @@ impl BucketStorage {
             path,
             mmap,
             cell_size,
-            used: AtomicU64::new(0),
+            count,
             capacity_pow2,
             stats,
             max_search,
@@ -112,6 +128,7 @@ impl BucketStorage {
         elem_size: u64,
         max_search: MaxSearch,
         stats: Arc<BucketStats>,
+        count: Arc<AtomicU64>,
     ) -> Self {
         Self::new_with_capacity(
             drives,
@@ -120,53 +137,74 @@ impl BucketStorage {
             DEFAULT_CAPACITY_POW2,
             max_search,
             stats,
+            count,
         )
     }
 
-    pub fn uid(&self, ix: u64) -> Uid {
-        assert!(ix < self.capacity(), "bad index size");
+    /// return ref to header of item 'ix' in mmapped file
+    fn header_ptr(&self, ix: u64) -> &Header {
         let ix = (ix * self.cell_size) as usize;
         let hdr_slice: &[u8] = &self.mmap[ix..ix + std::mem::size_of::<Header>()];
         unsafe {
             let hdr = hdr_slice.as_ptr() as *const Header;
-            return hdr.as_ref().unwrap().uid();
+            hdr.as_ref().unwrap()
         }
     }
 
-    pub fn allocate(&self, ix: u64, uid: Uid) -> Result<(), BucketStorageError> {
+    /// return ref to header of item 'ix' in mmapped file
+    fn header_mut_ptr(&mut self, ix: u64) -> &mut Header {
+        let ix = (ix * self.cell_size) as usize;
+        let hdr_slice: &mut [u8] = &mut self.mmap[ix..ix + std::mem::size_of::<Header>()];
+        unsafe {
+            let hdr = hdr_slice.as_mut_ptr() as *mut Header;
+            hdr.as_mut().unwrap()
+        }
+    }
+
+    /// return uid allocated at index 'ix' or None if vacant
+    pub fn uid(&self, ix: u64) -> Option<Uid> {
+        assert!(ix < self.capacity(), "bad index size");
+        self.header_ptr(ix).uid()
+    }
+
+    /// true if the entry at index 'ix' is free (as opposed to being allocated)
+    pub fn is_free(&self, ix: u64) -> bool {
+        // note that the terminology in the implementation is locked or unlocked.
+        // but our api is allocate/free
+        self.header_ptr(ix).is_unlocked()
+    }
+
+    /// caller knows id is not empty
+    pub fn uid_unchecked(&self, ix: u64) -> Uid {
+        self.uid(ix).unwrap()
+    }
+
+    /// 'is_resizing' true if caller is resizing the index (so don't increment count)
+    /// 'is_resizing' false if caller is adding an item to the index (so increment count)
+    pub fn allocate(
+        &mut self,
+        ix: u64,
+        uid: Uid,
+        is_resizing: bool,
+    ) -> Result<(), BucketStorageError> {
         assert!(ix < self.capacity(), "allocate: bad index size");
         assert!(UID_UNLOCKED != uid, "allocate: bad uid");
         let mut e = Err(BucketStorageError::AlreadyAllocated);
-        let ix = (ix * self.cell_size) as usize;
         //debug!("ALLOC {} {}", ix, uid);
-        let hdr_slice: &[u8] = &self.mmap[ix..ix + std::mem::size_of::<Header>()];
-        unsafe {
-            let hdr = hdr_slice.as_ptr() as *const Header;
-            if hdr.as_ref().unwrap().try_lock(uid) {
-                e = Ok(());
-                self.used.fetch_add(1, Ordering::Relaxed);
+        if self.header_mut_ptr(ix).try_lock(uid) {
+            e = Ok(());
+            if !is_resizing {
+                self.count.fetch_add(1, Ordering::Relaxed);
             }
-        };
+        }
         e
     }
 
-    pub fn free(&self, ix: u64, uid: Uid) {
+    pub fn free(&mut self, ix: u64, uid: Uid) {
         assert!(ix < self.capacity(), "bad index size");
         assert!(UID_UNLOCKED != uid, "free: bad uid");
-        let ix = (ix * self.cell_size) as usize;
-        //debug!("FREE {} {}", ix, uid);
-        let hdr_slice: &[u8] = &self.mmap[ix..ix + std::mem::size_of::<Header>()];
-        unsafe {
-            let hdr = hdr_slice.as_ptr() as *const Header;
-            //debug!("FREE uid: {}", hdr.as_ref().unwrap().uid());
-            let previous_uid = hdr.as_ref().unwrap().unlock();
-            assert_eq!(
-                previous_uid, uid,
-                "free: unlocked a header with a differet uid: {}",
-                previous_uid
-            );
-            self.used.fetch_sub(1, Ordering::Relaxed);
-        }
+        self.header_mut_ptr(ix).unlock(uid);
+        self.count.fetch_sub(1, Ordering::Relaxed);
     }
 
     pub fn get<T: Sized>(&self, ix: u64) -> &T {
@@ -324,6 +362,9 @@ impl BucketStorage {
             capacity_pow_2,
             max_search,
             Arc::clone(stats),
+            bucket
+                .map(|bucket| Arc::clone(&bucket.count))
+                .unwrap_or_default(),
         );
         if let Some(bucket) = bucket {
             new_bucket.copy_contents(bucket);
@@ -339,5 +380,45 @@ impl BucketStorage {
     /// Return the number of cells currently allocated
     pub fn capacity(&self) -> u64 {
         1 << self.capacity_pow2
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_bucket_storage() {
+        let tmpdir1 = std::env::temp_dir().join("bucket_map_test_mt");
+        let paths: Vec<PathBuf> = [tmpdir1]
+            .iter()
+            .filter(|x| std::fs::create_dir_all(x).is_ok())
+            .cloned()
+            .collect();
+        assert!(!paths.is_empty());
+
+        let mut storage =
+            BucketStorage::new(Arc::new(paths), 1, 1, 1, Arc::default(), Arc::default());
+        let ix = 0;
+        let uid = Uid::MAX;
+        assert!(storage.is_free(ix));
+        assert!(storage.allocate(ix, uid, false).is_ok());
+        assert!(storage.allocate(ix, uid, false).is_err());
+        assert!(!storage.is_free(ix));
+        assert_eq!(storage.uid(ix), Some(uid));
+        assert_eq!(storage.uid_unchecked(ix), uid);
+        storage.free(ix, uid);
+        assert!(storage.is_free(ix));
+        assert_eq!(storage.uid(ix), None);
+        let uid = 1;
+        assert!(storage.is_free(ix));
+        assert!(storage.allocate(ix, uid, false).is_ok());
+        assert!(storage.allocate(ix, uid, false).is_err());
+        assert!(!storage.is_free(ix));
+        assert_eq!(storage.uid(ix), Some(uid));
+        assert_eq!(storage.uid_unchecked(ix), uid);
+        storage.free(ix, uid);
+        assert!(storage.is_free(ix));
+        assert_eq!(storage.uid(ix), None);
     }
 }

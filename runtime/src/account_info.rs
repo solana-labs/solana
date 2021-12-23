@@ -102,6 +102,9 @@ impl IsCached for StorageLocation {
     }
 }
 
+/// We have to have SOME value for store_id when we are cached
+const CACHE_VIRTUAL_STORAGE_ID: AppendVecId = AppendVecId::MAX;
+
 impl AccountInfo {
     pub fn new(storage_location: StorageLocation, stored_size: StoredSize, lamports: u64) -> Self {
         assert_eq!(stored_size & ALL_FLAGS, 0);
@@ -110,8 +113,6 @@ impl AccountInfo {
             StorageLocation::AppendVec(store_id, offset) => (store_id, offset),
             StorageLocation::Cached => {
                 stored_size_mask |= IS_CACHED_STORE_ID_FLAG;
-                // We have to have SOME value for store_id when we are cached
-                const CACHE_VIRTUAL_STORAGE_ID: AppendVecId = AppendVecId::MAX;
                 (CACHE_VIRTUAL_STORAGE_ID, CACHE_VIRTUAL_OFFSET)
             }
         };
@@ -139,6 +140,13 @@ impl AccountInfo {
     pub fn stored_size(&self) -> StoredSize {
         // elminate the special bit that indicates the info references an account with zero lamports
         self.stored_size_mask & !ALL_FLAGS
+    }
+
+    /// true iff store_id and offset match self AND self is not cached
+    /// If self is cached, then store_id and offset are meaningless.
+    pub fn matches_storage_location(&self, store_id: AppendVecId, offset: Offset) -> bool {
+        // order is set for best short circuit
+        self.store_id == store_id && self.offset() == offset && !self.is_cached()
     }
 
     pub fn storage_location(&self) -> StorageLocation {
@@ -171,5 +179,27 @@ mod test {
     fn test_alignment() {
         let offset = 1; // not aligned
         AccountInfo::new(StorageLocation::AppendVec(0, offset), 0, 0);
+    }
+
+    #[test]
+    fn test_matches_storage_location() {
+        let offset = 0;
+        let id = 0;
+        let info = AccountInfo::new(StorageLocation::AppendVec(id, offset), 0, 0);
+        assert!(info.matches_storage_location(id, offset));
+
+        // wrong offset
+        let offset = ALIGN_BOUNDARY_OFFSET;
+        assert!(!info.matches_storage_location(id, offset));
+
+        // wrong id
+        let offset = 0;
+        let id = 1;
+        assert!(!info.matches_storage_location(id, offset));
+
+        // is cached
+        let id = CACHE_VIRTUAL_STORAGE_ID;
+        let info = AccountInfo::new(StorageLocation::Cached, 0, 0);
+        assert!(!info.matches_storage_location(id, offset));
     }
 }

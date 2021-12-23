@@ -10,7 +10,6 @@ documentation = "https://docs.rs/solana-metrics"
 edition = "2021"
 
 [dependencies]
-env_logger = "0.9.0"
 gethostname = "0.2.1"
 lazy_static = "1.4.0"
 log = "0.4.14"
@@ -18,6 +17,7 @@ reqwest = { version = "0.11.6", default-features = false, features = ["blocking"
 solana-sdk = { path = "../sdk", version = "=1.10.0" }
 
 [dev-dependencies]
+env_logger = "0.9.0"
 rand = "0.7.0"
 serial_test = "0.5.1"
 

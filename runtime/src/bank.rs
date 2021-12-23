@@ -1505,6 +1505,10 @@ impl Bank {
             .scan_results_limit_bytes
     }
 
+    pub fn proper_ancestors_set(&self) -> HashSet<Slot> {
+        HashSet::from_iter(self.proper_ancestors())
+    }
+
     /// Returns all ancestors excluding self.slot.
     pub(crate) fn proper_ancestors(&self) -> impl Iterator<Item = Slot> + '_ {
         self.ancestors
@@ -3068,10 +3072,7 @@ impl Bank {
             .into_iter()
             .map(SanitizedTransaction::from_transaction_for_tests)
             .collect::<Vec<_>>();
-        let lock_results = self
-            .rc
-            .accounts
-            .lock_accounts(sanitized_txs.iter(), self.demote_program_write_locks());
+        let lock_results = self.rc.accounts.lock_accounts(sanitized_txs.iter());
         TransactionBatch::new(lock_results, self, Cow::Owned(sanitized_txs))
     }
 
@@ -3087,10 +3088,7 @@ impl Bank {
                 })
             })
             .collect::<Result<Vec<_>>>()?;
-        let lock_results = self
-            .rc
-            .accounts
-            .lock_accounts(sanitized_txs.iter(), self.demote_program_write_locks());
+        let lock_results = self.rc.accounts.lock_accounts(sanitized_txs.iter());
         Ok(TransactionBatch::new(
             lock_results,
             self,
@@ -3103,10 +3101,7 @@ impl Bank {
         &'a self,
         txs: &'b [SanitizedTransaction],
     ) -> TransactionBatch<'a, 'b> {
-        let lock_results = self
-            .rc
-            .accounts
-            .lock_accounts(txs.iter(), self.demote_program_write_locks());
+        let lock_results = self.rc.accounts.lock_accounts(txs.iter());
         TransactionBatch::new(lock_results, self, Cow::Borrowed(txs))
     }
 
@@ -3118,11 +3113,10 @@ impl Bank {
         transaction_results: impl Iterator<Item = Result<()>>,
     ) -> TransactionBatch<'a, 'b> {
         // this lock_results could be: Ok, AccountInUse, WouldExceedBlockMaxLimit or WouldExceedAccountMaxLimit
-        let lock_results = self.rc.accounts.lock_accounts_with_results(
-            transactions.iter(),
-            transaction_results,
-            self.demote_program_write_locks(),
-        );
+        let lock_results = self
+            .rc
+            .accounts
+            .lock_accounts_with_results(transactions.iter(), transaction_results);
         TransactionBatch::new(lock_results, self, Cow::Borrowed(transactions))
     }
 
@@ -3204,11 +3198,9 @@ impl Bank {
     pub fn unlock_accounts(&self, batch: &mut TransactionBatch) {
         if batch.needs_unlock {
             batch.needs_unlock = false;
-            self.rc.accounts.unlock_accounts(
-                batch.sanitized_transactions().iter(),
-                batch.lock_results(),
-                self.demote_program_write_locks(),
-            )
+            self.rc
+                .accounts
+                .unlock_accounts(batch.sanitized_transactions().iter(), batch.lock_results())
         }
     }
 
@@ -3415,11 +3407,10 @@ impl Bank {
     /// Converts Accounts into RefCell<AccountSharedData>, this involves moving
     /// ownership by draining the source
     fn accounts_to_refcells(accounts: &mut TransactionAccounts) -> TransactionAccountRefCells {
-        let account_refcells: Vec<_> = accounts
+        accounts
             .drain(..)
-            .map(|(pubkey, account)| (pubkey, Rc::new(RefCell::new(account))))
-            .collect();
-        account_refcells
+            .map(|(pubkey, account)| (pubkey, RefCell::new(account)))
+            .collect()
     }
 
     /// Converts back from RefCell<AccountSharedData> to AccountSharedData, this involves moving
@@ -3427,17 +3418,10 @@ impl Bank {
     fn refcells_to_accounts(
         accounts: &mut TransactionAccounts,
         mut account_refcells: TransactionAccountRefCells,
-    ) -> std::result::Result<(), TransactionError> {
+    ) {
         for (pubkey, account_refcell) in account_refcells.drain(..) {
-            accounts.push((
-                pubkey,
-                Rc::try_unwrap(account_refcell)
-                    .map_err(|_| TransactionError::AccountBorrowOutstanding)?
-                    .into_inner(),
-            ))
+            accounts.push((pubkey, account_refcell.into_inner()))
         }
-
-        Ok(())
     }
 
     /// Get any cached executors needed by the transaction
@@ -3653,13 +3637,10 @@ impl Bank {
                             });
                         inner_instructions.push(inner_instruction_list);
 
-                        if let Err(e) = Self::refcells_to_accounts(
+                        Self::refcells_to_accounts(
                             &mut loaded_transaction.accounts,
                             account_refcells,
-                        ) {
-                            warn!("Account lifetime mismanagement");
-                            process_result = Err(e);
-                        }
+                        );
 
                         if process_result.is_ok() {
                             self.update_executors(executors);
@@ -3921,7 +3902,6 @@ impl Bank {
             &blockhash,
             lamports_per_signature,
             self.rent_for_sysvars(),
-            self.demote_program_write_locks(),
             self.leave_nonce_on_success(),
         );
         let rent_debits = self.collect_rent(executed_results, loaded_txs);
@@ -4199,7 +4179,10 @@ impl Bank {
     fn collect_rent_in_partition(&self, partition: Partition) -> usize {
         let subrange = Self::pubkey_range_from_partition(partition);
 
-        self.rc.accounts.hold_range_in_memory(&subrange, true);
+        let thread_pool = &self.rc.accounts.accounts_db.thread_pool;
+        self.rc
+            .accounts
+            .hold_range_in_memory(&subrange, true, thread_pool);
 
         let accounts = self
             .rc
@@ -4233,7 +4216,9 @@ impl Bank {
             .unwrap()
             .extend(rent_debits.into_unordered_rewards_iter());
 
-        self.rc.accounts.hold_range_in_memory(&subrange, false);
+        self.rc
+            .accounts
+            .hold_range_in_memory(&subrange, false, thread_pool);
         account_count
     }
 
@@ -5768,11 +5753,6 @@ impl Bank {
             .is_active(&feature_set::stake_program_advance_activating_credits_observed::id())
     }
 
-    pub fn demote_program_write_locks(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::demote_program_write_locks::id())
-    }
-
     pub fn leave_nonce_on_success(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::leave_nonce_on_success::id())
@@ -7271,10 +7251,7 @@ pub(crate) mod tests {
 
         assert_eq!(
             bank.process_transaction(&tx),
-            Err(TransactionError::InstructionError(
-                0,
-                InstructionError::ExecutableLamportChange
-            ))
+            Err(TransactionError::InvalidWritableAccount)
         );
         assert_eq!(bank.get_balance(&account_pubkey), account_balance);
     }

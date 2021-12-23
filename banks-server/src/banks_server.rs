@@ -35,7 +35,7 @@ use {
     tarpc::{
         context::Context,
         serde_transport::tcp,
-        server::{self, Channel, Incoming},
+        server::{self, incoming::Incoming, Channel},
         transport::{self, channel::UnboundedChannel},
         ClientMessage, Response,
     },

@@ -16,7 +16,7 @@ regex = "1.5.4"
 cargo_metadata = "0.14.1"
 solana-sdk = { path = "..", version = "=1.10.0" }
 solana-download-utils = { path = "../../download-utils", version = "=1.10.0" }
-tar = "0.4.37"
+tar = "0.4.38"
 
 [dev-dependencies]
 serial_test = "*"
