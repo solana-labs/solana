@@ -142,11 +142,27 @@ The following method is used for notifying transactions:
 ```
 
 The `ReplicaAccountInfReplicaTransactionInfoVersionsoVersions` struct
-contains the information about a transaction streamed. The `slot`
-points to the slot the transaction is executed at. For details of
-transaction, please refer to [`solana-sdk`] and
-[`solana-transaction-status`]
+contains the information about a transaction streamed. It wraps `ReplicaTransactionInfo`
 
+```
+pub struct ReplicaTransactionInfo<'a> {
+    /// The first signature of the transaction, used for identifying the transaction.
+    pub signature: &'a Signature,
+
+    /// Indicates if the transaction is a simple vote transaction.
+    pub is_vote: bool,
+
+    /// The sanitized transaction.
+    pub transaction: &'a SanitizedTransaction,
+
+    /// Metadata of the transaction status.
+    pub transaction_status_meta: &'a TransactionStatusMeta,
+}
+```
+For details of `SanitizedTransaction` and `TransactionStatusMeta `,
+please refer to [`solana-sdk`] and [`solana-transaction-status`]
+
+The `slot` points to the slot the transaction is executed at. 
 For more details, please refer to the Rust documentation in
 [`solana-accountsdb-plugin-interface`].
 
