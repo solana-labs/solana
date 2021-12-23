@@ -11,11 +11,7 @@ use {
     log::*,
     solana_banks_client::start_client,
     solana_banks_server::banks_server::start_local_server,
-    solana_program_runtime::{
-        ic_msg,
-        invoke_context::{InstructionAccount, ProcessInstructionWithContext},
-        stable_log,
-    },
+    solana_program_runtime::{ic_msg, invoke_context::ProcessInstructionWithContext, stable_log},
     solana_runtime::{
         bank::{Bank, ExecuteTimings},
         bank_forks::BankForks,
@@ -235,30 +231,19 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         account_infos: &[AccountInfo],
         signers_seeds: &[&[&[u8]]],
     ) -> ProgramResult {
-        //
-        // TODO: Merge the business logic below with the BPF invoke path in
-        //       programs/bpf_loader/src/syscalls.rs
-        //
-
         let invoke_context = get_invoke_context();
         let log_collector = invoke_context.get_log_collector();
 
         let caller = *invoke_context.get_caller().expect("get_caller");
         let message = Message::new(&[instruction.clone()], None);
-        let program_id_index = message.instructions[0].program_id_index as usize;
-        let program_id = message.account_keys[program_id_index];
-        // TODO don't have the caller's keyed_accounts so can't validate writer or signer escalation or deescalation yet
-        let caller_privileges = message
-            .account_keys
-            .iter()
-            .enumerate()
-            .map(|(i, _)| message.is_writable(i))
-            .collect::<Vec<bool>>();
 
-        stable_log::program_invoke(&log_collector, &program_id, invoke_context.invoke_depth());
+        stable_log::program_invoke(
+            &log_collector,
+            &instruction.program_id,
+            invoke_context.invoke_depth(),
+        );
 
         // Convert AccountInfos into Accounts
-        let mut instruction_accounts = Vec::with_capacity(message.account_keys.len());
         let mut accounts = Vec::with_capacity(message.account_keys.len());
         for (i, account_key) in message.account_keys.iter().enumerate() {
             let (account_index, account_info) = invoke_context
@@ -285,39 +270,16 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             } else {
                 None
             };
-            instruction_accounts.push(InstructionAccount {
-                index: account_index,
-                is_signer: message.is_signer(i),
-                is_writable: message.is_writable(i),
-            });
             accounts.push((account_index, account_info));
         }
-        let program_account_index = invoke_context.find_index_of_account(&program_id).unwrap();
-        let program_indices = vec![program_account_index];
 
-        // Check Signers
-        for account_info in account_infos {
-            for instruction_account in &instruction.accounts {
-                if *account_info.unsigned_key() == instruction_account.pubkey
-                    && instruction_account.is_signer
-                    && !account_info.is_signer
-                {
-                    let mut program_signer = false;
-                    for seeds in signers_seeds.iter() {
-                        let signer = Pubkey::create_program_address(seeds, &caller).unwrap();
-                        if instruction_account.pubkey == signer {
-                            program_signer = true;
-                            break;
-                        }
-                    }
-                    assert!(
-                        program_signer,
-                        "Missing signer for {}",
-                        instruction_account.pubkey
-                    );
-                }
-            }
-        }
+        let signers = signers_seeds
+            .iter()
+            .map(|seeds| Pubkey::create_program_address(seeds, &caller).unwrap())
+            .collect::<Vec<_>>();
+        let (instruction_accounts, caller_write_privileges, program_indices) = invoke_context
+            .prepare_instruction(instruction, &signers)
+            .unwrap();
 
         if let Some(instruction_recorder) = &invoke_context.instruction_recorder {
             instruction_recorder.record_instruction(instruction.clone());
@@ -326,7 +288,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             .process_instruction(
                 &instruction.data,
                 &instruction_accounts,
-                Some(&caller_privileges),
+                Some(&caller_write_privileges),
                 &program_indices,
             )
             .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;
@@ -359,7 +321,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             }
         }
 
-        stable_log::program_success(&log_collector, &program_id);
+        stable_log::program_success(&log_collector, &instruction.program_id);
         Ok(())
     }
 
