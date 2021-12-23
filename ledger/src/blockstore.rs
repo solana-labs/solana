@@ -517,7 +517,7 @@ impl Blockstore {
                     entries.pop().unwrap();
                 }
                 let shreds = entries_to_test_shreds(
-                    entries.clone(),
+                    &entries,
                     slot,
                     parent.unwrap_or(slot),
                     is_slot_complete,
@@ -3999,7 +3999,7 @@ pub fn create_new_ledger_from_name_auto_delete(
 }
 
 pub fn entries_to_test_shreds(
-    entries: Vec<Entry>,
+    entries: &[Entry],
     slot: Slot,
     parent_slot: Slot,
     is_full_slot: bool,
@@ -4009,7 +4009,7 @@ pub fn entries_to_test_shreds(
         .unwrap()
         .entries_to_shreds(
             &Keypair::new(),
-            &entries,
+            entries,
             is_full_slot,
             0, // next_shred_index,
             0, // next_code_index
@@ -4024,7 +4024,7 @@ pub fn make_slot_entries(
     num_entries: u64,
 ) -> (Vec<Shred>, Vec<Entry>) {
     let entries = create_ticks(num_entries, 0, Hash::default());
-    let shreds = entries_to_test_shreds(entries.clone(), slot, parent_slot, true, 0);
+    let shreds = entries_to_test_shreds(&entries, slot, parent_slot, true, 0);
     (shreds, entries)
 }
 
@@ -4567,12 +4567,12 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         let entries = create_ticks(8, 0, Hash::default());
-        let shreds = entries_to_test_shreds(entries[0..4].to_vec(), 1, 0, false, 0);
+        let shreds = entries_to_test_shreds(&entries[0..4], 1, 0, false, 0);
         blockstore
             .insert_shreds(shreds, None, false)
             .expect("Expected successful write of shreds");
 
-        let mut shreds1 = entries_to_test_shreds(entries[4..].to_vec(), 1, 0, false, 0);
+        let mut shreds1 = entries_to_test_shreds(&entries[4..], 1, 0, false, 0);
         for (i, b) in shreds1.iter_mut().enumerate() {
             b.set_index(8 + i as u32);
         }
@@ -4601,7 +4601,7 @@ pub mod tests {
             let entries = create_ticks(slot + 1, 0, Hash::default());
             let last_entry = entries.last().unwrap().clone();
             let mut shreds =
-                entries_to_test_shreds(entries, slot, slot.saturating_sub(1), false, 0);
+                entries_to_test_shreds(&entries, slot, slot.saturating_sub(1), false, 0);
             for b in shreds.iter_mut() {
                 b.set_index(index);
                 b.set_slot(slot as u64);
@@ -4634,8 +4634,7 @@ pub mod tests {
         // Write entries
         for slot in 0..num_slots {
             let entries = create_ticks(entries_per_slot, 0, Hash::default());
-            let shreds =
-                entries_to_test_shreds(entries.clone(), slot, slot.saturating_sub(1), false, 0);
+            let shreds = entries_to_test_shreds(&entries, slot, slot.saturating_sub(1), false, 0);
             assert!(shreds.len() as u64 >= shreds_per_slot);
             blockstore
                 .insert_shreds(shreds, None, false)
@@ -4713,7 +4712,7 @@ pub mod tests {
         let slot = 0;
         let num_entries = max_ticks_per_n_shreds(1, None) + 1;
         let entries = create_ticks(num_entries, slot, Hash::default());
-        let shreds = entries_to_test_shreds(entries, slot, 0, true, 0);
+        let shreds = entries_to_test_shreds(&entries, slot, 0, true, 0);
         let num_shreds = shreds.len();
         assert!(num_shreds > 1);
         assert!(blockstore
@@ -5432,7 +5431,7 @@ pub mod tests {
         // Create enough entries to ensure there are at least two shreds created
         let num_entries = max_ticks_per_n_shreds(1, None) + 1;
         let entries = create_ticks(num_entries, 0, Hash::default());
-        let mut shreds = entries_to_test_shreds(entries, slot, 0, true, 0);
+        let mut shreds = entries_to_test_shreds(&entries, slot, 0, true, 0);
         let num_shreds = shreds.len();
         assert!(num_shreds > 1);
         for (i, s) in shreds.iter_mut().enumerate() {
@@ -5571,7 +5570,7 @@ pub mod tests {
         );
 
         let entries = create_ticks(100, 0, Hash::default());
-        let mut shreds = entries_to_test_shreds(entries, slot, 0, true, 0);
+        let mut shreds = entries_to_test_shreds(&entries, slot, 0, true, 0);
         assert!(shreds.len() > 2);
         shreds.drain(2..);
 
@@ -5610,7 +5609,7 @@ pub mod tests {
         // Write entries
         let num_entries = 10;
         let entries = create_ticks(num_entries, 0, Hash::default());
-        let shreds = entries_to_test_shreds(entries, slot, 0, true, 0);
+        let shreds = entries_to_test_shreds(&entries, slot, 0, true, 0);
         let num_shreds = shreds.len();
 
         blockstore.insert_shreds(shreds, None, false).unwrap();
@@ -6138,7 +6137,7 @@ pub mod tests {
         let num_ticks = 8;
         let entries = create_ticks(num_ticks, 0, Hash::default());
         let slot = 1;
-        let shreds = entries_to_test_shreds(entries, slot, 0, false, 0);
+        let shreds = entries_to_test_shreds(&entries, slot, 0, false, 0);
         let next_shred_index = shreds.len();
         blockstore
             .insert_shreds(shreds, None, false)
@@ -6226,9 +6225,9 @@ pub mod tests {
         let slot = 10;
         let entries = make_slot_entries_with_transactions(100);
         let blockhash = get_last_hash(entries.iter()).unwrap();
-        let shreds = entries_to_test_shreds(entries.clone(), slot, slot - 1, true, 0);
-        let more_shreds = entries_to_test_shreds(entries.clone(), slot + 1, slot, true, 0);
-        let unrooted_shreds = entries_to_test_shreds(entries.clone(), slot + 2, slot + 1, true, 0);
+        let shreds = entries_to_test_shreds(&entries, slot, slot - 1, true, 0);
+        let more_shreds = entries_to_test_shreds(&entries, slot + 1, slot, true, 0);
+        let unrooted_shreds = entries_to_test_shreds(&entries, slot + 2, slot + 1, true, 0);
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         blockstore.insert_shreds(shreds, None, false).unwrap();
@@ -7095,7 +7094,7 @@ pub mod tests {
     fn test_get_rooted_transaction() {
         let slot = 2;
         let entries = make_slot_entries_with_transactions(5);
-        let shreds = entries_to_test_shreds(entries.clone(), slot, slot - 1, true, 0);
+        let shreds = entries_to_test_shreds(&entries, slot, slot - 1, true, 0);
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         blockstore.insert_shreds(shreds, None, false).unwrap();
@@ -7202,7 +7201,7 @@ pub mod tests {
 
         let slot = 2;
         let entries = make_slot_entries_with_transactions(5);
-        let shreds = entries_to_test_shreds(entries.clone(), slot, slot - 1, true, 0);
+        let shreds = entries_to_test_shreds(&entries, slot, slot - 1, true, 0);
         blockstore.insert_shreds(shreds, None, false).unwrap();
 
         let expected_transactions: Vec<TransactionWithStatusMeta> = entries
@@ -7560,7 +7559,7 @@ pub mod tests {
             let entries = make_slot_entries_with_transaction_addresses(&[
                 address0, address1, address0, address1,
             ]);
-            let shreds = entries_to_test_shreds(entries.clone(), slot, slot - 1, true, 0);
+            let shreds = entries_to_test_shreds(&entries, slot, slot - 1, true, 0);
             blockstore.insert_shreds(shreds, None, false).unwrap();
 
             for (i, entry) in entries.into_iter().enumerate() {
@@ -7591,7 +7590,7 @@ pub mod tests {
             let entries = make_slot_entries_with_transaction_addresses(&[
                 address0, address1, address0, address1,
             ]);
-            let shreds = entries_to_test_shreds(entries.clone(), slot, 8, true, 0);
+            let shreds = entries_to_test_shreds(&entries, slot, 8, true, 0);
             blockstore.insert_shreds(shreds, None, false).unwrap();
 
             for entry in entries.into_iter() {
@@ -8611,7 +8610,7 @@ pub mod tests {
         let parent = 0;
         let num_txs = 20;
         let entry = make_large_tx_entry(num_txs);
-        let shreds = entries_to_test_shreds(vec![entry], slot, parent, true, 0);
+        let shreds = entries_to_test_shreds(&[entry], slot, parent, true, 0);
         assert!(shreds.len() > 1);
 
         let ledger_path = get_tmp_ledger_path_auto_delete!();
@@ -8697,7 +8696,7 @@ pub mod tests {
             assert!(!blockstore.is_full(0));
         }
 
-        let duplicate_shreds = entries_to_test_shreds(original_entries.clone(), 0, 0, true, 0);
+        let duplicate_shreds = entries_to_test_shreds(&original_entries, 0, 0, true, 0);
         let num_shreds = duplicate_shreds.len() as u64;
         blockstore
             .insert_shreds(duplicate_shreds, None, false)
