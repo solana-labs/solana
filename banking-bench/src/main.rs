@@ -5,7 +5,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
-    solana_core::banking_stage::BankingStage,
+    solana_core::{banking_stage::BankingStage, packet_deduper::PacketDeduper},
     solana_gossip::cluster_info::{ClusterInfo, Node},
     solana_ledger::{
         blockstore::Blockstore,
@@ -235,6 +235,7 @@ fn main() {
             None,
             replay_vote_sender,
             Arc::new(RwLock::new(CostModel::default())),
+            PacketDeduper::default(),
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 
