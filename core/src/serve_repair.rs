@@ -170,8 +170,8 @@ pub enum RepairProtocol {
     WindowIndexWithNonce(ContactInfo, Slot, u64, Nonce),
     HighestWindowIndexWithNonce(ContactInfo, Slot, u64, Nonce),
     OrphanWithNonce(ContactInfo, Slot, Nonce),
-    CodingWithNonce(ContactInfo, Slot, u64, Nonce),
     AncestorHashes(ContactInfo, Slot, Nonce),
+    CodingWithNonce(ContactInfo, Slot, u64, Nonce),
 }
 
 #[derive(Clone)]

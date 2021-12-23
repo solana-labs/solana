@@ -230,6 +230,8 @@ fn retransmit(
     let mut shreds = shreds_receiver.recv_timeout(RECV_TIMEOUT)?;
     let mut timer_start = Measure::start("retransmit");
     shreds.extend(shreds_receiver.try_iter().flatten());
+    stats.num_shreds += shreds.len();
+    stats.total_batches += 1;
 
     let mut epoch_fetch = Measure::start("retransmit_epoch_fetch");
     let (working_bank, root_bank) = {
