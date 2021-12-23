@@ -162,7 +162,7 @@ pub struct ReplicaTransactionInfo<'a> {
 For details of `SanitizedTransaction` and `TransactionStatusMeta `,
 please refer to [`solana-sdk`] and [`solana-transaction-status`]
 
-The `slot` points to the slot the transaction is executed at. 
+The `slot` points to the slot the transaction is executed at.
 For more details, please refer to the Rust documentation in
 [`solana-accountsdb-plugin-interface`].
 
