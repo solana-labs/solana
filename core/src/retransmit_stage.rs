@@ -24,16 +24,14 @@ use {
     solana_ledger::{
         blockstore::Blockstore,
         leader_schedule_cache::LeaderScheduleCache,
-        shred::{Shred, ShredId, ShredType},
+        shred::{Shred, ShredId},
     },
     solana_measure::measure::Measure,
     solana_perf::packet::PacketBatch,
     solana_rayon_threadlimit::get_thread_count,
     solana_rpc::{max_slots::MaxSlots, rpc_subscriptions::RpcSubscriptions},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
-    solana_sdk::{
-        clock::Slot, epoch_schedule::EpochSchedule, feature_set, pubkey::Pubkey, timing::timestamp,
-    },
+    solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey, timing::timestamp},
     solana_streamer::sendmmsg::{multi_target_send, SendPktsError},
     std::{
         collections::{BTreeSet, HashMap, HashSet},
@@ -240,22 +238,6 @@ fn retransmit(
     };
     epoch_fetch.stop();
     stats.epoch_fetch += epoch_fetch.as_us();
-
-    let feature_slot = working_bank
-        .feature_set
-        .activated_slot(&feature_set::broadcast_only_coding_shreds::id());
-    if let Some(feature_slot) = feature_slot {
-        let epoch_schedule = working_bank.epoch_schedule();
-        let feature_epoch = epoch_schedule.get_epoch(feature_slot);
-
-        shreds.retain(|shred| {
-            if shred.shred_type() == ShredType::Code {
-                return true;
-            }
-            let shred_epoch = epoch_schedule.get_epoch(shred.slot());
-            feature_epoch < shred_epoch
-        })
-    }
 
     let mut epoch_cache_update = Measure::start("retransmit_epoch_cach_update");
     maybe_reset_shreds_received_cache(shreds_received, hasher_reset_ts);
