@@ -601,8 +601,8 @@ mod tests {
         let leader_keypair = Keypair::new();
         let GenesisConfigInfo {
             mut genesis_config,
-            mint_keypair: _,
             voting_keypair,
+            ..
         } = create_genesis_config_with_leader(10_000, &leader_keypair.pubkey(), 1_000);
         let slots_in_epoch = 32;
         genesis_config.epoch_schedule = EpochSchedule::new(slots_in_epoch);

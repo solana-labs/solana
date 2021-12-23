@@ -121,7 +121,7 @@ impl FetchStage {
     }
 
     fn new_multi_socket(
-        sockets: Vec<Arc<UdpSocket>>,
+        tpu_sockets: Vec<Arc<UdpSocket>>,
         tpu_forwards_sockets: Vec<Arc<UdpSocket>>,
         tpu_vote_sockets: Vec<Arc<UdpSocket>>,
         exit: &Arc<AtomicBool>,
@@ -132,7 +132,7 @@ impl FetchStage {
     ) -> Self {
         let recycler: PacketBatchRecycler = Recycler::warmed(1000, 1024);
 
-        let tpu_threads = sockets.into_iter().map(|socket| {
+        let tpu_threads = tpu_sockets.into_iter().map(|socket| {
             streamer::receiver(
                 socket,
                 exit,

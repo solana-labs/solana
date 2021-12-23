@@ -6275,6 +6275,7 @@ pub mod tests {
             mut genesis_config,
             mint_keypair,
             voting_keypair,
+            ..
         } = create_genesis_config(TEST_MINT_LAMPORTS);
 
         genesis_config.rent.lamports_per_byte_year = 50;
