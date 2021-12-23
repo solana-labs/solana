@@ -33,7 +33,7 @@ use {
         net::{IpAddr, Ipv4Addr, SocketAddr},
         path::{Path, PathBuf},
         process::exit,
-        sync::mpsc::channel,
+        sync::{mpsc::channel, Arc, RwLock},
         time::{Duration, SystemTime, UNIX_EPOCH},
     },
 };
@@ -508,6 +508,7 @@ fn main() {
     genesis.max_ledger_shreds = value_of(&matches, "limit_ledger_size");
     genesis.max_genesis_archive_unpacked_size = Some(u64::MAX);
 
+    let admin_service_cluster_info = Arc::new(RwLock::new(None));
     admin_rpc_service::run(
         &ledger_path,
         admin_rpc_service::AdminRpcRequestMetadata {
@@ -519,6 +520,7 @@ fn main() {
             start_time: std::time::SystemTime::now(),
             validator_exit: genesis.validator_exit.clone(),
             authorized_voter_keypairs: genesis.authorized_voter_keypairs.clone(),
+            cluster_info: admin_service_cluster_info.clone(),
         },
     );
     let dashboard = if output == Output::Dashboard {
@@ -591,6 +593,7 @@ fn main() {
 
     match genesis.start_with_mint_address(mint_address, socket_addr_space) {
         Ok(test_validator) => {
+            *admin_service_cluster_info.write().unwrap() = Some(test_validator.cluster_info());
             if let Some(dashboard) = dashboard {
                 dashboard.run(Duration::from_millis(250));
             }

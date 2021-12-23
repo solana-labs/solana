@@ -5822,6 +5822,7 @@ dependencies = [
  "num_cpus",
  "rand 0.7.3",
  "serde",
+ "serde_json",
  "signal-hook",
  "solana-clap-utils",
  "solana-cli-config",

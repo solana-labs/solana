@@ -1,7 +1,11 @@
 use {
     crate::validator::{Validator, ValidatorConfig, ValidatorStartProgress},
     solana_client::rpc_client::RpcClient,
-    solana_gossip::{cluster_info::Node, gossip_service::discover_cluster, socketaddr},
+    solana_gossip::{
+        cluster_info::{ClusterInfo, Node},
+        gossip_service::discover_cluster,
+        socketaddr,
+    },
     solana_ledger::{blockstore::create_new_ledger, create_new_tmp_ledger},
     solana_net_utils::PortRange,
     solana_rpc::rpc::JsonRpcConfig,
@@ -627,6 +631,10 @@ impl TestValidator {
         if let Some(validator) = self.validator.take() {
             validator.join();
         }
+    }
+
+    pub fn cluster_info(&self) -> Arc<ClusterInfo> {
+        self.validator.as_ref().unwrap().cluster_info.clone()
     }
 }
 

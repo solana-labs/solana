@@ -2055,6 +2055,18 @@ pub fn main() {
             )
         )
         .subcommand(
+            SubCommand::with_name("contact-info")
+            .about("Display the validator's contact info")
+            .arg(
+                Arg::with_name("output")
+                    .long("output")
+                    .takes_value(true)
+                    .value_name("MODE")
+                    .possible_values(&["json", "json-compact"])
+                    .help("Output display mode")
+            )
+        )
+        .subcommand(
             SubCommand::with_name("init")
             .about("Initialize the ledger directory then exit")
         )
@@ -2166,6 +2178,26 @@ pub fn main() {
                 }
                 _ => unreachable!(),
             }
+        }
+        ("contact-info", Some(subcommand_matches)) => {
+            let output_mode = subcommand_matches.value_of("output");
+            let admin_client = admin_rpc_service::connect(&ledger_path);
+            let contact_info = admin_rpc_service::runtime()
+                .block_on(async move { admin_client.await?.contact_info().await })
+                .unwrap_or_else(|err| {
+                    eprintln!("Contact info query failed: {}", err);
+                    exit(1);
+                });
+            if let Some(mode) = output_mode {
+                match mode {
+                    "json" => println!("{}", serde_json::to_string_pretty(&contact_info).unwrap()),
+                    "json-compact" => print!("{}", serde_json::to_string(&contact_info).unwrap()),
+                    _ => unreachable!(),
+                }
+            } else {
+                print!("{}", contact_info);
+            }
+            return;
         }
         ("init", _) => Operation::Initialize,
         ("exit", Some(subcommand_matches)) => {
@@ -2685,6 +2717,7 @@ pub fn main() {
     let _ledger_write_guard = lock_ledger(&ledger_path, &mut ledger_lock);
 
     let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
+    let admin_service_cluster_info = Arc::new(RwLock::new(None));
     admin_rpc_service::run(
         &ledger_path,
         admin_rpc_service::AdminRpcRequestMetadata {
@@ -2693,6 +2726,7 @@ pub fn main() {
             validator_exit: validator_config.validator_exit.clone(),
             start_progress: start_progress.clone(),
             authorized_voter_keypairs: authorized_voter_keypairs.clone(),
+            cluster_info: admin_service_cluster_info.clone(),
         },
     );
 
@@ -2832,6 +2866,7 @@ pub fn main() {
         start_progress,
         socket_addr_space,
     );
+    *admin_service_cluster_info.write().unwrap() = Some(validator.cluster_info.clone());
 
     if let Some(filename) = init_complete_file {
         File::create(filename).unwrap_or_else(|_| {
