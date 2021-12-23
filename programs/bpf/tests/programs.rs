@@ -1743,7 +1743,6 @@ fn test_program_bpf_upgrade() {
         program_id,
         &[0],
         vec![
-            AccountMeta::new(program_id.clone(), false),
             AccountMeta::new(clock::id(), false),
         ],
     );
@@ -1838,7 +1837,6 @@ fn test_program_bpf_upgrade_and_invoke_in_same_tx() {
         program_id,
         &[0],
         vec![
-            AccountMeta::new(program_id.clone(), false),
             AccountMeta::new(clock::id(), false),
         ],
     );
@@ -2114,7 +2112,6 @@ fn test_program_bpf_upgrade_via_cpi() {
         &[0],
         vec![
             AccountMeta::new_readonly(program_id, false),
-            AccountMeta::new_readonly(program_id, false),
             AccountMeta::new_readonly(clock::id(), false),
         ],
     );
@@ -2217,7 +2214,6 @@ fn test_program_bpf_upgrade_self_via_cpi() {
         program_id,
         &[0],
         vec![
-            AccountMeta::new_readonly(noop_program_id, false),
             AccountMeta::new_readonly(noop_program_id, false),
             AccountMeta::new_readonly(clock::id(), false),
         ],
