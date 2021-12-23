@@ -5,12 +5,15 @@ use {
     jsonrpc_ipc_server::{RequestContext, ServerBuilder},
     jsonrpc_server_utils::tokio,
     log::*,
+    serde::{Deserialize, Serialize},
     solana_core::validator::ValidatorStartProgress,
+    solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_sdk::{
         exit::Exit,
         signature::{read_keypair_file, Keypair, Signer},
     },
     std::{
+        fmt::{self, Display},
         net::SocketAddr,
         path::{Path, PathBuf},
         sync::{Arc, RwLock},
@@ -26,8 +29,79 @@ pub struct AdminRpcRequestMetadata {
     pub start_progress: Arc<RwLock<ValidatorStartProgress>>,
     pub validator_exit: Arc<RwLock<Exit>>,
     pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
+    pub cluster_info: Arc<RwLock<Option<Arc<ClusterInfo>>>>,
 }
 impl Metadata for AdminRpcRequestMetadata {}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct AdminRpcContactInfo {
+    pub id: String,
+    pub gossip: SocketAddr,
+    pub tvu: SocketAddr,
+    pub tvu_forwards: SocketAddr,
+    pub repair: SocketAddr,
+    pub tpu: SocketAddr,
+    pub tpu_forwards: SocketAddr,
+    pub tpu_vote: SocketAddr,
+    pub rpc: SocketAddr,
+    pub rpc_pubsub: SocketAddr,
+    pub serve_repair: SocketAddr,
+    pub last_updated_timestamp: u64,
+    pub shred_version: u16,
+}
+
+impl From<ContactInfo> for AdminRpcContactInfo {
+    fn from(contact_info: ContactInfo) -> Self {
+        let ContactInfo {
+            id,
+            gossip,
+            tvu,
+            tvu_forwards,
+            repair,
+            tpu,
+            tpu_forwards,
+            tpu_vote,
+            rpc,
+            rpc_pubsub,
+            serve_repair,
+            wallclock,
+            shred_version,
+        } = contact_info;
+        Self {
+            id: id.to_string(),
+            last_updated_timestamp: wallclock,
+            gossip,
+            tvu,
+            tvu_forwards,
+            repair,
+            tpu,
+            tpu_forwards,
+            tpu_vote,
+            rpc,
+            rpc_pubsub,
+            serve_repair,
+            shred_version,
+        }
+    }
+}
+
+impl Display for AdminRpcContactInfo {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "Identity: {}", self.id)?;
+        writeln!(f, "Gossip: {}", self.gossip)?;
+        writeln!(f, "TVU: {}", self.tvu)?;
+        writeln!(f, "TVU Forwards: {}", self.tvu_forwards)?;
+        writeln!(f, "Repair: {}", self.repair)?;
+        writeln!(f, "TPU: {}", self.tpu)?;
+        writeln!(f, "TPU Forwards: {}", self.tpu_forwards)?;
+        writeln!(f, "TPU Votes: {}", self.tpu_vote)?;
+        writeln!(f, "RPC: {}", self.rpc)?;
+        writeln!(f, "RPC Pubsub: {}", self.rpc_pubsub)?;
+        writeln!(f, "Serve Repair: {}", self.serve_repair)?;
+        writeln!(f, "Last Updated Timestamp: {}", self.last_updated_timestamp)?;
+        writeln!(f, "Shred Version: {}", self.shred_version)
+    }
+}
 
 #[rpc]
 pub trait AdminRpc {
@@ -53,6 +127,9 @@ pub trait AdminRpc {
 
     #[rpc(meta, name = "removeAllAuthorizedVoters")]
     fn remove_all_authorized_voters(&self, meta: Self::Metadata) -> Result<()>;
+
+    #[rpc(meta, name = "contactInfo")]
+    fn contact_info(&self, meta: Self::Metadata) -> Result<AdminRpcContactInfo>;
 }
 
 pub struct AdminRpcImpl;
@@ -127,6 +204,16 @@ impl AdminRpc for AdminRpcImpl {
         debug!("remove_all_authorized_voters received");
         meta.authorized_voter_keypairs.write().unwrap().clear();
         Ok(())
+    }
+
+    fn contact_info(&self, meta: Self::Metadata) -> Result<AdminRpcContactInfo> {
+        if let Some(cluster_info) = meta.cluster_info.read().unwrap().as_ref() {
+            Ok(cluster_info.my_contact_info().into())
+        } else {
+            Err(jsonrpc_core::error::Error::invalid_params(
+                "Retry once validator start up is complete",
+            ))
+        }
     }
 }
 

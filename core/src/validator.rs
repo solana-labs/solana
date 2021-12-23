@@ -274,6 +274,7 @@ pub struct Validator {
     tvu: Tvu,
     ip_echo_server: Option<solana_net_utils::IpEchoServer>,
     accountsdb_plugin_service: Option<AccountsDbPluginService>,
+    pub cluster_info: Arc<ClusterInfo>,
 }
 
 // in the distant future, get rid of ::new()/exit() and use Result properly...
@@ -863,6 +864,7 @@ impl Validator {
             ip_echo_server,
             validator_exit: config.validator_exit.clone(),
             accountsdb_plugin_service,
+            cluster_info,
         }
     }
 
@@ -902,6 +904,8 @@ impl Validator {
     }
 
     pub fn join(self) {
+        drop(self.cluster_info);
+
         self.poh_service.join().expect("poh_service");
         drop(self.poh_recorder);
 
