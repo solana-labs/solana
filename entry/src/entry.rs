@@ -489,32 +489,17 @@ pub fn start_verify_transactions(
     let entries = verify_transactions(entries, Arc::new(verify_func));
     match entries {
         Ok(entries) => {
-            //todo: de-duplicate this code as much as possible
-            let entry_txs: Vec<&SanitizedTransaction> = entries
+            let (entry_txs, large_entry_txs): (
+                Vec<&SanitizedTransaction>,
+                Vec<&SanitizedTransaction>,
+            ) = entries
                 .iter()
                 .filter_map(|entry_type| match entry_type {
                     EntryType::Tick(_) => None,
-                    EntryType::Transactions(transactions) => Some(
-                        transactions
-                            .iter()
-                            .filter(|transaction| !transaction.is_large_transaction()),
-                    ),
+                    EntryType::Transactions(transactions) => Some(transactions.iter()),
                 })
                 .flatten()
-                .collect::<Vec<_>>();
-
-            let large_entry_txs: Vec<&SanitizedTransaction> = entries
-                .iter()
-                .filter_map(|entry_type| match entry_type {
-                    EntryType::Tick(_) => None,
-                    EntryType::Transactions(transactions) => Some(
-                        transactions
-                            .iter()
-                            .filter(|transaction| transaction.is_large_transaction()),
-                    ),
-                })
-                .flatten()
-                .collect::<Vec<_>>();
+                .partition(|transaction| transaction.is_large_transaction());
 
             if entry_txs.is_empty() && large_entry_txs.is_empty() {
                 return Ok(EntrySigVerificationState {
@@ -525,6 +510,7 @@ pub fn start_verify_transactions(
                 });
             }
 
+            // TODO: Still lots of duplicate code below
             let mut packet_batches = entry_txs
                 .par_iter()
                 .chunks(PACKETS_PER_BATCH)
