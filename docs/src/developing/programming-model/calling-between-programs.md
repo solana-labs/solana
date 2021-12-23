@@ -57,9 +57,7 @@ given instruction to the `token` program via the instruction's `program_id`
 field.
 
 Note that `invoke` requires the caller to pass all the accounts required by the
-instruction being invoked. This means that both the executable account (the
-ones that matches the instruction's program id) and the accounts passed to the
-instruction processor.
+instruction being invoked, except for the executable account (the `program_id`).
 
 Before invoking `pay()`, the runtime must ensure that `acme` didn't modify any
 accounts owned by `token`. It does this by applying the runtime's policy to the
