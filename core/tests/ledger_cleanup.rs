@@ -338,26 +338,51 @@ mod tests {
                     let mut num_shreds = 0;
                     let mut max_speed = 0f32;
                     let mut min_speed = f32::MAX;
+                    let (mut shreds_with_parent, _) = make_many_slot_shreds(
+                        1, batch_size_slots, shreds_per_slot);
+                    let (first_shreds, _) = make_many_slot_shreds(
+                        0, batch_size_slots, shreds_per_slot);
                     loop {
-                        let batch_id = shared_batch_id.fetch_add(1, Ordering::SeqCst);
+                        let batch_id = shared_batch_id.fetch_add(1, Ordering::Relaxed);
                         let start_slot = batch_id * batch_size_slots;
-                        let len = batch_id;
                         if start_slot >= benchmark_slots {
                             break;
                         }
+                        let len = batch_id;
 
-                        let new_shreds = if pre_generate_data {
+                        let br = if pre_generate_data {
                             let mut sl = cloned_shreds.lock().unwrap();
                             if let Some(shreds_from_queue) = sl.pop_front() {
-                                shreds_from_queue
+                                total += shreds_from_queue.len();
+                                cloned_blockstore.insert_shreds(
+                                    shreds_from_queue, None, false).unwrap()
                             } else {
+                                // If the queue is empty, we're done!
                                 break;
                             }
                         } else {
-                            let (generated_shreds, _) = make_many_slot_shreds(
-                                start_slot, batch_size_slots, shreds_per_slot);
-                            generated_shreds
+                            let mut slot_id = start_slot;
+                            if slot_id > 0 {
+                                for shred in shreds_with_parent.iter_mut() {
+                                    shred.set_slot(slot_id);
+                                    if shred.index() as u64 == shreds_per_slot - 1 {
+                                        slot_id += 1;
+                                    }
+                                }
+                                total += shreds_with_parent.len();
+                                cloned_blockstore.insert_shreds(
+                                    shreds_with_parent.clone(), None, false).unwrap()
+                            } else {
+                                total += first_shreds.len();
+                                cloned_blockstore.insert_shreds(
+                                    first_shreds.clone(), None, false).unwrap()
+                            }
                         };
+
+                        total_batches += 1;
+                        total_inserted_shreds += br.1.len();
+                        num_shreds += br.1.len();
+                        shared_finished_count.fetch_add(1, Ordering::Relaxed);
 
                         // as_secs() returns whole number of seconds, so this runs every second
                         if now.elapsed().as_secs() > 0 {
@@ -377,14 +402,6 @@ mod tests {
                             now = Instant::now();
                             num_shreds = 0;
                         }
-
-                        total += new_shreds.len();
-                        total_batches += 1;
-                        let br = cloned_blockstore.insert_shreds(
-                            new_shreds, None, false).unwrap();
-                        total_inserted_shreds += br.1.len();
-                        num_shreds += br.1.len();
-                        shared_finished_count.fetch_add(1, Ordering::Relaxed);
 
                         if cloned_insert_exit.load(Ordering::Relaxed) {
                             if max_speed > 0.0 {
