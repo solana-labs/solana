@@ -33,7 +33,7 @@ pub enum SigVerifyServiceError<P: PacketInterface> {
     Streamer(#[from] StreamerError<P>),
 }
 
-type Result<T, P: PacketInterface> = std::result::Result<T, SigVerifyServiceError<P>>;
+type Result<T, P> = std::result::Result<T, SigVerifyServiceError<P>>;
 
 pub struct SigVerifyStage {
     thread_hdl: JoinHandle<()>,

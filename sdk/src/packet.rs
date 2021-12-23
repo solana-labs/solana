@@ -20,7 +20,6 @@ pub const MAX_TRANSACTION_SIZE: usize = EXTENDED_PACKET_DATA_SIZE;
 #[cfg(test)]
 static_assertions::const_assert_eq!(EXTENDED_PACKET_DATA_SIZE > PACKET_DATA_SIZE);
 
-
 // Send + Sync needed to allow Rayon par_iter()
 /// Generic interface to support variable sized packtes
 pub trait PacketInterface: Clone + Default + Sized + Send + Sync + fmt::Debug {

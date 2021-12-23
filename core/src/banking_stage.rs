@@ -67,9 +67,9 @@ use {
 
 /// (packets, valid_indexes, forwarded)
 /// Set of packets with a list of which are valid and if this batch has been forwarded.
-type PacketBatchAndOffsets<P: PacketInterface> = (PacketBatch<P>, Vec<usize>, bool);
+type PacketBatchAndOffsets<P> = (PacketBatch<P>, Vec<usize>, bool);
 
-pub type UnprocessedPacketBatches<P: PacketInterface> = VecDeque<PacketBatchAndOffsets<P>>;
+pub type UnprocessedPacketBatches<P> = VecDeque<PacketBatchAndOffsets<P>>;
 
 /// Transaction forwarding
 pub const FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET: u64 = 2;
@@ -761,8 +761,7 @@ impl BankingStage {
             ForwardOption::ForwardTransaction => {
                 if PacketType::is_extended() {
                     next_leader_tpu_extended_forwards(cluster_info, poh_recorder)
-                }
-                else {
+                } else {
                     next_leader_tpu_forwards(cluster_info, poh_recorder)
                 }
             }
@@ -1538,7 +1537,9 @@ fn next_leader_tpu_extended_forwards(
     cluster_info: &ClusterInfo,
     poh_recorder: &Mutex<PohRecorder>,
 ) -> Option<std::net::SocketAddr> {
-    next_leader_x(cluster_info, poh_recorder, |leader| leader.tpu_extended_forwards)
+    next_leader_x(cluster_info, poh_recorder, |leader| {
+        leader.tpu_extended_forwards
+    })
 }
 
 pub(crate) fn next_leader_tpu_vote(

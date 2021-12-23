@@ -3,7 +3,9 @@ use {
     log::*,
     solana_metrics::{datapoint_warn, inc_new_counter_info},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
-    solana_sdk::{hash::Hash, packet::PACKET_DATA_SIZE, nonce_account, pubkey::Pubkey, signature::Signature},
+    solana_sdk::{
+        hash::Hash, nonce_account, packet::PACKET_DATA_SIZE, pubkey::Pubkey, signature::Signature,
+    },
     std::{
         collections::HashMap,
         net::{SocketAddr, UdpSocket},
@@ -101,7 +103,14 @@ impl SendTransactionService {
             leader_forward_count,
             ..Config::default()
         };
-        Self::new_with_config(tpu_address, tpu_extended_address, bank_forks, leader_info, receiver, config)
+        Self::new_with_config(
+            tpu_address,
+            tpu_extended_address,
+            bank_forks,
+            leader_info,
+            receiver,
+            config,
+        )
     }
 
     pub fn new_with_config<T: TpuInfo + std::marker::Send + 'static>(
@@ -160,12 +169,12 @@ impl SendTransactionService {
                         let addresses = addresses
                             .map(|address_list| {
                                 if address_list.is_empty() {
-                                    vec![choose_tpu.clone()]
+                                    vec![choose_tpu]
                                 } else {
                                     address_list
                                 }
                             })
-                            .unwrap_or_else(|| vec![choose_tpu.clone()]);
+                            .unwrap_or_else(|| vec![choose_tpu]);
                         for address in addresses {
                             Self::send_transaction(
                                 &send_socket,
@@ -281,7 +290,7 @@ impl SendTransactionService {
                     result.retried += 1;
                     transaction_info.retries += 1;
                     inc_new_counter_info!("send_transaction_service-retry", 1);
-                    let extended = Self::requires_tpu_extended(&transaction_info);
+                    let extended = Self::requires_tpu_extended(transaction_info);
                     let choose_tpu = if extended {
                         tpu_extended_address
                     } else {
@@ -293,12 +302,12 @@ impl SendTransactionService {
                     let addresses = addresses
                         .map(|address_list| {
                             if address_list.is_empty() {
-                                vec![choose_tpu.clone()]
+                                vec![*choose_tpu]
                             } else {
                                 address_list
                             }
                         })
-                        .unwrap_or_else(|| vec![choose_tpu.clone()]);
+                        .unwrap_or_else(|| vec![*choose_tpu]);
                     for address in addresses {
                         Self::send_transaction(
                             send_socket,

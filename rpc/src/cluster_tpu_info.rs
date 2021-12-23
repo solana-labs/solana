@@ -47,13 +47,9 @@ impl TpuInfo for ClusterTpuInfo {
             // TOOD: There was some funny business with pulling SocketAddr out of
             // (SocketAddr, SocketAddr); figure that out and use borrows again
             if let Some(addr_pair) = self.recent_peers.get(leader) {
-                let addr = if extended {
-                    addr_pair.1
-                } else {
-                    addr_pair.0
-                };
+                let addr = if extended { addr_pair.1 } else { addr_pair.0 };
                 if !unique_leaders.contains(&addr) {
-                    unique_leaders.push(addr.clone());
+                    unique_leaders.push(addr);
                 }
             }
         }

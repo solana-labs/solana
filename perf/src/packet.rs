@@ -1,5 +1,7 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
-pub use solana_sdk::packet::{ExtendedPacket, Meta, Packet, PacketInterface, PACKET_DATA_SIZE, EXTENDED_PACKET_DATA_SIZE};
+pub use solana_sdk::packet::{
+    ExtendedPacket, Meta, Packet, PacketInterface, EXTENDED_PACKET_DATA_SIZE, PACKET_DATA_SIZE,
+};
 use {
     crate::{cuda_runtime::PinnedVec, recycler::Recycler},
     bincode::config::Options,
