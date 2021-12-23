@@ -141,8 +141,13 @@ impl StandardBroadcastRun {
             Some(index) => index + 1,
             None => next_shred_index,
         };
+        let next_code_index = match &self.unfinished_slot {
+            Some(state) => state.next_code_index,
+            None => 0,
+        };
         self.unfinished_slot = Some(UnfinishedSlotInfo {
             next_shred_index,
+            next_code_index,
             slot,
             parent: parent_slot,
             data_shreds_buffer,
@@ -449,23 +454,40 @@ fn make_coding_shreds(
     is_slot_end: bool,
     stats: &mut ProcessShredsStats,
 ) -> Vec<Shred> {
-    let data_shreds = match unfinished_slot {
-        None => Vec::default(),
-        Some(unfinished_slot) => {
-            let size = unfinished_slot.data_shreds_buffer.len();
-            // Consume a multiple of 32, unless this is the slot end.
-            let offset = if is_slot_end {
-                0
-            } else {
-                size % MAX_DATA_SHREDS_PER_FEC_BLOCK as usize
-            };
-            unfinished_slot
-                .data_shreds_buffer
-                .drain(0..size - offset)
-                .collect()
-        }
+    let unfinished_slot = match unfinished_slot {
+        None => return Vec::default(),
+        Some(state) => state,
     };
-    Shredder::data_shreds_to_coding_shreds(keypair, &data_shreds, is_slot_end, stats).unwrap()
+    let data_shreds: Vec<_> = {
+        let size = unfinished_slot.data_shreds_buffer.len();
+        // Consume a multiple of 32, unless this is the slot end.
+        let offset = if is_slot_end {
+            0
+        } else {
+            size % MAX_DATA_SHREDS_PER_FEC_BLOCK as usize
+        };
+        unfinished_slot
+            .data_shreds_buffer
+            .drain(0..size - offset)
+            .collect()
+    };
+    let shreds = Shredder::data_shreds_to_coding_shreds(
+        keypair,
+        &data_shreds,
+        is_slot_end,
+        unfinished_slot.next_code_index,
+        stats,
+    )
+    .unwrap();
+    if let Some(index) = shreds
+        .iter()
+        .filter(|shred| shred.is_code())
+        .map(Shred::index)
+        .max()
+    {
+        unfinished_slot.next_code_index = unfinished_slot.next_code_index.max(index + 1);
+    }
+    shreds
 }
 
 impl BroadcastRun for StandardBroadcastRun {
@@ -582,6 +604,7 @@ mod test {
         let parent = 0;
         run.unfinished_slot = Some(UnfinishedSlotInfo {
             next_shred_index,
+            next_code_index: 17,
             slot,
             parent,
             data_shreds_buffer: Vec::default(),
