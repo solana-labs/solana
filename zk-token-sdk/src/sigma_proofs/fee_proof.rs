@@ -1,9 +1,6 @@
 #[cfg(not(target_arch = "bpf"))]
 use {
-    crate::encryption::{
-        elgamal::{ElGamalCiphertext, ElGamalPubkey},
-        pedersen::{PedersenBase, PedersenCommitment, PedersenOpening},
-    },
+    crate::encryption::pedersen::{PedersenBase, PedersenCommitment, PedersenOpening},
     rand::rngs::OsRng,
 };
 use {
@@ -25,9 +22,11 @@ pub struct FeeProof {
 #[allow(non_snake_case, dead_code)]
 #[cfg(not(target_arch = "bpf"))]
 impl FeeProof {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         amount_fee: u64,
         max_fee: u64,
+        delta_fee: u64,
         commitment_fee: &PedersenCommitment,
         opening_fee: &PedersenOpening,
         commitment_delta_real: &PedersenCommitment,
@@ -40,7 +39,7 @@ impl FeeProof {
         let G = PedersenBase::default().G;
         let H = PedersenBase::default().H;
 
-        let x = Scalar::from(amount_fee);
+        let x = Scalar::from(delta_fee);
         let m = Scalar::from(max_fee);
 
         let C_max = commitment_fee.get_point();
@@ -92,6 +91,8 @@ impl FeeProof {
 
             let c = transcript.challenge_scalar(b"c");
             let c_equality = c - c_max;
+
+            transcript.challenge_scalar(b"w");
 
             let z_x = c_equality * x + y_x;
             let z_delta_real = c_equality * r_delta_real + y_delta_real;
@@ -146,6 +147,8 @@ impl FeeProof {
 
             let c = transcript.challenge_scalar(b"c");
             let c_max = c - c_equality;
+
+            transcript.challenge_scalar(b"w");
 
             let z_max = c_max * r_max + y_max;
 
@@ -220,9 +223,40 @@ impl FeeProof {
         let c_max = self.fee_max_proof.c_max;
         let c_equality = c - c_max;
 
+        let w = transcript.challenge_scalar(b"w");
+        let ww = w * w;
+
+        println!("{:?}", C_delta_real.compress());
+
         let check = RistrettoPoint::vartime_multiscalar_mul(
-            vec![c_max, -c_max * m, -z_max, Scalar::one()],
-            vec![C_max, G, H, Y_max],
+            vec![
+                c_max,
+                -c_max * m,
+                -z_max,
+                Scalar::one(),
+                w * z_x,
+                w * z_delta_real,
+                -w * c_equality,
+                -w,
+                ww * z_x,
+                ww * z_delta_claimed,
+                -ww * c_equality,
+                -ww,
+            ],
+            vec![
+                C_max,
+                G,
+                H,
+                Y_max,
+                G,
+                H,
+                C_delta_real,
+                Y_delta_real,
+                G,
+                H,
+                C_delta_claimed,
+                Y_delta_claimed,
+            ],
         );
 
         if check.is_identity() {
@@ -282,6 +316,7 @@ mod test {
         let proof = FeeProof::new(
             amount_fee,
             max_fee,
+            delta_fee,
             &commitment_fee,
             &opening_fee,
             &commitment_delta_real,
