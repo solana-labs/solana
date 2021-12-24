@@ -30,7 +30,6 @@ use {
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
         instruction::{Instruction, InstructionError},
-        message::Message,
         native_token::sol_to_lamports,
         poh_config::PohConfig,
         program_error::{ProgramError, ACCOUNT_BORROW_FAILED, UNSUPPORTED_SYSVAR},
@@ -235,43 +234,12 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         let log_collector = invoke_context.get_log_collector();
 
         let caller = *invoke_context.get_caller().expect("get_caller");
-        let message = Message::new(&[instruction.clone()], None);
 
         stable_log::program_invoke(
             &log_collector,
             &instruction.program_id,
             invoke_context.invoke_depth(),
         );
-
-        // Convert AccountInfos into Accounts
-        let mut accounts = Vec::with_capacity(message.account_keys.len());
-        for (i, account_key) in message.account_keys.iter().enumerate() {
-            let (account_index, account_info) = invoke_context
-                .find_index_of_account(account_key)
-                .zip(
-                    account_infos
-                        .iter()
-                        .find(|account_info| account_info.unsigned_key() == account_key),
-                )
-                .ok_or(InstructionError::MissingAccount)
-                .unwrap();
-            {
-                let mut account = invoke_context
-                    .get_account_at_index(account_index)
-                    .borrow_mut();
-                account.copy_into_owner_from_slice(account_info.owner.as_ref());
-                account.set_data_from_slice(&account_info.try_borrow_data().unwrap());
-                account.set_lamports(account_info.lamports());
-                account.set_executable(account_info.executable);
-                account.set_rent_epoch(account_info.rent_epoch);
-            }
-            let account_info = if message.is_writable(i) {
-                Some(account_info)
-            } else {
-                None
-            };
-            accounts.push((account_index, account_info));
-        }
 
         let signers = signers_seeds
             .iter()
@@ -280,6 +248,30 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         let (instruction_accounts, caller_write_privileges, program_indices) = invoke_context
             .prepare_instruction(instruction, &signers)
             .unwrap();
+
+        // Convert AccountInfos into Accounts
+        let mut accounts = Vec::with_capacity(instruction_accounts.len());
+        for instruction_account in instruction_accounts.iter() {
+            let account_key = invoke_context.get_account_key_at_index(instruction_account.index);
+            let account_info = account_infos
+                .iter()
+                .find(|account_info| account_info.unsigned_key() == account_key)
+                .ok_or(InstructionError::MissingAccount)
+                .unwrap();
+            {
+                let mut account = invoke_context
+                    .get_account_at_index(instruction_account.index)
+                    .borrow_mut();
+                account.copy_into_owner_from_slice(account_info.owner.as_ref());
+                account.set_data_from_slice(&account_info.try_borrow_data().unwrap());
+                account.set_lamports(account_info.lamports());
+                account.set_executable(account_info.executable);
+                account.set_rent_epoch(account_info.rent_epoch);
+            }
+            if instruction_account.is_writable {
+                accounts.push((instruction_account.index, account_info));
+            }
+        }
 
         if let Some(instruction_recorder) = &invoke_context.instruction_recorder {
             instruction_recorder.record_instruction(instruction.clone());
@@ -295,30 +287,28 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
         // Copy writeable account modifications back into the caller's AccountInfos
         for (account_index, account_info) in accounts.into_iter() {
-            if let Some(account_info) = account_info {
-                let account = invoke_context.get_account_at_index(account_index);
-                let account_borrow = account.borrow();
-                **account_info.try_borrow_mut_lamports().unwrap() = account_borrow.lamports();
-                let mut data = account_info.try_borrow_mut_data()?;
-                let new_data = account_borrow.data();
-                if account_info.owner != account_borrow.owner() {
-                    // TODO Figure out a better way to allow the System Program to set the account owner
-                    #[allow(clippy::transmute_ptr_to_ptr)]
-                    #[allow(mutable_transmutes)]
-                    let account_info_mut =
-                        unsafe { transmute::<&Pubkey, &mut Pubkey>(account_info.owner) };
-                    *account_info_mut = *account_borrow.owner();
-                }
-                // TODO: Figure out how to allow the System Program to resize the account data
-                assert!(
-                    data.len() == new_data.len(),
-                    "Account data resizing not supported yet: {} -> {}. \
-                        Consider making this test conditional on `#[cfg(feature = \"test-bpf\")]`",
-                    data.len(),
-                    new_data.len()
-                );
-                data.clone_from_slice(new_data);
+            let account = invoke_context.get_account_at_index(account_index);
+            let account_borrow = account.borrow();
+            **account_info.try_borrow_mut_lamports().unwrap() = account_borrow.lamports();
+            let mut data = account_info.try_borrow_mut_data()?;
+            let new_data = account_borrow.data();
+            if account_info.owner != account_borrow.owner() {
+                // TODO Figure out a better way to allow the System Program to set the account owner
+                #[allow(clippy::transmute_ptr_to_ptr)]
+                #[allow(mutable_transmutes)]
+                let account_info_mut =
+                    unsafe { transmute::<&Pubkey, &mut Pubkey>(account_info.owner) };
+                *account_info_mut = *account_borrow.owner();
             }
+            // TODO: Figure out how to allow the System Program to resize the account data
+            assert!(
+                data.len() == new_data.len(),
+                "Account data resizing not supported yet: {} -> {}. \
+                    Consider making this test conditional on `#[cfg(feature = \"test-bpf\")]`",
+                data.len(),
+                new_data.len()
+            );
+            data.clone_from_slice(new_data);
         }
 
         stable_log::program_success(&log_collector, &instruction.program_id);
