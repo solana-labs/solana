@@ -537,7 +537,9 @@ impl<'a> InvokeContext<'a> {
         let mut duplicate_indicies = Vec::with_capacity(instruction.accounts.len());
         for account_meta in instruction.accounts.iter() {
             let account_index = self
-                .find_index_of_account(&account_meta.pubkey)
+                .accounts
+                .iter()
+                .position(|(key, _account)| key == &account_meta.pubkey)
                 .ok_or_else(|| {
                     ic_msg!(
                         self,
@@ -615,7 +617,11 @@ impl<'a> InvokeContext<'a> {
         let program_account_index = caller_keyed_accounts
             .iter()
             .find(|keyed_account| &callee_program_id == keyed_account.unsigned_key())
-            .and_then(|_keyed_account| self.find_index_of_account(&callee_program_id))
+            .and_then(|_keyed_account| {
+                self.accounts
+                    .iter()
+                    .rposition(|(key, _account)| key == &callee_program_id)
+            })
             .ok_or_else(|| {
                 ic_msg!(self, "Unknown program {}", callee_program_id);
                 InstructionError::MissingAccount
@@ -631,8 +637,10 @@ impl<'a> InvokeContext<'a> {
                 programdata_address,
             } = program_account.state()?
             {
-                if let Some(programdata_account_index) =
-                    self.find_index_of_account(&programdata_address)
+                if let Some(programdata_account_index) = self
+                    .accounts
+                    .iter()
+                    .rposition(|(key, _account)| key == &programdata_address)
                 {
                     program_indices.push(programdata_account_index);
                 } else {
@@ -820,16 +828,6 @@ impl<'a> InvokeContext<'a> {
     /// Get the completed loader work that can be re-used across execution
     pub fn get_executor(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
         self.executors.borrow().get(pubkey)
-    }
-
-    /// Finds an account_index by its key
-    pub fn find_index_of_account(&self, pubkey: &Pubkey) -> Option<usize> {
-        for (index, (key, _account)) in self.accounts.iter().enumerate().rev() {
-            if key == pubkey {
-                return Some(index);
-            }
-        }
-        None
     }
 
     /// Returns an account by its account_index
