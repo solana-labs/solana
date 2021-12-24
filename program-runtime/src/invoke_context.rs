@@ -155,7 +155,7 @@ pub struct InvokeContext<'a> {
     current_compute_budget: ComputeBudget,
     compute_meter: Rc<RefCell<ComputeMeter>>,
     executors: Rc<RefCell<Executors>>,
-    pub instruction_recorder: Rc<RefCell<InstructionRecorder>>,
+    pub instruction_recorder: Option<Rc<RefCell<InstructionRecorder>>>,
     pub feature_set: Arc<FeatureSet>,
     pub timings: ExecuteDetailsTimings,
     pub blockhash: Hash,
@@ -173,7 +173,7 @@ impl<'a> InvokeContext<'a> {
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         compute_budget: ComputeBudget,
         executors: Rc<RefCell<Executors>>,
-        instruction_recorder: Rc<RefCell<InstructionRecorder>>,
+        instruction_recorder: Option<Rc<RefCell<InstructionRecorder>>>,
         feature_set: Arc<FeatureSet>,
         blockhash: Hash,
         lamports_per_signature: u64,
@@ -211,7 +211,7 @@ impl<'a> InvokeContext<'a> {
             Some(LogCollector::new_ref()),
             ComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
-            InstructionRecorder::new_ref(1),
+            None,
             Arc::new(FeatureSet::all_enabled()),
             Hash::default(),
             0,
@@ -683,29 +683,31 @@ impl<'a> InvokeContext<'a> {
 
         let is_lowest_invocation_level = self.invoke_stack.is_empty();
         if is_lowest_invocation_level {
-            self.instruction_recorder
-                .borrow_mut()
-                .begin_next_recording();
+            if let Some(instruction_recorder) = &self.instruction_recorder {
+                instruction_recorder.borrow_mut().begin_next_recording();
+            }
         } else {
             // Verify the calling program hasn't misbehaved
             self.verify_and_update(instruction_accounts, caller_write_privileges)?;
 
             // Record instruction
-            let compiled_instruction = CompiledInstruction {
-                program_id_index: self
-                    .accounts
-                    .iter()
-                    .position(|(key, _account)| *key == program_id)
-                    .unwrap_or(0) as u8,
-                data: instruction_data.to_vec(),
-                accounts: instruction_accounts
-                    .iter()
-                    .map(|instruction_account| instruction_account.index as u8)
-                    .collect(),
-            };
-            self.instruction_recorder
-                .borrow_mut()
-                .record_compiled_instruction(compiled_instruction);
+            if let Some(instruction_recorder) = &self.instruction_recorder {
+                let compiled_instruction = CompiledInstruction {
+                    program_id_index: self
+                        .accounts
+                        .iter()
+                        .position(|(key, _account)| *key == program_id)
+                        .unwrap_or(0) as u8,
+                    data: instruction_data.to_vec(),
+                    accounts: instruction_accounts
+                        .iter()
+                        .map(|instruction_account| instruction_account.index as u8)
+                        .collect(),
+                };
+                instruction_recorder
+                    .borrow_mut()
+                    .record_compiled_instruction(compiled_instruction);
+            }
         }
 
         let result = self

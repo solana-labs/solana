@@ -3576,8 +3576,13 @@ impl Bank {
                         let account_refcells =
                             Self::accounts_to_refcells(&mut loaded_transaction.accounts);
 
-                        let instruction_recorder =
-                            InstructionRecorder::new_ref(tx.message().instructions().len());
+                        let instruction_recorder = if enable_cpi_recording {
+                            Some(InstructionRecorder::new_ref(
+                                tx.message().instructions().len(),
+                            ))
+                        } else {
+                            None
+                        };
 
                         let log_collector = if enable_log_recording {
                             Some(LogCollector::new_ref())
@@ -3622,15 +3627,15 @@ impl Bank {
                                     .ok()
                             });
                         transaction_log_messages.push(log_messages);
-                        inner_instructions.push(if enable_cpi_recording {
-                            Rc::try_unwrap(instruction_recorder)
-                                .ok()
+                        inner_instructions.push(
+                            instruction_recorder
+                                .and_then(|instruction_recorder| {
+                                    Rc::try_unwrap(instruction_recorder).ok()
+                                })
                                 .map(|instruction_recorder| {
                                     instruction_recorder.into_inner().deconstruct()
-                                })
-                        } else {
-                            None
-                        });
+                                }),
+                        );
 
                         Self::refcells_to_accounts(
                             &mut loaded_transaction.accounts,
