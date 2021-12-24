@@ -226,6 +226,7 @@ fn main() {
             SocketAddrSpace::Unspecified,
         );
         let cluster_info = Arc::new(cluster_info);
+        let packet_deduper = PacketDeduper::default();
         let banking_stage = BankingStage::new(
             &cluster_info,
             &poh_recorder,
@@ -235,7 +236,7 @@ fn main() {
             None,
             replay_vote_sender,
             Arc::new(RwLock::new(CostModel::default())),
-            PacketDeduper::default(),
+            packet_deduper.clone(),
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 
@@ -350,6 +351,7 @@ fn main() {
             // in this chunk, but since we rotate between CHUNKS then
             // we should clear them by the time we come around again to re-use that chunk.
             bank.clear_signatures();
+            packet_deduper.reset();
             total_us += duration_as_us(&now.elapsed());
             debug!(
                 "time: {} us checked: {} sent: {}",
