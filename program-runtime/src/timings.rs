@@ -4,6 +4,7 @@ use {solana_sdk::pubkey::Pubkey, std::collections::HashMap};
 pub struct ProgramTiming {
     pub accumulated_us: u64,
     pub accumulated_units: u64,
+    pub current_cost_model_estimated_units: u64,
     pub count: u32,
 }
 
@@ -46,10 +47,24 @@ impl ExecuteDetailsTimings {
             program_timing.count = program_timing.count.saturating_add(other.count);
         }
     }
-    pub fn accumulate_program(&mut self, program_id: &Pubkey, us: u64, units: u64) {
+    pub fn accumulate_program(
+        &mut self,
+        program_id: &Pubkey,
+        us: u64,
+        actual_compute_units_consumed: u64,
+        estimated_execution_cost: u64,
+        is_error: bool,
+    ) {
         let program_timing = self.per_program_timings.entry(*program_id).or_default();
         program_timing.accumulated_us = program_timing.accumulated_us.saturating_add(us);
-        program_timing.accumulated_units = program_timing.accumulated_units.saturating_add(units);
+        let compute_units_update = if is_error {
+            std::cmp::max(actual_compute_units_consumed, estimated_execution_cost)
+        } else {
+            actual_compute_units_consumed
+        };
+        program_timing.accumulated_units = program_timing
+            .accumulated_units
+            .saturating_add(compute_units_update);
         program_timing.count = program_timing.count.saturating_add(1);
     }
 }

@@ -970,7 +970,7 @@ impl BankingStage {
         let tx_costs = qos_service.compute_transaction_costs(txs.iter());
 
         let transactions_qos_results =
-            qos_service.select_transactions_per_cost(txs.iter(), tx_costs.iter(), bank);
+            qos_service.select_transactions_per_cost(txs.iter(), tx_costs.into_iter(), bank);
 
         // Only lock accounts for those transactions are selected for the block;
         // Once accounts are locked, other threads cannot encode transactions that will modify the

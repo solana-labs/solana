@@ -1,4 +1,5 @@
 use {
+    crate::cost_model::ExecutionCost,
     serde::{Deserialize, Serialize},
     solana_measure::measure::Measure,
     solana_program_runtime::{
@@ -53,6 +54,7 @@ impl MessageProcessor {
         builtin_programs: &[BuiltinProgram],
         message: &Message,
         program_indices: &[Vec<usize>],
+        estimated_execution_cost: ExecutionCost,
         transaction_context: &TransactionContext,
         rent: Rent,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
@@ -139,6 +141,8 @@ impl MessageProcessor {
                 instruction.program_id(&message.account_keys),
                 time.as_us(),
                 compute_units_consumed,
+                estimated_execution_cost,
+                result.is_err(),
             );
             timings.accumulate(&invoke_context.timings);
             result

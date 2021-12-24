@@ -117,9 +117,9 @@ impl QosService {
     pub fn select_transactions_per_cost<'a>(
         &self,
         transactions: impl Iterator<Item = &'a SanitizedTransaction>,
-        transactions_costs: impl Iterator<Item = &'a TransactionCost>,
+        transactions_costs: impl Iterator<Item = TransactionCost>,
         bank: &Arc<Bank>,
-    ) -> Vec<transaction::Result<()>> {
+    ) -> Vec<transaction::Result<TransactionCost>> {
         let mut cost_tracking_time = Measure::start("cost_tracking_time");
         let mut cost_tracker = bank.write_cost_tracker().unwrap();
         let select_results = transactions
@@ -128,7 +128,7 @@ impl QosService {
                 Ok(current_block_cost) => {
                     debug!("slot {:?}, transaction {:?}, cost {:?}, fit into current block, current block cost {}", bank.slot(), tx, cost, current_block_cost);
                     self.metrics.selected_txs_count.fetch_add(1, Ordering::Relaxed);
-                    Ok(())
+                    Ok(cost)
                 },
                 Err(e) => {
                     debug!("slot {:?}, transaction {:?}, cost {:?}, not fit into current block, '{:?}'", bank.slot(), tx, cost, e);

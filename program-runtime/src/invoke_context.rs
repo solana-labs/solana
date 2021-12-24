@@ -1604,6 +1604,11 @@ mod tests {
     fn test_process_instruction_compute_budget() {
         let caller_program_id = solana_sdk::pubkey::new_rand();
         let callee_program_id = solana_sdk::pubkey::new_rand();
+        let builtin_programs = &[BuiltinProgram {
+            program_id: callee_program_id,
+            process_instruction: mock_process_instruction,
+        }];
+
         let owned_account = AccountSharedData::new(42, 1, &callee_program_id);
         let not_owned_account = AccountSharedData::new(84, 1, &solana_sdk::pubkey::new_rand());
         let readonly_account = AccountSharedData::new(168, 1, &solana_sdk::pubkey::new_rand());
@@ -1612,19 +1617,12 @@ mod tests {
         program_account.set_executable(true);
 
         let accounts = vec![
-            (solana_sdk::pubkey::new_rand(), RefCell::new(owned_account)),
-            (
-                solana_sdk::pubkey::new_rand(),
-                RefCell::new(not_owned_account),
-            ),
-            (
-                solana_sdk::pubkey::new_rand(),
-                RefCell::new(readonly_account),
-            ),
-            (caller_program_id, RefCell::new(loader_account)),
-            (callee_program_id, RefCell::new(program_account)),
+            (solana_sdk::pubkey::new_rand(), owned_account),
+            (solana_sdk::pubkey::new_rand(), not_owned_account),
+            (solana_sdk::pubkey::new_rand(), readonly_account),
+            (caller_program_id, loader_account),
+            (callee_program_id, program_account),
         ];
-        let account_indices = [0, 1, 2];
         let program_indices = [3, 4];
 
         let metas = vec![
@@ -1632,20 +1630,23 @@ mod tests {
             AccountMeta::new(accounts[1].0, false),
             AccountMeta::new_readonly(accounts[2].0, false),
         ];
+        let instruction_accounts = metas
+            .iter()
+            .enumerate()
+            .map(|(account_index, account_meta)| InstructionAccount {
+                index: account_index,
+                is_signer: account_meta.is_signer,
+                is_writable: account_meta.is_writable,
+            })
+            .collect::<Vec<_>>();
 
-        let builtin_programs = &[BuiltinProgram {
-            program_id: callee_program_id,
-            process_instruction: mock_process_instruction,
-        }];
-        let mut invoke_context = InvokeContext::new_mock(&accounts, builtin_programs);
-
+        let transaction_context = TransactionContext::new(accounts, 1);
+        let mut invoke_context = InvokeContext::new_mock(&transaction_context, builtin_programs);
         let compute_units_consumed = 10;
         let desired_results = vec![Ok(()), Err(InstructionError::GenericError)];
 
         for desired_result in desired_results {
-            let caller_instruction =
-                CompiledInstruction::new(program_indices[0] as u8, &(), vec![0, 1, 2, 3, 4]);
-            let callee_instruction = Instruction::new_with_bincode(
+            let instruction = Instruction::new_with_bincode(
                 callee_program_id,
                 &MockInstruction::ConsumeComputeUnits {
                     compute_units_consumed,
@@ -1653,22 +1654,15 @@ mod tests {
                 },
                 metas.clone(),
             );
-            let message = Message::new(&[callee_instruction.clone()], None);
             invoke_context
-                .push(&message, &caller_instruction, &program_indices[..1], &[])
+                .push(&instruction_accounts, &program_indices[..1])
                 .unwrap();
-            let caller_write_privileges = message
-                .account_keys
-                .iter()
-                .enumerate()
-                .map(|(i, _)| message.is_writable(i))
-                .collect::<Vec<bool>>();
+
             let result = invoke_context.process_instruction(
-                &message,
-                &message.instructions[0],
+                &instruction.data,
+                &instruction_accounts,
+                None,
                 &program_indices[1..],
-                &account_indices,
-                &caller_write_privileges,
             );
 
             // Because the instruction had compute cost > 0, then regardless of the execution result,
