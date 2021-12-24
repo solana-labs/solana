@@ -3,7 +3,9 @@ use {
     solana_measure::measure::Measure,
     solana_program_runtime::{
         instruction_recorder::InstructionRecorder,
-        invoke_context::{BuiltinProgram, Executors, InvokeContext, TransactionAccountRefCell},
+        invoke_context::{
+            BuiltinProgram, Executors, InstructionAccount, InvokeContext, TransactionAccountRefCell,
+        },
         log_collector::LogCollector,
         timings::ExecuteDetailsTimings,
     },
@@ -111,9 +113,26 @@ impl MessageProcessor {
                 invoke_context.instruction_recorder =
                     Some(&instruction_recorders[instruction_index]);
             }
+            let instruction_accounts = instruction
+                .accounts
+                .iter()
+                .map(|account_index| {
+                    let account_index = *account_index as usize;
+                    InstructionAccount {
+                        index: account_index,
+                        is_signer: message.is_signer(account_index),
+                        is_writable: message.is_writable(account_index),
+                    }
+                })
+                .collect::<Vec<_>>();
             let mut time = Measure::start("execute_instruction");
             let compute_meter_consumption = invoke_context
-                .process_instruction(message, instruction, program_indices, &[], &[])
+                .process_instruction(
+                    &instruction.data,
+                    &instruction_accounts,
+                    None,
+                    program_indices,
+                )
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
             time.stop();
             timings.accumulate_program(

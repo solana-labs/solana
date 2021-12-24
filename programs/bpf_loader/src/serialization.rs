@@ -450,20 +450,11 @@ mod tests {
         ];
         let instruction_data = vec![1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
         let program_indices = [0];
-        let preparation = prepare_mock_invoke_context(
-            &program_indices,
-            &instruction_data,
-            transaction_accounts.clone(),
-            instruction_accounts,
-        );
-        let mut invoke_context = InvokeContext::new_mock(&preparation.accounts, &[]);
+        let preparation =
+            prepare_mock_invoke_context(transaction_accounts.clone(), instruction_accounts);
+        let mut invoke_context = InvokeContext::new_mock(&preparation.transaction_accounts, &[]);
         invoke_context
-            .push(
-                &preparation.message,
-                &preparation.message.instructions[0],
-                &program_indices,
-                &preparation.account_indices,
-            )
+            .push(&preparation.instruction_accounts, &program_indices)
             .unwrap();
 
         // check serialize_parameters_aligned
