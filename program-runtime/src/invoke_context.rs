@@ -14,7 +14,7 @@ use {
             remove_native_loader, requestable_heap_size, tx_wide_compute_cap, FeatureSet,
         },
         hash::Hash,
-        instruction::{AccountMeta, Instruction, InstructionError},
+        instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
         keyed_account::{create_keyed_accounts_unified, keyed_account_at_index, KeyedAccount},
         native_loader,
         pubkey::Pubkey,
@@ -688,6 +688,23 @@ impl<'a> InvokeContext<'a> {
         if !is_lowest_invocation_level {
             // Verify the calling program hasn't misbehaved
             self.verify_and_update(instruction_accounts, caller_write_privileges)?;
+
+            // Record instruction
+            let compiled_instruction = CompiledInstruction {
+                program_id_index: self
+                    .accounts
+                    .iter()
+                    .position(|(key, _account)| *key == program_id)
+                    .unwrap_or(0) as u8,
+                data: instruction_data.to_vec(),
+                accounts: instruction_accounts
+                    .iter()
+                    .map(|instruction_account| instruction_account.index as u8)
+                    .collect(),
+            };
+            self.instruction_recorder
+                .borrow_mut()
+                .record_compiled_instruction(compiled_instruction);
         }
 
         let result = self
