@@ -3576,14 +3576,8 @@ impl Bank {
                         let account_refcells =
                             Self::accounts_to_refcells(&mut loaded_transaction.accounts);
 
-                        let instruction_recorders = if enable_cpi_recording {
-                            let ix_count = tx.message().instructions().len();
-                            let mut recorders = Vec::with_capacity(ix_count);
-                            recorders.resize_with(ix_count, InstructionRecorder::default);
-                            Some(recorders)
-                        } else {
-                            None
-                        };
+                        let instruction_recorder =
+                            InstructionRecorder::new_ref(tx.message().instructions().len());
 
                         let log_collector = if enable_log_recording {
                             Some(LogCollector::new_ref())
@@ -3603,7 +3597,7 @@ impl Bank {
                                 self.rent_collector.rent,
                                 log_collector.clone(),
                                 executors.clone(),
-                                instruction_recorders.as_deref(),
+                                instruction_recorder.clone(),
                                 feature_set,
                                 compute_budget,
                                 &mut timings.details,
@@ -3628,14 +3622,13 @@ impl Bank {
                                     .ok()
                             });
                         transaction_log_messages.push(log_messages);
-                        let inner_instruction_list: Option<InnerInstructionsList> =
-                            instruction_recorders.and_then(|instruction_recorders| {
-                                instruction_recorders
-                                    .into_iter()
-                                    .map(|r| r.compile_instructions(tx.message()))
-                                    .collect()
-                            });
-                        inner_instructions.push(inner_instruction_list);
+                        inner_instructions.push(if enable_cpi_recording {
+                            instruction_recorder
+                                .borrow()
+                                .compile_instructions(tx.message())
+                        } else {
+                            None
+                        });
 
                         Self::refcells_to_accounts(
                             &mut loaded_transaction.accounts,

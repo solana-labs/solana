@@ -7,24 +7,40 @@ use {
 };
 
 /// Records and compiles cross-program invoked instructions
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct InstructionRecorder {
-    inner: Rc<RefCell<Vec<Instruction>>>,
+    inner: Vec<Vec<Instruction>>,
 }
 
 impl InstructionRecorder {
+    pub fn new_ref(instructions_in_message: usize) -> Rc<RefCell<Self>> {
+        Rc::new(RefCell::new(Self {
+            inner: Vec::with_capacity(instructions_in_message),
+        }))
+    }
+
     pub fn compile_instructions(
         &self,
         message: &SanitizedMessage,
-    ) -> Option<Vec<CompiledInstruction>> {
+    ) -> Option<Vec<Vec<CompiledInstruction>>> {
         self.inner
-            .borrow()
             .iter()
-            .map(|ix| message.try_compile_instruction(ix))
+            .map(|instructions| {
+                instructions
+                    .iter()
+                    .map(|ix| message.try_compile_instruction(ix))
+                    .collect()
+            })
             .collect()
     }
 
-    pub fn record_instruction(&self, instruction: Instruction) {
-        self.inner.borrow_mut().push(instruction);
+    pub fn begin_next_recording(&mut self) {
+        self.inner.push(Vec::new());
+    }
+
+    pub fn record_instruction(&mut self, instruction: Instruction) {
+        if let Some(inner) = self.inner.last_mut() {
+            inner.push(instruction);
+        }
     }
 }

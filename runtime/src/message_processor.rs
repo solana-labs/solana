@@ -58,7 +58,7 @@ impl MessageProcessor {
         rent: Rent,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         executors: Rc<RefCell<Executors>>,
-        instruction_recorders: Option<&[InstructionRecorder]>,
+        instruction_recorder: Rc<RefCell<InstructionRecorder>>,
         feature_set: Arc<FeatureSet>,
         compute_budget: ComputeBudget,
         timings: &mut ExecuteDetailsTimings,
@@ -74,6 +74,7 @@ impl MessageProcessor {
             log_collector,
             compute_budget,
             executors,
+            instruction_recorder,
             feature_set,
             blockhash,
             lamports_per_signature,
@@ -109,10 +110,10 @@ impl MessageProcessor {
                 }
             }
 
-            if let Some(instruction_recorders) = instruction_recorders {
-                invoke_context.instruction_recorder =
-                    Some(&instruction_recorders[instruction_index]);
-            }
+            invoke_context
+                .instruction_recorder
+                .borrow_mut()
+                .begin_next_recording();
             let instruction_accounts = instruction
                 .accounts
                 .iter()
@@ -260,7 +261,7 @@ mod tests {
             rent_collector.rent,
             None,
             executors.clone(),
-            None,
+            InstructionRecorder::new_ref(1),
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteDetailsTimings::default(),
@@ -289,7 +290,7 @@ mod tests {
             rent_collector.rent,
             None,
             executors.clone(),
-            None,
+            InstructionRecorder::new_ref(1),
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteDetailsTimings::default(),
@@ -322,7 +323,7 @@ mod tests {
             rent_collector.rent,
             None,
             executors,
-            None,
+            InstructionRecorder::new_ref(1),
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteDetailsTimings::default(),
@@ -466,7 +467,7 @@ mod tests {
             rent_collector.rent,
             None,
             executors.clone(),
-            None,
+            InstructionRecorder::new_ref(1),
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteDetailsTimings::default(),
@@ -499,7 +500,7 @@ mod tests {
             rent_collector.rent,
             None,
             executors.clone(),
-            None,
+            InstructionRecorder::new_ref(1),
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteDetailsTimings::default(),
@@ -529,7 +530,7 @@ mod tests {
             rent_collector.rent,
             None,
             executors,
-            None,
+            InstructionRecorder::new_ref(1),
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteDetailsTimings::default(),
@@ -586,7 +587,7 @@ mod tests {
             RentCollector::default().rent,
             None,
             Rc::new(RefCell::new(Executors::default())),
-            None,
+            InstructionRecorder::new_ref(1),
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteDetailsTimings::default(),

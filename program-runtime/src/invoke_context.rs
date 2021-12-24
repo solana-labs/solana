@@ -155,7 +155,7 @@ pub struct InvokeContext<'a> {
     current_compute_budget: ComputeBudget,
     compute_meter: Rc<RefCell<ComputeMeter>>,
     executors: Rc<RefCell<Executors>>,
-    pub instruction_recorder: Option<&'a InstructionRecorder>,
+    pub instruction_recorder: Rc<RefCell<InstructionRecorder>>,
     pub feature_set: Arc<FeatureSet>,
     pub timings: ExecuteDetailsTimings,
     pub blockhash: Hash,
@@ -173,6 +173,7 @@ impl<'a> InvokeContext<'a> {
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         compute_budget: ComputeBudget,
         executors: Rc<RefCell<Executors>>,
+        instruction_recorder: Rc<RefCell<InstructionRecorder>>,
         feature_set: Arc<FeatureSet>,
         blockhash: Hash,
         lamports_per_signature: u64,
@@ -189,7 +190,7 @@ impl<'a> InvokeContext<'a> {
             compute_budget,
             compute_meter: ComputeMeter::new_ref(compute_budget.max_units),
             executors,
-            instruction_recorder: None,
+            instruction_recorder,
             feature_set,
             timings: ExecuteDetailsTimings::default(),
             blockhash,
@@ -210,6 +211,7 @@ impl<'a> InvokeContext<'a> {
             Some(LogCollector::new_ref()),
             ComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
+            InstructionRecorder::new_ref(1),
             Arc::new(FeatureSet::all_enabled()),
             Hash::default(),
             0,
@@ -493,9 +495,9 @@ impl<'a> InvokeContext<'a> {
             prev_account_sizes.push((instruction_account.index, account_length));
         }
 
-        if let Some(instruction_recorder) = &self.instruction_recorder {
-            instruction_recorder.record_instruction(instruction.clone());
-        }
+        self.instruction_recorder
+            .borrow_mut()
+            .record_instruction(instruction.clone());
         self.process_instruction(
             &instruction.data,
             &instruction_accounts,
