@@ -2382,12 +2382,6 @@ fn call<'a, 'b: 'a>(
         *invoke_context,
     )?;
 
-    // Record the instruction
-    invoke_context
-        .instruction_recorder
-        .borrow_mut()
-        .record_instruction(instruction.clone());
-
     // Process instruction
     invoke_context
         .process_instruction(

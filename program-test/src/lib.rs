@@ -274,10 +274,6 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         }
 
         invoke_context
-            .instruction_recorder
-            .borrow_mut()
-            .record_instruction(instruction.clone());
-        invoke_context
             .process_instruction(
                 &instruction.data,
                 &instruction_accounts,

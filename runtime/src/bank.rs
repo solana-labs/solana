@@ -3622,11 +3622,12 @@ impl Bank {
                                     .ok()
                             });
                         transaction_log_messages.push(log_messages);
-                        let recorded_instructions = instruction_recorder
-                            .borrow()
-                            .compile_instructions(tx.message());
                         inner_instructions.push(if enable_cpi_recording {
-                            recorded_instructions
+                            Rc::try_unwrap(instruction_recorder)
+                                .ok()
+                                .map(|instruction_recorder| {
+                                    instruction_recorder.into_inner().deconstruct()
+                                })
                         } else {
                             None
                         });

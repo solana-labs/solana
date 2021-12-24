@@ -110,10 +110,6 @@ impl MessageProcessor {
                 }
             }
 
-            invoke_context
-                .instruction_recorder
-                .borrow_mut()
-                .begin_next_recording();
             let instruction_accounts = instruction
                 .accounts
                 .iter()

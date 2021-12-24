@@ -495,9 +495,6 @@ impl<'a> InvokeContext<'a> {
             prev_account_sizes.push((instruction_account.index, account_length));
         }
 
-        self.instruction_recorder
-            .borrow_mut()
-            .record_instruction(instruction.clone());
         self.process_instruction(
             &instruction.data,
             &instruction_accounts,
@@ -685,7 +682,11 @@ impl<'a> InvokeContext<'a> {
             .unwrap_or_else(native_loader::id);
 
         let is_lowest_invocation_level = self.invoke_stack.is_empty();
-        if !is_lowest_invocation_level {
+        if is_lowest_invocation_level {
+            self.instruction_recorder
+                .borrow_mut()
+                .begin_next_recording();
+        } else {
             // Verify the calling program hasn't misbehaved
             self.verify_and_update(instruction_accounts, caller_write_privileges)?;
 
