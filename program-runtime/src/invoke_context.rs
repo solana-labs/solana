@@ -16,7 +16,6 @@ use {
         hash::Hash,
         instruction::{AccountMeta, Instruction, InstructionError},
         keyed_account::{create_keyed_accounts_unified, keyed_account_at_index, KeyedAccount},
-        message::Message,
         native_loader,
         pubkey::Pubkey,
         rent::Rent,
@@ -28,7 +27,7 @@ use {
 pub type TransactionAccountRefCell = (Pubkey, RefCell<AccountSharedData>);
 pub type TransactionAccountRefCells = Vec<TransactionAccountRefCell>;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct InstructionAccount {
     pub index: usize,
     pub is_signer: bool,
@@ -531,32 +530,45 @@ impl<'a> InvokeContext<'a> {
         instruction: &Instruction,
         signers: &[Pubkey],
     ) -> Result<(Vec<InstructionAccount>, Vec<bool>, Vec<usize>), InstructionError> {
-        // Normalize / unify the privileges of duplicate accounts by
-        // constructing a message and compiling an instruction
-        // only to throw them away immediately after.
-        let message = Message::new(&[instruction.clone()], None);
-        let instruction_accounts = message.instructions[0]
-            .accounts
-            .iter()
-            .map(|index_in_instruction| {
-                let index_in_instruction = *index_in_instruction as usize;
-                let account_index = self
-                    .find_index_of_account(&message.account_keys[index_in_instruction])
-                    .ok_or_else(|| {
-                        ic_msg!(
-                            self,
-                            "Instruction references an unknown account {}",
-                            message.account_keys[index_in_instruction],
-                        );
-                        InstructionError::MissingAccount
-                    })?;
-                Ok(InstructionAccount {
+        // Finds the index of each account in the instruction by its pubkey.
+        // Then normalizes / unifies the privileges of duplicate accounts.
+        // Note: This works like visit_each_account_once() and is an O(n^2) algorithm too.
+        let mut deduplicated_instruction_accounts: Vec<InstructionAccount> = Vec::new();
+        let mut duplicate_indicies = Vec::with_capacity(instruction.accounts.len());
+        for account_meta in instruction.accounts.iter() {
+            let account_index = self
+                .accounts
+                .iter()
+                .position(|(key, _account)| key == &account_meta.pubkey)
+                .ok_or_else(|| {
+                    ic_msg!(
+                        self,
+                        "Instruction references an unknown account {}",
+                        account_meta.pubkey,
+                    );
+                    InstructionError::MissingAccount
+                })?;
+            if let Some(duplicate_index) = deduplicated_instruction_accounts
+                .iter()
+                .position(|instruction_account| instruction_account.index == account_index)
+            {
+                duplicate_indicies.push(duplicate_index);
+                let instruction_account = &mut deduplicated_instruction_accounts[duplicate_index];
+                instruction_account.is_signer |= account_meta.is_signer;
+                instruction_account.is_writable |= account_meta.is_writable;
+            } else {
+                duplicate_indicies.push(deduplicated_instruction_accounts.len());
+                deduplicated_instruction_accounts.push(InstructionAccount {
                     index: account_index,
-                    is_signer: message.is_signer(index_in_instruction),
-                    is_writable: message.is_writable(index_in_instruction),
-                })
-            })
-            .collect::<Result<Vec<_>, InstructionError>>()?;
+                    is_signer: account_meta.is_signer,
+                    is_writable: account_meta.is_writable,
+                });
+            }
+        }
+        let instruction_accounts = duplicate_indicies
+            .into_iter()
+            .map(|duplicate_index| deduplicated_instruction_accounts[duplicate_index].clone())
+            .collect();
 
         // Check for privilege escalation
         let caller_keyed_accounts = self.get_instruction_keyed_accounts()?;
@@ -605,7 +617,11 @@ impl<'a> InvokeContext<'a> {
         let program_account_index = caller_keyed_accounts
             .iter()
             .find(|keyed_account| &callee_program_id == keyed_account.unsigned_key())
-            .and_then(|_keyed_account| self.find_index_of_account(&callee_program_id))
+            .and_then(|_keyed_account| {
+                self.accounts
+                    .iter()
+                    .rposition(|(key, _account)| key == &callee_program_id)
+            })
             .ok_or_else(|| {
                 ic_msg!(self, "Unknown program {}", callee_program_id);
                 InstructionError::MissingAccount
@@ -621,8 +637,10 @@ impl<'a> InvokeContext<'a> {
                 programdata_address,
             } = program_account.state()?
             {
-                if let Some(programdata_account_index) =
-                    self.find_index_of_account(&programdata_address)
+                if let Some(programdata_account_index) = self
+                    .accounts
+                    .iter()
+                    .rposition(|(key, _account)| key == &programdata_address)
                 {
                     program_indices.push(programdata_account_index);
                 } else {
@@ -659,16 +677,17 @@ impl<'a> InvokeContext<'a> {
         caller_write_privileges: Option<&[bool]>,
         program_indices: &[usize],
     ) -> Result<u64, InstructionError> {
+        let program_id = program_indices
+            .last()
+            .map(|index| self.accounts[*index].0)
+            .unwrap_or_else(native_loader::id);
+
         let is_lowest_invocation_level = self.invoke_stack.is_empty();
         if !is_lowest_invocation_level {
             // Verify the calling program hasn't misbehaved
             self.verify_and_update(instruction_accounts, caller_write_privileges)?;
         }
 
-        let program_id = program_indices
-            .last()
-            .map(|index| self.accounts[*index].0)
-            .unwrap_or_else(native_loader::id);
         let result = self
             .push(instruction_accounts, program_indices)
             .and_then(|_| {
@@ -809,16 +828,6 @@ impl<'a> InvokeContext<'a> {
     /// Get the completed loader work that can be re-used across execution
     pub fn get_executor(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
         self.executors.borrow().get(pubkey)
-    }
-
-    /// Finds an account_index by its key
-    pub fn find_index_of_account(&self, pubkey: &Pubkey) -> Option<usize> {
-        for (index, (key, _account)) in self.accounts.iter().enumerate().rev() {
-            if key == pubkey {
-                return Some(index);
-            }
-        }
-        None
     }
 
     /// Returns an account by its account_index
@@ -995,11 +1004,7 @@ mod tests {
     use {
         super::*,
         serde::{Deserialize, Serialize},
-        solana_sdk::{
-            account::{ReadableAccount, WritableAccount},
-            instruction::AccountMeta,
-            native_loader,
-        },
+        solana_sdk::account::{ReadableAccount, WritableAccount},
     };
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -1278,23 +1283,20 @@ mod tests {
             AccountMeta::new(accounts[1].0, false),
             AccountMeta::new_readonly(accounts[2].0, false),
         ];
-
+        let instruction_accounts = metas
+            .iter()
+            .enumerate()
+            .map(|(account_index, account_meta)| InstructionAccount {
+                index: account_index,
+                is_signer: account_meta.is_signer,
+                is_writable: account_meta.is_writable,
+            })
+            .collect::<Vec<_>>();
         let instruction = Instruction::new_with_bincode(
             callee_program_id,
             &MockInstruction::NoopSuccess,
             metas.clone(),
         );
-        let message = Message::new(&[instruction], None);
-        let instruction_accounts = message
-            .account_keys
-            .iter()
-            .enumerate()
-            .map(|(index, _)| InstructionAccount {
-                index,
-                is_signer: message.is_signer(index),
-                is_writable: message.is_writable(index),
-            })
-            .collect::<Vec<_>>();
         let builtin_programs = &[BuiltinProgram {
             program_id: callee_program_id,
             process_instruction: mock_process_instruction,
@@ -1308,7 +1310,7 @@ mod tests {
         accounts[0].1.borrow_mut().data_as_mut_slice()[0] = 1;
         assert_eq!(
             invoke_context.process_instruction(
-                &message.instructions[0].data,
+                &instruction.data,
                 &instruction_accounts,
                 None,
                 &program_indices[1..],
@@ -1321,7 +1323,7 @@ mod tests {
         accounts[2].1.borrow_mut().data_as_mut_slice()[0] = 1;
         assert_eq!(
             invoke_context.process_instruction(
-                &message.instructions[0].data,
+                &instruction.data,
                 &instruction_accounts,
                 None,
                 &program_indices[1..],
@@ -1396,24 +1398,20 @@ mod tests {
             AccountMeta::new_readonly(accounts[2].0, false),
             AccountMeta::new_readonly(accounts[3].0, false),
         ];
+        let instruction_accounts = metas
+            .iter()
+            .enumerate()
+            .map(|(account_index, account_meta)| InstructionAccount {
+                index: account_index,
+                is_signer: account_meta.is_signer,
+                is_writable: account_meta.is_writable,
+            })
+            .collect::<Vec<_>>();
         let callee_instruction = Instruction::new_with_bincode(
             callee_program_id,
             &MockInstruction::NoopSuccess,
             metas.clone(),
         );
-        let message = Message::new(&[callee_instruction.clone()], None);
-        let instruction_accounts = message.instructions[0]
-            .accounts
-            .iter()
-            .map(|account_index| {
-                let account_index = *account_index as usize;
-                InstructionAccount {
-                    index: account_index,
-                    is_signer: message.is_signer(account_index),
-                    is_writable: message.is_writable(account_index),
-                }
-            })
-            .collect::<Vec<_>>();
 
         let mut invoke_context = InvokeContext::new_mock(&accounts, builtin_programs);
         invoke_context
