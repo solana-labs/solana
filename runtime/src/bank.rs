@@ -3576,11 +3576,10 @@ impl Bank {
                         let account_refcells =
                             Self::accounts_to_refcells(&mut loaded_transaction.accounts);
 
-                        let instruction_recorders = if enable_cpi_recording {
-                            let ix_count = tx.message().instructions().len();
-                            let mut recorders = Vec::with_capacity(ix_count);
-                            recorders.resize_with(ix_count, InstructionRecorder::default);
-                            Some(recorders)
+                        let instruction_recorder = if enable_cpi_recording {
+                            Some(InstructionRecorder::new_ref(
+                                tx.message().instructions().len(),
+                            ))
                         } else {
                             None
                         };
@@ -3603,7 +3602,7 @@ impl Bank {
                                 self.rent_collector.rent,
                                 log_collector.clone(),
                                 executors.clone(),
-                                instruction_recorders.as_deref(),
+                                instruction_recorder.clone(),
                                 feature_set,
                                 compute_budget,
                                 &mut timings.details,
@@ -3628,14 +3627,15 @@ impl Bank {
                                     .ok()
                             });
                         transaction_log_messages.push(log_messages);
-                        let inner_instruction_list: Option<InnerInstructionsList> =
-                            instruction_recorders.and_then(|instruction_recorders| {
-                                instruction_recorders
-                                    .into_iter()
-                                    .map(|r| r.compile_instructions(tx.message()))
-                                    .collect()
-                            });
-                        inner_instructions.push(inner_instruction_list);
+                        inner_instructions.push(
+                            instruction_recorder
+                                .and_then(|instruction_recorder| {
+                                    Rc::try_unwrap(instruction_recorder).ok()
+                                })
+                                .map(|instruction_recorder| {
+                                    instruction_recorder.into_inner().deconstruct()
+                                }),
+                        );
 
                         Self::refcells_to_accounts(
                             &mut loaded_transaction.accounts,

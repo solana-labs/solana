@@ -58,7 +58,7 @@ impl MessageProcessor {
         rent: Rent,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         executors: Rc<RefCell<Executors>>,
-        instruction_recorders: Option<&[InstructionRecorder]>,
+        instruction_recorder: Option<Rc<RefCell<InstructionRecorder>>>,
         feature_set: Arc<FeatureSet>,
         compute_budget: ComputeBudget,
         timings: &mut ExecuteDetailsTimings,
@@ -74,6 +74,7 @@ impl MessageProcessor {
             log_collector,
             compute_budget,
             executors,
+            instruction_recorder,
             feature_set,
             blockhash,
             lamports_per_signature,
@@ -109,10 +110,6 @@ impl MessageProcessor {
                 }
             }
 
-            if let Some(instruction_recorders) = instruction_recorders {
-                invoke_context.instruction_recorder =
-                    Some(&instruction_recorders[instruction_index]);
-            }
             let instruction_accounts = instruction
                 .accounts
                 .iter()

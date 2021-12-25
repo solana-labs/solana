@@ -2382,11 +2382,6 @@ fn call<'a, 'b: 'a>(
         *invoke_context,
     )?;
 
-    // Record the instruction
-    if let Some(instruction_recorder) = &invoke_context.instruction_recorder {
-        instruction_recorder.record_instruction(instruction.clone());
-    }
-
     // Process instruction
     invoke_context
         .process_instruction(

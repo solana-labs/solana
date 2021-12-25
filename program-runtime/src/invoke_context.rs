@@ -14,7 +14,7 @@ use {
             remove_native_loader, requestable_heap_size, tx_wide_compute_cap, FeatureSet,
         },
         hash::Hash,
-        instruction::{AccountMeta, Instruction, InstructionError},
+        instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
         keyed_account::{create_keyed_accounts_unified, keyed_account_at_index, KeyedAccount},
         native_loader,
         pubkey::Pubkey,
@@ -155,7 +155,7 @@ pub struct InvokeContext<'a> {
     current_compute_budget: ComputeBudget,
     compute_meter: Rc<RefCell<ComputeMeter>>,
     executors: Rc<RefCell<Executors>>,
-    pub instruction_recorder: Option<&'a InstructionRecorder>,
+    pub instruction_recorder: Option<Rc<RefCell<InstructionRecorder>>>,
     pub feature_set: Arc<FeatureSet>,
     pub timings: ExecuteDetailsTimings,
     pub blockhash: Hash,
@@ -173,6 +173,7 @@ impl<'a> InvokeContext<'a> {
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         compute_budget: ComputeBudget,
         executors: Rc<RefCell<Executors>>,
+        instruction_recorder: Option<Rc<RefCell<InstructionRecorder>>>,
         feature_set: Arc<FeatureSet>,
         blockhash: Hash,
         lamports_per_signature: u64,
@@ -189,7 +190,7 @@ impl<'a> InvokeContext<'a> {
             compute_budget,
             compute_meter: ComputeMeter::new_ref(compute_budget.max_units),
             executors,
-            instruction_recorder: None,
+            instruction_recorder,
             feature_set,
             timings: ExecuteDetailsTimings::default(),
             blockhash,
@@ -210,6 +211,7 @@ impl<'a> InvokeContext<'a> {
             Some(LogCollector::new_ref()),
             ComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
+            None,
             Arc::new(FeatureSet::all_enabled()),
             Hash::default(),
             0,
@@ -493,9 +495,6 @@ impl<'a> InvokeContext<'a> {
             prev_account_sizes.push((instruction_account.index, account_length));
         }
 
-        if let Some(instruction_recorder) = &self.instruction_recorder {
-            instruction_recorder.record_instruction(instruction.clone());
-        }
         self.process_instruction(
             &instruction.data,
             &instruction_accounts,
@@ -683,9 +682,32 @@ impl<'a> InvokeContext<'a> {
             .unwrap_or_else(native_loader::id);
 
         let is_lowest_invocation_level = self.invoke_stack.is_empty();
-        if !is_lowest_invocation_level {
+        if is_lowest_invocation_level {
+            if let Some(instruction_recorder) = &self.instruction_recorder {
+                instruction_recorder.borrow_mut().begin_next_recording();
+            }
+        } else {
             // Verify the calling program hasn't misbehaved
             self.verify_and_update(instruction_accounts, caller_write_privileges)?;
+
+            // Record instruction
+            if let Some(instruction_recorder) = &self.instruction_recorder {
+                let compiled_instruction = CompiledInstruction {
+                    program_id_index: self
+                        .accounts
+                        .iter()
+                        .position(|(key, _account)| *key == program_id)
+                        .unwrap_or(0) as u8,
+                    data: instruction_data.to_vec(),
+                    accounts: instruction_accounts
+                        .iter()
+                        .map(|instruction_account| instruction_account.index as u8)
+                        .collect(),
+                };
+                instruction_recorder
+                    .borrow_mut()
+                    .record_compiled_instruction(compiled_instruction);
+            }
         }
 
         let result = self

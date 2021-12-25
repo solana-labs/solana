@@ -273,9 +273,6 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             }
         }
 
-        if let Some(instruction_recorder) = &invoke_context.instruction_recorder {
-            instruction_recorder.record_instruction(instruction.clone());
-        }
         invoke_context
             .process_instruction(
                 &instruction.data,
