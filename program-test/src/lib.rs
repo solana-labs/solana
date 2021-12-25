@@ -252,7 +252,9 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         // Convert AccountInfos into Accounts
         let mut accounts = Vec::with_capacity(instruction_accounts.len());
         for instruction_account in instruction_accounts.iter() {
-            let account_key = invoke_context.get_account_key_at_index(instruction_account.index);
+            let account_key = invoke_context
+                .transaction_context
+                .get_key_of_account_at_index(instruction_account.index);
             let account_info = account_infos
                 .iter()
                 .find(|account_info| account_info.unsigned_key() == account_key)
@@ -260,6 +262,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                 .unwrap();
             {
                 let mut account = invoke_context
+                    .transaction_context
                     .get_account_at_index(instruction_account.index)
                     .borrow_mut();
                 account.copy_into_owner_from_slice(account_info.owner.as_ref());
@@ -284,7 +287,9 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
         // Copy writeable account modifications back into the caller's AccountInfos
         for (account_index, account_info) in accounts.into_iter() {
-            let account = invoke_context.get_account_at_index(account_index);
+            let account = invoke_context
+                .transaction_context
+                .get_account_at_index(account_index);
             let account_borrow = account.borrow();
             **account_info.try_borrow_mut_lamports().unwrap() = account_borrow.lamports();
             let mut data = account_info.try_borrow_mut_data()?;

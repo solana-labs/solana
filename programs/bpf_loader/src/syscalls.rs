@@ -5,7 +5,7 @@ use {
     alloc::Alloc,
     solana_program_runtime::{
         ic_logger_msg, ic_msg,
-        invoke_context::{ComputeMeter, InstructionAccount, InvokeContext},
+        invoke_context::{ComputeMeter, InvokeContext},
         stable_log,
     },
     solana_rbpf::{
@@ -41,6 +41,7 @@ use {
             Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
         },
         sysvar::{self, Sysvar, SysvarId},
+        transaction_context::InstructionAccount,
     },
     std::{
         alloc::Layout,
@@ -2214,8 +2215,12 @@ where
     accounts.push((*program_account_index, None));
 
     for instruction_account in instruction_accounts.iter() {
-        let account = invoke_context.get_account_at_index(instruction_account.index);
-        let account_key = invoke_context.get_account_key_at_index(instruction_account.index);
+        let account = invoke_context
+            .transaction_context
+            .get_account_at_index(instruction_account.index);
+        let account_key = invoke_context
+            .transaction_context
+            .get_key_of_account_at_index(instruction_account.index);
         if account.borrow().executable() {
             // Use the known account
             accounts.push((instruction_account.index, None));
@@ -2396,6 +2401,7 @@ fn call<'a, 'b: 'a>(
     for (callee_account_index, caller_account) in accounts.iter_mut() {
         if let Some(caller_account) = caller_account {
             let callee_account = invoke_context
+                .transaction_context
                 .get_account_at_index(*callee_account_index)
                 .borrow();
             *caller_account.lamports = callee_account.lamports();

@@ -3,9 +3,7 @@ use {
     solana_measure::measure::Measure,
     solana_program_runtime::{
         instruction_recorder::InstructionRecorder,
-        invoke_context::{
-            BuiltinProgram, Executors, InstructionAccount, InvokeContext, TransactionAccountRefCell,
-        },
+        invoke_context::{BuiltinProgram, Executors, InvokeContext},
         log_collector::LogCollector,
         timings::ExecuteDetailsTimings,
     },
@@ -20,6 +18,7 @@ use {
         rent::Rent,
         sysvar::instructions,
         transaction::TransactionError,
+        transaction_context::{InstructionAccount, TransactionContext},
     },
     std::{cell::RefCell, rc::Rc, sync::Arc},
 };
@@ -54,7 +53,7 @@ impl MessageProcessor {
         builtin_programs: &[BuiltinProgram],
         message: &Message,
         program_indices: &[Vec<usize>],
-        accounts: &[TransactionAccountRefCell],
+        transaction_context: &TransactionContext,
         rent: Rent,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         executors: Rc<RefCell<Executors>>,
@@ -67,8 +66,8 @@ impl MessageProcessor {
         lamports_per_signature: u64,
     ) -> Result<ProcessedMessageInfo, TransactionError> {
         let mut invoke_context = InvokeContext::new(
+            transaction_context,
             rent,
-            accounts,
             builtin_programs,
             sysvars,
             log_collector,
@@ -99,15 +98,18 @@ impl MessageProcessor {
 
             // Fixup the special instructions key if present
             // before the account pre-values are taken care of
-            for (pubkey, account) in accounts.iter().take(message.account_keys.len()) {
-                if instructions::check_id(pubkey) {
-                    let mut mut_account_ref = account.borrow_mut();
-                    instructions::store_current_index(
-                        mut_account_ref.data_as_mut_slice(),
-                        instruction_index as u16,
-                    );
-                    break;
-                }
+            if let Some(account_index) = invoke_context
+                .transaction_context
+                .find_index_of_account(&instructions::id())
+            {
+                let mut mut_account_ref = invoke_context
+                    .transaction_context
+                    .get_account_at_index(account_index)
+                    .borrow_mut();
+                instructions::store_current_index(
+                    mut_account_ref.data_as_mut_slice(),
+                    instruction_index as u16,
+                );
             }
 
             let instruction_accounts = instruction
