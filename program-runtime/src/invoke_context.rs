@@ -1168,11 +1168,7 @@ mod tests {
             invoke_stack.push(solana_sdk::pubkey::new_rand());
             accounts.push((
                 solana_sdk::pubkey::new_rand(),
-                RefCell::new(AccountSharedData::new(
-                    index as u64,
-                    1,
-                    &invoke_stack[index],
-                )),
+                AccountSharedData::new(index as u64, 1, &invoke_stack[index]),
             ));
             instruction_accounts.push(InstructionAccount {
                 index,
@@ -1183,11 +1179,7 @@ mod tests {
         for (index, program_id) in invoke_stack.iter().enumerate() {
             accounts.push((
                 *program_id,
-                RefCell::new(AccountSharedData::new(
-                    1,
-                    1,
-                    &solana_sdk::pubkey::Pubkey::default(),
-                )),
+                AccountSharedData::new(1, 1, &solana_sdk::pubkey::Pubkey::default()),
             ));
             instruction_accounts.push(InstructionAccount {
                 index,
@@ -1195,7 +1187,8 @@ mod tests {
                 is_writable: false,
             });
         }
-        let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
+        let transaction_context = TransactionContext::new(accounts, 1);
+        let mut invoke_context = InvokeContext::new_mock(&transaction_context, &[]);
 
         // Check call depth increases and has a limit
         let mut depth_reached = 0;
@@ -1227,8 +1220,10 @@ mod tests {
             ];
 
             // modify account owned by the program
-            accounts[owned_index].1.borrow_mut().data_as_mut_slice()[0] =
-                (MAX_DEPTH + owned_index) as u8;
+            transaction_context
+                .get_account_at_index(owned_index)
+                .borrow_mut()
+                .data_as_mut_slice()[0] = (MAX_DEPTH + owned_index) as u8;
             invoke_context
                 .verify_and_update(&instruction_accounts, None)
                 .unwrap();
@@ -1238,15 +1233,23 @@ mod tests {
             );
 
             // modify account not owned by the program
-            let data = accounts[not_owned_index].1.borrow_mut().data()[0];
-            accounts[not_owned_index].1.borrow_mut().data_as_mut_slice()[0] =
-                (MAX_DEPTH + not_owned_index) as u8;
+            let data = transaction_context
+                .get_account_at_index(not_owned_index)
+                .borrow_mut()
+                .data()[0];
+            transaction_context
+                .get_account_at_index(not_owned_index)
+                .borrow_mut()
+                .data_as_mut_slice()[0] = (MAX_DEPTH + not_owned_index) as u8;
             assert_eq!(
                 invoke_context.verify_and_update(&instruction_accounts, None),
                 Err(InstructionError::ExternalAccountDataModified)
             );
             assert_eq!(invoke_context.pre_accounts[not_owned_index].data()[0], data);
-            accounts[not_owned_index].1.borrow_mut().data_as_mut_slice()[0] = data;
+            transaction_context
+                .get_account_at_index(not_owned_index)
+                .borrow_mut()
+                .data_as_mut_slice()[0] = data;
 
             invoke_context.pop();
         }
@@ -1254,13 +1257,11 @@ mod tests {
 
     #[test]
     fn test_invoke_context_verify() {
-        let accounts = vec![(
-            solana_sdk::pubkey::new_rand(),
-            RefCell::new(AccountSharedData::default()),
-        )];
+        let accounts = vec![(solana_sdk::pubkey::new_rand(), AccountSharedData::default())];
         let instruction_accounts = vec![];
         let program_indices = vec![0];
-        let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
+        let transaction_context = TransactionContext::new(accounts, 1);
+        let mut invoke_context = InvokeContext::new_mock(&transaction_context, &[]);
         invoke_context
             .push(&instruction_accounts, &program_indices)
             .unwrap();
@@ -1268,7 +1269,7 @@ mod tests {
             .verify(&instruction_accounts, &program_indices)
             .is_ok());
 
-        let mut _borrowed = accounts[0].1.borrow();
+        let mut _borrowed = transaction_context.get_account_at_index(0).borrow();
         assert_eq!(
             invoke_context.verify(&instruction_accounts, &program_indices),
             Err(InstructionError::AccountBorrowOutstanding)
@@ -1279,6 +1280,10 @@ mod tests {
     fn test_process_cross_program() {
         let caller_program_id = solana_sdk::pubkey::new_rand();
         let callee_program_id = solana_sdk::pubkey::new_rand();
+        let builtin_programs = &[BuiltinProgram {
+            program_id: callee_program_id,
+            process_instruction: mock_process_instruction,
+        }];
 
         let owned_account = AccountSharedData::new(42, 1, &callee_program_id);
         let not_owned_account = AccountSharedData::new(84, 1, &solana_sdk::pubkey::new_rand());
@@ -1288,17 +1293,11 @@ mod tests {
         program_account.set_executable(true);
 
         let accounts = vec![
-            (solana_sdk::pubkey::new_rand(), RefCell::new(owned_account)),
-            (
-                solana_sdk::pubkey::new_rand(),
-                RefCell::new(not_owned_account),
-            ),
-            (
-                solana_sdk::pubkey::new_rand(),
-                RefCell::new(readonly_account),
-            ),
-            (caller_program_id, RefCell::new(loader_account)),
-            (callee_program_id, RefCell::new(program_account)),
+            (solana_sdk::pubkey::new_rand(), owned_account),
+            (solana_sdk::pubkey::new_rand(), not_owned_account),
+            (solana_sdk::pubkey::new_rand(), readonly_account),
+            (caller_program_id, loader_account),
+            (callee_program_id, program_account),
         ];
         let program_indices = [3, 4];
 
@@ -1321,17 +1320,17 @@ mod tests {
             &MockInstruction::NoopSuccess,
             metas.clone(),
         );
-        let builtin_programs = &[BuiltinProgram {
-            program_id: callee_program_id,
-            process_instruction: mock_process_instruction,
-        }];
-        let mut invoke_context = InvokeContext::new_mock(&accounts, builtin_programs);
+        let transaction_context = TransactionContext::new(accounts, 1);
+        let mut invoke_context = InvokeContext::new_mock(&transaction_context, builtin_programs);
         invoke_context
             .push(&instruction_accounts, &program_indices[..1])
             .unwrap();
 
         // not owned account modified by the caller (before the invoke)
-        accounts[0].1.borrow_mut().data_as_mut_slice()[0] = 1;
+        transaction_context
+            .get_account_at_index(1)
+            .borrow_mut()
+            .data_as_mut_slice()[0] = 1;
         assert_eq!(
             invoke_context.process_instruction(
                 &instruction.data,
@@ -1341,10 +1340,16 @@ mod tests {
             ),
             Err(InstructionError::ExternalAccountDataModified)
         );
-        accounts[0].1.borrow_mut().data_as_mut_slice()[0] = 0;
+        transaction_context
+            .get_account_at_index(1)
+            .borrow_mut()
+            .data_as_mut_slice()[0] = 0;
 
         // readonly account modified by the invoker
-        accounts[2].1.borrow_mut().data_as_mut_slice()[0] = 1;
+        transaction_context
+            .get_account_at_index(2)
+            .borrow_mut()
+            .data_as_mut_slice()[0] = 1;
         assert_eq!(
             invoke_context.process_instruction(
                 &instruction.data,
@@ -1354,7 +1359,10 @@ mod tests {
             ),
             Err(InstructionError::ReadonlyDataModified)
         );
-        accounts[2].1.borrow_mut().data_as_mut_slice()[0] = 0;
+        transaction_context
+            .get_account_at_index(2)
+            .borrow_mut()
+            .data_as_mut_slice()[0] = 0;
 
         invoke_context.pop();
 
@@ -1403,16 +1411,10 @@ mod tests {
         let mut program_account = AccountSharedData::new(1, 0, &native_loader::id());
         program_account.set_executable(true);
         let accounts = vec![
-            (solana_sdk::pubkey::new_rand(), RefCell::new(owned_account)),
-            (
-                solana_sdk::pubkey::new_rand(),
-                RefCell::new(not_owned_account),
-            ),
-            (
-                solana_sdk::pubkey::new_rand(),
-                RefCell::new(readonly_account),
-            ),
-            (callee_program_id, RefCell::new(program_account)),
+            (solana_sdk::pubkey::new_rand(), owned_account),
+            (solana_sdk::pubkey::new_rand(), not_owned_account),
+            (solana_sdk::pubkey::new_rand(), readonly_account),
+            (callee_program_id, program_account),
         ];
         let program_indices = [3];
 
@@ -1437,26 +1439,39 @@ mod tests {
             metas.clone(),
         );
 
-        let mut invoke_context = InvokeContext::new_mock(&accounts, builtin_programs);
+        let transaction_context = TransactionContext::new(accounts, 1);
+        let mut invoke_context = InvokeContext::new_mock(&transaction_context, builtin_programs);
         invoke_context
             .push(&instruction_accounts, &program_indices)
             .unwrap();
 
         // not owned account modified by the invoker
-        accounts[1].1.borrow_mut().data_as_mut_slice()[0] = 1;
+        transaction_context
+            .get_account_at_index(1)
+            .borrow_mut()
+            .data_as_mut_slice()[0] = 1;
         assert_eq!(
             invoke_context.native_invoke(callee_instruction.clone(), &[]),
             Err(InstructionError::ExternalAccountDataModified)
         );
-        accounts[1].1.borrow_mut().data_as_mut_slice()[0] = 0;
+        transaction_context
+            .get_account_at_index(1)
+            .borrow_mut()
+            .data_as_mut_slice()[0] = 0;
 
         // readonly account modified by the invoker
-        accounts[2].1.borrow_mut().data_as_mut_slice()[0] = 1;
+        transaction_context
+            .get_account_at_index(2)
+            .borrow_mut()
+            .data_as_mut_slice()[0] = 1;
         assert_eq!(
             invoke_context.native_invoke(callee_instruction, &[]),
             Err(InstructionError::ReadonlyDataModified)
         );
-        accounts[2].1.borrow_mut().data_as_mut_slice()[0] = 0;
+        transaction_context
+            .get_account_at_index(2)
+            .borrow_mut()
+            .data_as_mut_slice()[0] = 0;
 
         invoke_context.pop();
 
@@ -1494,20 +1509,15 @@ mod tests {
     #[test]
     fn test_invoke_context_compute_budget() {
         let accounts = vec![
-            (
-                solana_sdk::pubkey::new_rand(),
-                RefCell::new(AccountSharedData::default()),
-            ),
-            (
-                crate::neon_evm_program::id(),
-                RefCell::new(AccountSharedData::default()),
-            ),
+            (solana_sdk::pubkey::new_rand(), AccountSharedData::default()),
+            (crate::neon_evm_program::id(), AccountSharedData::default()),
         ];
 
         let mut feature_set = FeatureSet::all_enabled();
         feature_set.deactivate(&tx_wide_compute_cap::id());
         feature_set.deactivate(&requestable_heap_size::id());
-        let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
+        let transaction_context = TransactionContext::new(accounts, 1);
+        let mut invoke_context = InvokeContext::new_mock(&transaction_context, &[]);
         invoke_context.feature_set = Arc::new(feature_set);
 
         invoke_context.push(&[], &[0]).unwrap();
