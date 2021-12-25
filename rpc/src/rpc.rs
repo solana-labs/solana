@@ -1472,6 +1472,17 @@ impl JsonRpcRequestProcessor {
                         before = results.last().map(|x| x.signature);
                     }
 
+                    if before.is_some()
+                        && bigtable_ledger_storage
+                            .get_confirmed_transaction(&before.unwrap())
+                            .await
+                            .ok()
+                            .flatten()
+                            .is_none()
+                    {
+                        before = None
+                    }
+
                     let bigtable_results = bigtable_ledger_storage
                         .get_confirmed_signatures_for_address(
                             &address,
