@@ -3211,16 +3211,19 @@ impl Bank {
         self.rc.accounts.accounts_db.set_shrink_paths(paths);
     }
 
-    fn check_age<'a>(
+    fn check_age<'a, T>(
         &self,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
-        lock_results: &[Result<ExecutionCost>],
+        lock_results: impl Iterator<Item = T>,
         max_age: usize,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<TransactionCheckResult> {
+    ) -> Vec<TransactionCheckResult>
+    where
+        T: std::borrow::Borrow<Result<ExecutionCost>>,
+    {
         let hash_queue = self.blockhash_queue.read().unwrap();
         txs.zip(lock_results)
-            .map(|(tx, lock_res)| match lock_res {
+            .map(|(tx, lock_res)| match lock_res.borrow() {
                 Ok(execution_cost) => {
                     let recent_blockhash = tx.message().recent_blockhash();
                     let hash_age = hash_queue.check_hash_age(recent_blockhash, max_age);
@@ -3300,13 +3303,16 @@ impl Bank {
             })
     }
 
-    pub fn check_transactions(
+    pub fn check_transactions<T>(
         &self,
         sanitized_txs: &[SanitizedTransaction],
-        lock_results: &[Result<ExecutionCost>],
+        lock_results: impl Iterator<Item = T>,
         max_age: usize,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<TransactionCheckResult> {
+    ) -> Vec<TransactionCheckResult>
+    where
+        T: std::borrow::Borrow<Result<ExecutionCost>>,
+    {
         let age_results =
             self.check_age(sanitized_txs.iter(), lock_results, max_age, error_counters);
         self.check_status_cache(sanitized_txs, age_results, error_counters)
@@ -3502,7 +3508,7 @@ impl Bank {
         let mut check_time = Measure::start("check_transactions");
         let check_results = self.check_transactions(
             sanitized_txs,
-            batch.lock_results(),
+            batch.lock_results().iter(),
             max_age,
             &mut error_counters,
         );

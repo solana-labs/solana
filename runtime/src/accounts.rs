@@ -1310,7 +1310,7 @@ mod tests {
         accounts.load_accounts(
             &ancestors,
             &[sanitized_tx],
-            vec![(Ok(()), None)],
+            vec![(Ok(0), None)],
             &hash_queue,
             error_counters,
             rent_collector,
@@ -2458,9 +2458,9 @@ mod tests {
         let txs = vec![tx0, tx1, tx2];
 
         let qos_results = vec![
-            Ok(()),
+            Ok(0),
             Err(TransactionError::WouldExceedMaxBlockCostLimit),
-            Ok(()),
+            Ok(0),
         ];
 
         let results = accounts.lock_accounts_with_results(txs.iter(), qos_results.into_iter());
@@ -2658,7 +2658,7 @@ mod tests {
         accounts.load_accounts(
             &ancestors,
             &[tx],
-            vec![(Ok(()), None)],
+            vec![(Ok(0), None)],
             &hash_queue,
             &mut error_counters,
             &rent_collector,
