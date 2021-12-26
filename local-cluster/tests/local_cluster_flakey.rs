@@ -331,6 +331,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
                     access_type: AccessType::TryPrimaryThenSecondary,
                     recovery_mode: None,
                     enforce_ulimit_nofile: true,
+                    ..BlockstoreOptions::default()
                 },
             )
             .unwrap();

@@ -3781,6 +3781,7 @@ pub fn create_new_ledger(
             access_type,
             recovery_mode: None,
             enforce_ulimit_nofile: false,
+            ..BlockstoreOptions::default()
         },
     )?;
     let ticks_per_slot = genesis_config.ticks_per_slot;
