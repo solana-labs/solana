@@ -514,3 +514,86 @@ fn test_slot_subscription() {
 
     assert_eq!(errors, [].to_vec());
 }
+
+#[tokio::test]
+#[serial]
+async fn test_slot_subscription_async() {
+    use {futures_util::StreamExt, solana_client::pubsub_client_async::PubsubClient};
+
+    let sync_service = Arc::new(AtomicU64::new(0));
+    let sync_client = Arc::clone(&sync_service);
+    fn wait_until(atomic: &Arc<AtomicU64>, value: u64) {
+        while atomic.load(Ordering::Relaxed) != value {
+            sleep(Duration::from_millis(1))
+        }
+    }
+
+    let pubsub_addr = SocketAddr::new(
+        IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+        rpc_port::DEFAULT_RPC_PUBSUB_PORT,
+    );
+
+    tokio::task::spawn_blocking(move || {
+        let exit = Arc::new(AtomicBool::new(false));
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank = Bank::new_for_tests(&genesis_config);
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
+        let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+        let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
+            &exit,
+            max_complete_transaction_status_slot,
+            bank_forks,
+            Arc::new(RwLock::new(BlockCommitmentCache::default())),
+            optimistically_confirmed_bank,
+        ));
+        let (trigger, pubsub_service) =
+            PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr);
+        sleep(Duration::from_millis(100));
+        sync_service.store(1, Ordering::Relaxed);
+
+        wait_until(&sync_service, 2);
+        subscriptions.notify_slot(1, 0, 0);
+        sync_service.store(3, Ordering::Relaxed);
+
+        wait_until(&sync_service, 4);
+        subscriptions.notify_slot(2, 1, 1);
+        sync_service.store(5, Ordering::Relaxed);
+
+        wait_until(&sync_service, 6);
+        exit.store(true, Ordering::Relaxed);
+        trigger.cancel();
+        pubsub_service.close().unwrap();
+    });
+
+    wait_until(&sync_client, 1);
+    let url = format!("ws://0.0.0.0:{}/", pubsub_addr.port());
+    let pubsub_client = PubsubClient::connect(&url).await.unwrap();
+    let (mut notifications, unsubscribe) = pubsub_client.slot_subscribe().await.unwrap();
+    sync_client.store(2, Ordering::Relaxed);
+
+    wait_until(&sync_client, 3);
+    assert_eq!(
+        tokio::time::timeout(Duration::from_millis(25), notifications.next()).await,
+        Ok(Some(SlotInfo {
+            slot: 1,
+            parent: 0,
+            root: 0,
+        }))
+    );
+    sync_client.store(4, Ordering::Relaxed);
+
+    wait_until(&sync_client, 5);
+    assert_eq!(
+        tokio::time::timeout(Duration::from_millis(25), notifications.next()).await,
+        Ok(Some(SlotInfo {
+            slot: 2,
+            parent: 1,
+            root: 1,
+        }))
+    );
+    sync_client.store(6, Ordering::Relaxed);
+
+    unsubscribe().await;
+}
