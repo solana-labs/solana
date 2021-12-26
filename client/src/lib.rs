@@ -9,6 +9,8 @@ pub mod mock_sender;
 pub mod nonce_utils;
 pub mod perf_utils;
 pub mod pubsub_client;
+#[cfg(feature = "async")]
+pub mod pubsub_client_async;
 pub mod rpc_cache;
 pub mod rpc_client;
 pub mod rpc_config;
