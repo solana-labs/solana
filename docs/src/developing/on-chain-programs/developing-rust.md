@@ -19,7 +19,7 @@ layout](https://doc.rust-lang.org/cargo/guide/project-layout.html):
 But must also include:
 
 ```
-/Xargo.toml
+/Cargo.toml
 ```
 
 Which must contain:
