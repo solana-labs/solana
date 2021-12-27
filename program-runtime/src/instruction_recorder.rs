@@ -1,30 +1,32 @@
 use {
-    solana_sdk::{
-        instruction::{CompiledInstruction, Instruction},
-        message::SanitizedMessage,
-    },
+    solana_sdk::instruction::CompiledInstruction,
     std::{cell::RefCell, rc::Rc},
 };
 
 /// Records and compiles cross-program invoked instructions
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct InstructionRecorder {
-    inner: Rc<RefCell<Vec<Instruction>>>,
+    records: Vec<Vec<CompiledInstruction>>,
 }
 
 impl InstructionRecorder {
-    pub fn compile_instructions(
-        &self,
-        message: &SanitizedMessage,
-    ) -> Option<Vec<CompiledInstruction>> {
-        self.inner
-            .borrow()
-            .iter()
-            .map(|ix| message.try_compile_instruction(ix))
-            .collect()
+    pub fn new_ref(instructions_in_message: usize) -> Rc<RefCell<Self>> {
+        Rc::new(RefCell::new(Self {
+            records: Vec::with_capacity(instructions_in_message),
+        }))
     }
 
-    pub fn record_instruction(&self, instruction: Instruction) {
-        self.inner.borrow_mut().push(instruction);
+    pub fn deconstruct(self) -> Vec<Vec<CompiledInstruction>> {
+        self.records
+    }
+
+    pub fn begin_next_recording(&mut self) {
+        self.records.push(Vec::new());
+    }
+
+    pub fn record_compiled_instruction(&mut self, instruction: CompiledInstruction) {
+        if let Some(records) = self.records.last_mut() {
+            records.push(instruction);
+        }
     }
 }

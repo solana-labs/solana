@@ -45,6 +45,8 @@ struct Header {
 }
 
 impl Header {
+    /// try to lock this entry with 'uid'
+    /// return true if it could be locked
     fn try_lock(&mut self, uid: Uid) -> bool {
         if self.lock == UID_UNLOCKED {
             self.lock = uid;
@@ -53,16 +55,22 @@ impl Header {
             false
         }
     }
+    /// mark this entry as unlocked
     fn unlock(&mut self, expected: Uid) {
         assert_eq!(expected, self.lock);
         self.lock = UID_UNLOCKED;
     }
+    /// uid that has locked this entry or None if unlocked
     fn uid(&self) -> Option<Uid> {
         if self.lock == UID_UNLOCKED {
             None
         } else {
             Some(self.lock)
         }
+    }
+    /// true if this entry is unlocked
+    fn is_unlocked(&self) -> bool {
+        self.lock == UID_UNLOCKED
     }
 }
 
@@ -153,9 +161,17 @@ impl BucketStorage {
         }
     }
 
+    /// return uid allocated at index 'ix' or None if vacant
     pub fn uid(&self, ix: u64) -> Option<Uid> {
         assert!(ix < self.capacity(), "bad index size");
         self.header_ptr(ix).uid()
+    }
+
+    /// true if the entry at index 'ix' is free (as opposed to being allocated)
+    pub fn is_free(&self, ix: u64) -> bool {
+        // note that the terminology in the implementation is locked or unlocked.
+        // but our api is allocate/free
+        self.header_ptr(ix).is_unlocked()
     }
 
     /// caller knows id is not empty
@@ -364,5 +380,45 @@ impl BucketStorage {
     /// Return the number of cells currently allocated
     pub fn capacity(&self) -> u64 {
         1 << self.capacity_pow2
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_bucket_storage() {
+        let tmpdir1 = std::env::temp_dir().join("bucket_map_test_mt");
+        let paths: Vec<PathBuf> = [tmpdir1]
+            .iter()
+            .filter(|x| std::fs::create_dir_all(x).is_ok())
+            .cloned()
+            .collect();
+        assert!(!paths.is_empty());
+
+        let mut storage =
+            BucketStorage::new(Arc::new(paths), 1, 1, 1, Arc::default(), Arc::default());
+        let ix = 0;
+        let uid = Uid::MAX;
+        assert!(storage.is_free(ix));
+        assert!(storage.allocate(ix, uid, false).is_ok());
+        assert!(storage.allocate(ix, uid, false).is_err());
+        assert!(!storage.is_free(ix));
+        assert_eq!(storage.uid(ix), Some(uid));
+        assert_eq!(storage.uid_unchecked(ix), uid);
+        storage.free(ix, uid);
+        assert!(storage.is_free(ix));
+        assert_eq!(storage.uid(ix), None);
+        let uid = 1;
+        assert!(storage.is_free(ix));
+        assert!(storage.allocate(ix, uid, false).is_ok());
+        assert!(storage.allocate(ix, uid, false).is_err());
+        assert!(!storage.is_free(ix));
+        assert_eq!(storage.uid(ix), Some(uid));
+        assert_eq!(storage.uid_unchecked(ix), uid);
+        storage.free(ix, uid);
+        assert!(storage.is_free(ix));
+        assert_eq!(storage.uid(ix), None);
     }
 }

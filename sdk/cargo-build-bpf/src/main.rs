@@ -23,6 +23,7 @@ struct Config<'a> {
     cargo_args: Option<Vec<&'a str>>,
     bpf_out_dir: Option<PathBuf>,
     bpf_sdk: PathBuf,
+    bpf_tools_version: &'a str,
     dump: bool,
     features: Vec<String>,
     generate_child_script_on_failure: bool,
@@ -44,6 +45,7 @@ impl Default for Config<'_> {
                 .join("sdk")
                 .join("bpf"),
             bpf_out_dir: None,
+            bpf_tools_version: "(unknown)",
             dump: false,
             features: vec![],
             generate_child_script_on_failure: false,
@@ -115,7 +117,6 @@ where
 fn install_if_missing(
     config: &Config,
     package: &str,
-    version: &str,
     url: &str,
     download_file_name: &str,
     target_path: &Path,
@@ -148,7 +149,7 @@ fn install_if_missing(
         fs::create_dir_all(&target_path).map_err(|err| err.to_string())?;
         let mut url = String::from(url);
         url.push('/');
-        url.push_str(version);
+        url.push_str(config.bpf_tools_version);
         url.push('/');
         url.push_str(download_file_name);
         let download_file_path = target_path.join(download_file_name);
@@ -472,17 +473,15 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
         eprintln!("Can't get home directory path: {}", err);
         exit(1);
     }));
-    let version = "v1.21";
     let package = "bpf-tools";
     let target_path = home_dir
         .join(".cache")
         .join("solana")
-        .join(version)
+        .join(config.bpf_tools_version)
         .join(package);
     install_if_missing(
         config,
         package,
-        version,
         "https://github.com/solana-labs/bpf-tools/releases/download",
         bpf_tools_download_file_name,
         &target_path,
@@ -695,9 +694,11 @@ fn main() {
         }
     }
 
+    let bpf_tools_version = "v1.21";
+    let version = format!("{}\nbpf-tools {}", crate_version!(), bpf_tools_version);
     let matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(crate_version!())
+        .version(version.as_str())
         .arg(
             Arg::with_name("bpf_out_dir")
                 .env("BPF_OUT_PATH")
@@ -800,6 +801,7 @@ fn main() {
                     .join(bpf_out_dir)
             }
         }),
+        bpf_tools_version,
         dump: matches.is_present("dump"),
         features: values_t!(matches, "features", String)
             .ok()

@@ -3410,7 +3410,7 @@ pub mod tests {
                     ), // should cause AccountNotFound error
                 ],
             );
-            entries_to_test_shreds(vec![entry], slot, slot.saturating_sub(1), false, 0)
+            entries_to_test_shreds(&[entry], slot, slot.saturating_sub(1), false, 0)
         });
 
         assert_matches!(
@@ -3440,7 +3440,7 @@ pub mod tests {
                     blockhash,
                 )],
             );
-            entries_to_test_shreds(vec![entry], slot, slot.saturating_sub(1), false, 0)
+            entries_to_test_shreds(&[entry], slot, slot.saturating_sub(1), false, 0)
         });
 
         if let Err(BlockstoreProcessorError::InvalidBlock(block_error)) = res {
@@ -3460,7 +3460,7 @@ pub mod tests {
 
             let too_few_hashes_tick = Entry::new(&blockhash, hashes_per_tick - 1, vec![]);
             entries_to_test_shreds(
-                vec![too_few_hashes_tick],
+                &[too_few_hashes_tick],
                 slot,
                 slot.saturating_sub(1),
                 false,
@@ -3484,7 +3484,7 @@ pub mod tests {
             let slot = bank.slot();
             let hashes_per_tick = bank.hashes_per_tick().unwrap_or(0);
             entries_to_test_shreds(
-                entry::create_ticks(bank.ticks_per_slot() + 1, hashes_per_tick, blockhash),
+                &entry::create_ticks(bank.ticks_per_slot() + 1, hashes_per_tick, blockhash),
                 slot,
                 slot.saturating_sub(1),
                 false,
@@ -3504,7 +3504,7 @@ pub mod tests {
             let slot = bank.slot();
             let hashes_per_tick = bank.hashes_per_tick().unwrap_or(0);
             entries_to_test_shreds(
-                entry::create_ticks(bank.ticks_per_slot() - 1, hashes_per_tick, blockhash),
+                &entry::create_ticks(bank.ticks_per_slot() - 1, hashes_per_tick, blockhash),
                 slot,
                 slot.saturating_sub(1),
                 true,
@@ -3526,7 +3526,7 @@ pub mod tests {
             let slot = bank.slot();
             let hashes_per_tick = bank.hashes_per_tick().unwrap_or(0);
             entries_to_test_shreds(
-                entry::create_ticks(bank.ticks_per_slot(), hashes_per_tick, blockhash),
+                &entry::create_ticks(bank.ticks_per_slot(), hashes_per_tick, blockhash),
                 slot,
                 slot.saturating_sub(1),
                 false,
@@ -3554,7 +3554,7 @@ pub mod tests {
             let tx = system_transaction::transfer(funded_keypair, &keypair.pubkey(), 2, blockhash);
             let trailing_entry = entry::next_entry(&last_entry_hash, 1, vec![tx]);
             entries.push(trailing_entry);
-            entries_to_test_shreds(entries, slot, slot.saturating_sub(1), true, 0)
+            entries_to_test_shreds(&entries, slot, slot.saturating_sub(1), true, 0)
         });
 
         if let Err(BlockstoreProcessorError::InvalidBlock(block_error)) = res {
