@@ -675,7 +675,7 @@ pub(crate) mod tests {
         rand::{seq::SliceRandom, thread_rng, SeedableRng},
         rand_chacha::ChaChaRng,
         rayon::ThreadPoolBuilder,
-        solana_perf::test_tx::test_tx,
+        solana_perf::test_tx::new_test_vote_tx,
         solana_sdk::{
             hash::{hash, HASH_BYTES},
             packet::PACKET_DATA_SIZE,
@@ -1623,6 +1623,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_process_pull_response() {
+        let mut rng = rand::thread_rng();
         let node_crds = RwLock::<Crds>::default();
         let node = CrdsGossipPull::default();
 
@@ -1678,8 +1679,8 @@ pub(crate) mod tests {
         );
 
         // construct something that's not a contact info
-        let peer_vote =
-            CrdsValue::new_unsigned(CrdsData::Vote(0, Vote::new(peer_pubkey, test_tx(), 0)));
+        let peer_vote = Vote::new(peer_pubkey, new_test_vote_tx(&mut rng), 0).unwrap();
+        let peer_vote = CrdsValue::new_unsigned(CrdsData::Vote(0, peer_vote));
         // check that older CrdsValues (non-ContactInfos) infos pass even if are too old,
         // but a recent contact info (inserted above) exists
         assert_eq!(
