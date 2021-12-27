@@ -270,7 +270,7 @@ impl Banks for BanksServer {
             units_consumed,
         } = self
             .bank(commitment)
-            .simulate_transaction(sanitized_transaction)
+            .simulate_transaction_unchecked(sanitized_transaction)
         {
             return BanksTransactionResult {
                 result: Some(Err(err)),
