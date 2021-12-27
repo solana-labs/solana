@@ -1,8 +1,8 @@
 use {
     crate::{
-        ic_logger_msg, ic_msg, instruction_recorder::InstructionRecorder,
-        log_collector::LogCollector, native_loader::NativeLoader, pre_account::PreAccount,
-        timings::ExecuteDetailsTimings,
+        accounts_data_meter::AccountsDataMeter, ic_logger_msg, ic_msg,
+        instruction_recorder::InstructionRecorder, log_collector::LogCollector,
+        native_loader::NativeLoader, pre_account::PreAccount, timings::ExecuteDetailsTimings,
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
@@ -119,55 +119,6 @@ impl ComputeMeter {
     }
 }
 
-/// Meter and track the amount of available accounts data space
-#[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
-pub struct AccountsDataMeter {
-    /// The maximum amount of accounts data space that can be used (in bytes)
-    maximum: u64,
-    /// The current amount of accounts data space used (in bytes)
-    current: u64,
-}
-impl AccountsDataMeter {
-    /// Make a new AccountsDataMeter, wrapped in an Rc & RefCell
-    pub fn new_ref(current_accounts_data_len: u64) -> Rc<RefCell<Self>> {
-        let accounts_data_meter = Self {
-            maximum: MAX_ACCOUNTS_DATA_LEN,
-            current: current_accounts_data_len,
-        };
-        debug_assert!(accounts_data_meter.current <= accounts_data_meter.maximum);
-        Rc::new(RefCell::new(accounts_data_meter))
-    }
-    /// Consume the AccountsDataMeter and return the final (i.e. current) accounts data len
-    pub fn finalize(self) -> u64 {
-        self.current
-    }
-    /// Get the remaining amount of accounts data space
-    pub fn remaining(&self) -> u64 {
-        self.maximum.saturating_sub(self.current)
-    }
-    /// Consume accounts data space.  If `amount` is positive, we are *increasing* the amount of
-    /// accounts data space used.  If `amount` is negative, we are *decreasing* the amount of
-    /// accounts data space used.
-    pub fn consume(&mut self, amount: i64) -> Result<(), InstructionError> {
-        if amount == 0 {
-            // nothing to do here; lets us skip doing unnecessary work in the 'else' case
-            return Ok(());
-        }
-
-        if amount.is_positive() {
-            let amount = amount as u64;
-            if amount > self.remaining() {
-                return Err(InstructionError::AccountsDataBudgetExceeded);
-            }
-            self.current = self.current.saturating_add(amount);
-        } else {
-            let amount = amount.abs() as u64;
-            self.current = self.current.saturating_sub(amount);
-        }
-        Ok(())
-    }
-}
-
 pub struct StackFrame<'a> {
     pub number_of_program_accounts: usize,
     pub keyed_accounts: Vec<KeyedAccount<'a>>,
@@ -205,7 +156,7 @@ pub struct InvokeContext<'a> {
     compute_budget: ComputeBudget,
     current_compute_budget: ComputeBudget,
     compute_meter: Rc<RefCell<ComputeMeter>>,
-    accounts_data_meter: Rc<RefCell<AccountsDataMeter>>,
+    accounts_data_meter: AccountsDataMeter,
     executors: Rc<RefCell<Executors>>,
     pub instruction_recorder: Option<Rc<RefCell<InstructionRecorder>>>,
     pub feature_set: Arc<FeatureSet>,
@@ -242,7 +193,7 @@ impl<'a> InvokeContext<'a> {
             current_compute_budget: compute_budget,
             compute_budget,
             compute_meter: ComputeMeter::new_ref(compute_budget.max_units),
-            accounts_data_meter: AccountsDataMeter::new_ref(current_accounts_data_len),
+            accounts_data_meter: AccountsDataMeter::new(current_accounts_data_len),
             executors,
             instruction_recorder,
             feature_set,
@@ -897,8 +848,8 @@ impl<'a> InvokeContext<'a> {
     }
 
     /// Get this invocation's AccountsDataMeter
-    pub fn get_accounts_data_meter(&self) -> Rc<RefCell<AccountsDataMeter>> {
-        Rc::clone(&self.accounts_data_meter)
+    pub fn get_accounts_data_meter(&self) -> &AccountsDataMeter {
+        &self.accounts_data_meter
     }
 
     /// Loaders may need to do work in order to execute a program. Cache

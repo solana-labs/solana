@@ -142,7 +142,7 @@ impl MessageProcessor {
             timings.accumulate(&invoke_context.timings);
         }
         Ok(ProcessedMessageInfo {
-            accounts_data_len: invoke_context.get_accounts_data_meter().take().finalize(),
+            accounts_data_len: invoke_context.get_accounts_data_meter().current(),
         })
     }
 }
