@@ -31,7 +31,7 @@ use {
     solana_ledger::{
         ancestor_iterator::AncestorIterator,
         blockstore::{Blockstore, PurgeType},
-        blockstore_db::AccessType,
+        blockstore_db::{AccessType, BlockstoreOptions},
         leader_schedule::{FixedSchedule, LeaderSchedule},
     },
     solana_local_cluster::{
@@ -3043,10 +3043,17 @@ fn test_validator_saves_tower() {
 }
 
 fn open_blockstore(ledger_path: &Path) -> Blockstore {
-    Blockstore::open_with_access_type(ledger_path, AccessType::TryPrimaryThenSecondary, None, true)
-        .unwrap_or_else(|e| {
-            panic!("Failed to open ledger at {:?}, err: {}", ledger_path, e);
-        })
+    Blockstore::open_with_access_type(
+        ledger_path,
+        BlockstoreOptions {
+            access_type: AccessType::TryPrimaryThenSecondary,
+            recovery_mode: None,
+            enforce_ulimit_nofile: true,
+        },
+    )
+    .unwrap_or_else(|e| {
+        panic!("Failed to open ledger at {:?}, err: {}", ledger_path, e);
+    })
 }
 
 fn purge_slots(blockstore: &Blockstore, start_slot: Slot, slot_count: Slot) {
@@ -3402,9 +3409,11 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
             a_votes.push(last_vote);
             let blockstore = Blockstore::open_with_access_type(
                 &val_a_ledger_path,
-                AccessType::TryPrimaryThenSecondary,
-                None,
-                true,
+                BlockstoreOptions {
+                    access_type: AccessType::TryPrimaryThenSecondary,
+                    recovery_mode: None,
+                    enforce_ulimit_nofile: true,
+                },
             )
             .unwrap();
             let mut ancestors = AncestorIterator::new(last_vote, &blockstore);
