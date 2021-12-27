@@ -4251,13 +4251,8 @@ pub fn create_test_transactions_and_populate_blockstore(
     let entry_3 = solana_entry::entry::next_entry(&entry_2.hash, 1, vec![fail_tx]);
     let entries = vec![entry_1, entry_2, entry_3];
 
-    let shreds = solana_ledger::blockstore::entries_to_test_shreds(
-        entries.clone(),
-        slot,
-        previous_slot,
-        true,
-        0,
-    );
+    let shreds =
+        solana_ledger::blockstore::entries_to_test_shreds(&entries, slot, previous_slot, true, 0);
     blockstore.insert_shreds(shreds, None, false).unwrap();
     blockstore.set_roots(std::iter::once(&slot)).unwrap();
 

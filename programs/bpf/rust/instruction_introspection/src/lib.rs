@@ -54,7 +54,7 @@ fn process_instruction(
                 &[instruction_data[0], instruction_data[1], 1],
                 vec![AccountMeta::new_readonly(instructions::id(), false)],
             ),
-            accounts,
+            &[instructions_account.clone()],
         )?;
     }
 

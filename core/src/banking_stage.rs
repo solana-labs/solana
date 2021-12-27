@@ -2564,7 +2564,7 @@ mod tests {
 
             poh_recorder.lock().unwrap().set_bank(&bank);
 
-            let shreds = entries_to_test_shreds(entries, bank.slot(), 0, true, 0);
+            let shreds = entries_to_test_shreds(&entries, bank.slot(), 0, true, 0);
             blockstore.insert_shreds(shreds, None, false).unwrap();
             blockstore.set_roots(std::iter::once(&bank.slot())).unwrap();
 

@@ -37,7 +37,7 @@
 use solana_sdk::recent_blockhashes_account;
 use {
     crate::{
-        accounts::{AccountAddressFilter, Accounts, TransactionAccounts, TransactionLoadResult},
+        accounts::{AccountAddressFilter, Accounts, TransactionLoadResult},
         accounts_db::{
             AccountShrinkThreshold, AccountsDbConfig, ErrorCounters, SnapshotStorages,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
@@ -74,10 +74,7 @@ use {
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
     solana_program_runtime::{
         instruction_recorder::InstructionRecorder,
-        invoke_context::{
-            BuiltinProgram, Executor, Executors, ProcessInstructionWithContext,
-            TransactionAccountRefCells,
-        },
+        invoke_context::{BuiltinProgram, Executor, Executors, ProcessInstructionWithContext},
         log_collector::LogCollector,
         timings::ExecuteDetailsTimings,
     },
@@ -127,6 +124,7 @@ use {
             Result, SanitizedTransaction, Transaction, TransactionError,
             TransactionVerificationMode, VersionedTransaction,
         },
+        transaction_context::{TransactionAccount, TransactionContext},
     },
     solana_stake_program::stake_state::{
         self, InflationPointCalculationEvent, PointValue, StakeState,
@@ -515,7 +513,7 @@ pub struct TransactionResults {
 pub struct TransactionSimulationResult {
     pub result: Result<()>,
     pub logs: TransactionLogMessages,
-    pub post_simulation_accounts: Vec<(Pubkey, AccountSharedData)>,
+    pub post_simulation_accounts: Vec<TransactionAccount>,
     pub units_consumed: u64,
 }
 pub struct TransactionBalancesSet {
@@ -654,7 +652,7 @@ impl NonceFull {
     pub fn from_partial(
         partial: NoncePartial,
         message: &SanitizedMessage,
-        accounts: &[(Pubkey, AccountSharedData)],
+        accounts: &[TransactionAccount],
         rent_debits: &RentDebits,
     ) -> Result<Self> {
         let fee_payer = (0..message.account_keys_len()).find_map(|i| {
@@ -3287,7 +3285,7 @@ impl Bank {
     pub fn check_transaction_for_nonce(
         &self,
         tx: &SanitizedTransaction,
-    ) -> Option<(Pubkey, AccountSharedData)> {
+    ) -> Option<TransactionAccount> {
         tx.get_durable_nonce(self.feature_set.is_active(&nonce_must_be_writable::id()))
             .and_then(|nonce_address| {
                 self.get_account_with_fixed_root(nonce_address)
@@ -3404,31 +3402,11 @@ impl Bank {
         }
     }
 
-    /// Converts Accounts into RefCell<AccountSharedData>, this involves moving
-    /// ownership by draining the source
-    fn accounts_to_refcells(accounts: &mut TransactionAccounts) -> TransactionAccountRefCells {
-        accounts
-            .drain(..)
-            .map(|(pubkey, account)| (pubkey, RefCell::new(account)))
-            .collect()
-    }
-
-    /// Converts back from RefCell<AccountSharedData> to AccountSharedData, this involves moving
-    /// ownership by draining the sources
-    fn refcells_to_accounts(
-        accounts: &mut TransactionAccounts,
-        mut account_refcells: TransactionAccountRefCells,
-    ) {
-        for (pubkey, account_refcell) in account_refcells.drain(..) {
-            accounts.push((pubkey, account_refcell.into_inner()))
-        }
-    }
-
     /// Get any cached executors needed by the transaction
     fn get_executors(
         &self,
         message: &SanitizedMessage,
-        accounts: &[(Pubkey, AccountSharedData)],
+        accounts: &[TransactionAccount],
         program_indices: &[Vec<usize>],
     ) -> Rc<RefCell<Executors>> {
         let mut num_executors = message.account_keys_len();
@@ -3573,14 +3551,17 @@ impl Bank {
                             &loaded_transaction.program_indices,
                         );
 
-                        let account_refcells =
-                            Self::accounts_to_refcells(&mut loaded_transaction.accounts);
+                        let mut transaction_accounts = Vec::new();
+                        std::mem::swap(&mut loaded_transaction.accounts, &mut transaction_accounts);
+                        let transaction_context = TransactionContext::new(
+                            transaction_accounts,
+                            compute_budget.max_invoke_depth,
+                        );
 
-                        let instruction_recorders = if enable_cpi_recording {
-                            let ix_count = tx.message().instructions().len();
-                            let mut recorders = Vec::with_capacity(ix_count);
-                            recorders.resize_with(ix_count, InstructionRecorder::default);
-                            Some(recorders)
+                        let instruction_recorder = if enable_cpi_recording {
+                            Some(InstructionRecorder::new_ref(
+                                tx.message().instructions().len(),
+                            ))
                         } else {
                             None
                         };
@@ -3599,11 +3580,11 @@ impl Bank {
                                 &self.builtin_programs.vec,
                                 legacy_message,
                                 &loaded_transaction.program_indices,
-                                &account_refcells,
+                                &transaction_context,
                                 self.rent_collector.rent,
                                 log_collector.clone(),
                                 executors.clone(),
-                                instruction_recorders.as_deref(),
+                                instruction_recorder.clone(),
                                 feature_set,
                                 compute_budget,
                                 &mut timings.details,
@@ -3628,19 +3609,17 @@ impl Bank {
                                     .ok()
                             });
                         transaction_log_messages.push(log_messages);
-                        let inner_instruction_list: Option<InnerInstructionsList> =
-                            instruction_recorders.and_then(|instruction_recorders| {
-                                instruction_recorders
-                                    .into_iter()
-                                    .map(|r| r.compile_instructions(tx.message()))
-                                    .collect()
-                            });
-                        inner_instructions.push(inner_instruction_list);
-
-                        Self::refcells_to_accounts(
-                            &mut loaded_transaction.accounts,
-                            account_refcells,
+                        inner_instructions.push(
+                            instruction_recorder
+                                .and_then(|instruction_recorder| {
+                                    Rc::try_unwrap(instruction_recorder).ok()
+                                })
+                                .map(|instruction_recorder| {
+                                    instruction_recorder.into_inner().deconstruct()
+                                }),
                         );
+
+                        loaded_transaction.accounts = transaction_context.deconstruct();
 
                         if process_result.is_ok() {
                             self.update_executors(executors);
@@ -4993,7 +4972,7 @@ impl Bank {
         &self,
         program_id: &Pubkey,
         config: &ScanConfig,
-    ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
+    ) -> ScanResult<Vec<TransactionAccount>> {
         self.rc
             .accounts
             .load_by_program(&self.ancestors, self.bank_id, program_id, config)
@@ -5004,7 +4983,7 @@ impl Bank {
         program_id: &Pubkey,
         filter: F,
         config: &ScanConfig,
-    ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
+    ) -> ScanResult<Vec<TransactionAccount>> {
         self.rc.accounts.load_by_program_with_filter(
             &self.ancestors,
             self.bank_id,
@@ -5020,7 +4999,7 @@ impl Bank {
         filter: F,
         config: &ScanConfig,
         byte_limit_for_scan: Option<usize>,
-    ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
+    ) -> ScanResult<Vec<TransactionAccount>> {
         self.rc.accounts.load_by_index_key_with_filter(
             &self.ancestors,
             self.bank_id,
@@ -5044,7 +5023,7 @@ impl Bank {
     pub fn get_program_accounts_modified_since_parent(
         &self,
         program_id: &Pubkey,
-    ) -> Vec<(Pubkey, AccountSharedData)> {
+    ) -> Vec<TransactionAccount> {
         self.rc
             .accounts
             .load_by_program_slot(self.slot(), Some(program_id))
@@ -5060,7 +5039,7 @@ impl Bank {
             .get_logs_for_address(address)
     }
 
-    pub fn get_all_accounts_modified_since_parent(&self) -> Vec<(Pubkey, AccountSharedData)> {
+    pub fn get_all_accounts_modified_since_parent(&self) -> Vec<TransactionAccount> {
         self.rc.accounts.load_by_program_slot(self.slot(), None)
     }
 
@@ -6722,8 +6701,7 @@ pub(crate) mod tests {
         mock_program_id: Pubkey,
         generic_rent_due_for_system_account: u64,
     ) {
-        let mut account_pairs: Vec<(Pubkey, AccountSharedData)> =
-            Vec::with_capacity(keypairs.len() - 1);
+        let mut account_pairs: Vec<TransactionAccount> = Vec::with_capacity(keypairs.len() - 1);
         account_pairs.push((
             keypairs[0].pubkey(),
             AccountSharedData::new(
