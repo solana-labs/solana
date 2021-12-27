@@ -8,6 +8,7 @@ mod tests {
         solana_core::ledger_cleanup_service::LedgerCleanupService,
         solana_ledger::{
             blockstore::{make_many_slot_shreds, Blockstore},
+            blockstore_db::BlockstoreOptions,
             get_tmp_ledger_path,
         },
         solana_measure::measure::Measure,
@@ -283,7 +284,8 @@ mod tests {
         solana_logger::setup_with("error,ledger_cleanup::tests=info");
 
         let ledger_path = get_tmp_ledger_path!();
-        let mut blockstore = Blockstore::open(&ledger_path).unwrap();
+        let mut blockstore =
+            Blockstore::open_with_options(&ledger_path, BlockstoreOptions::default()).unwrap();
         let config = get_benchmark_config();
         if config.no_compaction {
             blockstore.set_no_compaction(true);

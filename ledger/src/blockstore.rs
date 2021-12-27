@@ -344,10 +344,7 @@ impl Blockstore {
         Self::do_open(ledger_path, BlockstoreOptions::default())
     }
 
-    pub fn open_with_access_type(
-        ledger_path: &Path,
-        options: BlockstoreOptions,
-    ) -> Result<Blockstore> {
+    pub fn open_with_options(ledger_path: &Path, options: BlockstoreOptions) -> Result<Blockstore> {
         Self::do_open(ledger_path, options)
     }
 
@@ -457,7 +454,7 @@ impl Blockstore {
         ledger_path: &Path,
         options: BlockstoreOptions,
     ) -> Result<BlockstoreSignals> {
-        let mut blockstore = Self::open_with_access_type(ledger_path, options)?;
+        let mut blockstore = Self::open_with_options(ledger_path, options)?;
         let (ledger_signal_sender, ledger_signal_receiver) = sync_channel(1);
         let (completed_slots_sender, completed_slots_receiver) =
             sync_channel(MAX_COMPLETED_SLOTS_IN_CHANNEL);
@@ -3755,7 +3752,7 @@ pub fn create_new_ledger(
     genesis_config.write(ledger_path)?;
 
     // Fill slot 0 with ticks that link back to the genesis_config to bootstrap the ledger.
-    let blockstore = Blockstore::open_with_access_type(
+    let blockstore = Blockstore::open_with_options(
         ledger_path,
         BlockstoreOptions {
             access_type,

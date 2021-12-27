@@ -175,7 +175,7 @@ fn start_client_rpc_services(
         block_commitment_cache,
     } = bank_info;
     let blockstore = Arc::new(
-        Blockstore::open_with_access_type(
+        Blockstore::open_with_options(
             &replica_config.ledger_path,
             BlockstoreOptions {
                 enforce_ulimit_nofile: false,
