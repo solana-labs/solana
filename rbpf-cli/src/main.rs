@@ -16,6 +16,7 @@ use {
     },
     solana_sdk::{
         account::AccountSharedData, bpf_loader, instruction::AccountMeta, pubkey::Pubkey,
+        transaction_context::TransactionContext,
     },
     std::{
         fs::File,
@@ -210,7 +211,8 @@ native machine code before execting it in the virtual machine.",
     };
     let preparation = prepare_mock_invoke_context(transaction_accounts, instruction_accounts);
     let program_indices = [0, 1];
-    let mut invoke_context = InvokeContext::new_mock(&preparation.transaction_accounts, &[]);
+    let transaction_context = TransactionContext::new(preparation.transaction_accounts, 1);
+    let mut invoke_context = InvokeContext::new_mock(&transaction_context, &[]);
     invoke_context
         .push(&preparation.instruction_accounts, &program_indices)
         .unwrap();

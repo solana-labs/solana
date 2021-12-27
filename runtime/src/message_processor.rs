@@ -3,9 +3,7 @@ use {
     solana_measure::measure::Measure,
     solana_program_runtime::{
         instruction_recorder::InstructionRecorder,
-        invoke_context::{
-            BuiltinProgram, Executors, InstructionAccount, InvokeContext, TransactionAccountRefCell,
-        },
+        invoke_context::{BuiltinProgram, Executors, InvokeContext},
         log_collector::LogCollector,
         timings::ExecuteDetailsTimings,
     },
@@ -20,6 +18,7 @@ use {
         rent::Rent,
         sysvar::instructions,
         transaction::TransactionError,
+        transaction_context::{InstructionAccount, TransactionContext},
     },
     std::{cell::RefCell, rc::Rc, sync::Arc},
 };
@@ -54,7 +53,7 @@ impl MessageProcessor {
         builtin_programs: &[BuiltinProgram],
         message: &Message,
         program_indices: &[Vec<usize>],
-        accounts: &[TransactionAccountRefCell],
+        transaction_context: &TransactionContext,
         rent: Rent,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         executors: Rc<RefCell<Executors>>,
@@ -67,8 +66,8 @@ impl MessageProcessor {
         lamports_per_signature: u64,
     ) -> Result<ProcessedMessageInfo, TransactionError> {
         let mut invoke_context = InvokeContext::new(
+            transaction_context,
             rent,
-            accounts,
             builtin_programs,
             sysvars,
             log_collector,
@@ -99,15 +98,18 @@ impl MessageProcessor {
 
             // Fixup the special instructions key if present
             // before the account pre-values are taken care of
-            for (pubkey, account) in accounts.iter().take(message.account_keys.len()) {
-                if instructions::check_id(pubkey) {
-                    let mut mut_account_ref = account.borrow_mut();
-                    instructions::store_current_index(
-                        mut_account_ref.data_as_mut_slice(),
-                        instruction_index as u16,
-                    );
-                    break;
-                }
+            if let Some(account_index) = invoke_context
+                .transaction_context
+                .find_index_of_account(&instructions::id())
+            {
+                let mut mut_account_ref = invoke_context
+                    .transaction_context
+                    .get_account_at_index(account_index)
+                    .borrow_mut();
+                instructions::store_current_index(
+                    mut_account_ref.data_as_mut_slice(),
+                    instruction_index as u16,
+                );
             }
 
             let instruction_accounts = instruction
@@ -221,39 +223,38 @@ mod tests {
         let accounts = vec![
             (
                 solana_sdk::pubkey::new_rand(),
-                RefCell::new(AccountSharedData::new(100, 1, &mock_system_program_id)),
+                AccountSharedData::new(100, 1, &mock_system_program_id),
             ),
             (
                 solana_sdk::pubkey::new_rand(),
-                RefCell::new(AccountSharedData::new(0, 1, &mock_system_program_id)),
+                AccountSharedData::new(0, 1, &mock_system_program_id),
             ),
             (
                 mock_system_program_id,
-                RefCell::new(create_loadable_account_for_test("mock_system_program")),
+                create_loadable_account_for_test("mock_system_program"),
             ),
         ];
+        let transaction_context = TransactionContext::new(accounts, 1);
         let program_indices = vec![vec![2]];
-
         let executors = Rc::new(RefCell::new(Executors::default()));
-
         let account_metas = vec![
-            AccountMeta::new(accounts[0].0, true),
-            AccountMeta::new_readonly(accounts[1].0, false),
+            AccountMeta::new(*transaction_context.get_key_of_account_at_index(0), true),
+            AccountMeta::new_readonly(*transaction_context.get_key_of_account_at_index(1), false),
         ];
+
         let message = Message::new(
             &[Instruction::new_with_bincode(
                 mock_system_program_id,
                 &MockSystemInstruction::Correct,
                 account_metas.clone(),
             )],
-            Some(&accounts[0].0),
+            Some(transaction_context.get_key_of_account_at_index(0)),
         );
-
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
             &program_indices,
-            &accounts,
+            &transaction_context,
             rent_collector.rent,
             None,
             executors.clone(),
@@ -266,8 +267,20 @@ mod tests {
             0,
         );
         assert!(result.is_ok());
-        assert_eq!(accounts[0].1.borrow().lamports(), 100);
-        assert_eq!(accounts[1].1.borrow().lamports(), 0);
+        assert_eq!(
+            transaction_context
+                .get_account_at_index(0)
+                .borrow()
+                .lamports(),
+            100
+        );
+        assert_eq!(
+            transaction_context
+                .get_account_at_index(1)
+                .borrow()
+                .lamports(),
+            0
+        );
 
         let message = Message::new(
             &[Instruction::new_with_bincode(
@@ -275,14 +288,13 @@ mod tests {
                 &MockSystemInstruction::AttemptCredit { lamports: 50 },
                 account_metas.clone(),
             )],
-            Some(&accounts[0].0),
+            Some(transaction_context.get_key_of_account_at_index(0)),
         );
-
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
             &program_indices,
-            &accounts,
+            &transaction_context,
             rent_collector.rent,
             None,
             executors.clone(),
@@ -308,14 +320,13 @@ mod tests {
                 &MockSystemInstruction::AttemptDataChange { data: 50 },
                 account_metas,
             )],
-            Some(&accounts[0].0),
+            Some(transaction_context.get_key_of_account_at_index(0)),
         );
-
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
             &program_indices,
-            &accounts,
+            &transaction_context,
             rent_collector.rent,
             None,
             executors,
@@ -425,25 +436,24 @@ mod tests {
         let accounts = vec![
             (
                 solana_sdk::pubkey::new_rand(),
-                RefCell::new(AccountSharedData::new(100, 1, &mock_program_id)),
+                AccountSharedData::new(100, 1, &mock_program_id),
             ),
             (
                 solana_sdk::pubkey::new_rand(),
-                RefCell::new(AccountSharedData::new(0, 1, &mock_program_id)),
+                AccountSharedData::new(0, 1, &mock_program_id),
             ),
             (
                 mock_program_id,
-                RefCell::new(create_loadable_account_for_test("mock_system_program")),
+                create_loadable_account_for_test("mock_system_program"),
             ),
         ];
+        let transaction_context = TransactionContext::new(accounts, 1);
         let program_indices = vec![vec![2]];
-
         let executors = Rc::new(RefCell::new(Executors::default()));
-
         let account_metas = vec![
-            AccountMeta::new(accounts[0].0, true),
-            AccountMeta::new(accounts[1].0, false),
-            AccountMeta::new(accounts[0].0, false),
+            AccountMeta::new(*transaction_context.get_key_of_account_at_index(0), true),
+            AccountMeta::new(*transaction_context.get_key_of_account_at_index(1), false),
+            AccountMeta::new(*transaction_context.get_key_of_account_at_index(0), false),
         ];
 
         // Try to borrow mut the same account
@@ -453,13 +463,13 @@ mod tests {
                 &MockSystemInstruction::BorrowFail,
                 account_metas.clone(),
             )],
-            Some(&accounts[0].0),
+            Some(transaction_context.get_key_of_account_at_index(0)),
         );
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
             &program_indices,
-            &accounts,
+            &transaction_context,
             rent_collector.rent,
             None,
             executors.clone(),
@@ -486,13 +496,13 @@ mod tests {
                 &MockSystemInstruction::MultiBorrowMut,
                 account_metas.clone(),
             )],
-            Some(&accounts[0].0),
+            Some(transaction_context.get_key_of_account_at_index(0)),
         );
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
             &program_indices,
-            &accounts,
+            &transaction_context,
             rent_collector.rent,
             None,
             executors.clone(),
@@ -516,13 +526,13 @@ mod tests {
                 },
                 account_metas,
             )],
-            Some(&accounts[0].0),
+            Some(transaction_context.get_key_of_account_at_index(0)),
         );
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
             &program_indices,
-            &accounts,
+            &transaction_context,
             rent_collector.rent,
             None,
             executors,
@@ -535,9 +545,24 @@ mod tests {
             0,
         );
         assert!(result.is_ok());
-        assert_eq!(accounts[0].1.borrow().lamports(), 80);
-        assert_eq!(accounts[1].1.borrow().lamports(), 20);
-        assert_eq!(accounts[0].1.borrow().data(), &vec![42]);
+        assert_eq!(
+            transaction_context
+                .get_account_at_index(0)
+                .borrow()
+                .lamports(),
+            80
+        );
+        assert_eq!(
+            transaction_context
+                .get_account_at_index(1)
+                .borrow()
+                .lamports(),
+            20
+        );
+        assert_eq!(
+            transaction_context.get_account_at_index(0).borrow().data(),
+            &vec![42]
+        );
     }
 
     #[test]
@@ -560,9 +585,10 @@ mod tests {
         let mut mock_program_account = AccountSharedData::new(1, 0, &native_loader::id());
         mock_program_account.set_executable(true);
         let accounts = vec![
-            (secp256k1_program::id(), RefCell::new(secp256k1_account)),
-            (mock_program_id, RefCell::new(mock_program_account)),
+            (secp256k1_program::id(), secp256k1_account),
+            (mock_program_id, mock_program_account),
         ];
+        let transaction_context = TransactionContext::new(accounts, 1);
 
         let message = Message::new(
             &[
@@ -574,12 +600,11 @@ mod tests {
             ],
             None,
         );
-
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
             &[vec![0], vec![1]],
-            &accounts,
+            &transaction_context,
             RentCollector::default().rent,
             None,
             Rc::new(RefCell::new(Executors::default())),

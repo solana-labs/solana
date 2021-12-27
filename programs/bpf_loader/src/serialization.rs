@@ -323,6 +323,7 @@ mod tests {
             bpf_loader,
             entrypoint::deserialize,
             instruction::AccountMeta,
+            transaction_context::TransactionContext,
         },
         std::{
             cell::RefCell,
@@ -452,7 +453,8 @@ mod tests {
         let program_indices = [0];
         let preparation =
             prepare_mock_invoke_context(transaction_accounts.clone(), instruction_accounts);
-        let mut invoke_context = InvokeContext::new_mock(&preparation.transaction_accounts, &[]);
+        let transaction_context = TransactionContext::new(preparation.transaction_accounts, 1);
+        let mut invoke_context = InvokeContext::new_mock(&transaction_context, &[]);
         invoke_context
             .push(&preparation.instruction_accounts, &program_indices)
             .unwrap();
