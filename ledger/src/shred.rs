@@ -1519,13 +1519,7 @@ pub mod tests {
         // Test5: Try recovery/reassembly with non zero index full slot with 3 missing data shreds
         // and 2 missing coding shreds. Hint: should work
         let serialized_entries = bincode::serialize(&entries).unwrap();
-<<<<<<< HEAD
         let (data_shreds, coding_shreds, _) = shredder.entries_to_shreds(&entries, true, 25);
-        let num_coding_shreds = coding_shreds.len();
-=======
-        let (data_shreds, coding_shreds, _) =
-            shredder.entries_to_shreds(&keypair, &entries, true, 25);
->>>>>>> 5fb0ab9d0 (removes redundant args from Shredder::try_recovery (#21226))
         // We should have 10 shreds now
         assert_eq!(data_shreds.len(), num_data_shreds);
 
@@ -1565,7 +1559,7 @@ pub mod tests {
         assert_eq!(serialized_entries[..], result[..serialized_entries.len()]);
 
         // Test6: Try recovery/reassembly with incorrect slot. Hint: does not recover any shreds
-        let recovered_data = Shredder::try_recovery(shred_info.clone()).unwrap();
+        let recovered_data = Shredder::try_recovery(shred_info).unwrap();
         assert!(recovered_data.is_empty());
     }
 
