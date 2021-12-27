@@ -7,7 +7,7 @@ use solana_sdk::instruction::InstructionError;
 /// 128 GB was chosen because it is the RAM amount listed under Hardware Recommendations on
 /// [Validator Requirements](https://docs.solana.com/running-validator/validator-reqs), and
 /// validators often put the ledger on a RAM disk (i.e. tmpfs).
-pub const MAX_ACCOUNTS_DATA_LEN: u64 = 128_000_000_000; // 128 GB
+pub const MAX_ACCOUNTS_DATA_LEN: u64 = 128_000_000_000;
 
 /// Meter and track the amount of available accounts data space
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
@@ -141,5 +141,30 @@ mod tests {
         assert!(result.is_ok());
         let remaining_after = accounts_data_meter.remaining();
         assert_eq!(remaining_after, remaining_before + amount.abs() as u64);
+    }
+
+    #[test]
+    fn test_consume_too_much() {
+        let current_accounts_data_len = 0;
+        let mut accounts_data_meter = AccountsDataMeter::new(current_accounts_data_len);
+
+        // Test: consuming more than what's available (1) returns an error, (2) does not consume
+        let remaining = accounts_data_meter.remaining();
+        let result = accounts_data_meter.consume(remaining as i64 + 1);
+        assert!(result.is_err());
+        assert_eq!(accounts_data_meter.remaining(), remaining);
+    }
+
+    #[test]
+    fn test_consume_zero() {
+        // Pre-condition: set up the accounts data meter such that there is no remaining space
+        let current_accounts_data_len = 1234;
+        let mut accounts_data_meter = AccountsDataMeter::new(current_accounts_data_len);
+        accounts_data_meter.maximum = current_accounts_data_len;
+        assert_eq!(accounts_data_meter.remaining(), 0);
+
+        // Test: can always consume zero, even if there is no remaining space
+        let result = accounts_data_meter.consume(0);
+        assert!(result.is_ok());
     }
 }
