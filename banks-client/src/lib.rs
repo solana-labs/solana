@@ -218,7 +218,7 @@ impl BanksClient {
 
     /// Send a transaction and return any preflight (sanitization or simulation) errors, or return
     /// after the transaction has been rejected or reached the given level of commitment.
-    pub fn process_transaction_with_preflight(
+    pub fn process_transaction_with_preflight_and_commitment(
         &mut self,
         transaction: Transaction,
         commitment: CommitmentLevel,
@@ -250,6 +250,18 @@ impl BanksClient {
                 simulation_details: _,
             } => result.map_err(Into::into),
         })
+    }
+
+    /// Send a transaction and return any preflight (sanitization or simulation) errors, or return
+    /// after the transaction has been finalized or rejected.
+    pub fn process_transaction_with_preflight(
+        &mut self,
+        transaction: Transaction,
+    ) -> impl Future<Output = Result<(), BanksClientError>> + '_ {
+        self.process_transaction_with_preflight_and_commitment(
+            transaction,
+            CommitmentLevel::default(),
+        )
     }
 
     /// Send a transaction and return until the transaction has been finalized or rejected.
