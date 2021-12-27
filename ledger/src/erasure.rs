@@ -42,11 +42,7 @@
 //!
 
 use {
-<<<<<<< HEAD
-    reed_solomon_erasure::{galois_8::Field, ReedSolomon},
-=======
     reed_solomon_erasure::{galois_8::Field, ReconstructShard, ReedSolomon},
->>>>>>> 11a53de0e (rewrites Shredder::try_recovery (#21082))
     serde::{Deserialize, Serialize},
 };
 
