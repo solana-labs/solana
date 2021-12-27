@@ -30,10 +30,10 @@ pub enum BanksClientError {
 
 impl BanksClientError {
     pub fn unwrap(&self) -> TransactionError {
-        if let BanksClientError::TransactionError(err) = self {
-            err.clone()
-        } else {
-            panic!("unexpected transport error")
+        match self {
+            BanksClientError::TransactionError(err)
+            | BanksClientError::SimulationError { err, .. } => err.clone(),
+            _ => panic!("unexpected transport error"),
         }
     }
 }
