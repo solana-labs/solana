@@ -2278,6 +2278,38 @@ describe('Connection', () => {
     expect(feeCalculator.lamportsPerSignature).to.eq(5000);
   });
 
+  it('get fee for message', async () => {
+    const accountFrom = Keypair.generate();
+    const accountTo = Keypair.generate();
+
+    const {blockhash} = await helpers.recentBlockhash({connection});
+
+    const transaction = new Transaction({
+      feePayer: accountFrom.publicKey,
+      recentBlockhash: blockhash,
+    }).add(
+      SystemProgram.transfer({
+        fromPubkey: accountFrom.publicKey,
+        toPubkey: accountTo.publicKey,
+        lamports: 10,
+      }),
+    );
+    const message = transaction.compileMessage();
+
+    await mockRpcResponse({
+      method: 'getFeeForMessage',
+      params: [
+        message.serialize().toString('base64'),
+        {commitment: 'confirmed'},
+      ],
+      value: 5000,
+      withContext: true,
+    });
+
+    const fee = (await connection.getFeeForMessage(message, 'confirmed')).value;
+    expect(fee).to.eq(5000);
+  });
+
   it('get block time', async () => {
     await mockRpcResponse({
       method: 'getBlockTime',
