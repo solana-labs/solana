@@ -2,14 +2,10 @@ use {
     crate::erasure::ErasureConfig,
     serde::{Deserialize, Serialize},
     solana_sdk::{clock::Slot, hash::Hash},
-<<<<<<< HEAD
-    std::{collections::BTreeSet, ops::RangeBounds},
-=======
     std::{
         collections::BTreeSet,
         ops::{Range, RangeBounds},
     },
->>>>>>> 3fc858eb6 (adds methods to obtain data/coding shreds indices from ErasureMeta)
 };
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
