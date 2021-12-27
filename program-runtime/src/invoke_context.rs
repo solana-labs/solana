@@ -23,8 +23,6 @@ use {
     },
     std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, sync::Arc},
 };
-/// The maximum allowed size, in bytes, of the accounts data
-pub const MAX_ACCOUNTS_DATA_LEN: u64 = 128_000_000_000; // 128 GB
 
 pub type TransactionAccountRefCell = (Pubkey, RefCell<AccountSharedData>);
 pub type TransactionAccountRefCells = Vec<TransactionAccountRefCell>;
