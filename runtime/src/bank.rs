@@ -146,7 +146,7 @@ use {
         sync::{
             atomic::{
                 AtomicBool, AtomicU64,
-                Ordering::{AcqRel, Acquire, Relaxed, Release},
+                Ordering::{Acquire, Relaxed, Release},
             },
             Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard,
         },
@@ -238,7 +238,7 @@ impl ExecuteTimings {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "GcfJc94Hb3s7gzF7Uh4YxLSiQf1MvUtMmtU45BvinkVT")]
+#[frozen_abi(digest = "2pPboTQ9ixNuR1hvRt7McJriam5EHfd3vpBWfxnVbmF3")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 // Eager rent collection repeats in cyclic manner.
@@ -1192,8 +1192,7 @@ impl Bank {
         };
 
         let total_accounts_stats = bank.get_total_accounts_stats().unwrap();
-        bank.accounts_data_len
-            .store(total_accounts_stats.data_len as u64, Release);
+        bank.store_accounts_data_len(total_accounts_stats.data_len as u64);
 
         bank
     }
@@ -1441,7 +1440,7 @@ impl Bank {
             freeze_started: AtomicBool::new(false),
             cost_tracker: RwLock::new(CostTracker::default()),
             sysvar_cache: RwLock::new(Vec::new()),
-            accounts_data_len: AtomicU64::new(parent.accounts_data_len.load(Acquire)),
+            accounts_data_len: AtomicU64::new(parent.load_accounts_data_len()),
         };
 
         let mut ancestors = Vec::with_capacity(1 + new.parents().len());
@@ -3591,11 +3590,10 @@ impl Bank {
                                 &*self.sysvar_cache.read().unwrap(),
                                 blockhash,
                                 lamports_per_signature,
+                                self.accounts_data_len.load(Acquire),
                             )
                             .map(|process_result| {
-                                self.update_accounts_data_len(
-                                    process_result.accounts_data_len_delta,
-                                )
+                                self.store_accounts_data_len(process_result.accounts_data_len)
                             });
                         } else {
                             // TODO: support versioned messages
@@ -3752,16 +3750,14 @@ impl Bank {
         )
     }
 
-    /// Update the bank's accounts_data_len field based on the `delta`.
-    fn update_accounts_data_len(&self, delta: i64) {
-        if delta == 0 {
-            return;
-        }
-        if delta > 0 {
-            self.accounts_data_len.fetch_add(delta as u64, AcqRel);
-        } else {
-            self.accounts_data_len.fetch_sub(delta.abs() as u64, AcqRel);
-        }
+    /// Load the accounts data len
+    fn load_accounts_data_len(&self) -> u64 {
+        self.accounts_data_len.load(Acquire)
+    }
+
+    /// Store a new value to the accounts data len
+    fn store_accounts_data_len(&self, accounts_data_len: u64) {
+        self.accounts_data_len.store(accounts_data_len, Release)
     }
 
     /// Calculate fee for `SanitizedMessage`

@@ -1,8 +1,8 @@
 use {
     crate::{
-        ic_logger_msg, ic_msg, instruction_recorder::InstructionRecorder,
-        log_collector::LogCollector, native_loader::NativeLoader, pre_account::PreAccount,
-        timings::ExecuteDetailsTimings,
+        accounts_data_meter::AccountsDataMeter, ic_logger_msg, ic_msg,
+        instruction_recorder::InstructionRecorder, log_collector::LogCollector,
+        native_loader::NativeLoader, pre_account::PreAccount, timings::ExecuteDetailsTimings,
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
@@ -146,6 +146,7 @@ pub struct InvokeContext<'a> {
     compute_budget: ComputeBudget,
     current_compute_budget: ComputeBudget,
     compute_meter: Rc<RefCell<ComputeMeter>>,
+    accounts_data_meter: AccountsDataMeter,
     executors: Rc<RefCell<Executors>>,
     pub instruction_recorder: Option<Rc<RefCell<InstructionRecorder>>>,
     pub feature_set: Arc<FeatureSet>,
@@ -168,6 +169,7 @@ impl<'a> InvokeContext<'a> {
         feature_set: Arc<FeatureSet>,
         blockhash: Hash,
         lamports_per_signature: u64,
+        current_accounts_data_len: u64,
     ) -> Self {
         Self {
             transaction_context,
@@ -181,6 +183,7 @@ impl<'a> InvokeContext<'a> {
             current_compute_budget: compute_budget,
             compute_budget,
             compute_meter: ComputeMeter::new_ref(compute_budget.max_units),
+            accounts_data_meter: AccountsDataMeter::new(current_accounts_data_len),
             executors,
             instruction_recorder,
             feature_set,
@@ -205,6 +208,7 @@ impl<'a> InvokeContext<'a> {
             None,
             Arc::new(FeatureSet::all_enabled()),
             Hash::default(),
+            0,
             0,
         )
     }
@@ -854,6 +858,11 @@ impl<'a> InvokeContext<'a> {
     /// Get this invocation's ComputeMeter
     pub fn get_compute_meter(&self) -> Rc<RefCell<ComputeMeter>> {
         self.compute_meter.clone()
+    }
+
+    /// Get this invocation's AccountsDataMeter
+    pub fn get_accounts_data_meter(&self) -> &AccountsDataMeter {
+        &self.accounts_data_meter
     }
 
     /// Loaders may need to do work in order to execute a program. Cache

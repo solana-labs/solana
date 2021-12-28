@@ -38,8 +38,8 @@ impl ::solana_frozen_abi::abi_example::AbiExample for MessageProcessor {
 /// Resultant information gathered from calling process_message()
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct ProcessedMessageInfo {
-    /// The amount that the accounts data len has changed
-    pub accounts_data_len_delta: i64,
+    /// The new accounts data len
+    pub accounts_data_len: u64,
 }
 
 impl MessageProcessor {
@@ -64,6 +64,7 @@ impl MessageProcessor {
         sysvars: &[(Pubkey, Vec<u8>)],
         blockhash: Hash,
         lamports_per_signature: u64,
+        current_accounts_data_len: u64,
     ) -> Result<ProcessedMessageInfo, TransactionError> {
         let mut invoke_context = InvokeContext::new(
             transaction_context,
@@ -77,6 +78,7 @@ impl MessageProcessor {
             feature_set,
             blockhash,
             lamports_per_signature,
+            current_accounts_data_len,
         );
 
         debug_assert_eq!(program_indices.len(), message.instructions.len());
@@ -141,7 +143,9 @@ impl MessageProcessor {
             );
             timings.accumulate(&invoke_context.timings);
         }
-        Ok(ProcessedMessageInfo::default())
+        Ok(ProcessedMessageInfo {
+            accounts_data_len: invoke_context.get_accounts_data_meter().current(),
+        })
     }
 }
 
@@ -265,6 +269,7 @@ mod tests {
             &[],
             Hash::default(),
             0,
+            0,
         );
         assert!(result.is_ok());
         assert_eq!(
@@ -305,6 +310,7 @@ mod tests {
             &[],
             Hash::default(),
             0,
+            0,
         );
         assert_eq!(
             result,
@@ -336,6 +342,7 @@ mod tests {
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
+            0,
             0,
         );
         assert_eq!(
@@ -480,6 +487,7 @@ mod tests {
             &[],
             Hash::default(),
             0,
+            0,
         );
         assert_eq!(
             result,
@@ -513,6 +521,7 @@ mod tests {
             &[],
             Hash::default(),
             0,
+            0,
         );
         assert!(result.is_ok());
 
@@ -542,6 +551,7 @@ mod tests {
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
+            0,
             0,
         );
         assert!(result.is_ok());
@@ -614,6 +624,7 @@ mod tests {
             &mut ExecuteDetailsTimings::default(),
             &[],
             Hash::default(),
+            0,
             0,
         );
         assert_eq!(
