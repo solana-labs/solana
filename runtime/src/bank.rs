@@ -3134,6 +3134,15 @@ impl Bank {
     ) -> TransactionSimulationResult {
         assert!(self.is_frozen(), "simulation bank must be frozen");
 
+        self.simulate_transaction_unchecked(transaction)
+    }
+
+    /// Run transactions against a bank without committing the results; does not check if the bank
+    /// is frozen, enabling use in single-Bank test frameworks
+    pub fn simulate_transaction_unchecked(
+        &self,
+        transaction: SanitizedTransaction,
+    ) -> TransactionSimulationResult {
         let number_of_accounts = transaction.message().account_keys_len();
         let batch = self.prepare_simulation_batch(transaction);
         let mut timings = ExecuteTimings::default();
