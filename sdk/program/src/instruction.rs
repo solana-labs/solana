@@ -248,6 +248,10 @@ pub enum InstructionError {
     /// Illegal account owner
     #[error("Provided owner is not allowed")]
     IllegalOwner,
+
+    /// Accounts data budget exceeded
+    #[error("Requested account data allocation exceeded the accounts data budget")]
+    AccountsDataBudgetExceeded,
     // Note: For any new error added here an equivalent ProgramError and its
     // conversions must also be added
 }
