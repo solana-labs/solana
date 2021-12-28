@@ -3590,7 +3590,7 @@ impl Bank {
                                 &*self.sysvar_cache.read().unwrap(),
                                 blockhash,
                                 lamports_per_signature,
-                                self.accounts_data_len.load(Acquire),
+                                self.load_accounts_data_len(),
                             )
                             .map(|process_result| {
                                 self.store_accounts_data_len(process_result.accounts_data_len)
