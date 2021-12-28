@@ -10,7 +10,7 @@ use {
     crate::error::BanksClientError,
     borsh::BorshDeserialize,
     futures::{future::join_all, Future, FutureExt, TryFutureExt},
-    solana_banks_interface::{BanksRequest, BanksResponse, BanksTransactionResult},
+    solana_banks_interface::{BanksRequest, BanksResponse, BanksTransactionResultWithSimulation},
     solana_program::{
         clock::Slot, fee_calculator::FeeCalculator, hash::Hash, program_pack::Pack, pubkey::Pubkey,
         rent::Rent, sysvar::Sysvar,
@@ -125,7 +125,8 @@ impl BanksClient {
         ctx: Context,
         transaction: Transaction,
         commitment: CommitmentLevel,
-    ) -> impl Future<Output = Result<BanksTransactionResult, BanksClientError>> + '_ {
+    ) -> impl Future<Output = Result<BanksTransactionResultWithSimulation, BanksClientError>> + '_
+    {
         self.inner
             .process_transaction_with_preflight_and_commitment_and_context(
                 ctx,
@@ -231,13 +232,13 @@ impl BanksClient {
             commitment,
         )
         .map(|result| match result? {
-            BanksTransactionResult {
+            BanksTransactionResultWithSimulation {
                 result: None,
                 simulation_details: _,
             } => Err(BanksClientError::ClientError(
                 "invalid blockhash or fee-payer",
             )),
-            BanksTransactionResult {
+            BanksTransactionResultWithSimulation {
                 result: Some(Err(err)),
                 simulation_details: Some(simulation_details),
             } => Err(BanksClientError::SimulationError {
@@ -245,7 +246,7 @@ impl BanksClient {
                 logs: simulation_details.logs,
                 units_consumed: simulation_details.units_consumed,
             }),
-            BanksTransactionResult {
+            BanksTransactionResultWithSimulation {
                 result: Some(result),
                 simulation_details: _,
             } => result.map_err(Into::into),

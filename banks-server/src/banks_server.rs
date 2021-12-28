@@ -2,8 +2,8 @@ use {
     bincode::{deserialize, serialize},
     futures::{future, prelude::stream::StreamExt},
     solana_banks_interface::{
-        Banks, BanksRequest, BanksResponse, BanksTransactionResult, TransactionConfirmationStatus,
-        TransactionSimulationDetails, TransactionStatus,
+        Banks, BanksRequest, BanksResponse, BanksTransactionResultWithSimulation,
+        TransactionConfirmationStatus, TransactionSimulationDetails, TransactionStatus,
     },
     solana_runtime::{
         bank::{Bank, TransactionSimulationResult},
@@ -252,11 +252,11 @@ impl Banks for BanksServer {
         ctx: Context,
         transaction: Transaction,
         commitment: CommitmentLevel,
-    ) -> BanksTransactionResult {
+    ) -> BanksTransactionResultWithSimulation {
         let sanitized_transaction =
             match SanitizedTransaction::try_from_legacy_transaction(transaction.clone()) {
                 Err(err) => {
-                    return BanksTransactionResult {
+                    return BanksTransactionResultWithSimulation {
                         result: Some(Err(err)),
                         simulation_details: None,
                     };
@@ -272,7 +272,7 @@ impl Banks for BanksServer {
             .bank(commitment)
             .simulate_transaction_unchecked(sanitized_transaction)
         {
-            return BanksTransactionResult {
+            return BanksTransactionResultWithSimulation {
                 result: Some(Err(err)),
                 simulation_details: Some(TransactionSimulationDetails {
                     logs,
@@ -280,7 +280,7 @@ impl Banks for BanksServer {
                 }),
             };
         }
-        BanksTransactionResult {
+        BanksTransactionResultWithSimulation {
             result: self
                 .process_transaction_with_commitment_and_context(ctx, transaction, commitment)
                 .await,

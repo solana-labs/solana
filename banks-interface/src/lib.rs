@@ -38,7 +38,7 @@ pub struct TransactionSimulationDetails {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct BanksTransactionResult {
+pub struct BanksTransactionResultWithSimulation {
     pub result: Option<transaction::Result<()>>,
     pub simulation_details: Option<TransactionSimulationDetails>,
 }
@@ -60,7 +60,7 @@ pub trait Banks {
     async fn process_transaction_with_preflight_and_commitment_and_context(
         transaction: Transaction,
         commitment: CommitmentLevel,
-    ) -> BanksTransactionResult;
+    ) -> BanksTransactionResultWithSimulation;
     async fn process_transaction_with_commitment_and_context(
         transaction: Transaction,
         commitment: CommitmentLevel,
