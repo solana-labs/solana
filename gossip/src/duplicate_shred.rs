@@ -86,6 +86,8 @@ fn check_shreds(
     if shred1.slot() != shred2.slot() {
         Err(Error::SlotMismatch)
     } else if shred1.index() != shred2.index() {
+        // TODO: Should also allow two coding shreds with different indices but
+        // same fec-set-index and mismatching erasure-config.
         Err(Error::ShredIndexMismatch)
     } else if shred1.common_header.shred_type != shred2.common_header.shred_type {
         Err(Error::ShredTypeMismatch)
