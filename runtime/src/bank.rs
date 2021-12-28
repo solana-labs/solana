@@ -37,7 +37,7 @@
 use solana_sdk::recent_blockhashes_account;
 use {
     crate::{
-        accounts::{AccountAddressFilter, Accounts, TransactionLoadResult},
+        accounts::{AccountAddressFilter, Accounts, LoadedTransaction, TransactionLoadResult},
         accounts_db::{
             AccountShrinkThreshold, AccountsDbConfig, ErrorCounters, SnapshotStorages,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
@@ -509,6 +509,14 @@ pub struct TransactionResults {
     pub fee_collection_results: Vec<Result<()>>,
     pub execution_results: Vec<TransactionExecutionResult>,
     pub rent_debits: Vec<RentDebits>,
+}
+pub enum TransactionExecutionStatus {
+    Executed {
+        result: Result<()>,
+        log_messages: Option<Vec<String>>,
+        recorded_instructions: Option<Vec<Vec<CompiledInstruction>>>,
+    },
+    NotExecuted(TransactionError),
 }
 pub struct TransactionSimulationResult {
     pub result: Result<()>,
@@ -3476,6 +3484,105 @@ impl Bank {
         cache.remove(pubkey);
     }
 
+    /// Execute a transaction using the provided loaded accounts and update
+    /// the executors cache if the transaction was successful.
+    #[must_use]
+    fn execute_loaded_transaction(
+        &self,
+        tx: &SanitizedTransaction,
+        loaded_transaction: &mut LoadedTransaction,
+        compute_budget: ComputeBudget,
+        enable_cpi_recording: bool,
+        enable_log_recording: bool,
+        execute_details_timings: &mut ExecuteDetailsTimings,
+        error_counters: &mut ErrorCounters,
+    ) -> TransactionExecutionStatus {
+        let legacy_message = match tx.message().legacy_message() {
+            Some(message) => message,
+            None => {
+                // TODO: support versioned messages
+                return TransactionExecutionStatus::NotExecuted(
+                    TransactionError::UnsupportedVersion,
+                );
+            }
+        };
+
+        let executors = self.get_executors(
+            tx.message(),
+            &loaded_transaction.accounts,
+            &loaded_transaction.program_indices,
+        );
+
+        let mut transaction_accounts = Vec::new();
+        std::mem::swap(&mut loaded_transaction.accounts, &mut transaction_accounts);
+        let mut transaction_context = TransactionContext::new(
+            transaction_accounts,
+            compute_budget.max_invoke_depth.saturating_add(1),
+        );
+
+        let instruction_recorder = if enable_cpi_recording {
+            Some(InstructionRecorder::new_ref(
+                tx.message().instructions().len(),
+            ))
+        } else {
+            None
+        };
+
+        let log_collector = if enable_log_recording {
+            Some(LogCollector::new_ref())
+        } else {
+            None
+        };
+
+        let (blockhash, lamports_per_signature) = self.last_blockhash_and_lamports_per_signature();
+        let process_result = MessageProcessor::process_message(
+            &self.builtin_programs.vec,
+            legacy_message,
+            &loaded_transaction.program_indices,
+            &mut transaction_context,
+            self.rent_collector.rent,
+            log_collector.clone(),
+            executors.clone(),
+            instruction_recorder.clone(),
+            self.feature_set.clone(),
+            compute_budget,
+            execute_details_timings,
+            &*self.sysvar_cache.read().unwrap(),
+            blockhash,
+            lamports_per_signature,
+            self.load_accounts_data_len(),
+        );
+
+        let log_messages: Option<TransactionLogMessages> =
+            log_collector.and_then(|log_collector| {
+                Rc::try_unwrap(log_collector)
+                    .map(|log_collector| log_collector.into_inner().into())
+                    .ok()
+            });
+
+        let recorded_instructions = instruction_recorder
+            .and_then(|instruction_recorder| Rc::try_unwrap(instruction_recorder).ok())
+            .map(|instruction_recorder| instruction_recorder.into_inner().deconstruct());
+
+        loaded_transaction.accounts = transaction_context.deconstruct();
+
+        let execution_result = process_result
+            .map(|info| {
+                self.store_accounts_data_len(info.accounts_data_len);
+                self.update_executors(executors);
+            })
+            .map_err(|err| {
+                error_counters.instruction_error += 1;
+                err
+            });
+
+        TransactionExecutionStatus::Executed {
+            result: execution_result,
+            log_messages,
+            recorded_instructions,
+        }
+    }
+
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
@@ -3543,6 +3650,7 @@ impl Bank {
         let mut transaction_log_messages: Vec<Option<Vec<String>>> =
             Vec::with_capacity(sanitized_txs.len());
 
+        let execute_details_timings = &mut timings.details;
         let executed: Vec<TransactionExecutionResult> = loaded_txs
             .iter_mut()
             .zip(sanitized_txs.iter())
@@ -3565,84 +3673,30 @@ impl Bank {
                     };
 
                     if process_result.is_ok() {
-                        let executors = self.get_executors(
-                            tx.message(),
-                            &loaded_transaction.accounts,
-                            &loaded_transaction.program_indices,
-                        );
-
-                        let mut transaction_accounts = Vec::new();
-                        std::mem::swap(&mut loaded_transaction.accounts, &mut transaction_accounts);
-                        let mut transaction_context = TransactionContext::new(
-                            transaction_accounts,
-                            compute_budget.max_invoke_depth.saturating_add(1),
-                        );
-
-                        let instruction_recorder = if enable_cpi_recording {
-                            Some(InstructionRecorder::new_ref(
-                                tx.message().instructions().len(),
-                            ))
-                        } else {
-                            None
+                        process_result = match self.execute_loaded_transaction(
+                            tx,
+                            loaded_transaction,
+                            compute_budget,
+                            enable_cpi_recording,
+                            enable_log_recording,
+                            execute_details_timings,
+                            &mut error_counters,
+                        ) {
+                            TransactionExecutionStatus::Executed {
+                                result,
+                                log_messages,
+                                recorded_instructions,
+                            } => {
+                                transaction_log_messages.push(log_messages);
+                                inner_instructions.push(recorded_instructions);
+                                result
+                            }
+                            TransactionExecutionStatus::NotExecuted(err) => {
+                                transaction_log_messages.push(None);
+                                inner_instructions.push(None);
+                                Err(err)
+                            }
                         };
-
-                        let log_collector = if enable_log_recording {
-                            Some(LogCollector::new_ref())
-                        } else {
-                            None
-                        };
-
-                        let (blockhash, lamports_per_signature) =
-                            self.last_blockhash_and_lamports_per_signature();
-
-                        if let Some(legacy_message) = tx.message().legacy_message() {
-                            process_result = MessageProcessor::process_message(
-                                &self.builtin_programs.vec,
-                                legacy_message,
-                                &loaded_transaction.program_indices,
-                                &mut transaction_context,
-                                self.rent_collector.rent,
-                                log_collector.clone(),
-                                executors.clone(),
-                                instruction_recorder.clone(),
-                                feature_set,
-                                compute_budget,
-                                &mut timings.details,
-                                &*self.sysvar_cache.read().unwrap(),
-                                blockhash,
-                                lamports_per_signature,
-                                self.load_accounts_data_len(),
-                            )
-                            .map(|process_result| {
-                                self.store_accounts_data_len(process_result.accounts_data_len)
-                            });
-                        } else {
-                            // TODO: support versioned messages
-                            process_result = Err(TransactionError::UnsupportedVersion);
-                        }
-
-                        let log_messages: Option<TransactionLogMessages> =
-                            log_collector.and_then(|log_collector| {
-                                Rc::try_unwrap(log_collector)
-                                    .map(|log_collector| log_collector.into_inner().into())
-                                    .ok()
-                            });
-                        transaction_log_messages.push(log_messages);
-                        inner_instructions.push(
-                            instruction_recorder
-                                .and_then(|instruction_recorder| {
-                                    Rc::try_unwrap(instruction_recorder).ok()
-                                })
-                                .map(|instruction_recorder| {
-                                    instruction_recorder.into_inner().deconstruct()
-                                }),
-                        );
-
-                        loaded_transaction.accounts = transaction_context.deconstruct();
-
-                        if process_result.is_ok() {
-                            self.update_executors(executors);
-                        }
                     } else {
                         transaction_log_messages.push(None);
                         inner_instructions.push(None);
