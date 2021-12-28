@@ -1,7 +1,7 @@
 //! Stakes serve as a cache of stake and vote accounts to derive
 //! node stakes
 use {
-    crate::vote_account::{ArcVoteAccount, VoteAccounts, VoteAccountsHashMap},
+    crate::vote_account::{VoteAccount, VoteAccounts, VoteAccountsHashMap},
     dashmap::DashMap,
     num_derive::ToPrimitive,
     num_traits::ToPrimitive,
@@ -268,7 +268,7 @@ impl Stakes {
                 );
 
                 self.vote_accounts
-                    .insert(*pubkey, (stake, ArcVoteAccount::from(account.clone())));
+                    .insert(*pubkey, (stake, VoteAccount::from(account.clone())));
             }
         } else if stake::program::check_id(account.owner()) {
             //  old_stake is stake lamports and voter_pubkey from the pre-store() version

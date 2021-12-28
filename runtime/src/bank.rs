@@ -61,7 +61,7 @@ use {
         status_cache::{SlotDelta, StatusCache},
         system_instruction_processor::{get_system_account_kind, SystemAccountKind},
         transaction_batch::TransactionBatch,
-        vote_account::ArcVoteAccount,
+        vote_account::VoteAccount,
     },
     byteorder::{ByteOrder, LittleEndian},
     dashmap::DashMap,
@@ -3809,7 +3809,7 @@ impl Bank {
     #[allow(clippy::needless_collect)]
     fn distribute_rent_to_validators<I>(&self, vote_accounts: I, rent_to_be_distributed: u64)
     where
-        I: IntoIterator<Item = (Pubkey, (u64, ArcVoteAccount))>,
+        I: IntoIterator<Item = (Pubkey, (u64, VoteAccount))>,
     {
         let mut total_staked = 0;
 
@@ -5196,7 +5196,7 @@ impl Bank {
     ///   attributed to each account
     /// Note: This clones the entire vote-accounts hashmap. For a single
     /// account lookup use get_vote_account instead.
-    pub fn vote_accounts(&self) -> Vec<(Pubkey, (u64 /*stake*/, ArcVoteAccount))> {
+    pub fn vote_accounts(&self) -> Vec<(Pubkey, (/*stake:*/ u64, VoteAccount))> {
         self.stakes_cache
             .stakes()
             .vote_accounts()
@@ -5206,10 +5206,7 @@ impl Bank {
     }
 
     /// Vote account for the given vote account pubkey along with the stake.
-    pub fn get_vote_account(
-        &self,
-        vote_account: &Pubkey,
-    ) -> Option<(u64 /*stake*/, ArcVoteAccount)> {
+    pub fn get_vote_account(&self, vote_account: &Pubkey) -> Option<(/*stake:*/ u64, VoteAccount)> {
         self.stakes_cache
             .stakes()
             .vote_accounts()
@@ -5235,7 +5232,7 @@ impl Bank {
     pub fn epoch_vote_accounts(
         &self,
         epoch: Epoch,
-    ) -> Option<&HashMap<Pubkey, (u64, ArcVoteAccount)>> {
+    ) -> Option<&HashMap<Pubkey, (u64, VoteAccount)>> {
         self.epoch_stakes
             .get(&epoch)
             .map(|epoch_stakes| Stakes::vote_accounts(epoch_stakes.stakes()))
