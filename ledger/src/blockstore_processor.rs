@@ -9,7 +9,6 @@ use {
         },
         leader_schedule_cache::LeaderScheduleCache,
     },
-<<<<<<< HEAD
     chrono_humanize::{Accuracy, HumanTime, Tense},
     crossbeam_channel::Sender,
     itertools::Itertools,
@@ -33,7 +32,7 @@ use {
         commitment::VOTE_THRESHOLD_SIZE,
         snapshot_utils::BankFromArchiveTimings,
         transaction_batch::TransactionBatch,
-        vote_account::ArcVoteAccount,
+        vote_account::VoteAccount,
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{
@@ -58,27 +57,6 @@ use {
         time::{Duration, Instant},
     },
     thiserror::Error,
-=======
-    bank_forks::BankForks,
-    bank_utils,
-    commitment::VOTE_THRESHOLD_SIZE,
-    snapshot_utils::BankFromArchiveTimings,
-    transaction_batch::TransactionBatch,
-    vote_account::VoteAccount,
-    vote_sender_types::ReplayVoteSender,
-};
-use solana_sdk::{
-    clock::{Slot, MAX_PROCESSING_AGE},
-    genesis_config::GenesisConfig,
-    hash::Hash,
-    pubkey::Pubkey,
-    signature::{Keypair, Signature},
-    timing,
-    transaction::{Result, Transaction, TransactionError},
-};
-use solana_transaction_status::token_balances::{
-    collect_token_balances, TransactionTokenBalancesSet,
->>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
 };
 
 // it tracks the block cost available capacity - number of compute-units allowed

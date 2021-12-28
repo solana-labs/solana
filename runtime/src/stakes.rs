@@ -1,8 +1,7 @@
 //! Stakes serve as a cache of stake and vote accounts to derive
 //! node stakes
 use {
-<<<<<<< HEAD
-    crate::vote_account::{ArcVoteAccount, VoteAccounts, VoteAccountsHashMap},
+    crate::vote_account::{VoteAccount, VoteAccounts, VoteAccountsHashMap},
     dashmap::DashMap,
     num_derive::ToPrimitive,
     num_traits::ToPrimitive,
@@ -10,9 +9,6 @@ use {
         iter::{IntoParallelRefIterator, ParallelIterator},
         ThreadPool,
     },
-=======
-    crate::vote_account::{VoteAccount, VoteAccounts},
->>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::{Epoch, Slot},
@@ -255,14 +251,8 @@ impl Stakes {
         &mut self,
         pubkey: &Pubkey,
         account: &AccountSharedData,
-<<<<<<< HEAD
         remove_delegation_on_inactive: bool,
     ) {
-=======
-        fix_stake_deactivate: bool,
-        check_vote_init: bool,
-    ) -> Option<VoteAccount> {
->>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
         if solana_vote_program::check_id(account.owner()) {
             // unconditionally remove existing at first; there is no dependent calculated state for
             // votes, not like stakes (stake codepath maintains calculated stake value grouped by
@@ -337,13 +327,8 @@ impl Stakes {
         }
     }
 
-<<<<<<< HEAD
     pub fn vote_accounts(&self) -> &VoteAccountsHashMap {
         self.vote_accounts.as_ref()
-=======
-    pub fn vote_accounts(&self) -> &HashMap<Pubkey, (u64, VoteAccount)> {
-        self.vote_accounts.borrow()
->>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
     }
 
     pub fn stake_delegations(&self) -> &HashMap<Pubkey, Delegation> {

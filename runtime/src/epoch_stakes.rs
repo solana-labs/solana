@@ -1,9 +1,5 @@
 use {
-<<<<<<< HEAD
-    crate::{stakes::Stakes, vote_account::ArcVoteAccount},
-=======
     crate::{stakes::Stakes, vote_account::VoteAccount},
->>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
     serde::{Deserialize, Serialize},
     solana_sdk::{clock::Epoch, pubkey::Pubkey},
     std::{collections::HashMap, sync::Arc},

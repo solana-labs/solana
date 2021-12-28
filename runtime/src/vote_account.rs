@@ -32,17 +32,13 @@ struct VoteAccountInner {
     vote_state_once: Once,
 }
 
-pub type VoteAccountsHashMap = HashMap<Pubkey, (/*stake:*/ u64, ArcVoteAccount)>;
+pub type VoteAccountsHashMap = HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>;
 
 #[derive(Debug, AbiExample)]
 pub struct VoteAccounts {
-<<<<<<< HEAD
     vote_accounts: VoteAccountsHashMap,
-=======
-    vote_accounts: HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>,
     // Inner Arc is meant to implement copy-on-write semantics as opposed to
     // sharing mutations (hence RwLock<Arc<...>> instead of Arc<RwLock<...>>).
->>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
     staked_nodes: RwLock<
         HashMap<
             Pubkey, // VoteAccount.vote_state.node_pubkey.
@@ -52,19 +48,7 @@ pub struct VoteAccounts {
     staked_nodes_once: Once,
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 impl VoteAccount {
-    pub fn account(&self) -> &Account {
-        &self.account
-    }
-
-=======
-impl ArcVoteAccount {
->>>>>>> 1403eaeef (makes solana_runtime::vote_account::VoteAccount private)
-=======
-impl VoteAccount {
->>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
     pub fn lamports(&self) -> u64 {
         self.0.account.lamports
     }
@@ -192,27 +176,6 @@ impl<'de> Deserialize<'de> for VoteAccount {
     }
 }
 
-<<<<<<< HEAD
-impl From<AccountSharedData> for ArcVoteAccount {
-    fn from(account: AccountSharedData) -> Self {
-        Self(Arc::new(VoteAccount::from(account)))
-    }
-}
-
-impl From<Account> for ArcVoteAccount {
-    fn from(account: Account) -> Self {
-        Self(Arc::new(VoteAccount::from(account)))
-    }
-}
-
-impl AsRef<VoteAccount> for ArcVoteAccount {
-    fn as_ref(&self) -> &VoteAccount {
-        &self.0
-    }
-}
-
-=======
->>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
 impl From<AccountSharedData> for VoteAccount {
     fn from(account: AccountSharedData) -> Self {
         Self(Arc::new(VoteAccountInner::from(account)))
@@ -294,11 +257,6 @@ impl PartialEq<VoteAccounts> for VoteAccounts {
     }
 }
 
-<<<<<<< HEAD
-=======
-type VoteAccountsHashMap = HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>;
-
->>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
 impl From<VoteAccountsHashMap> for VoteAccounts {
     fn from(vote_accounts: VoteAccountsHashMap) -> Self {
         Self {

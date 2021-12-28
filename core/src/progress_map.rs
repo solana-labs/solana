@@ -2,19 +2,11 @@ use {
     crate::{
         cluster_info_vote_listener::SlotVoteTracker,
         cluster_slots::SlotPubkeys,
-<<<<<<< HEAD
         consensus::{Stake, VotedStakes},
         replay_stage::SUPERMINORITY_THRESHOLD,
     },
     solana_ledger::blockstore_processor::{ConfirmationProgress, ConfirmationTiming},
-    solana_runtime::{bank::Bank, bank_forks::BankForks, vote_account::ArcVoteAccount},
-=======
-        replay_stage::SUPERMINORITY_THRESHOLD,
-        {consensus::Stake, consensus::VotedStakes},
-    },
-    solana_ledger::blockstore_processor::{ConfirmationProgress, ConfirmationTiming},
     solana_runtime::{bank::Bank, bank_forks::BankForks, vote_account::VoteAccount},
->>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
     solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey},
     std::{
         collections::{BTreeMap, HashMap, HashSet},

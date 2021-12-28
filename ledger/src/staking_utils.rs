@@ -69,11 +69,7 @@ pub(crate) mod tests {
             bootstrap_validator_stake_lamports, create_genesis_config, GenesisConfigInfo,
         },
         rand::Rng,
-<<<<<<< HEAD
-        solana_runtime::vote_account::{ArcVoteAccount, VoteAccounts},
-=======
         solana_runtime::vote_account::{VoteAccount, VoteAccounts},
->>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
         solana_sdk::{
             account::{from_account, AccountSharedData},
             clock::Clock,
