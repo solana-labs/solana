@@ -1,28 +1,18 @@
-<<<<<<< HEAD
 use {
     crate::{cluster_info_vote_listener::VerifiedLabelVotePacketsReceiver, result::Result},
-    solana_gossip::crds_value::CrdsValueLabel,
+    crossbeam_channel::Select,
     solana_perf::packet::PacketBatch,
-    solana_sdk::clock::Slot,
+    solana_runtime::bank::Bank,
+    solana_sdk::{
+        account::from_account, clock::Slot, hash::Hash, pubkey::Pubkey, signature::Signature,
+        slot_hashes::SlotHashes, sysvar,
+    },
+    solana_vote_program::vote_state::Vote,
     std::{
-        collections::{hash_map::Entry, HashMap},
+        collections::{BTreeMap, HashMap, HashSet},
+        sync::Arc,
         time::Duration,
     },
-=======
-use crate::{cluster_info_vote_listener::VerifiedLabelVotePacketsReceiver, result::Result};
-use crossbeam_channel::Select;
-use solana_perf::packet::Packets;
-use solana_runtime::bank::Bank;
-use solana_sdk::{
-    account::from_account, clock::Slot, hash::Hash, pubkey::Pubkey, signature::Signature,
-    slot_hashes::SlotHashes, sysvar,
-};
-use solana_vote_program::vote_state::Vote;
-use std::{
-    collections::{BTreeMap, HashMap, HashSet},
-    sync::Arc,
-    time::Duration,
->>>>>>> b30c94ce5 (ClusterInfoVoteListener send only missing votes to BankingStage (#20873))
 };
 
 const MAX_VOTES_PER_VALIDATOR: usize = 1000;
@@ -30,7 +20,7 @@ const MAX_VOTES_PER_VALIDATOR: usize = 1000;
 pub struct VerifiedVoteMetadata {
     pub vote_account_key: Pubkey,
     pub vote: Vote,
-    pub packet: Packets,
+    pub packet_batch: PacketBatch,
     pub signature: Signature,
 }
 
@@ -80,7 +70,7 @@ impl<'a> ValidatorGossipVotesIterator<'a> {
 ///
 /// Iterator is done after iterating through all vote accounts
 impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
-    type Item = Vec<Packets>;
+    type Item = Vec<PacketBatch>;
 
     fn next(&mut self) -> Option<Self::Item> {
         // TODO: Maybe prioritize by stake weight
@@ -126,7 +116,7 @@ impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
                                             None
                                         }
                                     })
-                                    .collect::<Vec<Packets>>()
+                                    .collect::<Vec<PacketBatch>>()
                             })
                         })
                 });
@@ -140,14 +130,10 @@ impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
     }
 }
 
-pub type SingleValidatorVotes = BTreeMap<(Slot, Hash), (Packets, Signature)>;
+pub type SingleValidatorVotes = BTreeMap<(Slot, Hash), (PacketBatch, Signature)>;
 
 #[derive(Default)]
-<<<<<<< HEAD
-pub struct VerifiedVotePackets(HashMap<CrdsValueLabel, (u64, Slot, PacketBatch)>);
-=======
 pub struct VerifiedVotePackets(HashMap<Pubkey, SingleValidatorVotes>);
->>>>>>> b30c94ce5 (ClusterInfoVoteListener send only missing votes to BankingStage (#20873))
 
 impl VerifiedVotePackets {
     pub fn receive_and_process_vote_packets(
@@ -164,7 +150,7 @@ impl VerifiedVotePackets {
                     let VerifiedVoteMetadata {
                         vote_account_key,
                         vote,
-                        packet,
+                        packet_batch,
                         signature,
                     } = verfied_vote_metadata;
                     if vote.slots.is_empty() {
@@ -174,69 +160,29 @@ impl VerifiedVotePackets {
                     let slot = vote.slots.last().unwrap();
                     let hash = vote.hash;
 
-<<<<<<< HEAD
-    #[cfg(test)]
-    fn get_vote_packets(&self, key: &CrdsValueLabel) -> Option<&(u64, Slot, PacketBatch)> {
-        self.0.get(key)
-    }
-
-    pub fn get_latest_votes(&self, last_update_version: u64) -> (u64, PacketBatch) {
-        let mut new_update_version = last_update_version;
-        let mut votes = HashMap::new();
-        for (label, (version, slot, packets)) in &self.0 {
-            new_update_version = std::cmp::max(*version, new_update_version);
-            if *version <= last_update_version {
-                continue;
-            }
-            match votes.entry(label.pubkey()) {
-                Entry::Vacant(entry) => {
-                    entry.insert((slot, packets));
-                }
-                Entry::Occupied(mut entry) => {
-                    let (entry_slot, _) = entry.get();
-                    if *entry_slot < slot {
-                        *entry.get_mut() = (slot, packets);
-=======
                     let validator_votes = self.0.entry(vote_account_key).or_default();
-                    validator_votes.insert((*slot, hash), (packet, signature));
+                    validator_votes.insert((*slot, hash), (packet_batch, signature));
 
                     if validator_votes.len() > MAX_VOTES_PER_VALIDATOR {
                         let smallest_key = validator_votes.keys().next().cloned().unwrap();
                         validator_votes.remove(&smallest_key).unwrap();
->>>>>>> b30c94ce5 (ClusterInfoVoteListener send only missing votes to BankingStage (#20873))
                     }
                 }
             }
         }
-<<<<<<< HEAD
-        let packets = votes
-            .into_iter()
-            .flat_map(|(_, (_, packets))| &packets.packets)
-            .cloned()
-            .collect();
-        (new_update_version, PacketBatch::new(packets))
-=======
         Ok(())
->>>>>>> b30c94ce5 (ClusterInfoVoteListener send only missing votes to BankingStage (#20873))
     }
 }
 
 #[cfg(test)]
 mod tests {
-<<<<<<< HEAD
     use {
         super::*,
-        crate::result::Error,
+        crate::{result::Error, vote_simulator::VoteSimulator},
         crossbeam_channel::{unbounded, RecvTimeoutError},
         solana_perf::packet::{Meta, Packet},
+        solana_sdk::slot_hashes::MAX_ENTRIES,
     };
-=======
-    use super::*;
-    use crate::{result::Error, vote_simulator::VoteSimulator};
-    use crossbeam_channel::unbounded;
-    use solana_perf::packet::Packet;
-    use solana_sdk::slot_hashes::MAX_ENTRIES;
->>>>>>> b30c94ce5 (ClusterInfoVoteListener send only missing votes to BankingStage (#20873))
 
     #[test]
     fn test_verified_vote_packets_receive_and_process_vote_packets() {
@@ -246,30 +192,19 @@ mod tests {
         // Construct the buffer
         let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
 
-<<<<<<< HEAD
-        let data = Packet {
-            meta: Meta {
-                repair: true,
-                ..Meta::default()
-            },
-            ..Packet::default()
-        };
-
-        let none_empty_packets = PacketBatch::new(vec![data, Packet::default()]);
-
-=======
         // Send a vote from `vote_account_key`, check that it was inserted
         let vote_slot = 0;
         let vote_hash = Hash::new_unique();
         let vote = Vote::new(vec![vote_slot], vote_hash);
+
+        let none_empty_packets = PacketBatch::new(vec![data, Packet::default()]);
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
             vote: vote.clone(),
-            packet: Packets::default(),
+            packet_batch: PacketBatch::default(),
             signature: Signature::new(&[1u8; 64]),
         }])
         .unwrap();
->>>>>>> b30c94ce5 (ClusterInfoVoteListener send only missing votes to BankingStage (#20873))
         verified_vote_packets
             .receive_and_process_vote_packets(&r, true)
             .unwrap();
@@ -286,15 +221,11 @@ mod tests {
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
             vote,
-            packet: Packets::default(),
+            packet_batch: PacketBatch::default(),
             signature: Signature::new(&[1u8; 64]),
         }])
         .unwrap();
         verified_vote_packets
-<<<<<<< HEAD
-            .0
-            .insert(label2, (1, 23, PacketBatch::default()));
-=======
             .receive_and_process_vote_packets(&r, true)
             .unwrap();
         assert_eq!(
@@ -305,7 +236,6 @@ mod tests {
                 .len(),
             1
         );
->>>>>>> b30c94ce5 (ClusterInfoVoteListener send only missing votes to BankingStage (#20873))
 
         // Same slot, different hash, should still be inserted
         let new_vote_hash = Hash::new_unique();
@@ -313,7 +243,7 @@ mod tests {
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
             vote,
-            packet: Packets::default(),
+            packet_batch: PacketBatch::default(),
             signature: Signature::new(&[1u8; 64]),
         }])
         .unwrap();
@@ -336,7 +266,7 @@ mod tests {
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
             vote,
-            packet: Packets::default(),
+            packet_batch: PacketBatch::default(),
             signature: Signature::new(&[2u8; 64]),
         }])
         .unwrap();
@@ -362,26 +292,11 @@ mod tests {
     #[test]
     fn test_verified_vote_packets_receive_and_process_vote_packets_max_len() {
         let (s, r) = unbounded();
-<<<<<<< HEAD
-        let pubkey = solana_sdk::pubkey::new_rand();
-        let label1 = CrdsValueLabel::Vote(0, pubkey);
-        let label2 = CrdsValueLabel::Vote(1, pubkey);
-        let mut update_version = 0;
-        s.send(vec![(label1.clone(), 17, PacketBatch::default())])
-            .unwrap();
-        s.send(vec![(label2.clone(), 23, PacketBatch::default())])
-            .unwrap();
-=======
         let vote_account_key = solana_sdk::pubkey::new_rand();
->>>>>>> b30c94ce5 (ClusterInfoVoteListener send only missing votes to BankingStage (#20873))
 
         // Construct the buffer
         let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
 
-<<<<<<< HEAD
-        let later_packets = PacketBatch::new(vec![data, Packet::default()]);
-        s.send(vec![(label1.clone(), 42, later_packets)]).unwrap();
-=======
         // Send many more votes than the upper limit per validator
         for _ in 0..2 * MAX_VOTES_PER_VALIDATOR {
             let vote_slot = 0;
@@ -390,7 +305,7 @@ mod tests {
             s.send(vec![VerifiedVoteMetadata {
                 vote_account_key,
                 vote,
-                packet: Packets::default(),
+                packet_batch: PacketBatch::default(),
                 signature: Signature::new(&[1u8; 64]),
             }])
             .unwrap();
@@ -427,14 +342,13 @@ mod tests {
             s.send(vec![VerifiedVoteMetadata {
                 vote_account_key,
                 vote,
-                packet: Packets::default(),
+                packet_batch: PacketBatch::default(),
                 signature: Signature::new_unique(),
             }])
             .unwrap();
         }
 
         // Ingest the votes into the buffer
->>>>>>> b30c94ce5 (ClusterInfoVoteListener send only missing votes to BankingStage (#20873))
         let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
         verified_vote_packets
             .receive_and_process_vote_packets(&r, true)
@@ -452,11 +366,6 @@ mod tests {
         assert!(gossip_votes_iterator.next().is_none());
     }
 
-<<<<<<< HEAD
-        // Test timestamp for next batch overwrites the original
-        s.send(vec![(label2.clone(), 51, PacketBatch::default())])
-            .unwrap();
-=======
     #[test]
     fn test_verified_vote_packets_validator_gossip_votes_iterator_correct_fork() {
         let (s, r) = unbounded();
@@ -487,7 +396,7 @@ mod tests {
                 s.send(vec![VerifiedVoteMetadata {
                     vote_account_key,
                     vote,
-                    packet: Packets::new(vec![Packet::default(); num_packets]),
+                    packet_batch: PacketBatch::new(vec![Packet::default(); num_packets]),
                     signature: Signature::new_unique(),
                 }])
                 .unwrap();
@@ -496,7 +405,6 @@ mod tests {
 
         // Ingest the votes into the buffer
         let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
->>>>>>> b30c94ce5 (ClusterInfoVoteListener send only missing votes to BankingStage (#20873))
         verified_vote_packets
             .receive_and_process_vote_packets(&r, true)
             .unwrap();
@@ -555,7 +463,7 @@ mod tests {
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
             vote,
-            packet: Packets::default(),
+            packet_batch: PacketBatch::default(),
             signature: Signature::new_unique(),
         }])
         .unwrap();

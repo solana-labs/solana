@@ -1077,6 +1077,7 @@ impl ClusterInfo {
     pub fn get_votes(&self, cursor: &mut Cursor) -> Vec<Transaction> {
         let txs: Vec<Transaction> = self
             .time_gossip_read_lock("get_votes", &self.stats.get_votes)
+            .crds
             .get_votes(cursor)
             .map(|vote| {
                 let transaction = match &vote.value.data {
@@ -3696,13 +3697,8 @@ mod tests {
     #[test]
     fn test_push_votes_with_tower() {
         let get_vote_slots = |cluster_info: &ClusterInfo| -> Vec<Slot> {
-<<<<<<< HEAD
-            let (labels, _) = cluster_info.get_votes(&mut Cursor::default());
-            let gossip = cluster_info.gossip.read().unwrap();
-=======
             let (labels, _) = cluster_info.get_votes_with_labels(&mut Cursor::default());
-            let gossip_crds = cluster_info.gossip.crds.read().unwrap();
->>>>>>> b30c94ce5 (ClusterInfoVoteListener send only missing votes to BankingStage (#20873))
+            let gossip = cluster_info.gossip.read().unwrap();
             let mut vote_slots = HashSet::new();
             for label in labels {
                 match &gossip.crds.get(&label).unwrap().value.data {

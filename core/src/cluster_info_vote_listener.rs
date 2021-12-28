@@ -1,11 +1,12 @@
-<<<<<<< HEAD
 use {
     crate::{
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
         replay_stage::DUPLICATE_THRESHOLD,
         result::{Error, Result},
         sigverify,
-        verified_vote_packets::VerifiedVotePackets,
+        verified_vote_packets::{
+            ValidatorGossipVotesIterator, VerifiedVoteMetadata, VerifiedVotePackets,
+        },
         vote_stake_tracker::VoteStakeTracker,
     },
     crossbeam_channel::{
@@ -17,9 +18,9 @@ use {
     solana_gossip::{
         cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
         crds::Cursor,
-        crds_value::CrdsValueLabel,
     },
     solana_ledger::blockstore::Blockstore,
+    solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_debug,
     solana_perf::packet::{self, PacketBatch},
     solana_poh::poh_recorder::PohRecorder,
@@ -39,83 +40,27 @@ use {
         epoch_schedule::EpochSchedule,
         hash::Hash,
         pubkey::Pubkey,
+        signature::Signature,
+        slot_hashes,
         transaction::Transaction,
     },
     solana_vote_program::{self, vote_state::Vote, vote_transaction},
     std::{
-        collections::HashMap,
+        collections::{HashMap, HashSet},
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, Mutex, RwLock,
         },
         thread::{self, sleep, Builder, JoinHandle},
         time::{Duration, Instant},
-=======
-use crate::{
-    optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
-    replay_stage::DUPLICATE_THRESHOLD,
-    result::{Error, Result},
-    sigverify,
-    verified_vote_packets::{
-        ValidatorGossipVotesIterator, VerifiedVoteMetadata, VerifiedVotePackets,
-    },
-    vote_stake_tracker::VoteStakeTracker,
-};
-use crossbeam_channel::{
-    unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Select, Sender as CrossbeamSender,
-};
-use itertools::izip;
-use log::*;
-use solana_gossip::{
-    cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
-    crds::Cursor,
-};
-use solana_ledger::blockstore::Blockstore;
-use solana_measure::measure::Measure;
-use solana_metrics::inc_new_counter_debug;
-use solana_perf::packet::{self, Packets};
-use solana_poh::poh_recorder::PohRecorder;
-use solana_rpc::{
-    optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
-    rpc_subscriptions::RpcSubscriptions,
-};
-use solana_runtime::{
-    bank::Bank,
-    bank_forks::BankForks,
-    commitment::VOTE_THRESHOLD_SIZE,
-    epoch_stakes::{EpochAuthorizedVoters, EpochStakes},
-    vote_sender_types::{ReplayVoteReceiver, ReplayedVote},
-};
-use solana_sdk::{
-    clock::{Epoch, Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT},
-    epoch_schedule::EpochSchedule,
-    hash::Hash,
-    pubkey::Pubkey,
-    signature::Signature,
-    slot_hashes,
-    transaction::Transaction,
-};
-use solana_vote_program::{self, vote_state::Vote, vote_transaction};
-use std::{
-    collections::{HashMap, HashSet},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        {Arc, Mutex, RwLock},
->>>>>>> b30c94ce5 (ClusterInfoVoteListener send only missing votes to BankingStage (#20873))
     },
 };
 
 // Map from a vote account to the authorized voter for an epoch
 pub type ThresholdConfirmedSlots = Vec<(Slot, Hash)>;
 pub type VotedHashUpdates = HashMap<Hash, Vec<Pubkey>>;
-<<<<<<< HEAD
-pub type VerifiedLabelVotePacketsSender = CrossbeamSender<Vec<(CrdsValueLabel, Slot, PacketBatch)>>;
-pub type VerifiedLabelVotePacketsReceiver =
-    CrossbeamReceiver<Vec<(CrdsValueLabel, Slot, PacketBatch)>>;
-=======
 pub type VerifiedLabelVotePacketsSender = CrossbeamSender<Vec<VerifiedVoteMetadata>>;
 pub type VerifiedLabelVotePacketsReceiver = CrossbeamReceiver<Vec<VerifiedVoteMetadata>>;
->>>>>>> b30c94ce5 (ClusterInfoVoteListener send only missing votes to BankingStage (#20873))
 pub type VerifiedVoteTransactionsSender = CrossbeamSender<Vec<Transaction>>;
 pub type VerifiedVoteTransactionsReceiver = CrossbeamReceiver<Vec<Transaction>>;
 pub type VerifiedVoteSender = CrossbeamSender<(Pubkey, Vec<Slot>)>;
@@ -447,36 +392,15 @@ impl ClusterInfoVoteListener {
     }
 
     #[allow(clippy::type_complexity)]
-<<<<<<< HEAD
-    fn verify_votes(
-        votes: Vec<Transaction>,
-        labels: Vec<CrdsValueLabel>,
-    ) -> (Vec<Transaction>, Vec<(CrdsValueLabel, Slot, PacketBatch)>) {
-        let mut packet_batches = packet::to_packet_batches(&votes, 1);
-=======
     fn verify_votes(votes: Vec<Transaction>) -> (Vec<Transaction>, Vec<VerifiedVoteMetadata>) {
-        let mut msgs = packet::to_packets_chunked(&votes, 1);
->>>>>>> b30c94ce5 (ClusterInfoVoteListener send only missing votes to BankingStage (#20873))
+        let mut packet_batches = packet::to_packet_batches(&votes, 1);
 
         // Votes should already be filtered by this point.
         let reject_non_vote = false;
         sigverify::ed25519_verify_cpu(&mut packet_batches, reject_non_vote);
 
-<<<<<<< HEAD
-        let (vote_txs, packet_batch) = izip!(labels.into_iter(), votes.into_iter(), packet_batches)
-            .filter_map(|(label, vote, packet_batch)| {
-                let slot = vote_transaction::parse_vote_transaction(&vote)
-                    .and_then(|(_, vote, _)| vote.slots.last().copied())?;
-
-                // to_packet_batches() above split into 1 packet long chunks
-                assert_eq!(packet_batch.packets.len(), 1);
-                if !packet_batch.packets[0].meta.discard {
-                    Some((vote, (label, slot, packet_batch)))
-                } else {
-                    None
-=======
-        let (vote_txs, vote_metadata) = izip!(votes.into_iter(), msgs,)
-            .filter_map(|(vote_tx, packet)| {
+        let (vote_txs, vote_metadata) = izip!(votes.into_iter(), packet_batches)
+            .filter_map(|(vote_tx, packet_batch)| {
                 let (vote, vote_account_key) = vote_transaction::parse_vote_transaction(&vote_tx)
                     .and_then(|(vote_account_key, vote, _)| {
                     if vote.slots.is_empty() {
@@ -486,30 +410,25 @@ impl ClusterInfoVoteListener {
                     }
                 })?;
 
-                // to_packets_chunked() above split into 1 packet long chunks
-                assert_eq!(packet.packets.len(), 1);
-                if !packet.packets[0].meta.discard {
+                // to_packet_batches() above split into 1 packet long chunks
+                assert_eq!(packet_batch.packets.len(), 1);
+                if !packet_batch.packets[0].meta.discard {
                     if let Some(signature) = vote_tx.signatures.first().cloned() {
                         return Some((
                             vote_tx,
                             VerifiedVoteMetadata {
                                 vote_account_key,
                                 vote,
-                                packet,
+                                packet_batch,
                                 signature,
                             },
                         ));
                     }
->>>>>>> b30c94ce5 (ClusterInfoVoteListener send only missing votes to BankingStage (#20873))
                 }
                 None
             })
             .unzip();
-<<<<<<< HEAD
-        (vote_txs, packet_batch)
-=======
         (vote_txs, vote_metadata)
->>>>>>> b30c94ce5 (ClusterInfoVoteListener send only missing votes to BankingStage (#20873))
     }
 
     fn bank_send_loop(
@@ -545,24 +464,6 @@ impl ClusterInfoVoteListener {
                 }
             }
 
-<<<<<<< HEAD
-            if time_since_lock.elapsed().as_millis() > GOSSIP_SLEEP_MILLIS as u128 {
-                let bank = poh_recorder.lock().unwrap().bank();
-                if let Some(bank) = bank {
-                    let last_version = bank.last_vote_sync.load(Ordering::Relaxed);
-                    let (new_version, packet_batch) =
-                        verified_vote_packets.get_latest_votes(last_version);
-                    inc_new_counter_info!("bank_send_loop_batch_size", packet_batch.packets.len());
-                    inc_new_counter_info!("bank_send_loop_num_batches", 1);
-                    verified_packets_sender.send(vec![packet_batch])?;
-                    #[allow(deprecated)]
-                    bank.last_vote_sync.compare_and_swap(
-                        last_version,
-                        new_version,
-                        Ordering::Relaxed,
-                    );
-                    time_since_lock = Instant::now();
-=======
             if time_since_lock.elapsed().as_millis() > BANK_SEND_VOTES_LOOP_SLEEP_MS as u128 {
                 // Always set this to avoid taking the poh lock too often
                 time_since_lock = Instant::now();
@@ -574,7 +475,6 @@ impl ClusterInfoVoteListener {
                         verified_packets_sender,
                         &verified_vote_packets,
                     )?;
->>>>>>> b30c94ce5 (ClusterInfoVoteListener send only missing votes to BankingStage (#20873))
                 }
             }
         }
@@ -583,7 +483,7 @@ impl ClusterInfoVoteListener {
     fn check_for_leader_bank_and_send_votes(
         bank_vote_sender_state_option: &mut Option<BankVoteSenderState>,
         current_working_bank: Arc<Bank>,
-        verified_packets_sender: &CrossbeamSender<Vec<Packets>>,
+        verified_packets_sender: &CrossbeamSender<Vec<PacketBatch>>,
         verified_vote_packets: &VerifiedVotePackets,
     ) -> Result<()> {
         // We will take this lock at most once every `BANK_SEND_VOTES_LOOP_SLEEP_MS`
@@ -1042,7 +942,6 @@ impl ClusterInfoVoteListener {
 
 #[cfg(test)]
 mod tests {
-<<<<<<< HEAD
     use {
         super::*,
         solana_perf::packet,
@@ -1050,35 +949,19 @@ mod tests {
         solana_runtime::{
             bank::Bank,
             commitment::BlockCommitmentCache,
-            genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs},
+            genesis_utils::{
+                self, create_genesis_config, GenesisConfigInfo, ValidatorVoteKeypairs,
+            },
             vote_sender_types::ReplayVoteSender,
         },
         solana_sdk::{
             hash::Hash,
+            pubkey::Pubkey,
             signature::{Keypair, Signature, Signer},
         },
         solana_vote_program::vote_state::Vote,
-        std::collections::BTreeSet,
+        std::{collections::BTreeSet, sync::Arc},
     };
-=======
-    use super::*;
-    use solana_perf::packet;
-    use solana_rpc::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank;
-    use solana_runtime::{
-        bank::Bank,
-        commitment::BlockCommitmentCache,
-        genesis_utils::{self, create_genesis_config, GenesisConfigInfo, ValidatorVoteKeypairs},
-        vote_sender_types::ReplayVoteSender,
-    };
-    use solana_sdk::{
-        hash::Hash,
-        pubkey::Pubkey,
-        signature::{Keypair, Signature, Signer},
-    };
-    use solana_vote_program::vote_state::Vote;
-    use std::collections::BTreeSet;
-    use std::sync::Arc;
->>>>>>> b30c94ce5 (ClusterInfoVoteListener send only missing votes to BankingStage (#20873))
 
     #[test]
     fn test_max_vote_tx_fits() {
@@ -1929,17 +1812,10 @@ mod tests {
         assert!(packets.is_empty());
     }
 
-<<<<<<< HEAD
-    fn verify_packets_len(packets: &[(CrdsValueLabel, Slot, PacketBatch)], ref_value: usize) {
-        let num_packets: usize = packets
-            .iter()
-            .map(|(_, _, batch)| batch.packets.len())
-=======
     fn verify_packets_len(packets: &[VerifiedVoteMetadata], ref_value: usize) {
         let num_packets: usize = packets
             .iter()
-            .map(|vote_metadata| vote_metadata.packet.packets.len())
->>>>>>> b30c94ce5 (ClusterInfoVoteListener send only missing votes to BankingStage (#20873))
+            .map(|vote_metadata| vote_metadata.batch.packets.len())
             .sum();
         assert_eq!(num_packets, ref_value);
     }
