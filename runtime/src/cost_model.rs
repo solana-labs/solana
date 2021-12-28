@@ -18,6 +18,7 @@ use {
 };
 
 const MAX_WRITABLE_ACCOUNTS: usize = 256;
+pub type ExecutionCost = u64;
 
 // costs are stored in number of 'compute unit's
 #[derive(Debug)]
@@ -26,7 +27,7 @@ pub struct TransactionCost {
     pub signature_cost: u64,
     pub write_lock_cost: u64,
     pub data_bytes_cost: u64,
-    pub execution_cost: u64,
+    pub execution_cost: ExecutionCost,
     // `cost_weight` is a multiplier could be applied to transaction cost,
     // if set to zero allows the transaction to bypass cost limit check.
     pub cost_weight: u32,

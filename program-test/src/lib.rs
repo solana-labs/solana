@@ -283,6 +283,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                 Some(&caller_write_privileges),
                 &program_indices,
             )
+            .result
             .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;
 
         // Copy writeable account modifications back into the caller's AccountInfos
