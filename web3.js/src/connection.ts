@@ -498,6 +498,7 @@ export type ParsedInnerInstruction = {
 export type TokenBalance = {
   accountIndex: number;
   mint: string;
+  owner?: string;
   uiTokenAmount: TokenAmount;
 };
 
@@ -1437,6 +1438,7 @@ const ParsedConfirmedTransactionResult = pick({
 const TokenBalanceResult = pick({
   accountIndex: number(),
   mint: string(),
+  owner: optional(string()),
   uiTokenAmount: TokenAmountResult,
 });
 
