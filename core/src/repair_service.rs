@@ -201,6 +201,7 @@ impl RepairService {
         blockstore: Arc<Blockstore>,
         exit: Arc<AtomicBool>,
         repair_socket: Arc<UdpSocket>,
+        ancestor_hashes_socket: Arc<UdpSocket>,
         repair_info: RepairInfo,
         verified_vote_receiver: VerifiedVoteReceiver,
         outstanding_requests: Arc<RwLock<OutstandingShredRepairs>>,
@@ -225,11 +226,10 @@ impl RepairService {
                 .unwrap()
         };
 
-        let ancestor_hashes_request_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").unwrap());
         let ancestor_hashes_service = AncestorHashesService::new(
             exit,
             blockstore,
-            ancestor_hashes_request_socket,
+            ancestor_hashes_socket,
             repair_info,
             ancestor_hashes_replay_update_receiver,
         );
