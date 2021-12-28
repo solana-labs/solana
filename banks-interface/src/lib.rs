@@ -30,6 +30,19 @@ pub struct TransactionStatus {
     pub confirmation_status: Option<TransactionConfirmationStatus>,
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionSimulationDetails {
+    pub logs: Vec<String>,
+    pub units_consumed: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct BanksTransactionResultWithSimulation {
+    pub result: Option<transaction::Result<()>>,
+    pub simulation_details: Option<TransactionSimulationDetails>,
+}
+
 #[tarpc::service]
 pub trait Banks {
     async fn send_transaction_with_context(transaction: Transaction);
@@ -44,6 +57,10 @@ pub trait Banks {
         -> Option<TransactionStatus>;
     async fn get_slot_with_context(commitment: CommitmentLevel) -> Slot;
     async fn get_block_height_with_context(commitment: CommitmentLevel) -> u64;
+    async fn process_transaction_with_preflight_and_commitment_and_context(
+        transaction: Transaction,
+        commitment: CommitmentLevel,
+    ) -> BanksTransactionResultWithSimulation;
     async fn process_transaction_with_commitment_and_context(
         transaction: Transaction,
         commitment: CommitmentLevel,
