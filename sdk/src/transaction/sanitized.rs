@@ -76,20 +76,24 @@ impl SanitizedTransaction {
         })
     }
 
-    /// Create a sanitized transaction from a legacy transaction. Used for tests only.
-    pub fn from_transaction_for_tests(tx: Transaction) -> Self {
-        tx.sanitize().unwrap();
+    pub fn try_from_legacy_transaction(tx: Transaction) -> Result<Self> {
+        tx.sanitize()?;
 
         if tx.message.has_duplicates() {
-            Result::<Self>::Err(TransactionError::AccountLoadedTwice).unwrap();
+            return Err(TransactionError::AccountLoadedTwice);
         }
 
-        Self {
+        Ok(Self {
             message_hash: tx.message.hash(),
             message: SanitizedMessage::Legacy(tx.message),
             is_simple_vote_tx: false,
             signatures: tx.signatures,
-        }
+        })
+    }
+
+    /// Create a sanitized transaction from a legacy transaction. Used for tests only.
+    pub fn from_transaction_for_tests(tx: Transaction) -> Self {
+        Self::try_from_legacy_transaction(tx).unwrap()
     }
 
     /// Return the first signature for this transaction.
