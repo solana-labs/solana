@@ -37,11 +37,10 @@
 use solana_sdk::recent_blockhashes_account;
 use {
     crate::{
-<<<<<<< HEAD
-        accounts::{AccountAddressFilter, Accounts, TransactionAccounts, TransactionLoadResult},
-=======
-        accounts::{AccountAddressFilter, Accounts, LoadedTransaction, TransactionLoadResult},
->>>>>>> 45458e7139 (Refactor: Improve type safety and readability of transaction execution (#22215))
+        accounts::{
+            AccountAddressFilter, Accounts, LoadedTransaction, TransactionAccounts,
+            TransactionLoadResult,
+        },
         accounts_db::{
             AccountShrinkThreshold, AccountsDbConfig, ErrorCounters, SnapshotStorages,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
@@ -3614,17 +3613,13 @@ impl Bank {
             &loaded_transaction.program_indices,
         );
 
-        let mut transaction_accounts = Vec::new();
-        std::mem::swap(&mut loaded_transaction.accounts, &mut transaction_accounts);
-        let mut transaction_context = TransactionContext::new(
-            transaction_accounts,
-            compute_budget.max_invoke_depth.saturating_add(1),
-        );
+        let account_refcells = Self::accounts_to_refcells(&mut loaded_transaction.accounts);
 
-        let instruction_recorder = if enable_cpi_recording {
-            Some(InstructionRecorder::new_ref(
-                tx.message().instructions().len(),
-            ))
+        let instruction_recorders = if enable_cpi_recording {
+            let ix_count = tx.message().instructions().len();
+            let mut recorders = Vec::with_capacity(ix_count);
+            recorders.resize_with(ix_count, InstructionRecorder::default);
+            Some(recorders)
         } else {
             None
         };
@@ -3640,18 +3635,17 @@ impl Bank {
             &self.builtin_programs.vec,
             legacy_message,
             &loaded_transaction.program_indices,
-            &mut transaction_context,
+            &account_refcells,
             self.rent_collector.rent,
             log_collector.clone(),
             executors.clone(),
-            instruction_recorder.clone(),
+            instruction_recorders.as_deref(),
             self.feature_set.clone(),
             compute_budget,
             execute_details_timings,
             &*self.sysvar_cache.read().unwrap(),
             blockhash,
             lamports_per_signature,
-            self.load_accounts_data_len(),
         );
 
         let log_messages: Option<TransactionLogMessages> =
@@ -3661,15 +3655,24 @@ impl Bank {
                     .ok()
             });
 
-        let inner_instructions = instruction_recorder
-            .and_then(|instruction_recorder| Rc::try_unwrap(instruction_recorder).ok())
-            .map(|instruction_recorder| instruction_recorder.into_inner().deconstruct());
+        let inner_instructions: Option<InnerInstructionsList> =
+            instruction_recorders.and_then(|instruction_recorders| {
+                instruction_recorders
+                    .into_iter()
+                    .map(|r| r.compile_instructions(tx.message()))
+                    .collect()
+            });
 
-        loaded_transaction.accounts = transaction_context.deconstruct();
+        if let Err(e) =
+            Self::refcells_to_accounts(&mut loaded_transaction.accounts, account_refcells)
+        {
+            warn!("Account lifetime mismanagement");
+            return TransactionExecutionResult::NotExecuted(e);
+        }
 
         let status = process_result
             .map(|info| {
-                self.store_accounts_data_len(info.accounts_data_len);
+                self.update_accounts_data_len(info.accounts_data_len_delta);
                 self.update_executors(executors);
             })
             .map_err(|err| {
@@ -3756,105 +3759,10 @@ impl Bank {
                     signature_count += u64::from(tx.message().header().num_required_signatures);
 
                     let mut compute_budget = self.compute_budget.unwrap_or_else(ComputeBudget::new);
-<<<<<<< HEAD
-
-                    let mut process_result = if feature_set.is_active(&tx_wide_compute_cap::id()) {
-                        compute_budget.process_transaction(tx, feature_set.clone())
-                    } else {
-                        Ok(())
-                    };
-
-                    if process_result.is_ok() {
-                        let executors = self.get_executors(
-                            tx.message(),
-                            &loaded_transaction.accounts,
-                            &loaded_transaction.program_indices,
-                        );
-
-                        let account_refcells =
-                            Self::accounts_to_refcells(&mut loaded_transaction.accounts);
-
-                        let instruction_recorders = if enable_cpi_recording {
-                            let ix_count = tx.message().instructions().len();
-                            let mut recorders = Vec::with_capacity(ix_count);
-                            recorders.resize_with(ix_count, InstructionRecorder::default);
-                            Some(recorders)
-                        } else {
-                            None
-                        };
-
-                        let log_collector = if enable_log_recording {
-                            Some(LogCollector::new_ref())
-                        } else {
-                            None
-                        };
-
-                        let (blockhash, lamports_per_signature) =
-                            self.last_blockhash_and_lamports_per_signature();
-
-                        if let Some(legacy_message) = tx.message().legacy_message() {
-                            process_result = MessageProcessor::process_message(
-                                &self.builtin_programs.vec,
-                                legacy_message,
-                                &loaded_transaction.program_indices,
-                                &account_refcells,
-                                self.rent_collector.rent,
-                                log_collector.clone(),
-                                executors.clone(),
-                                instruction_recorders.as_deref(),
-                                feature_set,
-                                compute_budget,
-                                &mut timings.details,
-                                &*self.sysvar_cache.read().unwrap(),
-                                blockhash,
-                                lamports_per_signature,
-                            )
-                            .map(|process_result| {
-                                self.update_accounts_data_len(
-                                    process_result.accounts_data_len_delta,
-                                )
-                            });
-                        } else {
-                            // TODO: support versioned messages
-                            process_result = Err(TransactionError::UnsupportedVersion);
-                        }
-
-                        let log_messages: Option<TransactionLogMessages> =
-                            log_collector.and_then(|log_collector| {
-                                Rc::try_unwrap(log_collector)
-                                    .map(|log_collector| log_collector.into_inner().into())
-                                    .ok()
-                            });
-                        transaction_log_messages.push(log_messages);
-                        let inner_instruction_list: Option<InnerInstructionsList> =
-                            instruction_recorders.and_then(|instruction_recorders| {
-                                instruction_recorders
-                                    .into_iter()
-                                    .map(|r| r.compile_instructions(tx.message()))
-                                    .collect()
-                            });
-                        inner_instructions.push(inner_instruction_list);
-
-                        if let Err(e) = Self::refcells_to_accounts(
-                            &mut loaded_transaction.accounts,
-                            account_refcells,
-                        ) {
-                            warn!("Account lifetime mismanagement");
-                            process_result = Err(e);
-                        }
-
-                        if process_result.is_ok() {
-                            self.update_executors(executors);
-                        }
-                    } else {
-                        transaction_log_messages.push(None);
-                        inner_instructions.push(None);
-=======
                     if feature_set.is_active(&tx_wide_compute_cap::id()) {
                         if let Err(err) = compute_budget.process_transaction(tx, feature_set) {
                             return TransactionExecutionResult::NotExecuted(err);
                         }
->>>>>>> 45458e7139 (Refactor: Improve type safety and readability of transaction execution (#22215))
                     }
 
                     let durable_nonce_fee = nonce.as_ref().map(DurableNonceFee::from);
@@ -5692,25 +5600,6 @@ impl Bank {
         execution_results: &[TransactionExecutionResult],
         loaded_txs: &[TransactionLoadResult],
     ) {
-<<<<<<< HEAD
-        for (i, ((raccs, _load_nonce), tx)) in loaded_txs.iter().zip(txs).enumerate() {
-            let (res, _res_nonce) = &res[i];
-            if res.is_err() || raccs.is_err() {
-                continue;
-            }
-
-            let message = tx.message();
-            let loaded_transaction = raccs.as_ref().unwrap();
-
-            for (_i, (pubkey, account)) in
-                (0..message.account_keys_len()).zip(loaded_transaction.accounts.iter())
-            {
-                self.stakes_cache.check_and_store(
-                    pubkey,
-                    account,
-                    self.stakes_remove_delegation_if_inactive_enabled(),
-                );
-=======
         for (i, ((load_result, _load_nonce), tx)) in loaded_txs.iter().zip(txs).enumerate() {
             if let (Ok(loaded_transaction), true) = (
                 load_result,
@@ -5720,9 +5609,12 @@ impl Bank {
                 for (_i, (pubkey, account)) in
                     (0..message.account_keys_len()).zip(loaded_transaction.accounts.iter())
                 {
-                    self.stakes_cache.check_and_store(pubkey, account);
+                    self.stakes_cache.check_and_store(
+                        pubkey,
+                        account,
+                        self.stakes_remove_delegation_if_inactive_enabled(),
+                    );
                 }
->>>>>>> 45458e7139 (Refactor: Improve type safety and readability of transaction execution (#22215))
             }
         }
     }

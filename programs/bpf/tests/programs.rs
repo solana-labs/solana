@@ -54,17 +54,12 @@ use solana_sdk::{
     transaction::{SanitizedTransaction, Transaction, TransactionError},
 };
 use solana_transaction_status::{
-<<<<<<< HEAD
     token_balances::collect_token_balances, ConfirmedTransaction, InnerInstructions,
-    TransactionStatusMeta, TransactionWithStatusMeta, UiTransactionEncoding,
+    TransactionStatusMeta, TransactionWithStatusMeta,
 };
 use std::{
-    collections::HashMap, convert::TryFrom, env, fs::File, io::Read, path::PathBuf, str::FromStr,
+    collections::HashMap, env, fs::File, io::Read, path::PathBuf, str::FromStr,
     sync::Arc,
-=======
-    token_balances::collect_token_balances, ConfirmedTransactionWithStatusMeta, InnerInstructions,
-    TransactionStatusMeta, TransactionWithStatusMeta,
->>>>>>> 45458e7139 (Refactor: Improve type safety and readability of transaction execution (#22215))
 };
 use std::{collections::HashMap, env, fs::File, io::Read, path::PathBuf, str::FromStr, sync::Arc};
 
@@ -206,18 +201,10 @@ fn run_program(name: &str) -> u64 {
     with_mock_invoke_context(loader_id, 0, |invoke_context| {
         let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
         let (parameter_bytes, account_lengths) = serialize_parameters(
-<<<<<<< HEAD
             &keyed_accounts[0].unsigned_key(),
             &keyed_accounts[1].unsigned_key(),
             &keyed_accounts[2..],
             &[],
-=======
-            invoke_context.transaction_context,
-            invoke_context
-                .transaction_context
-                .get_current_instruction_context()
-                .unwrap(),
->>>>>>> 45458e7139 (Refactor: Improve type safety and readability of transaction execution (#22215))
         )
         .unwrap();
 
@@ -243,17 +230,7 @@ fn run_program(name: &str) -> u64 {
         let mut instruction_count = 0;
         let mut tracer = None;
         for i in 0..2 {
-<<<<<<< HEAD
             invoke_context.return_data = (*invoke_context.get_caller().unwrap(), Vec::new());
-=======
-            invoke_context.return_data = (
-                *invoke_context
-                    .transaction_context
-                    .get_program_key()
-                    .unwrap(),
-                Vec::new(),
-            );
->>>>>>> 45458e7139 (Refactor: Improve type safety and readability of transaction execution (#22215))
             let mut parameter_bytes = parameter_bytes.clone();
             {
                 let mut vm = create_vm(
@@ -306,16 +283,8 @@ fn run_program(name: &str) -> u64 {
             }
             let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
             deserialize_parameters(
-<<<<<<< HEAD
                 &loader_id,
                 &keyed_accounts[2..],
-=======
-                invoke_context.transaction_context,
-                invoke_context
-                    .transaction_context
-                    .get_current_instruction_context()
-                    .unwrap(),
->>>>>>> 45458e7139 (Refactor: Improve type safety and readability of transaction execution (#22215))
                 parameter_bytes.as_slice(),
                 &account_lengths,
                 true,
@@ -358,14 +327,10 @@ fn process_transaction_and_record_inner(
     (result, inner_instructions)
 }
 
-<<<<<<< HEAD
-fn execute_transactions(bank: &Bank, txs: Vec<Transaction>) -> Vec<ConfirmedTransaction> {
-=======
 fn execute_transactions(
     bank: &Bank,
     txs: Vec<Transaction>,
-) -> Vec<Result<ConfirmedTransactionWithStatusMeta, TransactionError>> {
->>>>>>> 45458e7139 (Refactor: Improve type safety and readability of transaction execution (#22215))
+) -> Vec<Result<ConfirmedTransaction, TransactionError>> {
     let batch = bank.prepare_batch_for_tests(txs.clone());
     let mut timings = ExecuteTimings::default();
     let mut mint_decimals = HashMap::new();
@@ -454,7 +419,7 @@ fn execute_transactions(
                         rewards: None,
                     };
 
-                    Ok(ConfirmedTransactionWithStatusMeta {
+                    Ok(ConfirmedTransaction {
                         slot: bank.slot(),
                         transaction: TransactionWithStatusMeta {
                             transaction: tx.clone(),
@@ -462,51 +427,14 @@ fn execute_transactions(
                         },
                         block_time: None,
                     })
-<<<<<<< HEAD
-                    .filter(|i| !i.instructions.is_empty())
-                    .collect()
-            });
-
-            let tx_status_meta = TransactionStatusMeta {
-                status: execute_result,
-                fee,
-                pre_balances,
-                post_balances,
-                pre_token_balances: Some(pre_token_balances),
-                post_token_balances: Some(post_token_balances),
-                inner_instructions,
-                log_messages,
-                rewards: None,
-            };
-
-            ConfirmedTransaction {
-                slot: bank.slot(),
-                transaction: TransactionWithStatusMeta {
-                    transaction: tx.clone(),
-                    meta: Some(tx_status_meta),
-                },
-                block_time: None,
-=======
                 }
                 TransactionExecutionResult::NotExecuted(err) => Err(err.clone()),
->>>>>>> 45458e7139 (Refactor: Improve type safety and readability of transaction execution (#22215))
             }
         },
     )
     .collect()
 }
 
-<<<<<<< HEAD
-fn print_confirmed_tx(name: &str, confirmed_tx: ConfirmedTransaction) {
-    let block_time = confirmed_tx.block_time;
-    let tx = confirmed_tx.transaction.transaction.clone();
-    let encoded = confirmed_tx.encode(UiTransactionEncoding::JsonParsed);
-    println!("EXECUTE {} (slot {})", name, encoded.slot);
-    println_transaction(&tx, &encoded.transaction.meta, "  ", None, block_time);
-}
-
-=======
->>>>>>> 45458e7139 (Refactor: Improve type safety and readability of transaction execution (#22215))
 #[test]
 #[cfg(any(feature = "bpf_c", feature = "bpf_rust"))]
 fn test_program_bpf_sanity() {

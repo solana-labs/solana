@@ -211,18 +211,10 @@ fn bench_create_vm(bencher: &mut Bencher) {
         // Serialize account data
         let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
         let (mut serialized, account_lengths) = serialize_parameters(
-<<<<<<< HEAD
             &keyed_accounts[0].unsigned_key(),
             &keyed_accounts[1].unsigned_key(),
             &keyed_accounts[2..],
             &[],
-=======
-            invoke_context.transaction_context,
-            invoke_context
-                .transaction_context
-                .get_current_instruction_context()
-                .unwrap(),
->>>>>>> 45458e7139 (Refactor: Improve type safety and readability of transaction execution (#22215))
         )
         .unwrap();
 
@@ -260,18 +252,10 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
         // Serialize account data
         let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
         let (mut serialized, account_lengths) = serialize_parameters(
-<<<<<<< HEAD
             &keyed_accounts[0].unsigned_key(),
             &keyed_accounts[1].unsigned_key(),
             &keyed_accounts[2..],
             &[],
-=======
-            invoke_context.transaction_context,
-            invoke_context
-                .transaction_context
-                .get_current_instruction_context()
-                .unwrap(),
->>>>>>> 45458e7139 (Refactor: Improve type safety and readability of transaction execution (#22215))
         )
         .unwrap();
 
