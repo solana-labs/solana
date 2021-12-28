@@ -1,10 +1,6 @@
 use {
     solana_runtime::bank::Bank,
-    solana_sdk::{
-        clock::{Epoch, Slot},
-        pubkey::Pubkey,
-    },
-    std::collections::HashMap,
+    solana_sdk::clock::{Epoch, Slot},
 };
 
 /// Looks through vote accounts, and finds the latest slot that has achieved
@@ -17,13 +13,6 @@ pub fn get_supermajority_slot(bank: &Bank, epoch: Epoch) -> Option<u64> {
 
     // Filter out the states that don't have a max lockout
     find_supermajority_slot(supermajority_stake, stakes_and_lockouts.iter())
-}
-
-pub fn vote_account_stakes(bank: &Bank) -> HashMap<Pubkey, u64> {
-    bank.vote_accounts()
-        .into_iter()
-        .map(|(id, (stake, _))| (id, stake))
-        .collect()
 }
 
 fn epoch_stakes_and_lockouts(bank: &Bank, epoch: Epoch) -> Vec<(u64, Option<u64>)> {
