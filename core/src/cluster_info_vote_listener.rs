@@ -457,7 +457,7 @@ impl ClusterInfoVoteListener {
             ) {
                 match e {
                     Error::CrossbeamRecvTimeout(RecvTimeoutError::Disconnected)
-                    | Error::ReadyTimeout => (),
+                    | Error::CrossbeamRecvTimeout(RecvTimeoutError::Timeout) => (),
                     _ => {
                         error!("thread {:?} error {:?}", thread::current().name(), e);
                     }
