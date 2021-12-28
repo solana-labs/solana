@@ -12,6 +12,7 @@ use {
             TransactionExecutionResult,
         },
         blockhash_queue::BlockhashQueue,
+        cost_model::ExecutionCost,
         rent_collector::RentCollector,
         system_instruction_processor::{get_system_account_kind, SystemAccountKind},
     },
@@ -109,6 +110,7 @@ pub struct LoadedTransaction {
     pub loaders: TransactionLoaders,
     pub rent: TransactionRent,
     pub rent_debits: RentDebits,
+    pub estimated_execution_cost: ExecutionCost,
 }
 
 pub type TransactionLoadResult = (Result<LoadedTransaction>, Option<NonceRollbackFull>);
@@ -205,6 +207,7 @@ impl Accounts {
         error_counters: &mut ErrorCounters,
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
+        estimated_execution_cost: ExecutionCost,
     ) -> Result<LoadedTransaction> {
         // Copy all the accounts
         let message = tx.message();
@@ -361,6 +364,32 @@ impl Accounts {
                         })
                     }
                 }
+<<<<<<< HEAD
+=======
+                payer_account
+                    .checked_sub_lamports(fee)
+                    .map_err(|_| TransactionError::InsufficientFundsForFee)?;
+
+                let program_indices = message
+                    .instructions()
+                    .iter()
+                    .map(|instruction| {
+                        self.load_executable_accounts(
+                            ancestors,
+                            &mut accounts,
+                            instruction.program_id_index as usize,
+                            error_counters,
+                        )
+                    })
+                    .collect::<Result<Vec<Vec<usize>>>>()?;
+                Ok(LoadedTransaction {
+                    accounts,
+                    program_indices,
+                    rent: tx_rent,
+                    rent_debits,
+                    estimated_execution_cost,
+                })
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
             } else {
                 error_counters.account_not_found += 1;
                 Err(TransactionError::AccountNotFound)
@@ -448,8 +477,13 @@ impl Accounts {
     ) -> Vec<TransactionLoadResult> {
         txs.zip(lock_results)
             .map(|etx| match etx {
+<<<<<<< HEAD
                 (tx, (Ok(()), nonce_rollback)) => {
                     let fee_calculator = nonce_rollback
+=======
+                (tx, (Ok(execution_cost), nonce)) => {
+                    let lamports_per_signature = nonce
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
                         .as_ref()
                         .map(|nonce_rollback| nonce_rollback.fee_calculator())
                         .unwrap_or_else(|| {
@@ -470,6 +504,7 @@ impl Accounts {
                         error_counters,
                         rent_collector,
                         feature_set,
+                        execution_cost,
                     ) {
                         Ok(loaded_transaction) => loaded_transaction,
                         Err(e) => return (Err(e), None),
@@ -883,6 +918,7 @@ impl Accounts {
     #[allow(clippy::needless_collect)]
     pub fn lock_accounts<'a>(
         &self,
+<<<<<<< HEAD
         txs: impl Iterator<Item = &'a Transaction>,
         demote_program_write_locks: bool,
     ) -> Vec<Result<()>> {
@@ -906,6 +942,41 @@ impl Accounts {
                 Ok((writable_keys, readonly_keys)) => {
                     self.lock_account(&mut account_locks, writable_keys, readonly_keys)
                 }
+=======
+        txs: impl Iterator<Item = &'a SanitizedTransaction>,
+    ) -> Vec<Result<ExecutionCost>> {
+        let keys: Vec<_> = txs.map(|tx| tx.get_account_locks()).collect();
+        let account_locks = &mut self.account_locks.lock().unwrap();
+        keys.into_iter()
+            .map(|keys| {
+                self.lock_account(account_locks, keys.writable, keys.readonly)
+                    .map(|_| 0)
+            })
+            .collect()
+    }
+
+    #[must_use]
+    #[allow(clippy::needless_collect)]
+    pub fn lock_accounts_with_results<'a>(
+        &self,
+        txs: impl Iterator<Item = &'a SanitizedTransaction>,
+        results: impl Iterator<Item = Result<ExecutionCost>>,
+    ) -> Vec<Result<ExecutionCost>> {
+        let key_results: Vec<_> = txs
+            .zip(results)
+            .map(|(tx, result)| match result {
+                Ok(execution_cost) => Ok((tx.get_account_locks(), execution_cost)),
+                Err(e) => Err(e),
+            })
+            .collect();
+        let account_locks = &mut self.account_locks.lock().unwrap();
+        key_results
+            .into_iter()
+            .map(|key_result| match key_result {
+                Ok((keys, execution_cost)) => self
+                    .lock_account(account_locks, keys.writable, keys.readonly)
+                    .map(|_| execution_cost),
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
                 Err(e) => Err(e),
             })
             .collect()
@@ -915,9 +986,14 @@ impl Accounts {
     #[allow(clippy::needless_collect)]
     pub fn unlock_accounts<'a>(
         &self,
+<<<<<<< HEAD
         txs: impl Iterator<Item = &'a Transaction>,
         results: &[Result<()>],
         demote_program_write_locks: bool,
+=======
+        txs: impl Iterator<Item = &'a SanitizedTransaction>,
+        results: &[Result<ExecutionCost>],
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
     ) {
         let keys: Vec<_> = txs
             .zip(results)
@@ -1202,8 +1278,13 @@ mod tests {
         let ancestors = vec![(0, 0)].into_iter().collect();
         accounts.load_accounts(
             &ancestors,
+<<<<<<< HEAD
             [tx].iter(),
             vec![(Ok(()), None)],
+=======
+            &[sanitized_tx],
+            vec![(Ok(0), None)],
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
             &hash_queue,
             error_counters,
             rent_collector,
@@ -2302,6 +2383,114 @@ mod tests {
     }
 
     #[test]
+<<<<<<< HEAD
+=======
+    fn test_accounts_locks_with_results() {
+        let keypair0 = Keypair::new();
+        let keypair1 = Keypair::new();
+        let keypair2 = Keypair::new();
+        let keypair3 = Keypair::new();
+
+        let account0 = AccountSharedData::new(1, 0, &Pubkey::default());
+        let account1 = AccountSharedData::new(2, 0, &Pubkey::default());
+        let account2 = AccountSharedData::new(3, 0, &Pubkey::default());
+        let account3 = AccountSharedData::new(4, 0, &Pubkey::default());
+
+        let accounts = Accounts::new_with_config_for_tests(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            false,
+            AccountShrinkThreshold::default(),
+        );
+        accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
+        accounts.store_slow_uncached(0, &keypair1.pubkey(), &account1);
+        accounts.store_slow_uncached(0, &keypair2.pubkey(), &account2);
+        accounts.store_slow_uncached(0, &keypair3.pubkey(), &account3);
+
+        let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
+        let message = Message::new_with_compiled_instructions(
+            1,
+            0,
+            2,
+            vec![keypair1.pubkey(), keypair0.pubkey(), native_loader::id()],
+            Hash::default(),
+            instructions,
+        );
+        let tx0 = new_sanitized_tx(&[&keypair1], message, Hash::default());
+        let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
+        let message = Message::new_with_compiled_instructions(
+            1,
+            0,
+            2,
+            vec![keypair2.pubkey(), keypair0.pubkey(), native_loader::id()],
+            Hash::default(),
+            instructions,
+        );
+        let tx1 = new_sanitized_tx(&[&keypair2], message, Hash::default());
+        let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
+        let message = Message::new_with_compiled_instructions(
+            1,
+            0,
+            2,
+            vec![keypair3.pubkey(), keypair0.pubkey(), native_loader::id()],
+            Hash::default(),
+            instructions,
+        );
+        let tx2 = new_sanitized_tx(&[&keypair3], message, Hash::default());
+        let txs = vec![tx0, tx1, tx2];
+
+        let qos_results = vec![
+            Ok(0),
+            Err(TransactionError::WouldExceedMaxBlockCostLimit),
+            Ok(0),
+        ];
+
+        let results = accounts.lock_accounts_with_results(txs.iter(), qos_results.into_iter());
+
+        assert!(results[0].is_ok()); // Read-only account (keypair0) can be referenced multiple times
+        assert!(results[1].is_err()); // is not locked due to !qos_results[1].is_ok()
+        assert!(results[2].is_ok()); // Read-only account (keypair0) can be referenced multiple times
+
+        // verify that keypair0 read-only lock twice (for tx0 and tx2)
+        assert_eq!(
+            *accounts
+                .account_locks
+                .lock()
+                .unwrap()
+                .readonly_locks
+                .get(&keypair0.pubkey())
+                .unwrap(),
+            2
+        );
+        // verify that keypair2 (for tx1) is not write-locked
+        assert!(accounts
+            .account_locks
+            .lock()
+            .unwrap()
+            .write_locks
+            .get(&keypair2.pubkey())
+            .is_none());
+
+        accounts.unlock_accounts(txs.iter(), &results);
+
+        // check all locks to be removed
+        assert!(accounts
+            .account_locks
+            .lock()
+            .unwrap()
+            .readonly_locks
+            .is_empty());
+        assert!(accounts
+            .account_locks
+            .lock()
+            .unwrap()
+            .write_locks
+            .is_empty());
+    }
+
+    #[test]
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
     fn test_collect_accounts_to_store() {
         let keypair0 = Keypair::new();
         let keypair1 = Keypair::new();
@@ -2352,6 +2541,7 @@ mod tests {
                 loaders: transaction_loaders0,
                 rent: transaction_rent0,
                 rent_debits: RentDebits::default(),
+                estimated_execution_cost: 0,
             }),
             None,
         );
@@ -2364,6 +2554,7 @@ mod tests {
                 loaders: transaction_loaders1,
                 rent: transaction_rent1,
                 rent_debits: RentDebits::default(),
+                estimated_execution_cost: 0,
             }),
             None,
         );
@@ -2464,8 +2655,13 @@ mod tests {
         let mut error_counters = ErrorCounters::default();
         accounts.load_accounts(
             &ancestors,
+<<<<<<< HEAD
             [tx].iter(),
             vec![(Ok(()), None)],
+=======
+            &[tx],
+            vec![(Ok(0), None)],
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
             &hash_queue,
             &mut error_counters,
             &rent_collector,
@@ -2760,6 +2956,7 @@ mod tests {
                 loaders: transaction_loaders,
                 rent: transaction_rent,
                 rent_debits: RentDebits::default(),
+                estimated_execution_cost: 0,
             }),
             nonce_rollback,
         );
@@ -2880,6 +3077,7 @@ mod tests {
                 loaders: transaction_loaders,
                 rent: transaction_rent,
                 rent_debits: RentDebits::default(),
+                estimated_execution_cost: 0,
             }),
             nonce_rollback,
         );

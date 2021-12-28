@@ -1,12 +1,17 @@
 use {
+<<<<<<< HEAD
     crate::{bank::Bank, hashed_transaction::HashedTransaction},
     solana_sdk::transaction::{Result, Transaction},
+=======
+    crate::{bank::Bank, cost_model::ExecutionCost},
+    solana_sdk::transaction::{Result, SanitizedTransaction},
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
     std::borrow::Cow,
 };
 
 // Represents the results of trying to lock a set of accounts
 pub struct TransactionBatch<'a, 'b> {
-    lock_results: Vec<Result<()>>,
+    lock_results: Vec<Result<ExecutionCost>>,
     bank: &'a Bank,
     hashed_txs: Cow<'b, [HashedTransaction<'b>]>,
     pub(crate) needs_unlock: bool,
@@ -14,7 +19,7 @@ pub struct TransactionBatch<'a, 'b> {
 
 impl<'a, 'b> TransactionBatch<'a, 'b> {
     pub fn new(
-        lock_results: Vec<Result<()>>,
+        lock_results: Vec<Result<ExecutionCost>>,
         bank: &'a Bank,
         hashed_txs: Cow<'b, [HashedTransaction<'b>]>,
     ) -> Self {
@@ -27,7 +32,7 @@ impl<'a, 'b> TransactionBatch<'a, 'b> {
         }
     }
 
-    pub fn lock_results(&self) -> &Vec<Result<()>> {
+    pub fn lock_results(&self) -> &Vec<Result<ExecutionCost>> {
         &self.lock_results
     }
 

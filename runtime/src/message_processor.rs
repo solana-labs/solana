@@ -1,4 +1,5 @@
 use {
+<<<<<<< HEAD
     crate::{
         accounts::Accounts, ancestors::Ancestors, bank::TransactionAccountRefCell,
         instruction_recorder::InstructionRecorder, log_collector::LogCollector,
@@ -7,6 +8,17 @@ use {
     log::*,
     serde::{Deserialize, Serialize},
     solana_measure::measure::Measure,
+=======
+    crate::cost_model::ExecutionCost,
+    serde::{Deserialize, Serialize},
+    solana_measure::measure::Measure,
+    solana_program_runtime::{
+        instruction_recorder::InstructionRecorder,
+        invoke_context::{BuiltinProgram, Executors, InvokeContext, ProcessInstructionResult},
+        log_collector::LogCollector,
+        timings::ExecuteDetailsTimings,
+    },
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
@@ -973,6 +985,7 @@ impl MessageProcessor {
     /// This method calls the instruction's program entrypoint function
     pub fn process_cross_program_instruction(
         message: &Message,
+<<<<<<< HEAD
         executable_accounts: &[TransactionAccountRefCell],
         accounts: &[TransactionAccountRefCell],
         caller_write_privileges: &[bool],
@@ -1071,6 +1084,17 @@ impl MessageProcessor {
         executable_accounts: &[TransactionAccountRefCell],
         accounts: &[TransactionAccountRefCell],
         rent: &Rent,
+=======
+        program_indices: &[Vec<usize>],
+        estimated_execution_cost: ExecutionCost,
+        transaction_context: &TransactionContext,
+        rent: Rent,
+        log_collector: Option<Rc<RefCell<LogCollector>>>,
+        executors: Rc<RefCell<Executors>>,
+        instruction_recorder: Option<Rc<RefCell<InstructionRecorder>>>,
+        feature_set: Arc<FeatureSet>,
+        compute_budget: ComputeBudget,
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
         timings: &mut ExecuteDetailsTimings,
         logger: Rc<RefCell<dyn Logger>>,
         updated_verify_policy: bool,
@@ -1281,6 +1305,7 @@ impl MessageProcessor {
         time.stop();
         let post_remaining_units = invoke_context.get_compute_meter().borrow().get_remaining();
 
+<<<<<<< HEAD
         let program_timing = timings.per_program_timings.entry(*program_id).or_default();
         program_timing.accumulated_us += time.as_us();
         program_timing.accumulated_units += pre_remaining_units - post_remaining_units;
@@ -1337,6 +1362,41 @@ impl MessageProcessor {
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err));
 
             err?;
+=======
+            let instruction_accounts = instruction
+                .accounts
+                .iter()
+                .map(|account_index| {
+                    let account_index = *account_index as usize;
+                    InstructionAccount {
+                        index: account_index,
+                        is_signer: message.is_signer(account_index),
+                        is_writable: message.is_writable(account_index),
+                    }
+                })
+                .collect::<Vec<_>>();
+            let mut time = Measure::start("execute_instruction");
+            let ProcessInstructionResult {
+                compute_units_consumed,
+                result,
+            } = invoke_context.process_instruction(
+                &instruction.data,
+                &instruction_accounts,
+                None,
+                program_indices,
+            );
+            time.stop();
+            timings.accumulate_program(
+                instruction.program_id(&message.account_keys),
+                time.as_us(),
+                compute_units_consumed,
+                estimated_execution_cost,
+                result.is_err(),
+            );
+            timings.accumulate(&invoke_context.timings);
+            result
+                .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
         }
         Ok(())
     }
@@ -2007,9 +2067,16 @@ mod tests {
 
         let result = message_processor.process_message(
             &message,
+<<<<<<< HEAD
             &loaders,
             &accounts,
             &rent_collector,
+=======
+            &program_indices,
+            0,
+            &transaction_context,
+            rent_collector.rent,
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
             None,
             executors.clone(),
             None,
@@ -2035,9 +2102,16 @@ mod tests {
 
         let result = message_processor.process_message(
             &message,
+<<<<<<< HEAD
             &loaders,
             &accounts,
             &rent_collector,
+=======
+            &program_indices,
+            0,
+            &transaction_context,
+            rent_collector.rent,
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
             None,
             executors.clone(),
             None,
@@ -2067,9 +2141,16 @@ mod tests {
 
         let result = message_processor.process_message(
             &message,
+<<<<<<< HEAD
             &loaders,
             &accounts,
             &rent_collector,
+=======
+            &program_indices,
+            0,
+            &transaction_context,
+            rent_collector.rent,
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
             None,
             executors,
             None,
@@ -2191,9 +2272,16 @@ mod tests {
         );
         let result = message_processor.process_message(
             &message,
+<<<<<<< HEAD
             &loaders,
             &accounts,
             &rent_collector,
+=======
+            &program_indices,
+            0,
+            &transaction_context,
+            rent_collector.rent,
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
             None,
             executors.clone(),
             None,
@@ -2223,9 +2311,16 @@ mod tests {
         );
         let result = message_processor.process_message(
             &message,
+<<<<<<< HEAD
             &loaders,
             &accounts,
             &rent_collector,
+=======
+            &program_indices,
+            0,
+            &transaction_context,
+            rent_collector.rent,
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
             None,
             executors.clone(),
             None,
@@ -2253,9 +2348,16 @@ mod tests {
         let ancestors = Ancestors::default();
         let result = message_processor.process_message(
             &message,
+<<<<<<< HEAD
             &loaders,
             &accounts,
             &rent_collector,
+=======
+            &program_indices,
+            0,
+            &transaction_context,
+            rent_collector.rent,
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
             None,
             executors,
             None,
@@ -2370,10 +2472,17 @@ mod tests {
             &caller_program_id,
             Rent::default(),
             &message,
+<<<<<<< HEAD
             &caller_instruction,
             &executable_accounts,
             &accounts,
             programs.as_slice(),
+=======
+            &[vec![0], vec![1]],
+            0,
+            &transaction_context,
+            RentCollector::default().rent,
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
             None,
             BpfComputeBudget::default(),
             Rc::new(RefCell::new(MockComputeMeter::default())),

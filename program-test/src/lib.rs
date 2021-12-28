@@ -330,6 +330,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             }
         }
 
+<<<<<<< HEAD
         invoke_context.record_instruction(instruction);
 
         solana_runtime::message_processor::MessageProcessor::process_cross_program_instruction(
@@ -340,6 +341,17 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             invoke_context,
         )
         .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;
+=======
+        invoke_context
+            .process_instruction(
+                &instruction.data,
+                &instruction_accounts,
+                Some(&caller_write_privileges),
+                &program_indices,
+            )
+            .result
+            .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
 
         // Copy writeable account modifications back into the caller's AccountInfos
         for (i, (pubkey, account)) in accounts.iter().enumerate().take(message.account_keys.len()) {

@@ -44,7 +44,12 @@ use {
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::{Ancestors, AncestorsForSerialization},
         blockhash_queue::BlockhashQueue,
+<<<<<<< HEAD
         builtins::{self, ActivationType},
+=======
+        builtins::{self, ActivationType, Builtin, Builtins},
+        cost_model::ExecutionCost,
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
         cost_tracker::CostTracker,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         hashed_transaction::{HashedTransaction, HashedTransactionSlice},
@@ -564,8 +569,13 @@ impl StatusCacheRc {
     }
 }
 
+<<<<<<< HEAD
 pub type TransactionCheckResult = (Result<()>, Option<NonceRollbackPartial>);
 pub type TransactionExecutionResult = (Result<()>, Option<NonceRollbackFull>);
+=======
+pub type TransactionCheckResult<'a> = (Result<ExecutionCost>, Option<NoncePartial>);
+pub type TransactionExecutionResult = (Result<()>, Option<NonceFull>);
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
 pub struct TransactionResults {
     pub fee_collection_results: Vec<Result<()>>,
     pub execution_results: Vec<TransactionExecutionResult>,
@@ -2937,8 +2947,45 @@ impl Bank {
         let mut batch = TransactionBatch::new(
             vec![check_transaction(tx)],
             self,
+<<<<<<< HEAD
             Cow::Owned(vec![HashedTransaction::from(tx)]),
         );
+=======
+            Cow::Owned(sanitized_txs),
+        ))
+    }
+
+    /// Prepare a locked transaction batch from a list of sanitized transactions.
+    pub fn prepare_sanitized_batch<'a, 'b>(
+        &'a self,
+        txs: &'b [SanitizedTransaction],
+    ) -> TransactionBatch<'a, 'b> {
+        let lock_results = self.rc.accounts.lock_accounts(txs.iter());
+        TransactionBatch::new(lock_results, self, Cow::Borrowed(txs))
+    }
+
+    /// Prepare a locked transaction batch from a list of sanitized transactions, and their cost
+    /// limited packing status
+    pub fn prepare_sanitized_batch_with_results<'a, 'b>(
+        &'a self,
+        transactions: &'b [SanitizedTransaction],
+        transaction_results: impl Iterator<Item = Result<ExecutionCost>>,
+    ) -> TransactionBatch<'a, 'b> {
+        // this lock_results could be: Ok, AccountInUse, WouldExceedBlockMaxLimit or WouldExceedAccountMaxLimit
+        let lock_results = self
+            .rc
+            .accounts
+            .lock_accounts_with_results(transactions.iter(), transaction_results);
+        TransactionBatch::new(lock_results, self, Cow::Borrowed(transactions))
+    }
+
+    /// Prepare a transaction batch without locking accounts for transaction simulation.
+    pub(crate) fn prepare_simulation_batch<'a>(
+        &'a self,
+        transaction: SanitizedTransaction,
+    ) -> TransactionBatch<'a, '_> {
+        let mut batch = TransactionBatch::new(vec![Ok(0)], self, Cow::Owned(vec![transaction]));
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
         batch.needs_unlock = false;
         batch
     }
@@ -3012,15 +3059,24 @@ impl Bank {
         self.rc.accounts.accounts_db.set_shrink_paths(paths);
     }
 
-    fn check_age<'a>(
+    fn check_age<'a, T>(
         &self,
+<<<<<<< HEAD
         txs: impl Iterator<Item = &'a Transaction>,
         lock_results: Vec<Result<()>>,
+=======
+        txs: impl Iterator<Item = &'a SanitizedTransaction>,
+        lock_results: impl Iterator<Item = T>,
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
         max_age: usize,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<TransactionCheckResult> {
+    ) -> Vec<TransactionCheckResult>
+    where
+        T: std::borrow::Borrow<Result<ExecutionCost>>,
+    {
         let hash_queue = self.blockhash_queue.read().unwrap();
         txs.zip(lock_results)
+<<<<<<< HEAD
             .map(|(tx, lock_res)| match lock_res {
                 Ok(()) => {
                     let message = tx.message();
@@ -3029,6 +3085,19 @@ impl Bank {
                         (Ok(()), None)
                     } else if let Some((pubkey, acc)) = self.check_tx_durable_nonce(tx) {
                         (Ok(()), Some(NonceRollbackPartial::new(pubkey, acc)))
+=======
+            .map(|(tx, lock_res)| match lock_res.borrow() {
+                Ok(execution_cost) => {
+                    let recent_blockhash = tx.message().recent_blockhash();
+                    let hash_age = hash_queue.check_hash_age(recent_blockhash, max_age);
+                    if hash_age == Some(true) {
+                        (Ok(*execution_cost), None)
+                    } else if let Some((address, account)) = self.check_transaction_for_nonce(tx) {
+                        (
+                            Ok(*execution_cost),
+                            Some(NoncePartial::new(address, account)),
+                        )
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
                     } else if hash_age == Some(false) {
                         error_counters.blockhash_too_old += 1;
                         (Err(TransactionError::BlockhashNotFound), None)
@@ -3115,6 +3184,7 @@ impl Bank {
             })
     }
 
+<<<<<<< HEAD
     // Determine if the bank is currently in an upgrade epoch, where only votes are permitted
     fn upgrade_epoch(&self) -> bool {
         match self.cluster_type() {
@@ -3152,6 +3222,21 @@ impl Bank {
         } else {
             cache_results
         }
+=======
+    pub fn check_transactions<T>(
+        &self,
+        sanitized_txs: &[SanitizedTransaction],
+        lock_results: impl Iterator<Item = T>,
+        max_age: usize,
+        error_counters: &mut ErrorCounters,
+    ) -> Vec<TransactionCheckResult>
+    where
+        T: std::borrow::Borrow<Result<ExecutionCost>>,
+    {
+        let age_results =
+            self.check_age(sanitized_txs.iter(), lock_results, max_age, error_counters);
+        self.check_status_cache(sanitized_txs, age_results, error_counters)
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
     }
 
     pub fn collect_balances(&self, batch: &TransactionBatch) -> TransactionBalances {
@@ -3407,8 +3492,13 @@ impl Bank {
 
         let mut check_time = Measure::start("check_transactions");
         let check_results = self.check_transactions(
+<<<<<<< HEAD
             hashed_txs,
             batch.lock_results(),
+=======
+            sanitized_txs,
+            batch.lock_results().iter(),
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
             max_age,
             &mut error_counters,
         );
@@ -3488,6 +3578,7 @@ impl Bank {
                             bpf_compute_budget.max_units,
                         )));
 
+<<<<<<< HEAD
                         process_result = self.message_processor.process_message(
                             tx.message(),
                             &loader_refcells,
@@ -3502,6 +3593,50 @@ impl Bank {
                             &mut timings.details,
                             self.rc.accounts.clone(),
                             &self.ancestors,
+=======
+                        if let Some(legacy_message) = tx.message().legacy_message() {
+                            process_result = MessageProcessor::process_message(
+                                &self.builtin_programs.vec,
+                                legacy_message,
+                                &loaded_transaction.program_indices,
+                                loaded_transaction.estimated_execution_cost,
+                                &transaction_context,
+                                self.rent_collector.rent,
+                                log_collector.clone(),
+                                executors.clone(),
+                                instruction_recorder.clone(),
+                                feature_set,
+                                compute_budget,
+                                &mut timings.details,
+                                &*self.sysvar_cache.read().unwrap(),
+                                blockhash,
+                                lamports_per_signature,
+                                self.load_accounts_data_len(),
+                            )
+                            .map(|process_result| {
+                                self.store_accounts_data_len(process_result.accounts_data_len)
+                            });
+                        } else {
+                            // TODO: support versioned messages
+                            process_result = Err(TransactionError::UnsupportedVersion);
+                        }
+
+                        let log_messages: Option<TransactionLogMessages> =
+                            log_collector.and_then(|log_collector| {
+                                Rc::try_unwrap(log_collector)
+                                    .map(|log_collector| log_collector.into_inner().into())
+                                    .ok()
+                            });
+                        transaction_log_messages.push(log_messages);
+                        inner_instructions.push(
+                            instruction_recorder
+                                .and_then(|instruction_recorder| {
+                                    Rc::try_unwrap(instruction_recorder).ok()
+                                })
+                                .map(|instruction_recorder| {
+                                    instruction_recorder.into_inner().deconstruct()
+                                }),
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
                         );
 
                         transaction_log_messages.push(Self::collect_log_messages(log_collector));

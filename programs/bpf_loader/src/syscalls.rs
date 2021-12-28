@@ -2469,6 +2469,7 @@ fn call<'a>(
     };
 
     // Process instruction
+<<<<<<< HEAD
 
     #[allow(clippy::deref_addrof)]
     match MessageProcessor::process_cross_program_instruction(
@@ -2483,6 +2484,17 @@ fn call<'a>(
             return Err(SyscallError::InstructionError(err).into());
         }
     }
+=======
+    invoke_context
+        .process_instruction(
+            &instruction.data,
+            &instruction_accounts,
+            Some(&caller_write_privileges),
+            &program_indices,
+        )
+        .result
+        .map_err(SyscallError::InstructionError)?;
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
 
     // Copy results back to caller
     {

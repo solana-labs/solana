@@ -25,9 +25,13 @@ use {
             TransactionExecutionResult,
         },
         bank_utils,
+<<<<<<< HEAD
         cost_model::CostModel,
         cost_tracker::CostTracker,
         hashed_transaction::HashedTransaction,
+=======
+        cost_model::{CostModel, ExecutionCost},
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
         transaction_batch::TransactionBatch,
         vote_sender_types::ReplayVoteSender,
     },
@@ -957,10 +961,30 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
     ) -> (Result<usize, PohRecorderError>, Vec<usize>) {
+<<<<<<< HEAD
         let mut lock_time = Measure::start("lock_time");
         // Once accounts are locked, other threads cannot encode transactions that will modify the
         // same account state
         let batch = bank.prepare_hashed_batch(txs);
+=======
+        let tx_costs = qos_service.compute_transaction_costs(txs.iter());
+
+        let transactions_qos_results =
+            qos_service.select_transactions_per_cost(txs.iter(), tx_costs.into_iter(), bank);
+
+        // Only lock accounts for those transactions are selected for the block;
+        // Once accounts are locked, other threads cannot encode transactions that will modify the
+        // same account state
+        let mut lock_time = Measure::start("lock_time");
+        let batch = bank.prepare_sanitized_batch_with_results(
+            txs,
+            transactions_qos_results
+                .into_iter()
+                .map(|transaction_cost_result| {
+                    transaction_cost_result.map(|transaction_cost| transaction_cost.execution_cost)
+                }),
+        );
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
         lock_time.stop();
 
         let (result, mut retryable_txs) = Self::process_and_record_transactions_locked(
@@ -1053,9 +1077,9 @@ impl BankingStage {
     fn prepare_filter_for_pending_transactions(
         transactions_len: usize,
         pending_tx_indexes: &[usize],
-    ) -> Vec<transaction::Result<()>> {
+    ) -> Vec<transaction::Result<ExecutionCost>> {
         let mut mask = vec![Err(TransactionError::BlockhashNotFound); transactions_len];
-        pending_tx_indexes.iter().for_each(|x| mask[*x] = Ok(()));
+        pending_tx_indexes.iter().for_each(|x| mask[*x] = Ok(0));
         mask
     }
 
@@ -1212,7 +1236,7 @@ impl BankingStage {
 
         let results = bank.check_transactions(
             transactions,
-            &filter,
+            filter.into_iter(),
             (MAX_PROCESSING_AGE)
                 .saturating_sub(max_tx_fwd_delay)
                 .saturating_sub(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET as usize),
@@ -2180,20 +2204,20 @@ mod tests {
             vec![
                 Err(TransactionError::BlockhashNotFound),
                 Err(TransactionError::BlockhashNotFound),
-                Ok(()),
+                Ok(0),
                 Err(TransactionError::BlockhashNotFound),
-                Ok(()),
-                Ok(())
+                Ok(0),
+                Ok(0)
             ]
         );
 
         assert_eq!(
             BankingStage::prepare_filter_for_pending_transactions(6, &[0, 2, 3]),
             vec![
-                Ok(()),
+                Ok(0),
                 Err(TransactionError::BlockhashNotFound),
-                Ok(()),
-                Ok(()),
+                Ok(0),
+                Ok(0),
                 Err(TransactionError::BlockhashNotFound),
                 Err(TransactionError::BlockhashNotFound),
             ]
@@ -2207,10 +2231,10 @@ mod tests {
                 &[
                     (Err(TransactionError::BlockhashNotFound), None),
                     (Err(TransactionError::BlockhashNotFound), None),
-                    (Ok(()), None),
+                    (Ok(0), None),
                     (Err(TransactionError::BlockhashNotFound), None),
-                    (Ok(()), None),
-                    (Ok(()), None),
+                    (Ok(0), None),
+                    (Ok(0), None),
                 ],
                 &[2, 4, 5, 9, 11, 13]
             ),
@@ -2220,12 +2244,12 @@ mod tests {
         assert_eq!(
             BankingStage::filter_valid_transaction_indexes(
                 &[
-                    (Ok(()), None),
+                    (Ok(0), None),
                     (Err(TransactionError::BlockhashNotFound), None),
                     (Err(TransactionError::BlockhashNotFound), None),
-                    (Ok(()), None),
-                    (Ok(()), None),
-                    (Ok(()), None),
+                    (Ok(0), None),
+                    (Ok(0), None),
+                    (Ok(0), None),
                 ],
                 &[1, 6, 7, 9, 31, 43]
             ),

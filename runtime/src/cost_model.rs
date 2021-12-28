@@ -12,6 +12,7 @@ use {
 };
 
 const MAX_WRITABLE_ACCOUNTS: usize = 256;
+pub type ExecutionCost = u64;
 
 // costs are stored in number of 'compute unit's
 #[derive(AbiExample, Default, Debug)]
@@ -20,7 +21,29 @@ pub struct TransactionCost {
     pub signature_cost: u64,
     pub write_lock_cost: u64,
     pub data_bytes_cost: u64,
+<<<<<<< HEAD
     pub execution_cost: u64,
+=======
+    pub execution_cost: ExecutionCost,
+    // `cost_weight` is a multiplier could be applied to transaction cost,
+    // if set to zero allows the transaction to bypass cost limit check.
+    pub cost_weight: u32,
+    pub account_data_size: u64,
+}
+
+impl Default for TransactionCost {
+    fn default() -> Self {
+        Self {
+            writable_accounts: Vec::with_capacity(MAX_WRITABLE_ACCOUNTS),
+            signature_cost: 0u64,
+            write_lock_cost: 0u64,
+            data_bytes_cost: 0u64,
+            execution_cost: 0u64,
+            cost_weight: 1u32,
+            account_data_size: 0u64,
+        }
+    }
+>>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
 }
 
 impl TransactionCost {
