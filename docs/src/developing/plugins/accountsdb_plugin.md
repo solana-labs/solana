@@ -141,8 +141,8 @@ The following method is used for notifying transactions:
     ) -> Result<()>
 ```
 
-The `ReplicaAccountInfReplicaTransactionInfoVersionsoVersions` struct
-contains the information about a transaction streamed. It wraps `ReplicaTransactionInfo`
+The `ReplicaTransactionInfoVersionsoVersions` struct
+contains the information about a streamed transaction. It wraps `ReplicaTransactionInfo`
 
 ```
 pub struct ReplicaTransactionInfo<'a> {
@@ -244,7 +244,7 @@ To select all accounts, use the wildcard character (*):
 ### Transaction Selection
 
 `transaction_selector`, controls if and what transactions to store.
-If this field is missing none of the transctions is stored.
+If this field is missing, none of the transactions are stored.
 
 For example, one can use the following to select only the transactions
 referencing accounts with particular Base58-encoded Pubkeys,
@@ -255,7 +255,7 @@ referencing accounts with particular Base58-encoded Pubkeys,
 }
 ```
 
-The `mentions` field support wildcard to select all transaction or
+The `mentions` field supports wildcards to select all transaction or
 all 'vote' transactions. For example, to select all transactions:
 
 ```
@@ -430,7 +430,7 @@ The following are the tables in the Postgres database
 
 | Table         | Description             |
 |:--------------|:------------------------|
-| account       | Accounts data           |
+| account       | Account data            |
 | slot          | Slot metadata           |
 | transaction   | Transaction data        |
 | account_audit | Account historical data |
