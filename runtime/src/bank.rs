@@ -3607,12 +3607,8 @@ impl Bank {
                                 &self.builtin_programs.vec,
                                 legacy_message,
                                 &loaded_transaction.program_indices,
-<<<<<<< HEAD
-                                &account_refcells,
-=======
                                 loaded_transaction.estimated_execution_cost,
-                                &transaction_context,
->>>>>>> eaa8c67bd (Count compute units even when transaction errors (#22059))
+                                &account_refcells,
                                 self.rent_collector.rent,
                                 log_collector.clone(),
                                 executors.clone(),
