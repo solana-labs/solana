@@ -1815,7 +1815,7 @@ mod tests {
     fn verify_packets_len(packets: &[VerifiedVoteMetadata], ref_value: usize) {
         let num_packets: usize = packets
             .iter()
-            .map(|vote_metadata| vote_metadata.batch.packets.len())
+            .map(|vote_metadata| vote_metadata.packet_batch.packets.len())
             .sum();
         assert_eq!(num_packets, ref_value);
     }
@@ -1883,7 +1883,7 @@ mod tests {
     #[test]
     fn test_check_for_leader_bank_and_send_votes() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(1000);
-        let current_leader_bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let current_leader_bank = Arc::new(Bank::new(&genesis_config));
         let mut bank_vote_sender_state_option: Option<BankVoteSenderState> = None;
         let verified_vote_packets = VerifiedVotePackets::default();
         let (verified_packets_sender, _verified_packets_receiver) = unbounded();

@@ -1,6 +1,5 @@
 use {
     crate::{cluster_info_vote_listener::VerifiedLabelVotePacketsReceiver, result::Result},
-    crossbeam_channel::Select,
     solana_perf::packet::PacketBatch,
     solana_runtime::bank::Bank,
     solana_sdk::{
@@ -178,9 +177,9 @@ impl VerifiedVotePackets {
 mod tests {
     use {
         super::*,
-        crate::{result::Error, vote_simulator::VoteSimulator},
-        crossbeam_channel::{unbounded, RecvTimeoutError},
-        solana_perf::packet::{Meta, Packet},
+        crate::{consensus::test::VoteSimulator, result::Error},
+        crossbeam_channel::unbounded,
+        solana_perf::packet::Packet,
         solana_sdk::slot_hashes::MAX_ENTRIES,
     };
 
@@ -196,8 +195,6 @@ mod tests {
         let vote_slot = 0;
         let vote_hash = Hash::new_unique();
         let vote = Vote::new(vec![vote_slot], vote_hash);
-
-        let none_empty_packets = PacketBatch::new(vec![data, Packet::default()]);
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
             vote: vote.clone(),
@@ -429,7 +426,7 @@ mod tests {
         // Get and verify batches
         let num_expected_batches = 2;
         for _ in 0..num_expected_batches {
-            let validator_batch: Vec<Packets> = gossip_votes_iterator.next().unwrap();
+            let validator_batch: Vec<PacketBatch> = gossip_votes_iterator.next().unwrap();
             assert_eq!(validator_batch.len(), slot_hashes.slot_hashes().len());
             let expected_len = validator_batch[0].packets.len();
             assert!(validator_batch
