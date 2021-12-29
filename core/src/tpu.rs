@@ -110,10 +110,10 @@ impl Tpu {
         let (verified_gossip_vote_packets_sender, verified_gossip_vote_packets_receiver) =
             unbounded();
         let cluster_info_vote_listener = ClusterInfoVoteListener::new(
-            exit,
+            exit.clone(),
             cluster_info.clone(),
             verified_gossip_vote_packets_sender,
-            poh_recorder,
+            poh_recorder.clone(),
             vote_tracker,
             bank_forks.clone(),
             subscriptions.clone(),
