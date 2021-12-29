@@ -441,7 +441,7 @@ pub fn submit_vote_to_cluster_gossip(
         vec![CrdsValue::new_signed(
             CrdsData::Vote(
                 0,
-                crds_value::Vote::new(node_keypair.pubkey(), vote_tx, timestamp()),
+                crds_value::Vote::new(node_keypair.pubkey(), vote_tx, timestamp()).unwrap(),
             ),
             node_keypair,
         )],
