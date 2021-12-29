@@ -31,7 +31,9 @@ use {
     solana_faucet::faucet::request_airdrop_transaction,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_ledger::{
-        blockstore::Blockstore, blockstore_db::BlockstoreError, get_tmp_ledger_path,
+        blockstore::{Blockstore, SignatureInfosForAddress},
+        blockstore_db::BlockstoreError,
+        get_tmp_ledger_path,
         leader_schedule_cache::LeaderScheduleCache,
     },
     solana_metrics::inc_new_counter_info,
@@ -1460,7 +1462,10 @@ impl JsonRpcRequestProcessor {
                 highest_confirmed_root
             };
 
-            let mut results = self
+            let SignatureInfosForAddress {
+                infos: mut results,
+                found_before,
+            } = self
                 .blockstore
                 .get_confirmed_signatures_for_address2(address, highest_slot, before, until, limit)
                 .map_err(|err| Error::invalid_params(format!("{}", err)))?;
@@ -1472,7 +1477,8 @@ impl JsonRpcRequestProcessor {
                         before = results.last().map(|x| x.signature);
                     }
 
-                    if before.is_some()
+                    if found_before
+                        && before.is_some()
                         && bigtable_ledger_storage
                             .get_confirmed_transaction(&before.unwrap())
                             .await
