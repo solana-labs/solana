@@ -1441,7 +1441,7 @@ impl JsonRpcRequestProcessor {
     pub async fn get_signatures_for_address(
         &self,
         address: Pubkey,
-        mut before: Option<Signature>,
+        before: Option<Signature>,
         until: Option<Signature>,
         mut limit: usize,
         commitment: Option<CommitmentConfig>,
@@ -1472,34 +1472,49 @@ impl JsonRpcRequestProcessor {
 
             if results.len() < limit {
                 if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
+                    let mut bigtable_before = before;
                     if !results.is_empty() {
                         limit -= results.len();
-                        before = results.last().map(|x| x.signature);
+                        bigtable_before = results.last().map(|x| x.signature);
                     }
 
+                    // If the oldest address-signature found in Blockstore has not yet been
+                    // uploaded to long-term storage, modify the storage query to return all latest
+                    // signatures to prevent erroring on RowNotFound. This can race with upload.
                     if found_before
-                        && before.is_some()
+                        && bigtable_before.is_some()
                         && bigtable_ledger_storage
-                            .get_confirmed_transaction(&before.unwrap())
+                            .get_confirmed_transaction(&bigtable_before.unwrap())
                             .await
                             .ok()
                             .flatten()
                             .is_none()
                     {
-                        before = None
+                        bigtable_before = None;
                     }
 
                     let bigtable_results = bigtable_ledger_storage
                         .get_confirmed_signatures_for_address(
                             &address,
-                            before.as_ref(),
+                            bigtable_before.as_ref(),
                             until.as_ref(),
                             limit,
                         )
                         .await;
                     match bigtable_results {
                         Ok(bigtable_results) => {
-                            results.extend(bigtable_results.into_iter().map(|x| x.0));
+                            let results_set: HashSet<_> =
+                                results.iter().map(|result| result.signature).collect();
+                            for (bigtable_result, _) in bigtable_results {
+                                // In the upload race condition, latest address-signatures in
+                                // long-term storage may include original `before` signature...
+                                if before != Some(bigtable_result.signature)
+                                    // ...or earlier Blockstore signatures
+                                    && !results_set.contains(&bigtable_result.signature)
+                                {
+                                    results.push(bigtable_result);
+                                }
+                            }
                         }
                         Err(err) => {
                             warn!("{:?}", err);
