@@ -10,6 +10,14 @@ pub struct DataBudget {
 }
 
 impl DataBudget {
+    /// Create a data budget with max bytes, used for tests
+    pub fn restricted() -> Self {
+        Self {
+            bytes: AtomicUsize::default(),
+            last_timestamp_ms: AtomicU64::new(u64::MAX),
+        }
+    }
+
     // If there are enough bytes in the budget, consumes from
     // the budget and returns true. Otherwise returns false.
     #[must_use]
