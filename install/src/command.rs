@@ -92,7 +92,8 @@ fn download_to_temp(
     let temp_file = temp_dir.path().join("download");
 
     let client = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(360))
+        .connect_timeout(Duration::from_secs(5))
+        .timeout(None)
         .build()?;
 
     let progress_bar = new_spinner_progress_bar();
