@@ -3,8 +3,8 @@
 /// In addition, the dynamic library must export a "C" function _create_plugin which
 /// creates the implementation of the plugin.
 use {
-    solana_sdk::{signature::Signature, transaction::SanitizedTransaction},
-    solana_transaction_status::TransactionStatusMeta,
+    solana_sdk::{clock::UnixTimestamp, signature::Signature, transaction::SanitizedTransaction},
+    solana_transaction_status::{Reward, TransactionStatusMeta},
     std::{any::Any, error, io},
     thiserror::Error,
 };
@@ -58,6 +58,19 @@ pub struct ReplicaTransactionInfo<'a> {
 
 pub enum ReplicaTransactionInfoVersions<'a> {
     V0_0_1(&'a ReplicaTransactionInfo<'a>),
+}
+
+#[derive(Clone, Debug)]
+pub struct ReplicaBlockInfo<'a> {
+    pub slot: u64,
+    pub blockhash: &'a str,
+    pub rewards: &'a [Reward],
+    pub block_time: Option<UnixTimestamp>,
+    pub block_height: Option<u64>,
+}
+
+pub enum ReplicaBlockInfoVersions<'a> {
+    V0_0_1(&'a ReplicaBlockInfo<'a>),
 }
 
 /// Errors returned by plugin calls
@@ -170,6 +183,12 @@ pub trait AccountsDbPlugin: Any + Send + Sync + std::fmt::Debug {
         transaction: ReplicaTransactionInfoVersions,
         slot: u64,
     ) -> Result<()> {
+        Ok(())
+    }
+
+    /// Called when block's metadata is updated.
+    #[allow(unused_variables)]
+    fn notify_block_metadata(&mut self, blockinfo: ReplicaBlockInfoVersions) -> Result<()> {
         Ok(())
     }
 
