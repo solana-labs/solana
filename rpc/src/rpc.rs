@@ -31,7 +31,9 @@ use {
     solana_faucet::faucet::request_airdrop_transaction,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_ledger::{
-        blockstore::Blockstore, blockstore_db::BlockstoreError, get_tmp_ledger_path,
+        blockstore::{Blockstore, SignatureInfosForAddress},
+        blockstore_db::BlockstoreError,
+        get_tmp_ledger_path,
         leader_schedule_cache::LeaderScheduleCache,
     },
     solana_metrics::inc_new_counter_info,
@@ -1439,7 +1441,7 @@ impl JsonRpcRequestProcessor {
     pub async fn get_signatures_for_address(
         &self,
         address: Pubkey,
-        mut before: Option<Signature>,
+        before: Option<Signature>,
         until: Option<Signature>,
         mut limit: usize,
         commitment: Option<CommitmentConfig>,
@@ -1460,29 +1462,59 @@ impl JsonRpcRequestProcessor {
                 highest_confirmed_root
             };
 
-            let mut results = self
+            let SignatureInfosForAddress {
+                infos: mut results,
+                found_before,
+            } = self
                 .blockstore
                 .get_confirmed_signatures_for_address2(address, highest_slot, before, until, limit)
                 .map_err(|err| Error::invalid_params(format!("{}", err)))?;
 
             if results.len() < limit {
                 if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
+                    let mut bigtable_before = before;
                     if !results.is_empty() {
                         limit -= results.len();
-                        before = results.last().map(|x| x.signature);
+                        bigtable_before = results.last().map(|x| x.signature);
+                    }
+
+                    // If the oldest address-signature found in Blockstore has not yet been
+                    // uploaded to long-term storage, modify the storage query to return all latest
+                    // signatures to prevent erroring on RowNotFound. This can race with upload.
+                    if found_before
+                        && bigtable_before.is_some()
+                        && bigtable_ledger_storage
+                            .get_confirmed_transaction(&bigtable_before.unwrap())
+                            .await
+                            .ok()
+                            .flatten()
+                            .is_none()
+                    {
+                        bigtable_before = None;
                     }
 
                     let bigtable_results = bigtable_ledger_storage
                         .get_confirmed_signatures_for_address(
                             &address,
-                            before.as_ref(),
+                            bigtable_before.as_ref(),
                             until.as_ref(),
                             limit,
                         )
                         .await;
                     match bigtable_results {
                         Ok(bigtable_results) => {
-                            results.extend(bigtable_results.into_iter().map(|x| x.0));
+                            let results_set: HashSet<_> =
+                                results.iter().map(|result| result.signature).collect();
+                            for (bigtable_result, _) in bigtable_results {
+                                // In the upload race condition, latest address-signatures in
+                                // long-term storage may include original `before` signature...
+                                if before != Some(bigtable_result.signature)
+                                    // ...or earlier Blockstore signatures
+                                    && !results_set.contains(&bigtable_result.signature)
+                                {
+                                    results.push(bigtable_result);
+                                }
+                            }
                         }
                         Err(err) => {
                             warn!("{:?}", err);
