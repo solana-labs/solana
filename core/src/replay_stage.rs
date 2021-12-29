@@ -26,6 +26,7 @@ use {
         voting_service::VoteOp,
         window_service::DuplicateSlotReceiver,
     },
+    solana_accountsdb_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
     solana_client::rpc_response::SlotUpdate,
     solana_entry::entry::VerifyRecyclers,
     solana_gossip::cluster_info::ClusterInfo,
@@ -335,6 +336,7 @@ impl ReplayStage {
         cost_update_sender: Sender<CostUpdate>,
         voting_sender: Sender<VoteOp>,
         drop_bank_sender: Sender<Vec<Arc<Bank>>>,
+        block_metadata_notifier: Option<BlockMetadataNotifierLock>,
     ) -> Self {
         let ReplayStageConfig {
             vote_account,
@@ -440,6 +442,7 @@ impl ReplayStage {
                         &cost_update_sender,
                         &mut duplicate_slots_to_repair,
                         &ancestor_hashes_replay_update_sender,
+                        block_metadata_notifier.clone(),
                     );
                     replay_active_banks_time.stop();
 
@@ -2042,6 +2045,7 @@ impl ReplayStage {
         cost_update_sender: &Sender<CostUpdate>,
         duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
         ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
+        block_metadata_notifier: Option<BlockMetadataNotifierLock>,
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
@@ -2197,6 +2201,16 @@ impl ReplayStage {
                     }
                 }
                 Self::record_rewards(&bank, rewards_recorder_sender);
+                if let Some(ref block_metadata_notifier) = block_metadata_notifier {
+                    let block_metadata_notifier = block_metadata_notifier.read().unwrap();
+                    block_metadata_notifier.notify_block_metadata(
+                        bank.slot(),
+                        &bank.last_blockhash().to_string(),
+                        &bank.rewards,
+                        Some(bank.clock().unix_timestamp),
+                        Some(bank.block_height()),
+                    )
+                }
             } else {
                 trace!(
                     "bank {} not completed tick_height: {}, max_tick_height: {}",
