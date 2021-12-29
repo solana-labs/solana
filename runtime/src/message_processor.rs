@@ -1,10 +1,9 @@
 use {
-    crate::cost_model::ExecutionCost,
     serde::{Deserialize, Serialize},
     solana_measure::measure::Measure,
     solana_program_runtime::{
         instruction_recorder::InstructionRecorder,
-        invoke_context::{BuiltinProgram, Executors, InvokeContext, ProcessInstructionResult},
+        invoke_context::{BuiltinProgram, Executors, InvokeContext},
         log_collector::LogCollector,
         timings::ExecuteDetailsTimings,
     },
@@ -54,7 +53,6 @@ impl MessageProcessor {
         builtin_programs: &[BuiltinProgram],
         message: &Message,
         program_indices: &[Vec<usize>],
-        estimated_execution_cost: ExecutionCost,
         transaction_context: &TransactionContext,
         rent: Rent,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
@@ -129,26 +127,21 @@ impl MessageProcessor {
                 })
                 .collect::<Vec<_>>();
             let mut time = Measure::start("execute_instruction");
-            let ProcessInstructionResult {
-                compute_units_consumed,
-                result,
-            } = invoke_context.process_instruction(
-                &instruction.data,
-                &instruction_accounts,
-                None,
-                program_indices,
-            );
+            let compute_meter_consumption = invoke_context
+                .process_instruction(
+                    &instruction.data,
+                    &instruction_accounts,
+                    None,
+                    program_indices,
+                )
+                .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
             time.stop();
             timings.accumulate_program(
                 instruction.program_id(&message.account_keys),
                 time.as_us(),
-                compute_units_consumed,
-                estimated_execution_cost,
-                result.is_err(),
+                compute_meter_consumption,
             );
             timings.accumulate(&invoke_context.timings);
-            result
-                .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
         Ok(ProcessedMessageInfo {
             accounts_data_len: invoke_context.get_accounts_data_meter().current(),
@@ -265,7 +258,6 @@ mod tests {
             builtin_programs,
             &message,
             &program_indices,
-            0,
             &transaction_context,
             rent_collector.rent,
             None,
@@ -307,7 +299,6 @@ mod tests {
             builtin_programs,
             &message,
             &program_indices,
-            0,
             &transaction_context,
             rent_collector.rent,
             None,
@@ -341,7 +332,6 @@ mod tests {
             builtin_programs,
             &message,
             &program_indices,
-            0,
             &transaction_context,
             rent_collector.rent,
             None,
@@ -486,7 +476,6 @@ mod tests {
             builtin_programs,
             &message,
             &program_indices,
-            0,
             &transaction_context,
             rent_collector.rent,
             None,
@@ -521,7 +510,6 @@ mod tests {
             builtin_programs,
             &message,
             &program_indices,
-            0,
             &transaction_context,
             rent_collector.rent,
             None,
@@ -553,7 +541,6 @@ mod tests {
             builtin_programs,
             &message,
             &program_indices,
-            0,
             &transaction_context,
             rent_collector.rent,
             None,
@@ -627,7 +614,6 @@ mod tests {
             builtin_programs,
             &message,
             &[vec![0], vec![1]],
-            0,
             &transaction_context,
             RentCollector::default().rent,
             None,
