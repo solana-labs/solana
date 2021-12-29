@@ -92,6 +92,12 @@ pub type CompletedSlotsSender = SyncSender<Vec<Slot>>;
 pub type CompletedSlotsReceiver = Receiver<Vec<Slot>>;
 type CompletedRanges = Vec<(u32, u32)>;
 
+#[derive(Default)]
+pub struct SignatureInfosForAddress {
+    pub infos: Vec<ConfirmedTransactionStatusWithSignature>,
+    pub found_before: bool,
+}
+
 #[derive(Clone, Copy)]
 pub enum PurgeType {
     Exact,
@@ -2402,7 +2408,7 @@ impl Blockstore {
         before: Option<Signature>,
         until: Option<Signature>,
         limit: usize,
-    ) -> Result<Vec<ConfirmedTransactionStatusWithSignature>> {
+    ) -> Result<SignatureInfosForAddress> {
         datapoint_info!(
             "blockstore-rpc-api",
             (
@@ -2426,7 +2432,7 @@ impl Blockstore {
                 let transaction_status =
                     self.get_transaction_status(before, &confirmed_unrooted_slots)?;
                 match transaction_status {
-                    None => return Ok(vec![]),
+                    None => return Ok(SignatureInfosForAddress::default()),
                     Some((slot, _)) => {
                         let block = self.get_complete_block(slot, false).map_err(|err| {
                             BlockstoreError::Io(IoError::new(
@@ -2668,7 +2674,10 @@ impl Blockstore {
             )
         );
 
-        Ok(infos)
+        Ok(SignatureInfosForAddress {
+            infos,
+            found_before: true, // if `before` signature was not found, this method returned early
+        })
     }
 
     pub fn read_rewards(&self, index: Slot) -> Result<Option<Rewards>> {
@@ -7484,7 +7493,7 @@ pub mod tests {
             let highest_confirmed_root = 8;
 
             // Fetch all rooted signatures for address 0 at once...
-            let all0 = blockstore
+            let sig_infos = blockstore
                 .get_confirmed_signatures_for_address2(
                     address0,
                     highest_confirmed_root,
@@ -7493,6 +7502,8 @@ pub mod tests {
                     usize::MAX,
                 )
                 .unwrap();
+            assert!(sig_infos.found_before);
+            let all0 = sig_infos.infos;
             assert_eq!(all0.len(), 12);
 
             // Fetch all rooted signatures for address 1 at once...
@@ -7504,12 +7515,13 @@ pub mod tests {
                     None,
                     usize::MAX,
                 )
-                .unwrap();
+                .unwrap()
+                .infos;
             assert_eq!(all1.len(), 12);
 
             // Fetch all signatures for address 0 individually
             for i in 0..all0.len() {
-                let results = blockstore
+                let sig_infos = blockstore
                     .get_confirmed_signatures_for_address2(
                         address0,
                         highest_confirmed_root,
@@ -7522,6 +7534,8 @@ pub mod tests {
                         1,
                     )
                     .unwrap();
+                assert!(sig_infos.found_before);
+                let results = sig_infos.infos;
                 assert_eq!(results.len(), 1);
                 assert_eq!(results[0], all0[i], "Unexpected result for {}", i);
             }
@@ -7543,12 +7557,13 @@ pub mod tests {
                         },
                         10,
                     )
-                    .unwrap();
+                    .unwrap()
+                    .infos;
                 assert_eq!(results.len(), 1);
                 assert_eq!(results[0], all0[i], "Unexpected result for {}", i);
             }
 
-            assert!(blockstore
+            let sig_infos = blockstore
                 .get_confirmed_signatures_for_address2(
                     address0,
                     highest_confirmed_root,
@@ -7556,8 +7571,9 @@ pub mod tests {
                     None,
                     1,
                 )
-                .unwrap()
-                .is_empty());
+                .unwrap();
+            assert!(sig_infos.found_before);
+            assert!(sig_infos.infos.is_empty());
 
             assert!(blockstore
                 .get_confirmed_signatures_for_address2(
@@ -7568,6 +7584,7 @@ pub mod tests {
                     2,
                 )
                 .unwrap()
+                .infos
                 .is_empty());
 
             // Fetch all signatures for address 0, three at a time
@@ -7585,7 +7602,8 @@ pub mod tests {
                         None,
                         3,
                     )
-                    .unwrap();
+                    .unwrap()
+                    .infos;
                 assert_eq!(results.len(), 3);
                 assert_eq!(results[0], all0[i]);
                 assert_eq!(results[1], all0[i + 1]);
@@ -7607,7 +7625,8 @@ pub mod tests {
                         None,
                         2,
                     )
-                    .unwrap();
+                    .unwrap()
+                    .infos;
                 assert_eq!(results.len(), 2);
                 assert_eq!(results[0].slot, results[1].slot);
                 assert!(results[0].signature >= results[1].signature);
@@ -7616,7 +7635,7 @@ pub mod tests {
             }
 
             // A search for address 0 with `before` and/or `until` signatures from address1 should also work
-            let results = blockstore
+            let sig_infos = blockstore
                 .get_confirmed_signatures_for_address2(
                     address0,
                     highest_confirmed_root,
@@ -7625,6 +7644,8 @@ pub mod tests {
                     usize::MAX,
                 )
                 .unwrap();
+            assert!(sig_infos.found_before);
+            let results = sig_infos.infos;
             // The exact number of results returned is variable, based on the sort order of the
             // random signatures that are generated
             assert!(!results.is_empty());
@@ -7637,7 +7658,8 @@ pub mod tests {
                     Some(all1[4].signature),
                     usize::MAX,
                 )
-                .unwrap();
+                .unwrap()
+                .infos;
             assert!(results2.len() < results.len());
 
             // Duplicate all tests using confirmed signatures
@@ -7652,7 +7674,8 @@ pub mod tests {
                     None,
                     usize::MAX,
                 )
-                .unwrap();
+                .unwrap()
+                .infos;
             assert_eq!(all0.len(), 14);
 
             // Fetch all signatures for address 1 at once...
@@ -7664,7 +7687,8 @@ pub mod tests {
                     None,
                     usize::MAX,
                 )
-                .unwrap();
+                .unwrap()
+                .infos;
             assert_eq!(all1.len(), 14);
 
             // Fetch all signatures for address 0 individually
@@ -7681,7 +7705,8 @@ pub mod tests {
                         None,
                         1,
                     )
-                    .unwrap();
+                    .unwrap()
+                    .infos;
                 assert_eq!(results.len(), 1);
                 assert_eq!(results[0], all0[i], "Unexpected result for {}", i);
             }
@@ -7703,7 +7728,8 @@ pub mod tests {
                         },
                         10,
                     )
-                    .unwrap();
+                    .unwrap()
+                    .infos;
                 assert_eq!(results.len(), 1);
                 assert_eq!(results[0], all0[i], "Unexpected result for {}", i);
             }
@@ -7717,6 +7743,7 @@ pub mod tests {
                     1,
                 )
                 .unwrap()
+                .infos
                 .is_empty());
 
             assert!(blockstore
@@ -7728,6 +7755,7 @@ pub mod tests {
                     2,
                 )
                 .unwrap()
+                .infos
                 .is_empty());
 
             // Fetch all signatures for address 0, three at a time
@@ -7745,7 +7773,8 @@ pub mod tests {
                         None,
                         3,
                     )
-                    .unwrap();
+                    .unwrap()
+                    .infos;
                 if i < 12 {
                     assert_eq!(results.len(), 3);
                     assert_eq!(results[2], all0[i + 2]);
@@ -7771,7 +7800,8 @@ pub mod tests {
                         None,
                         2,
                     )
-                    .unwrap();
+                    .unwrap()
+                    .infos;
                 assert_eq!(results.len(), 2);
                 assert_eq!(results[0].slot, results[1].slot);
                 assert!(results[0].signature >= results[1].signature);
@@ -7788,7 +7818,8 @@ pub mod tests {
                     None,
                     usize::MAX,
                 )
-                .unwrap();
+                .unwrap()
+                .infos;
             // The exact number of results returned is variable, based on the sort order of the
             // random signatures that are generated
             assert!(!results.is_empty());
@@ -7801,8 +7832,26 @@ pub mod tests {
                     Some(all1[4].signature),
                     usize::MAX,
                 )
-                .unwrap();
+                .unwrap()
+                .infos;
             assert!(results2.len() < results.len());
+
+            // Remove signature
+            blockstore
+                .address_signatures_cf
+                .delete((0, address0, 2, all0[0].signature))
+                .unwrap();
+            let sig_infos = blockstore
+                .get_confirmed_signatures_for_address2(
+                    address0,
+                    highest_confirmed_root,
+                    Some(all0[0].signature),
+                    None,
+                    usize::MAX,
+                )
+                .unwrap();
+            assert!(!sig_infos.found_before);
+            assert!(sig_infos.infos.is_empty());
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
