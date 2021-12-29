@@ -2372,7 +2372,6 @@ fn call<'a, 'b: 'a>(
             &account_indices,
             &caller_write_privileges,
         )
-        .result
         .map_err(SyscallError::InstructionError)?;
 
     // Copy results back to caller
