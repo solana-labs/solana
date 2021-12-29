@@ -988,7 +988,7 @@ pub enum ShredStorageType {
 
 impl Default for ShredStorageType {
     fn default() -> Self {
-        Self::RocksLevel
+        Self::RocksFifo(BlockstoreRocksFifoOptions::default())
     }
 }
 
@@ -1010,7 +1010,7 @@ impl Default for BlockstoreOptions {
             access_type: AccessType::PrimaryOnly,
             recovery_mode: None,
             enforce_ulimit_nofile: true,
-            shred_storage_type: ShredStorageType::RocksLevel,
+            shred_storage_type: ShredStorageType::default(),
         }
     }
 }
