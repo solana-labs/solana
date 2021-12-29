@@ -246,6 +246,7 @@ mod tests {
                 ProgramTiming {
                     accumulated_us,
                     accumulated_units,
+                    current_cost_model_estimated_units: 0,
                     count,
                 },
             );
@@ -281,6 +282,7 @@ mod tests {
                 ProgramTiming {
                     accumulated_us,
                     accumulated_units,
+                    current_cost_model_estimated_units: 0,
                     count,
                 },
             );

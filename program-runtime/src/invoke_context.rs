@@ -30,6 +30,12 @@ pub type TransactionAccountRefCells = Vec<TransactionAccountRefCell>;
 pub type ProcessInstructionWithContext =
     fn(usize, &[u8], &mut InvokeContext) -> Result<(), InstructionError>;
 
+#[derive(Debug, PartialEq)]
+pub struct ProcessInstructionResult {
+    pub compute_units_consumed: u64,
+    pub result: Result<(), InstructionError>,
+}
+
 #[derive(Clone)]
 pub struct BuiltinProgram {
     pub program_id: Pubkey,
@@ -499,7 +505,8 @@ impl<'a> InvokeContext<'a> {
             &program_indices,
             &account_indices,
             &caller_write_privileges,
-        )?;
+        )
+        .result?;
 
         // Verify the called program has not misbehaved
         let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
@@ -640,37 +647,48 @@ impl<'a> InvokeContext<'a> {
         program_indices: &[usize],
         account_indices: &[usize],
         caller_write_privileges: &[bool],
-    ) -> Result<u64, InstructionError> {
+    ) -> ProcessInstructionResult {
         let is_lowest_invocation_level = self.invoke_stack.is_empty();
         if !is_lowest_invocation_level {
             // Verify the calling program hasn't misbehaved
-            self.verify_and_update(instruction, account_indices, caller_write_privileges)?;
+            let result =
+                self.verify_and_update(instruction, account_indices, caller_write_privileges);
+            if result.is_err() {
+                return ProcessInstructionResult {
+                    compute_units_consumed: 0,
+                    result,
+                };
+            }
         }
 
+        let mut compute_units_consumed = 0;
         let result = self
             .push(message, instruction, program_indices, account_indices)
             .and_then(|_| {
                 self.return_data = (*instruction.program_id(&message.account_keys), Vec::new());
                 let pre_remaining_units = self.compute_meter.borrow().get_remaining();
-                self.process_executable_chain(&instruction.data)?;
+                let execution_result = self.process_executable_chain(&instruction.data);
                 let post_remaining_units = self.compute_meter.borrow().get_remaining();
+                compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
+                execution_result?;
 
                 // Verify the called program has not misbehaved
                 if is_lowest_invocation_level {
-                    self.verify(message, instruction, program_indices)?;
+                    self.verify(message, instruction, program_indices)
                 } else {
                     let write_privileges: Vec<bool> = (0..message.account_keys.len())
                         .map(|i| message.is_writable(i))
                         .collect();
-                    self.verify_and_update(instruction, account_indices, &write_privileges)?;
+                    self.verify_and_update(instruction, account_indices, &write_privileges)
                 }
-
-                Ok(pre_remaining_units.saturating_sub(post_remaining_units))
             });
 
         // Pop the invoke_stack to restore previous state
         self.pop();
-        result
+        ProcessInstructionResult {
+            compute_units_consumed,
+            result,
+        }
     }
 
     /// Calls the instruction's program entrypoint method
@@ -983,6 +1001,10 @@ mod tests {
         ModifyOwned,
         ModifyNotOwned,
         ModifyReadonly,
+        ConsumeComputeUnits {
+            compute_units_consumed: u64,
+            desired_result: Result<(), InstructionError>,
+        },
     }
 
     #[test]
@@ -1051,6 +1073,17 @@ mod tests {
                     keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?
                         .try_account_ref_mut()?
                         .data_as_mut_slice()[0] = 1
+                }
+                MockInstruction::ConsumeComputeUnits {
+                    compute_units_consumed,
+                    desired_result,
+                } => {
+                    invoke_context
+                        .get_compute_meter()
+                        .borrow_mut()
+                        .consume(compute_units_consumed)
+                        .unwrap();
+                    return desired_result;
                 }
             }
         } else {
@@ -1260,13 +1293,15 @@ mod tests {
             .collect::<Vec<bool>>();
         accounts[0].1.borrow_mut().data_as_mut_slice()[0] = 1;
         assert_eq!(
-            invoke_context.process_instruction(
-                &message,
-                &message.instructions[0],
-                &program_indices[1..],
-                &account_indices,
-                &caller_write_privileges,
-            ),
+            invoke_context
+                .process_instruction(
+                    &message,
+                    &message.instructions[0],
+                    &program_indices[1..],
+                    &account_indices,
+                    &caller_write_privileges,
+                )
+                .result,
             Err(InstructionError::ExternalAccountDataModified)
         );
         accounts[0].1.borrow_mut().data_as_mut_slice()[0] = 0;
@@ -1274,13 +1309,15 @@ mod tests {
         // readonly account modified by the invoker
         accounts[2].1.borrow_mut().data_as_mut_slice()[0] = 1;
         assert_eq!(
-            invoke_context.process_instruction(
-                &message,
-                &message.instructions[0],
-                &program_indices[1..],
-                &account_indices,
-                &caller_write_privileges,
-            ),
+            invoke_context
+                .process_instruction(
+                    &message,
+                    &message.instructions[0],
+                    &program_indices[1..],
+                    &account_indices,
+                    &caller_write_privileges,
+                )
+                .result,
             Err(InstructionError::ReadonlyDataModified)
         );
         accounts[2].1.borrow_mut().data_as_mut_slice()[0] = 0;
@@ -1288,15 +1325,33 @@ mod tests {
         invoke_context.pop();
 
         let cases = vec![
-            (MockInstruction::NoopSuccess, Ok(0)),
+            (
+                MockInstruction::NoopSuccess,
+                ProcessInstructionResult {
+                    result: Ok(()),
+                    compute_units_consumed: 0,
+                },
+            ),
             (
                 MockInstruction::NoopFail,
-                Err(InstructionError::GenericError),
+                ProcessInstructionResult {
+                    result: Err(InstructionError::GenericError),
+                    compute_units_consumed: 0,
+                },
             ),
-            (MockInstruction::ModifyOwned, Ok(0)),
+            (
+                MockInstruction::ModifyOwned,
+                ProcessInstructionResult {
+                    result: Ok(()),
+                    compute_units_consumed: 0,
+                },
+            ),
             (
                 MockInstruction::ModifyNotOwned,
-                Err(InstructionError::ExternalAccountDataModified),
+                ProcessInstructionResult {
+                    result: Err(InstructionError::ExternalAccountDataModified),
+                    compute_units_consumed: 0,
+                },
             ),
         ];
         for case in cases {
@@ -1496,5 +1551,93 @@ mod tests {
             ComputeBudget::default()
         );
         invoke_context.pop();
+    }
+
+    #[test]
+    fn test_process_instruction_compute_budget() {
+        let caller_program_id = solana_sdk::pubkey::new_rand();
+        let callee_program_id = solana_sdk::pubkey::new_rand();
+        let owned_account = AccountSharedData::new(42, 1, &callee_program_id);
+        let not_owned_account = AccountSharedData::new(84, 1, &solana_sdk::pubkey::new_rand());
+        let readonly_account = AccountSharedData::new(168, 1, &solana_sdk::pubkey::new_rand());
+        let loader_account = AccountSharedData::new(0, 0, &native_loader::id());
+        let mut program_account = AccountSharedData::new(1, 0, &native_loader::id());
+        program_account.set_executable(true);
+
+        let accounts = vec![
+            (
+                solana_sdk::pubkey::new_rand(),
+                Rc::new(RefCell::new(owned_account)),
+            ),
+            (
+                solana_sdk::pubkey::new_rand(),
+                Rc::new(RefCell::new(not_owned_account)),
+            ),
+            (
+                solana_sdk::pubkey::new_rand(),
+                Rc::new(RefCell::new(readonly_account)),
+            ),
+            (caller_program_id, Rc::new(RefCell::new(loader_account))),
+            (callee_program_id, Rc::new(RefCell::new(program_account))),
+        ];
+        let account_indices = [0, 1, 2];
+        let program_indices = [3, 4];
+
+        let metas = vec![
+            AccountMeta::new(accounts[0].0, false),
+            AccountMeta::new(accounts[1].0, false),
+            AccountMeta::new_readonly(accounts[2].0, false),
+        ];
+
+        let builtin_programs = &[BuiltinProgram {
+            program_id: callee_program_id,
+            process_instruction: mock_process_instruction,
+        }];
+        let mut invoke_context = InvokeContext::new_mock(&accounts, builtin_programs);
+
+        let compute_units_consumed = 10;
+        let desired_results = vec![Ok(()), Err(InstructionError::GenericError)];
+
+        for desired_result in desired_results {
+            let caller_instruction =
+                CompiledInstruction::new(program_indices[0] as u8, &(), vec![0, 1, 2, 3, 4]);
+            let callee_instruction = Instruction::new_with_bincode(
+                callee_program_id,
+                &MockInstruction::ConsumeComputeUnits {
+                    compute_units_consumed,
+                    desired_result: desired_result.clone(),
+                },
+                metas.clone(),
+            );
+            let message = Message::new(&[callee_instruction.clone()], None);
+            invoke_context
+                .push(&message, &caller_instruction, &program_indices[..1], &[])
+                .unwrap();
+            let caller_write_privileges = message
+                .account_keys
+                .iter()
+                .enumerate()
+                .map(|(i, _)| message.is_writable(i))
+                .collect::<Vec<bool>>();
+            let result = invoke_context.process_instruction(
+                &message,
+                &message.instructions[0],
+                &program_indices[1..],
+                &account_indices,
+                &caller_write_privileges,
+            );
+
+            // Because the instruction had compute cost > 0, then regardless of the execution result,
+            // the number of compute units consumed should be a non-default which is something greater
+            // than zero.
+            assert!(result.compute_units_consumed > 0);
+            assert_eq!(
+                result,
+                ProcessInstructionResult {
+                    compute_units_consumed,
+                    result: desired_result,
+                }
+            );
+        }
     }
 }
