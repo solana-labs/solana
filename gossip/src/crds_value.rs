@@ -305,20 +305,13 @@ impl Sanitize for Vote {
 }
 
 impl Vote {
-<<<<<<< HEAD
-    pub fn new(from: Pubkey, transaction: Transaction, wallclock: u64) -> Self {
-        let slot = parse_vote_transaction(&transaction)
-            .and_then(|(_, vote, _)| vote.slots.last().copied());
-        Self {
-=======
     // Returns None if cannot parse transaction into a vote.
     pub fn new(from: Pubkey, transaction: Transaction, wallclock: u64) -> Option<Self> {
         parse_vote_transaction(&transaction).map(|(_, vote, _)| Self {
->>>>>>> c9c78622a (discards serialized gossip crds votes if cannot parse tx (#22129))
             from,
             transaction,
             wallclock,
-            slot: vote.last_voted_slot(),
+            slot: vote.slots.last().copied(),
         })
     }
 
