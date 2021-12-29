@@ -92,6 +92,12 @@ pub type CompletedSlotsSender = SyncSender<Vec<Slot>>;
 pub type CompletedSlotsReceiver = Receiver<Vec<Slot>>;
 type CompletedRanges = Vec<(u32, u32)>;
 
+#[derive(Default)]
+pub struct SignatureInfosForAddress {
+    pub infos: Vec<ConfirmedTransactionStatusWithSignature>,
+    pub found_before: bool,
+}
+
 #[derive(Clone, Copy)]
 pub enum PurgeType {
     Exact,
@@ -2402,7 +2408,7 @@ impl Blockstore {
         before: Option<Signature>,
         until: Option<Signature>,
         limit: usize,
-    ) -> Result<Vec<ConfirmedTransactionStatusWithSignature>> {
+    ) -> Result<SignatureInfosForAddress> {
         datapoint_info!(
             "blockstore-rpc-api",
             (
@@ -2426,7 +2432,7 @@ impl Blockstore {
                 let transaction_status =
                     self.get_transaction_status(before, &confirmed_unrooted_slots)?;
                 match transaction_status {
-                    None => return Ok(vec![]),
+                    None => return Ok(SignatureInfosForAddress::default()),
                     Some((slot, _)) => {
                         let block = self.get_complete_block(slot, false).map_err(|err| {
                             BlockstoreError::Io(IoError::new(
@@ -2668,7 +2674,10 @@ impl Blockstore {
             )
         );
 
-        Ok(infos)
+        Ok(SignatureInfosForAddress {
+            infos,
+            found_before: true, // if `before` signature was not found, this method returned early
+        })
     }
 
     pub fn read_rewards(&self, index: Slot) -> Result<Option<Rewards>> {
@@ -7483,17 +7492,131 @@ pub mod tests {
                 .unwrap();
             let highest_confirmed_root = 8;
 
+<<<<<<< HEAD
             // Fetch all rooted signatures for address 0 at once...
             let all0 = blockstore
+=======
+        // Fetch all rooted signatures for address 0 at once...
+        let sig_infos = blockstore
+            .get_confirmed_signatures_for_address2(
+                address0,
+                highest_confirmed_root,
+                None,
+                None,
+                usize::MAX,
+            )
+            .unwrap();
+        assert!(sig_infos.found_before);
+        let all0 = sig_infos.infos;
+        assert_eq!(all0.len(), 12);
+
+        // Fetch all rooted signatures for address 1 at once...
+        let all1 = blockstore
+            .get_confirmed_signatures_for_address2(
+                address1,
+                highest_confirmed_root,
+                None,
+                None,
+                usize::MAX,
+            )
+            .unwrap()
+            .infos;
+        assert_eq!(all1.len(), 12);
+
+        // Fetch all signatures for address 0 individually
+        for i in 0..all0.len() {
+            let sig_infos = blockstore
+>>>>>>> bac6821e1 (get_signatures_for_address does not correctly account for result sets that span local and Bigtable sources (#22115))
                 .get_confirmed_signatures_for_address2(
                     address0,
                     highest_confirmed_root,
                     None,
+<<<<<<< HEAD
+=======
+                    1,
+                )
+                .unwrap();
+            assert!(sig_infos.found_before);
+            let results = sig_infos.infos;
+            assert_eq!(results.len(), 1);
+            assert_eq!(results[0], all0[i], "Unexpected result for {}", i);
+        }
+        // Fetch all signatures for address 0 individually using `until`
+        for i in 0..all0.len() {
+            let results = blockstore
+                .get_confirmed_signatures_for_address2(
+                    address0,
+                    highest_confirmed_root,
+                    if i == 0 {
+                        None
+                    } else {
+                        Some(all0[i - 1].signature)
+                    },
+                    if i == all0.len() - 1 || i == all0.len() {
+                        None
+                    } else {
+                        Some(all0[i + 1].signature)
+                    },
+                    10,
+                )
+                .unwrap()
+                .infos;
+            assert_eq!(results.len(), 1);
+            assert_eq!(results[0], all0[i], "Unexpected result for {}", i);
+        }
+
+        let sig_infos = blockstore
+            .get_confirmed_signatures_for_address2(
+                address0,
+                highest_confirmed_root,
+                Some(all0[all0.len() - 1].signature),
+                None,
+                1,
+            )
+            .unwrap();
+        assert!(sig_infos.found_before);
+        assert!(sig_infos.infos.is_empty());
+
+        assert!(blockstore
+            .get_confirmed_signatures_for_address2(
+                address0,
+                highest_confirmed_root,
+                None,
+                Some(all0[0].signature),
+                2,
+            )
+            .unwrap()
+            .infos
+            .is_empty());
+
+        // Fetch all signatures for address 0, three at a time
+        assert!(all0.len() % 3 == 0);
+        for i in (0..all0.len()).step_by(3) {
+            let results = blockstore
+                .get_confirmed_signatures_for_address2(
+                    address0,
+                    highest_confirmed_root,
+                    if i == 0 {
+                        None
+                    } else {
+                        Some(all0[i - 1].signature)
+                    },
+>>>>>>> bac6821e1 (get_signatures_for_address does not correctly account for result sets that span local and Bigtable sources (#22115))
                     None,
                     usize::MAX,
                 )
+<<<<<<< HEAD
                 .unwrap();
             assert_eq!(all0.len(), 12);
+=======
+                .unwrap()
+                .infos;
+            assert_eq!(results.len(), 3);
+            assert_eq!(results[0], all0[i]);
+            assert_eq!(results[1], all0[i + 1]);
+            assert_eq!(results[2], all0[i + 2]);
+        }
+>>>>>>> bac6821e1 (get_signatures_for_address does not correctly account for result sets that span local and Bigtable sources (#22115))
 
             // Fetch all rooted signatures for address 1 at once...
             let all1 = blockstore
@@ -7504,6 +7627,7 @@ pub mod tests {
                     None,
                     usize::MAX,
                 )
+<<<<<<< HEAD
                 .unwrap();
             assert_eq!(all1.len(), 12);
 
@@ -7549,6 +7673,77 @@ pub mod tests {
             }
 
             assert!(blockstore
+=======
+                .unwrap()
+                .infos;
+            assert_eq!(results.len(), 2);
+            assert_eq!(results[0].slot, results[1].slot);
+            assert!(results[0].signature >= results[1].signature);
+            assert_eq!(results[0], all1[i]);
+            assert_eq!(results[1], all1[i + 1]);
+        }
+
+        // A search for address 0 with `before` and/or `until` signatures from address1 should also work
+        let sig_infos = blockstore
+            .get_confirmed_signatures_for_address2(
+                address0,
+                highest_confirmed_root,
+                Some(all1[0].signature),
+                None,
+                usize::MAX,
+            )
+            .unwrap();
+        assert!(sig_infos.found_before);
+        let results = sig_infos.infos;
+        // The exact number of results returned is variable, based on the sort order of the
+        // random signatures that are generated
+        assert!(!results.is_empty());
+
+        let results2 = blockstore
+            .get_confirmed_signatures_for_address2(
+                address0,
+                highest_confirmed_root,
+                Some(all1[0].signature),
+                Some(all1[4].signature),
+                usize::MAX,
+            )
+            .unwrap()
+            .infos;
+        assert!(results2.len() < results.len());
+
+        // Duplicate all tests using confirmed signatures
+        let highest_confirmed_slot = 10;
+
+        // Fetch all signatures for address 0 at once...
+        let all0 = blockstore
+            .get_confirmed_signatures_for_address2(
+                address0,
+                highest_confirmed_slot,
+                None,
+                None,
+                usize::MAX,
+            )
+            .unwrap()
+            .infos;
+        assert_eq!(all0.len(), 14);
+
+        // Fetch all signatures for address 1 at once...
+        let all1 = blockstore
+            .get_confirmed_signatures_for_address2(
+                address1,
+                highest_confirmed_slot,
+                None,
+                None,
+                usize::MAX,
+            )
+            .unwrap()
+            .infos;
+        assert_eq!(all1.len(), 14);
+
+        // Fetch all signatures for address 0 individually
+        for i in 0..all0.len() {
+            let results = blockstore
+>>>>>>> bac6821e1 (get_signatures_for_address does not correctly account for result sets that span local and Bigtable sources (#22115))
                 .get_confirmed_signatures_for_address2(
                     address0,
                     highest_confirmed_root,
@@ -7557,17 +7752,85 @@ pub mod tests {
                     1,
                 )
                 .unwrap()
+<<<<<<< HEAD
                 .is_empty());
 
             assert!(blockstore
                 .get_confirmed_signatures_for_address2(
                     address0,
                     highest_confirmed_root,
+=======
+                .infos;
+            assert_eq!(results.len(), 1);
+            assert_eq!(results[0], all0[i], "Unexpected result for {}", i);
+        }
+        // Fetch all signatures for address 0 individually using `until`
+        for i in 0..all0.len() {
+            let results = blockstore
+                .get_confirmed_signatures_for_address2(
+                    address0,
+                    highest_confirmed_slot,
+                    if i == 0 {
+                        None
+                    } else {
+                        Some(all0[i - 1].signature)
+                    },
+                    if i == all0.len() - 1 || i == all0.len() {
+                        None
+                    } else {
+                        Some(all0[i + 1].signature)
+                    },
+                    10,
+                )
+                .unwrap()
+                .infos;
+            assert_eq!(results.len(), 1);
+            assert_eq!(results[0], all0[i], "Unexpected result for {}", i);
+        }
+
+        assert!(blockstore
+            .get_confirmed_signatures_for_address2(
+                address0,
+                highest_confirmed_slot,
+                Some(all0[all0.len() - 1].signature),
+                None,
+                1,
+            )
+            .unwrap()
+            .infos
+            .is_empty());
+
+        assert!(blockstore
+            .get_confirmed_signatures_for_address2(
+                address0,
+                highest_confirmed_slot,
+                None,
+                Some(all0[0].signature),
+                2,
+            )
+            .unwrap()
+            .infos
+            .is_empty());
+
+        // Fetch all signatures for address 0, three at a time
+        assert!(all0.len() % 3 == 2);
+        for i in (0..all0.len()).step_by(3) {
+            let results = blockstore
+                .get_confirmed_signatures_for_address2(
+                    address0,
+                    highest_confirmed_slot,
+                    if i == 0 {
+                        None
+                    } else {
+                        Some(all0[i - 1].signature)
+                    },
+>>>>>>> bac6821e1 (get_signatures_for_address does not correctly account for result sets that span local and Bigtable sources (#22115))
                     None,
                     Some(all0[0].signature),
                     2,
                 )
                 .unwrap()
+<<<<<<< HEAD
                 .is_empty());
 
             // Fetch all signatures for address 0, three at a time
@@ -7586,6 +7849,10 @@ pub mod tests {
                         3,
                     )
                     .unwrap();
+=======
+                .infos;
+            if i < 12 {
+>>>>>>> bac6821e1 (get_signatures_for_address does not correctly account for result sets that span local and Bigtable sources (#22115))
                 assert_eq!(results.len(), 3);
                 assert_eq!(results[0], all0[i]);
                 assert_eq!(results[1], all0[i + 1]);
@@ -7664,6 +7931,7 @@ pub mod tests {
                     None,
                     usize::MAX,
                 )
+<<<<<<< HEAD
                 .unwrap();
             assert_eq!(all1.len(), 14);
 
@@ -7805,6 +8073,60 @@ pub mod tests {
             assert!(results2.len() < results.len());
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+=======
+                .unwrap()
+                .infos;
+            assert_eq!(results.len(), 2);
+            assert_eq!(results[0].slot, results[1].slot);
+            assert!(results[0].signature >= results[1].signature);
+            assert_eq!(results[0], all1[i]);
+            assert_eq!(results[1], all1[i + 1]);
+        }
+
+        // A search for address 0 with `before` and/or `until` signatures from address1 should also work
+        let results = blockstore
+            .get_confirmed_signatures_for_address2(
+                address0,
+                highest_confirmed_slot,
+                Some(all1[0].signature),
+                None,
+                usize::MAX,
+            )
+            .unwrap()
+            .infos;
+        // The exact number of results returned is variable, based on the sort order of the
+        // random signatures that are generated
+        assert!(!results.is_empty());
+
+        let results2 = blockstore
+            .get_confirmed_signatures_for_address2(
+                address0,
+                highest_confirmed_slot,
+                Some(all1[0].signature),
+                Some(all1[4].signature),
+                usize::MAX,
+            )
+            .unwrap()
+            .infos;
+        assert!(results2.len() < results.len());
+
+        // Remove signature
+        blockstore
+            .address_signatures_cf
+            .delete((0, address0, 2, all0[0].signature))
+            .unwrap();
+        let sig_infos = blockstore
+            .get_confirmed_signatures_for_address2(
+                address0,
+                highest_confirmed_root,
+                Some(all0[0].signature),
+                None,
+                usize::MAX,
+            )
+            .unwrap();
+        assert!(!sig_infos.found_before);
+        assert!(sig_infos.infos.is_empty());
+>>>>>>> bac6821e1 (get_signatures_for_address does not correctly account for result sets that span local and Bigtable sources (#22115))
     }
 
     #[test]
