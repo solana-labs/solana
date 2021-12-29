@@ -773,6 +773,7 @@ impl ProgramTest {
                 genesis_config,
                 mint_keypair,
                 voting_keypair,
+                validator_pubkey: bootstrap_validator_pubkey,
             },
         )
     }

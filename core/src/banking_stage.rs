@@ -392,23 +392,34 @@ impl BankingStage {
         data_budget: &DataBudget,
     ) -> std::io::Result<()> {
         let packets = Self::filter_valid_packets_for_forwarding(buffered_packet_batches.iter());
-        inc_new_counter_info!("banking_stage-forwarded_packets", packets.len());
         const INTERVAL_MS: u64 = 100;
         const MAX_BYTES_PER_SECOND: usize = 10_000 * 1200;
         const MAX_BYTES_PER_INTERVAL: usize = MAX_BYTES_PER_SECOND * INTERVAL_MS as usize / 1000;
         const MAX_BYTES_BUDGET: usize = MAX_BYTES_PER_INTERVAL * 5;
         data_budget.update(INTERVAL_MS, |bytes| {
-            std::cmp::min(bytes + MAX_BYTES_PER_INTERVAL, MAX_BYTES_BUDGET)
+            std::cmp::min(
+                bytes.saturating_add(MAX_BYTES_PER_INTERVAL),
+                MAX_BYTES_BUDGET,
+            )
         });
 
-        let mut packet_vec = Vec::with_capacity(packets.len());
-        for p in packets {
-            if data_budget.take(p.meta.size) {
-                packet_vec.push((&p.data[..p.meta.size], tpu_forwards));
+        let packet_vec: Vec<_> = packets
+            .iter()
+            .filter_map(|p| {
+                if !p.meta.forwarded && data_budget.take(p.meta.size) {
+                    Some((&p.data[..p.meta.size], tpu_forwards))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if !packet_vec.is_empty() {
+            inc_new_counter_info!("banking_stage-forwarded_packets", packet_vec.len());
+            if let Err(SendPktsError::IoError(ioerr, _num_failed)) = batch_send(socket, &packet_vec)
+            {
+                return Err(ioerr);
             }
-        }
-        if let Err(SendPktsError::IoError(ioerr, _num_failed)) = batch_send(socket, &packet_vec) {
-            return Err(ioerr);
         }
 
         Ok(())
@@ -1502,7 +1513,7 @@ mod tests {
             system_transaction,
             transaction::{Transaction, TransactionError},
         },
-        solana_streamer::socket::SocketAddrSpace,
+        solana_streamer::{recvmmsg::recv_mmsg, socket::SocketAddrSpace},
         solana_transaction_status::TransactionWithStatusMeta,
         solana_vote_program::vote_transaction,
         std::{
@@ -2763,16 +2774,15 @@ mod tests {
     fn test_forwarder_budget() {
         solana_logger::setup();
         // Create `PacketBatch` with 1 unprocessed packet
-        let single_packet_batch = PacketBatch::new(vec![Packet::default()]);
-        let mut unprocessed_packets: UnprocessedPacketBatches =
-            vec![(single_packet_batch, vec![0], false)]
-                .into_iter()
-                .collect();
-
-        let cluster_info = new_test_cluster_info(Node::new_localhost().info);
+        let packet = Packet::from_data(None, &[0]).unwrap();
+        let single_packet_batch = PacketBatch::new(vec![packet]);
 
         let genesis_config_info = create_slow_genesis_config(10_000);
-        let GenesisConfigInfo { genesis_config, .. } = &genesis_config_info;
+        let GenesisConfigInfo {
+            genesis_config,
+            validator_pubkey,
+            ..
+        } = &genesis_config_info;
 
         let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(genesis_config));
         let ledger_path = get_tmp_ledger_path!();
@@ -2791,17 +2801,155 @@ mod tests {
             let (exit, poh_recorder, poh_service, _entry_receiver) =
                 create_test_recorder(&bank, &blockstore, Some(poh_config));
 
-            let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-            let data_budget = DataBudget::default();
-            BankingStage::handle_forwarding(
-                &ForwardOption::ForwardTransaction,
-                &cluster_info,
-                &mut unprocessed_packets,
-                &poh_recorder,
-                &socket,
-                false,
-                &data_budget,
+            let local_node = Node::new_localhost_with_pubkey(validator_pubkey);
+            let cluster_info = new_test_cluster_info(local_node.info);
+            let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+            let recv_socket = &local_node.sockets.tpu_forwards[0];
+
+            let test_cases = vec![
+                ("budget-restricted", DataBudget::restricted(), 0),
+                ("budget-available", DataBudget::default(), 1),
+            ];
+
+            for (name, data_budget, expected_num_forwarded) in test_cases {
+                let mut unprocessed_packet_batches: UnprocessedPacketBatches =
+                    vec![(single_packet_batch.clone(), vec![0], false)]
+                        .into_iter()
+                        .collect();
+                BankingStage::handle_forwarding(
+                    &ForwardOption::ForwardTransaction,
+                    &cluster_info,
+                    &mut unprocessed_packet_batches,
+                    &poh_recorder,
+                    &send_socket,
+                    true,
+                    &data_budget,
+                );
+
+                recv_socket
+                    .set_nonblocking(expected_num_forwarded == 0)
+                    .unwrap();
+
+                let mut packets = vec![Packet::default(); 2];
+                let (_, num_received) =
+                    recv_mmsg(recv_socket, &mut packets[..]).unwrap_or_default();
+                assert_eq!(num_received, expected_num_forwarded, "{}", name);
+            }
+
+            exit.store(true, Ordering::Relaxed);
+            poh_service.join().unwrap();
+        }
+        Blockstore::destroy(&ledger_path).unwrap();
+    }
+
+    #[test]
+    fn test_handle_forwarding() {
+        solana_logger::setup();
+
+        const FWD_PACKET: u8 = 1;
+        let forwarded_packet = {
+            let mut packet = Packet::from_data(None, &[FWD_PACKET]).unwrap();
+            packet.meta.forwarded = true;
+            packet
+        };
+
+        const NORMAL_PACKET: u8 = 2;
+        let normal_packet = Packet::from_data(None, &[NORMAL_PACKET]).unwrap();
+
+        let packet_batch = PacketBatch::new(vec![forwarded_packet, normal_packet]);
+        let mut unprocessed_packet_batches: UnprocessedPacketBatches =
+            vec![(packet_batch, vec![0, 1], false)]
+                .into_iter()
+                .collect();
+
+        let genesis_config_info = create_slow_genesis_config(10_000);
+        let GenesisConfigInfo {
+            genesis_config,
+            validator_pubkey,
+            ..
+        } = &genesis_config_info;
+        let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(genesis_config));
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Arc::new(
+                Blockstore::open(&ledger_path)
+                    .expect("Expected to be able to open database ledger"),
             );
+            let poh_config = PohConfig {
+                // limit tick count to avoid clearing working_bank at
+                // PohRecord then PohRecorderError(MaxHeightReached) at BankingStage
+                target_tick_count: Some(bank.max_tick_height() - 1),
+                ..PohConfig::default()
+            };
+
+            let (exit, poh_recorder, poh_service, _entry_receiver) =
+                create_test_recorder(&bank, &blockstore, Some(poh_config));
+
+            let local_node = Node::new_localhost_with_pubkey(validator_pubkey);
+            let cluster_info = new_test_cluster_info(local_node.info);
+            let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+            let recv_socket = &local_node.sockets.tpu_forwards[0];
+
+            let test_cases = vec![
+                ("not-forward", ForwardOption::NotForward, true, vec![], 2),
+                (
+                    "fwd-normal",
+                    ForwardOption::ForwardTransaction,
+                    true,
+                    vec![NORMAL_PACKET],
+                    2,
+                ),
+                (
+                    "fwd-no-op",
+                    ForwardOption::ForwardTransaction,
+                    true,
+                    vec![],
+                    2,
+                ),
+                (
+                    "fwd-no-hold",
+                    ForwardOption::ForwardTransaction,
+                    false,
+                    vec![],
+                    0,
+                ),
+            ];
+
+            for (name, forward_option, hold, expected_ids, expected_num_unprocessed) in test_cases {
+                BankingStage::handle_forwarding(
+                    &forward_option,
+                    &cluster_info,
+                    &mut unprocessed_packet_batches,
+                    &poh_recorder,
+                    &send_socket,
+                    hold,
+                    &DataBudget::default(),
+                );
+
+                recv_socket
+                    .set_nonblocking(expected_ids.is_empty())
+                    .unwrap();
+
+                let mut packets = vec![Packet::default(); 2];
+                let (_, num_received) =
+                    recv_mmsg(recv_socket, &mut packets[..]).unwrap_or_default();
+                assert_eq!(num_received, expected_ids.len(), "{}", name);
+                for (i, expected_id) in expected_ids.iter().enumerate() {
+                    assert_eq!(packets[i].meta.size, 1);
+                    assert_eq!(packets[i].data[0], *expected_id, "{}", name);
+                }
+
+                let num_unprocessed_packets: usize = unprocessed_packet_batches
+                    .iter()
+                    .map(|(b, ..)| b.packets.len())
+                    .sum();
+                assert_eq!(
+                    num_unprocessed_packets, expected_num_unprocessed,
+                    "{}",
+                    name
+                );
+            }
+
             exit.store(true, Ordering::Relaxed);
             poh_service.join().unwrap();
         }
