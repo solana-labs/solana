@@ -8,10 +8,6 @@ export const SYSVAR_EPOCH_SCHEDULE_PUBKEY = new PublicKey(
   'SysvarEpochSchedu1e111111111111111111111111',
 );
 
-export const SYSVAR_FEES_PUBKEY = new PublicKey(
-  'SysvarFees111111111111111111111111111111111',
-);
-
 export const SYSVAR_INSTRUCTIONS_PUBKEY = new PublicKey(
   'Sysvar1nstructions1111111111111111111111111',
 );
