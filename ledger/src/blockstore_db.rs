@@ -1040,7 +1040,7 @@ impl Default for BlockstoreOptions {
             access_type: AccessType::PrimaryOnly,
             recovery_mode: None,
             enforce_ulimit_nofile: true,
-            shred_storage_type: ShredStorageType::RocksLevel,
+            shred_storage_type: ShredStorageType::RocksFifo,
             // Maximum size of cf::DataShred.  Used when `shred_storage_type`
             // is set to ShredStorageType::RocksFifo.
             shred_data_cf_size: DEFAULT_FIFO_COMPACTION_DATA_CF_SIZE,
