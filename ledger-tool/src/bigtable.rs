@@ -30,7 +30,7 @@ async fn upload(
     allow_missing_metadata: bool,
     force_reupload: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let bigtable = solana_storage_bigtable::LedgerStorage::new(false, None)
+    let bigtable = solana_storage_bigtable::LedgerStorage::new(false, None, None)
         .await
         .map_err(|err| format!("Failed to connect to storage: {:?}", err))?;
 
@@ -48,7 +48,7 @@ async fn upload(
 
 async fn delete_slots(slots: Vec<Slot>, dry_run: bool) -> Result<(), Box<dyn std::error::Error>> {
     let read_only = dry_run;
-    let bigtable = solana_storage_bigtable::LedgerStorage::new(read_only, None)
+    let bigtable = solana_storage_bigtable::LedgerStorage::new(read_only, None, None)
         .await
         .map_err(|err| format!("Failed to connect to storage: {:?}", err))?;
 
@@ -56,7 +56,7 @@ async fn delete_slots(slots: Vec<Slot>, dry_run: bool) -> Result<(), Box<dyn std
 }
 
 async fn first_available_block() -> Result<(), Box<dyn std::error::Error>> {
-    let bigtable = solana_storage_bigtable::LedgerStorage::new(true, None).await?;
+    let bigtable = solana_storage_bigtable::LedgerStorage::new(true, None, None).await?;
     match bigtable.get_first_available_block().await? {
         Some(block) => println!("{}", block),
         None => println!("No blocks available"),
@@ -66,7 +66,7 @@ async fn first_available_block() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn block(slot: Slot, output_format: OutputFormat) -> Result<(), Box<dyn std::error::Error>> {
-    let bigtable = solana_storage_bigtable::LedgerStorage::new(false, None)
+    let bigtable = solana_storage_bigtable::LedgerStorage::new(false, None, None)
         .await
         .map_err(|err| format!("Failed to connect to storage: {:?}", err))?;
 
@@ -81,7 +81,7 @@ async fn block(slot: Slot, output_format: OutputFormat) -> Result<(), Box<dyn st
 }
 
 async fn blocks(starting_slot: Slot, limit: usize) -> Result<(), Box<dyn std::error::Error>> {
-    let bigtable = solana_storage_bigtable::LedgerStorage::new(false, None)
+    let bigtable = solana_storage_bigtable::LedgerStorage::new(false, None, None)
         .await
         .map_err(|err| format!("Failed to connect to storage: {:?}", err))?;
 
@@ -92,12 +92,38 @@ async fn blocks(starting_slot: Slot, limit: usize) -> Result<(), Box<dyn std::er
     Ok(())
 }
 
+async fn compare_blocks(starting_slot: Slot, limit: usize, cred_path: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
+
+    if let Some(t) = &cred_path {
+        if t.len() <= 0 {panic!("you must provide the second credential");}
+    }
+    
+    let bigtable_def = solana_storage_bigtable::LedgerStorage::new(false, None, None)
+    .await
+    .map_err(|err| format!("Failed to connect to default storage: {:?}", err))?;
+
+    let slots = bigtable_def.get_confirmed_blocks(starting_slot, limit).await?;
+    println!("{:?}", slots);
+    println!("standard bigtable {} blocks found", slots.len());
+
+
+    let bigtable_cmp = solana_storage_bigtable::LedgerStorage::new(false, None, cred_path)
+        .await
+        .map_err(|err| format!("Failed to connect to storage which is used to compare with standard storage: {:?}", err))?;
+    
+        let slots = bigtable_cmp.get_confirmed_blocks(starting_slot, limit).await?;
+    println!("{:?}", slots);
+    println!("bigtable used to compare with {} blocks found", slots.len());
+
+    Ok(())
+}
+
 async fn confirm(
     signature: &Signature,
     verbose: bool,
     output_format: OutputFormat,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let bigtable = solana_storage_bigtable::LedgerStorage::new(false, None)
+    let bigtable = solana_storage_bigtable::LedgerStorage::new(false, None, None)
         .await
         .map_err(|err| format!("Failed to connect to storage: {:?}", err))?;
 
@@ -146,7 +172,7 @@ pub async fn transaction_history(
     show_transactions: bool,
     query_chunk_size: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let bigtable = solana_storage_bigtable::LedgerStorage::new(true, None).await?;
+    let bigtable = solana_storage_bigtable::LedgerStorage::new(true, None, None).await?;
 
     let mut loaded_block: Option<(Slot, ConfirmedBlock)> = None;
     while limit > 0 {
@@ -330,6 +356,42 @@ impl BigTableSubCommand for App<'_, '_> {
                         ),
                 )
                 .subcommand(
+                    SubCommand::with_name("compare-blocks")
+                        .about("Get a list of slots with confirmed blocks for the given range")
+                        .arg(
+                            Arg::with_name("starting_slot")
+                                .long("starting-slot")
+                                .validator(is_slot)
+                                .value_name("SLOT")
+                                .takes_value(true)
+                                .index(1)
+                                .required(true)
+                                .default_value("0")
+                                .help("Start listing at this slot"),
+                        )
+                        .arg(
+                            Arg::with_name("limit")
+                                .long("limit")
+                                .validator(is_slot)
+                                .value_name("LIMIT")
+                                .takes_value(true)
+                                .index(2)
+                                .required(true)
+                                .default_value("1000")
+                                .help("Maximum number of slots to return"),
+                        ).arg(
+                            Arg::with_name("credential")
+                            .long("credential")
+                            .short("cred")
+                            .value_name("CREDENTIAL")
+                            .takes_value(true)
+                            .index(3)
+                            .required(true)
+                            .default_value("")
+                            .help("credential file path")
+                        ),
+                )
+                .subcommand(
                     SubCommand::with_name("block")
                         .about("Get a confirmed block")
                         .arg(
@@ -458,6 +520,12 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
             let limit = value_t_or_exit!(arg_matches, "limit", usize);
 
             runtime.block_on(blocks(starting_slot, limit))
+        }
+        ("compare-blocks", Some(arg_matches)) => {
+            let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
+            let limit = value_t_or_exit!(arg_matches, "limit", usize);
+            let credential = value_t_or_exit!(arg_matches, "credential", String);
+            runtime.block_on(compare_blocks(starting_slot, limit, Some(credential)))   
         }
         ("confirm", Some(arg_matches)) => {
             let signature = arg_matches

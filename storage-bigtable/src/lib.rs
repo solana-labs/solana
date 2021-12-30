@@ -345,9 +345,9 @@ pub struct LedgerStorage {
 }
 
 impl LedgerStorage {
-    pub async fn new(read_only: bool, timeout: Option<std::time::Duration>) -> Result<Self> {
+    pub async fn new(read_only: bool, timeout: Option<std::time::Duration>, cred_path: Option<String>) -> Result<Self> {
         let connection =
-            bigtable::BigTableConnection::new("solana-ledger", read_only, timeout).await?;
+            bigtable::BigTableConnection::new("solana-ledger", read_only, timeout, cred_path).await?;
         Ok(Self { connection })
     }
 
