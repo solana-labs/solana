@@ -406,11 +406,16 @@ impl BankingStage {
                 MAX_BYTES_BUDGET,
             )
         });
+
+        let mut forwarded_packet_count = 0;
         for p in packets {
             if !p.meta.forwarded && data_budget.take(p.meta.size) {
+                forwarded_packet_count = forwarded_packet_count.saturating_add(1);
                 socket.send_to(&p.data[..p.meta.size], &tpu_forwards)?;
             }
         }
+
+        inc_new_counter_info!("banking_stage-forwarded_packets", forwarded_packet_count);
 
         Ok(())
     }
