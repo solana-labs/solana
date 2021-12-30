@@ -3,6 +3,7 @@
 use crate::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     instruction::InstructionError,
+    lamports::LamportsError,
     pubkey::Pubkey,
 };
 use std::cell::{RefCell, RefMut};
@@ -11,7 +12,8 @@ pub type TransactionAccount = (Pubkey, AccountSharedData);
 
 #[derive(Clone, Debug)]
 pub struct InstructionAccount {
-    pub index: usize,
+    pub index_in_transaction: usize,
+    pub index_in_caller: usize,
     pub is_signer: bool,
     pub is_writable: bool,
 }
@@ -19,6 +21,7 @@ pub struct InstructionAccount {
 /// Loaded transaction shared between runtime and programs.
 ///
 /// This context is valid for the entire duration of a transaction being processed.
+#[derive(Debug)]
 pub struct TransactionContext {
     account_keys: Vec<Pubkey>,
     accounts: Vec<RefCell<AccountSharedData>>,
@@ -98,12 +101,12 @@ impl TransactionContext {
     /// Gets an InstructionContext by its height in the stack
     pub fn get_instruction_context_at(
         &self,
-        instruction_context_height: usize,
+        level: usize,
     ) -> Result<&InstructionContext, InstructionError> {
-        if instruction_context_height >= self.instruction_context_stack.len() {
+        if level >= self.instruction_context_stack.len() {
             return Err(InstructionError::CallDepth);
         }
-        Ok(&self.instruction_context_stack[instruction_context_height])
+        Ok(&self.instruction_context_stack[level])
     }
 
     /// Gets the max height of the InstructionContext stack
@@ -111,66 +114,36 @@ impl TransactionContext {
         self.instruction_context_capacity
     }
 
-    /// Gets the height of the current InstructionContext
-    pub fn get_instruction_context_height(&self) -> usize {
-        self.instruction_context_stack.len().saturating_sub(1)
+    /// Gets the level of the next InstructionContext
+    pub fn get_instruction_context_stack_height(&self) -> usize {
+        self.instruction_context_stack.len()
     }
 
     /// Returns the current InstructionContext
     pub fn get_current_instruction_context(&self) -> Result<&InstructionContext, InstructionError> {
-        self.get_instruction_context_at(self.get_instruction_context_height())
-    }
-
-    /// Gets the last program account of the current InstructionContext
-    pub fn try_borrow_program_account(&self) -> Result<BorrowedAccount, InstructionError> {
-        let instruction_context = self.get_current_instruction_context()?;
-        instruction_context.try_borrow_account(
-            self,
-            instruction_context
-                .number_of_program_accounts
-                .saturating_sub(1),
-        )
-    }
-
-    /// Gets an instruction account of the current InstructionContext
-    pub fn try_borrow_instruction_account(
-        &self,
-        index_in_instruction: usize,
-    ) -> Result<BorrowedAccount, InstructionError> {
-        let instruction_context = self.get_current_instruction_context()?;
-        instruction_context.try_borrow_account(
-            self,
-            instruction_context
-                .number_of_program_accounts
-                .saturating_add(index_in_instruction),
-        )
+        let level = self
+            .instruction_context_stack
+            .len()
+            .checked_sub(1)
+            .ok_or(InstructionError::CallDepth)?;
+        self.get_instruction_context_at(level)
     }
 
     /// Pushes a new InstructionContext
     pub fn push(
         &mut self,
-        number_of_program_accounts: usize,
+        program_accounts: &[usize],
         instruction_accounts: &[InstructionAccount],
-        instruction_data: Vec<u8>,
+        instruction_data: &[u8],
     ) -> Result<(), InstructionError> {
         if self.instruction_context_stack.len() >= self.instruction_context_capacity {
             return Err(InstructionError::CallDepth);
         }
-        let mut result = InstructionContext {
-            instruction_data,
-            number_of_program_accounts,
-            account_indices: Vec::with_capacity(instruction_accounts.len()),
-            account_is_signer: Vec::with_capacity(instruction_accounts.len()),
-            account_is_writable: Vec::with_capacity(instruction_accounts.len()),
-        };
-        for instruction_account in instruction_accounts.iter() {
-            result.account_indices.push(instruction_account.index);
-            result.account_is_signer.push(instruction_account.is_signer);
-            result
-                .account_is_writable
-                .push(instruction_account.is_writable);
-        }
-        self.instruction_context_stack.push(result);
+        self.instruction_context_stack.push(InstructionContext {
+            program_accounts: program_accounts.to_vec(),
+            instruction_accounts: instruction_accounts.to_vec(),
+            instruction_data: instruction_data.to_vec(),
+        });
         Ok(())
     }
 
@@ -183,6 +156,20 @@ impl TransactionContext {
         Ok(())
     }
 
+    /// Returns the key of the current InstructionContexts program account
+    pub fn get_program_key(&self) -> Result<&Pubkey, InstructionError> {
+        let instruction_context = self.get_current_instruction_context()?;
+        let program_account = instruction_context.try_borrow_program_account(self)?;
+        Ok(&self.account_keys[program_account.index_in_transaction])
+    }
+
+    /// Returns the owner of the current InstructionContexts program account
+    pub fn get_loader_key(&self) -> Result<Pubkey, InstructionError> {
+        let instruction_context = self.get_current_instruction_context()?;
+        let program_account = instruction_context.try_borrow_program_account(self)?;
+        Ok(*program_account.get_owner())
+    }
+
     /// Gets the return data of the current InstructionContext or any above
     pub fn get_return_data(&self) -> (&Pubkey, &[u8]) {
         (&self.return_data.0, &self.return_data.1)
@@ -190,8 +177,7 @@ impl TransactionContext {
 
     /// Set the return data of the current InstructionContext
     pub fn set_return_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError> {
-        let pubkey = *self.try_borrow_program_account()?.get_key();
-        self.return_data = (pubkey, data);
+        self.return_data = (*self.get_program_key()?, data);
         Ok(())
     }
 }
@@ -199,35 +185,62 @@ impl TransactionContext {
 /// Loaded instruction shared between runtime and programs.
 ///
 /// This context is valid for the entire duration of a (possibly cross program) instruction being processed.
+#[derive(Debug)]
 pub struct InstructionContext {
-    number_of_program_accounts: usize,
-    account_indices: Vec<usize>,
-    account_is_signer: Vec<bool>,
-    account_is_writable: Vec<bool>,
+    program_accounts: Vec<usize>,
+    instruction_accounts: Vec<InstructionAccount>,
     instruction_data: Vec<u8>,
 }
 
 impl InstructionContext {
     /// Number of program accounts
     pub fn get_number_of_program_accounts(&self) -> usize {
-        self.number_of_program_accounts
+        self.program_accounts.len()
     }
 
     /// Number of accounts in this Instruction (without program accounts)
     pub fn get_number_of_instruction_accounts(&self) -> usize {
-        self.account_indices
-            .len()
-            .saturating_sub(self.number_of_program_accounts)
+        self.instruction_accounts.len()
     }
 
-    /// Total number of accounts in this Instruction (with program accounts)
-    pub fn get_total_number_of_accounts(&self) -> usize {
-        self.account_indices.len()
+    /// Number of accounts in this Instruction
+    pub fn get_number_of_accounts(&self) -> usize {
+        self.program_accounts
+            .len()
+            .saturating_add(self.instruction_accounts.len())
     }
 
     /// Data parameter for the programs `process_instruction` handler
     pub fn get_instruction_data(&self) -> &[u8] {
         &self.instruction_data
+    }
+
+    /// Searches for a program account by its key
+    pub fn find_index_of_program_account(
+        &self,
+        transaction_context: &TransactionContext,
+        pubkey: &Pubkey,
+    ) -> Option<usize> {
+        self.program_accounts
+            .iter()
+            .position(|index_in_transaction| {
+                &transaction_context.account_keys[*index_in_transaction] == pubkey
+            })
+    }
+
+    /// Searches for an account by its key
+    pub fn find_index_of_account(
+        &self,
+        transaction_context: &TransactionContext,
+        pubkey: &Pubkey,
+    ) -> Option<usize> {
+        self.instruction_accounts
+            .iter()
+            .position(|instruction_account| {
+                &transaction_context.account_keys[instruction_account.index_in_transaction]
+                    == pubkey
+            })
+            .map(|index| index.saturating_add(self.program_accounts.len()))
     }
 
     /// Tries to borrow an account from this Instruction
@@ -236,10 +249,15 @@ impl InstructionContext {
         transaction_context: &'b TransactionContext,
         index_in_instruction: usize,
     ) -> Result<BorrowedAccount<'a>, InstructionError> {
-        if index_in_instruction >= self.account_indices.len() {
+        let index_in_transaction = if index_in_instruction < self.program_accounts.len() {
+            self.program_accounts[index_in_instruction]
+        } else if index_in_instruction < self.get_number_of_accounts() {
+            self.instruction_accounts
+                [index_in_instruction.saturating_sub(self.program_accounts.len())]
+            .index_in_transaction
+        } else {
             return Err(InstructionError::NotEnoughAccountKeys);
-        }
-        let index_in_transaction = self.account_indices[index_in_instruction];
+        };
         if index_in_transaction >= transaction_context.accounts.len() {
             return Err(InstructionError::MissingAccount);
         }
@@ -254,9 +272,35 @@ impl InstructionContext {
             account,
         })
     }
+
+    /// Gets the last program account of the current InstructionContext
+    pub fn try_borrow_program_account<'a, 'b: 'a>(
+        &'a self,
+        transaction_context: &'b TransactionContext,
+    ) -> Result<BorrowedAccount<'a>, InstructionError> {
+        self.try_borrow_account(
+            transaction_context,
+            self.program_accounts.len().saturating_sub(1),
+        )
+    }
+
+    /// Gets an instruction account of the current InstructionContext
+    pub fn try_borrow_instruction_account<'a, 'b: 'a>(
+        &'a self,
+        transaction_context: &'b TransactionContext,
+        index_in_instruction: usize,
+    ) -> Result<BorrowedAccount<'a>, InstructionError> {
+        self.try_borrow_account(
+            transaction_context,
+            self.program_accounts
+                .len()
+                .saturating_add(index_in_instruction),
+        )
+    }
 }
 
 /// Shared account borrowed from the TransactionContext and an InstructionContext.
+#[derive(Debug)]
 pub struct BorrowedAccount<'a> {
     transaction_context: &'a TransactionContext,
     instruction_context: &'a InstructionContext,
@@ -266,6 +310,16 @@ pub struct BorrowedAccount<'a> {
 }
 
 impl<'a> BorrowedAccount<'a> {
+    /// Returns the index of this account (transaction wide)
+    pub fn get_index_in_transaction(&self) -> usize {
+        self.index_in_transaction
+    }
+
+    /// Returns the index of this account (instruction wide)
+    pub fn get_index_in_instruction(&self) -> usize {
+        self.index_in_instruction
+    }
+
     /// Returns the public key of this account (transaction wide)
     pub fn get_key(&self) -> &Pubkey {
         &self.transaction_context.account_keys[self.index_in_transaction]
@@ -299,6 +353,24 @@ impl<'a> BorrowedAccount<'a> {
         Ok(())
     }
 
+    /// Adds lamports to this account (transaction wide)
+    pub fn checked_add_lamports(&mut self, lamports: u64) -> Result<(), InstructionError> {
+        self.set_lamports(
+            self.get_lamports()
+                .checked_add(lamports)
+                .ok_or(LamportsError::ArithmeticOverflow)?,
+        )
+    }
+
+    /// Subtracts lamports from this account (transaction wide)
+    pub fn checked_sub_lamports(&mut self, lamports: u64) -> Result<(), InstructionError> {
+        self.set_lamports(
+            self.get_lamports()
+                .checked_sub(lamports)
+                .ok_or(LamportsError::ArithmeticUnderflow)?,
+        )
+    }
+
     /// Returns a read-only slice of the account data (transaction wide)
     pub fn get_data(&self) -> &[u8] {
         self.account.data()
@@ -310,6 +382,40 @@ impl<'a> BorrowedAccount<'a> {
             return Err(InstructionError::Immutable);
         }
         Ok(self.account.data_as_mut_slice())
+    }
+
+    /// Guarded alternative to `get_data_mut()?.copy_from_slice()` which checks if the account size matches
+    pub fn copy_from_slice(&mut self, data: &[u8]) -> Result<(), InstructionError> {
+        if !self.is_writable() {
+            return Err(InstructionError::Immutable);
+        }
+        let account_data = self.account.data_as_mut_slice();
+        if data.len() != account_data.len() {
+            return Err(InstructionError::AccountDataSizeChanged);
+        }
+        account_data.copy_from_slice(data);
+        Ok(())
+    }
+
+    /// Deserializes the account data into a state
+    pub fn get_state<T: serde::de::DeserializeOwned>(&self) -> Result<T, InstructionError> {
+        self.account
+            .deserialize_data()
+            .map_err(|_| InstructionError::InvalidAccountData)
+    }
+
+    /// Serializes a state into the account data
+    pub fn set_state<T: serde::Serialize>(&mut self, state: &T) -> Result<(), InstructionError> {
+        if !self.is_writable() {
+            return Err(InstructionError::Immutable);
+        }
+        let data = self.account.data_as_mut_slice();
+        let serialized_size =
+            bincode::serialized_size(state).map_err(|_| InstructionError::GenericError)?;
+        if serialized_size > data.len() as u64 {
+            return Err(InstructionError::AccountDataTooSmall);
+        }
+        bincode::serialize_into(&mut *data, state).map_err(|_| InstructionError::GenericError)
     }
 
     /*pub fn realloc(&self, new_len: usize, zero_init: bool) {
@@ -332,11 +438,25 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Returns whether this account is a signer (instruction wide)
     pub fn is_signer(&self) -> bool {
-        self.instruction_context.account_is_signer[self.index_in_instruction]
+        if self.index_in_instruction < self.instruction_context.program_accounts.len() {
+            false
+        } else {
+            self.instruction_context.instruction_accounts[self
+                .index_in_instruction
+                .saturating_sub(self.instruction_context.program_accounts.len())]
+            .is_signer
+        }
     }
 
     /// Returns whether this account is writable (instruction wide)
     pub fn is_writable(&self) -> bool {
-        self.instruction_context.account_is_writable[self.index_in_instruction]
+        if self.index_in_instruction < self.instruction_context.program_accounts.len() {
+            false
+        } else {
+            self.instruction_context.instruction_accounts[self
+                .index_in_instruction
+                .saturating_sub(self.instruction_context.program_accounts.len())]
+            .is_writable
+        }
     }
 }

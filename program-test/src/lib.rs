@@ -249,30 +249,30 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             .prepare_instruction(instruction, &signers)
             .unwrap();
 
-        // Convert AccountInfos into Accounts
-        let mut accounts = Vec::with_capacity(instruction_accounts.len());
+        // Copy caller's account_info modifications into invoke_context accounts
+        let mut account_indices = Vec::with_capacity(instruction_accounts.len());
         for instruction_account in instruction_accounts.iter() {
             let account_key = invoke_context
                 .transaction_context
-                .get_key_of_account_at_index(instruction_account.index);
-            let account_info = account_infos
+                .get_key_of_account_at_index(instruction_account.index_in_transaction);
+            let account_info_index = account_infos
                 .iter()
-                .find(|account_info| account_info.unsigned_key() == account_key)
+                .position(|account_info| account_info.unsigned_key() == account_key)
                 .ok_or(InstructionError::MissingAccount)
                 .unwrap();
-            {
-                let mut account = invoke_context
-                    .transaction_context
-                    .get_account_at_index(instruction_account.index)
-                    .borrow_mut();
-                account.copy_into_owner_from_slice(account_info.owner.as_ref());
-                account.set_data_from_slice(&account_info.try_borrow_data().unwrap());
-                account.set_lamports(account_info.lamports());
-                account.set_executable(account_info.executable);
-                account.set_rent_epoch(account_info.rent_epoch);
-            }
+            let account_info = &account_infos[account_info_index];
+            let mut account = invoke_context
+                .transaction_context
+                .get_account_at_index(instruction_account.index_in_transaction)
+                .borrow_mut();
+            account.copy_into_owner_from_slice(account_info.owner.as_ref());
+            account.set_data_from_slice(&account_info.try_borrow_data().unwrap());
+            account.set_lamports(account_info.lamports());
+            account.set_executable(account_info.executable);
+            account.set_rent_epoch(account_info.rent_epoch);
             if instruction_account.is_writable {
-                accounts.push((instruction_account.index, account_info));
+                account_indices
+                    .push((instruction_account.index_in_transaction, account_info_index));
             }
         }
 
@@ -285,22 +285,23 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             )
             .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;
 
-        // Copy writeable account modifications back into the caller's AccountInfos
-        for (account_index, account_info) in accounts.into_iter() {
+        // Copy invoke_context accounts modifications into caller's account_info
+        for (index_in_transaction, account_info_index) in account_indices.into_iter() {
             let account = invoke_context
                 .transaction_context
-                .get_account_at_index(account_index);
-            let account_borrow = account.borrow();
-            **account_info.try_borrow_mut_lamports().unwrap() = account_borrow.lamports();
+                .get_account_at_index(index_in_transaction)
+                .borrow_mut();
+            let account_info = &account_infos[account_info_index];
+            **account_info.try_borrow_mut_lamports().unwrap() = account.lamports();
             let mut data = account_info.try_borrow_mut_data()?;
-            let new_data = account_borrow.data();
-            if account_info.owner != account_borrow.owner() {
+            let new_data = account.data();
+            if account_info.owner != account.owner() {
                 // TODO Figure out a better way to allow the System Program to set the account owner
                 #[allow(clippy::transmute_ptr_to_ptr)]
                 #[allow(mutable_transmutes)]
                 let account_info_mut =
                     unsafe { transmute::<&Pubkey, &mut Pubkey>(account_info.owner) };
-                *account_info_mut = *account_borrow.owner();
+                *account_info_mut = *account.owner();
             }
             // TODO: Figure out how to allow the System Program to resize the account data
             assert!(
