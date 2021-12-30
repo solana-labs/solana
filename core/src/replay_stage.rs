@@ -606,7 +606,7 @@ impl ReplayStage {
                         for r in heaviest_fork_failures {
                             if let HeaviestForkFailures::NoPropagatedConfirmation(slot) = r {
                                 if let Some(latest_leader_slot) =
-                                    progress.get_latest_leader_slot(slot)
+                                    progress.get_latest_leader_slot_assert_slot_must_exist(slot)
                                 {
                                     progress.log_propagated_stats(latest_leader_slot, &bank_forks);
                                 }
@@ -857,7 +857,10 @@ impl ReplayStage {
     ) {
         let start_slot = poh_recorder.lock().unwrap().start_slot();
         if let Some(latest_leader_slot) = progress.get_latest_leader_slot(start_slot) {
-            if !progress.is_propagated(latest_leader_slot) {
+            // We just returned a postivie result above from `get_latest_leader_slot`, so
+            // `start_slot` must exist in the progress map above
+            let must_exist_in_progress_map = true;
+            if !progress.is_propagated(start_slot, must_exist_in_progress_map) {
                 warn!("Slot not propagated: slot={}", latest_leader_slot);
                 let retransmit_info = progress.get_retransmit_info(latest_leader_slot).unwrap();
                 if retransmit_info.reached_retransmit_threshold() {
@@ -1368,7 +1371,9 @@ impl ReplayStage {
         // `poh_slot` and `parent_slot`, because they're in the same
         // `NUM_CONSECUTIVE_LEADER_SLOTS` block, we still skip the propagated
         // check because it's still within the propagation grace period.
-        if let Some(latest_leader_slot) = progress_map.get_latest_leader_slot(parent_slot) {
+        if let Some(latest_leader_slot) =
+            progress_map.get_latest_leader_slot_assert_slot_must_exist(parent_slot)
+        {
             let skip_propagated_check =
                 poh_slot - latest_leader_slot < NUM_CONSECUTIVE_LEADER_SLOTS;
             if skip_propagated_check {
@@ -1380,7 +1385,7 @@ impl ReplayStage {
         // propagation of `parent_slot`, it checks propagation of the latest ancestor
         // of `parent_slot` (hence the call to `get_latest_leader_slot()` in the
         // check above)
-        progress_map.is_propagated(parent_slot)
+        progress_map.is_propagated(parent_slot, true)
     }
 
     fn should_retransmit(poh_slot: Slot, last_retransmit_slot: &mut Slot) -> bool {
@@ -1465,7 +1470,7 @@ impl ReplayStage {
             );
 
             if !Self::check_propagation_for_start_leader(poh_slot, parent_slot, progress_map) {
-                let latest_unconfirmed_leader_slot = progress_map.get_latest_leader_slot(parent_slot)
+                let latest_unconfirmed_leader_slot = progress_map.get_latest_leader_slot_assert_slot_must_exist(parent_slot)
                     .expect("In order for propagated check to fail, latest leader must exist in progress map");
                 if poh_slot != skipped_slots_info.last_skipped_slot {
                     datapoint_info!(
@@ -2341,7 +2346,7 @@ impl ReplayStage {
         cluster_slots: &ClusterSlots,
     ) {
         // If propagation has already been confirmed, return
-        if progress.is_propagated(slot) {
+        if progress.is_propagated(slot, true) {
             return;
         }
 
@@ -2534,7 +2539,7 @@ impl ReplayStage {
                 )
             };
 
-            let propagation_confirmed = is_leader_slot || progress.is_propagated(bank.slot());
+            let propagation_confirmed = is_leader_slot || progress.is_propagated(bank.slot(), true);
 
             if is_locked_out {
                 failure_reasons.push(HeaviestForkFailures::LockedOut(bank.slot()));
@@ -2580,7 +2585,8 @@ impl ReplayStage {
         fork_tip: Slot,
         bank_forks: &RwLock<BankForks>,
     ) {
-        let mut current_leader_slot = progress.get_latest_leader_slot(fork_tip);
+        let mut current_leader_slot =
+            progress.get_latest_leader_slot_assert_slot_must_exist(fork_tip);
         let mut did_newly_reach_threshold = false;
         let root = bank_forks.read().unwrap().root();
         loop {
@@ -4384,7 +4390,7 @@ pub mod tests {
 
         // Make sure is_propagated == false so that the propagation logic
         // runs in `update_propagation_status`
-        assert!(!progress_map.is_propagated(10));
+        assert!(!progress_map.is_propagated(10, true));
 
         let vote_tracker = VoteTracker::new(&bank_forks.root_bank());
         vote_tracker.insert_vote(10, vote_pubkey);
@@ -5011,7 +5017,7 @@ pub mod tests {
             vote_tracker.insert_vote(root_bank.slot(), *vote_key);
         }
 
-        assert!(!progress.is_propagated(root_bank.slot()));
+        assert!(!progress.is_propagated(root_bank.slot(), true));
 
         // Update propagation status
         let tower = Tower::new_for_tests(0, 0.67);
@@ -5029,7 +5035,7 @@ pub mod tests {
         );
 
         // Check status is true
-        assert!(progress.is_propagated(root_bank.slot()));
+        assert!(progress.is_propagated(root_bank.slot(), true));
     }
 
     #[test]

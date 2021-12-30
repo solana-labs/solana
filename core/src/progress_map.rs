@@ -351,6 +351,14 @@ pub struct PropagatedStats {
 }
 
 impl PropagatedStats {
+    pub fn get_latest_leader_slot(&self, slot_of_self: Slot) -> Option<Slot> {
+        if self.is_leader_slot {
+            Some(slot_of_self)
+        } else {
+            self.prev_leader_slot
+        }
+    }
+
     pub fn add_vote_pubkey(&mut self, vote_pubkey: Pubkey, stake: u64) {
         if self.propagated_validators.insert(vote_pubkey) {
             self.propagated_validators_stake += stake;
@@ -456,8 +464,12 @@ impl ProgressMap {
             .and_then(|fork_progress| fork_progress.fork_stats.bank_hash)
     }
 
-    pub fn is_propagated(&self, slot: Slot) -> bool {
-        let leader_slot_to_check = self.get_latest_leader_slot(slot);
+    pub fn is_propagated(&self, slot: Slot, slot_must_exist: bool) -> bool {
+        let leader_slot_to_check = if slot_must_exist {
+            self.get_latest_leader_slot_assert_slot_must_exist(slot)
+        } else {
+            self.get_latest_leader_slot(slot)
+        };
 
         // prev_leader_slot doesn't exist because already rooted
         // or this validator hasn't been scheduled as a leader
@@ -475,16 +487,18 @@ impl ProgressMap {
             .unwrap_or(true)
     }
 
-    pub fn get_latest_leader_slot(&self, slot: Slot) -> Option<Slot> {
+    pub fn get_latest_leader_slot_assert_slot_must_exist(&self, slot: Slot) -> Option<Slot> {
         let propagated_stats = self
             .get_propagated_stats(slot)
-            .expect("All frozen banks must exist in the Progress map");
+            .unwrap_or_else(|| panic!("Expected leader slot {} to exist in progress map", slot));
 
-        if propagated_stats.is_leader_slot {
-            Some(slot)
-        } else {
-            propagated_stats.prev_leader_slot
-        }
+        propagated_stats.get_latest_leader_slot(slot)
+    }
+
+    pub fn get_latest_leader_slot(&self, slot: Slot) -> Option<Slot> {
+        let propagated_stats = self.get_propagated_stats(slot)?;
+
+        propagated_stats.get_latest_leader_slot(slot)
     }
 
     pub fn my_latest_landed_vote(&self, slot: Slot) -> Option<Slot> {
@@ -712,27 +726,27 @@ mod test {
         );
 
         // None of these slot have parents which are confirmed
-        assert!(!progress_map.is_propagated(9));
-        assert!(!progress_map.is_propagated(10));
+        assert!(!progress_map.is_propagated(9, true));
+        assert!(!progress_map.is_propagated(10, true));
 
         // Insert new ForkProgress for slot 8 with no previous leader.
         // The previous leader before 8, slot 7, does not exist in
         // progress map, so is_propagated(8) should return true as
         // this implies the parent is rooted
         progress_map.insert(8, ForkProgress::new(Hash::default(), Some(7), None, 0, 0));
-        assert!(progress_map.is_propagated(8));
+        assert!(progress_map.is_propagated(8, true));
 
         // If we set the is_propagated = true, is_propagated should return true
         progress_map
             .get_propagated_stats_mut(9)
             .unwrap()
             .is_propagated = true;
-        assert!(progress_map.is_propagated(9));
+        assert!(progress_map.is_propagated(9, true));
         assert!(progress_map.get(&9).unwrap().propagated_stats.is_propagated);
 
         // Because slot 9 is now confirmed, then slot 10 is also confirmed b/c 9
         // is the last leader slot before 10
-        assert!(progress_map.is_propagated(10));
+        assert!(progress_map.is_propagated(10, true));
 
         // If we make slot 10 a leader slot though, even though its previous
         // leader slot 9 has been confirmed, slot 10 itself is not confirmed
@@ -740,6 +754,6 @@ mod test {
             .get_propagated_stats_mut(10)
             .unwrap()
             .is_leader_slot = true;
-        assert!(!progress_map.is_propagated(10));
+        assert!(!progress_map.is_propagated(10, true));
     }
 }
