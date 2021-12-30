@@ -48,14 +48,26 @@ pub enum ReplicaAccountInfoVersions<'a> {
     V0_0_1(&'a ReplicaAccountInfo<'a>),
 }
 
+/// Information about a transaction
 #[derive(Clone, Debug)]
 pub struct ReplicaTransactionInfo<'a> {
+    /// The first signature of the transaction, used for identifying the transaction.
     pub signature: &'a Signature,
+
+    /// Indicates if the transaction is a simple vote transaction.
     pub is_vote: bool,
+
+    /// The sanitized transaction.
     pub transaction: &'a SanitizedTransaction,
+
+    /// Metadata of the transaction status.
     pub transaction_status_meta: &'a TransactionStatusMeta,
 }
 
+/// A wrapper to future-proof ReplicaTransactionInfo handling.
+/// If there were a change to the structure of ReplicaTransactionInfo,
+/// there would be new enum entry for the newer version, forcing
+/// plugin implementations to handle the change.
 pub enum ReplicaTransactionInfoVersions<'a> {
     V0_0_1(&'a ReplicaTransactionInfo<'a>),
 }
