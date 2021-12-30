@@ -192,7 +192,7 @@ impl ShredFetchStage {
             recycler.clone(),
             bank_forks.clone(),
             "shred_fetch_tvu_forwards",
-            |p| p.meta.forward = true,
+            |p| p.meta.forwarded = true,
         );
 
         let (repair_receiver, repair_handler) = Self::packet_modifier(
