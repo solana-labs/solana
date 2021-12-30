@@ -861,10 +861,10 @@ impl ReplayStage {
             let first_leader_group_slot =
                 Self::first_of_consecutive_leader_slots(latest_leader_slot);
             for slot in first_leader_group_slot..=latest_leader_slot {
-                if progress
+                if !progress
                     .get_propagated_stats(slot)
                     .map(|stats| stats.is_propagated)
-                    .unwrap_or(false)
+                    .unwrap_or(true)
                 {
                     let retransmit_info = progress.get_retransmit_info(slot).unwrap();
                     if retransmit_info.reached_retransmit_threshold() {
@@ -1493,24 +1493,25 @@ impl ReplayStage {
                     let first_leader_group_slot =
                         Self::first_of_consecutive_leader_slots(latest_unconfirmed_leader_slot);
                     for slot in first_leader_group_slot..=latest_unconfirmed_leader_slot {
-                        let retransmit_info = progress_map.get_retransmit_info(slot).unwrap();
-                        if retransmit_info.reached_retransmit_threshold() {
-                            info!(
-                                "Retrying retransmit: retransmit_info={:?}",
-                                &retransmit_info
-                            );
-                            datapoint_info!(
-                                "replay_stage-retransmit",
-                                ("slot", slot, i64),
-                                ("retry_iteration", retransmit_info.retry_iteration, i64),
-                            );
-                            let _ = retransmit_slots_sender.send(slot);
-                            retransmit_info.increment_retry_iteration();
-                        } else {
-                            info!(
-                                "Bypassing retransmit of my leader slot retransmit_info={:?}",
-                                &retransmit_info
-                            );
+                        if let Some(retransmit_info) = progress_map.get_retransmit_info(slot) {
+                            if retransmit_info.reached_retransmit_threshold() {
+                                info!(
+                                    "Retrying retransmit: retransmit_info={:?}",
+                                    &retransmit_info
+                                );
+                                datapoint_info!(
+                                    "replay_stage-retransmit",
+                                    ("slot", slot, i64),
+                                    ("retry_iteration", retransmit_info.retry_iteration, i64),
+                                );
+                                let _ = retransmit_slots_sender.send(slot);
+                                retransmit_info.increment_retry_iteration();
+                            } else {
+                                info!(
+                                    "Bypassing retransmit of my leader slot retransmit_info={:?}",
+                                    &retransmit_info
+                                );
+                            }
                         }
                     }
                 }

@@ -10,7 +10,7 @@ use {
     crate::error::BanksClientError,
     borsh::BorshDeserialize,
     futures::{future::join_all, Future, FutureExt, TryFutureExt},
-    solana_banks_interface::{BanksRequest, BanksResponse},
+    solana_banks_interface::{BanksRequest, BanksResponse, BanksTransactionResultWithSimulation},
     solana_program::{
         clock::Slot, fee_calculator::FeeCalculator, hash::Hash, program_pack::Pack, pubkey::Pubkey,
         rent::Rent, sysvar::Sysvar,
@@ -120,6 +120,22 @@ impl BanksClient {
             .map_err(Into::into)
     }
 
+    pub fn process_transaction_with_preflight_and_commitment_and_context(
+        &mut self,
+        ctx: Context,
+        transaction: Transaction,
+        commitment: CommitmentLevel,
+    ) -> impl Future<Output = Result<BanksTransactionResultWithSimulation, BanksClientError>> + '_
+    {
+        self.inner
+            .process_transaction_with_preflight_and_commitment_and_context(
+                ctx,
+                transaction,
+                commitment,
+            )
+            .map_err(Into::into)
+    }
+
     pub fn get_account_with_commitment_and_context(
         &mut self,
         ctx: Context,
@@ -199,6 +215,54 @@ impl BanksClient {
                 )),
                 Some(transaction_result) => Ok(transaction_result?),
             })
+    }
+
+    /// Send a transaction and return any preflight (sanitization or simulation) errors, or return
+    /// after the transaction has been rejected or reached the given level of commitment.
+    pub fn process_transaction_with_preflight_and_commitment(
+        &mut self,
+        transaction: Transaction,
+        commitment: CommitmentLevel,
+    ) -> impl Future<Output = Result<(), BanksClientError>> + '_ {
+        let mut ctx = context::current();
+        ctx.deadline += Duration::from_secs(50);
+        self.process_transaction_with_preflight_and_commitment_and_context(
+            ctx,
+            transaction,
+            commitment,
+        )
+        .map(|result| match result? {
+            BanksTransactionResultWithSimulation {
+                result: None,
+                simulation_details: _,
+            } => Err(BanksClientError::ClientError(
+                "invalid blockhash or fee-payer",
+            )),
+            BanksTransactionResultWithSimulation {
+                result: Some(Err(err)),
+                simulation_details: Some(simulation_details),
+            } => Err(BanksClientError::SimulationError {
+                err,
+                logs: simulation_details.logs,
+                units_consumed: simulation_details.units_consumed,
+            }),
+            BanksTransactionResultWithSimulation {
+                result: Some(result),
+                simulation_details: _,
+            } => result.map_err(Into::into),
+        })
+    }
+
+    /// Send a transaction and return any preflight (sanitization or simulation) errors, or return
+    /// after the transaction has been finalized or rejected.
+    pub fn process_transaction_with_preflight(
+        &mut self,
+        transaction: Transaction,
+    ) -> impl Future<Output = Result<(), BanksClientError>> + '_ {
+        self.process_transaction_with_preflight_and_commitment(
+            transaction,
+            CommitmentLevel::default(),
+        )
     }
 
     /// Send a transaction and return until the transaction has been finalized or rejected.

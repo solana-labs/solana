@@ -463,7 +463,9 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     if legacy_program_feature_present {
         println!("Legacy program feature detected");
     }
-    let bpf_tools_download_file_name = if cfg!(target_os = "macos") {
+    let bpf_tools_download_file_name = if cfg!(target_os = "windows") {
+        "solana-bpf-tools-windows.tar.bz2"
+    } else if cfg!(target_os = "macos") {
         "solana-bpf-tools-osx.tar.bz2"
     } else {
         "solana-bpf-tools-linux.tar.bz2"
@@ -513,16 +515,21 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     env::set_var("AR", llvm_bin.join("llvm-ar"));
     env::set_var("OBJDUMP", llvm_bin.join("llvm-objdump"));
     env::set_var("OBJCOPY", llvm_bin.join("llvm-objcopy"));
-    let rustflags = match env::var("RUSTFLAGS") {
+    const RF_LTO: &str = "-C lto=no";
+    let mut rustflags = match env::var("RUSTFLAGS") {
         Ok(rf) => {
-            if rf.contains("-C lto=no") {
+            if rf.contains(&RF_LTO) {
                 rf
             } else {
-                rf + &" -C lto=no".to_string()
+                format!("{} {}", rf, RF_LTO)
             }
         }
-        _ => "-C lto=no".to_string(),
+        _ => RF_LTO.to_string(),
     };
+    if cfg!(windows) && !rustflags.contains("-C linker=") {
+        let ld_path = llvm_bin.join("ld.lld");
+        rustflags = format!("{} -C linker={}", rustflags, ld_path.display());
+    }
     if config.verbose {
         println!("RUSTFLAGS={}", rustflags);
     }
@@ -602,6 +609,17 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
         }
 
         if file_older_or_missing(&program_unstripped_so, &program_so) {
+            #[cfg(windows)]
+            let output = spawn(
+                &llvm_bin.join("llvm-objcopy"),
+                &[
+                    "--strip-all".as_ref(),
+                    program_unstripped_so.as_os_str(),
+                    program_so.as_os_str(),
+                ],
+                config.generate_child_script_on_failure,
+            );
+            #[cfg(not(windows))]
             let output = spawn(
                 &config.bpf_sdk.join("scripts").join("strip.sh"),
                 &[&program_unstripped_so, &program_so],
@@ -613,13 +631,26 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
         }
 
         if config.dump && file_older_or_missing(&program_unstripped_so, &program_dump) {
-            let output = spawn(
-                &config.bpf_sdk.join("scripts").join("dump.sh"),
-                &[&program_unstripped_so, &program_dump],
-                config.generate_child_script_on_failure,
-            );
-            if config.verbose {
-                println!("{}", output);
+            let dump_script = config.bpf_sdk.join("scripts").join("dump.sh");
+            #[cfg(windows)]
+            {
+                eprintln!("Using Bash scripts from within a program is not supported on Windows, skipping `--dump`.");
+                eprintln!(
+                    "Please run \"{} {} {}\" from a Bash-supporting shell, then re-run this command to see the processed program dump.",
+                    &dump_script.display(),
+                    &program_unstripped_so.display(),
+                    &program_dump.display());
+            }
+            #[cfg(not(windows))]
+            {
+                let output = spawn(
+                    &dump_script,
+                    &[&program_unstripped_so, &program_dump],
+                    config.generate_child_script_on_failure,
+                );
+                if config.verbose {
+                    println!("{}", output);
+                }
             }
             postprocess_dump(&program_dump);
         }
@@ -678,10 +709,6 @@ fn build_bpf(config: Config, manifest_path: Option<PathBuf>) {
 }
 
 fn main() {
-    if cfg!(windows) {
-        println!("Solana Rust BPF toolchain is not available on Windows");
-        exit(1);
-    }
     let default_config = Config::default();
     let default_bpf_sdk = format!("{}", default_config.bpf_sdk.display());
 

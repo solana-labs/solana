@@ -1,12 +1,12 @@
 use {
-    crate::bank::Bank,
+    crate::{bank::Bank, cost_model::ExecutionCost},
     solana_sdk::transaction::{Result, SanitizedTransaction},
     std::borrow::Cow,
 };
 
 // Represents the results of trying to lock a set of accounts
 pub struct TransactionBatch<'a, 'b> {
-    lock_results: Vec<Result<()>>,
+    lock_results: Vec<Result<ExecutionCost>>,
     bank: &'a Bank,
     sanitized_txs: Cow<'b, [SanitizedTransaction]>,
     pub(crate) needs_unlock: bool,
@@ -14,7 +14,7 @@ pub struct TransactionBatch<'a, 'b> {
 
 impl<'a, 'b> TransactionBatch<'a, 'b> {
     pub fn new(
-        lock_results: Vec<Result<()>>,
+        lock_results: Vec<Result<ExecutionCost>>,
         bank: &'a Bank,
         sanitized_txs: Cow<'b, [SanitizedTransaction]>,
     ) -> Self {
@@ -27,7 +27,7 @@ impl<'a, 'b> TransactionBatch<'a, 'b> {
         }
     }
 
-    pub fn lock_results(&self) -> &Vec<Result<()>> {
+    pub fn lock_results(&self) -> &Vec<Result<ExecutionCost>> {
         &self.lock_results
     }
 

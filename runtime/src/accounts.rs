@@ -13,6 +13,7 @@ use {
             TransactionExecutionResult,
         },
         blockhash_queue::BlockhashQueue,
+        cost_model::ExecutionCost,
         rent_collector::RentCollector,
         system_instruction_processor::{get_system_account_kind, SystemAccountKind},
     },
@@ -114,6 +115,7 @@ pub struct LoadedTransaction {
     pub program_indices: TransactionProgramIndices,
     pub rent: TransactionRent,
     pub rent_debits: RentDebits,
+    pub estimated_execution_cost: ExecutionCost,
 }
 
 pub type TransactionLoadResult = (Result<LoadedTransaction>, Option<NonceFull>);
@@ -231,6 +233,7 @@ impl Accounts {
         error_counters: &mut ErrorCounters,
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
+        estimated_execution_cost: ExecutionCost,
     ) -> Result<LoadedTransaction> {
         // Copy all the accounts
         let message = tx.message();
@@ -374,6 +377,7 @@ impl Accounts {
                     program_indices,
                     rent: tx_rent,
                     rent_debits,
+                    estimated_execution_cost,
                 })
             } else {
                 error_counters.account_not_found += 1;
@@ -467,7 +471,7 @@ impl Accounts {
         txs.iter()
             .zip(lock_results)
             .map(|etx| match etx {
-                (tx, (Ok(()), nonce)) => {
+                (tx, (Ok(execution_cost), nonce)) => {
                     let lamports_per_signature = nonce
                         .as_ref()
                         .map(|nonce| nonce.lamports_per_signature())
@@ -487,6 +491,7 @@ impl Accounts {
                         error_counters,
                         rent_collector,
                         feature_set,
+                        execution_cost,
                     ) {
                         Ok(loaded_transaction) => loaded_transaction,
                         Err(e) => return (Err(e), None),
@@ -978,11 +983,14 @@ impl Accounts {
     pub fn lock_accounts<'a>(
         &self,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
-    ) -> Vec<Result<()>> {
+    ) -> Vec<Result<ExecutionCost>> {
         let keys: Vec<_> = txs.map(|tx| tx.get_account_locks()).collect();
         let account_locks = &mut self.account_locks.lock().unwrap();
         keys.into_iter()
-            .map(|keys| self.lock_account(account_locks, keys.writable, keys.readonly))
+            .map(|keys| {
+                self.lock_account(account_locks, keys.writable, keys.readonly)
+                    .map(|_| 0)
+            })
             .collect()
     }
 
@@ -991,12 +999,12 @@ impl Accounts {
     pub fn lock_accounts_with_results<'a>(
         &self,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
-        results: impl Iterator<Item = Result<()>>,
-    ) -> Vec<Result<()>> {
+        results: impl Iterator<Item = Result<ExecutionCost>>,
+    ) -> Vec<Result<ExecutionCost>> {
         let key_results: Vec<_> = txs
             .zip(results)
             .map(|(tx, result)| match result {
-                Ok(()) => Ok(tx.get_account_locks()),
+                Ok(execution_cost) => Ok((tx.get_account_locks(), execution_cost)),
                 Err(e) => Err(e),
             })
             .collect();
@@ -1004,7 +1012,9 @@ impl Accounts {
         key_results
             .into_iter()
             .map(|key_result| match key_result {
-                Ok(keys) => self.lock_account(account_locks, keys.writable, keys.readonly),
+                Ok((keys, execution_cost)) => self
+                    .lock_account(account_locks, keys.writable, keys.readonly)
+                    .map(|_| execution_cost),
                 Err(e) => Err(e),
             })
             .collect()
@@ -1015,7 +1025,7 @@ impl Accounts {
     pub fn unlock_accounts<'a>(
         &self,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
-        results: &[Result<()>],
+        results: &[Result<ExecutionCost>],
     ) {
         let keys: Vec<_> = txs
             .zip(results)
@@ -1300,7 +1310,7 @@ mod tests {
         accounts.load_accounts(
             &ancestors,
             &[sanitized_tx],
-            vec![(Ok(()), None)],
+            vec![(Ok(0), None)],
             &hash_queue,
             error_counters,
             rent_collector,
@@ -2448,9 +2458,9 @@ mod tests {
         let txs = vec![tx0, tx1, tx2];
 
         let qos_results = vec![
-            Ok(()),
+            Ok(0),
             Err(TransactionError::WouldExceedMaxBlockCostLimit),
-            Ok(()),
+            Ok(0),
         ];
 
         let results = accounts.lock_accounts_with_results(txs.iter(), qos_results.into_iter());
@@ -2543,6 +2553,7 @@ mod tests {
                 program_indices: vec![],
                 rent: 0,
                 rent_debits: RentDebits::default(),
+                estimated_execution_cost: 0,
             }),
             None,
         );
@@ -2553,6 +2564,7 @@ mod tests {
                 program_indices: vec![],
                 rent: 0,
                 rent_debits: RentDebits::default(),
+                estimated_execution_cost: 0,
             }),
             None,
         );
@@ -2646,7 +2658,7 @@ mod tests {
         accounts.load_accounts(
             &ancestors,
             &[tx],
-            vec![(Ok(()), None)],
+            vec![(Ok(0), None)],
             &hash_queue,
             &mut error_counters,
             &rent_collector,
@@ -2982,6 +2994,7 @@ mod tests {
                 program_indices: vec![],
                 rent: 0,
                 rent_debits: RentDebits::default(),
+                estimated_execution_cost: 0,
             }),
             nonce.clone(),
         );
@@ -3092,6 +3105,7 @@ mod tests {
                 program_indices: vec![],
                 rent: 0,
                 rent_debits: RentDebits::default(),
+                estimated_execution_cost: 0,
             }),
             nonce.clone(),
         );

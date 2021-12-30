@@ -19,14 +19,21 @@ pub enum BanksClientError {
 
     #[error("transport transaction error: {0}")]
     TransactionError(#[from] TransactionError),
+
+    #[error("simulation error: {err:?}, logs: {logs:?}, units_consumed: {units_consumed:?}")]
+    SimulationError {
+        err: TransactionError,
+        logs: Vec<String>,
+        units_consumed: u64,
+    },
 }
 
 impl BanksClientError {
     pub fn unwrap(&self) -> TransactionError {
-        if let BanksClientError::TransactionError(err) = self {
-            err.clone()
-        } else {
-            panic!("unexpected transport error")
+        match self {
+            BanksClientError::TransactionError(err)
+            | BanksClientError::SimulationError { err, .. } => err.clone(),
+            _ => panic!("unexpected transport error"),
         }
     }
 }
@@ -38,6 +45,9 @@ impl From<BanksClientError> for io::Error {
             BanksClientError::Io(err) => err,
             BanksClientError::RpcError(err) => Self::new(io::ErrorKind::Other, err.to_string()),
             BanksClientError::TransactionError(err) => {
+                Self::new(io::ErrorKind::Other, err.to_string())
+            }
+            BanksClientError::SimulationError { err, .. } => {
                 Self::new(io::ErrorKind::Other, err.to_string())
             }
         }
@@ -57,6 +67,7 @@ impl From<BanksClientError> for TransportError {
                 Self::IoError(io::Error::new(io::ErrorKind::Other, err.to_string()))
             }
             BanksClientError::TransactionError(err) => Self::TransactionError(err),
+            BanksClientError::SimulationError { err, .. } => Self::TransactionError(err),
         }
     }
 }
