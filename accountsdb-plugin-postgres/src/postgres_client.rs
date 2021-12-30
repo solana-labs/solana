@@ -339,7 +339,7 @@ impl SimplePostgresClient {
             Err(err) => {
                 return Err(AccountsDbPluginError::Custom(Box::new(AccountsDbPluginPostgresError::DataSchemaError {
                     msg: format!(
-                        "Error in preparing for the accounts update PostgreSQL database: {} host: {:?} user: {:?} config: {:?}",
+                        "Error in preparing for the account_audit update PostgreSQL database: {} host: {:?} user: {:?} config: {:?}",
                         err, config.host, config.user, config
                     ),
                 })));
@@ -394,7 +394,7 @@ impl SimplePostgresClient {
         }
     }
 
-    /// Internal function for updating or inserting a single account
+    /// Internal function for inserting an account into account_audit table.
     fn insert_account_audit(
         account: &DbAccountInfo,
         statement: &Statement,
