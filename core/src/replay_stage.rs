@@ -859,8 +859,7 @@ impl ReplayStage {
         if let Some(latest_leader_slot) = progress.get_latest_leader_slot(start_slot) {
             // We just returned a postivie result above from `get_latest_leader_slot`, so
             // `start_slot` must exist in the progress map above
-            let must_exist_in_progress_map = true;
-            if !progress.is_propagated(start_slot, must_exist_in_progress_map) {
+            if !progress.is_propagated_assert_slot_must_exist(start_slot) {
                 warn!("Slot not propagated: slot={}", latest_leader_slot);
                 let retransmit_info = progress.get_retransmit_info(latest_leader_slot).unwrap();
                 if retransmit_info.reached_retransmit_threshold() {
@@ -1385,7 +1384,7 @@ impl ReplayStage {
         // propagation of `parent_slot`, it checks propagation of the latest ancestor
         // of `parent_slot` (hence the call to `get_latest_leader_slot()` in the
         // check above)
-        progress_map.is_propagated(parent_slot, true)
+        progress_map.is_propagated_assert_slot_must_exist(parent_slot)
     }
 
     fn should_retransmit(poh_slot: Slot, last_retransmit_slot: &mut Slot) -> bool {
@@ -2346,7 +2345,7 @@ impl ReplayStage {
         cluster_slots: &ClusterSlots,
     ) {
         // If propagation has already been confirmed, return
-        if progress.is_propagated(slot, true) {
+        if progress.is_propagated_assert_slot_must_exist(slot) {
             return;
         }
 
@@ -2539,7 +2538,8 @@ impl ReplayStage {
                 )
             };
 
-            let propagation_confirmed = is_leader_slot || progress.is_propagated(bank.slot(), true);
+            let propagation_confirmed =
+                is_leader_slot || progress.is_propagated_assert_slot_must_exist(bank.slot());
 
             if is_locked_out {
                 failure_reasons.push(HeaviestForkFailures::LockedOut(bank.slot()));
@@ -4390,7 +4390,7 @@ pub mod tests {
 
         // Make sure is_propagated == false so that the propagation logic
         // runs in `update_propagation_status`
-        assert!(!progress_map.is_propagated(10, true));
+        assert!(!progress_map.is_propagated_assert_slot_must_exist(10));
 
         let vote_tracker = VoteTracker::new(&bank_forks.root_bank());
         vote_tracker.insert_vote(10, vote_pubkey);
@@ -5017,7 +5017,7 @@ pub mod tests {
             vote_tracker.insert_vote(root_bank.slot(), *vote_key);
         }
 
-        assert!(!progress.is_propagated(root_bank.slot(), true));
+        assert!(!progress.is_propagated_assert_slot_must_exist(root_bank.slot()));
 
         // Update propagation status
         let tower = Tower::new_for_tests(0, 0.67);
@@ -5035,7 +5035,7 @@ pub mod tests {
         );
 
         // Check status is true
-        assert!(progress.is_propagated(root_bank.slot(), true));
+        assert!(progress.is_propagated_assert_slot_must_exist(root_bank.slot()));
     }
 
     #[test]
