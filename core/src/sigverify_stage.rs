@@ -196,7 +196,7 @@ impl SigVerifyStage {
 
         let verified_packets = verifier.verify_batches(batches);
         warn!(
-            "verifier::<{}>: num packets that failed sigverify: {}",
+            "verifier::<{}>: num packets that failed sigverify: {}, num packets: {}",
             P::get_packet_type_name(),
             verified_packets
                 .iter()
@@ -206,6 +206,12 @@ impl SigVerifyStage {
                         .iter()
                         .map(|packet| if packet.get_meta().discard { 1 } else { 0 })
                         .sum()
+                })
+                .sum::<usize>(),
+                verified_packets
+                .iter()
+                .map(|packets| -> usize {
+                    packets.packets.len()
                 })
                 .sum::<usize>()
         );
