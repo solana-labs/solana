@@ -983,7 +983,7 @@ impl ClusterInfo {
         assert!((vote_index as usize) < MAX_LOCKOUT_HISTORY);
         let self_pubkey = self.id();
         let now = timestamp();
-        let vote = Vote::new(self_pubkey, vote, now);
+        let vote = Vote::new(self_pubkey, vote, now).unwrap();
         let vote = CrdsData::Vote(vote_index, vote);
         let vote = CrdsValue::new_signed(vote, &self.keypair());
         let mut gossip_crds = self.gossip.crds.write().unwrap();
@@ -4219,7 +4219,8 @@ mod tests {
             keypair.pubkey(),
             vote_tx,
             0, // wallclock
-        );
+        )
+        .unwrap();
         let vote = CrdsValue::new_signed(CrdsData::Vote(1, vote), &Keypair::new());
         assert!(bincode::serialized_size(&vote).unwrap() <= PUSH_MESSAGE_MAX_PAYLOAD_SIZE as u64);
     }

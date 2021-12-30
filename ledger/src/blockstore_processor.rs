@@ -102,10 +102,10 @@ thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::
                     .unwrap())
 );
 
-fn first_err<T>(results: &[Result<T>]) -> Result<()> {
+fn first_err(results: &[Result<()>]) -> Result<()> {
     for r in results {
-        if let Err(e) = r {
-            return Err(e.clone());
+        if r.is_err() {
+            return r.clone();
         }
     }
     Ok(())

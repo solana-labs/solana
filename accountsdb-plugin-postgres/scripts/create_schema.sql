@@ -153,6 +153,16 @@ CREATE TABLE transaction (
     CONSTRAINT transaction_pk PRIMARY KEY (slot, signature)
 );
 
+-- The table storing block metadata
+CREATE TABLE block (
+    slot BIGINT PRIMARY KEY,
+    blockhash VARCHAR(44),
+    rewards "Reward"[],
+    block_time BIGINT,
+    block_height BIGINT,
+    updated_on TIMESTAMP NOT NULL
+);
+
 /**
  * The following is for keeping historical data for accounts and is not required for plugin to work.
  */

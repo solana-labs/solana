@@ -427,6 +427,13 @@ impl Validator {
                     accountsdb_plugin_service.get_transaction_notifier()
                 });
 
+        let block_metadata_notifier =
+            accountsdb_plugin_service
+                .as_ref()
+                .and_then(|accountsdb_plugin_service| {
+                    accountsdb_plugin_service.get_block_metadata_notifier()
+                });
+
         info!(
             "AccountsDb plugin: accounts_update_notifier: {} transaction_notifier: {}",
             accounts_update_notifier.is_some(),
@@ -884,6 +891,7 @@ impl Validator {
             &cost_model,
             accounts_package_channel,
             last_full_snapshot_slot,
+            block_metadata_notifier,
         );
 
         let tpu = Tpu::new(

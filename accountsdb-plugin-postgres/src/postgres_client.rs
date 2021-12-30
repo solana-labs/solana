@@ -1,4 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
+
+mod postgres_client_block_metadata;
 mod postgres_client_transaction;
 
 /// A concurrent implementation for writing accounts into the PostgreSQL in parallel.
@@ -10,9 +12,10 @@ use {
     crossbeam_channel::{bounded, Receiver, RecvTimeoutError, Sender},
     log::*,
     postgres::{Client, NoTls, Statement},
+    postgres_client_block_metadata::DbBlockInfo,
     postgres_client_transaction::LogTransactionRequest,
     solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
-        AccountsDbPluginError, ReplicaAccountInfo, SlotStatus,
+        AccountsDbPluginError, ReplicaAccountInfo, ReplicaBlockInfo, SlotStatus,
     },
     solana_measure::measure::Measure,
     solana_metrics::*,
@@ -44,6 +47,7 @@ struct PostgresSqlClientWrapper {
     update_slot_with_parent_stmt: Statement,
     update_slot_without_parent_stmt: Statement,
     update_transaction_log_stmt: Statement,
+    update_block_metadata_stmt: Statement,
 }
 
 pub struct SimplePostgresClient {
@@ -194,6 +198,11 @@ pub trait PostgresClient {
     fn log_transaction(
         &mut self,
         transaction_log_info: LogTransactionRequest,
+    ) -> Result<(), AccountsDbPluginError>;
+
+    fn update_block_metadata(
+        &mut self,
+        block_info: UpdateBlockMetadataRequest,
     ) -> Result<(), AccountsDbPluginError>;
 }
 
@@ -501,6 +510,8 @@ impl SimplePostgresClient {
             Self::build_slot_upsert_statement_without_parent(&mut client, config)?;
         let update_transaction_log_stmt =
             Self::build_transaction_info_upsert_statement(&mut client, config)?;
+        let update_block_metadata_stmt =
+            Self::build_block_metadata_upsert_statement(&mut client, config)?;
 
         let batch_size = config
             .batch_size
@@ -516,6 +527,7 @@ impl SimplePostgresClient {
                 update_slot_with_parent_stmt,
                 update_slot_without_parent_stmt,
                 update_transaction_log_stmt,
+                update_block_metadata_stmt,
             }),
         })
     }
@@ -591,6 +603,13 @@ impl PostgresClient for SimplePostgresClient {
     ) -> Result<(), AccountsDbPluginError> {
         self.log_transaction_impl(transaction_log_info)
     }
+
+    fn update_block_metadata(
+        &mut self,
+        block_info: UpdateBlockMetadataRequest,
+    ) -> Result<(), AccountsDbPluginError> {
+        self.update_block_metadata_impl(block_info)
+    }
 }
 
 struct UpdateAccountRequest {
@@ -604,11 +623,16 @@ struct UpdateSlotRequest {
     slot_status: SlotStatus,
 }
 
+pub struct UpdateBlockMetadataRequest {
+    pub block_info: DbBlockInfo,
+}
+
 #[warn(clippy::large_enum_variant)]
 enum DbWorkItem {
     UpdateAccount(Box<UpdateAccountRequest>),
     UpdateSlot(Box<UpdateSlotRequest>),
     LogTransaction(Box<LogTransactionRequest>),
+    UpdateBlockMetadata(Box<UpdateBlockMetadataRequest>),
 }
 
 impl PostgresClientWorker {
@@ -672,6 +696,14 @@ impl PostgresClientWorker {
                     DbWorkItem::LogTransaction(transaction_log_info) => {
                         if let Err(err) = self.client.log_transaction(*transaction_log_info) {
                             error!("Failed to update transaction: ({})", err);
+                            if panic_on_db_errors {
+                                abort();
+                            }
+                        }
+                    }
+                    DbWorkItem::UpdateBlockMetadata(block_info) => {
+                        if let Err(err) = self.client.update_block_metadata(*block_info) {
+                            error!("Failed to update block metadata: ({})", err);
                             if panic_on_db_errors {
                                 abort();
                             }
@@ -863,6 +895,25 @@ impl ParallelPostgresClient {
         {
             return Err(AccountsDbPluginError::SlotStatusUpdateError {
                 msg: format!("Failed to update the slot {:?}, error: {:?}", slot, err),
+            });
+        }
+        Ok(())
+    }
+
+    pub fn update_block_metadata(
+        &mut self,
+        block_info: &ReplicaBlockInfo,
+    ) -> Result<(), AccountsDbPluginError> {
+        if let Err(err) = self.sender.send(DbWorkItem::UpdateBlockMetadata(Box::new(
+            UpdateBlockMetadataRequest {
+                block_info: DbBlockInfo::from(block_info),
+            },
+        ))) {
+            return Err(AccountsDbPluginError::SlotStatusUpdateError {
+                msg: format!(
+                    "Failed to update the block metadata at slot {:?}, error: {:?}",
+                    block_info.slot, err
+                ),
             });
         }
         Ok(())

@@ -599,7 +599,7 @@ mod tests {
         crate::{
             packet::{Packet, PacketBatch},
             sigverify::{self, PacketOffsets},
-            test_tx::{test_multisig_tx, test_tx, vote_tx},
+            test_tx::{new_test_vote_tx, test_multisig_tx, test_tx},
         },
         bincode::{deserialize, serialize},
         solana_sdk::{
@@ -1187,6 +1187,7 @@ mod tests {
     #[test]
     fn test_is_simple_vote_transaction() {
         solana_logger::setup();
+        let mut rng = rand::thread_rng();
 
         // tansfer tx is not
         {
@@ -1200,7 +1201,7 @@ mod tests {
 
         // single vote tx is
         {
-            let mut tx = vote_tx();
+            let mut tx = new_test_vote_tx(&mut rng);
             tx.message.instructions[0].data = vec![1, 2, 3];
             let mut packet = sigverify::make_packet_from_transaction(tx);
             let packet_offsets = do_get_packet_offsets(&packet, 0).unwrap();
@@ -1233,15 +1234,17 @@ mod tests {
     #[test]
     fn test_is_simple_vote_transaction_with_offsets() {
         solana_logger::setup();
+        let mut rng = rand::thread_rng();
 
         let mut current_offset = 0usize;
         let mut batch = PacketBatch::default();
         batch
             .packets
             .push(sigverify::make_packet_from_transaction(test_tx()));
+        let tx = new_test_vote_tx(&mut rng);
         batch
             .packets
-            .push(sigverify::make_packet_from_transaction(vote_tx()));
+            .push(sigverify::make_packet_from_transaction(tx));
         batch
             .packets
             .iter_mut()
