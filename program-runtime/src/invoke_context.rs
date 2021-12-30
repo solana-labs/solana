@@ -345,6 +345,7 @@ impl<'a> InvokeContext<'a> {
             .invoke_stack
             .last()
             .and_then(|frame| frame.program_id())
+            .cloned()
             .ok_or(InstructionError::CallDepth)?;
         let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
 
@@ -376,7 +377,7 @@ impl<'a> InvokeContext<'a> {
                 .borrow();
             pre_account
                 .verify(
-                    program_id,
+                    &program_id,
                     instruction_account.is_writable,
                     &self.rent,
                     &account,
@@ -421,22 +422,20 @@ impl<'a> InvokeContext<'a> {
             .invoke_stack
             .last()
             .and_then(|frame| frame.program_id())
+            .cloned()
             .ok_or(InstructionError::CallDepth)?;
-        let rent = &self.rent;
-        let log_collector = &self.log_collector;
-        let transaction_context = self.transaction_context;
-        let pre_accounts = &mut self.pre_accounts;
-        let timings = &mut self.timings;
 
         // Verify the per-account instruction results
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
         let mut work = |index_in_instruction: usize, instruction_account: &InstructionAccount| {
             if instruction_account.index_in_transaction
-                < transaction_context.get_number_of_accounts()
+                < self.transaction_context.get_number_of_accounts()
             {
-                let key = transaction_context
+                let key = self
+                    .transaction_context
                     .get_key_of_account_at_index(instruction_account.index_in_transaction);
-                let account = transaction_context
+                let account = self
+                    .transaction_context
                     .get_account_at_index(instruction_account.index_in_transaction);
                 let is_writable = if let Some(caller_write_privileges) = caller_write_privileges {
                     caller_write_privileges[index_in_instruction]
@@ -444,7 +443,7 @@ impl<'a> InvokeContext<'a> {
                     instruction_account.is_writable
                 };
                 // Find the matching PreAccount
-                for pre_account in pre_accounts.iter_mut() {
+                for pre_account in self.pre_accounts.iter_mut() {
                     if key == pre_account.key() {
                         {
                             // Verify account has no outstanding references
@@ -455,17 +454,17 @@ impl<'a> InvokeContext<'a> {
                         let account = account.borrow();
                         pre_account
                             .verify(
-                                program_id,
+                                &program_id,
                                 is_writable,
-                                rent,
+                                &self.rent,
                                 &account,
-                                timings,
+                                &mut self.timings,
                                 false,
                                 do_support_realloc,
                             )
                             .map_err(|err| {
                                 ic_logger_msg!(
-                                    log_collector,
+                                    &self.log_collector,
                                     "failed to verify account {}: {}",
                                     key,
                                     err
