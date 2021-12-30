@@ -863,7 +863,10 @@ impl ReplayStage {
         if let (false, Some(latest_leader_slot)) =
             progress.get_leader_propagation_slot_must_exist(start_slot)
         {
-            warn!("Slot not propagated: slot={}", latest_leader_slot);
+            info!(
+                "Slot not propagated: start_slot={} latest_leader_slot={}",
+                start_slot, latest_leader_slot
+            );
 
             let first_leader_group_slot =
                 Self::first_of_consecutive_leader_slots(latest_leader_slot);
@@ -873,12 +876,16 @@ impl ReplayStage {
                     if let Some(retransmit_info) = progress.get_retransmit_info(slot) {
                         if retransmit_info.reached_retransmit_threshold() {
                             info!(
-                                    "Retrying retransmit: start_slot={} latest_leader_slot={} retransmit_info={:?}",
-                                    start_slot, latest_leader_slot, &retransmit_info,
-                                );
+                                "Retrying retransmit: start_slot={} latest_leader_slot={} slot={} retransmit_info={:?}",
+                                start_slot,
+                                latest_leader_slot,
+                                slot,
+                                &retransmit_info,
+                            );
                             datapoint_info!(
                                 "replay_stage-retransmit-timing-based",
-                                ("slot", latest_leader_slot, i64),
+                                ("latest_leader_slot", latest_leader_slot, i64),
+                                ("slot", slot, i64),
                                 ("retry_iteration", retransmit_info.retry_iteration, i64),
                             );
                             let _ = retransmit_slots_sender.send(slot);
