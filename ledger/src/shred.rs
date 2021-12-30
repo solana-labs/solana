@@ -56,21 +56,15 @@ use {
         erasure::Session,
     },
     bincode::config::Options,
-<<<<<<< HEAD
     core::cell::RefCell,
+    num_derive::FromPrimitive,
+    num_traits::FromPrimitive,
     rayon::{
         iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator},
         slice::ParallelSlice,
         ThreadPool,
     },
-    serde::{Deserialize, Serialize},
-=======
-    num_derive::FromPrimitive,
-    num_traits::FromPrimitive,
-    rayon::{prelude::*, ThreadPool},
     serde::{Deserialize, Deserializer, Serialize, Serializer},
-    solana_entry::entry::{create_ticks, Entry},
->>>>>>> 57057f8d3 (uses enum for shred type)
     solana_measure::measure::Measure,
     solana_perf::packet::{limited_deserialize, Packet},
     solana_rayon_threadlimit::get_thread_count,
@@ -1897,8 +1891,7 @@ pub mod tests {
         assert_eq!(None, get_shred_slot_index_type(&packet, &mut stats));
         assert_eq!(1, stats.index_out_of_bounds);
 
-<<<<<<< HEAD
-        let (mut header, coding_header) = Shredder::new_coding_shred_header(
+        let (header, coding_header) = Shredder::new_coding_shred_header(
             8,   // slot
             2,   // index
             10,  // fec_set_index
@@ -1907,10 +1900,6 @@ pub mod tests {
             3,   // position
             200, // version
         );
-        header.shred_type = ShredType(u8::MAX);
-=======
-        let (header, coding_header) = Shredder::new_coding_shred_header(8, 2, 10, 30, 4, 200);
->>>>>>> 57057f8d3 (uses enum for shred type)
         let shred = Shred::new_empty_from_header(header, DataShredHeader::default(), coding_header);
         shred.copy_to_packet(&mut packet);
         packet.data[OFFSET_OF_SHRED_TYPE] = u8::MAX;

@@ -830,53 +830,6 @@ impl Blockstore {
         let mut newly_completed_data_sets: Vec<CompletedDataSetInfo> = vec![];
         let mut inserted_indices = Vec::new();
         for (i, (shred, is_repaired)) in shreds.into_iter().zip(is_repaired).enumerate() {
-<<<<<<< HEAD
-            if shred.is_data() {
-                let shred_source = if is_repaired {
-                    ShredSource::Repaired
-                } else {
-                    ShredSource::Turbine
-                };
-                match self.check_insert_data_shred(
-                    shred,
-                    &mut erasure_metas,
-                    &mut index_working_set,
-                    &mut slot_meta_working_set,
-                    &mut write_batch,
-                    &mut just_inserted_data_shreds,
-                    &mut index_meta_time,
-                    is_trusted,
-                    handle_duplicate,
-                    leader_schedule,
-                    shred_source,
-                ) {
-                    Err(InsertDataShredError::Exists) => metrics.num_data_shreds_exists += 1,
-                    Err(InsertDataShredError::InvalidShred) => metrics.num_data_shreds_invalid += 1,
-                    Err(InsertDataShredError::BlockstoreError(_)) => {
-                        metrics.num_data_shreds_blockstore_error += 1;
-                    }
-                    Ok(completed_data_sets) => {
-                        newly_completed_data_sets.extend(completed_data_sets);
-                        inserted_indices.push(i);
-                        metrics.num_inserted += 1;
-                    }
-                };
-            } else if shred.is_code() {
-                self.check_cache_coding_shred(
-                    shred,
-                    &mut erasure_metas,
-                    &mut index_working_set,
-                    &mut just_inserted_coding_shreds,
-                    &mut index_meta_time,
-                    handle_duplicate,
-                    is_trusted,
-                    is_repaired,
-                    metrics,
-                );
-            } else {
-                panic!("There should be no other case");
-            }
-=======
             match shred.shred_type() {
                 ShredType::Data => {
                     let shred_source = if is_repaired {
@@ -901,9 +854,8 @@ impl Blockstore {
                         Err(InsertDataShredError::InvalidShred) => {
                             metrics.num_data_shreds_invalid += 1
                         }
-                        Err(InsertDataShredError::BlockstoreError(err)) => {
+                        Err(InsertDataShredError::BlockstoreError(_)) => {
                             metrics.num_data_shreds_blockstore_error += 1;
-                            error!("blockstore error: {}", err);
                         }
                         Ok(completed_data_sets) => {
                             newly_completed_data_sets.extend(completed_data_sets);
@@ -926,7 +878,6 @@ impl Blockstore {
                     );
                 }
             };
->>>>>>> 57057f8d3 (uses enum for shred type)
         }
         start.stop();
 
@@ -8268,8 +8219,8 @@ pub mod tests {
                 blockstore.is_shred_duplicate(
                     slot,
                     0,
-                    &duplicate_shred.payload,
-                    duplicate_shred.is_data()
+                    duplicate_shred.payload.clone(),
+                    duplicate_shred.shred_type()
                 ),
                 Some(shred.payload.to_vec())
             );
@@ -8277,36 +8228,15 @@ pub mod tests {
                 .is_shred_duplicate(
                     slot,
                     0,
-                    &non_duplicate_shred.payload,
-                    duplicate_shred.is_data()
+                    non_duplicate_shred.payload,
+                    duplicate_shred.shred_type()
                 )
                 .is_none());
 
-<<<<<<< HEAD
             // Store a duplicate shred
             blockstore
                 .store_duplicate_slot(slot, shred.payload.clone(), duplicate_shred.payload.clone())
                 .unwrap();
-=======
-        // Check if shreds are duplicated
-        assert_eq!(
-            blockstore.is_shred_duplicate(
-                slot,
-                0,
-                duplicate_shred.payload.clone(),
-                duplicate_shred.shred_type(),
-            ),
-            Some(shred.payload.to_vec())
-        );
-        assert!(blockstore
-            .is_shred_duplicate(
-                slot,
-                0,
-                non_duplicate_shred.payload.clone(),
-                non_duplicate_shred.shred_type(),
-            )
-            .is_none());
->>>>>>> 48dfdfb4d (changes Blockstore::is_shred_duplicate arg type to ShredType)
 
             // Slot is now marked as duplicate
             assert!(blockstore.has_duplicate_shreds_in_slot(slot));
@@ -8775,7 +8705,6 @@ pub mod tests {
             assert_eq!(meta, expected_slot_meta);
             assert_eq!(blockstore.get_index(slot).unwrap().unwrap(), expected_index);
 
-<<<<<<< HEAD
             // Case 2: Inserting a duplicate with an even smaller last shred index should not
             // mark the slot as dead since the Slotmeta is full.
             let mut even_smaller_last_shred_duplicate =
@@ -8788,8 +8717,8 @@ pub mod tests {
                 .is_shred_duplicate(
                     slot,
                     even_smaller_last_shred_duplicate.index(),
-                    &even_smaller_last_shred_duplicate.payload,
-                    true
+                    even_smaller_last_shred_duplicate.payload.clone(),
+                    ShredType::Data,
                 )
                 .is_some());
             blockstore
@@ -8805,35 +8734,6 @@ pub mod tests {
                 } else {
                     assert!(blockstore.get_data_shred(slot, i).unwrap().is_none());
                 }
-=======
-        // Case 2: Inserting a duplicate with an even smaller last shred index should not
-        // mark the slot as dead since the Slotmeta is full.
-        let mut even_smaller_last_shred_duplicate = shreds[smaller_last_shred_index - 1].clone();
-        even_smaller_last_shred_duplicate.set_last_in_slot();
-        // Flip a byte to create a duplicate shred
-        even_smaller_last_shred_duplicate.payload[0] =
-            std::u8::MAX - even_smaller_last_shred_duplicate.payload[0];
-        assert!(blockstore
-            .is_shred_duplicate(
-                slot,
-                even_smaller_last_shred_duplicate.index(),
-                even_smaller_last_shred_duplicate.payload.clone(),
-                ShredType::Data,
-            )
-            .is_some());
-        blockstore
-            .insert_shreds(vec![even_smaller_last_shred_duplicate], None, false)
-            .unwrap();
-        assert!(!blockstore.is_dead(slot));
-        for i in 0..num_shreds {
-            if i <= smaller_last_shred_index as u64 {
-                assert_eq!(
-                    blockstore.get_data_shred(slot, i).unwrap().unwrap(),
-                    shreds[i as usize].payload
-                );
-            } else {
-                assert!(blockstore.get_data_shred(slot, i).unwrap().is_none());
->>>>>>> 48dfdfb4d (changes Blockstore::is_shred_duplicate arg type to ShredType)
             }
             let mut meta = blockstore.meta(slot).unwrap().unwrap();
             meta.first_shred_timestamp = expected_slot_meta.first_shred_timestamp;
