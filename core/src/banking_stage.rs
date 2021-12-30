@@ -406,29 +406,9 @@ impl BankingStage {
                 MAX_BYTES_BUDGET,
             )
         });
-<<<<<<< HEAD
         for p in packets {
-            if data_budget.take(p.meta.size) {
+            if !p.meta.forwarded && data_budget.take(p.meta.size) {
                 socket.send_to(&p.data[..p.meta.size], &tpu_forwards)?;
-=======
-
-        let packet_vec: Vec<_> = packets
-            .iter()
-            .filter_map(|p| {
-                if !p.meta.forwarded && data_budget.take(p.meta.size) {
-                    Some((&p.data[..p.meta.size], tpu_forwards))
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        if !packet_vec.is_empty() {
-            inc_new_counter_info!("banking_stage-forwarded_packets", packet_vec.len());
-            if let Err(SendPktsError::IoError(ioerr, _num_failed)) = batch_send(socket, &packet_vec)
-            {
-                return Err(ioerr);
->>>>>>> b1d9a2e60 (Don't forward packets received from TPU forwards port (#22078))
             }
         }
 
