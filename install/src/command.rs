@@ -92,7 +92,7 @@ fn download_to_temp(
     let temp_file = temp_dir.path().join("download");
 
     let client = reqwest::blocking::Client::builder()
-        .connect_timeout(Duration::from_secs(5))
+        .connect_timeout(Duration::from_secs(30))
         .timeout(None)
         .build()?;
 
