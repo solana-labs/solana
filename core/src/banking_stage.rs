@@ -26,7 +26,7 @@ use {
             TransactionExecutionResult,
         },
         bank_utils,
-        cost_model::{CostModel, ExecutionCost},
+        cost_model::CostModel,
         transaction_batch::TransactionBatch,
         vote_sender_types::ReplayVoteSender,
     },
@@ -984,20 +984,14 @@ impl BankingStage {
         let tx_costs = qos_service.compute_transaction_costs(txs.iter());
 
         let transactions_qos_results =
-            qos_service.select_transactions_per_cost(txs.iter(), tx_costs.into_iter(), bank);
+            qos_service.select_transactions_per_cost(txs.iter(), tx_costs.iter(), bank);
 
         // Only lock accounts for those transactions are selected for the block;
         // Once accounts are locked, other threads cannot encode transactions that will modify the
         // same account state
         let mut lock_time = Measure::start("lock_time");
-        let batch = bank.prepare_sanitized_batch_with_results(
-            txs,
-            transactions_qos_results
-                .into_iter()
-                .map(|transaction_cost_result| {
-                    transaction_cost_result.map(|transaction_cost| transaction_cost.execution_cost)
-                }),
-        );
+        let batch =
+            bank.prepare_sanitized_batch_with_results(txs, transactions_qos_results.into_iter());
         lock_time.stop();
 
         // retryable_txs includes AccountInUse, WouldExceedMaxBlockCostLimit and
@@ -1094,9 +1088,9 @@ impl BankingStage {
     fn prepare_filter_for_pending_transactions(
         transactions_len: usize,
         pending_tx_indexes: &[usize],
-    ) -> Vec<transaction::Result<ExecutionCost>> {
+    ) -> Vec<transaction::Result<()>> {
         let mut mask = vec![Err(TransactionError::BlockhashNotFound); transactions_len];
-        pending_tx_indexes.iter().for_each(|x| mask[*x] = Ok(0));
+        pending_tx_indexes.iter().for_each(|x| mask[*x] = Ok(()));
         mask
     }
 
@@ -1187,7 +1181,7 @@ impl BankingStage {
 
         let results = bank.check_transactions(
             transactions,
-            filter.into_iter(),
+            &filter,
             (MAX_PROCESSING_AGE)
                 .saturating_sub(max_tx_fwd_delay)
                 .saturating_sub(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET as usize),
@@ -2099,20 +2093,20 @@ mod tests {
             vec![
                 Err(TransactionError::BlockhashNotFound),
                 Err(TransactionError::BlockhashNotFound),
-                Ok(0),
+                Ok(()),
                 Err(TransactionError::BlockhashNotFound),
-                Ok(0),
-                Ok(0)
+                Ok(()),
+                Ok(())
             ]
         );
 
         assert_eq!(
             BankingStage::prepare_filter_for_pending_transactions(6, &[0, 2, 3]),
             vec![
-                Ok(0),
+                Ok(()),
                 Err(TransactionError::BlockhashNotFound),
-                Ok(0),
-                Ok(0),
+                Ok(()),
+                Ok(()),
                 Err(TransactionError::BlockhashNotFound),
                 Err(TransactionError::BlockhashNotFound),
             ]
@@ -2126,10 +2120,10 @@ mod tests {
                 &[
                     (Err(TransactionError::BlockhashNotFound), None),
                     (Err(TransactionError::BlockhashNotFound), None),
-                    (Ok(0), None),
+                    (Ok(()), None),
                     (Err(TransactionError::BlockhashNotFound), None),
-                    (Ok(0), None),
-                    (Ok(0), None),
+                    (Ok(()), None),
+                    (Ok(()), None),
                 ],
                 &[2, 4, 5, 9, 11, 13]
             ),
@@ -2139,12 +2133,12 @@ mod tests {
         assert_eq!(
             BankingStage::filter_valid_transaction_indexes(
                 &[
-                    (Ok(0), None),
+                    (Ok(()), None),
                     (Err(TransactionError::BlockhashNotFound), None),
                     (Err(TransactionError::BlockhashNotFound), None),
-                    (Ok(0), None),
-                    (Ok(0), None),
-                    (Ok(0), None),
+                    (Ok(()), None),
+                    (Ok(()), None),
+                    (Ok(()), None),
                 ],
                 &[1, 6, 7, 9, 31, 43]
             ),
