@@ -92,8 +92,8 @@ function CustomClusterInput({ activeSuffix, active }: InputProps) {
     : "btn-white";
 
   const clusterLocation = (location: Location) => {
+    query.set("cluster", "custom");
     if (customUrl.length > 0) {
-      query.set("cluster", "custom");
       query.set("customUrl", customUrl);
     }
     return {
@@ -105,7 +105,6 @@ function CustomClusterInput({ activeSuffix, active }: InputProps) {
   const onUrlInput = useDebounceCallback((url: string) => {
     updateCustomUrl(url);
     if (url.length > 0) {
-      query.set("cluster", "custom");
       query.set("customUrl", url);
       history.push({ ...location, search: query.toString() });
     }
@@ -119,7 +118,7 @@ function CustomClusterInput({ activeSuffix, active }: InputProps) {
       </Link>
       {active && (
         <input
-          type="text"
+          type="url"
           defaultValue={customUrl}
           className={`form-control ${inputTextClass}`}
           onFocus={() => setEditing(true)}

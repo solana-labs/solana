@@ -3,7 +3,7 @@ import { Buffer } from "buffer";
 import { Copyable } from "./Copyable";
 
 export function HexData({ raw }: { raw: Buffer }) {
-  if (!raw) {
+  if (!raw || raw.length === 0) {
     return <span>No data</span>;
   }
 
