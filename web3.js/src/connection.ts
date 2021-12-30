@@ -1723,7 +1723,7 @@ export type AccountInfo<T> = {
   lamports: number;
   /** Optional data assigned to the account */
   data: T;
-  /** Optional rent epoch infor for account */
+  /** Optional rent epoch info for account */
   rentEpoch?: number;
 };
 
