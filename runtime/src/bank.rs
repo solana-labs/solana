@@ -47,7 +47,6 @@ use {
         ancestors::{Ancestors, AncestorsForSerialization},
         blockhash_queue::BlockhashQueue,
         builtins::{self, ActivationType, Builtin, Builtins},
-        cost_model::ExecutionCost,
         cost_tracker::CostTracker,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         inline_spl_token,
@@ -504,7 +503,7 @@ impl StatusCacheRc {
     }
 }
 
-pub type TransactionCheckResult<'a> = (Result<ExecutionCost>, Option<NoncePartial>);
+pub type TransactionCheckResult = (Result<()>, Option<NoncePartial>);
 pub type TransactionExecutionResult = (Result<()>, Option<NonceFull>);
 pub struct TransactionResults {
     pub fee_collection_results: Vec<Result<()>>,
@@ -3108,7 +3107,7 @@ impl Bank {
     pub fn prepare_sanitized_batch_with_results<'a, 'b>(
         &'a self,
         transactions: &'b [SanitizedTransaction],
-        transaction_results: impl Iterator<Item = Result<ExecutionCost>>,
+        transaction_results: impl Iterator<Item = Result<()>>,
     ) -> TransactionBatch<'a, 'b> {
         // this lock_results could be: Ok, AccountInUse, WouldExceedBlockMaxLimit or WouldExceedAccountMaxLimit
         let lock_results = self
@@ -3123,7 +3122,7 @@ impl Bank {
         &'a self,
         transaction: SanitizedTransaction,
     ) -> TransactionBatch<'a, '_> {
-        let mut batch = TransactionBatch::new(vec![Ok(0)], self, Cow::Owned(vec![transaction]));
+        let mut batch = TransactionBatch::new(vec![Ok(())], self, Cow::Owned(vec![transaction]));
         batch.needs_unlock = false;
         batch
     }
@@ -3219,29 +3218,23 @@ impl Bank {
         self.rc.accounts.accounts_db.set_shrink_paths(paths);
     }
 
-    fn check_age<'a, T>(
+    fn check_age<'a>(
         &self,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
-        lock_results: impl Iterator<Item = T>,
+        lock_results: &[Result<()>],
         max_age: usize,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<TransactionCheckResult>
-    where
-        T: std::borrow::Borrow<Result<ExecutionCost>>,
-    {
+    ) -> Vec<TransactionCheckResult> {
         let hash_queue = self.blockhash_queue.read().unwrap();
         txs.zip(lock_results)
-            .map(|(tx, lock_res)| match lock_res.borrow() {
-                Ok(execution_cost) => {
+            .map(|(tx, lock_res)| match lock_res {
+                Ok(()) => {
                     let recent_blockhash = tx.message().recent_blockhash();
                     let hash_age = hash_queue.check_hash_age(recent_blockhash, max_age);
                     if hash_age == Some(true) {
-                        (Ok(*execution_cost), None)
+                        (Ok(()), None)
                     } else if let Some((address, account)) = self.check_transaction_for_nonce(tx) {
-                        (
-                            Ok(*execution_cost),
-                            Some(NoncePartial::new(address, account)),
-                        )
+                        (Ok(()), Some(NoncePartial::new(address, account)))
                     } else if hash_age == Some(false) {
                         error_counters.blockhash_too_old += 1;
                         (Err(TransactionError::BlockhashNotFound), None)
@@ -3311,16 +3304,13 @@ impl Bank {
             })
     }
 
-    pub fn check_transactions<T>(
+    pub fn check_transactions(
         &self,
         sanitized_txs: &[SanitizedTransaction],
-        lock_results: impl Iterator<Item = T>,
+        lock_results: &[Result<()>],
         max_age: usize,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<TransactionCheckResult>
-    where
-        T: std::borrow::Borrow<Result<ExecutionCost>>,
-    {
+    ) -> Vec<TransactionCheckResult> {
         let age_results =
             self.check_age(sanitized_txs.iter(), lock_results, max_age, error_counters);
         self.check_status_cache(sanitized_txs, age_results, error_counters)
@@ -3516,7 +3506,7 @@ impl Bank {
         let mut check_time = Measure::start("check_transactions");
         let check_results = self.check_transactions(
             sanitized_txs,
-            batch.lock_results().iter(),
+            batch.lock_results(),
             max_age,
             &mut error_counters,
         );
@@ -3598,7 +3588,6 @@ impl Bank {
                                 &self.builtin_programs.vec,
                                 legacy_message,
                                 &loaded_transaction.program_indices,
-                                loaded_transaction.estimated_execution_cost,
                                 &transaction_context,
                                 self.rent_collector.rent,
                                 log_collector.clone(),
