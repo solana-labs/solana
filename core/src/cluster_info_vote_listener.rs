@@ -396,23 +396,6 @@ impl ClusterInfoVoteListener {
         let mut packet_batches = packet::to_packet_batches(&votes, 1);
 
         // Votes should already be filtered by this point.
-<<<<<<< HEAD
-        let reject_non_vote = false;
-        sigverify::ed25519_verify_cpu(&mut packet_batches, reject_non_vote);
-
-        let (vote_txs, vote_metadata) = izip!(votes.into_iter(), packet_batches)
-            .filter_map(|(vote_tx, packet_batch)| {
-                let (vote, vote_account_key) = vote_transaction::parse_vote_transaction(&vote_tx)
-                    .and_then(|(vote_account_key, vote, _)| {
-                    if vote.slots.is_empty() {
-                        None
-                    } else {
-                        Some((vote, vote_account_key))
-                    }
-                })?;
-
-                // to_packet_batches() above split into 1 packet long chunks
-=======
         sigverify::ed25519_verify_cpu(&mut packet_batches, /*reject_non_vote=*/ false);
         let root_bank = bank_forks.read().unwrap().root_bank();
         let epoch_schedule = root_bank.epoch_schedule();
@@ -421,7 +404,6 @@ impl ClusterInfoVoteListener {
             .zip(packet_batches)
             .filter(|(_, packet_batch)| {
                 // to_packet_batches() above splits into 1 packet long batches
->>>>>>> c0c603865 (checks for authorized voter early on in the vote-listener pipeline (#22169))
                 assert_eq!(packet_batch.packets.len(), 1);
                 !packet_batch.packets[0].meta.discard
             })
@@ -977,15 +959,7 @@ mod tests {
             signature::{Keypair, Signature, Signer},
         },
         solana_vote_program::vote_state::Vote,
-<<<<<<< HEAD
-        std::{collections::BTreeSet, sync::Arc},
-=======
-        std::{
-            collections::BTreeSet,
-            iter::repeat_with,
-            sync::{atomic::AtomicU64, Arc},
-        },
->>>>>>> c0c603865 (checks for authorized voter early on in the vote-listener pipeline (#22169))
+        std::{collections::BTreeSet, iter::repeat_with, sync::Arc},
     };
 
     #[test]
@@ -1832,7 +1806,7 @@ mod tests {
     fn test_verify_votes_empty() {
         solana_logger::setup();
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let bank = Bank::new_for_tests(&genesis_config);
+        let bank = Bank::new(&genesis_config);
         let bank_forks = RwLock::new(BankForks::new(bank));
         let votes = vec![];
         let (vote_txs, packets) = ClusterInfoVoteListener::verify_votes(votes, &bank_forks);
@@ -1877,7 +1851,7 @@ mod tests {
                 &voting_keypairs,
                 vec![100; voting_keypairs.len()], // stakes
             );
-        let bank = Bank::new_for_tests(&genesis_config);
+        let bank = Bank::new(&genesis_config);
         let bank_forks = RwLock::new(BankForks::new(bank));
         let vote_tx = test_vote_tx(voting_keypairs.first(), hash);
         let votes = vec![vote_tx];
@@ -1902,7 +1876,7 @@ mod tests {
                 &voting_keypairs,
                 vec![100; voting_keypairs.len()], // stakes
             );
-        let bank = Bank::new_for_tests(&genesis_config);
+        let bank = Bank::new(&genesis_config);
         let bank_forks = RwLock::new(BankForks::new(bank));
         let vote_tx = test_vote_tx(voting_keypairs.first(), hash);
         let mut bad_vote = vote_tx.clone();
