@@ -117,12 +117,13 @@ impl MessageProcessor {
             let instruction_accounts = instruction
                 .accounts
                 .iter()
-                .map(|account_index| {
-                    let account_index = *account_index as usize;
+                .map(|index_in_transaction| {
+                    let index_in_transaction = *index_in_transaction as usize;
                     InstructionAccount {
-                        index: account_index,
-                        is_signer: message.is_signer(account_index),
-                        is_writable: message.is_writable(account_index),
+                        index_in_transaction,
+                        index_in_caller: program_indices.len().saturating_add(index_in_transaction),
+                        is_signer: message.is_signer(index_in_transaction),
+                        is_writable: message.is_writable(index_in_transaction),
                     }
                 })
                 .collect::<Vec<_>>();
