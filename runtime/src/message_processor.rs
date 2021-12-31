@@ -1276,9 +1276,9 @@ impl MessageProcessor {
         let pre_remaining_units = invoke_context.get_compute_meter().borrow().get_remaining();
         let mut time = Measure::start("execute_instruction");
 
-        let process_instruction_result =
+        let execute_result =
             self.process_instruction(program_id, &instruction.data, &mut invoke_context);
-        let execute_or_verify_result = process_instruction_result.and_then(|_| {
+        let execute_or_verify_result = execute_result.and_then(|_| {
             Self::verify(
                 message,
                 instruction,
@@ -1312,7 +1312,7 @@ impl MessageProcessor {
 
         timings.accumulate(&invoke_context.timings);
 
-        Ok(())
+        execute_or_verify_result
     }
 
     /// Process a message.
