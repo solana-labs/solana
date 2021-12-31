@@ -3561,7 +3561,7 @@ impl Bank {
 
                         let mut transaction_accounts = Vec::new();
                         std::mem::swap(&mut loaded_transaction.accounts, &mut transaction_accounts);
-                        let transaction_context = TransactionContext::new(
+                        let mut transaction_context = TransactionContext::new(
                             transaction_accounts,
                             compute_budget.max_invoke_depth,
                         );
@@ -3588,7 +3588,7 @@ impl Bank {
                                 &self.builtin_programs.vec,
                                 legacy_message,
                                 &loaded_transaction.program_indices,
-                                &transaction_context,
+                                &mut transaction_context,
                                 self.rent_collector.rent,
                                 log_collector.clone(),
                                 executors.clone(),

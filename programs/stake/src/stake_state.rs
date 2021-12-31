@@ -4999,8 +4999,8 @@ mod tests {
 
     #[test]
     fn test_merge() {
-        let transaction_context = TransactionContext::new(Vec::new(), 1);
-        let invoke_context = InvokeContext::new_mock(&transaction_context, &[]);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let source_stake_pubkey = solana_sdk::pubkey::new_rand();
         let authorized_pubkey = solana_sdk::pubkey::new_rand();
@@ -5110,8 +5110,8 @@ mod tests {
 
     #[test]
     fn test_merge_self_fails() {
-        let transaction_context = TransactionContext::new(Vec::new(), 1);
-        let invoke_context = InvokeContext::new_mock(&transaction_context, &[]);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let stake_address = Pubkey::new_unique();
         let authority_pubkey = Pubkey::new_unique();
         let signers = HashSet::from_iter(vec![authority_pubkey]);
@@ -5156,8 +5156,8 @@ mod tests {
 
     #[test]
     fn test_merge_incorrect_authorized_staker() {
-        let transaction_context = TransactionContext::new(Vec::new(), 1);
-        let invoke_context = InvokeContext::new_mock(&transaction_context, &[]);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let source_stake_pubkey = solana_sdk::pubkey::new_rand();
         let authorized_pubkey = solana_sdk::pubkey::new_rand();
@@ -5226,8 +5226,8 @@ mod tests {
 
     #[test]
     fn test_merge_invalid_account_data() {
-        let transaction_context = TransactionContext::new(Vec::new(), 1);
-        let invoke_context = InvokeContext::new_mock(&transaction_context, &[]);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let source_stake_pubkey = solana_sdk::pubkey::new_rand();
         let authorized_pubkey = solana_sdk::pubkey::new_rand();
@@ -5277,8 +5277,8 @@ mod tests {
 
     #[test]
     fn test_merge_fake_stake_source() {
-        let transaction_context = TransactionContext::new(Vec::new(), 1);
-        let invoke_context = InvokeContext::new_mock(&transaction_context, &[]);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let source_stake_pubkey = solana_sdk::pubkey::new_rand();
         let authorized_pubkey = solana_sdk::pubkey::new_rand();
@@ -5320,8 +5320,8 @@ mod tests {
 
     #[test]
     fn test_merge_active_stake() {
-        let transaction_context = TransactionContext::new(Vec::new(), 1);
-        let invoke_context = InvokeContext::new_mock(&transaction_context, &[]);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let base_lamports = 4242424242;
         let stake_address = Pubkey::new_unique();
         let source_address = Pubkey::new_unique();
@@ -5943,8 +5943,8 @@ mod tests {
 
     #[test]
     fn test_things_can_merge() {
-        let transaction_context = TransactionContext::new(Vec::new(), 1);
-        let invoke_context = InvokeContext::new_mock(&transaction_context, &[]);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let good_stake = Stake {
             credits_observed: 4242,
             delegation: Delegation {
@@ -6042,8 +6042,8 @@ mod tests {
 
     #[test]
     fn test_metas_can_merge_pre_v4() {
-        let transaction_context = TransactionContext::new(Vec::new(), 1);
-        let invoke_context = InvokeContext::new_mock(&transaction_context, &[]);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         // Identical Metas can merge
         assert!(MergeKind::metas_can_merge(
             &invoke_context,
@@ -6129,8 +6129,8 @@ mod tests {
 
     #[test]
     fn test_metas_can_merge_v4() {
-        let transaction_context = TransactionContext::new(Vec::new(), 1);
-        let invoke_context = InvokeContext::new_mock(&transaction_context, &[]);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         // Identical Metas can merge
         assert!(MergeKind::metas_can_merge(
             &invoke_context,
@@ -6276,8 +6276,8 @@ mod tests {
 
     #[test]
     fn test_merge_kind_get_if_mergeable() {
-        let transaction_context = TransactionContext::new(Vec::new(), 1);
-        let invoke_context = InvokeContext::new_mock(&transaction_context, &[]);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let authority_pubkey = Pubkey::new_unique();
         let initial_lamports = 4242424242;
         let rent = Rent::default();
@@ -6509,8 +6509,8 @@ mod tests {
 
     #[test]
     fn test_merge_kind_merge() {
-        let transaction_context = TransactionContext::new(Vec::new(), 1);
-        let invoke_context = InvokeContext::new_mock(&transaction_context, &[]);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let lamports = 424242;
         let meta = Meta {
             rent_exempt_reserve: 42,
@@ -6588,8 +6588,8 @@ mod tests {
 
     #[test]
     fn test_active_stake_merge() {
-        let transaction_context = TransactionContext::new(Vec::new(), 1);
-        let invoke_context = InvokeContext::new_mock(&transaction_context, &[]);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let delegation_a = 4_242_424_242u64;
         let delegation_b = 6_200_000_000u64;
         let credits_a = 124_521_000u64;

@@ -135,7 +135,7 @@ impl<'a> StackFrame<'a> {
 }
 
 pub struct InvokeContext<'a> {
-    pub transaction_context: &'a TransactionContext,
+    pub transaction_context: &'a mut TransactionContext,
     pub return_data: (Pubkey, Vec<u8>),
     invoke_stack: Vec<StackFrame<'a>>,
     rent: Rent,
@@ -158,7 +158,7 @@ pub struct InvokeContext<'a> {
 impl<'a> InvokeContext<'a> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        transaction_context: &'a TransactionContext,
+        transaction_context: &'a mut TransactionContext,
         rent: Rent,
         builtin_programs: &'a [BuiltinProgram],
         sysvars: &'a [(Pubkey, Vec<u8>)],
@@ -194,7 +194,7 @@ impl<'a> InvokeContext<'a> {
     }
 
     pub fn new_mock(
-        transaction_context: &'a TransactionContext,
+        transaction_context: &'a mut TransactionContext,
         builtin_programs: &'a [BuiltinProgram],
     ) -> Self {
         Self::new(
@@ -427,7 +427,7 @@ impl<'a> InvokeContext<'a> {
             .ok_or(InstructionError::CallDepth)?;
         let rent = &self.rent;
         let log_collector = &self.log_collector;
-        let transaction_context = self.transaction_context;
+        let transaction_context = &mut self.transaction_context;
         let pre_accounts = &mut self.pre_accounts;
         let timings = &mut self.timings;
 
@@ -978,11 +978,11 @@ pub fn with_mock_invoke_context<R, F: FnMut(&mut InvokeContext) -> R>(
     }];
     let preparation =
         prepare_mock_invoke_context(transaction_accounts, instruction_accounts, &program_indices);
-    let transaction_context = TransactionContext::new(
+    let mut transaction_context = TransactionContext::new(
         preparation.transaction_accounts,
         ComputeBudget::default().max_invoke_depth,
     );
-    let mut invoke_context = InvokeContext::new_mock(&transaction_context, &[]);
+    let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
     invoke_context
         .push(&preparation.instruction_accounts, &program_indices)
         .unwrap();
@@ -1006,11 +1006,11 @@ pub fn mock_process_instruction_with_sysvars(
     preparation
         .transaction_accounts
         .push((*loader_id, processor_account));
-    let transaction_context = TransactionContext::new(
+    let mut transaction_context = TransactionContext::new(
         preparation.transaction_accounts,
         ComputeBudget::default().max_invoke_depth,
     );
-    let mut invoke_context = InvokeContext::new_mock(&transaction_context, &[]);
+    let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
     invoke_context.sysvars = sysvars;
     let result = invoke_context
         .push(&preparation.instruction_accounts, &program_indices)
@@ -1245,8 +1245,8 @@ mod tests {
                 is_writable: false,
             });
         }
-        let transaction_context = TransactionContext::new(accounts, MAX_DEPTH);
-        let mut invoke_context = InvokeContext::new_mock(&transaction_context, &[]);
+        let mut transaction_context = TransactionContext::new(accounts, MAX_DEPTH);
+        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
 
         // Check call depth increases and has a limit
         let mut depth_reached = 0;
@@ -1320,8 +1320,8 @@ mod tests {
         let accounts = vec![(solana_sdk::pubkey::new_rand(), AccountSharedData::default())];
         let instruction_accounts = vec![];
         let program_indices = vec![0];
-        let transaction_context = TransactionContext::new(accounts, 1);
-        let mut invoke_context = InvokeContext::new_mock(&transaction_context, &[]);
+        let mut transaction_context = TransactionContext::new(accounts, 1);
+        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context
             .push(&instruction_accounts, &program_indices)
             .unwrap();
@@ -1370,8 +1370,9 @@ mod tests {
                 is_writable: index_in_transaction < 2,
             })
             .collect::<Vec<_>>();
-        let transaction_context = TransactionContext::new(accounts, 2);
-        let mut invoke_context = InvokeContext::new_mock(&transaction_context, builtin_programs);
+        let mut transaction_context = TransactionContext::new(accounts, 2);
+        let mut invoke_context =
+            InvokeContext::new_mock(&mut transaction_context, builtin_programs);
 
         // External modification tests
         {
@@ -1490,8 +1491,8 @@ mod tests {
         let mut feature_set = FeatureSet::all_enabled();
         feature_set.deactivate(&tx_wide_compute_cap::id());
         feature_set.deactivate(&requestable_heap_size::id());
-        let transaction_context = TransactionContext::new(accounts, 1);
-        let mut invoke_context = InvokeContext::new_mock(&transaction_context, &[]);
+        let mut transaction_context = TransactionContext::new(accounts, 1);
+        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context.feature_set = Arc::new(feature_set);
 
         invoke_context.push(&[], &[0]).unwrap();
