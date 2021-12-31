@@ -136,6 +136,20 @@ impl CostModel {
         self.instruction_execution_cost_table.get_cost_table()
     }
 
+    pub fn find_instruction_cost(&self, program_key: &Pubkey) -> u64 {
+        match self.instruction_execution_cost_table.get_cost(program_key) {
+            Some(cost) => *cost,
+            None => {
+                let default_value = self.instruction_execution_cost_table.get_mode();
+                debug!(
+                    "Program key {:?} does not have assigned cost, using mode {}",
+                    program_key, default_value
+                );
+                default_value
+            }
+        }
+    }
+
     fn get_signature_cost(&self, transaction: &SanitizedTransaction) -> u64 {
         transaction.signatures().len() as u64 * SIGNATURE_COST
     }
@@ -182,6 +196,7 @@ impl CostModel {
         cost
     }
 
+<<<<<<< HEAD
     fn find_instruction_cost(&self, program_key: &Pubkey) -> u64 {
         match self.instruction_execution_cost_table.get_cost(program_key) {
             Some(cost) => *cost,
@@ -196,6 +211,61 @@ impl CostModel {
         }
     }
 
+=======
+    fn calculate_account_data_size_on_deserialized_system_instruction(
+        instruction: SystemInstruction,
+    ) -> u64 {
+        match instruction {
+            SystemInstruction::CreateAccount {
+                lamports: _lamports,
+                space,
+                owner: _owner,
+            } => space,
+            SystemInstruction::CreateAccountWithSeed {
+                base: _base,
+                seed: _seed,
+                lamports: _lamports,
+                space,
+                owner: _owner,
+            } => space,
+            SystemInstruction::Allocate { space } => space,
+            SystemInstruction::AllocateWithSeed {
+                base: _base,
+                seed: _seed,
+                space,
+                owner: _owner,
+            } => space,
+            _ => 0,
+        }
+    }
+
+    fn calculate_account_data_size_on_instruction(
+        program_id: &Pubkey,
+        instruction: &CompiledInstruction,
+    ) -> u64 {
+        if program_id == &system_program::id() {
+            if let Ok(instruction) = limited_deserialize(&instruction.data) {
+                return Self::calculate_account_data_size_on_deserialized_system_instruction(
+                    instruction,
+                );
+            }
+        }
+        0
+    }
+
+    /// eventually, potentially determine account data size of all writable accounts
+    /// at the moment, calculate account data size of account creation
+    fn calculate_account_data_size(&self, transaction: &SanitizedTransaction) -> u64 {
+        transaction
+            .message()
+            .program_instructions_iter()
+            .map(|(program_id, instruction)| {
+                Self::calculate_account_data_size_on_instruction(program_id, instruction)
+            })
+            .sum()
+    }
+
+>>>>>>> d06e6c742 (Count compute units even when transaction errors (#22182))
     fn calculate_cost_weight(&self, transaction: &SanitizedTransaction) -> u32 {
         if is_simple_vote_transaction(transaction) {
             // vote has zero cost weight, so it bypasses block cost limit checking

@@ -3,7 +3,11 @@ use {
     solana_measure::measure::Measure,
     solana_program_runtime::{
         instruction_recorder::InstructionRecorder,
+<<<<<<< HEAD
         invoke_context::{BuiltinProgram, Executors, InvokeContext, TransactionAccountRefCell},
+=======
+        invoke_context::{BuiltinProgram, Executors, InvokeContext, ProcessInstructionResult},
+>>>>>>> d06e6c742 (Count compute units even when transaction errors (#22182))
         log_collector::LogCollector,
         timings::ExecuteDetailsTimings,
     },
@@ -105,16 +109,31 @@ impl MessageProcessor {
                     Some(&instruction_recorders[instruction_index]);
             }
             let mut time = Measure::start("execute_instruction");
+<<<<<<< HEAD
             let compute_meter_consumption = invoke_context
                 .process_instruction(message, instruction, program_indices, &[], &[])
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
+=======
+            let ProcessInstructionResult {
+                compute_units_consumed,
+                result,
+            } = invoke_context.process_instruction(
+                &instruction.data,
+                &instruction_accounts,
+                None,
+                program_indices,
+            );
+>>>>>>> d06e6c742 (Count compute units even when transaction errors (#22182))
             time.stop();
             timings.accumulate_program(
                 instruction.program_id(&message.account_keys),
                 time.as_us(),
-                compute_meter_consumption,
+                compute_units_consumed,
+                result.is_err(),
             );
             timings.accumulate(&invoke_context.timings);
+            result
+                .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
         Ok(())
     }
