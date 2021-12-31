@@ -318,9 +318,12 @@ impl<'a> InvokeContext<'a> {
             }))
             .collect::<Vec<_>>();
 
+        // Unsafe will be removed together with the keyed_accounts
         self.invoke_stack.push(StackFrame::new(
             program_indices.len(),
-            create_keyed_accounts_unified(keyed_accounts.as_slice()),
+            create_keyed_accounts_unified(unsafe {
+                std::mem::transmute(keyed_accounts.as_slice())
+            }),
         ));
         Ok(())
     }
