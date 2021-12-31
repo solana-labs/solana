@@ -1335,7 +1335,6 @@ mod tests {
 
     #[test]
     fn test_process_cross_program() {
-        let caller_program_id = solana_sdk::pubkey::new_rand();
         let callee_program_id = solana_sdk::pubkey::new_rand();
         let builtin_programs = &[BuiltinProgram {
             program_id: callee_program_id,
@@ -1348,85 +1347,87 @@ mod tests {
         let loader_account = AccountSharedData::new(0, 0, &native_loader::id());
         let mut program_account = AccountSharedData::new(1, 0, &native_loader::id());
         program_account.set_executable(true);
-
         let accounts = vec![
             (solana_sdk::pubkey::new_rand(), owned_account),
             (solana_sdk::pubkey::new_rand(), not_owned_account),
             (solana_sdk::pubkey::new_rand(), readonly_account),
-            (caller_program_id, loader_account),
             (callee_program_id, program_account),
+            (solana_sdk::pubkey::new_rand(), loader_account),
         ];
-        let program_indices = [3, 4];
-
         let metas = vec![
             AccountMeta::new(accounts[0].0, false),
             AccountMeta::new(accounts[1].0, false),
             AccountMeta::new_readonly(accounts[2].0, false),
         ];
-        let instruction_accounts = metas
-            .iter()
-            .enumerate()
-            .map(|(index_in_transaction, account_meta)| InstructionAccount {
+        let instruction_accounts = (0..4)
+            .map(|index_in_transaction| InstructionAccount {
                 index_in_transaction,
-                index_in_caller: program_indices.len() + index_in_transaction,
-                is_signer: account_meta.is_signer,
-                is_writable: account_meta.is_writable,
+                index_in_caller: 1 + index_in_transaction,
+                is_signer: false,
+                is_writable: index_in_transaction < 2,
             })
             .collect::<Vec<_>>();
-        let instruction = Instruction::new_with_bincode(
+        let transaction_context = TransactionContext::new(accounts, 2);
+        let mut invoke_context = InvokeContext::new_mock(&transaction_context, builtin_programs);
+        invoke_context.push(&instruction_accounts, &[4]).unwrap();
+
+        let inner_instruction = Instruction::new_with_bincode(
             callee_program_id,
             &MockInstruction::NoopSuccess,
             metas.clone(),
         );
-        let transaction_context = TransactionContext::new(accounts, 1);
-        let mut invoke_context = InvokeContext::new_mock(&transaction_context, builtin_programs);
-        invoke_context
-            .push(&instruction_accounts, &program_indices[..1])
+        let (inner_instruction_accounts, caller_write_privileges, program_indices) = invoke_context
+            .prepare_instruction(&inner_instruction, &[])
             .unwrap();
         let mut compute_units_consumed = 0;
 
         // not owned account modified by the caller (before the invoke)
-        transaction_context
+        invoke_context
+            .transaction_context
             .get_account_at_index(1)
             .borrow_mut()
             .data_as_mut_slice()[0] = 1;
         assert_eq!(
             invoke_context.process_instruction(
-                &instruction.data,
-                &instruction_accounts,
-                None,
-                &program_indices[1..],
+                &inner_instruction.data,
+                &inner_instruction_accounts,
+                Some(&caller_write_privileges),
+                &program_indices,
                 &mut compute_units_consumed,
             ),
             Err(InstructionError::ExternalAccountDataModified)
         );
-        transaction_context
+        invoke_context
+            .transaction_context
             .get_account_at_index(1)
             .borrow_mut()
             .data_as_mut_slice()[0] = 0;
 
         // readonly account modified by the invoker
-        transaction_context
+        invoke_context
+            .transaction_context
             .get_account_at_index(2)
             .borrow_mut()
             .data_as_mut_slice()[0] = 1;
         assert_eq!(
             invoke_context.process_instruction(
-                &instruction.data,
-                &instruction_accounts,
-                None,
-                &program_indices[1..],
+                &inner_instruction.data,
+                &inner_instruction_accounts,
+                Some(&caller_write_privileges),
+                &program_indices,
                 &mut compute_units_consumed,
             ),
             Err(InstructionError::ReadonlyDataModified)
         );
-        transaction_context
+        invoke_context
+            .transaction_context
             .get_account_at_index(2)
             .borrow_mut()
             .data_as_mut_slice()[0] = 0;
 
         invoke_context.pop();
 
+        // Other test cases
         let cases = vec![
             (MockInstruction::NoopSuccess, Ok(())),
             (
@@ -1438,21 +1439,30 @@ mod tests {
                 MockInstruction::ModifyNotOwned,
                 Err(InstructionError::ExternalAccountDataModified),
             ),
+            (MockInstruction::ModifyOwned, Ok(())),
+            (
+                MockInstruction::ModifyReadonly,
+                Err(InstructionError::ReadonlyDataModified),
+            ),
         ];
         for case in cases {
-            let instruction =
+            invoke_context.push(&instruction_accounts, &[4]).unwrap();
+            let inner_instruction =
                 Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
-            invoke_context
-                .push(&instruction_accounts, &program_indices[..1])
-                .unwrap();
+            let (inner_instruction_accounts, caller_write_privileges, program_indices) =
+                invoke_context
+                    .prepare_instruction(&inner_instruction, &[])
+                    .unwrap();
             assert_eq!(
-                invoke_context.process_instruction(
-                    &instruction.data,
-                    &instruction_accounts,
-                    None,
-                    &program_indices[1..],
-                    &mut compute_units_consumed,
-                ),
+                invoke_context
+                    .process_instruction(
+                        &inner_instruction.data,
+                        &inner_instruction_accounts,
+                        Some(&caller_write_privileges),
+                        &program_indices,
+                        &mut compute_units_consumed,
+                    )
+                    .map(|_| ()),
                 case.1
             );
             invoke_context.pop();
@@ -1470,6 +1480,7 @@ mod tests {
         let owned_account = AccountSharedData::new(42, 1, &callee_program_id);
         let not_owned_account = AccountSharedData::new(84, 1, &solana_sdk::pubkey::new_rand());
         let readonly_account = AccountSharedData::new(168, 1, &solana_sdk::pubkey::new_rand());
+        let loader_account = AccountSharedData::new(0, 0, &native_loader::id());
         let mut program_account = AccountSharedData::new(1, 0, &native_loader::id());
         program_account.set_executable(true);
         let accounts = vec![
@@ -1477,61 +1488,59 @@ mod tests {
             (solana_sdk::pubkey::new_rand(), not_owned_account),
             (solana_sdk::pubkey::new_rand(), readonly_account),
             (callee_program_id, program_account),
+            (solana_sdk::pubkey::new_rand(), loader_account),
         ];
-        let program_indices = [3];
-
         let metas = vec![
             AccountMeta::new(accounts[0].0, false),
             AccountMeta::new(accounts[1].0, false),
             AccountMeta::new_readonly(accounts[2].0, false),
-            AccountMeta::new_readonly(accounts[3].0, false),
         ];
-        let instruction_accounts = metas
-            .iter()
-            .enumerate()
-            .map(|(index_in_transaction, account_meta)| InstructionAccount {
+        let instruction_accounts = (0..4)
+            .map(|index_in_transaction| InstructionAccount {
                 index_in_transaction,
-                index_in_caller: program_indices.len() + index_in_transaction,
-                is_signer: account_meta.is_signer,
-                is_writable: account_meta.is_writable,
+                index_in_caller: 1 + index_in_transaction,
+                is_signer: false,
+                is_writable: index_in_transaction < 2,
             })
             .collect::<Vec<_>>();
-        let callee_instruction = Instruction::new_with_bincode(
+        let transaction_context = TransactionContext::new(accounts, 2);
+        let mut invoke_context = InvokeContext::new_mock(&transaction_context, builtin_programs);
+        invoke_context.push(&instruction_accounts, &[4]).unwrap();
+
+        let inner_instruction = Instruction::new_with_bincode(
             callee_program_id,
             &MockInstruction::NoopSuccess,
             metas.clone(),
         );
 
-        let transaction_context = TransactionContext::new(accounts, 1);
-        let mut invoke_context = InvokeContext::new_mock(&transaction_context, builtin_programs);
-        invoke_context
-            .push(&instruction_accounts, &program_indices)
-            .unwrap();
-
         // not owned account modified by the invoker
-        transaction_context
+        invoke_context
+            .transaction_context
             .get_account_at_index(1)
             .borrow_mut()
             .data_as_mut_slice()[0] = 1;
         assert_eq!(
-            invoke_context.native_invoke(callee_instruction.clone(), &[]),
+            invoke_context.native_invoke(inner_instruction.clone(), &[]),
             Err(InstructionError::ExternalAccountDataModified)
         );
-        transaction_context
+        invoke_context
+            .transaction_context
             .get_account_at_index(1)
             .borrow_mut()
             .data_as_mut_slice()[0] = 0;
 
         // readonly account modified by the invoker
-        transaction_context
+        invoke_context
+            .transaction_context
             .get_account_at_index(2)
             .borrow_mut()
             .data_as_mut_slice()[0] = 1;
         assert_eq!(
-            invoke_context.native_invoke(callee_instruction, &[]),
+            invoke_context.native_invoke(inner_instruction, &[]),
             Err(InstructionError::ReadonlyDataModified)
         );
-        transaction_context
+        invoke_context
+            .transaction_context
             .get_account_at_index(2)
             .borrow_mut()
             .data_as_mut_slice()[0] = 0;
@@ -1556,15 +1565,10 @@ mod tests {
             ),
         ];
         for case in cases {
-            let callee_instruction =
+            invoke_context.push(&instruction_accounts, &[4]).unwrap();
+            let inner_instruction =
                 Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
-            invoke_context
-                .push(&instruction_accounts, &program_indices)
-                .unwrap();
-            assert_eq!(
-                invoke_context.native_invoke(callee_instruction, &[]),
-                case.1
-            );
+            assert_eq!(invoke_context.native_invoke(inner_instruction, &[]), case.1);
             invoke_context.pop();
         }
     }
