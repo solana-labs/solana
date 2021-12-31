@@ -6216,7 +6216,6 @@ pub(crate) mod tests {
             genesis_config::create_genesis_config,
             hash,
             instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
-            keyed_account::keyed_account_at_index,
             message::{Message, MessageHeader},
             nonce,
             poh_config::PohConfig,
@@ -6656,63 +6655,6 @@ pub(crate) mod tests {
         assert_eq!(bank_with_success_txs_hash, bank_hash);
     }
 
-    #[derive(Serialize, Deserialize)]
-    enum MockInstruction {
-        Deduction,
-    }
-
-    fn mock_process_instruction(
-        first_instruction_account: usize,
-        data: &[u8],
-        invoke_context: &mut InvokeContext,
-    ) -> result::Result<(), InstructionError> {
-        let keyed_accounts = invoke_context.get_keyed_accounts()?;
-        if let Ok(instruction) = bincode::deserialize(data) {
-            match instruction {
-                MockInstruction::Deduction => {
-                    keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?
-                        .account
-                        .borrow_mut()
-                        .checked_add_lamports(1)?;
-                    keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?
-                        .account
-                        .borrow_mut()
-                        .checked_sub_lamports(1)?;
-                    Ok(())
-                }
-            }
-        } else {
-            Err(InstructionError::InvalidInstructionData)
-        }
-    }
-
-    fn create_mock_transaction(
-        payer: &Keypair,
-        keypair1: &Keypair,
-        keypair2: &Keypair,
-        read_only_keypair: &Keypair,
-        mock_program_id: Pubkey,
-        recent_blockhash: Hash,
-    ) -> Transaction {
-        let account_metas = vec![
-            AccountMeta::new(payer.pubkey(), true),
-            AccountMeta::new(keypair1.pubkey(), true),
-            AccountMeta::new(keypair2.pubkey(), true),
-            AccountMeta::new_readonly(read_only_keypair.pubkey(), false),
-        ];
-        let deduct_instruction = Instruction::new_with_bincode(
-            mock_program_id,
-            &MockInstruction::Deduction,
-            account_metas,
-        );
-        Transaction::new_signed_with_payer(
-            &[deduct_instruction],
-            Some(&payer.pubkey()),
-            &[payer, keypair1, keypair2],
-            recent_blockhash,
-        )
-    }
-
     fn store_accounts_for_rent_test(
         bank: &Bank,
         keypairs: &mut Vec<Keypair>,
@@ -6812,7 +6754,6 @@ pub(crate) mod tests {
     fn create_child_bank_for_rent_test(
         root_bank: &Arc<Bank>,
         genesis_config: &GenesisConfig,
-        mock_program_id: Pubkey,
     ) -> Bank {
         let mut bank = Bank::new_from_parent(
             root_bank,
@@ -6824,8 +6765,6 @@ pub(crate) mod tests {
             ) as u64,
         );
         bank.rent_collector.slots_per_year = 421_812.0;
-        bank.add_builtin("mock_program", &mock_program_id, mock_process_instruction);
-
         bank
     }
 
@@ -7224,11 +7163,7 @@ pub(crate) mod tests {
         };
 
         let root_bank = Arc::new(Bank::new_for_tests(&genesis_config));
-        let bank = create_child_bank_for_rent_test(
-            &root_bank,
-            &genesis_config,
-            solana_sdk::pubkey::new_rand(),
-        );
+        let bank = create_child_bank_for_rent_test(&root_bank, &genesis_config);
 
         let account_pubkey = solana_sdk::pubkey::new_rand();
         let account_balance = 1;
@@ -7258,6 +7193,35 @@ pub(crate) mod tests {
         solana_logger::setup();
         let mock_program_id = Pubkey::new(&[2u8; 32]);
 
+        #[derive(Serialize, Deserialize)]
+        enum MockInstruction {
+            Deduction,
+        }
+
+        fn mock_process_instruction(
+            _first_instruction_account: usize,
+            data: &[u8],
+            invoke_context: &mut InvokeContext,
+        ) -> result::Result<(), InstructionError> {
+            let transaction_context = &invoke_context.transaction_context;
+            let instruction_context = transaction_context.get_current_instruction_context()?;
+            if let Ok(instruction) = bincode::deserialize(data) {
+                match instruction {
+                    MockInstruction::Deduction => {
+                        instruction_context
+                            .try_borrow_instruction_account(transaction_context, 1)?
+                            .checked_add_lamports(1)?;
+                        instruction_context
+                            .try_borrow_instruction_account(transaction_context, 2)?
+                            .checked_sub_lamports(1)?;
+                        Ok(())
+                    }
+                }
+            } else {
+                Err(InstructionError::InvalidInstructionData)
+            }
+        }
+
         let (mut genesis_config, _mint_keypair) = create_genesis_config(10);
         let mut keypairs: Vec<Keypair> = Vec::with_capacity(14);
         for _i in 0..14 {
@@ -7275,7 +7239,8 @@ pub(crate) mod tests {
         // we must ensure lazy rent collection doens't get broken!
         root_bank.restore_old_behavior_for_fragile_tests();
         let root_bank = Arc::new(root_bank);
-        let bank = create_child_bank_for_rent_test(&root_bank, &genesis_config, mock_program_id);
+        let mut bank = create_child_bank_for_rent_test(&root_bank, &genesis_config);
+        bank.add_builtin("mock_program", &mock_program_id, mock_process_instruction);
 
         assert_eq!(bank.last_blockhash(), genesis_config.hash());
 
@@ -7332,12 +7297,21 @@ pub(crate) mod tests {
             genesis_config.hash(),
         );
 
-        let t6 = create_mock_transaction(
-            &keypairs[10],
-            &keypairs[11],
-            &keypairs[12],
-            &keypairs[13],
+        let account_metas = vec![
+            AccountMeta::new(keypairs[10].pubkey(), true),
+            AccountMeta::new(keypairs[11].pubkey(), true),
+            AccountMeta::new(keypairs[12].pubkey(), true),
+            AccountMeta::new_readonly(keypairs[13].pubkey(), false),
+        ];
+        let deduct_instruction = Instruction::new_with_bincode(
             mock_program_id,
+            &MockInstruction::Deduction,
+            account_metas,
+        );
+        let t6 = Transaction::new_signed_with_payer(
+            &[deduct_instruction],
+            Some(&keypairs[10].pubkey()),
+            &[&keypairs[10], &keypairs[11], &keypairs[12]],
             genesis_config.hash(),
         );
 
@@ -11403,23 +11377,24 @@ pub(crate) mod tests {
         let mut bank = Bank::new_for_tests(&genesis_config);
 
         fn mock_process_instruction(
-            first_instruction_account: usize,
+            _first_instruction_account: usize,
             data: &[u8],
             invoke_context: &mut InvokeContext,
         ) -> result::Result<(), InstructionError> {
-            let keyed_accounts = invoke_context.get_keyed_accounts()?;
+            let transaction_context = &invoke_context.transaction_context;
+            let instruction_context = transaction_context.get_current_instruction_context()?;
             let lamports = data[0] as u64;
-            keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?
-                .try_account_ref_mut()?
+            instruction_context
+                .try_borrow_instruction_account(transaction_context, 2)?
                 .checked_sub_lamports(lamports)?;
-            keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?
-                .try_account_ref_mut()?
+            instruction_context
+                .try_borrow_instruction_account(transaction_context, 1)?
                 .checked_add_lamports(lamports)?;
-            keyed_account_at_index(keyed_accounts, first_instruction_account)?
-                .try_account_ref_mut()?
+            instruction_context
+                .try_borrow_instruction_account(transaction_context, 0)?
                 .checked_sub_lamports(lamports)?;
-            keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?
-                .try_account_ref_mut()?
+            instruction_context
+                .try_borrow_instruction_account(transaction_context, 1)?
                 .checked_add_lamports(lamports)?;
             Ok(())
         }
@@ -11934,14 +11909,15 @@ pub(crate) mod tests {
     #[test]
     fn test_same_program_id_uses_unqiue_executable_accounts() {
         fn nested_processor(
-            first_instruction_account: usize,
+            _first_instruction_account: usize,
             _data: &[u8],
             invoke_context: &mut InvokeContext,
         ) -> result::Result<(), InstructionError> {
-            let keyed_accounts = invoke_context.get_keyed_accounts()?;
-            let account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            assert_eq!(42, account.lamports().unwrap());
-            account.try_account_ref_mut()?.checked_add_lamports(1)?;
+            let transaction_context = &invoke_context.transaction_context;
+            let instruction_context = transaction_context.get_current_instruction_context()?;
+            let _ = instruction_context
+                .try_borrow_account(transaction_context, 1)?
+                .checked_add_lamports(1);
             Ok(())
         }
 
@@ -14656,15 +14632,15 @@ pub(crate) mod tests {
         let mut bank = Bank::new_for_tests(&genesis_config);
 
         fn mock_ix_processor(
-            first_instruction_account: usize,
+            _first_instruction_account: usize,
             _data: &[u8],
             invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
-            use solana_sdk::account::WritableAccount;
-            let keyed_accounts = invoke_context.get_keyed_accounts()?;
-            let data = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
-            data.try_account_ref_mut()?.data_as_mut_slice()[0] = 5;
-            Ok(())
+            let transaction_context = &invoke_context.transaction_context;
+            let instruction_context = transaction_context.get_current_instruction_context()?;
+            instruction_context
+                .try_borrow_instruction_account(transaction_context, 1)?
+                .set_data(&[0; 40])
         }
 
         let program_id = solana_sdk::pubkey::new_rand();
@@ -14675,7 +14651,6 @@ pub(crate) mod tests {
         let blockhash_sysvar = sysvar::clock::id();
         #[allow(deprecated)]
         let orig_lamports = bank.get_account(&sysvar::clock::id()).unwrap().lamports();
-        info!("{:?}", bank.get_account(&sysvar::clock::id()));
         let tx = system_transaction::transfer(&mint_keypair, &blockhash_sysvar, 10, blockhash);
         assert_eq!(
             bank.process_transaction(&tx),
@@ -14688,7 +14663,6 @@ pub(crate) mod tests {
             bank.get_account(&sysvar::clock::id()).unwrap().lamports(),
             orig_lamports
         );
-        info!("{:?}", bank.get_account(&sysvar::clock::id()));
 
         let accounts = vec![
             AccountMeta::new(mint_keypair.pubkey(), true),
