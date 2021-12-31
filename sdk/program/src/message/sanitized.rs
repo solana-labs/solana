@@ -30,8 +30,6 @@ pub enum SanitizeMessageError {
     ValueOutOfBounds,
     #[error("invalid value")]
     InvalidValue,
-    #[error("duplicate account key")]
-    DuplicateAccountKey,
 }
 
 impl From<SanitizeError> for SanitizeMessageError {
@@ -48,13 +46,7 @@ impl TryFrom<LegacyMessage> for SanitizedMessage {
     type Error = SanitizeMessageError;
     fn try_from(message: LegacyMessage) -> Result<Self, Self::Error> {
         message.sanitize()?;
-
-        let sanitized_msg = Self::Legacy(message);
-        if sanitized_msg.has_duplicates() {
-            return Err(SanitizeMessageError::DuplicateAccountKey);
-        }
-
-        Ok(sanitized_msg)
+        Ok(Self::Legacy(message))
     }
 }
 
@@ -310,21 +302,6 @@ mod tests {
 
     #[test]
     fn test_try_from_message() {
-        let dupe_key = Pubkey::new_unique();
-        let legacy_message_with_dupes = LegacyMessage {
-            header: MessageHeader {
-                num_required_signatures: 1,
-                ..MessageHeader::default()
-            },
-            account_keys: vec![dupe_key, dupe_key],
-            ..LegacyMessage::default()
-        };
-
-        assert_eq!(
-            SanitizedMessage::try_from(legacy_message_with_dupes).err(),
-            Some(SanitizeMessageError::DuplicateAccountKey),
-        );
-
         let legacy_message_with_no_signers = LegacyMessage {
             account_keys: vec![Pubkey::new_unique()],
             ..LegacyMessage::default()

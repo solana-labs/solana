@@ -46,6 +46,7 @@ enum TransactionErrorType {
     INVALID_WRITABLE_ACCOUNT = 19;
     WOULD_EXCEED_MAX_ACCOUNT_COST_LIMIT = 20;
     WOULD_EXCEED_MAX_ACCOUNT_DATA_COST_LIMIT = 21;
+    TOO_MANY_ACCOUNT_LOCKS = 22;
 }
 
 message InstructionError {

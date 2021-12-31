@@ -105,6 +105,10 @@ pub enum TransactionError {
     /// Transaction would exceed max account data limit within the block
     #[error("Transaction would exceed max account data limit within the block")]
     WouldExceedMaxAccountDataCostLimit,
+
+    /// Transaction locked too many accounts
+    #[error("Transaction locked too many accounts")]
+    TooManyAccountLocks,
 }
 
 impl From<SanitizeError> for TransactionError {
@@ -114,12 +118,7 @@ impl From<SanitizeError> for TransactionError {
 }
 
 impl From<SanitizeMessageError> for TransactionError {
-    fn from(err: SanitizeMessageError) -> Self {
-        match err {
-            SanitizeMessageError::IndexOutOfBounds
-            | SanitizeMessageError::ValueOutOfBounds
-            | SanitizeMessageError::InvalidValue => Self::SanitizeFailure,
-            SanitizeMessageError::DuplicateAccountKey => Self::AccountLoadedTwice,
-        }
+    fn from(_err: SanitizeMessageError) -> Self {
+        Self::SanitizeFailure
     }
 }
