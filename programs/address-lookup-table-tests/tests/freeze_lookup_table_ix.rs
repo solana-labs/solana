@@ -79,6 +79,30 @@ async fn test_freeze_immutable_lookup_table() {
 }
 
 #[tokio::test]
+async fn test_freeze_deactivated_lookup_table() {
+    let mut context = setup_test_context().await;
+
+    let authority = Keypair::new();
+    let initialized_table = {
+        let mut table = new_address_lookup_table(Some(authority.pubkey()), 10);
+        table.meta.deactivation_slot = 0;
+        table
+    };
+    let lookup_table_address = Pubkey::new_unique();
+    add_lookup_table_account(&mut context, lookup_table_address, initialized_table).await;
+
+    let ix = freeze_lookup_table(lookup_table_address, authority.pubkey());
+
+    assert_ix_error(
+        &mut context,
+        ix,
+        Some(&authority),
+        InstructionError::InvalidArgument,
+    )
+    .await;
+}
+
+#[tokio::test]
 async fn test_freeze_lookup_table_with_wrong_authority() {
     let mut context = setup_test_context().await;
 

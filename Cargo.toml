@@ -85,8 +85,3 @@ members = [
 exclude = [
     "programs/bpf",
 ]
-
-# TODO: Remove once the "simd-accel" feature from the reed-solomon-erasure
-# dependency is supported on Apple M1. v2 of the feature resolver is needed to
-# specify arch-specific features.
-resolver = "2"

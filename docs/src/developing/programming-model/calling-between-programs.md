@@ -54,8 +54,10 @@ mod acme {
 
 `invoke()` is built into Solana's runtime and is responsible for routing the
 given instruction to the `token` program via the instruction's `program_id`
-field. The caller has to pass all the accounts required by the instruction
-being invoked, except for the executable account (with the key `program_id`).
+field.
+
+Note that `invoke` requires the caller to pass all the accounts required by the
+instruction being invoked, except for the executable account (the `program_id`).
 
 Before invoking `pay()`, the runtime must ensure that `acme` didn't modify any
 accounts owned by `token`. It does this by applying the runtime's policy to the

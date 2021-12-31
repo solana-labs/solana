@@ -1204,6 +1204,12 @@ pub fn main() {
                 .help("PubSub worker threads"),
         )
         .arg(
+            Arg::with_name("rpc_pubsub_enable_block_subscription")
+                .long("rpc-pubsub-enable-block-subscription")
+                .takes_value(false)
+                .help("Enable the unstable RPC PubSub `blockSubscribe` subscription"),
+        )
+        .arg(
             Arg::with_name("rpc_pubsub_enable_vote_subscription")
                 .long("rpc-pubsub-enable-vote-subscription")
                 .takes_value(false)
@@ -1677,6 +1683,18 @@ pub fn main() {
             )
         )
         .subcommand(
+            SubCommand::with_name("contact-info")
+            .about("Display the validator's contact info")
+            .arg(
+                Arg::with_name("output")
+                    .long("output")
+                    .takes_value(true)
+                    .value_name("MODE")
+                    .possible_values(&["json", "json-compact"])
+                    .help("Output display mode")
+            )
+        )
+        .subcommand(
             SubCommand::with_name("init")
             .about("Initialize the ledger directory then exit")
         )
@@ -1802,6 +1820,26 @@ pub fn main() {
                 }
                 _ => unreachable!(),
             }
+        }
+        ("contact-info", Some(subcommand_matches)) => {
+            let output_mode = subcommand_matches.value_of("output");
+            let admin_client = admin_rpc_service::connect(&ledger_path);
+            let contact_info = admin_rpc_service::runtime()
+                .block_on(async move { admin_client.await?.contact_info().await })
+                .unwrap_or_else(|err| {
+                    eprintln!("Contact info query failed: {}", err);
+                    exit(1);
+                });
+            if let Some(mode) = output_mode {
+                match mode {
+                    "json" => println!("{}", serde_json::to_string_pretty(&contact_info).unwrap()),
+                    "json-compact" => print!("{}", serde_json::to_string(&contact_info).unwrap()),
+                    _ => unreachable!(),
+                }
+            } else {
+                print!("{}", contact_info);
+            }
+            return;
         }
         ("init", _) => Operation::Initialize,
         ("exit", Some(subcommand_matches)) => {
@@ -2217,6 +2255,7 @@ pub fn main() {
             )
         }),
         pubsub_config: PubSubConfig {
+            enable_block_subscription: matches.is_present("rpc_pubsub_enable_block_subscription"),
             enable_vote_subscription: matches.is_present("rpc_pubsub_enable_vote_subscription"),
             max_active_subscriptions: value_t_or_exit!(
                 matches,

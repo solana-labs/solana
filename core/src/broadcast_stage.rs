@@ -497,6 +497,7 @@ pub mod test {
             &keypair,
             &data_shreds[0..],
             true, // is_last_in_slot
+            0,    // next_code_index
             &mut ProcessShredsStats::default(),
         )
         .unwrap();

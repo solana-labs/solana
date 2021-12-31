@@ -85,6 +85,8 @@ gives a convenient interface for the RPC methods.
 
 Unstable methods may see breaking changes in patch releases and may not be supported in perpetuity.
 
+- [blockSubscribe](jsonrpc-api.md#blocksubscribe---unstable-disabled-by-default)
+- [blockUnsubscribe](jsonrpc-api.md#blockunsubscribe)
 - [slotsUpdatesSubscribe](jsonrpc-api.md#slotsupdatessubscribe---unstable)
 - [slotsUpdatesUnsubscribe](jsonrpc-api.md#slotsupdatesunsubscribe)
 - [voteSubscribe](jsonrpc-api.md#votesubscribe---unstable-disabled-by-default)
@@ -387,7 +389,7 @@ The result field will be an object with the following fields:
   - `transactions: <array>` - present if "full" transaction details are requested; an array of JSON objects containing:
     - `transaction: <object|[string,encoding]>` - [Transaction](#transaction-structure) object, either in JSON format or encoded binary data, depending on encoding parameter
     - `meta: <object>` - transaction status metadata object, containing `null` or:
-      - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
+      - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
       - `fee: <u64>` - fee this transaction was charged, as u64 integer
       - `preBalances: <array>` - array of u64 account balances from before the transaction was processed
       - `postBalances: <array>` - array of u64 account balances after the transaction was processed
@@ -587,6 +589,7 @@ The JSON structure of token balances is defined as a list of objects in the foll
 
 - `accountIndex: <number>` - Index of the account in which the token balance is provided for.
 - `mint: <string>` - Pubkey of the token's mint.
+- `owner: <string>` - Pubkey of token balance's owner.
 - `uiTokenAmount: <object>` -
   - `amount: <string>` - Raw amount of tokens as a string, ignoring decimals.
   - `decimals: <number>` - Number of decimals configured for token's mint.
@@ -1990,7 +1993,7 @@ from newest to oldest transaction:
 * `<object>`
   * `signature: <string>` - transaction signature as base-58 encoded string
   * `slot: <u64>` - The slot that contains the block with the transaction
-  * `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
+  * `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
   * `memo: <string |null>` - Memo associated with the transaction, null if no memo is present
   * `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch) of when transaction was processed. null if not available.
 
@@ -2054,7 +2057,7 @@ An array of:
 - `<object>`
   - `slot: <u64>` - The slot the transaction was processed
   - `confirmations: <usize | null>` - Number of blocks since signature confirmation, null if rooted, as well as finalized by a supermajority of the cluster
-  - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
+  - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
   - `confirmationStatus: <string | null>` - The transaction's cluster confirmation status; either `processed`, `confirmed`, or `finalized`. See [Commitment](jsonrpc-api.md#configuring-state-commitment) for more on optimistic confirmation.
   - DEPRECATED: `status: <object>` - Transaction status
     - `"Ok": <null>` - Transaction was successful
@@ -3251,7 +3254,7 @@ Simulate sending a transaction
 An RpcResponse containing a TransactionStatus object
 The result will be an RpcResponse JSON object with `value` set to a JSON object with the following fields:
 
-- `err: <object | string | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
+- `err: <object | string | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
 - `logs: <array | null>` - Array of log messages the transaction instructions output during execution, null if simulation failed before the transaction was able to execute (for example due to an invalid blockhash or signature verification failure)
 - `accounts: <array> | null>` - array of accounts with the same length as the `accounts.addresses` array in the request
   - `<null>` - if the account doesn't exist or if `err` is not null
@@ -3443,6 +3446,339 @@ Result:
 {"jsonrpc": "2.0","result": true,"id": 1}
 ```
 
+### blockSubscribe - Unstable, disabled by default
+
+**This subscription is unstable and only available if the validator was started
+with the `--rpc-pubsub-enable-block-subscription` flag. The format of this
+subscription may change in the future**
+
+Subscribe to receive notification anytime a new block is Confirmed or Finalized.
+
+#### Parameters:
+
+- `filter: <string>|<object>` - filter criteria for the logs to receive results by account type; currently supported:
+  - "all" - include all transactions in block
+  - `{ "mentionsAccountOrProgram": <string> }` - return only transactions that mention the provided public key (as base-58 encoded string). If no mentions in a given block, then no notification will be sent.
+- `<object>` - (optional) Configuration object containing the following optional fields:
+  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64", "base64+zstd" or "jsonParsed".
+    "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to base64 encoding, detectable when the `data` field is type `<string>`. Default is "base64".
+  - (optional) `transactionDetails: <string>` - level of transaction detail to return, either "full", "signatures", or "none". If parameter not provided, the default detail level is "full".
+  - (optional) `showRewards: bool` - whether to populate the `rewards` array. If parameter not provided, the default includes rewards.
+
+#### Results:
+
+- `integer` - subscription id \(needed to unsubscribe\)
+
+#### Example:
+
+Request:
+```json
+{"jsonrpc": "2.0", "id": "1", "method": "blockSubscribe", "params": ["all"]}
+```
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "1",
+  "method": "blockSubscribe",
+  "params": [
+    {"mentionsAccountOrProgram": "LieKvPRE8XeX3Y2xVNHjKlpAScD12lYySBVQ4HqoJ5op"},
+    {
+      "commitment": "confirmed",
+      "encoding": "base64",
+      "showRewards": true,
+      "transactionDetails": "full"
+    }
+  ]
+}
+```
+
+Result:
+```json
+{"jsonrpc": "2.0","result": 0,"id": 1}
+```
+
+#### Notification Format:
+
+The notification will be an object with the following fields:
+
+-`slot: <u64>` - The corresponding slot.
+- `err: <object | null>` - Error if something went wrong publishing the notification otherwise null.
+- `block: <object | null>` - A block object as seen in the [getBlock](jsonrpc-api.md#getblock) RPC HTTP method.
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "blockNotification",
+  "params": {
+    "result": {
+      "context": {
+        "slot": 112301554
+      },
+      "value": {
+        "slot": 112301554,
+        "block": {
+          "previousBlockhash": "GJp125YAN4ufCSUvZJVdCyWQJ7RPWMmwxoyUQySydZA",
+          "blockhash": "6ojMHjctdqfB55JDpEpqfHnP96fiaHEcvzEQ2NNcxzHP",
+          "parentSlot": 112301553,
+          "transactions": [
+            {
+              "transaction": [
+                "OpltwoUvWxYi1P2U8vbIdE/aPntjYo5Aa0VQ2JJyeJE2g9Vvxk8dDGgFMruYfDu8/IfUWb0REppTe7IpAuuLRgIBAAkWnj4KHRpEWWW7gvO1c0BHy06wZi2g7/DLqpEtkRsThAXIdBbhXCLvltw50ZnjDx2hzw74NVn49kmpYj2VZHQJoeJoYJqaKcvuxCi/2i4yywedcVNDWkM84Iuw+cEn9/ROCrXY4qBFI9dveEERQ1c4kdU46xjxj9Vi+QXkb2Kx45QFVkG4Y7HHsoS6WNUiw2m4ffnMNnOVdF9tJht7oeuEfDMuUEaO7l9JeUxppCvrGk3CP45saO51gkwVYEgKzhpKjCx3rgsYxNR81fY4hnUQXSbbc2Y55FkwgRBpVvQK7/+clR4Gjhd3L4y+OtPl7QF93Akg1LaU9wRMs5nvfDFlggqI9PqJl+IvVWrNRdBbPS8LIIhcwbRTkSbqlJQWxYg3Bo2CTVbw7rt1ZubuHWWp0mD/UJpLXGm2JprWTePNULzHu67sfqaWF99LwmwjTyYEkqkRt1T0Je5VzHgJs0N5jY4iIU9K3lMqvrKOIn/2zEMZ+ol2gdgjshx+sphIyhw65F3J/Dbzk04LLkK+CULmN571Y+hFlXF2ke0BIuUG6AUF+4214Cu7FXnqo3rkxEHDZAk0lRrAJ8X/Z+iwuwI5cgbd9uHXZaGT2cvhRs7reawctIXtX1s3kTqM9YV+/wCpDLAp8axcEkaQkLDKRoWxqp8XLNZSKial7Rk+ELAVVKWoWLRXRZ+OIggu0OzMExvVLE5VHqy71FNHq4gGitkiKYNFWSLIE4qGfdFLZXy/6hwS+wq9ewjikCpd//C9BcCL7Wl0iQdUslxNVCBZHnCoPYih9JXvGefOb9WWnjGy14sG9j70+RSVx6BlkFELWwFvIlWR/tHn3EhHAuL0inS2pwX7ZQTAU6gDVaoqbR2EiJ47cKoPycBNvHLoKxoY9AZaBjPl6q8SKQJSFyFd9n44opAgI6zMTjYF/8Ok4VpXEESp3QaoUyTI9sOJ6oFP6f4dwnvQelgXS+AEfAsHsKXxGAIUDQENAgMEBQAGBwgIDg8IBJCER3QXl1AVDBADCQoOAAQLERITDAjb7ugh3gOuTy==",
+                "base64"
+              ],
+              "meta": {
+                "err": null,
+                "status": {
+                  "Ok": null
+                },
+                "fee": 5000,
+                "preBalances": [
+                  1758510880,
+                  2067120,
+                  1566000,
+                  1461600,
+                  2039280,
+                  2039280,
+                  1900080,
+                  1865280,
+                  0,
+                  3680844220,
+                  2039280
+                ],
+                "postBalances": [
+                  1758505880,
+                  2067120,
+                  1566000,
+                  1461600,
+                  2039280,
+                  2039280,
+                  1900080,
+                  1865280,
+                  0,
+                  3680844220,
+                  2039280
+                ],
+                "innerInstructions": [
+                  {
+                    "index": 0,
+                    "instructions": [
+                      {
+                        "programIdIndex": 13,
+                        "accounts": [
+                          1,
+                          15,
+                          3,
+                          4,
+                          2,
+                          14
+                        ],
+                        "data": "21TeLgZXNbtHXVBzCaiRmH"
+                      },
+                      {
+                        "programIdIndex": 14,
+                        "accounts": [
+                          3,
+                          4,
+                          1
+                        ],
+                        "data": "6qfC8ic7Aq99"
+                      },
+                      {
+                        "programIdIndex": 13,
+                        "accounts": [
+                          1,
+                          15,
+                          3,
+                          5,
+                          2,
+                          14
+                        ],
+                        "data": "21TeLgZXNbsn4QEpaSEr3q"
+                      },
+                      {
+                        "programIdIndex": 14,
+                        "accounts": [
+                          3,
+                          5,
+                          1
+                        ],
+                        "data": "6LC7BYyxhFRh"
+                      }
+                    ]
+                  },
+                  {
+                    "index": 1,
+                    "instructions": [
+                      {
+                        "programIdIndex": 14,
+                        "accounts": [
+                          4,
+                          3,
+                          0
+                        ],
+                        "data": "7aUiLHFjSVdZ"
+                      },
+                      {
+                        "programIdIndex": 19,
+                        "accounts": [
+                          17,
+                          18,
+                          16,
+                          9,
+                          11,
+                          12,
+                          14
+                        ],
+                        "data": "8kvZyjATKQWYxaKR1qD53V"
+                      },
+                      {
+                        "programIdIndex": 14,
+                        "accounts": [
+                          9,
+                          11,
+                          18
+                        ],
+                        "data": "6qfC8ic7Aq99"
+                      }
+                    ]
+                  }
+                ],
+                "logMessages": [
+                  "Program QMNeHCGYnLVDn1icRAfQZpjPLBNkfGbSKRB83G5d8KB invoke [1]",
+                  "Program QMWoBmAyJLAsA1Lh9ugMTw2gciTihncciphzdNzdZYV invoke [2]"
+                ],
+                "preTokenBalances": [
+                  {
+                    "accountIndex": 4,
+                    "mint": "iouQcQBAiEXe6cKLS85zmZxUqaCqBdeHFpqKoSz615u",
+                    "uiTokenAmount": {
+                      "uiAmount": null,
+                      "decimals": 6,
+                      "amount": "0",
+                      "uiAmountString": "0"
+                    },
+                    "owner": "LieKvPRE8XeX3Y2xVNHjKlpAScD12lYySBVQ4HqoJ5op"
+                  },
+                  {
+                    "accountIndex": 5,
+                    "mint": "iouQcQBAiEXe6cKLS85zmZxUqaCqBdeHFpqKoSz615u",
+                    "uiTokenAmount": {
+                      "uiAmount": 11513.0679,
+                      "decimals": 6,
+                      "amount": "11513067900",
+                      "uiAmountString": "11513.0679"
+                    },
+                    "owner": "rXhAofQCT7NN9TUqigyEAUzV1uLL4boeD8CRkNBSkYk"
+                  },
+                  {
+                    "accountIndex": 10,
+                    "mint": "Saber2gLauYim4Mvftnrasomsv6NvAuncvMEZwcLpD1",
+                    "uiTokenAmount": {
+                      "uiAmount": null,
+                      "decimals": 6,
+                      "amount": "0",
+                      "uiAmountString": "0"
+                    },
+                    "owner": "CL9wkGFT3SZRRNa9dgaovuRV7jrVVigBUZ6DjcgySsCU"
+                  },
+                  {
+                    "accountIndex": 11,
+                    "mint": "Saber2gLauYim4Mvftnrasomsv6NvAuncvMEZwcLpD1",
+                    "uiTokenAmount": {
+                      "uiAmount": 15138.514093,
+                      "decimals": 6,
+                      "amount": "15138514093",
+                      "uiAmountString": "15138.514093"
+                    },
+                    "owner": "LieKvPRE8XeX3Y2xVNHjKlpAScD12lYySBVQ4HqoJ5op"
+                  }
+                ],
+                "postTokenBalances": [
+                  {
+                    "accountIndex": 4,
+                    "mint": "iouQcQBAiEXe6cKLS85zmZxUqaCqBdeHFpqKoSz615u",
+                    "uiTokenAmount": {
+                      "uiAmount": null,
+                      "decimals": 6,
+                      "amount": "0",
+                      "uiAmountString": "0"
+                    },
+                    "owner": "LieKvPRE8XeX3Y2xVNHjKlpAScD12lYySBVQ4HqoJ5op"
+                  },
+                  {
+                    "accountIndex": 5,
+                    "mint": "iouQcQBAiEXe6cKLS85zmZxUqaCqBdeHFpqKoSz615u",
+                    "uiTokenAmount": {
+                      "uiAmount": 11513.103028,
+                      "decimals": 6,
+                      "amount": "11513103028",
+                      "uiAmountString": "11513.103028"
+                    },
+                    "owner": "rXhAofQCT7NN9TUqigyEAUzV1uLL4boeD8CRkNBSkYk"
+                  },
+                  {
+                    "accountIndex": 10,
+                    "mint": "Saber2gLauYim4Mvftnrasomsv6NvAuncvMEZwcLpD1",
+                    "uiTokenAmount": {
+                      "uiAmount": null,
+                      "decimals": 6,
+                      "amount": "0",
+                      "uiAmountString": "0"
+                    },
+                    "owner": "CL9wkGFT3SZRRNa9dgaovuRV7jrVVigBUZ6DjcgySsCU"
+                  },
+                  {
+                    "accountIndex": 11,
+                    "mint": "Saber2gLauYim4Mvftnrasomsv6NvAuncvMEZwcLpD1",
+                    "uiTokenAmount": {
+                      "uiAmount": 15489.767829,
+                      "decimals": 6,
+                      "amount": "15489767829",
+                      "uiAmountString": "15489.767829"
+                    },
+                    "owner": "BeiHVPRE8XeX3Y2xVNrSsTpAScH94nYySBVQ4HqgN9at"
+                  }
+                ],
+                "rewards": []
+              }
+            }
+          ],
+          "blockTime": 1639926816,
+          "blockHeight": 101210751
+        },
+        "err": null
+      }
+    },
+    "subscription": 14
+  }
+}
+```
+
+### blockUnsubscribe
+
+Unsubscribe from block notifications
+
+#### Parameters:
+
+- `<integer>` - subscription id to cancel
+
+#### Results:
+
+- `<bool>` - unsubscribe success message
+
+#### Example:
+
+Request:
+```json
+{"jsonrpc":"2.0", "id":1, "method":"blockUnsubscribe", "params":[0]}
+```
+
+Response:
+```json
+{"jsonrpc": "2.0","result": true,"id": 1}
+```
+
 ### logsSubscribe
 
 Subscribe to transaction logging
@@ -3495,7 +3831,7 @@ Result:
 The notification will be an RpcResponse JSON object with value equal to:
 
 - `signature: <string>` - The transaction signature base58 encoded.
-- `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
+- `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
 - `logs: <array | null>` - Array of log messages the transaction instructions output during execution, null if simulation failed before the transaction was able to execute (for example due to an invalid blockhash or signature verification failure)
 
 Example:
@@ -3753,7 +4089,7 @@ Result:
 #### Notification Format:
 
 The notification will be an RpcResponse JSON object with value containing an object with:
-- `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
+- `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
 
 Example:
 ```json
@@ -4132,7 +4468,7 @@ The result field will be an object with the following fields:
   - `transactions: <array>` - present if "full" transaction details are requested; an array of JSON objects containing:
     - `transaction: <object|[string,encoding]>` - [Transaction](#transaction-structure) object, either in JSON format or encoded binary data, depending on encoding parameter
     - `meta: <object>` - transaction status metadata object, containing `null` or:
-      - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
+      - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
       - `fee: <u64>` - fee this transaction was charged, as u64 integer
       - `preBalances: <array>` - array of u64 account balances from before the transaction was processed
       - `postBalances: <array>` - array of u64 account balances after the transaction was processed
@@ -4388,7 +4724,7 @@ from newest to oldest transaction:
 * `<object>`
   * `signature: <string>` - transaction signature as base-58 encoded string
   * `slot: <u64>` - The slot that contains the block with the transaction
-  * `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
+  * `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
   * `memo: <string |null>` - Memo associated with the transaction, null if no memo is present
   * `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch) of when transaction was processed. null if not available.
 

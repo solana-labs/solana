@@ -40,9 +40,11 @@ base64 = "0.13"
 curve25519-dalek = "3.0.0"
 libsecp256k1 = "0.6.0"
 rand = "0.7.0"
-solana-logger = { path = "../../logger", version = "=1.10.0" }
 itertools = "0.10.1"
 wasm-bindgen = "0.2"
+
+[target.'cfg(not(target_arch = "bpf"))'.dev-dependencies]
+solana-logger = { path = "../../logger", version = "=1.10.0" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.7"

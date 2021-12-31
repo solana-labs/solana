@@ -37,6 +37,7 @@ use {
         system_program,
         sysvar::{self, instructions::construct_instructions_data},
         transaction::{Result, SanitizedTransaction, TransactionError},
+        transaction_context::TransactionAccount,
     },
     std::{
         cmp::Reverse,
@@ -105,12 +106,11 @@ pub struct Accounts {
 }
 
 // for the load instructions
-pub type TransactionAccounts = Vec<(Pubkey, AccountSharedData)>;
 pub type TransactionRent = u64;
 pub type TransactionProgramIndices = Vec<Vec<usize>>;
 #[derive(PartialEq, Debug, Clone)]
 pub struct LoadedTransaction {
-    pub accounts: TransactionAccounts,
+    pub accounts: Vec<TransactionAccount>,
     pub program_indices: TransactionProgramIndices,
     pub rent: TransactionRent,
     pub rent_debits: RentDebits,
@@ -385,7 +385,7 @@ impl Accounts {
     fn load_executable_accounts(
         &self,
         ancestors: &Ancestors,
-        accounts: &mut Vec<(Pubkey, AccountSharedData)>,
+        accounts: &mut Vec<TransactionAccount>,
         mut program_account_index: usize,
         error_counters: &mut ErrorCounters,
     ) -> Result<Vec<usize>> {
@@ -606,7 +606,7 @@ impl Accounts {
         &self,
         slot: Slot,
         program_id: Option<&Pubkey>,
-    ) -> Vec<(Pubkey, AccountSharedData)> {
+    ) -> Vec<TransactionAccount> {
         self.scan_slot(slot, |stored_account| {
             let hit = match program_id {
                 None => true,
@@ -721,7 +721,7 @@ impl Accounts {
     }
 
     fn load_while_filtering<F: Fn(&AccountSharedData) -> bool>(
-        collector: &mut Vec<(Pubkey, AccountSharedData)>,
+        collector: &mut Vec<TransactionAccount>,
         some_account_tuple: Option<(&Pubkey, AccountSharedData, Slot)>,
         filter: F,
     ) {
@@ -739,11 +739,11 @@ impl Accounts {
         bank_id: BankId,
         program_id: &Pubkey,
         config: &ScanConfig,
-    ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
+    ) -> ScanResult<Vec<TransactionAccount>> {
         self.accounts_db.scan_accounts(
             ancestors,
             bank_id,
-            |collector: &mut Vec<(Pubkey, AccountSharedData)>, some_account_tuple| {
+            |collector: &mut Vec<TransactionAccount>, some_account_tuple| {
                 Self::load_while_filtering(collector, some_account_tuple, |account| {
                     account.owner() == program_id
                 })
@@ -759,11 +759,11 @@ impl Accounts {
         program_id: &Pubkey,
         filter: F,
         config: &ScanConfig,
-    ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
+    ) -> ScanResult<Vec<TransactionAccount>> {
         self.accounts_db.scan_accounts(
             ancestors,
             bank_id,
-            |collector: &mut Vec<(Pubkey, AccountSharedData)>, some_account_tuple| {
+            |collector: &mut Vec<TransactionAccount>, some_account_tuple| {
                 Self::load_while_filtering(collector, some_account_tuple, |account| {
                     account.owner() == program_id && filter(account)
                 })
@@ -796,9 +796,9 @@ impl Accounts {
     }
 
     fn maybe_abort_scan(
-        result: ScanResult<Vec<(Pubkey, AccountSharedData)>>,
+        result: ScanResult<Vec<TransactionAccount>>,
         config: &ScanConfig,
-    ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
+    ) -> ScanResult<Vec<TransactionAccount>> {
         if config.is_aborted() {
             ScanResult::Err(ScanError::Aborted(
                 "The accumulated scan results exceeded the limit".to_string(),
@@ -816,7 +816,7 @@ impl Accounts {
         filter: F,
         config: &ScanConfig,
         byte_limit_for_scan: Option<usize>,
-    ) -> ScanResult<Vec<(Pubkey, AccountSharedData)>> {
+    ) -> ScanResult<Vec<TransactionAccount>> {
         let sum = AtomicUsize::default();
         let config = config.recreate_with_abort();
         let result = self
@@ -825,7 +825,7 @@ impl Accounts {
                 ancestors,
                 bank_id,
                 *index_key,
-                |collector: &mut Vec<(Pubkey, AccountSharedData)>, some_account_tuple| {
+                |collector: &mut Vec<TransactionAccount>, some_account_tuple| {
                     Self::load_while_filtering(collector, some_account_tuple, |account| {
                         let use_account = filter(account);
                         if use_account
@@ -870,26 +870,30 @@ impl Accounts {
         )
     }
 
-    pub fn hold_range_in_memory<R>(&self, range: &R, start_holding: bool)
-    where
-        R: RangeBounds<Pubkey> + std::fmt::Debug,
+    pub fn hold_range_in_memory<R>(
+        &self,
+        range: &R,
+        start_holding: bool,
+        thread_pool: &rayon::ThreadPool,
+    ) where
+        R: RangeBounds<Pubkey> + std::fmt::Debug + Sync,
     {
         self.accounts_db
             .accounts_index
-            .hold_range_in_memory(range, start_holding)
+            .hold_range_in_memory(range, start_holding, thread_pool)
     }
 
     pub fn load_to_collect_rent_eagerly<R: RangeBounds<Pubkey> + std::fmt::Debug>(
         &self,
         ancestors: &Ancestors,
         range: R,
-    ) -> Vec<(Pubkey, AccountSharedData)> {
+    ) -> Vec<TransactionAccount> {
         self.accounts_db.range_scan_accounts(
             "load_to_collect_rent_eagerly_scan_elapsed",
             ancestors,
             range,
             &ScanConfig::new(true),
-            |collector: &mut Vec<(Pubkey, AccountSharedData)>, option| {
+            |collector: &mut Vec<TransactionAccount>, option| {
                 Self::load_while_filtering(collector, option, |_| true)
             },
         )
@@ -1273,7 +1277,7 @@ mod tests {
 
     fn load_accounts_with_fee_and_rent(
         tx: Transaction,
-        ka: &[(Pubkey, AccountSharedData)],
+        ka: &[TransactionAccount],
         lamports_per_signature: u64,
         rent_collector: &RentCollector,
         error_counters: &mut ErrorCounters,
@@ -1306,7 +1310,7 @@ mod tests {
 
     fn load_accounts_with_fee(
         tx: Transaction,
-        ka: &[(Pubkey, AccountSharedData)],
+        ka: &[TransactionAccount],
         lamports_per_signature: u64,
         error_counters: &mut ErrorCounters,
     ) -> Vec<TransactionLoadResult> {
@@ -1321,7 +1325,7 @@ mod tests {
 
     fn load_accounts(
         tx: Transaction,
-        ka: &[(Pubkey, AccountSharedData)],
+        ka: &[TransactionAccount],
         error_counters: &mut ErrorCounters,
     ) -> Vec<TransactionLoadResult> {
         load_accounts_with_fee(tx, ka, 0, error_counters)
@@ -1331,12 +1335,12 @@ mod tests {
     fn test_hold_range_in_memory() {
         let accts = Accounts::default_for_tests();
         let range = Pubkey::new(&[0; 32])..=Pubkey::new(&[0xff; 32]);
-        accts.hold_range_in_memory(&range, true);
-        accts.hold_range_in_memory(&range, false);
-        accts.hold_range_in_memory(&range, true);
-        accts.hold_range_in_memory(&range, true);
-        accts.hold_range_in_memory(&range, false);
-        accts.hold_range_in_memory(&range, false);
+        accts.hold_range_in_memory(&range, true, &test_thread_pool());
+        accts.hold_range_in_memory(&range, false, &test_thread_pool());
+        accts.hold_range_in_memory(&range, true, &test_thread_pool());
+        accts.hold_range_in_memory(&range, true, &test_thread_pool());
+        accts.hold_range_in_memory(&range, false, &test_thread_pool());
+        accts.hold_range_in_memory(&range, false, &test_thread_pool());
     }
 
     #[test]
@@ -1353,7 +1357,7 @@ mod tests {
         let range2_inclusive = range2.start..=range2.end;
         assert_eq!(0, idx.bin_calculator.bin_from_pubkey(&range2.start));
         assert_eq!(0, idx.bin_calculator.bin_from_pubkey(&range2.end));
-        accts.hold_range_in_memory(&range, true);
+        accts.hold_range_in_memory(&range, true, &test_thread_pool());
         idx.account_maps.iter().enumerate().for_each(|(_bin, map)| {
             let map = map.read().unwrap();
             assert_eq!(
@@ -1361,7 +1365,7 @@ mod tests {
                 vec![range.clone()]
             );
         });
-        accts.hold_range_in_memory(&range2, true);
+        accts.hold_range_in_memory(&range2, true, &test_thread_pool());
         idx.account_maps.iter().enumerate().for_each(|(bin, map)| {
             let map = map.read().unwrap();
             let expected = if bin == 0 {
@@ -1376,13 +1380,17 @@ mod tests {
                 bin
             );
         });
-        accts.hold_range_in_memory(&range, false);
-        accts.hold_range_in_memory(&range2, false);
+        accts.hold_range_in_memory(&range, false, &test_thread_pool());
+        accts.hold_range_in_memory(&range2, false, &test_thread_pool());
+    }
+
+    fn test_thread_pool() -> rayon::ThreadPool {
+        crate::accounts_db::make_min_priority_thread_pool()
     }
 
     #[test]
     fn test_load_accounts_no_account_0_exists() {
-        let accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
+        let accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
         let keypair = Keypair::new();
@@ -1408,7 +1416,7 @@ mod tests {
 
     #[test]
     fn test_load_accounts_unknown_program_id() {
-        let mut accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
+        let mut accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
         let keypair = Keypair::new();
@@ -1442,7 +1450,7 @@ mod tests {
 
     #[test]
     fn test_load_accounts_insufficient_funds() {
-        let mut accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
+        let mut accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
         let keypair = Keypair::new();
@@ -1478,7 +1486,7 @@ mod tests {
 
     #[test]
     fn test_load_accounts_invalid_account_for_fee() {
-        let mut accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
+        let mut accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
         let keypair = Keypair::new();
@@ -1580,7 +1588,7 @@ mod tests {
 
     #[test]
     fn test_load_accounts_no_loaders() {
-        let mut accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
+        let mut accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
         let keypair = Keypair::new();
@@ -1621,7 +1629,7 @@ mod tests {
 
     #[test]
     fn test_load_accounts_max_call_depth() {
-        let mut accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
+        let mut accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
         let keypair = Keypair::new();
@@ -1687,7 +1695,7 @@ mod tests {
 
     #[test]
     fn test_load_accounts_bad_owner() {
-        let mut accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
+        let mut accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
         let keypair = Keypair::new();
@@ -1722,7 +1730,7 @@ mod tests {
 
     #[test]
     fn test_load_accounts_not_executable() {
-        let mut accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
+        let mut accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
         let keypair = Keypair::new();
@@ -1756,7 +1764,7 @@ mod tests {
 
     #[test]
     fn test_load_accounts_multiple_loaders() {
-        let mut accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
+        let mut accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
         let keypair = Keypair::new();
@@ -1852,7 +1860,7 @@ mod tests {
 
     #[test]
     fn test_load_accounts_executable_with_write_lock() {
-        let mut accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
+        let mut accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
         let keypair = Keypair::new();
@@ -1908,7 +1916,7 @@ mod tests {
 
     #[test]
     fn test_load_accounts_upgradeable_with_write_lock() {
-        let mut accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
+        let mut accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
         let keypair = Keypair::new();
@@ -2005,7 +2013,7 @@ mod tests {
 
     #[test]
     fn test_load_accounts_programdata_with_write_lock() {
-        let mut accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
+        let mut accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
         let keypair = Keypair::new();

@@ -192,7 +192,7 @@ impl ShredFetchStage {
             recycler.clone(),
             bank_forks.clone(),
             "shred_fetch_tvu_forwards",
-            |p| p.meta.forward = true,
+            |p| p.meta.forwarded = true,
         );
 
         let (repair_receiver, repair_handler) = Self::packet_modifier(
@@ -270,6 +270,7 @@ mod tests {
         let coding = solana_ledger::shred::Shredder::generate_coding_shreds(
             &[shred],
             false, // is_last_in_slot
+            3,     // next_code_index
         );
         coding[0].copy_to_packet(&mut packet);
         ShredFetchStage::process_packet(

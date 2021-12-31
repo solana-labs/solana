@@ -21,6 +21,7 @@ pub(super) struct ReceiveResults {
 #[derive(Clone)]
 pub struct UnfinishedSlotInfo {
     pub next_shred_index: u32,
+    pub(crate) next_code_index: u32,
     pub slot: Slot,
     pub parent: Slot,
     // Data shreds buffered to make a batch of size

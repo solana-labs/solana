@@ -97,11 +97,8 @@ impl AggregateCommitmentService {
                 return Ok(());
             }
 
-            let mut aggregation_data = receiver.recv_timeout(Duration::from_secs(1))?;
-
-            while let Ok(new_data) = receiver.try_recv() {
-                aggregation_data = new_data;
-            }
+            let aggregation_data = receiver.recv_timeout(Duration::from_secs(1))?;
+            let aggregation_data = receiver.try_iter().last().unwrap_or(aggregation_data);
 
             let ancestors = aggregation_data.bank.status_cache_ancestors();
             if ancestors.is_empty() {
@@ -506,11 +503,7 @@ mod tests {
 
         let validator_vote_keypairs = ValidatorVoteKeypairs::new_rand();
         let validator_keypairs = vec![&validator_vote_keypairs];
-        let GenesisConfigInfo {
-            genesis_config,
-            mint_keypair: _,
-            voting_keypair: _,
-        } = create_genesis_config_with_vote_accounts(
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config_with_vote_accounts(
             1_000_000_000,
             &validator_keypairs,
             vec![100; 1],

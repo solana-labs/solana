@@ -116,21 +116,22 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
     }
 
-    pub fn items<R>(&self, range: &Option<&R>) -> Vec<(K, AccountMapEntry<T>)>
+    pub fn items<R>(&self, range: &R) -> Vec<(K, AccountMapEntry<T>)>
     where
         R: RangeBounds<Pubkey> + std::fmt::Debug,
     {
-        self.start_stop_flush(true);
-        self.put_range_in_cache(range); // check range here to see if our items are already held in the cache
-        Self::update_stat(&self.stats().items, 1);
+        let m = Measure::start("items");
+        self.hold_range_in_memory(range, true);
         let map = self.map().read().unwrap();
         let mut result = Vec::with_capacity(map.len());
         map.iter().for_each(|(k, v)| {
-            if range.map(|range| range.contains(k)).unwrap_or(true) {
+            if range.contains(k) {
                 result.push((*k, Arc::clone(v)));
             }
         });
-        self.start_stop_flush(false);
+        self.hold_range_in_memory(range, false);
+        Self::update_stat(&self.stats().items, 1);
+        Self::update_time_stat(&self.stats().items_us, m);
         result
     }
 
@@ -632,10 +633,45 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
     }
 
-    pub fn just_set_hold_range_in_memory<R>(&self, range: &R, start_holding: bool)
+    /// Look at the currently held ranges. If 'range' is already included in what is
+    ///  being held, then add 'range' to the currently held list AND return true
+    /// If 'range' is NOT already included in what is being held, then return false
+    ///  withOUT adding 'range' to the list of what is currently held
+    fn add_hold_range_in_memory_if_already_held<R>(&self, range: &R) -> bool
     where
         R: RangeBounds<Pubkey>,
     {
+        let start_holding = true;
+        let only_add_if_already_held = true;
+        self.just_set_hold_range_in_memory_internal(range, start_holding, only_add_if_already_held)
+    }
+
+    fn just_set_hold_range_in_memory<R>(&self, range: &R, start_holding: bool)
+    where
+        R: RangeBounds<Pubkey>,
+    {
+        let only_add_if_already_held = false;
+        let _ = self.just_set_hold_range_in_memory_internal(
+            range,
+            start_holding,
+            only_add_if_already_held,
+        );
+    }
+
+    /// if 'start_holding', then caller wants to add 'range' to the list of ranges being held
+    /// if !'start_holding', then caller wants to remove 'range' to the list
+    /// if 'only_add_if_already_held', caller intends to only add 'range' to the list if the range is already held
+    /// returns true iff start_holding=true and the range we're asked to hold was already being held
+    fn just_set_hold_range_in_memory_internal<R>(
+        &self,
+        range: &R,
+        start_holding: bool,
+        only_add_if_already_held: bool,
+    ) -> bool
+    where
+        R: RangeBounds<Pubkey>,
+    {
+        assert!(!(only_add_if_already_held && !start_holding));
         let start = match range.start_bound() {
             Bound::Included(bound) | Bound::Excluded(bound) => *bound,
             Bound::Unbounded => Pubkey::new(&[0; 32]),
@@ -650,8 +686,19 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         // inclusive is bigger than exclusive so we may hold 1 extra item worst case
         let inclusive_range = start..=end;
         let mut ranges = self.cache_ranges_held.write().unwrap();
+        let mut already_held = false;
         if start_holding {
-            ranges.push(inclusive_range);
+            if only_add_if_already_held {
+                for r in ranges.iter() {
+                    if r.contains(&start) && r.contains(&end) {
+                        already_held = true;
+                        break;
+                    }
+                }
+            }
+            if already_held || !only_add_if_already_held {
+                ranges.push(inclusive_range);
+            }
         } else {
             // find the matching range and delete it since we don't want to hold it anymore
             // search backwards, assuming LIFO ordering
@@ -659,15 +706,15 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 if let (Bound::Included(start_found), Bound::Included(end_found)) =
                     (r.start_bound(), r.end_bound())
                 {
-                    if start_found != &start || end_found != &end {
-                        continue;
+                    if start_found == &start && end_found == &end {
+                        // found a match. There may be dups, that's ok, we expect another call to remove the dup.
+                        ranges.remove(i);
+                        break;
                     }
                 }
-                // found a match. There may be dups, that's ok, we expect another call to remove the dup.
-                ranges.remove(i);
-                break;
             }
         }
+        already_held
     }
 
     fn start_stop_flush(&self, stop: bool) {
@@ -685,12 +732,14 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     {
         self.start_stop_flush(true);
 
-        if start_holding {
-            // put everything in the cache and it will be held there
-            self.put_range_in_cache(&Some(range));
+        if !start_holding || !self.add_hold_range_in_memory_if_already_held(range) {
+            if start_holding {
+                // put everything in the cache and it will be held there
+                self.put_range_in_cache(&Some(range));
+            }
+            // do this AFTER items have been put in cache - that way anyone who finds this range can know that the items are already in the cache
+            self.just_set_hold_range_in_memory(range, start_holding);
         }
-        // do this AFTER items have been put in cache - that way anyone who finds this range can know that the items are already in the cache
-        self.just_set_hold_range_in_memory(range, start_holding);
 
         self.start_stop_flush(false);
     }
@@ -757,6 +806,13 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         thread_rng().gen_range(0, N) == 0
     }
 
+    /// assumes 1 entry in the slot list. Ignores overhead of the HashMap and such
+    fn approx_size_of_one_entry() -> usize {
+        std::mem::size_of::<T>()
+            + std::mem::size_of::<Pubkey>()
+            + std::mem::size_of::<AccountMapEntry<T>>()
+    }
+
     /// return true if 'entry' should be removed from the in-mem index
     fn should_remove_from_mem(
         &self,
@@ -764,24 +820,30 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         entry: &AccountMapEntry<T>,
         startup: bool,
         update_stats: bool,
+        exceeds_budget: bool,
     ) -> bool {
         // this could be tunable dynamically based on memory pressure
         // we could look at more ages or we could throw out more items we are choosing to keep in the cache
         if startup || (current_age == entry.age()) {
-            // only read the slot list if we are planning to throw the item out
-            let slot_list = entry.slot_list.read().unwrap();
-            if slot_list.len() != 1 {
-                if update_stats {
-                    Self::update_stat(&self.stats().held_in_mem_slot_list_len, 1);
-                }
-                false // keep 0 and > 1 slot lists in mem. They will be cleaned or shrunk soon.
+            if exceeds_budget {
+                // if we are already holding too many items in-mem, then we need to be more aggressive at kicking things out
+                true
             } else {
-                // keep items with slot lists that contained cached items
-                let remove = !slot_list.iter().any(|(_, info)| info.is_cached());
-                if !remove && update_stats {
-                    Self::update_stat(&self.stats().held_in_mem_slot_list_cached, 1);
+                // only read the slot list if we are planning to throw the item out
+                let slot_list = entry.slot_list.read().unwrap();
+                if slot_list.len() != 1 {
+                    if update_stats {
+                        Self::update_stat(&self.stats().held_in_mem_slot_list_len, 1);
+                    }
+                    false // keep 0 and > 1 slot lists in mem. They will be cleaned or shrunk soon.
+                } else {
+                    // keep items with slot lists that contained cached items
+                    let remove = !slot_list.iter().any(|(_, info)| info.is_cached());
+                    if !remove && update_stats {
+                        Self::update_stat(&self.stats().held_in_mem_slot_list_cached, 1);
+                    }
+                    remove
                 }
-                remove
             }
         } else {
             false
@@ -799,6 +861,12 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             return;
         }
 
+        let in_mem_count = self.stats().count_in_mem.load(Ordering::Relaxed);
+        let limit = self.storage.mem_budget_mb;
+        let exceeds_budget = limit
+            .map(|limit| in_mem_count * Self::approx_size_of_one_entry() >= limit * 1024 * 1024)
+            .unwrap_or_default();
+
         // may have to loop if disk has to grow and we have to restart
         loop {
             let mut removes;
@@ -814,7 +882,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 removes = Vec::with_capacity(map.len());
                 let m = Measure::start("flush_scan_and_update"); // we don't care about lock time in this metric - bg threads can wait
                 for (k, v) in map.iter() {
-                    if self.should_remove_from_mem(current_age, v, startup, true) {
+                    if self.should_remove_from_mem(current_age, v, startup, true, exceeds_budget) {
                         removes.push(*k);
                     } else if Self::random_chance_of_eviction() {
                         removes_random.push(*k);
@@ -853,9 +921,19 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             let m = Measure::start("flush_remove_or_grow");
             match disk_resize {
                 Ok(_) => {
-                    if !self.flush_remove_from_cache(removes, current_age, startup, false)
-                        || !self.flush_remove_from_cache(removes_random, current_age, startup, true)
-                    {
+                    if !self.flush_remove_from_cache(
+                        removes,
+                        current_age,
+                        startup,
+                        false,
+                        exceeds_budget,
+                    ) || !self.flush_remove_from_cache(
+                        removes_random,
+                        current_age,
+                        startup,
+                        true,
+                        exceeds_budget,
+                    ) {
                         iterate_for_age = false; // did not make it all the way through this bucket, so didn't handle age completely
                     }
                     Self::update_time_stat(&self.stats().flush_remove_us, m);
@@ -885,6 +963,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         current_age: Age,
         startup: bool,
         randomly_evicted: bool,
+        exceeds_budget: bool,
     ) -> bool {
         let mut completed_scan = true;
         if removes.is_empty() {
@@ -907,7 +986,13 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
                 if v.dirty()
                     || (!randomly_evicted
-                        && !self.should_remove_from_mem(current_age, v, startup, false))
+                        && !self.should_remove_from_mem(
+                            current_age,
+                            v,
+                            startup,
+                            false,
+                            exceeds_budget,
+                        ))
                 {
                     // marked dirty or bumped in age after we looked above
                     // these will be handled in later passes
@@ -975,6 +1060,21 @@ mod tests {
         InMemAccountsIndex::new(&holder, bin)
     }
 
+    fn new_disk_buckets_for_test<T: IndexValue>() -> InMemAccountsIndex<T> {
+        let holder = Arc::new(BucketMapHolder::new(
+            BINS_FOR_TESTING,
+            &Some(AccountsIndexConfig {
+                index_limit_mb: Some(1),
+                ..AccountsIndexConfig::default()
+            }),
+            1,
+        ));
+        let bin = 0;
+        let bucket = InMemAccountsIndex::new(&holder, bin);
+        assert!(bucket.storage.is_disk_index_enabled());
+        bucket
+    }
+
     #[test]
     fn test_should_remove_from_mem() {
         solana_logger::setup();
@@ -989,6 +1089,18 @@ mod tests {
             AccountMapEntryMeta::default(),
         ));
 
+        // exceeded budget
+        assert!(bucket.should_remove_from_mem(
+            current_age,
+            &Arc::new(AccountMapEntryInner::new(
+                vec![],
+                ref_count,
+                AccountMapEntryMeta::default()
+            )),
+            startup,
+            false,
+            true,
+        ));
         // empty slot list
         assert!(!bucket.should_remove_from_mem(
             current_age,
@@ -999,12 +1111,14 @@ mod tests {
             )),
             startup,
             false,
+            false,
         ));
         // 1 element slot list
         assert!(bucket.should_remove_from_mem(
             current_age,
             &one_element_slot_list_entry,
             startup,
+            false,
             false,
         ));
         // 2 element slot list
@@ -1016,6 +1130,7 @@ mod tests {
                 AccountMapEntryMeta::default()
             )),
             startup,
+            false,
             false,
         ));
 
@@ -1031,6 +1146,7 @@ mod tests {
                 )),
                 startup,
                 false,
+                false,
             ));
         }
 
@@ -1039,6 +1155,7 @@ mod tests {
             current_age,
             &one_element_slot_list_entry,
             startup,
+            false,
             false,
         ));
 
@@ -1049,6 +1166,7 @@ mod tests {
             &one_element_slot_list_entry,
             startup,
             false,
+            false,
         ));
 
         // 1 element slot list, but at startup and age not current
@@ -1058,15 +1176,17 @@ mod tests {
             &one_element_slot_list_entry,
             startup,
             false,
+            false,
         ));
     }
 
     #[test]
     fn test_hold_range_in_memory() {
-        let bucket = new_for_test::<u64>();
+        let bucket = new_disk_buckets_for_test::<u64>();
         // 0x81 is just some other range
+        let all = Pubkey::new(&[0; 32])..=Pubkey::new(&[0xff; 32]);
         let ranges = [
-            Pubkey::new(&[0; 32])..=Pubkey::new(&[0xff; 32]),
+            all.clone(),
             Pubkey::new(&[0x81; 32])..=Pubkey::new(&[0xff; 32]),
         ];
         for range in ranges.clone() {
@@ -1076,6 +1196,10 @@ mod tests {
                 bucket.cache_ranges_held.read().unwrap().to_vec(),
                 vec![range.clone()]
             );
+            {
+                assert!(bucket.add_hold_range_in_memory_if_already_held(&range));
+                bucket.hold_range_in_memory(&range, false);
+            }
             bucket.hold_range_in_memory(&range, false);
             assert!(bucket.cache_ranges_held.read().unwrap().is_empty());
             bucket.hold_range_in_memory(&range, true);
@@ -1105,6 +1229,13 @@ mod tests {
             );
             bucket.hold_range_in_memory(&ranges[0].clone(), false);
             assert!(bucket.cache_ranges_held.read().unwrap().is_empty());
+
+            // hold all in mem first
+            assert!(bucket.cache_ranges_held.read().unwrap().is_empty());
+            bucket.hold_range_in_memory(&all, true);
+            assert!(bucket.add_hold_range_in_memory_if_already_held(&range));
+            bucket.hold_range_in_memory(&range, false);
+            bucket.hold_range_in_memory(&all, false);
         }
     }
 

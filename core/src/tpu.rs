@@ -10,6 +10,7 @@ use {
             GossipVerifiedVoteHashSender, VerifiedVoteSender, VoteTracker,
         },
         fetch_stage::FetchStage,
+        packet_deduper::PacketDeduper,
         sigverify::TransactionSigVerifier,
         sigverify_stage::SigVerifyStage,
     },
@@ -109,10 +110,10 @@ impl Tpu {
         let (verified_gossip_vote_packets_sender, verified_gossip_vote_packets_receiver) =
             unbounded();
         let cluster_info_vote_listener = ClusterInfoVoteListener::new(
-            exit,
+            exit.clone(),
             cluster_info.clone(),
             verified_gossip_vote_packets_sender,
-            poh_recorder,
+            poh_recorder.clone(),
             vote_tracker,
             bank_forks.clone(),
             subscriptions.clone(),
@@ -133,6 +134,7 @@ impl Tpu {
             transaction_status_sender,
             replay_vote_sender,
             cost_model.clone(),
+            PacketDeduper::default(),
         );
 
         let broadcast_stage = broadcast_type.new_broadcast_stage(

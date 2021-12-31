@@ -21,9 +21,7 @@ use {
     },
     solana_vote_program::{
         vote_instruction,
-        vote_state::{
-            BlockTimestamp, Lockout, Vote, VoteState, VoteTransaction, MAX_LOCKOUT_HISTORY,
-        },
+        vote_state::{BlockTimestamp, Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY},
     },
     std::{
         cmp::Ordering,
@@ -411,7 +409,8 @@ impl Tower {
             last_voted_slot_in_bank,
         );
 
-        new_vote.set_timestamp(self.maybe_timestamp(self.last_vote.last_voted_slot().unwrap_or(0)));
+        new_vote.timestamp =
+            self.maybe_timestamp(self.last_vote.slots.last().copied().unwrap_or_default());
         self.last_vote = new_vote;
 
         let new_root = self.root();
@@ -434,11 +433,11 @@ impl Tower {
     }
 
     pub fn last_voted_slot(&self) -> Option<Slot> {
-        self.last_vote.last_voted_slot()
+        self.last_vote.slots.last().copied()
     }
 
     pub fn last_voted_slot_hash(&self) -> Option<(Slot, Hash)> {
-        self.last_vote.last_voted_slot_hash()
+        Some((*self.last_vote.slots.last()?, self.last_vote.hash))
     }
 
     pub fn stray_restored_slot(&self) -> Option<Slot> {
@@ -1120,10 +1119,10 @@ impl Tower {
             );
 
             assert_eq!(
-                self.last_vote.last_voted_slot().unwrap(),
-                *self.voted_slots().last().unwrap()
+                self.last_vote.slots.last().unwrap(),
+                self.voted_slots().last().unwrap()
             );
-            self.stray_restored_slot = Some(self.last_vote.last_voted_slot().unwrap());
+            self.stray_restored_slot = Some(*self.last_vote.slots.last().unwrap());
         }
 
         Ok(())
@@ -2248,7 +2247,7 @@ pub mod test {
         let mut local = VoteState::default();
         let vote = Tower::apply_vote_and_generate_vote_diff(&mut local, 0, Hash::default(), None);
         assert_eq!(local.votes.len(), 1);
-        assert_eq!(vote.slots(), vec![0]);
+        assert_eq!(vote.slots, vec![0]);
         assert_eq!(local.tower(), vec![0]);
     }
 
@@ -2259,7 +2258,7 @@ pub mod test {
         // another vote for slot 0 should return an empty vote as the diff.
         let vote =
             Tower::apply_vote_and_generate_vote_diff(&mut local, 0, Hash::default(), Some(0));
-        assert!(vote.is_empty());
+        assert!(vote.slots.is_empty());
     }
 
     #[test]
@@ -2274,7 +2273,7 @@ pub mod test {
         assert_eq!(local.votes.len(), 1);
         let vote =
             Tower::apply_vote_and_generate_vote_diff(&mut local, 1, Hash::default(), Some(0));
-        assert_eq!(vote.slots(), vec![1]);
+        assert_eq!(vote.slots, vec![1]);
         assert_eq!(local.tower(), vec![0, 1]);
     }
 
@@ -2294,7 +2293,7 @@ pub mod test {
         // observable in any of the results.
         let vote =
             Tower::apply_vote_and_generate_vote_diff(&mut local, 3, Hash::default(), Some(0));
-        assert_eq!(vote.slots(), vec![3]);
+        assert_eq!(vote.slots, vec![3]);
         assert_eq!(local.tower(), vec![3]);
     }
 
@@ -2376,7 +2375,7 @@ pub mod test {
             tower.record_vote(i as u64, Hash::default());
         }
 
-        expected.timestamp = tower.last_vote.timestamp();
+        expected.timestamp = tower.last_vote.timestamp;
         assert_eq!(expected, tower.last_vote)
     }
 

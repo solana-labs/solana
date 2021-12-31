@@ -21,9 +21,13 @@ async fn test_close_lookup_table() {
     let mut context = setup_test_context().await;
     overwrite_slot_hashes_with_slots(&mut context, &[]);
 
-    let authority_keypair = Keypair::new();
-    let initialized_table = new_address_lookup_table(Some(authority_keypair.pubkey()), 0);
     let lookup_table_address = Pubkey::new_unique();
+    let authority_keypair = Keypair::new();
+    let initialized_table = {
+        let mut table = new_address_lookup_table(Some(authority_keypair.pubkey()), 0);
+        table.meta.deactivation_slot = 0;
+        table
+    };
     add_lookup_table_account(&mut context, lookup_table_address, initialized_table).await;
 
     let client = &mut context.banks_client;
@@ -49,7 +53,7 @@ async fn test_close_lookup_table() {
 }
 
 #[tokio::test]
-async fn test_close_lookup_table_too_recent() {
+async fn test_close_lookup_table_not_deactivated() {
     let mut context = setup_test_context().await;
 
     let authority_keypair = Keypair::new();
@@ -63,10 +67,38 @@ async fn test_close_lookup_table_too_recent() {
         context.payer.pubkey(),
     );
 
+    // The ix should fail because the table hasn't been deactivated yet
+    assert_ix_error(
+        &mut context,
+        ix,
+        Some(&authority_keypair),
+        InstructionError::InvalidArgument,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_close_lookup_table_recently_deactivated() {
+    let mut context = setup_test_context().await;
+
+    let authority_keypair = Keypair::new();
+    let initialized_table = {
+        let mut table = new_address_lookup_table(Some(authority_keypair.pubkey()), 0);
+        table.meta.deactivation_slot = 0;
+        table
+    };
+    let lookup_table_address = Pubkey::new_unique();
+    add_lookup_table_account(&mut context, lookup_table_address, initialized_table).await;
+
+    let ix = close_lookup_table(
+        lookup_table_address,
+        authority_keypair.pubkey(),
+        context.payer.pubkey(),
+    );
+
     // Context sets up the slot hashes sysvar to have an entry
-    // for slot 0 which is what the default initialized table
-    // has as its derivation slot. Because that slot is present,
-    // the ix should fail.
+    // for slot 0 which is when the table was deactivated.
+    // Because that slot is present, the ix should fail.
     assert_ix_error(
         &mut context,
         ix,

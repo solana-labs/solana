@@ -23,8 +23,10 @@ jsonrpc-derive = "18.0.0"
 jsonrpc-ipc-server = "18.0.0"
 jsonrpc-server-utils= "18.0.0"
 log = "0.4.14"
-num_cpus = "1.13.0"
+num_cpus = "1.13.1"
 rand = "0.7.0"
+serde = "1.0.132"
+serde_json = "1.0.73"
 solana-clap-utils = { path = "../clap-utils", version = "=1.10.0" }
 solana-cli-config = { path = "../cli-config", version = "=1.10.0" }
 solana-client = { path = "../client", version = "=1.10.0" }
@@ -56,7 +58,7 @@ jemallocator = {package = "tikv-jemallocator", version = "0.4.1", features = ["u
 
 [target."cfg(unix)".dependencies]
 libc = "0.2.112"
-signal-hook = "0.3.12"
+signal-hook = "0.3.13"
 sysctl = "0.4.3"
 
 [package.metadata.docs.rs]

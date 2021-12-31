@@ -38,8 +38,8 @@ use {
         clock::Clock,
         entrypoint::{HEAP_LENGTH, SUCCESS},
         feature_set::{
-            do_support_realloc, reduce_required_deploy_balance, reject_all_elf_rw,
-            reject_deployment_of_unresolved_syscalls,
+            cap_accounts_data_len, do_support_realloc, reduce_required_deploy_balance,
+            reject_all_elf_rw, reject_deployment_of_unresolved_syscalls,
             reject_section_virtual_address_file_offset_mismatch, requestable_heap_size,
             start_verify_shift32_imm, stop_verify_mul64_imm_nonzero,
         },
@@ -47,6 +47,7 @@ use {
         keyed_account::{from_keyed_account, keyed_account_at_index, KeyedAccount},
         loader_instruction::LoaderInstruction,
         loader_upgradeable_instruction::UpgradeableLoaderInstruction,
+        program_error::ACCOUNTS_DATA_BUDGET_EXCEEDED,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
         rent::Rent,
@@ -995,7 +996,7 @@ impl Executor for BpfExecutor {
         serialize_time.stop();
         let mut create_vm_time = Measure::start("create_vm");
         let mut execute_time;
-        {
+        let execution_result = {
             let mut vm = match create_vm(
                 &self.executable,
                 parameter_bytes.as_slice_mut(),
@@ -1040,12 +1041,20 @@ impl Executor for BpfExecutor {
                 stable_log::program_return(&log_collector, &program_id, return_data);
             }
             match result {
-                Ok(status) => {
-                    if status != SUCCESS {
-                        let error: InstructionError = status.into();
-                        stable_log::program_failure(&log_collector, &program_id, &error);
-                        return Err(error);
-                    }
+                Ok(status) if status != SUCCESS => {
+                    let error: InstructionError = if status == ACCOUNTS_DATA_BUDGET_EXCEEDED
+                        && !invoke_context
+                            .feature_set
+                            .is_active(&cap_accounts_data_len::id())
+                    {
+                        // Until the cap_accounts_data_len feature is enabled, map the
+                        // ACCOUNTS_DATA_BUDGET_EXCEEDED error to InvalidError
+                        InstructionError::InvalidError
+                    } else {
+                        status.into()
+                    };
+                    stable_log::program_failure(&log_collector, &program_id, &error);
+                    Err(error)
                 }
                 Err(error) => {
                     let error = match error {
@@ -1058,23 +1067,29 @@ impl Executor for BpfExecutor {
                         }
                     };
                     stable_log::program_failure(&log_collector, &program_id, &error);
-                    return Err(error);
+                    Err(error)
                 }
+                _ => Ok(()),
             }
-            execute_time.stop();
-        }
+        };
+        execute_time.stop();
+
         let mut deserialize_time = Measure::start("deserialize");
-        let keyed_accounts = invoke_context.get_keyed_accounts()?;
-        deserialize_parameters(
-            &loader_id,
-            &keyed_accounts[first_instruction_account + 1..],
-            parameter_bytes.as_slice(),
-            &account_lengths,
-            invoke_context
-                .feature_set
-                .is_active(&do_support_realloc::id()),
-        )?;
+        let execute_or_deserialize_result = execution_result.and_then(|_| {
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
+            deserialize_parameters(
+                &loader_id,
+                &keyed_accounts[first_instruction_account + 1..],
+                parameter_bytes.as_slice(),
+                &account_lengths,
+                invoke_context
+                    .feature_set
+                    .is_active(&do_support_realloc::id()),
+            )
+        });
         deserialize_time.stop();
+
+        // Update the timings
         let timings = &mut invoke_context.timings;
         timings.serialize_us = timings.serialize_us.saturating_add(serialize_time.as_us());
         timings.create_vm_us = timings.create_vm_us.saturating_add(create_vm_time.as_us());
@@ -1082,8 +1097,11 @@ impl Executor for BpfExecutor {
         timings.deserialize_us = timings
             .deserialize_us
             .saturating_add(deserialize_time.as_us());
-        stable_log::program_success(&log_collector, &program_id);
-        Ok(())
+
+        if execute_or_deserialize_result.is_ok() {
+            stable_log::program_success(&log_collector, &program_id);
+        }
+        execute_or_deserialize_result
     }
 }
 

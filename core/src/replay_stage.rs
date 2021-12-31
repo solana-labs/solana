@@ -26,6 +26,7 @@ use {
         voting_service::VoteOp,
         window_service::DuplicateSlotReceiver,
     },
+    solana_accountsdb_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
     solana_client::rpc_response::SlotUpdate,
     solana_entry::entry::VerifyRecyclers,
     solana_gossip::cluster_info::ClusterInfo,
@@ -335,6 +336,7 @@ impl ReplayStage {
         cost_update_sender: Sender<CostUpdate>,
         voting_sender: Sender<VoteOp>,
         drop_bank_sender: Sender<Vec<Arc<Bank>>>,
+        block_metadata_notifier: Option<BlockMetadataNotifierLock>,
     ) -> Self {
         let ReplayStageConfig {
             vote_account,
@@ -440,6 +442,7 @@ impl ReplayStage {
                         &cost_update_sender,
                         &mut duplicate_slots_to_repair,
                         &ancestor_hashes_replay_update_sender,
+                        block_metadata_notifier.clone(),
                     );
                     replay_active_banks_time.stop();
 
@@ -854,7 +857,11 @@ impl ReplayStage {
     ) {
         let start_slot = poh_recorder.lock().unwrap().start_slot();
         if let Some(latest_leader_slot) = progress.get_latest_leader_slot(start_slot) {
-            if !progress.is_propagated(latest_leader_slot) {
+            if !progress
+                .get_propagated_stats(latest_leader_slot)
+                .map(|stats| stats.is_propagated)
+                .unwrap_or(true)
+            {
                 warn!("Slot not propagated: slot={}", latest_leader_slot);
                 let retransmit_info = progress.get_retransmit_info(latest_leader_slot).unwrap();
                 if retransmit_info.reached_retransmit_threshold() {
@@ -2042,6 +2049,7 @@ impl ReplayStage {
         cost_update_sender: &Sender<CostUpdate>,
         duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
         ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
+        block_metadata_notifier: Option<BlockMetadataNotifierLock>,
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
@@ -2197,6 +2205,16 @@ impl ReplayStage {
                     }
                 }
                 Self::record_rewards(&bank, rewards_recorder_sender);
+                if let Some(ref block_metadata_notifier) = block_metadata_notifier {
+                    let block_metadata_notifier = block_metadata_notifier.read().unwrap();
+                    block_metadata_notifier.notify_block_metadata(
+                        bank.slot(),
+                        &bank.last_blockhash().to_string(),
+                        &bank.rewards,
+                        Some(bank.clock().unix_timestamp),
+                        Some(bank.block_height()),
+                    )
+                }
             } else {
                 trace!(
                     "bank {} not completed tick_height: {}, max_tick_height: {}",
@@ -3087,8 +3105,10 @@ pub mod tests {
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(bank_forks);
         let exit = Arc::new(AtomicBool::new(false));
+        let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
+            max_complete_transaction_status_slot,
             bank_forks.clone(),
             Arc::new(RwLock::new(BlockCommitmentCache::default())),
             optimistically_confirmed_bank,
@@ -3387,7 +3407,7 @@ pub mod tests {
                     ), // should cause AccountNotFound error
                 ],
             );
-            entries_to_test_shreds(vec![entry], slot, slot.saturating_sub(1), false, 0)
+            entries_to_test_shreds(&[entry], slot, slot.saturating_sub(1), false, 0)
         });
 
         assert_matches!(
@@ -3417,7 +3437,7 @@ pub mod tests {
                     blockhash,
                 )],
             );
-            entries_to_test_shreds(vec![entry], slot, slot.saturating_sub(1), false, 0)
+            entries_to_test_shreds(&[entry], slot, slot.saturating_sub(1), false, 0)
         });
 
         if let Err(BlockstoreProcessorError::InvalidBlock(block_error)) = res {
@@ -3437,7 +3457,7 @@ pub mod tests {
 
             let too_few_hashes_tick = Entry::new(&blockhash, hashes_per_tick - 1, vec![]);
             entries_to_test_shreds(
-                vec![too_few_hashes_tick],
+                &[too_few_hashes_tick],
                 slot,
                 slot.saturating_sub(1),
                 false,
@@ -3461,7 +3481,7 @@ pub mod tests {
             let slot = bank.slot();
             let hashes_per_tick = bank.hashes_per_tick().unwrap_or(0);
             entries_to_test_shreds(
-                entry::create_ticks(bank.ticks_per_slot() + 1, hashes_per_tick, blockhash),
+                &entry::create_ticks(bank.ticks_per_slot() + 1, hashes_per_tick, blockhash),
                 slot,
                 slot.saturating_sub(1),
                 false,
@@ -3481,7 +3501,7 @@ pub mod tests {
             let slot = bank.slot();
             let hashes_per_tick = bank.hashes_per_tick().unwrap_or(0);
             entries_to_test_shreds(
-                entry::create_ticks(bank.ticks_per_slot() - 1, hashes_per_tick, blockhash),
+                &entry::create_ticks(bank.ticks_per_slot() - 1, hashes_per_tick, blockhash),
                 slot,
                 slot.saturating_sub(1),
                 true,
@@ -3503,7 +3523,7 @@ pub mod tests {
             let slot = bank.slot();
             let hashes_per_tick = bank.hashes_per_tick().unwrap_or(0);
             entries_to_test_shreds(
-                entry::create_ticks(bank.ticks_per_slot(), hashes_per_tick, blockhash),
+                &entry::create_ticks(bank.ticks_per_slot(), hashes_per_tick, blockhash),
                 slot,
                 slot.saturating_sub(1),
                 false,
@@ -3531,7 +3551,7 @@ pub mod tests {
             let tx = system_transaction::transfer(funded_keypair, &keypair.pubkey(), 2, blockhash);
             let trailing_entry = entry::next_entry(&last_entry_hash, 1, vec![tx]);
             entries.push(trailing_entry);
-            entries_to_test_shreds(entries, slot, slot.saturating_sub(1), true, 0)
+            entries_to_test_shreds(&entries, slot, slot.saturating_sub(1), true, 0)
         });
 
         if let Err(BlockstoreProcessorError::InvalidBlock(block_error)) = res {
@@ -3622,8 +3642,10 @@ pub mod tests {
                 &replay_vote_sender,
                 &VerifyRecyclers::default(),
             );
+            let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
             let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
                 &exit,
+                max_complete_transaction_status_slot,
                 bank_forks.clone(),
                 block_commitment_cache,
                 OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
@@ -3690,8 +3712,10 @@ pub mod tests {
 
         let exit = Arc::new(AtomicBool::new(false));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
+        let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
+            max_complete_transaction_status_slot,
             bank_forks.clone(),
             block_commitment_cache.clone(),
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
