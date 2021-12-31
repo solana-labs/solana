@@ -503,14 +503,10 @@ impl<'a> InvokeContext<'a> {
             &message,
             &message.instructions[0],
             &program_indices,
-<<<<<<< HEAD
             &account_indices,
             &caller_write_privileges,
-        )?;
-=======
         )
         .result?;
->>>>>>> d06e6c742 (Count compute units even when transaction errors (#22182))
 
         // Verify the called program has not misbehaved
         let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
@@ -649,49 +645,20 @@ impl<'a> InvokeContext<'a> {
         message: &Message,
         instruction: &CompiledInstruction,
         program_indices: &[usize],
-<<<<<<< HEAD
         account_indices: &[usize],
         caller_write_privileges: &[bool],
-    ) -> Result<u64, InstructionError> {
-=======
     ) -> ProcessInstructionResult {
-        let program_id = program_indices
-            .last()
-            .map(|index| *self.transaction_context.get_key_of_account_at_index(*index))
-            .unwrap_or_else(native_loader::id);
-
->>>>>>> d06e6c742 (Count compute units even when transaction errors (#22182))
         let is_lowest_invocation_level = self.invoke_stack.is_empty();
         if !is_lowest_invocation_level {
             // Verify the calling program hasn't misbehaved
-<<<<<<< HEAD
-            self.verify_and_update(instruction, account_indices, caller_write_privileges)?;
-=======
-            let result = self.verify_and_update(instruction_accounts, caller_write_privileges);
+            let result =
+                self.verify_and_update(instruction, account_indices, caller_write_privileges);
             if result.is_err() {
                 return ProcessInstructionResult {
                     compute_units_consumed: 0,
                     result,
                 };
             }
-            // Record instruction
-            if let Some(instruction_recorder) = &self.instruction_recorder {
-                let compiled_instruction = CompiledInstruction {
-                    program_id_index: self
-                        .transaction_context
-                        .find_index_of_account(&program_id)
-                        .unwrap_or(0) as u8,
-                    data: instruction_data.to_vec(),
-                    accounts: instruction_accounts
-                        .iter()
-                        .map(|instruction_account| instruction_account.index_in_transaction as u8)
-                        .collect(),
-                };
-                instruction_recorder
-                    .borrow_mut()
-                    .record_compiled_instruction(compiled_instruction);
-            }
->>>>>>> d06e6c742 (Count compute units even when transaction errors (#22182))
         }
 
         let mut compute_units_consumed = 0;
@@ -700,29 +667,19 @@ impl<'a> InvokeContext<'a> {
             .and_then(|_| {
                 self.return_data = (*instruction.program_id(&message.account_keys), Vec::new());
                 let pre_remaining_units = self.compute_meter.borrow().get_remaining();
-<<<<<<< HEAD
-                self.process_executable_chain(&instruction.data)?;
-=======
-                let execution_result = self.process_executable_chain(instruction_data);
->>>>>>> d06e6c742 (Count compute units even when transaction errors (#22182))
+                let execution_result = self.process_executable_chain(&instruction.data);
                 let post_remaining_units = self.compute_meter.borrow().get_remaining();
                 compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
                 execution_result?;
 
                 // Verify the called program has not misbehaved
                 if is_lowest_invocation_level {
-<<<<<<< HEAD
-                    self.verify(message, instruction, program_indices)?;
+                    self.verify(message, instruction, program_indices)
                 } else {
                     let write_privileges: Vec<bool> = (0..message.account_keys.len())
                         .map(|i| message.is_writable(i))
                         .collect();
-                    self.verify_and_update(instruction, account_indices, &write_privileges)?;
-=======
-                    self.verify(instruction_accounts, program_indices)
-                } else {
-                    self.verify_and_update(instruction_accounts, None)
->>>>>>> d06e6c742 (Count compute units even when transaction errors (#22182))
+                    self.verify_and_update(instruction, account_indices, &write_privileges)
                 }
             });
 
@@ -1336,24 +1293,15 @@ mod tests {
             .collect::<Vec<bool>>();
         accounts[0].1.borrow_mut().data_as_mut_slice()[0] = 1;
         assert_eq!(
-<<<<<<< HEAD
-            invoke_context.process_instruction(
-                &message,
-                &message.instructions[0],
-                &program_indices[1..],
-                &account_indices,
-                &caller_write_privileges,
-            ),
-=======
             invoke_context
                 .process_instruction(
-                    &instruction.data,
-                    &instruction_accounts,
-                    None,
+                    &message,
+                    &message.instructions[0],
                     &program_indices[1..],
+                    &account_indices,
+                    &caller_write_privileges,
                 )
                 .result,
->>>>>>> d06e6c742 (Count compute units even when transaction errors (#22182))
             Err(InstructionError::ExternalAccountDataModified)
         );
         accounts[0].1.borrow_mut().data_as_mut_slice()[0] = 0;
@@ -1361,24 +1309,15 @@ mod tests {
         // readonly account modified by the invoker
         accounts[2].1.borrow_mut().data_as_mut_slice()[0] = 1;
         assert_eq!(
-<<<<<<< HEAD
-            invoke_context.process_instruction(
-                &message,
-                &message.instructions[0],
-                &program_indices[1..],
-                &account_indices,
-                &caller_write_privileges,
-            ),
-=======
             invoke_context
                 .process_instruction(
-                    &instruction.data,
-                    &instruction_accounts,
-                    None,
+                    &message,
+                    &message.instructions[0],
                     &program_indices[1..],
+                    &account_indices,
+                    &caller_write_privileges,
                 )
                 .result,
->>>>>>> d06e6c742 (Count compute units even when transaction errors (#22182))
             Err(InstructionError::ReadonlyDataModified)
         );
         accounts[2].1.borrow_mut().data_as_mut_slice()[0] = 0;
@@ -1618,11 +1557,6 @@ mod tests {
     fn test_process_instruction_compute_budget() {
         let caller_program_id = solana_sdk::pubkey::new_rand();
         let callee_program_id = solana_sdk::pubkey::new_rand();
-        let builtin_programs = &[BuiltinProgram {
-            program_id: callee_program_id,
-            process_instruction: mock_process_instruction,
-        }];
-
         let owned_account = AccountSharedData::new(42, 1, &callee_program_id);
         let not_owned_account = AccountSharedData::new(84, 1, &solana_sdk::pubkey::new_rand());
         let readonly_account = AccountSharedData::new(168, 1, &solana_sdk::pubkey::new_rand());
@@ -1631,12 +1565,22 @@ mod tests {
         program_account.set_executable(true);
 
         let accounts = vec![
-            (solana_sdk::pubkey::new_rand(), owned_account),
-            (solana_sdk::pubkey::new_rand(), not_owned_account),
-            (solana_sdk::pubkey::new_rand(), readonly_account),
-            (caller_program_id, loader_account),
-            (callee_program_id, program_account),
+            (
+                solana_sdk::pubkey::new_rand(),
+                Rc::new(RefCell::new(owned_account)),
+            ),
+            (
+                solana_sdk::pubkey::new_rand(),
+                Rc::new(RefCell::new(not_owned_account)),
+            ),
+            (
+                solana_sdk::pubkey::new_rand(),
+                Rc::new(RefCell::new(readonly_account)),
+            ),
+            (caller_program_id, Rc::new(RefCell::new(loader_account))),
+            (callee_program_id, Rc::new(RefCell::new(program_account))),
         ];
+        let account_indices = [0, 1, 2];
         let program_indices = [3, 4];
 
         let metas = vec![
@@ -1644,23 +1588,20 @@ mod tests {
             AccountMeta::new(accounts[1].0, false),
             AccountMeta::new_readonly(accounts[2].0, false),
         ];
-        let instruction_accounts = metas
-            .iter()
-            .enumerate()
-            .map(|(account_index, account_meta)| InstructionAccount {
-                index: account_index,
-                is_signer: account_meta.is_signer,
-                is_writable: account_meta.is_writable,
-            })
-            .collect::<Vec<_>>();
 
-        let transaction_context = TransactionContext::new(accounts, 1);
-        let mut invoke_context = InvokeContext::new_mock(&transaction_context, builtin_programs);
+        let builtin_programs = &[BuiltinProgram {
+            program_id: callee_program_id,
+            process_instruction: mock_process_instruction,
+        }];
+        let mut invoke_context = InvokeContext::new_mock(&accounts, builtin_programs);
+
         let compute_units_consumed = 10;
         let desired_results = vec![Ok(()), Err(InstructionError::GenericError)];
 
         for desired_result in desired_results {
-            let instruction = Instruction::new_with_bincode(
+            let caller_instruction =
+                CompiledInstruction::new(program_indices[0] as u8, &(), vec![0, 1, 2, 3, 4]);
+            let callee_instruction = Instruction::new_with_bincode(
                 callee_program_id,
                 &MockInstruction::ConsumeComputeUnits {
                     compute_units_consumed,
@@ -1668,15 +1609,22 @@ mod tests {
                 },
                 metas.clone(),
             );
+            let message = Message::new(&[callee_instruction.clone()], None);
             invoke_context
-                .push(&instruction_accounts, &program_indices[..1])
+                .push(&message, &caller_instruction, &program_indices[..1], &[])
                 .unwrap();
-
+            let caller_write_privileges = message
+                .account_keys
+                .iter()
+                .enumerate()
+                .map(|(i, _)| message.is_writable(i))
+                .collect::<Vec<bool>>();
             let result = invoke_context.process_instruction(
-                &instruction.data,
-                &instruction_accounts,
-                None,
+                &message,
+                &message.instructions[0],
                 &program_indices[1..],
+                &account_indices,
+                &caller_write_privileges,
             );
 
             // Because the instruction had compute cost > 0, then regardless of the execution result,
