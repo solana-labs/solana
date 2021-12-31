@@ -973,8 +973,8 @@ impl Debug for BpfExecutor {
 impl Executor for BpfExecutor {
     fn execute<'a, 'b>(
         &self,
-        first_instruction_account: usize,
-        instruction_data: &[u8],
+        _first_instruction_account: usize,
+        _instruction_data: &[u8],
         invoke_context: &'a mut InvokeContext<'b>,
         use_jit: bool,
     ) -> Result<(), InstructionError> {
@@ -983,15 +983,12 @@ impl Executor for BpfExecutor {
         let invoke_depth = invoke_context.invoke_depth();
 
         let mut serialize_time = Measure::start("serialize");
-        let keyed_accounts = invoke_context.get_keyed_accounts()?;
-        let program = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-        let loader_id = program.owner()?;
-        let program_id = *program.unsigned_key();
+        let program_id = *invoke_context.transaction_context.get_program_key()?;
         let (mut parameter_bytes, account_lengths) = serialize_parameters(
-            &loader_id,
-            &program_id,
-            &keyed_accounts[first_instruction_account + 1..],
-            instruction_data,
+            invoke_context.transaction_context,
+            invoke_context
+                .transaction_context
+                .get_current_instruction_context()?,
         )?;
         serialize_time.stop();
         let mut create_vm_time = Measure::start("create_vm");
@@ -1076,10 +1073,11 @@ impl Executor for BpfExecutor {
 
         let mut deserialize_time = Measure::start("deserialize");
         let execute_or_deserialize_result = execution_result.and_then(|_| {
-            let keyed_accounts = invoke_context.get_keyed_accounts()?;
             deserialize_parameters(
-                &loader_id,
-                &keyed_accounts[first_instruction_account + 1..],
+                invoke_context.transaction_context,
+                invoke_context
+                    .transaction_context
+                    .get_current_instruction_context()?,
                 parameter_bytes.as_slice(),
                 &account_lengths,
                 invoke_context

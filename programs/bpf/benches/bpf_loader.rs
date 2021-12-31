@@ -209,12 +209,9 @@ fn bench_create_vm(bencher: &mut Bencher) {
             .mock_set_remaining(BUDGET);
 
         // Serialize account data
-        let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
         let (mut serialized, account_lengths) = serialize_parameters(
-            &keyed_accounts[0].unsigned_key(),
-            &keyed_accounts[1].unsigned_key(),
-            &keyed_accounts[2..],
-            &[],
+            invoke_context.transaction_context,
+            invoke_context.transaction_context.get_current_instruction_context().unwrap(),
         )
         .unwrap();
 
@@ -250,12 +247,9 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
             .mock_set_remaining(BUDGET);
 
         // Serialize account data
-        let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
         let (mut serialized, account_lengths) = serialize_parameters(
-            &keyed_accounts[0].unsigned_key(),
-            &keyed_accounts[1].unsigned_key(),
-            &keyed_accounts[2..],
-            &[],
+            invoke_context.transaction_context,
+            invoke_context.transaction_context.get_current_instruction_context().unwrap(),
         )
         .unwrap();
 
