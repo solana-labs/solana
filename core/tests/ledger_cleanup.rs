@@ -437,18 +437,6 @@ mod tests {
                 }
             }
 
-            if stop_size_bytes > 0 {
-                if storage_previous >= stop_size_bytes {
-                    stop_size_bytes_exceeded_iterations += 1;
-                } else {
-                    stop_size_bytes_exceeded_iterations = 0;
-                }
-
-                if stop_size_bytes_exceeded_iterations > stop_size_iterations {
-                    break;
-                }
-            }
-
             if finished_batch >= num_batches {
                 break;
             } else {
