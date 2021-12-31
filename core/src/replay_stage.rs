@@ -857,7 +857,11 @@ impl ReplayStage {
     ) {
         let start_slot = poh_recorder.lock().unwrap().start_slot();
         if let Some(latest_leader_slot) = progress.get_latest_leader_slot(start_slot) {
-            if !progress.is_propagated(latest_leader_slot) {
+            if !progress
+                .get_propagated_stats(latest_leader_slot)
+                .map(|stats| stats.is_propagated)
+                .unwrap_or(true)
+            {
                 warn!("Slot not propagated: slot={}", latest_leader_slot);
                 let retransmit_info = progress.get_retransmit_info(latest_leader_slot).unwrap();
                 if retransmit_info.reached_retransmit_threshold() {
