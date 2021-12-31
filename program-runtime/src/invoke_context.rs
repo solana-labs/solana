@@ -1612,7 +1612,6 @@ mod tests {
 
     #[test]
     fn test_process_instruction_compute_budget() {
-        let caller_program_id = solana_sdk::pubkey::new_rand();
         let callee_program_id = solana_sdk::pubkey::new_rand();
         let builtin_programs = &[BuiltinProgram {
             program_id: callee_program_id,
@@ -1622,7 +1621,6 @@ mod tests {
         let owned_account = AccountSharedData::new(42, 1, &callee_program_id);
         let not_owned_account = AccountSharedData::new(84, 1, &solana_sdk::pubkey::new_rand());
         let readonly_account = AccountSharedData::new(168, 1, &solana_sdk::pubkey::new_rand());
-        let loader_account = AccountSharedData::new(0, 0, &native_loader::id());
         let mut program_account = AccountSharedData::new(1, 0, &native_loader::id());
         program_account.set_executable(true);
 
@@ -1630,10 +1628,9 @@ mod tests {
             (solana_sdk::pubkey::new_rand(), owned_account),
             (solana_sdk::pubkey::new_rand(), not_owned_account),
             (solana_sdk::pubkey::new_rand(), readonly_account),
-            (caller_program_id, loader_account),
             (callee_program_id, program_account),
         ];
-        let program_indices = [3, 4];
+        let program_indices = [3];
 
         let metas = vec![
             AccountMeta::new(accounts[0].0, false),
@@ -1665,16 +1662,13 @@ mod tests {
                 },
                 metas.clone(),
             );
-            invoke_context
-                .push(&instruction_accounts, &program_indices[..1])
-                .unwrap();
 
             let mut compute_units_consumed = 0;
             let result = invoke_context.process_instruction(
                 &instruction.data,
                 &instruction_accounts,
                 None,
-                &program_indices[1..],
+                &program_indices,
                 &mut compute_units_consumed,
             );
 
