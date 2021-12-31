@@ -451,8 +451,11 @@ mod tests {
         ];
         let instruction_data = vec![1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
         let program_indices = [0];
-        let preparation =
-            prepare_mock_invoke_context(transaction_accounts.clone(), instruction_accounts);
+        let preparation = prepare_mock_invoke_context(
+            transaction_accounts.clone(),
+            instruction_accounts,
+            &program_indices,
+        );
         let transaction_context = TransactionContext::new(preparation.transaction_accounts, 1);
         let mut invoke_context = InvokeContext::new_mock(&transaction_context, &[]);
         invoke_context

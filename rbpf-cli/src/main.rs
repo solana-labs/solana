@@ -209,8 +209,9 @@ native machine code before execting it in the virtual machine.",
             input.instruction_data
         }
     };
-    let preparation = prepare_mock_invoke_context(transaction_accounts, instruction_accounts);
     let program_indices = [0, 1];
+    let preparation =
+        prepare_mock_invoke_context(transaction_accounts, instruction_accounts, &program_indices);
     let transaction_context = TransactionContext::new(preparation.transaction_accounts, 1);
     let mut invoke_context = InvokeContext::new_mock(&transaction_context, &[]);
     invoke_context

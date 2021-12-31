@@ -2203,8 +2203,13 @@ where
     F: Fn(&T, &InvokeContext) -> Result<CallerAccount<'a>, EbpfError<BpfError>>,
 {
     let keyed_accounts = invoke_context
-        .get_instruction_keyed_accounts()
+        .get_keyed_accounts()
         .map_err(SyscallError::InstructionError)?;
+    let number_of_program_accounts = keyed_accounts.len()
+        - invoke_context
+            .get_instruction_keyed_accounts()
+            .map_err(SyscallError::InstructionError)?
+            .len();
     let mut accounts = Vec::with_capacity(instruction_accounts.len().saturating_add(1));
 
     let program_account_index = program_indices
@@ -2217,13 +2222,13 @@ where
     for instruction_account in instruction_accounts.iter() {
         let account = invoke_context
             .transaction_context
-            .get_account_at_index(instruction_account.index);
+            .get_account_at_index(instruction_account.index_in_transaction);
         let account_key = invoke_context
             .transaction_context
-            .get_key_of_account_at_index(instruction_account.index);
+            .get_key_of_account_at_index(instruction_account.index_in_transaction);
         if account.borrow().executable() {
             // Use the known account
-            accounts.push((instruction_account.index, None));
+            accounts.push((instruction_account.index_in_transaction, None));
         } else if let Some(caller_account_index) =
             account_info_keys.iter().position(|key| *key == account_key)
         {
@@ -2238,20 +2243,11 @@ where
                 account.set_rent_epoch(caller_account.rent_epoch);
             }
             let caller_account = if instruction_account.is_writable {
-                if let Some(orig_data_len_index) = keyed_accounts
-                    .iter()
-                    .position(|keyed_account| keyed_account.unsigned_key() == account_key)
-                    .map(|index| {
-                        // index starts at first instruction account
-                        index - keyed_accounts.len().saturating_sub(orig_data_lens.len())
-                    })
-                    .and_then(|index| {
-                        if index >= orig_data_lens.len() {
-                            None
-                        } else {
-                            Some(index)
-                        }
-                    })
+                let orig_data_len_index = instruction_account
+                    .index_in_caller
+                    .saturating_sub(number_of_program_accounts);
+                if keyed_accounts[instruction_account.index_in_caller].unsigned_key() == account_key
+                    && orig_data_len_index < orig_data_lens.len()
                 {
                     caller_account.original_data_len = orig_data_lens[orig_data_len_index];
                 } else {
@@ -2269,7 +2265,7 @@ where
             } else {
                 None
             };
-            accounts.push((instruction_account.index, caller_account));
+            accounts.push((instruction_account.index_in_transaction, caller_account));
         } else {
             ic_msg!(
                 invoke_context,
