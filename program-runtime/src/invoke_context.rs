@@ -1674,7 +1674,8 @@ mod tests {
             .iter()
             .enumerate()
             .map(|(account_index, account_meta)| InstructionAccount {
-                index: account_index,
+                index_in_transaction: account_index,
+                index_in_caller: 1 + account_index,
                 is_signer: account_meta.is_signer,
                 is_writable: account_meta.is_writable,
             })
