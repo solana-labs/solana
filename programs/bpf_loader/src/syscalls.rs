@@ -2391,6 +2391,7 @@ fn call<'a, 'b: 'a>(
             Some(&caller_write_privileges),
             &program_indices,
         )
+        .result
         .map_err(SyscallError::InstructionError)?;
 
     // Copy results back to caller
