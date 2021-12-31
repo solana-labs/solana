@@ -3563,7 +3563,7 @@ impl Bank {
                         std::mem::swap(&mut loaded_transaction.accounts, &mut transaction_accounts);
                         let mut transaction_context = TransactionContext::new(
                             transaction_accounts,
-                            compute_budget.max_invoke_depth,
+                            compute_budget.max_invoke_depth.saturating_add(1),
                         );
 
                         let instruction_recorder = if enable_cpi_recording {

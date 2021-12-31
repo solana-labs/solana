@@ -215,7 +215,11 @@ native machine code before execting it in the virtual machine.",
     let mut transaction_context = TransactionContext::new(preparation.transaction_accounts, 1);
     let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
     invoke_context
-        .push(&preparation.instruction_accounts, &program_indices)
+        .push(
+            &preparation.instruction_accounts,
+            &program_indices,
+            &instruction_data,
+        )
         .unwrap();
     let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
     let (mut parameter_bytes, account_lengths) = serialize_parameters(

@@ -2989,7 +2989,7 @@ mod tests {
             1,
         );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        invoke_context.push(&[], &[0]).unwrap();
+        invoke_context.push(&[], &[0], &[]).unwrap();
         let mut syscall_panic = SyscallPanic {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
         };
@@ -3062,7 +3062,7 @@ mod tests {
             1,
         );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        invoke_context.push(&[], &[0]).unwrap();
+        invoke_context.push(&[], &[0], &[]).unwrap();
         let mut syscall_sol_log = SyscallLog {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
         };
@@ -3162,7 +3162,7 @@ mod tests {
             1,
         );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        invoke_context.push(&[], &[0]).unwrap();
+        invoke_context.push(&[], &[0], &[]).unwrap();
         let cost = invoke_context.get_compute_budget().log_64_units;
         let mut syscall_sol_log_u64 = SyscallLogU64 {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -3200,7 +3200,7 @@ mod tests {
             1,
         );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        invoke_context.push(&[], &[0]).unwrap();
+        invoke_context.push(&[], &[0], &[]).unwrap();
         let cost = invoke_context.get_compute_budget().log_pubkey_units;
         let mut syscall_sol_pubkey = SyscallLogPubkey {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -3411,7 +3411,7 @@ mod tests {
             1,
         );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        invoke_context.push(&[], &[0]).unwrap();
+        invoke_context.push(&[], &[0], &[]).unwrap();
 
         let bytes1 = "Gaggablaghblagh!";
         let bytes2 = "flurbos";
@@ -3576,7 +3576,7 @@ mod tests {
         );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context.sysvars = &sysvars;
-        invoke_context.push(&[], &[0]).unwrap();
+        invoke_context.push(&[], &[0], &[]).unwrap();
 
         // Test clock sysvar
         {
@@ -3825,7 +3825,7 @@ mod tests {
             1,
         );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        invoke_context.push(&[], &[0]).unwrap();
+        invoke_context.push(&[], &[0], &[]).unwrap();
         let address = bpf_loader_upgradeable::id();
 
         let exceeded_seed = &[127; MAX_SEED_LEN + 1];
@@ -3937,7 +3937,7 @@ mod tests {
             1,
         );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        invoke_context.push(&[], &[0]).unwrap();
+        invoke_context.push(&[], &[0], &[]).unwrap();
         let cost = invoke_context
             .get_compute_budget()
             .create_program_address_units;

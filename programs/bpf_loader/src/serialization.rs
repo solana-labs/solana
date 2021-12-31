@@ -459,7 +459,11 @@ mod tests {
         let mut transaction_context = TransactionContext::new(preparation.transaction_accounts, 1);
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context
-            .push(&preparation.instruction_accounts, &program_indices)
+            .push(
+                &preparation.instruction_accounts,
+                &program_indices,
+                &instruction_data,
+            )
             .unwrap();
 
         // check serialize_parameters_aligned

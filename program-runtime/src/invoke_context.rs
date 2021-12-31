@@ -218,6 +218,7 @@ impl<'a> InvokeContext<'a> {
         &mut self,
         instruction_accounts: &[InstructionAccount],
         program_indices: &[usize],
+        instruction_data: &[u8],
     ) -> Result<(), InstructionError> {
         if self.invoke_stack.len() > self.compute_budget.max_invoke_depth {
             return Err(InstructionError::CallDepth);
@@ -325,12 +326,14 @@ impl<'a> InvokeContext<'a> {
                 std::mem::transmute(keyed_accounts.as_slice())
             }),
         ));
-        Ok(())
+        self.transaction_context
+            .push(program_indices, instruction_accounts, instruction_data)
     }
 
     /// Pop a stack frame from the invocation stack
-    pub fn pop(&mut self) {
+    pub fn pop(&mut self) -> Result<(), InstructionError> {
         self.invoke_stack.pop();
+        self.transaction_context.pop()
     }
 
     /// Current depth of the invocation stack
@@ -344,12 +347,12 @@ impl<'a> InvokeContext<'a> {
         instruction_accounts: &[InstructionAccount],
         program_indices: &[usize],
     ) -> Result<(), InstructionError> {
+        let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
         let program_id = self
             .invoke_stack
             .last()
             .and_then(|frame| frame.program_id())
             .ok_or(InstructionError::CallDepth)?;
-        let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
 
         // Verify all executable accounts have zero outstanding refs
         for account_index in program_indices.iter() {
@@ -707,7 +710,7 @@ impl<'a> InvokeContext<'a> {
         ))
     }
 
-    /// Processes a cross-program instruction and returns how many compute units were used
+    /// Processes an instruction and returns how many compute units were used
     pub fn process_instruction(
         &mut self,
         instruction_data: &[u8],
@@ -751,7 +754,7 @@ impl<'a> InvokeContext<'a> {
         }
 
         let result = self
-            .push(instruction_accounts, program_indices)
+            .push(instruction_accounts, program_indices, instruction_data)
             .and_then(|_| {
                 self.return_data = (program_id, Vec::new());
                 let pre_remaining_units = self.compute_meter.borrow().get_remaining();
@@ -769,7 +772,7 @@ impl<'a> InvokeContext<'a> {
             });
 
         // Pop the invoke_stack to restore previous state
-        self.pop();
+        let _ = self.pop();
         result
     }
 
@@ -980,11 +983,11 @@ pub fn with_mock_invoke_context<R, F: FnMut(&mut InvokeContext) -> R>(
         prepare_mock_invoke_context(transaction_accounts, instruction_accounts, &program_indices);
     let mut transaction_context = TransactionContext::new(
         preparation.transaction_accounts,
-        ComputeBudget::default().max_invoke_depth,
+        ComputeBudget::default().max_invoke_depth.saturating_add(1),
     );
     let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
     invoke_context
-        .push(&preparation.instruction_accounts, &program_indices)
+        .push(&preparation.instruction_accounts, &program_indices, &[])
         .unwrap();
     callback(&mut invoke_context)
 }
@@ -1008,13 +1011,18 @@ pub fn mock_process_instruction_with_sysvars(
         .push((*loader_id, processor_account));
     let mut transaction_context = TransactionContext::new(
         preparation.transaction_accounts,
-        ComputeBudget::default().max_invoke_depth,
+        ComputeBudget::default().max_invoke_depth.saturating_add(1),
     );
     let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
     invoke_context.sysvars = sysvars;
     let result = invoke_context
-        .push(&preparation.instruction_accounts, &program_indices)
+        .push(
+            &preparation.instruction_accounts,
+            &program_indices,
+            instruction_data,
+        )
         .and_then(|_| process_instruction(1, instruction_data, &mut invoke_context));
+    invoke_context.pop().unwrap();
     assert_eq!(result, expected_result);
     let mut transaction_accounts = transaction_context.deconstruct_without_keys().unwrap();
     transaction_accounts.pop();
@@ -1252,7 +1260,7 @@ mod tests {
         let mut depth_reached = 0;
         for _ in 0..invoke_stack.len() {
             if Err(InstructionError::CallDepth)
-                == invoke_context.push(&instruction_accounts, &[MAX_DEPTH + depth_reached])
+                == invoke_context.push(&instruction_accounts, &[MAX_DEPTH + depth_reached], &[])
             {
                 break;
             }
@@ -1280,7 +1288,8 @@ mod tests {
             ];
 
             // modify account owned by the program
-            transaction_context
+            invoke_context
+                .transaction_context
                 .get_account_at_index(owned_index)
                 .borrow_mut()
                 .data_as_mut_slice()[0] = (MAX_DEPTH + owned_index) as u8;
@@ -1293,11 +1302,13 @@ mod tests {
             );
 
             // modify account not owned by the program
-            let data = transaction_context
+            let data = invoke_context
+                .transaction_context
                 .get_account_at_index(not_owned_index)
                 .borrow_mut()
                 .data()[0];
-            transaction_context
+            invoke_context
+                .transaction_context
                 .get_account_at_index(not_owned_index)
                 .borrow_mut()
                 .data_as_mut_slice()[0] = (MAX_DEPTH + not_owned_index) as u8;
@@ -1306,12 +1317,13 @@ mod tests {
                 Err(InstructionError::ExternalAccountDataModified)
             );
             assert_eq!(invoke_context.pre_accounts[not_owned_index].data()[0], data);
-            transaction_context
+            invoke_context
+                .transaction_context
                 .get_account_at_index(not_owned_index)
                 .borrow_mut()
                 .data_as_mut_slice()[0] = data;
 
-            invoke_context.pop();
+            invoke_context.pop().unwrap();
         }
     }
 
@@ -1323,17 +1335,11 @@ mod tests {
         let mut transaction_context = TransactionContext::new(accounts, 1);
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context
-            .push(&instruction_accounts, &program_indices)
+            .push(&instruction_accounts, &program_indices, &[])
             .unwrap();
         assert!(invoke_context
             .verify(&instruction_accounts, &program_indices)
             .is_ok());
-
-        let mut _borrowed = transaction_context.get_account_at_index(0).borrow();
-        assert_eq!(
-            invoke_context.verify(&instruction_accounts, &program_indices),
-            Err(InstructionError::AccountBorrowOutstanding)
-        );
     }
 
     #[test]
@@ -1376,7 +1382,9 @@ mod tests {
 
         // External modification tests
         {
-            invoke_context.push(&instruction_accounts, &[4]).unwrap();
+            invoke_context
+                .push(&instruction_accounts, &[4], &[])
+                .unwrap();
             let inner_instruction = Instruction::new_with_bincode(
                 callee_program_id,
                 &MockInstruction::NoopSuccess,
@@ -1415,7 +1423,7 @@ mod tests {
                 .borrow_mut()
                 .data_as_mut_slice()[0] = 0;
 
-            invoke_context.pop();
+            invoke_context.pop().unwrap();
         }
 
         // Internal modification tests
@@ -1436,18 +1444,22 @@ mod tests {
             ),
         ];
         for case in cases {
-            invoke_context.push(&instruction_accounts, &[4]).unwrap();
+            invoke_context
+                .push(&instruction_accounts, &[4], &[])
+                .unwrap();
             let inner_instruction =
                 Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
             assert_eq!(invoke_context.native_invoke(inner_instruction, &[]), case.1);
-            invoke_context.pop();
+            invoke_context.pop().unwrap();
         }
 
         // Compute unit consumption tests
         let compute_units_to_consume = 10;
         let expected_results = vec![Ok(()), Err(InstructionError::GenericError)];
         for expected_result in expected_results {
-            invoke_context.push(&instruction_accounts, &[4]).unwrap();
+            invoke_context
+                .push(&instruction_accounts, &[4], &[])
+                .unwrap();
             let inner_instruction = Instruction::new_with_bincode(
                 callee_program_id,
                 &MockInstruction::ConsumeComputeUnits {
@@ -1477,7 +1489,7 @@ mod tests {
             assert_eq!(compute_units_consumed, compute_units_to_consume);
             assert_eq!(result, expected_result);
 
-            invoke_context.pop();
+            invoke_context.pop().unwrap();
         }
     }
 
@@ -1495,14 +1507,14 @@ mod tests {
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context.feature_set = Arc::new(feature_set);
 
-        invoke_context.push(&[], &[0]).unwrap();
+        invoke_context.push(&[], &[0], &[]).unwrap();
         assert_eq!(
             *invoke_context.get_compute_budget(),
             ComputeBudget::default()
         );
-        invoke_context.pop();
+        invoke_context.pop().unwrap();
 
-        invoke_context.push(&[], &[1]).unwrap();
+        invoke_context.push(&[], &[1], &[]).unwrap();
         let expected_compute_budget = ComputeBudget {
             max_units: 500_000,
             heap_size: Some(256_usize.saturating_mul(1024)),
@@ -1512,13 +1524,13 @@ mod tests {
             *invoke_context.get_compute_budget(),
             expected_compute_budget
         );
-        invoke_context.pop();
+        invoke_context.pop().unwrap();
 
-        invoke_context.push(&[], &[0]).unwrap();
+        invoke_context.push(&[], &[0], &[]).unwrap();
         assert_eq!(
             *invoke_context.get_compute_budget(),
             ComputeBudget::default()
         );
-        invoke_context.pop();
+        invoke_context.pop().unwrap();
     }
 }
