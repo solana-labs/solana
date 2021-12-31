@@ -66,6 +66,18 @@ pub struct ProgramTiming {
     pub accumulated_us: u64,
     pub accumulated_units: u64,
     pub count: u32,
+    pub errored_txs_compute_consumed: Vec<u64>,
+}
+
+impl ProgramTiming {
+    pub fn coalesce_error_timings(&mut self, current_estimated_program_cost: u64) {
+        for tx_error_compute_consumed in self.errored_txs_compute_consumed.drain(..) {
+            let compute_units_update =
+                std::cmp::max(current_estimated_program_cost, tx_error_compute_consumed);
+            self.accumulated_units = self.accumulated_units.saturating_add(compute_units_update);
+            self.count = self.count.saturating_add(1);
+        }
+    }
 }
 
 #[derive(Default, Debug)]
@@ -1264,27 +1276,39 @@ impl MessageProcessor {
         let pre_remaining_units = invoke_context.get_compute_meter().borrow().get_remaining();
         let mut time = Measure::start("execute_instruction");
 
-        self.process_instruction(program_id, &instruction.data, &mut invoke_context)?;
-        Self::verify(
-            message,
-            instruction,
-            &invoke_context.pre_accounts,
-            executable_accounts,
-            accounts,
-            &rent_collector.rent,
-            timings,
-            invoke_context.get_logger(),
-            invoke_context.is_feature_active(&updated_verify_policy::id()),
-            invoke_context.is_feature_active(&demote_program_write_locks::id()),
-        )?;
+        let process_instruction_result =
+            self.process_instruction(program_id, &instruction.data, &mut invoke_context);
+        let execute_or_verify_result = process_instruction_result.and_then(|_| {
+            Self::verify(
+                message,
+                instruction,
+                &invoke_context.pre_accounts,
+                executable_accounts,
+                accounts,
+                &rent_collector.rent,
+                timings,
+                invoke_context.get_logger(),
+                invoke_context.is_feature_active(&updated_verify_policy::id()),
+                invoke_context.is_feature_active(&demote_program_write_locks::id()),
+            )
+        });
 
         time.stop();
         let post_remaining_units = invoke_context.get_compute_meter().borrow().get_remaining();
 
         let program_timing = timings.per_program_timings.entry(*program_id).or_default();
         program_timing.accumulated_us += time.as_us();
-        program_timing.accumulated_units += pre_remaining_units - post_remaining_units;
-        program_timing.count += 1;
+        let compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
+        if execute_or_verify_result.is_err() {
+            program_timing
+                .errored_txs_compute_consumed
+                .push(compute_units_consumed);
+        } else {
+            program_timing.accumulated_units = program_timing
+                .accumulated_units
+                .saturating_add(compute_units_consumed);
+            program_timing.count = program_timing.count.saturating_add(1);
+        }
 
         timings.accumulate(&invoke_context.timings);
 
