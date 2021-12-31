@@ -396,22 +396,6 @@ impl ClusterInfoVoteListener {
         let mut packet_batches = packet::to_packet_batches(&votes, 1);
 
         // Votes should already be filtered by this point.
-<<<<<<< HEAD
-        let reject_non_vote = false;
-        sigverify::ed25519_verify_cpu(&mut packet_batches, reject_non_vote);
-
-        let (vote_txs, vote_metadata) = izip!(votes.into_iter(), packet_batches)
-            .filter_map(|(vote_tx, packet_batch)| {
-                let (vote, vote_account_key) = vote_transaction::parse_vote_transaction(&vote_tx)
-                    .and_then(|(vote_account_key, vote, _)| {
-                    if vote.slots.is_empty() {
-                        None
-                    } else {
-                        Some((vote, vote_account_key))
-                    }
-                })?;
-
-=======
         sigverify::ed25519_verify_cpu(&mut packet_batches, /*reject_non_vote=*/ false);
         let root_bank = bank_forks.read().unwrap().root_bank();
         let epoch_schedule = root_bank.epoch_schedule();
@@ -419,7 +403,6 @@ impl ClusterInfoVoteListener {
             .into_iter()
             .zip(packet_batches)
             .filter(|(_, packet_batch)| {
->>>>>>> c0c603865 (checks for authorized voter early on in the vote-listener pipeline (#22169))
                 // to_packet_batches() above splits into 1 packet long batches
                 assert_eq!(packet_batch.packets.len(), 1);
                 !packet_batch.packets[0].meta.discard
