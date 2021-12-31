@@ -3,7 +3,7 @@ use {
     solana_measure::measure::Measure,
     solana_program_runtime::{
         instruction_recorder::InstructionRecorder,
-        invoke_context::{BuiltinProgram, Executors, InvokeContext, ProcessInstructionResult},
+        invoke_context::{BuiltinProgram, Executors, InvokeContext},
         log_collector::LogCollector,
         timings::ExecuteDetailsTimings,
     },
@@ -128,14 +128,13 @@ impl MessageProcessor {
                 })
                 .collect::<Vec<_>>();
             let mut time = Measure::start("execute_instruction");
-            let ProcessInstructionResult {
-                compute_units_consumed,
-                result,
-            } = invoke_context.process_instruction(
+            let mut compute_units_consumed = 0;
+            let result = invoke_context.process_instruction(
                 &instruction.data,
                 &instruction_accounts,
                 None,
                 program_indices,
+                &mut compute_units_consumed,
             );
             time.stop();
             timings.accumulate_program(
