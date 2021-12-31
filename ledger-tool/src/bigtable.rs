@@ -20,6 +20,7 @@ use {
         process::exit,
         result::Result,
         sync::{atomic::AtomicBool, Arc},
+        collections::HashSet,
     },
 };
 
@@ -94,26 +95,34 @@ async fn blocks(starting_slot: Slot, limit: usize) -> Result<(), Box<dyn std::er
 
 async fn compare_blocks(starting_slot: Slot, limit: usize, cred_path: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
 
-    if let Some(t) = &cred_path {
-        if t.len() <= 0 {panic!("you must provide the second credential");}
+    if let Some(credential) = &cred_path {
+        assert!(credential.len() > 0);
     }
     
     let bigtable_def = solana_storage_bigtable::LedgerStorage::new(false, None, None)
     .await
-    .map_err(|err| format!("Failed to connect to default storage: {:?}", err))?;
+    .map_err(|err| format!("failed to connect to standard bigtable: {:?}", err))?;
 
-    let slots = bigtable_def.get_confirmed_blocks(starting_slot, limit).await?;
-    println!("{:?}", slots);
-    println!("standard bigtable {} blocks found", slots.len());
+    let slots_def = bigtable_def.get_confirmed_blocks(starting_slot, limit).await?;
+    println!("{:?}", slots_def);
+    println!("standard bigtable {} blocks found", slots_def.len());
 
 
-    let bigtable_cmp = solana_storage_bigtable::LedgerStorage::new(false, None, cred_path)
+    let bigtable_std = solana_storage_bigtable::LedgerStorage::new(false, None, cred_path)
         .await
-        .map_err(|err| format!("Failed to connect to storage which is used to compare with standard storage: {:?}", err))?;
+        .map_err(|err| format!("failed to connect to bigtable used to be compared with standard bigtable: {:?}", err))?;
     
-        let slots = bigtable_cmp.get_confirmed_blocks(starting_slot, limit).await?;
-    println!("{:?}", slots);
-    println!("bigtable used to compare with {} blocks found", slots.len());
+        let slots_std = bigtable_std.get_confirmed_blocks(starting_slot, limit).await?;
+    println!("{:?}", slots_std);
+    println!("bigtable used to compare with {} blocks found", slots_std.len());
+    
+    let mut missing_block = HashSet::new();
+    for slot in slots_std {
+        if !slots_def.contains(&slot) {
+            missing_block.insert(slot);
+        }
+    }
+    println!("missing blocks:{:?}", missing_block);
 
     Ok(())
 }
@@ -357,7 +366,8 @@ impl BigTableSubCommand for App<'_, '_> {
                 )
                 .subcommand(
                     SubCommand::with_name("compare-blocks")
-                        .about("Get a list of slots with confirmed blocks for the given range")
+                        .about("Compare a list of slots with confirmed blocks for the given range with a standard source. \
+                                Output missing blocks.")
                         .arg(
                             Arg::with_name("starting_slot")
                                 .long("starting-slot")
@@ -382,13 +392,12 @@ impl BigTableSubCommand for App<'_, '_> {
                         ).arg(
                             Arg::with_name("credential")
                             .long("credential")
-                            .short("cred")
                             .value_name("CREDENTIAL")
                             .takes_value(true)
                             .index(3)
                             .required(true)
                             .default_value("")
-                            .help("credential file path")
+                            .help("File path of credential with a standard source"),
                         ),
                 )
                 .subcommand(
