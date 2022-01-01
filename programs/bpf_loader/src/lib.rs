@@ -912,7 +912,7 @@ impl Executor for BpfExecutor {
         serialize_time.stop();
         let mut create_vm_time = Measure::start("create_vm");
         let mut execute_time;
-        {
+        let execution_result = {
             let compute_meter = invoke_context.get_compute_meter();
             let mut vm = match create_vm(
                 loader_id,
@@ -958,19 +958,17 @@ impl Executor for BpfExecutor {
                 stable_log::program_return(&logger, program_id, return_data);
             }
             match result {
-                Ok(status) => {
-                    if status != SUCCESS {
-                        let error: InstructionError = if !add_missing_program_error_mappings
-                            && (status == ACCOUNT_NOT_RENT_EXEMPT || status == BORSH_IO_ERROR)
-                        {
-                            // map originally missing error mappings to InvalidError
-                            InstructionError::InvalidError
-                        } else {
-                            status.into()
-                        };
-                        stable_log::program_failure(&logger, program_id, &error);
-                        return Err(error);
-                    }
+                Ok(status) if status != SUCCESS => {
+                    let error: InstructionError = if !add_missing_program_error_mappings
+                        && (status == ACCOUNT_NOT_RENT_EXEMPT || status == BORSH_IO_ERROR)
+                    {
+                        // map originally missing error mappings to InvalidError
+                        InstructionError::InvalidError
+                    } else {
+                        status.into()
+                    };
+                    stable_log::program_failure(&logger, program_id, &error);
+                    Err(error)
                 }
                 Err(error) => {
                     let error = match error {
@@ -983,14 +981,18 @@ impl Executor for BpfExecutor {
                         }
                     };
                     stable_log::program_failure(&logger, program_id, &error);
-                    return Err(error);
+                    Err(error)
                 }
+                _ => Ok(()),
             }
-            execute_time.stop();
-        }
+        };
+        execute_time.stop();
+
         let mut deserialize_time = Measure::start("deserialize");
-        let keyed_accounts = invoke_context.get_keyed_accounts()?;
-        deserialize_parameters(loader_id, keyed_accounts, parameter_bytes.as_slice())?;
+        let execute_or_deserialize_result = execution_result.and_then(|_| {
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
+            deserialize_parameters(loader_id, keyed_accounts, parameter_bytes.as_slice())
+        });
         deserialize_time.stop();
         invoke_context.update_timing(
             serialize_time.as_us(),
@@ -998,8 +1000,11 @@ impl Executor for BpfExecutor {
             execute_time.as_us(),
             deserialize_time.as_us(),
         );
-        stable_log::program_success(&logger, program_id);
-        Ok(())
+
+        if execute_or_deserialize_result.is_ok() {
+            stable_log::program_success(&logger, program_id);
+        }
+        execute_or_deserialize_result
     }
 }
 
