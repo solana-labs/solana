@@ -9,7 +9,6 @@ sol_try_find_program_address
 sol_sha256
 sol_keccak256
 sol_secp256k1_recover
-sol_blake3
 sol_get_clock_sysvar
 sol_get_epoch_schedule_sysvar
 sol_get_fees_sysvar
