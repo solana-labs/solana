@@ -70,10 +70,12 @@ use {
         sysvar::stake_history,
         transaction::{self, Transaction, TransactionError},
     },
+    solana_storage_bigtable::Error as StorageError,
     solana_streamer::socket::SocketAddrSpace,
     solana_transaction_status::{
-        ConfirmedBlock, EncodedConfirmedTransaction, Reward, RewardType,
-        TransactionConfirmationStatus, TransactionStatus, UiConfirmedBlock, UiTransactionEncoding,
+        ConfirmedBlock, ConfirmedTransactionStatusWithSignature, EncodedConfirmedTransaction,
+        Reward, RewardType, TransactionConfirmationStatus, TransactionStatus, UiConfirmedBlock,
+        UiTransactionEncoding,
     },
     solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY},
     spl_token::{
@@ -1449,6 +1451,29 @@ impl JsonRpcRequestProcessor {
                 .get_confirmed_signatures_for_address2(address, highest_slot, before, until, limit)
                 .map_err(|err| Error::invalid_params(format!("{}", err)))?;
 
+            let map_results = |results: Vec<ConfirmedTransactionStatusWithSignature>| {
+                results
+                    .into_iter()
+                    .map(|x| {
+                        let mut item: RpcConfirmedTransactionStatusWithSignature = x.into();
+                        if item.slot <= highest_confirmed_root {
+                            item.confirmation_status =
+                                Some(TransactionConfirmationStatus::Finalized);
+                        } else {
+                            item.confirmation_status =
+                                Some(TransactionConfirmationStatus::Confirmed);
+                            if item.block_time.is_none() {
+                                let r_bank_forks = self.bank_forks.read().unwrap();
+                                item.block_time = r_bank_forks
+                                    .get(item.slot)
+                                    .map(|bank| bank.clock().unix_timestamp);
+                            }
+                        }
+                        item
+                    })
+                    .collect()
+            };
+
             if results.len() < limit {
                 if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                     let mut bigtable_before = before;
@@ -1460,16 +1485,20 @@ impl JsonRpcRequestProcessor {
                     // If the oldest address-signature found in Blockstore has not yet been
                     // uploaded to long-term storage, modify the storage query to return all latest
                     // signatures to prevent erroring on RowNotFound. This can race with upload.
-                    if found_before
-                        && bigtable_before.is_some()
-                        && bigtable_ledger_storage
-                            .get_confirmed_transaction(&bigtable_before.unwrap())
+                    if found_before && bigtable_before.is_some() {
+                        match bigtable_ledger_storage
+                            .get_signature_status(&bigtable_before.unwrap())
                             .await
-                            .ok()
-                            .flatten()
-                            .is_none()
-                    {
-                        bigtable_before = None;
+                        {
+                            Err(StorageError::SignatureNotFound) => {
+                                bigtable_before = None;
+                            }
+                            Err(err) => {
+                                warn!("{:?}", err);
+                                return Ok(map_results(results));
+                            }
+                            Ok(_) => {}
+                        }
                     }
 
                     let bigtable_results = bigtable_ledger_storage
@@ -1502,24 +1531,7 @@ impl JsonRpcRequestProcessor {
                 }
             }
 
-            Ok(results
-                .into_iter()
-                .map(|x| {
-                    let mut item: RpcConfirmedTransactionStatusWithSignature = x.into();
-                    if item.slot <= highest_confirmed_root {
-                        item.confirmation_status = Some(TransactionConfirmationStatus::Finalized);
-                    } else {
-                        item.confirmation_status = Some(TransactionConfirmationStatus::Confirmed);
-                        if item.block_time.is_none() {
-                            let r_bank_forks = self.bank_forks.read().unwrap();
-                            item.block_time = r_bank_forks
-                                .get(item.slot)
-                                .map(|bank| bank.clock().unix_timestamp);
-                        }
-                    }
-                    item
-                })
-                .collect())
+            Ok(map_results(results))
         } else {
             Err(RpcCustomError::TransactionHistoryNotAvailable.into())
         }
