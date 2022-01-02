@@ -35,6 +35,7 @@ use {
         blockstore::Blockstore,
         blockstore_processor::{self, BlockstoreProcessorError, TransactionStatusSender},
         leader_schedule_cache::LeaderScheduleCache,
+        leader_schedule_utils::first_of_consecutive_leader_slots,
     },
     solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_info,
@@ -850,8 +851,41 @@ impl ReplayStage {
         }
     }
 
-    fn first_of_consecutive_leader_slots(slot: Slot) -> Slot {
-        (slot / NUM_CONSECUTIVE_LEADER_SLOTS) * NUM_CONSECUTIVE_LEADER_SLOTS
+    fn maybe_retransmit_unpropagated_slots(
+        metric_name: &'static str,
+        retransmit_slots_sender: &RetransmitSlotsSender,
+        progress: &mut ProgressMap,
+        latest_leader_slot: Slot,
+    ) {
+        let first_leader_group_slot = first_of_consecutive_leader_slots(latest_leader_slot);
+
+        for slot in first_leader_group_slot..=latest_leader_slot {
+            if !progress.is_propagated(slot).unwrap_or(true) {
+                if let Some(retransmit_info) = progress.get_retransmit_info(slot) {
+                    if retransmit_info.reached_retransmit_threshold() {
+                        info!(
+                            "Retrying retransmit: latest_leader_slot={} slot={} retransmit_info={:?}",
+                            latest_leader_slot,
+                            slot,
+                            &retransmit_info,
+                        );
+                        datapoint_info!(
+                            metric_name,
+                            ("latest_leader_slot", latest_leader_slot, i64),
+                            ("slot", slot, i64),
+                            ("retry_iteration", retransmit_info.retry_iteration, i64),
+                        );
+                        let _ = retransmit_slots_sender.send(slot);
+                        retransmit_info.increment_retry_iteration();
+                    } else {
+                        debug!(
+                            "Bypass retransmit of slot={} retransmit_info={:?}",
+                            slot, &retransmit_info
+                        );
+                    }
+                }
+            }
+        }
     }
 
     fn retransmit_latest_unpropagated_leader_slot(
@@ -863,39 +897,16 @@ impl ReplayStage {
         if let (false, Some(latest_leader_slot)) =
             progress.get_leader_propagation_slot_must_exist(start_slot)
         {
-            info!(
+            debug!(
                 "Slot not propagated: start_slot={} latest_leader_slot={}",
                 start_slot, latest_leader_slot
             );
-
-            let first_leader_group_slot =
-                Self::first_of_consecutive_leader_slots(latest_leader_slot);
-
-            for slot in first_leader_group_slot..=latest_leader_slot {
-                if !progress.is_propagated(slot).unwrap_or(true) {
-                    if let Some(retransmit_info) = progress.get_retransmit_info(slot) {
-                        if retransmit_info.reached_retransmit_threshold() {
-                            info!(
-                                "Retrying retransmit: start_slot={} latest_leader_slot={} slot={} retransmit_info={:?}",
-                                start_slot,
-                                latest_leader_slot,
-                                slot,
-                                &retransmit_info,
-                            );
-                            datapoint_info!(
-                                "replay_stage-retransmit-timing-based",
-                                ("latest_leader_slot", latest_leader_slot, i64),
-                                ("slot", slot, i64),
-                                ("retry_iteration", retransmit_info.retry_iteration, i64),
-                            );
-                            let _ = retransmit_slots_sender.send(slot);
-                            retransmit_info.increment_retry_iteration();
-                        } else {
-                            info!("Bypass retry: {:?}", &retransmit_info);
-                        }
-                    }
-                }
-            }
+            Self::maybe_retransmit_unpropagated_slots(
+                "replay_stage-retransmit-timing-based",
+                retransmit_slots_sender,
+                progress,
+                latest_leader_slot,
+            );
         }
     }
 
@@ -1506,30 +1517,12 @@ impl ReplayStage {
                     skipped_slots_info.last_skipped_slot = poh_slot;
                 }
                 if Self::should_retransmit(poh_slot, &mut skipped_slots_info.last_retransmit_slot) {
-                    let first_leader_group_slot =
-                        Self::first_of_consecutive_leader_slots(latest_unconfirmed_leader_slot);
-                    for slot in first_leader_group_slot..=latest_unconfirmed_leader_slot {
-                        if let Some(retransmit_info) = progress_map.get_retransmit_info(slot) {
-                            if retransmit_info.reached_retransmit_threshold() {
-                                info!(
-                                    "Retrying retransmit: retransmit_info={:?}",
-                                    &retransmit_info
-                                );
-                                datapoint_info!(
-                                    "replay_stage-retransmit",
-                                    ("slot", slot, i64),
-                                    ("retry_iteration", retransmit_info.retry_iteration, i64),
-                                );
-                                let _ = retransmit_slots_sender.send(slot);
-                                retransmit_info.increment_retry_iteration();
-                            } else {
-                                info!(
-                                    "Bypassing retransmit of my leader slot retransmit_info={:?}",
-                                    &retransmit_info
-                                );
-                            }
-                        }
-                    }
+                    Self::maybe_retransmit_unpropagated_slots(
+                        "replay_stage-retransmit",
+                        retransmit_slots_sender,
+                        progress_map,
+                        latest_unconfirmed_leader_slot,
+                    );
                 }
                 return;
             }

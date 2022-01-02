@@ -61,6 +61,10 @@ pub fn num_ticks_left_in_slot(bank: &Bank, tick_height: u64) -> u64 {
     bank.ticks_per_slot() - tick_height % bank.ticks_per_slot()
 }
 
+pub fn first_of_consecutive_leader_slots(slot: Slot) -> Slot {
+    (slot / NUM_CONSECUTIVE_LEADER_SLOTS) * NUM_CONSECUTIVE_LEADER_SLOTS
+}
+
 fn sort_stakes(stakes: &mut Vec<(Pubkey, u64)>) {
     // Sort first by stake. If stakes are the same, sort by pubkey to ensure a
     // deterministic result.
