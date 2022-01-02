@@ -1,7 +1,12 @@
 use {
     serde::{Deserialize, Serialize},
     solana_frozen_abi_macro::{AbiEnumVisitor, AbiExample},
-    solana_sdk::{clock::Slot, instruction::InstructionError, pubkey::Pubkey},
+    solana_sdk::{
+        clock::Slot,
+        instruction::InstructionError,
+        pubkey::Pubkey,
+        slot_hashes::{SlotHashes, MAX_ENTRIES},
+    },
     std::borrow::Cow,
 };
 
@@ -19,6 +24,14 @@ pub enum ProgramState {
     Uninitialized,
     /// Initialized `LookupTable` account.
     LookupTable(LookupTableMeta),
+}
+
+/// Activation status of a lookup table
+#[derive(Debug, PartialEq, Clone)]
+pub enum LookupTableStatus {
+    Activated,
+    Deactivating { remaining_blocks: usize },
+    Deactivated,
 }
 
 /// Address lookup table metadata
@@ -59,6 +72,41 @@ impl LookupTableMeta {
         LookupTableMeta {
             authority: Some(authority),
             ..LookupTableMeta::default()
+        }
+    }
+
+    /// Returns whether the table is considered active for address lookups
+    pub fn is_active(&self, current_slot: Slot, slot_hashes: &SlotHashes) -> bool {
+        match self.status(current_slot, slot_hashes) {
+            LookupTableStatus::Activated => true,
+            LookupTableStatus::Deactivating { .. } => true,
+            LookupTableStatus::Deactivated => false,
+        }
+    }
+
+    /// Return the current status of the lookup table
+    pub fn status(&self, current_slot: Slot, slot_hashes: &SlotHashes) -> LookupTableStatus {
+        if self.deactivation_slot == Slot::MAX {
+            LookupTableStatus::Activated
+        } else if self.deactivation_slot == current_slot {
+            LookupTableStatus::Deactivating {
+                remaining_blocks: MAX_ENTRIES.saturating_add(1),
+            }
+        } else if let Some(slot_hash_position) = slot_hashes.position(&self.deactivation_slot) {
+            // Deactivation requires a cool-down period to give in-flight transactions
+            // enough time to land and to remove indeterminism caused by transactions loading
+            // addresses in the same slot when a table is closed. The cool-down period is
+            // equivalent to the amount of time it takes for a slot to be removed from the
+            // slot hash list.
+            //
+            // By using the slot hash to enforce the cool-down, there is a side effect
+            // of not allowing lookup tables to be recreated at the same derived address
+            // because tables must be created at an address derived from a recent slot.
+            LookupTableStatus::Deactivating {
+                remaining_blocks: MAX_ENTRIES.saturating_sub(slot_hash_position),
+            }
+        } else {
+            LookupTableStatus::Deactivated
         }
     }
 }
@@ -127,6 +175,7 @@ impl<'a> AddressLookupTable<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use solana_sdk::hash::Hash;
 
     impl AddressLookupTable<'_> {
         fn new_for_tests(meta: LookupTableMeta, num_addresses: usize) -> Self {
@@ -159,6 +208,74 @@ mod tests {
         let meta_size = bincode::serialized_size(&lookup_table).unwrap();
         assert!(meta_size as usize <= LOOKUP_TABLE_META_SIZE);
         assert_eq!(meta_size as usize, 24);
+    }
+
+    #[test]
+    fn test_lookup_table_meta_status() {
+        let mut slot_hashes = SlotHashes::default();
+        for slot in 1..=MAX_ENTRIES as Slot {
+            slot_hashes.add(slot, Hash::new_unique());
+        }
+
+        let most_recent_slot = slot_hashes.first().unwrap().0;
+        let least_recent_slot = slot_hashes.last().unwrap().0;
+        assert!(least_recent_slot < most_recent_slot);
+
+        // 10 was chosen because the current slot isn't necessarily the next
+        // slot after the most recent block
+        let current_slot = most_recent_slot + 10;
+
+        let active_table = LookupTableMeta {
+            deactivation_slot: Slot::MAX,
+            ..LookupTableMeta::default()
+        };
+
+        let just_started_deactivating_table = LookupTableMeta {
+            deactivation_slot: current_slot,
+            ..LookupTableMeta::default()
+        };
+
+        let recently_started_deactivating_table = LookupTableMeta {
+            deactivation_slot: most_recent_slot,
+            ..LookupTableMeta::default()
+        };
+
+        let almost_deactivated_table = LookupTableMeta {
+            deactivation_slot: least_recent_slot,
+            ..LookupTableMeta::default()
+        };
+
+        let deactivated_table = LookupTableMeta {
+            deactivation_slot: least_recent_slot - 1,
+            ..LookupTableMeta::default()
+        };
+
+        assert_eq!(
+            active_table.status(current_slot, &slot_hashes),
+            LookupTableStatus::Activated
+        );
+        assert_eq!(
+            just_started_deactivating_table.status(current_slot, &slot_hashes),
+            LookupTableStatus::Deactivating {
+                remaining_blocks: MAX_ENTRIES.saturating_add(1),
+            }
+        );
+        assert_eq!(
+            recently_started_deactivating_table.status(current_slot, &slot_hashes),
+            LookupTableStatus::Deactivating {
+                remaining_blocks: MAX_ENTRIES,
+            }
+        );
+        assert_eq!(
+            almost_deactivated_table.status(current_slot, &slot_hashes),
+            LookupTableStatus::Deactivating {
+                remaining_blocks: 1,
+            }
+        );
+        assert_eq!(
+            deactivated_table.status(current_slot, &slot_hashes),
+            LookupTableStatus::Deactivated
+        );
     }
 
     #[test]

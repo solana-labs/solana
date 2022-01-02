@@ -2,8 +2,8 @@ use {
     crate::{
         instruction::ProgramInstruction,
         state::{
-            AddressLookupTable, LookupTableMeta, ProgramState, LOOKUP_TABLE_MAX_ADDRESSES,
-            LOOKUP_TABLE_META_SIZE,
+            AddressLookupTable, LookupTableMeta, LookupTableStatus, ProgramState,
+            LOOKUP_TABLE_MAX_ADDRESSES, LOOKUP_TABLE_META_SIZE,
         },
     },
     solana_program_runtime::{ic_msg, invoke_context::InvokeContext},
@@ -15,7 +15,7 @@ use {
         keyed_account::keyed_account_at_index,
         program_utils::limited_deserialize,
         pubkey::{Pubkey, PUBKEY_BYTES},
-        slot_hashes::{SlotHashes, MAX_ENTRIES},
+        slot_hashes::SlotHashes,
         system_instruction,
         sysvar::{
             clock::{self, Clock},
@@ -419,26 +419,25 @@ impl Processor {
         if lookup_table.meta.authority != Some(*authority_account.unsigned_key()) {
             return Err(InstructionError::IncorrectAuthority);
         }
-        if lookup_table.meta.deactivation_slot == Slot::MAX {
-            ic_msg!(invoke_context, "Lookup table is not deactivated");
-            return Err(InstructionError::InvalidArgument);
-        }
 
-        // Assert that the deactivation slot is no longer recent to give in-flight transactions
-        // enough time to land and to remove indeterminism caused by transactions loading
-        // addresses in the same slot when a table is closed. This enforced delay has a side
-        // effect of not allowing lookup tables to be recreated at the same derived address
-        // because tables must be created at an address derived from a recent slot.
+        let clock: Clock = invoke_context.get_sysvar(&clock::id())?;
         let slot_hashes: SlotHashes = invoke_context.get_sysvar(&slot_hashes::id())?;
-        if let Some(position) = slot_hashes.position(&lookup_table.meta.deactivation_slot) {
-            let expiration = MAX_ENTRIES.saturating_sub(position);
-            ic_msg!(
-                invoke_context,
-                "Table cannot be closed until its derivation slot expires in {} blocks",
-                expiration
-            );
-            return Err(InstructionError::InvalidArgument);
-        }
+
+        match lookup_table.meta.status(clock.slot, &slot_hashes) {
+            LookupTableStatus::Activated => {
+                ic_msg!(invoke_context, "Lookup table is not deactivated");
+                Err(InstructionError::InvalidArgument)
+            }
+            LookupTableStatus::Deactivating { remaining_blocks } => {
+                ic_msg!(
+                    invoke_context,
+                    "Table cannot be closed until it's fully deactivated in {} blocks",
+                    remaining_blocks
+                );
+                Err(InstructionError::InvalidArgument)
+            }
+            LookupTableStatus::Deactivated => Ok(()),
+        }?;
 
         drop(lookup_table_account_ref);
 
