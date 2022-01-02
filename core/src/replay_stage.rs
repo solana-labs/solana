@@ -856,13 +856,16 @@ impl ReplayStage {
         retransmit_slots_sender: &RetransmitSlotsSender,
         progress: &mut ProgressMap,
         latest_leader_slot: Slot,
+        force_retransmit_latest_slot: bool,
     ) {
         let first_leader_group_slot = first_of_consecutive_leader_slots(latest_leader_slot);
 
         for slot in first_leader_group_slot..=latest_leader_slot {
             if !progress.is_propagated(slot).unwrap_or(true) {
                 if let Some(retransmit_info) = progress.get_retransmit_info(slot) {
-                    if retransmit_info.reached_retransmit_threshold() {
+                    if (force_retransmit_latest_slot && slot == latest_leader_slot)
+                        || retransmit_info.reached_retransmit_threshold()
+                    {
                         info!(
                             "Retrying retransmit: latest_leader_slot={} slot={} retransmit_info={:?}",
                             latest_leader_slot,
@@ -906,6 +909,7 @@ impl ReplayStage {
                 retransmit_slots_sender,
                 progress,
                 latest_leader_slot,
+                false,
             );
         }
     }
@@ -1522,6 +1526,7 @@ impl ReplayStage {
                         retransmit_slots_sender,
                         progress_map,
                         latest_unconfirmed_leader_slot,
+                        false, //true,
                     );
                 }
                 return;
