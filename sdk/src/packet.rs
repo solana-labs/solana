@@ -3,7 +3,7 @@ use {
     serde::Serialize,
     std::{
         fmt, io,
-        net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
+        net::{IpAddr, Ipv4Addr, SocketAddr},
     },
 };
 
@@ -13,16 +13,15 @@ use {
 ///   8 bytes is the size of the fragment header
 pub const PACKET_DATA_SIZE: usize = 1280 - 40 - 8;
 
-#[derive(Clone, Default, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 #[repr(C)]
 pub struct Meta {
     pub size: usize,
     pub forwarded: bool,
     pub repair: bool,
     pub discard: bool,
-    pub addr: [u16; 8],
+    pub addr: IpAddr,
     pub port: u16,
-    pub v6: bool,
     pub is_tracer_tx: bool,
     pub is_simple_vote_tx: bool,
 }
@@ -92,40 +91,26 @@ impl PartialEq for Packet {
 
 impl Meta {
     pub fn addr(&self) -> SocketAddr {
-        if !self.v6 {
-            let addr = [
-                self.addr[0] as u8,
-                self.addr[1] as u8,
-                self.addr[2] as u8,
-                self.addr[3] as u8,
-            ];
-            let ipv4: Ipv4Addr = From::<[u8; 4]>::from(addr);
-            SocketAddr::new(IpAddr::V4(ipv4), self.port)
-        } else {
-            let ipv6: Ipv6Addr = From::<[u16; 8]>::from(self.addr);
-            SocketAddr::new(IpAddr::V6(ipv6), self.port)
-        }
+        SocketAddr::new(self.addr, self.port)
     }
 
-    pub fn set_addr(&mut self, a: &SocketAddr) {
-        match *a {
-            SocketAddr::V4(v4) => {
-                let ip = v4.ip().octets();
-                self.addr[0] = u16::from(ip[0]);
-                self.addr[1] = u16::from(ip[1]);
-                self.addr[2] = u16::from(ip[2]);
-                self.addr[3] = u16::from(ip[3]);
-                self.addr[4] = 0;
-                self.addr[5] = 0;
-                self.addr[6] = 0;
-                self.addr[7] = 0;
-                self.v6 = false;
-            }
-            SocketAddr::V6(v6) => {
-                self.addr = v6.ip().segments();
-                self.v6 = true;
-            }
+    pub fn set_addr(&mut self, socket_addr: &SocketAddr) {
+        self.addr = socket_addr.ip();
+        self.port = socket_addr.port();
+    }
+}
+
+impl Default for Meta {
+    fn default() -> Self {
+        Self {
+            size: 0,
+            forwarded: false,
+            repair: false,
+            discard: false,
+            addr: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+            port: 0,
+            is_tracer_tx: false,
+            is_simple_vote_tx: false,
         }
-        self.port = a.port();
     }
 }

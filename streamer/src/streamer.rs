@@ -12,7 +12,7 @@ use {
     std::{
         cmp::Reverse,
         collections::HashMap,
-        net::UdpSocket,
+        net::{IpAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, Ordering},
             mpsc::{Receiver, RecvTimeoutError, SendError, Sender},
@@ -130,14 +130,14 @@ struct SendStats {
 
 #[derive(Default)]
 struct StreamerSendStats {
-    host_map: HashMap<[u16; 8], SendStats>,
+    host_map: HashMap<IpAddr, SendStats>,
     since: Option<Instant>,
 }
 
 impl StreamerSendStats {
     fn report_stats(
         name: &'static str,
-        host_map: HashMap<[u16; 8], SendStats>,
+        host_map: HashMap<IpAddr, SendStats>,
         sample_duration: Option<Duration>,
     ) {
         const MAX_REPORT_ENTRIES: usize = 5;
