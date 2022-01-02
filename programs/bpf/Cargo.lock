@@ -3395,6 +3395,7 @@ dependencies = [
  "assert_matches",
  "base64 0.13.0",
  "bincode",
+ "bitflags",
  "borsh",
  "bs58 0.4.0",
  "bytemuck",

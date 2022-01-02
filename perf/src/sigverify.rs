@@ -9,7 +9,7 @@ use solana_sdk::transaction::Transaction;
 use {
     crate::{
         cuda_runtime::PinnedVec,
-        packet::{Packet, PacketBatch},
+        packet::{Packet, PacketBatch, PacketFlags},
         perf_libs,
         recycler::Recycler,
     },
@@ -114,17 +114,17 @@ fn verify_packet(packet: &mut Packet, reject_non_vote: bool) {
     let msg_start = packet_offsets.msg_start as usize;
 
     // If this packet was already marked as discard, drop it
-    if packet.meta.discard {
+    if packet.meta.discard() {
         return;
     }
 
     if packet_offsets.sig_len == 0 {
-        packet.meta.discard = true;
+        packet.meta.set_discard(true);
         return;
     }
 
     if packet.meta.size <= msg_start {
-        packet.meta.discard = true;
+        packet.meta.set_discard(true);
         return;
     }
 
@@ -142,15 +142,15 @@ fn verify_packet(packet: &mut Packet, reject_non_vote: bool) {
             &packet.data[pubkey_start..pubkey_end],
             &packet.data[msg_start..msg_end],
         ) {
-            packet.meta.discard = true;
+            packet.meta.set_discard(true);
             return;
         }
 
         // Check for tracer pubkey
-        if !packet.meta.is_tracer_tx
+        if !packet.meta.is_tracer_tx()
             && &packet.data[pubkey_start..pubkey_end] == TRACER_KEY.as_ref()
         {
-            packet.meta.is_tracer_tx = true;
+            packet.meta.flags |= PacketFlags::TRACER_TX;
         }
 
         pubkey_start = pubkey_end;
@@ -289,7 +289,7 @@ fn get_packet_offsets(
     let unsanitized_packet_offsets = do_get_packet_offsets(packet, current_offset);
     if let Ok(offsets) = unsanitized_packet_offsets {
         check_for_simple_vote_transaction(packet, &offsets, current_offset).ok();
-        if !reject_non_vote || packet.meta.is_simple_vote_tx {
+        if !reject_non_vote || packet.meta.is_simple_vote_tx() {
             return offsets;
         }
     }
@@ -360,7 +360,7 @@ fn check_for_simple_vote_transaction(
     if &packet.data[instruction_program_id_start..instruction_program_id_end]
         == solana_sdk::vote::program::id().as_ref()
     {
-        packet.meta.is_simple_vote_tx = true;
+        packet.meta.flags |= PacketFlags::SIMPLE_VOTE_TX;
     }
     Ok(())
 }
@@ -441,7 +441,7 @@ pub fn ed25519_verify_disabled(batches: &mut [PacketBatch]) {
         batch
             .packets
             .par_iter_mut()
-            .for_each(|p| p.meta.discard = false)
+            .for_each(|p| p.meta.set_discard(false))
     });
     inc_new_counter_debug!("ed25519_verify_disabled", packet_count);
 }
@@ -498,11 +498,11 @@ pub fn get_checked_scalar(scalar: &[u8; 32]) -> Result<[u8; 32], PacketError> {
 }
 
 pub fn mark_disabled(batches: &mut [PacketBatch], r: &[Vec<u8>]) {
-    batches.iter_mut().zip(r).for_each(|(b, v)| {
-        b.packets.iter_mut().zip(v).for_each(|(p, f)| {
-            p.meta.discard = *f == 0;
-        })
-    });
+    for (batch, v) in batches.iter_mut().zip(r) {
+        for (pkt, f) in batch.packets.iter_mut().zip(v) {
+            pkt.meta.set_discard(*f == 0);
+        }
+    }
 }
 
 pub fn ed25519_verify(
@@ -629,9 +629,9 @@ mod tests {
         batch.packets.push(Packet::default());
         let mut batches: Vec<PacketBatch> = vec![batch];
         mark_disabled(&mut batches, &[vec![0]]);
-        assert!(batches[0].packets[0].meta.discard);
+        assert!(batches[0].packets[0].meta.discard());
         mark_disabled(&mut batches, &[vec![1]]);
-        assert!(!batches[0].packets[0].meta.discard);
+        assert!(!batches[0].packets[0].meta.discard());
     }
 
     #[test]
@@ -730,12 +730,12 @@ mod tests {
         assert_eq!(res, Err(PacketError::InvalidPubkeyLen));
 
         verify_packet(&mut packet, false);
-        assert!(packet.meta.discard);
+        assert!(packet.meta.discard());
 
-        packet.meta.discard = false;
+        packet.meta.set_discard(false);
         let mut batches = generate_packet_batches(&packet, 1, 1);
         ed25519_verify(&mut batches);
-        assert!(batches[0].packets[0].meta.discard);
+        assert!(batches[0].packets[0].meta.discard());
     }
 
     #[test]
@@ -766,12 +766,12 @@ mod tests {
         assert_eq!(res, Err(PacketError::InvalidPubkeyLen));
 
         verify_packet(&mut packet, false);
-        assert!(packet.meta.discard);
+        assert!(packet.meta.discard());
 
-        packet.meta.discard = false;
+        packet.meta.set_discard(false);
         let mut batches = generate_packet_batches(&packet, 1, 1);
         ed25519_verify(&mut batches);
-        assert!(batches[0].packets[0].meta.discard);
+        assert!(batches[0].packets[0].meta.discard());
     }
 
     #[test]
@@ -972,7 +972,7 @@ mod tests {
         assert!(batches
             .iter()
             .flat_map(|batch| &batch.packets)
-            .all(|p| p.meta.discard == should_discard));
+            .all(|p| p.meta.discard() == should_discard));
     }
 
     fn ed25519_verify(batches: &mut [PacketBatch]) {
@@ -995,7 +995,7 @@ mod tests {
         assert!(batches
             .iter()
             .flat_map(|batch| &batch.packets)
-            .all(|p| p.meta.discard));
+            .all(|p| p.meta.discard()));
     }
 
     #[test]
@@ -1041,9 +1041,9 @@ mod tests {
             .zip(ref_vec.into_iter().flatten())
             .all(|(p, discard)| {
                 if discard == 0 {
-                    p.meta.discard
+                    p.meta.discard()
                 } else {
-                    !p.meta.discard
+                    !p.meta.discard()
                 }
             }));
     }
@@ -1196,7 +1196,7 @@ mod tests {
             let mut packet = sigverify::make_packet_from_transaction(tx);
             let packet_offsets = do_get_packet_offsets(&packet, 0).unwrap();
             check_for_simple_vote_transaction(&mut packet, &packet_offsets, 0).ok();
-            assert!(!packet.meta.is_simple_vote_tx);
+            assert!(!packet.meta.is_simple_vote_tx());
         }
 
         // single vote tx is
@@ -1206,7 +1206,7 @@ mod tests {
             let mut packet = sigverify::make_packet_from_transaction(tx);
             let packet_offsets = do_get_packet_offsets(&packet, 0).unwrap();
             check_for_simple_vote_transaction(&mut packet, &packet_offsets, 0).ok();
-            assert!(packet.meta.is_simple_vote_tx);
+            assert!(packet.meta.is_simple_vote_tx());
         }
 
         // multiple mixed tx is not
@@ -1227,7 +1227,7 @@ mod tests {
             let mut packet = sigverify::make_packet_from_transaction(tx);
             let packet_offsets = do_get_packet_offsets(&packet, 0).unwrap();
             check_for_simple_vote_transaction(&mut packet, &packet_offsets, 0).ok();
-            assert!(!packet.meta.is_simple_vote_tx);
+            assert!(!packet.meta.is_simple_vote_tx());
         }
     }
 
@@ -1253,9 +1253,9 @@ mod tests {
                 let packet_offsets = do_get_packet_offsets(packet, current_offset).unwrap();
                 check_for_simple_vote_transaction(packet, &packet_offsets, current_offset).ok();
                 if index == 1 {
-                    assert!(packet.meta.is_simple_vote_tx);
+                    assert!(packet.meta.is_simple_vote_tx());
                 } else {
-                    assert!(!packet.meta.is_simple_vote_tx);
+                    assert!(!packet.meta.is_simple_vote_tx());
                 }
 
                 current_offset = current_offset.saturating_add(size_of::<Packet>());
