@@ -56,7 +56,10 @@ mod test {
             shred::{Shred, Shredder},
             sigverify_shreds::verify_shred_cpu,
         },
-        solana_sdk::signature::{Keypair, Signer},
+        solana_sdk::{
+            packet::PacketFlags,
+            signature::{Keypair, Signer},
+        },
         std::{
             collections::HashMap,
             net::{IpAddr, Ipv4Addr},
@@ -87,7 +90,7 @@ mod test {
             nonce,
         )
         .unwrap();
-        packet.meta.repair = true;
+        packet.meta.flags |= PacketFlags::REPAIR;
 
         let leader_slots = [(slot, keypair.pubkey().to_bytes())]
             .iter()

@@ -406,7 +406,7 @@ impl BankingStage {
         let packet_vec: Vec<_> = packets
             .iter()
             .filter_map(|p| {
-                if !p.meta.forwarded && data_budget.take(p.meta.size) {
+                if !p.meta.forwarded() && data_budget.take(p.meta.size) {
                     Some((&p.data[..p.meta.size], tpu_forwards))
                 } else {
                     None
@@ -1125,7 +1125,7 @@ impl BankingStage {
             .iter()
             .filter_map(|tx_index| {
                 let p = &packet_batch.packets[*tx_index];
-                if votes_only && !p.meta.is_simple_vote_tx {
+                if votes_only && !p.meta.is_simple_vote_tx() {
                     return None;
                 }
 
@@ -1135,7 +1135,7 @@ impl BankingStage {
                 let tx = SanitizedTransaction::try_create(
                     tx,
                     message_hash,
-                    Some(p.meta.is_simple_vote_tx),
+                    Some(p.meta.is_simple_vote_tx()),
                     |_| Err(TransactionError::UnsupportedVersion),
                 )
                 .ok()?;
@@ -1306,15 +1306,8 @@ impl BankingStage {
     fn generate_packet_indexes(vers: &PinnedVec<Packet>) -> Vec<usize> {
         vers.iter()
             .enumerate()
-            .filter_map(
-                |(index, ver)| {
-                    if !ver.meta.discard {
-                        Some(index)
-                    } else {
-                        None
-                    }
-                },
-            )
+            .filter(|(_, pkt)| !pkt.meta.discard())
+            .map(|(index, _)| index)
             .collect()
     }
 
@@ -1492,7 +1485,7 @@ mod tests {
             get_tmp_ledger_path,
             leader_schedule_cache::LeaderScheduleCache,
         },
-        solana_perf::packet::to_packet_batches,
+        solana_perf::packet::{to_packet_batches, PacketFlags},
         solana_poh::{
             poh_recorder::{create_test_recorder, Record, WorkingBankEntry},
             poh_service::PohService,
@@ -1638,7 +1631,7 @@ mod tests {
             b.packets
                 .iter_mut()
                 .zip(v)
-                .for_each(|(p, f)| p.meta.discard = *f == 0)
+                .for_each(|(p, f)| p.meta.set_discard(*f == 0))
         });
         with_vers.into_iter().map(|(b, _)| b).collect()
     }
@@ -2843,7 +2836,7 @@ mod tests {
         const FWD_PACKET: u8 = 1;
         let forwarded_packet = {
             let mut packet = Packet::from_data(None, &[FWD_PACKET]).unwrap();
-            packet.meta.forwarded = true;
+            packet.meta.flags |= PacketFlags::FORWARDED;
             packet
         };
 
@@ -3084,7 +3077,7 @@ mod tests {
             packet_indexes.push(index);
         }
         for index in vote_indexes.iter() {
-            packet_batch.packets[*index].meta.is_simple_vote_tx = true;
+            packet_batch.packets[*index].meta.flags |= PacketFlags::SIMPLE_VOTE_TX;
         }
         (packet_batch, packet_indexes)
     }

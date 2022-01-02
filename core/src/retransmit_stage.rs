@@ -615,7 +615,7 @@ mod tests {
         let mut packet_batch = PacketBatch::new(vec![]);
         solana_streamer::packet::recv_from(&mut packet_batch, &me_retransmit, 1).unwrap();
         assert_eq!(packet_batch.packets.len(), 1);
-        assert!(!packet_batch.packets[0].meta.repair);
+        assert!(!packet_batch.packets[0].meta.repair());
     }
 
     #[test]

@@ -549,7 +549,7 @@ pub fn start_verify_transactions(
                 );
                 let verified = packet_batches
                     .iter()
-                    .all(|batch| batch.packets.iter().all(|p| !p.meta.discard));
+                    .all(|batch| batch.packets.iter().all(|p| !p.meta.discard()));
                 verify_time.stop();
                 (verified, verify_time.as_us())
             });
