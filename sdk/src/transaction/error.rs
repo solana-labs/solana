@@ -109,6 +109,22 @@ pub enum TransactionError {
     /// Transaction locked too many accounts
     #[error("Transaction locked too many accounts")]
     TooManyAccountLocks,
+
+    /// Address lookup table not found
+    #[error("Transaction loads an address table account that doesn't exist")]
+    AddressLookupTableNotFound,
+
+    /// Attempted to lookup addresses from an account owned by the wrong program
+    #[error("Transaction loads an address table account with an invalid owner")]
+    InvalidAddressLookupTableOwner,
+
+    /// Attempted to lookup addresses from an invalid account
+    #[error("Transaction loads an address table account with invalid data")]
+    InvalidAddressLookupTableData,
+
+    /// Address table lookup uses an invalid index
+    #[error("Transaction address table lookup uses an invalid index")]
+    InvalidAddressLookupTableIndex,
 }
 
 impl From<SanitizeError> for TransactionError {
@@ -120,5 +136,35 @@ impl From<SanitizeError> for TransactionError {
 impl From<SanitizeMessageError> for TransactionError {
     fn from(_err: SanitizeMessageError) -> Self {
         Self::SanitizeFailure
+    }
+}
+
+#[derive(Debug, Error, PartialEq, Eq, Clone)]
+pub enum AddressLookupError {
+    /// Attempted to lookup addresses from a table that does not exist
+    #[error("Attempted to lookup addresses from a table that does not exist")]
+    LookupTableAccountNotFound,
+
+    /// Attempted to lookup addresses from an account owned by the wrong program
+    #[error("Attempted to lookup addresses from an account owned by the wrong program")]
+    InvalidAccountOwner,
+
+    /// Attempted to lookup addresses from an invalid account
+    #[error("Attempted to lookup addresses from an invalid account")]
+    InvalidAccountData,
+
+    /// Address lookup contains an invalid index
+    #[error("Address lookup contains an invalid index")]
+    InvalidLookupIndex,
+}
+
+impl From<AddressLookupError> for TransactionError {
+    fn from(err: AddressLookupError) -> Self {
+        match err {
+            AddressLookupError::LookupTableAccountNotFound => Self::AddressLookupTableNotFound,
+            AddressLookupError::InvalidAccountOwner => Self::InvalidAddressLookupTableOwner,
+            AddressLookupError::InvalidAccountData => Self::InvalidAddressLookupTableData,
+            AddressLookupError::InvalidLookupIndex => Self::InvalidAddressLookupTableIndex,
+        }
     }
 }

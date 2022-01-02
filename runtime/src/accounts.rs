@@ -22,6 +22,7 @@ use {
     },
     log::*,
     rand::{thread_rng, Rng},
+    solana_address_lookup_table_program::state::AddressLookupTable,
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
@@ -30,13 +31,20 @@ use {
         feature_set::{self, FeatureSet},
         genesis_config::ClusterType,
         hash::Hash,
-        message::SanitizedMessage,
+        message::{
+            v0::{LoadedAddresses, MessageAddressTableLookup},
+            SanitizedMessage,
+        },
         native_loader,
         nonce::{state::Versions as NonceVersions, State as NonceState},
         pubkey::Pubkey,
+        slot_hashes::SlotHashes,
         system_program,
         sysvar::{self, instructions::construct_instructions_data},
-        transaction::{Result, SanitizedTransaction, TransactionAccountLocks, TransactionError},
+        transaction::{
+            AddressLookupError, Result, SanitizedTransaction, TransactionAccountLocks,
+            TransactionError,
+        },
         transaction_context::TransactionAccount,
     },
     std::{
@@ -512,6 +520,40 @@ impl Accounts {
                 (_, (Err(e), _nonce)) => (Err(e), None),
             })
             .collect()
+    }
+
+    pub fn load_lookup_table_addresses(
+        &self,
+        ancestors: &Ancestors,
+        address_table_lookup: &MessageAddressTableLookup,
+        slot_hashes: &SlotHashes,
+    ) -> std::result::Result<LoadedAddresses, AddressLookupError> {
+        let table_account = self
+            .accounts_db
+            .load_with_fixed_root(ancestors, &address_table_lookup.account_key)
+            .map(|(account, _rent)| account)
+            .ok_or(AddressLookupError::LookupTableAccountNotFound)?;
+
+        if table_account.owner() == &solana_address_lookup_table_program::id() {
+            let current_slot = ancestors.max_slot();
+            let lookup_table = AddressLookupTable::deserialize(table_account.data())
+                .map_err(|_ix_err| AddressLookupError::InvalidAccountData)?;
+
+            Ok(LoadedAddresses {
+                writable: lookup_table.lookup(
+                    current_slot,
+                    &address_table_lookup.writable_indexes,
+                    slot_hashes,
+                )?,
+                readonly: lookup_table.lookup(
+                    current_slot,
+                    &address_table_lookup.readonly_indexes,
+                    slot_hashes,
+                )?,
+            })
+        } else {
+            Err(AddressLookupError::InvalidAccountOwner)
+        }
     }
 
     fn filter_zero_lamport_account(
@@ -1268,6 +1310,7 @@ mod tests {
             bank::{DurableNonceFee, TransactionExecutionDetails},
             rent_collector::RentCollector,
         },
+        solana_address_lookup_table_program::state::LookupTableMeta,
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
             epoch_schedule::EpochSchedule,
@@ -1282,6 +1325,7 @@ mod tests {
             transaction::{Transaction, MAX_TX_ACCOUNT_LOCKS},
         },
         std::{
+            borrow::Cow,
             convert::TryFrom,
             sync::atomic::{AtomicBool, AtomicU64, Ordering},
             thread, time,
@@ -1864,6 +1908,149 @@ mod tests {
             }
             (Err(e), _nonce) => Err(e).unwrap(),
         }
+    }
+
+    #[test]
+    fn test_load_lookup_table_addresses_account_not_found() {
+        let ancestors = vec![(0, 0)].into_iter().collect();
+        let accounts = Accounts::new_with_config_for_tests(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            false,
+            AccountShrinkThreshold::default(),
+        );
+
+        let invalid_table_key = Pubkey::new_unique();
+        let address_table_lookup = MessageAddressTableLookup {
+            account_key: invalid_table_key,
+            writable_indexes: vec![],
+            readonly_indexes: vec![],
+        };
+
+        assert_eq!(
+            accounts.load_lookup_table_addresses(
+                &ancestors,
+                &address_table_lookup,
+                &SlotHashes::default(),
+            ),
+            Err(AddressLookupError::LookupTableAccountNotFound),
+        );
+    }
+
+    #[test]
+    fn test_load_lookup_table_addresses_invalid_account_owner() {
+        let ancestors = vec![(0, 0)].into_iter().collect();
+        let accounts = Accounts::new_with_config_for_tests(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            false,
+            AccountShrinkThreshold::default(),
+        );
+
+        let invalid_table_key = Pubkey::new_unique();
+        let invalid_table_account = AccountSharedData::default();
+        accounts.store_slow_uncached(0, &invalid_table_key, &invalid_table_account);
+
+        let address_table_lookup = MessageAddressTableLookup {
+            account_key: invalid_table_key,
+            writable_indexes: vec![],
+            readonly_indexes: vec![],
+        };
+
+        assert_eq!(
+            accounts.load_lookup_table_addresses(
+                &ancestors,
+                &address_table_lookup,
+                &SlotHashes::default(),
+            ),
+            Err(AddressLookupError::InvalidAccountOwner),
+        );
+    }
+
+    #[test]
+    fn test_load_lookup_table_addresses_invalid_account_data() {
+        let ancestors = vec![(0, 0)].into_iter().collect();
+        let accounts = Accounts::new_with_config_for_tests(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            false,
+            AccountShrinkThreshold::default(),
+        );
+
+        let invalid_table_key = Pubkey::new_unique();
+        let invalid_table_account =
+            AccountSharedData::new(1, 0, &solana_address_lookup_table_program::id());
+        accounts.store_slow_uncached(0, &invalid_table_key, &invalid_table_account);
+
+        let address_table_lookup = MessageAddressTableLookup {
+            account_key: invalid_table_key,
+            writable_indexes: vec![],
+            readonly_indexes: vec![],
+        };
+
+        assert_eq!(
+            accounts.load_lookup_table_addresses(
+                &ancestors,
+                &address_table_lookup,
+                &SlotHashes::default(),
+            ),
+            Err(AddressLookupError::InvalidAccountData),
+        );
+    }
+
+    #[test]
+    fn test_load_lookup_table_addresses() {
+        let ancestors = vec![(1, 1), (0, 0)].into_iter().collect();
+        let accounts = Accounts::new_with_config_for_tests(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            false,
+            AccountShrinkThreshold::default(),
+        );
+
+        let table_key = Pubkey::new_unique();
+        let table_addresses = vec![Pubkey::new_unique(), Pubkey::new_unique()];
+        let table_account = {
+            let table_state = AddressLookupTable {
+                meta: LookupTableMeta::default(),
+                addresses: Cow::Owned(table_addresses.clone()),
+            };
+            let table_data = {
+                let mut data = vec![];
+                table_state.serialize_for_tests(&mut data).unwrap();
+                data
+            };
+            AccountSharedData::create(
+                1,
+                table_data,
+                solana_address_lookup_table_program::id(),
+                false,
+                0,
+            )
+        };
+        accounts.store_slow_uncached(0, &table_key, &table_account);
+
+        let address_table_lookup = MessageAddressTableLookup {
+            account_key: table_key,
+            writable_indexes: vec![0],
+            readonly_indexes: vec![1],
+        };
+
+        assert_eq!(
+            accounts.load_lookup_table_addresses(
+                &ancestors,
+                &address_table_lookup,
+                &SlotHashes::default(),
+            ),
+            Ok(LoadedAddresses {
+                writable: vec![table_addresses[0]],
+                readonly: vec![table_addresses[1]],
+            }),
+        );
     }
 
     #[test]
