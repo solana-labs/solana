@@ -8,7 +8,10 @@ use {
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
     solana_perf::{packet::PacketBatchRecycler, recycler::Recycler},
     solana_poh::poh_recorder::PohRecorder,
-    solana_sdk::{clock::DEFAULT_TICKS_PER_SLOT, packet::Packet},
+    solana_sdk::{
+        clock::DEFAULT_TICKS_PER_SLOT,
+        packet::{Packet, PacketFlags},
+    },
     solana_streamer::streamer::{self, PacketBatchReceiver, PacketBatchSender},
     std::{
         net::UdpSocket,
@@ -84,7 +87,7 @@ impl FetchStage {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) -> Result<()> {
         let mark_forwarded = |packet: &mut Packet| {
-            packet.meta.forwarded = true;
+            packet.meta.flags |= PacketFlags::FORWARDED;
         };
 
         let mut packet_batch = recvr.recv()?;

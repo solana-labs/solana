@@ -362,7 +362,7 @@ where
     let last_root = blockstore.last_root();
     let working_bank = bank_forks.read().unwrap().working_bank();
     let handle_packet = |packet: &Packet| {
-        if packet.meta.discard {
+        if packet.meta.discard() {
             inc_new_counter_debug!("streamer-recv_window-invalid_or_unnecessary_packet", 1);
             return None;
         }
@@ -375,7 +375,7 @@ where
         if !shred_filter(&shred, working_bank.clone(), last_root) {
             return None;
         }
-        if packet.meta.repair {
+        if packet.meta.repair() {
             let repair_info = RepairMeta {
                 _from_addr: packet.meta.addr(),
                 // If can't parse the nonce, dump the packet.

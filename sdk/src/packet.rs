@@ -1,5 +1,6 @@
 use {
     bincode::Result,
+    bitflags::bitflags,
     serde::Serialize,
     std::{
         fmt, io,
@@ -13,17 +14,24 @@ use {
 ///   8 bytes is the size of the fragment header
 pub const PACKET_DATA_SIZE: usize = 1280 - 40 - 8;
 
+bitflags! {
+    #[repr(C)]
+    pub struct PacketFlags: u8 {
+        const DISCARD        = 0b00000001;
+        const FORWARDED      = 0b00000010;
+        const REPAIR         = 0b00000100;
+        const SIMPLE_VOTE_TX = 0b00001000;
+        const TRACER_TX      = 0b00010000;
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 #[repr(C)]
 pub struct Meta {
     pub size: usize,
-    pub forwarded: bool,
-    pub repair: bool,
-    pub discard: bool,
     pub addr: IpAddr,
     pub port: u16,
-    pub is_tracer_tx: bool,
-    pub is_simple_vote_tx: bool,
+    pub flags: PacketFlags,
 }
 
 #[derive(Clone)]
@@ -98,19 +106,45 @@ impl Meta {
         self.addr = socket_addr.ip();
         self.port = socket_addr.port();
     }
+
+    #[inline]
+    pub fn discard(&self) -> bool {
+        self.flags.contains(PacketFlags::DISCARD)
+    }
+
+    #[inline]
+    pub fn set_discard(&mut self, discard: bool) {
+        self.flags.set(PacketFlags::DISCARD, discard);
+    }
+
+    #[inline]
+    pub fn forwarded(&self) -> bool {
+        self.flags.contains(PacketFlags::FORWARDED)
+    }
+
+    #[inline]
+    pub fn repair(&self) -> bool {
+        self.flags.contains(PacketFlags::REPAIR)
+    }
+
+    #[inline]
+    pub fn is_simple_vote_tx(&self) -> bool {
+        self.flags.contains(PacketFlags::SIMPLE_VOTE_TX)
+    }
+
+    #[inline]
+    pub fn is_tracer_tx(&self) -> bool {
+        self.flags.contains(PacketFlags::TRACER_TX)
+    }
 }
 
 impl Default for Meta {
     fn default() -> Self {
         Self {
             size: 0,
-            forwarded: false,
-            repair: false,
-            discard: false,
             addr: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
             port: 0,
-            is_tracer_tx: false,
-            is_simple_vote_tx: false,
+            flags: PacketFlags::empty(),
         }
     }
 }

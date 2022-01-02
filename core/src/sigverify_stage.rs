@@ -163,7 +163,9 @@ impl SigVerifyStage {
         }
         for (_addr, indexes) in received_ips {
             for (batch_index, packet_index) in indexes {
-                batches[batch_index].packets[packet_index].meta.discard = true;
+                batches[batch_index].packets[packet_index]
+                    .meta
+                    .set_discard(true);
             }
         }
     }
@@ -275,7 +277,7 @@ mod tests {
                 batch
                     .packets
                     .iter()
-                    .map(|p| if p.meta.discard { 0 } else { 1 })
+                    .map(|p| if p.meta.discard() { 0 } else { 1 })
                     .sum::<usize>()
             })
             .sum::<usize>()
@@ -291,7 +293,7 @@ mod tests {
         let max = 3;
         SigVerifyStage::discard_excess_packets(&mut batches, max);
         assert_eq!(count_non_discard(&batches), max);
-        assert!(!batches[0].packets[0].meta.discard);
-        assert!(!batches[0].packets[3].meta.discard);
+        assert!(!batches[0].packets[0].meta.discard());
+        assert!(!batches[0].packets[3].meta.discard());
     }
 }
