@@ -2384,12 +2384,14 @@ fn call<'a, 'b: 'a>(
     )?;
 
     // Process instruction
+    let mut compute_units_consumed = 0;
     invoke_context
         .process_instruction(
             &instruction.data,
             &instruction_accounts,
             Some(&caller_write_privileges),
             &program_indices,
+            &mut compute_units_consumed,
         )
         .map_err(SyscallError::InstructionError)?;
 

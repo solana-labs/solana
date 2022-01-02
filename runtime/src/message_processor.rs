@@ -128,21 +128,24 @@ impl MessageProcessor {
                 })
                 .collect::<Vec<_>>();
             let mut time = Measure::start("execute_instruction");
-            let compute_meter_consumption = invoke_context
-                .process_instruction(
-                    &instruction.data,
-                    &instruction_accounts,
-                    None,
-                    program_indices,
-                )
-                .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
+            let mut compute_units_consumed = 0;
+            let result = invoke_context.process_instruction(
+                &instruction.data,
+                &instruction_accounts,
+                None,
+                program_indices,
+                &mut compute_units_consumed,
+            );
             time.stop();
             timings.accumulate_program(
                 instruction.program_id(&message.account_keys),
                 time.as_us(),
-                compute_meter_consumption,
+                compute_units_consumed,
+                result.is_err(),
             );
             timings.accumulate(&invoke_context.timings);
+            result
+                .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
         Ok(ProcessedMessageInfo {
             accounts_data_len: invoke_context.get_accounts_data_meter().current(),

@@ -142,6 +142,20 @@ impl CostModel {
         self.instruction_execution_cost_table.get_cost_table()
     }
 
+    pub fn find_instruction_cost(&self, program_key: &Pubkey) -> u64 {
+        match self.instruction_execution_cost_table.get_cost(program_key) {
+            Some(cost) => *cost,
+            None => {
+                let default_value = self.instruction_execution_cost_table.get_mode();
+                debug!(
+                    "Program key {:?} does not have assigned cost, using mode {}",
+                    program_key, default_value
+                );
+                default_value
+            }
+        }
+    }
+
     fn get_signature_cost(&self, transaction: &SanitizedTransaction) -> u64 {
         transaction.signatures().len() as u64 * SIGNATURE_COST
     }
@@ -186,20 +200,6 @@ impl CostModel {
             cost = cost.saturating_add(instruction_cost);
         }
         cost
-    }
-
-    fn find_instruction_cost(&self, program_key: &Pubkey) -> u64 {
-        match self.instruction_execution_cost_table.get_cost(program_key) {
-            Some(cost) => *cost,
-            None => {
-                let default_value = self.instruction_execution_cost_table.get_mode();
-                debug!(
-                    "Program key {:?} does not have assigned cost, using mode {}",
-                    program_key, default_value
-                );
-                default_value
-            }
-        }
     }
 
     fn calculate_account_data_size_on_deserialized_system_instruction(
