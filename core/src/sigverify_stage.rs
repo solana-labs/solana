@@ -286,7 +286,7 @@ mod tests {
         solana_logger::setup();
         let mut batch = PacketBatch::default();
         batch.packets.resize(10, Packet::default());
-        batch.packets[3].meta.addr = [1u16; 8];
+        batch.packets[3].meta.addr = std::net::IpAddr::from([1u16; 8]);
         let mut batches = vec![batch];
         let max = 3;
         SigVerifyStage::discard_excess_packets(&mut batches, max);

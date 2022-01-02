@@ -37,7 +37,7 @@ fn bench_packet_discard(bencher: &mut Bencher) {
         .map(|_| {
             let mut addr = [0u16; 8];
             thread_rng().fill(&mut addr);
-            addr
+            std::net::IpAddr::from(addr)
         })
         .collect();
 
