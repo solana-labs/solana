@@ -99,18 +99,12 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize,
         return Err(io::Error::last_os_error());
     }
     let mut npkts = 0;
-<<<<<<< HEAD
-    addrs
-        .iter()
-        .zip(&hdrs)
-=======
     let mut total_size = 0;
 
-    izip!(addrs, hdrs, packets.iter_mut())
->>>>>>> 20b61e28b (Flip iter operations to keep associated address/header/packets together (#22245))
+    izip!(&addrs, &hdrs, packets.iter_mut())
         .take(nrecv as usize)
         .filter_map(|(addr, hdr, pkt)| {
-            let addr = cast_socket_addr(&addr, &hdr)?.to_std();
+            let addr = cast_socket_addr(addr, hdr)?.to_std();
             Some((addr, hdr, pkt))
         })
         .for_each(|(addr, hdr, pkt)| {
