@@ -35,7 +35,18 @@ if [[ -n $CI ]]; then
       export CI_BASE_BRANCH=$BUILDKITE_BRANCH
       export CI_PULL_REQUEST=
     fi
-    export CI_OS_NAME=linux
+
+    case "$(uname -s)" in
+    Linux)
+      export CI_OS_NAME=linux
+      ;;
+    Darwin)
+      export CI_OS_NAME=osx
+      ;;
+    *)
+      ;;
+    esac
+
     if [[ -n $BUILDKITE_TRIGGERED_FROM_BUILD_PIPELINE_SLUG ]]; then
       # The solana-secondary pipeline should use the slug of the pipeline that
       # triggered it
