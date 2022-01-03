@@ -132,7 +132,6 @@ impl MessageProcessor {
             let result = invoke_context.process_instruction(
                 &instruction.data,
                 &instruction_accounts,
-                None,
                 program_indices,
                 &mut compute_units_consumed,
             );

@@ -263,7 +263,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             .iter()
             .map(|seeds| Pubkey::create_program_address(seeds, &caller).unwrap())
             .collect::<Vec<_>>();
-        let (instruction_accounts, caller_write_privileges, program_indices) = invoke_context
+        let (instruction_accounts, program_indices) = invoke_context
             .prepare_instruction(instruction, &signers)
             .unwrap();
 
@@ -299,7 +299,6 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             .process_instruction(
                 &instruction.data,
                 &instruction_accounts,
-                Some(&caller_write_privileges),
                 &program_indices,
                 &mut compute_units_consumed,
             )

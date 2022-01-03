@@ -438,17 +438,18 @@ impl<'a> InvokeContext<'a> {
     fn verify_and_update(
         &mut self,
         instruction_accounts: &[InstructionAccount],
-        caller_write_privileges: Option<&[bool]>,
+        before_instruction_context_push: bool,
     ) -> Result<(), InstructionError> {
         let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
         let transaction_context = &self.transaction_context;
+        let instruction_context = transaction_context.get_current_instruction_context()?;
         let program_id = transaction_context
             .get_program_key()
             .map_err(|_| InstructionError::CallDepth)?;
 
         // Verify the per-account instruction results
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
-        let mut work = |index_in_instruction: usize, instruction_account: &InstructionAccount| {
+        let mut work = |_index_in_instruction: usize, instruction_account: &InstructionAccount| {
             if instruction_account.index_in_transaction
                 < transaction_context.get_number_of_accounts()
             {
@@ -456,8 +457,13 @@ impl<'a> InvokeContext<'a> {
                     .get_key_of_account_at_index(instruction_account.index_in_transaction);
                 let account = transaction_context
                     .get_account_at_index(instruction_account.index_in_transaction);
-                let is_writable = if let Some(caller_write_privileges) = caller_write_privileges {
-                    caller_write_privileges[index_in_instruction]
+                let is_writable = if before_instruction_context_push {
+                    instruction_context
+                        .try_borrow_account(
+                            self.transaction_context,
+                            instruction_account.index_in_caller,
+                        )?
+                        .is_writable()
                 } else {
                     instruction_account.is_writable
                 };
@@ -520,7 +526,7 @@ impl<'a> InvokeContext<'a> {
         instruction: Instruction,
         signers: &[Pubkey],
     ) -> Result<(), InstructionError> {
-        let (instruction_accounts, caller_write_privileges, program_indices) =
+        let (instruction_accounts, program_indices) =
             self.prepare_instruction(&instruction, signers)?;
         let mut prev_account_sizes = Vec::with_capacity(instruction_accounts.len());
         for instruction_account in instruction_accounts.iter() {
@@ -537,7 +543,6 @@ impl<'a> InvokeContext<'a> {
         self.process_instruction(
             &instruction.data,
             &instruction_accounts,
-            Some(&caller_write_privileges),
             &program_indices,
             &mut compute_units_consumed,
         )?;
@@ -574,7 +579,7 @@ impl<'a> InvokeContext<'a> {
         &mut self,
         instruction: &Instruction,
         signers: &[Pubkey],
-    ) -> Result<(Vec<InstructionAccount>, Vec<bool>, Vec<usize>), InstructionError> {
+    ) -> Result<(Vec<InstructionAccount>, Vec<usize>), InstructionError> {
         // Finds the index of each account in the instruction by its pubkey.
         // Then normalizes / unifies the privileges of duplicate accounts.
         // Note: This works like visit_each_account_once() and is an O(n^2) algorithm too.
@@ -656,18 +661,6 @@ impl<'a> InvokeContext<'a> {
             .map(|duplicate_index| deduplicated_instruction_accounts[duplicate_index].clone())
             .collect();
 
-        // Check for privilege escalation
-        let caller_write_privileges = instruction_accounts
-            .iter()
-            .map(|instruction_account| {
-                let borrowed_account = instruction_context.try_borrow_account(
-                    self.transaction_context,
-                    instruction_account.index_in_caller,
-                )?;
-                Ok(borrowed_account.is_writable())
-            })
-            .collect::<Result<Vec<bool>, InstructionError>>()?;
-
         // Find and validate executables / program accounts
         let callee_program_id = instruction.program_id;
         let program_account_index = instruction_context
@@ -712,11 +705,7 @@ impl<'a> InvokeContext<'a> {
         }
         program_indices.push(borrowed_program_account.get_index_in_transaction());
 
-        Ok((
-            instruction_accounts,
-            caller_write_privileges,
-            program_indices,
-        ))
+        Ok((instruction_accounts, program_indices))
     }
 
     /// Processes an instruction and returns how many compute units were used
@@ -724,7 +713,6 @@ impl<'a> InvokeContext<'a> {
         &mut self,
         instruction_data: &[u8],
         instruction_accounts: &[InstructionAccount],
-        caller_write_privileges: Option<&[bool]>,
         program_indices: &[usize],
         compute_units_consumed: &mut u64,
     ) -> Result<(), InstructionError> {
@@ -744,7 +732,7 @@ impl<'a> InvokeContext<'a> {
             }
         } else {
             // Verify the calling program hasn't misbehaved
-            self.verify_and_update(instruction_accounts, caller_write_privileges)?;
+            self.verify_and_update(instruction_accounts, true)?;
 
             // Record instruction
             if let Some(instruction_recorder) = &self.instruction_recorder {
@@ -779,7 +767,7 @@ impl<'a> InvokeContext<'a> {
                 if is_lowest_invocation_level {
                     self.verify(instruction_accounts, program_indices)
                 } else {
-                    self.verify_and_update(instruction_accounts, None)
+                    self.verify_and_update(instruction_accounts, false)
                 }
             });
 
@@ -1282,7 +1270,7 @@ mod tests {
                 .borrow_mut()
                 .data_as_mut_slice()[0] = (MAX_DEPTH + owned_index) as u8;
             invoke_context
-                .verify_and_update(&instruction_accounts, None)
+                .verify_and_update(&instruction_accounts, false)
                 .unwrap();
             assert_eq!(
                 invoke_context.pre_accounts[owned_index].data()[0],
@@ -1301,7 +1289,7 @@ mod tests {
                 .borrow_mut()
                 .data_as_mut_slice()[0] = (MAX_DEPTH + not_owned_index) as u8;
             assert_eq!(
-                invoke_context.verify_and_update(&instruction_accounts, None),
+                invoke_context.verify_and_update(&instruction_accounts, false),
                 Err(InstructionError::ExternalAccountDataModified)
             );
             assert_eq!(invoke_context.pre_accounts[not_owned_index].data()[0], data);
@@ -1456,16 +1444,14 @@ mod tests {
                 },
                 metas.clone(),
             );
-            let (inner_instruction_accounts, caller_write_privileges, program_indices) =
-                invoke_context
-                    .prepare_instruction(&inner_instruction, &[])
-                    .unwrap();
+            let (inner_instruction_accounts, program_indices) = invoke_context
+                .prepare_instruction(&inner_instruction, &[])
+                .unwrap();
 
             let mut compute_units_consumed = 0;
             let result = invoke_context.process_instruction(
                 &inner_instruction.data,
                 &inner_instruction_accounts,
-                Some(&caller_write_privileges),
                 &program_indices,
                 &mut compute_units_consumed,
             );

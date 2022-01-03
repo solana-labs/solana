@@ -2383,7 +2383,7 @@ fn call<'a, 'b: 'a>(
         signers_seeds_len,
         memory_mapping,
     )?;
-    let (instruction_accounts, caller_write_privileges, program_indices) = invoke_context
+    let (instruction_accounts, program_indices) = invoke_context
         .prepare_instruction(&instruction, &signers)
         .map_err(SyscallError::InstructionError)?;
     check_authorized_program(&instruction.program_id, &instruction.data, *invoke_context)?;
@@ -2403,7 +2403,6 @@ fn call<'a, 'b: 'a>(
         .process_instruction(
             &instruction.data,
             &instruction_accounts,
-            Some(&caller_write_privileges),
             &program_indices,
             &mut compute_units_consumed,
         )
