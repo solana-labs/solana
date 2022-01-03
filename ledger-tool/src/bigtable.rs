@@ -120,10 +120,13 @@ async fn compare_blocks(
         .get_confirmed_blocks(starting_slot, limit)
         .await?;
     log::info!("standard bigtable {} blocks found", slots_std.len());
-
+    let last = if slots_std.is_empty() {
+        serde_json::Number::from(-1)
+    } else {
+        serde_json::Number::from(slots_std[slots_std.len() - 1])
+    };
     match missing_blocks(&slots_std, &slots_def) {
         Some(blocks) => {
-            let last = slots_std[slots_std.len() - 1]; // slot_std here not a empty Vec
             println!(
                 "{}",
                 json!({
@@ -134,13 +137,14 @@ async fn compare_blocks(
                 })
             );
         }
+
         None => {
             println!(
                 "{}",
                 json!({
                     "count_std": slots_std.len(),
                     "count_def": slots_def.len(),
-                    "last_block_std": -1,
+                    "last_block_std": last,
                     "missing_blocks":[],
                 })
             );
