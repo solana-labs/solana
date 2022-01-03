@@ -1064,10 +1064,7 @@ mod tests {
     use {
         super::*,
         serde::{Deserialize, Serialize},
-        solana_sdk::{
-            account::{ReadableAccount, WritableAccount},
-            keyed_account::keyed_account_at_index,
-        },
+        solana_sdk::account::{ReadableAccount, WritableAccount},
     };
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -1167,41 +1164,41 @@ mod tests {
 
     #[allow(clippy::integer_arithmetic)]
     fn mock_process_instruction(
-        first_instruction_account: usize,
+        _first_instruction_account: usize,
         data: &[u8],
         invoke_context: &mut InvokeContext,
     ) -> Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
+        let instruction_context = transaction_context.get_current_instruction_context()?;
         let program_id = transaction_context.get_program_key()?;
-        let keyed_accounts = invoke_context.get_keyed_accounts()?;
         assert_eq!(
-            *program_id,
-            keyed_account_at_index(keyed_accounts, first_instruction_account)?.owner()?
+            program_id,
+            instruction_context
+                .try_borrow_instruction_account(transaction_context, 0)?
+                .get_owner()
         );
         assert_ne!(
-            keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?.owner()?,
-            *keyed_account_at_index(keyed_accounts, first_instruction_account)?.unsigned_key()
+            instruction_context
+                .try_borrow_instruction_account(transaction_context, 1)?
+                .get_owner(),
+            instruction_context
+                .try_borrow_instruction_account(transaction_context, 0)?
+                .get_key()
         );
 
         if let Ok(instruction) = bincode::deserialize(data) {
             match instruction {
                 MockInstruction::NoopSuccess => (),
                 MockInstruction::NoopFail => return Err(InstructionError::GenericError),
-                MockInstruction::ModifyOwned => {
-                    keyed_account_at_index(keyed_accounts, first_instruction_account)?
-                        .try_account_ref_mut()?
-                        .data_as_mut_slice()[0] = 1
-                }
-                MockInstruction::ModifyNotOwned => {
-                    keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?
-                        .try_account_ref_mut()?
-                        .data_as_mut_slice()[0] = 1
-                }
-                MockInstruction::ModifyReadonly => {
-                    keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?
-                        .try_account_ref_mut()?
-                        .data_as_mut_slice()[0] = 1
-                }
+                MockInstruction::ModifyOwned => instruction_context
+                    .try_borrow_instruction_account(transaction_context, 0)?
+                    .set_data(&[1])?,
+                MockInstruction::ModifyNotOwned => instruction_context
+                    .try_borrow_instruction_account(transaction_context, 1)?
+                    .set_data(&[1])?,
+                MockInstruction::ModifyReadonly => instruction_context
+                    .try_borrow_instruction_account(transaction_context, 2)?
+                    .set_data(&[1])?,
                 MockInstruction::ConsumeComputeUnits {
                     compute_units_to_consume,
                     desired_result,
@@ -1213,12 +1210,9 @@ mod tests {
                         .unwrap();
                     return desired_result;
                 }
-                MockInstruction::Resize { new_len } => {
-                    keyed_account_at_index(keyed_accounts, first_instruction_account)?
-                        .try_account_ref_mut()?
-                        .data_mut()
-                        .resize_with(new_len, Default::default)
-                }
+                MockInstruction::Resize { new_len } => instruction_context
+                    .try_borrow_instruction_account(transaction_context, 0)?
+                    .set_data(&vec![0; new_len])?,
             }
         } else {
             return Err(InstructionError::InvalidInstructionData);
