@@ -221,7 +221,7 @@ impl SubscriptionControl {
                 entry
                     .get()
                     .upgrade()
-                    .expect("dead subscription encountered in SubscriptionControl"),
+                    .ok_or(Error::EmptySubscriptionTokenInnerFound)?,
                 self.0.counter.create_token(),
             )),
             DashEntry::Vacant(entry) => {
@@ -320,6 +320,8 @@ impl SubscriptionInfo {
 pub enum Error {
     #[error("node subscription limit reached")]
     TooManySubscriptions,
+    #[error("empty subscription token inner")]
+    EmptySubscriptionTokenInnerFound,
 }
 
 struct LogsSubscriptionsIndex {

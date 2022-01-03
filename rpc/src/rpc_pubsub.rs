@@ -6,9 +6,9 @@ use {
         rpc_pubsub_service::PubSubConfig,
         rpc_subscription_tracker::{
             AccountSubscriptionParams, BlockSubscriptionKind, BlockSubscriptionParams,
-            LogsSubscriptionKind, LogsSubscriptionParams, ProgramSubscriptionParams,
-            SignatureSubscriptionParams, SubscriptionControl, SubscriptionId, SubscriptionParams,
-            SubscriptionToken,
+            Error as SubscribeError, LogsSubscriptionKind, LogsSubscriptionParams,
+            ProgramSubscriptionParams, SignatureSubscriptionParams, SubscriptionControl,
+            SubscriptionId, SubscriptionParams, SubscriptionToken,
         },
     },
     dashmap::DashMap,
@@ -371,15 +371,21 @@ impl RpcSolPubSubImpl {
     }
 
     fn subscribe(&self, params: SubscriptionParams) -> Result<SubscriptionId> {
-        let token = self
-            .subscription_control
-            .subscribe(params)
-            .map_err(|_| Error {
+        let token = self.subscription_control.subscribe(params).map_err(|err| {
+            let message = match err {
+                SubscribeError::TooManySubscriptions => {
+                    "Internal Error: Subscription refused. Node subscription limit reached"
+                }
+                SubscribeError::EmptySubscriptionTokenInnerFound => {
+                    "Internal Error: Transient subscribe error"
+                }
+            };
+            Error {
                 code: ErrorCode::InternalError,
-                message: "Internal Error: Subscription refused. Node subscription limit reached"
-                    .into(),
+                message: message.into(),
                 data: None,
-            })?;
+            }
+        })?;
         let id = token.id();
         self.current_subscriptions.insert(id, token);
         Ok(id)
