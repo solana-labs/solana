@@ -7,6 +7,7 @@ use {
     solana_address_lookup_table_program::instruction::close_lookup_table,
     solana_program_test::*,
     solana_sdk::{
+        clock::Clock,
         instruction::InstructionError,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
@@ -68,6 +69,38 @@ async fn test_close_lookup_table_not_deactivated() {
     );
 
     // The ix should fail because the table hasn't been deactivated yet
+    assert_ix_error(
+        &mut context,
+        ix,
+        Some(&authority_keypair),
+        InstructionError::InvalidArgument,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_close_lookup_table_deactivated_in_current_slot() {
+    let mut context = setup_test_context().await;
+
+    let clock = context.banks_client.get_sysvar::<Clock>().await.unwrap();
+    let authority_keypair = Keypair::new();
+    let initialized_table = {
+        let mut table = new_address_lookup_table(Some(authority_keypair.pubkey()), 0);
+        table.meta.deactivation_slot = clock.slot;
+        table
+    };
+    let lookup_table_address = Pubkey::new_unique();
+    add_lookup_table_account(&mut context, lookup_table_address, initialized_table).await;
+
+    let ix = close_lookup_table(
+        lookup_table_address,
+        authority_keypair.pubkey(),
+        context.payer.pubkey(),
+    );
+
+    // Context sets up the slot hashes sysvar to have an entry
+    // for slot 0 which is when the table was deactivated.
+    // Because that slot is present, the ix should fail.
     assert_ix_error(
         &mut context,
         ix,
