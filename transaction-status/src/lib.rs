@@ -25,7 +25,6 @@ use {
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
         commitment_config::CommitmentConfig,
-        deserialize_utils::default_on_eof,
         instruction::CompiledInstruction,
         message::{Message, MessageHeader},
         pubkey::Pubkey,
@@ -122,7 +121,7 @@ pub struct UiInnerInstructions {
     pub instructions: Vec<UiInstruction>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TransactionTokenBalance {
     pub account_index: u8,
     pub mint: String,
@@ -181,22 +180,16 @@ impl From<InnerInstructions> for UiInnerInstructions {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TransactionStatusMeta {
     pub status: Result<()>,
     pub fee: u64,
     pub pre_balances: Vec<u64>,
     pub post_balances: Vec<u64>,
-    #[serde(deserialize_with = "default_on_eof")]
     pub inner_instructions: Option<Vec<InnerInstructions>>,
-    #[serde(deserialize_with = "default_on_eof")]
     pub log_messages: Option<Vec<String>>,
-    #[serde(deserialize_with = "default_on_eof")]
     pub pre_token_balances: Option<Vec<TransactionTokenBalance>>,
-    #[serde(deserialize_with = "default_on_eof")]
     pub post_token_balances: Option<Vec<TransactionTokenBalance>>,
-    #[serde(deserialize_with = "default_on_eof")]
     pub rewards: Option<Rewards>,
 }
 
@@ -333,8 +326,7 @@ impl TransactionStatus {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ConfirmedTransactionStatusWithSignature {
     pub signature: Signature,
     pub slot: Slot,
@@ -355,8 +347,7 @@ pub struct Reward {
 
 pub type Rewards = Vec<Reward>;
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct ConfirmedBlock {
     pub previous_blockhash: String,
     pub blockhash: String,
@@ -499,11 +490,9 @@ impl Default for TransactionDetails {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ConfirmedTransaction {
     pub slot: Slot,
-    #[serde(flatten)]
     pub transaction: TransactionWithStatusMeta,
     pub block_time: Option<UnixTimestamp>,
 }
@@ -561,8 +550,7 @@ pub struct UiParsedMessage {
     pub instructions: Vec<UiInstruction>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TransactionWithStatusMeta {
     pub transaction: Transaction,
     pub meta: Option<TransactionStatusMeta>,
