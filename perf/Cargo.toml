@@ -18,7 +18,7 @@ lazy_static = "1.4.0"
 log = "0.4.14"
 rand = "0.7.0"
 rayon = "1.5.1"
-serde = "1.0.132"
+serde = "1.0.133"
 solana-metrics = { path = "../metrics", version = "=1.10.0" }
 solana-sdk = { path = "../sdk", version = "=1.10.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.10.0" }
