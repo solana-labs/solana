@@ -11,7 +11,7 @@ documentation = "https://docs.rs/solana-ledger-tool"
 
 [dependencies]
 bs58 = "0.4.0"
-clap = "2.33.1"
+clap = "3.0.0"
 csv = "1.1.6"
 dashmap = "5.0.0"
 histogram = "*"
