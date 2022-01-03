@@ -14,7 +14,7 @@ edition = "2021"
 base64 = "0.12.3"
 log = "0.4.14"
 serde_derive = "1.0.103"
-serde_json = "1.0.72"
+serde_json = "1.0.74"
 solana-cli-output = { path = "../cli-output", version = "=1.10.0" }
 solana-client = { path = "../client", version = "=1.10.0" }
 solana-core = { path = "../core", version = "=1.10.0" }
