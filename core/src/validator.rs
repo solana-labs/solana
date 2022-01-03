@@ -704,6 +704,16 @@ impl Validator {
                 Some(node.info.shred_version),
             )),
         };
+<<<<<<< HEAD
+=======
+
+        let (stats_reporter_sender, stats_reporter_receiver) = channel();
+        // https://github.com/rust-lang/rust/issues/39364#issuecomment-634545136
+        let _stats_reporter_sender = stats_reporter_sender.clone();
+
+        let stats_reporter_service = StatsReporterService::new(stats_reporter_receiver, &exit);
+
+>>>>>>> 0e4ede46d (work around rust 39364 for stats_reporter_sender (#22227))
         let gossip_service = GossipService::new(
             &cluster_info,
             Some(bank_forks.clone()),
