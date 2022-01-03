@@ -894,6 +894,7 @@ impl ReplayStage {
         progress: &mut ProgressMap,
     ) {
         let start_slot = poh_recorder.lock().unwrap().start_slot();
+
         if let (false, Some(latest_leader_slot)) =
             progress.get_leader_propagation_slot_must_exist(start_slot)
         {
@@ -2955,6 +2956,7 @@ pub mod tests {
     use {
         super::*,
         crate::{
+            broadcast_stage::RetransmitSlotsReceiver,
             consensus::Tower,
             progress_map::{ValidatorStakeInfo, RETRANSMIT_BASE_DELAY_MS},
             replay_stage::ReplayStage,
@@ -6092,6 +6094,74 @@ pub mod tests {
             4,
             "retransmit should advance retry_iteration"
         );
+    }
+
+    fn receive_slots(retransmit_slots_receiver: &RetransmitSlotsReceiver) -> Vec<Slot> {
+        let mut slots = Vec::default();
+        while let Ok(slot) = retransmit_slots_receiver.recv_timeout(Duration::from_millis(10)) {
+            slots.push(slot);
+        }
+        slots
+    }
+
+    #[test]
+    fn test_maybe_retransmit_unpropagated_slots() {
+        let ReplayBlockstoreComponents {
+            validator_node_to_vote_keys,
+            leader_schedule_cache,
+            vote_simulator,
+            ..
+        } = replay_blockstore_components(None, 10, None::<GenerateVotes>);
+
+        let VoteSimulator {
+            mut progress,
+            ref bank_forks,
+            ..
+        } = vote_simulator;
+
+        let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
+
+        for i in 1..10 {
+            let bank = Bank::new_from_parent(
+                bank_forks.read().unwrap().get(i - 1).unwrap(),
+                &leader_schedule_cache.slot_leader_at(i, None).unwrap(),
+                i,
+            );
+            progress.insert(
+                i,
+                ForkProgress::new_from_bank(
+                    &bank,
+                    bank.collector_id(),
+                    validator_node_to_vote_keys
+                        .get(bank.collector_id())
+                        .unwrap(),
+                    Some(0),
+                    0,
+                    0,
+                ),
+            );
+            assert!(progress.get_propagated_stats(i).unwrap().is_leader_slot);
+            bank.freeze();
+            bank_forks.write().unwrap().insert(bank);
+        }
+
+        ReplayStage::maybe_retransmit_unpropagated_slots(
+            "test",
+            &retransmit_slots_sender,
+            &mut progress,
+            0,
+        );
+        let received_slots = receive_slots(&retransmit_slots_receiver);
+        assert_eq!(received_slots, vec![0]);
+
+        ReplayStage::maybe_retransmit_unpropagated_slots(
+            "test",
+            &retransmit_slots_sender,
+            &mut progress,
+            6,
+        );
+        let received_slots = receive_slots(&retransmit_slots_receiver);
+        assert_eq!(received_slots, vec![4, 5, 6]);
     }
 
     fn run_compute_and_select_forks(
