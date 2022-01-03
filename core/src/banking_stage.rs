@@ -57,7 +57,7 @@ use {
         ops::DerefMut,
         sync::{
             atomic::{AtomicU64, AtomicUsize, Ordering},
-            Arc, Mutex, RwLock, RwLockReadGuard,
+            Arc, Mutex, RwLock,
         },
         thread::{self, Builder, JoinHandle},
         time::{Duration, Instant},
@@ -1096,7 +1096,7 @@ impl BankingStage {
         packet_batch: &PacketBatch,
         transaction_indexes: &[usize],
         feature_set: &Arc<feature_set::FeatureSet>,
-        read_cost_tracker: &RwLockReadGuard<CostTracker>,
+        cost_tracker: &CostTracker,
         banking_stage_stats: &BankingStageStats,
         demote_program_write_locks: bool,
         votes_only: bool,
@@ -1134,9 +1134,8 @@ impl BankingStage {
 
                     // excluding vote TX from cost_model, for now
                     if !is_vote
-                        && read_cost_tracker
+                        && cost_tracker
                             .would_transaction_fit(
-                                &tx,
                                 &cost_model
                                     .read()
                                     .unwrap()
@@ -1282,7 +1281,6 @@ impl BankingStage {
         transactions.iter().enumerate().for_each(|(index, tx)| {
             if unprocessed_tx_indexes.iter().all(|&i| i != index) {
                 bank.write_cost_tracker().unwrap().add_transaction_cost(
-                    tx.transaction(),
                     &cost_model
                         .read()
                         .unwrap()

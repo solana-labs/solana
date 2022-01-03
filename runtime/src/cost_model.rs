@@ -16,6 +16,7 @@ const MAX_WRITABLE_ACCOUNTS: usize = 256;
 // costs are stored in number of 'compute unit's
 #[derive(AbiExample, Default, Debug)]
 pub struct TransactionCost {
+    pub readable_accounts: Vec<Pubkey>,
     pub writable_accounts: Vec<Pubkey>,
     pub signature_cost: u64,
     pub write_lock_cost: u64,
@@ -136,6 +137,8 @@ impl CostModel {
             if is_writable {
                 tx_cost.writable_accounts.push(*k);
                 tx_cost.write_lock_cost += WRITE_LOCK_UNITS;
+            } else {
+                tx_cost.readable_accounts.push(*k);
             }
         });
     }
