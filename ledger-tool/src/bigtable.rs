@@ -4,6 +4,7 @@ use {
     clap::{
         value_t, value_t_or_exit, values_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand,
     },
+    serde_json::json,
     solana_clap_utils::{
         input_parsers::pubkey_of,
         input_validators::{is_slot, is_valid_pubkey},
@@ -16,11 +17,11 @@ use {
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
     solana_transaction_status::{ConfirmedBlock, EncodedTransaction, UiTransactionEncoding},
     std::{
+        collections::HashSet,
         path::Path,
         process::exit,
         result::Result,
         sync::{atomic::AtomicBool, Arc},
-        collections::HashSet,
     },
 };
 
@@ -93,37 +94,58 @@ async fn blocks(starting_slot: Slot, limit: usize) -> Result<(), Box<dyn std::er
     Ok(())
 }
 
-async fn compare_blocks(starting_slot: Slot, limit: usize, cred_path: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
-
+async fn compare_blocks(
+    starting_slot: Slot,
+    limit: usize,
+    cred_path: Option<String>,
+) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(credential) = &cred_path {
-        assert!(credential.len() > 0);
+        assert!(!credential.is_empty());
     }
-    
+
     let bigtable_def = solana_storage_bigtable::LedgerStorage::new(false, None, None)
-    .await
-    .map_err(|err| format!("failed to connect to standard bigtable: {:?}", err))?;
+        .await
+        .map_err(|err| format!("failed to connect to default bigtable: {:?}", err))?;
 
-    let slots_def = bigtable_def.get_confirmed_blocks(starting_slot, limit).await?;
-    println!("{:?}", slots_def);
-    println!("standard bigtable {} blocks found", slots_def.len());
-
+    let slots_def = bigtable_def
+        .get_confirmed_blocks(starting_slot, limit)
+        .await?;
+    log::info!("default bigtable {} blocks found", slots_def.len());
 
     let bigtable_std = solana_storage_bigtable::LedgerStorage::new(false, None, cred_path)
         .await
-        .map_err(|err| format!("failed to connect to bigtable used to be compared with standard bigtable: {:?}", err))?;
-    
-        let slots_std = bigtable_std.get_confirmed_blocks(starting_slot, limit).await?;
-    println!("{:?}", slots_std);
-    println!("bigtable used to compare with {} blocks found", slots_std.len());
-    
-    let mut missing_block = HashSet::new();
-    for slot in slots_std {
-        if !slots_def.contains(&slot) {
-            missing_block.insert(slot);
+        .map_err(|err| format!("failed to connect to standard bigtable: {:?}", err))?;
+
+    let slots_std = bigtable_std
+        .get_confirmed_blocks(starting_slot, limit)
+        .await?;
+    log::info!("standard bigtable {} blocks found", slots_std.len());
+
+    match missing_blocks(&slots_std, &slots_def) {
+        Some(blocks) => {
+            let last = slots_std[slots_std.len() - 1]; // slot_std here not a empty Vec
+            println!(
+                "{}",
+                json!({
+                    "count_std": slots_std.len(),
+                    "count_def": slots_def.len(),
+                    "last_block_std": last,
+                    "missing_blocks": blocks,
+                })
+            );
+        }
+        None => {
+            println!(
+                "{}",
+                json!({
+                    "count_std": slots_std.len(),
+                    "count_def": slots_def.len(),
+                    "last_block_std": -1,
+                    "missing_blocks":[],
+                })
+            );
         }
     }
-    println!("missing blocks:{:?}", missing_block);
-
     Ok(())
 }
 
@@ -534,7 +556,7 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
             let limit = value_t_or_exit!(arg_matches, "limit", usize);
             let credential = value_t_or_exit!(arg_matches, "credential", String);
-            runtime.block_on(compare_blocks(starting_slot, limit, Some(credential)))   
+            runtime.block_on(compare_blocks(starting_slot, limit, Some(credential)))
         }
         ("confirm", Some(arg_matches)) => {
             let signature = arg_matches
@@ -574,4 +596,47 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
         eprintln!("{:?}", err);
         exit(1);
     });
+}
+
+fn missing_blocks(slots_std: &[Slot], slots_cmp: &[Slot]) -> Option<Vec<Slot>> {
+    if slots_cmp.is_empty() && !slots_std.is_empty() {
+        return Some(slots_std.to_owned());
+    } else if slots_cmp.is_empty() {
+        return None;
+    }
+    let set_cmp = HashSet::<&u64>::from_iter(slots_cmp.iter().clone());
+    let mut slots_miss = vec![];
+
+    for slot in slots_std {
+        if !set_cmp.contains(slot) {
+            slots_miss.push(slot.to_owned())
+        }
+    }
+    if !slots_miss.is_empty() {
+        Some(slots_miss)
+    } else {
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_missing_blocks() {
+        let std = vec![0, 37, 38, 39, 40, 41, 42, 43, 44, 45];
+        let cmp = vec![0, 38, 39, 40, 43, 44, 45, 46, 47];
+        let cmp_leftshift = vec![0, 25, 26, 27, 28, 29, 30, 31, 32];
+        let cmp_rightshift = vec![0, 44, 46, 47, 48, 49, 50, 51, 52, 53, 54];
+        let ret_missing = vec![37, 41, 42];
+        let ret_leftshift = vec![37, 38, 39, 40, 41, 42, 43, 44, 45];
+        let ret_rightshift = vec![37, 38, 39, 40, 41, 42, 43, 45];
+        assert_eq!(missing_blocks(&[], &[]), None);
+        assert_eq!(missing_blocks(&[], &cmp), None);
+        assert_eq!(missing_blocks(&std, &[]), Some(std.to_owned()));
+        assert_eq!(missing_blocks(&std, &cmp), Some(ret_missing));
+        assert_eq!(missing_blocks(&std, &cmp_leftshift), Some(ret_leftshift));
+        assert_eq!(missing_blocks(&std, &cmp_rightshift), Some(ret_rightshift));
+    }
 }

@@ -16,18 +16,15 @@ use {
     },
 };
 
-fn load_credentials(fp:Option<String>) -> Result<Credentials, String> {
+fn load_credentials(fp: Option<String>) -> Result<Credentials, String> {
     match fp {
-        Some(f) =>{
-            Credentials::from_file(&f).map_err(|err| {
-                format!(
-                    "Failed to read credentials from {}: {}",
-                    f, err
-                )
-            })
-        }
+        Some(f) => Credentials::from_file(&f)
+            .map_err(|err| format!("Failed to read credentials from {}: {}", f, err)),
         None => {
-            let credentials_file = std::env::var("GOOGLE_APPLICATION_CREDENTIALS").map_err(|_| "GOOGLE_APPLICATION_CREDENTIALS environment variable not found".to_string())?;
+            let credentials_file =
+                std::env::var("GOOGLE_APPLICATION_CREDENTIALS").map_err(|_| {
+                    "GOOGLE_APPLICATION_CREDENTIALS environment variable not found".to_string()
+                })?;
             Credentials::from_file(&credentials_file).map_err(|err| {
                 format!(
                     "Failed to read GCP credentials from {}: {}",
@@ -35,9 +32,8 @@ fn load_credentials(fp:Option<String>) -> Result<Credentials, String> {
                 )
             })
         }
-    }    
+    }
 }
-
 
 #[derive(Clone)]
 pub struct AccessToken {
