@@ -53,7 +53,7 @@ impl MessageProcessor {
         builtin_programs: &[BuiltinProgram],
         message: &Message,
         program_indices: &[Vec<usize>],
-        transaction_context: &TransactionContext,
+        transaction_context: &mut TransactionContext,
         rent: Rent,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         executors: Rc<RefCell<Executors>>,
@@ -132,7 +132,6 @@ impl MessageProcessor {
             let result = invoke_context.process_instruction(
                 &instruction.data,
                 &instruction_accounts,
-                None,
                 program_indices,
                 &mut compute_units_consumed,
             );
@@ -242,7 +241,7 @@ mod tests {
                 create_loadable_account_for_test("mock_system_program"),
             ),
         ];
-        let transaction_context = TransactionContext::new(accounts, 1);
+        let mut transaction_context = TransactionContext::new(accounts, 1);
         let program_indices = vec![vec![2]];
         let executors = Rc::new(RefCell::new(Executors::default()));
         let account_metas = vec![
@@ -262,7 +261,7 @@ mod tests {
             builtin_programs,
             &message,
             &program_indices,
-            &transaction_context,
+            &mut transaction_context,
             rent_collector.rent,
             None,
             executors.clone(),
@@ -303,7 +302,7 @@ mod tests {
             builtin_programs,
             &message,
             &program_indices,
-            &transaction_context,
+            &mut transaction_context,
             rent_collector.rent,
             None,
             executors.clone(),
@@ -336,7 +335,7 @@ mod tests {
             builtin_programs,
             &message,
             &program_indices,
-            &transaction_context,
+            &mut transaction_context,
             rent_collector.rent,
             None,
             executors,
@@ -458,7 +457,7 @@ mod tests {
                 create_loadable_account_for_test("mock_system_program"),
             ),
         ];
-        let transaction_context = TransactionContext::new(accounts, 1);
+        let mut transaction_context = TransactionContext::new(accounts, 1);
         let program_indices = vec![vec![2]];
         let executors = Rc::new(RefCell::new(Executors::default()));
         let account_metas = vec![
@@ -480,7 +479,7 @@ mod tests {
             builtin_programs,
             &message,
             &program_indices,
-            &transaction_context,
+            &mut transaction_context,
             rent_collector.rent,
             None,
             executors.clone(),
@@ -514,7 +513,7 @@ mod tests {
             builtin_programs,
             &message,
             &program_indices,
-            &transaction_context,
+            &mut transaction_context,
             rent_collector.rent,
             None,
             executors.clone(),
@@ -545,7 +544,7 @@ mod tests {
             builtin_programs,
             &message,
             &program_indices,
-            &transaction_context,
+            &mut transaction_context,
             rent_collector.rent,
             None,
             executors,
@@ -602,7 +601,7 @@ mod tests {
             (secp256k1_program::id(), secp256k1_account),
             (mock_program_id, mock_program_account),
         ];
-        let transaction_context = TransactionContext::new(accounts, 1);
+        let mut transaction_context = TransactionContext::new(accounts, 1);
 
         let message = Message::new(
             &[
@@ -618,7 +617,7 @@ mod tests {
             builtin_programs,
             &message,
             &[vec![0], vec![1]],
-            &transaction_context,
+            &mut transaction_context,
             RentCollector::default().rent,
             None,
             Rc::new(RefCell::new(Executors::default())),

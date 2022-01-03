@@ -196,12 +196,9 @@ fn run_program(name: &str) -> u64 {
     file.read_to_end(&mut data).unwrap();
     let loader_id = bpf_loader::id();
     with_mock_invoke_context(loader_id, 0, |invoke_context| {
-        let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
         let (parameter_bytes, account_lengths) = serialize_parameters(
-            &keyed_accounts[0].unsigned_key(),
-            &keyed_accounts[1].unsigned_key(),
-            &keyed_accounts[2..],
-            &[],
+            invoke_context.transaction_context,
+            invoke_context.transaction_context.get_current_instruction_context().unwrap(),
         )
         .unwrap();
 
@@ -227,7 +224,7 @@ fn run_program(name: &str) -> u64 {
         let mut instruction_count = 0;
         let mut tracer = None;
         for i in 0..2 {
-            invoke_context.return_data = (*invoke_context.get_caller().unwrap(), Vec::new());
+            invoke_context.return_data = (*invoke_context.transaction_context.get_program_key().unwrap(), Vec::new());
             let mut parameter_bytes = parameter_bytes.clone();
             {
                 let mut vm = create_vm(
@@ -278,10 +275,9 @@ fn run_program(name: &str) -> u64 {
                     tracer = Some(vm.get_tracer().clone());
                 }
             }
-            let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
             deserialize_parameters(
-                &loader_id,
-                &keyed_accounts[2..],
+                invoke_context.transaction_context,
+                invoke_context.transaction_context.get_current_instruction_context().unwrap(),
                 parameter_bytes.as_slice(),
                 &account_lengths,
                 true,

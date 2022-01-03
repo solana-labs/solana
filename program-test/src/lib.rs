@@ -45,7 +45,7 @@ use {
     solana_vote_program::vote_state::{VoteState, VoteStateVersions},
     std::{
         cell::RefCell,
-        collections::HashMap,
+        collections::HashSet,
         convert::TryFrom,
         fs::File,
         io::{self, Read},
@@ -100,57 +100,68 @@ pub fn builtin_process_instruction(
 ) -> Result<(), InstructionError> {
     set_invoke_context(invoke_context);
 
+    let transaction_context = &invoke_context.transaction_context;
+    let instruction_context = transaction_context.get_current_instruction_context()?;
+    let indices_in_instruction = instruction_context.get_number_of_program_accounts()
+        ..instruction_context.get_number_of_accounts();
+
     let log_collector = invoke_context.get_log_collector();
-    let program_id = invoke_context.get_caller()?;
+    let program_id = transaction_context.get_program_key()?;
     stable_log::program_invoke(&log_collector, program_id, invoke_context.invoke_depth());
 
-    // Skip the processor account
-    let keyed_accounts = &invoke_context.get_keyed_accounts()?[1..];
+    // Copy indices_in_instruction into a HashSet to ensure there are no duplicates
+    let deduplicated_indices: HashSet<usize> = indices_in_instruction.clone().collect();
 
-    // Copy all the accounts into a HashMap to ensure there are no duplicates
-    let mut accounts: HashMap<Pubkey, Account> = keyed_accounts
+    // Create copies of the accounts
+    let mut account_copies = deduplicated_indices
         .iter()
-        .map(|ka| {
-            (
-                *ka.unsigned_key(),
-                Account::from(ka.account.borrow().clone()),
-            )
+        .map(|index_in_instruction| {
+            let borrowed_account = instruction_context
+                .try_borrow_account(transaction_context, *index_in_instruction)?;
+            Ok((
+                *borrowed_account.get_key(),
+                *borrowed_account.get_owner(),
+                borrowed_account.get_lamports(),
+                borrowed_account.get_data().to_vec(),
+            ))
         })
-        .collect();
+        .collect::<Result<Vec<_>, InstructionError>>()?;
 
-    // Create shared references to each account's lamports/data/owner
-    let account_refs: HashMap<_, _> = accounts
+    // Create shared references to account_copies
+    let account_refs: Vec<_> = account_copies
         .iter_mut()
-        .map(|(key, account)| {
+        .map(|(key, owner, lamports, data)| {
             (
-                *key,
-                (
-                    Rc::new(RefCell::new(&mut account.lamports)),
-                    Rc::new(RefCell::new(&mut account.data[..])),
-                    &account.owner,
-                ),
+                key,
+                owner,
+                Rc::new(RefCell::new(lamports)),
+                Rc::new(RefCell::new(data.as_mut())),
             )
         })
         .collect();
 
     // Create AccountInfos
-    let account_infos: Vec<AccountInfo> = keyed_accounts
-        .iter()
-        .map(|keyed_account| {
-            let key = keyed_account.unsigned_key();
-            let (lamports, data, owner) = &account_refs[key];
-            AccountInfo {
+    let account_infos = indices_in_instruction
+        .map(|index_in_instruction| {
+            let account_copy_index = deduplicated_indices
+                .iter()
+                .position(|index| *index == index_in_instruction)
+                .unwrap();
+            let (key, owner, lamports, data) = &account_refs[account_copy_index];
+            let borrowed_account = instruction_context
+                .try_borrow_account(transaction_context, index_in_instruction)?;
+            Ok(AccountInfo {
                 key,
-                is_signer: keyed_account.signer_key().is_some(),
-                is_writable: keyed_account.is_writable(),
+                is_signer: borrowed_account.is_signer(),
+                is_writable: borrowed_account.is_writable(),
                 lamports: lamports.clone(),
                 data: data.clone(),
                 owner,
-                executable: keyed_account.executable().unwrap(),
-                rent_epoch: keyed_account.rent_epoch().unwrap(),
-            }
+                executable: borrowed_account.is_executable(),
+                rent_epoch: borrowed_account.get_rent_epoch(),
+            })
         })
-        .collect();
+        .collect::<Result<Vec<AccountInfo>, InstructionError>>()?;
 
     // Execute the program
     process_instruction(program_id, &account_infos, input).map_err(|err| {
@@ -161,12 +172,16 @@ pub fn builtin_process_instruction(
     stable_log::program_success(&log_collector, program_id);
 
     // Commit AccountInfo changes back into KeyedAccounts
-    for keyed_account in keyed_accounts {
-        let mut account = keyed_account.account.borrow_mut();
-        let key = keyed_account.unsigned_key();
-        let (lamports, data, _owner) = &account_refs[key];
-        account.set_lamports(**lamports.borrow());
-        account.set_data(data.borrow().to_vec());
+    for (index_in_instruction, (_key, _owner, lamports, data)) in deduplicated_indices
+        .into_iter()
+        .zip(account_copies.into_iter())
+    {
+        let mut borrowed_account =
+            instruction_context.try_borrow_account(transaction_context, index_in_instruction)?;
+        if borrowed_account.is_writable() {
+            borrowed_account.set_lamports(lamports)?;
+            borrowed_account.set_data(&data)?;
+        }
     }
 
     Ok(())
@@ -233,7 +248,10 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         let invoke_context = get_invoke_context();
         let log_collector = invoke_context.get_log_collector();
 
-        let caller = *invoke_context.get_caller().expect("get_caller");
+        let caller = *invoke_context
+            .transaction_context
+            .get_program_key()
+            .unwrap();
 
         stable_log::program_invoke(
             &log_collector,
@@ -245,7 +263,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             .iter()
             .map(|seeds| Pubkey::create_program_address(seeds, &caller).unwrap())
             .collect::<Vec<_>>();
-        let (instruction_accounts, caller_write_privileges, program_indices) = invoke_context
+        let (instruction_accounts, program_indices) = invoke_context
             .prepare_instruction(instruction, &signers)
             .unwrap();
 
@@ -281,7 +299,6 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             .process_instruction(
                 &instruction.data,
                 &instruction_accounts,
-                Some(&caller_write_privileges),
                 &program_indices,
                 &mut compute_units_consumed,
             )

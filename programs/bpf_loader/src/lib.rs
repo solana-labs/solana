@@ -225,7 +225,7 @@ fn process_instruction_common(
     use_jit: bool,
 ) -> Result<(), InstructionError> {
     let log_collector = invoke_context.get_log_collector();
-    let program_id = invoke_context.get_caller()?;
+    let program_id = invoke_context.transaction_context.get_program_key()?;
 
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
     let first_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
@@ -301,7 +301,7 @@ fn process_instruction_common(
                     use_jit,
                     false,
                 )?;
-                let program_id = invoke_context.get_caller()?;
+                let program_id = invoke_context.transaction_context.get_program_key()?;
                 invoke_context.add_executor(program_id, executor.clone());
                 executor
             }
@@ -342,7 +342,7 @@ fn process_loader_upgradeable_instruction(
     use_jit: bool,
 ) -> Result<(), InstructionError> {
     let log_collector = invoke_context.get_log_collector();
-    let program_id = invoke_context.get_caller()?;
+    let program_id = invoke_context.transaction_context.get_program_key()?;
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
     match limited_deserialize(instruction_data)? {
@@ -495,7 +495,7 @@ fn process_loader_upgradeable_instruction(
                 .accounts
                 .push(AccountMeta::new(*buffer.unsigned_key(), false));
 
-            let caller_program_id = invoke_context.get_caller()?;
+            let caller_program_id = invoke_context.transaction_context.get_program_key()?;
             let signers = [&[new_program_id.as_ref(), &[bump_seed]]]
                 .iter()
                 .map(|seeds| Pubkey::create_program_address(*seeds, caller_program_id))
@@ -892,7 +892,7 @@ fn process_loader_instruction(
     invoke_context: &mut InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
-    let program_id = invoke_context.get_caller()?;
+    let program_id = invoke_context.transaction_context.get_program_key()?;
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
     let program = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
     if program.owner()? != *program_id {
@@ -973,8 +973,8 @@ impl Debug for BpfExecutor {
 impl Executor for BpfExecutor {
     fn execute<'a, 'b>(
         &self,
-        first_instruction_account: usize,
-        instruction_data: &[u8],
+        _first_instruction_account: usize,
+        _instruction_data: &[u8],
         invoke_context: &'a mut InvokeContext<'b>,
         use_jit: bool,
     ) -> Result<(), InstructionError> {
@@ -983,15 +983,12 @@ impl Executor for BpfExecutor {
         let invoke_depth = invoke_context.invoke_depth();
 
         let mut serialize_time = Measure::start("serialize");
-        let keyed_accounts = invoke_context.get_keyed_accounts()?;
-        let program = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-        let loader_id = program.owner()?;
-        let program_id = *program.unsigned_key();
+        let program_id = *invoke_context.transaction_context.get_program_key()?;
         let (mut parameter_bytes, account_lengths) = serialize_parameters(
-            &loader_id,
-            &program_id,
-            &keyed_accounts[first_instruction_account + 1..],
-            instruction_data,
+            invoke_context.transaction_context,
+            invoke_context
+                .transaction_context
+                .get_current_instruction_context()?,
         )?;
         serialize_time.stop();
         let mut create_vm_time = Measure::start("create_vm");
@@ -1076,10 +1073,11 @@ impl Executor for BpfExecutor {
 
         let mut deserialize_time = Measure::start("deserialize");
         let execute_or_deserialize_result = execution_result.and_then(|_| {
-            let keyed_accounts = invoke_context.get_keyed_accounts()?;
             deserialize_parameters(
-                &loader_id,
-                &keyed_accounts[first_instruction_account + 1..],
+                invoke_context.transaction_context,
+                invoke_context
+                    .transaction_context
+                    .get_current_instruction_context()?,
                 parameter_bytes.as_slice(),
                 &account_lengths,
                 invoke_context

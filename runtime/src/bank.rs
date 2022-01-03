@@ -3561,9 +3561,9 @@ impl Bank {
 
                         let mut transaction_accounts = Vec::new();
                         std::mem::swap(&mut loaded_transaction.accounts, &mut transaction_accounts);
-                        let transaction_context = TransactionContext::new(
+                        let mut transaction_context = TransactionContext::new(
                             transaction_accounts,
-                            compute_budget.max_invoke_depth,
+                            compute_budget.max_invoke_depth.saturating_add(1),
                         );
 
                         let instruction_recorder = if enable_cpi_recording {
@@ -3588,7 +3588,7 @@ impl Bank {
                                 &self.builtin_programs.vec,
                                 legacy_message,
                                 &loaded_transaction.program_indices,
-                                &transaction_context,
+                                &mut transaction_context,
                                 self.rent_collector.rent,
                                 log_collector.clone(),
                                 executors.clone(),
@@ -10401,7 +10401,7 @@ pub(crate) mod tests {
             _instruction_data: &[u8],
             invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
-            let program_id = invoke_context.get_caller()?;
+            let program_id = invoke_context.transaction_context.get_program_key()?;
             if mock_vote_program_id() != *program_id {
                 return Err(InstructionError::IncorrectProgramId);
             }

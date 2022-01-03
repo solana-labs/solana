@@ -170,7 +170,7 @@ impl NativeLoader {
         invoke_context: &mut InvokeContext,
     ) -> Result<(), InstructionError> {
         let (program_id, name_vec) = {
-            let program_id = invoke_context.get_caller()?;
+            let program_id = invoke_context.transaction_context.get_program_key()?;
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let program = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             if native_loader::id() != *program_id {

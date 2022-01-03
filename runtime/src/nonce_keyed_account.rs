@@ -334,8 +334,8 @@ mod test {
     where
         F: FnMut(&mut InvokeContext, &KeyedAccount),
     {
-        let transaction_context = TransactionContext::new(Vec::new(), 1);
-        let mut invoke_context = InvokeContext::new_mock(&transaction_context, &[]);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let pubkey = Pubkey::new_unique();
         let account = create_account(lamports);
         let keyed_account = KeyedAccount::new(&pubkey, signer, &account);
