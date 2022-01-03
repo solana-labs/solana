@@ -1633,23 +1633,9 @@ impl ClusterInfo {
                 }
             }
         }
-        // Adopt an entrypoint's `shred_version` if ours is unset
-        if self.my_shred_version() == 0 {
-            if let Some(entrypoint) = entrypoints
-                .iter()
-                .find(|entrypoint| entrypoint.shred_version != 0)
-            {
-                info!(
-                    "Setting shred version to {:?} from entrypoint {:?}",
-                    entrypoint.shred_version, entrypoint.id
-                );
-                self.my_contact_info.write().unwrap().shred_version = entrypoint.shred_version;
-            }
-        }
-        self.my_shred_version() != 0
-            && entrypoints
-                .iter()
-                .all(|entrypoint| entrypoint.id != Pubkey::default())
+        entrypoints
+            .iter()
+            .all(|entrypoint| entrypoint.id != Pubkey::default())
     }
 
     fn handle_purge(
@@ -4323,7 +4309,7 @@ mod tests {
             .any(|entrypoint| *entrypoint == gossiped_entrypoint2_info));
 
         assert!(entrypoints_processed);
-        assert_eq!(cluster_info.my_shred_version(), 1); // <-- shred version now adopted from entrypoint2
+        assert_eq!(cluster_info.my_shred_version(), 0);
     }
 
     #[test]

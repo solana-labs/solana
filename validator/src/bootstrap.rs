@@ -209,7 +209,7 @@ fn start_gossip_node(
     ledger_path: &Path,
     gossip_addr: &SocketAddr,
     gossip_socket: UdpSocket,
-    expected_shred_version: Option<u16>,
+    expected_shred_version: u16,
     gossip_validators: Option<HashSet<Pubkey>>,
     should_check_duplicate_instance: bool,
     socket_addr_space: SocketAddrSpace,
@@ -217,7 +217,7 @@ fn start_gossip_node(
     let contact_info = ClusterInfo::gossip_contact_info(
         identity_keypair.pubkey(),
         *gossip_addr,
-        expected_shred_version.unwrap_or(0),
+        expected_shred_version,
     );
     let mut cluster_info = ClusterInfo::new(contact_info, identity_keypair, socket_addr_space);
     cluster_info.set_entrypoints(cluster_entrypoints.to_vec());
@@ -245,9 +245,8 @@ fn get_rpc_peers(
     blacklist_timeout: &Instant,
     retry_reason: &mut Option<String>,
 ) -> Option<Vec<ContactInfo>> {
-    let shred_version = validator_config
-        .expected_shred_version
-        .unwrap_or_else(|| cluster_info.my_shred_version());
+    let shred_version = validator_config.expected_shred_version.unwrap();
+    assert_eq!(shred_version, cluster_info.my_shred_version());
     if shred_version == 0 {
         let all_zero_shred_versions = cluster_entrypoints.iter().all(|cluster_entrypoint| {
             cluster_info
@@ -436,7 +435,7 @@ mod without_incremental_snapshots {
                     ledger_path,
                     &node.info.gossip,
                     node.sockets.gossip.try_clone().unwrap(),
-                    validator_config.expected_shred_version,
+                    validator_config.expected_shred_version.unwrap(),
                     validator_config.gossip_validators.clone(),
                     should_check_duplicate_instance,
                     socket_addr_space,
@@ -851,7 +850,7 @@ mod with_incremental_snapshots {
                     ledger_path,
                     &node.info.gossip,
                     node.sockets.gossip.try_clone().unwrap(),
-                    validator_config.expected_shred_version,
+                    validator_config.expected_shred_version.unwrap(),
                     validator_config.gossip_validators.clone(),
                     should_check_duplicate_instance,
                     socket_addr_space,

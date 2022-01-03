@@ -2168,14 +2168,10 @@ pub fn main() {
             exit(1);
         }
     }
-    // TODO: Once entrypoints are updated to return shred-version, this should
-    // abort if it fails to obtain a shred-version, so that nodes always join
-    // gossip with a valid shred-version. The code to adopt entrypoint shred
-    // version can then be deleted from gossip and get_rpc_node above.
     let expected_shred_version = value_t!(matches, "expected_shred_version", u16)
         .ok()
-        .or_else(|| get_cluster_shred_version(&entrypoint_addrs));
-
+        .or_else(|| get_cluster_shred_version(&entrypoint_addrs))
+        .unwrap();
     let tower_storage: Arc<dyn solana_core::tower_storage::TowerStorage> =
         match value_t_or_exit!(matches, "tower_storage", String).as_str() {
             "file" => {
@@ -2341,7 +2337,7 @@ pub fn main() {
         expected_bank_hash: matches
             .value_of("expected_bank_hash")
             .map(|s| Hash::from_str(s).unwrap()),
-        expected_shred_version,
+        expected_shred_version: Some(expected_shred_version),
         new_hard_forks: hardforks_of(&matches, "hard_forks"),
         rpc_config: JsonRpcConfig {
             enable_rpc_transaction_history: matches.is_present("enable_rpc_transaction_history"),
