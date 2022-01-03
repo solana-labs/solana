@@ -11357,7 +11357,7 @@ pub mod tests {
         // write unique keys to successive slots
         keys.iter().enumerate().for_each(|(slot, key)| {
             let slot = slot as Slot;
-            db.store_uncached(slot, &[(key, &zero_lamport_account)]);
+            db.store_uncached(slot, &[(key, &zero_lamport_account, slot)]);
             db.get_accounts_delta_hash(slot);
             db.add_root(slot);
         });
@@ -11383,7 +11383,7 @@ pub mod tests {
         // write unique keys to successive slots
         keys.iter().enumerate().for_each(|(slot, key)| {
             let slot = slot as Slot;
-            db.store_uncached(slot, &[(key, &zero_lamport_account)]);
+            db.store_uncached(slot, &[(key, &zero_lamport_account, slot)]);
             db.get_accounts_delta_hash(slot);
             db.add_root(slot);
             // reset next_id to what it was previously to cause us to re-use the same id
