@@ -28,16 +28,11 @@ use {
         rpc_subscriptions::RpcSubscriptions,
     },
     solana_runtime::{
-<<<<<<< HEAD
         bank::Bank,
         bank_forks::BankForks,
         commitment::VOTE_THRESHOLD_SIZE,
-        epoch_stakes::{EpochAuthorizedVoters, EpochStakes},
+        epoch_stakes::EpochStakes,
         vote_sender_types::{ReplayVoteReceiver, ReplayedVote},
-=======
-        bank::Bank, bank_forks::BankForks, commitment::VOTE_THRESHOLD_SIZE,
-        epoch_stakes::EpochStakes, vote_sender_types::ReplayVoteReceiver,
->>>>>>> 69d71f8f8 (removes epoch_authorized_voters from VoteTracker (#22192))
     },
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT},
@@ -693,42 +688,6 @@ impl ClusterInfoVoteListener {
         }
     }
 
-<<<<<<< HEAD
-    fn filter_gossip_votes(
-        vote_tracker: &VoteTracker,
-        vote_pubkey: &Pubkey,
-        vote: &Vote,
-        gossip_tx: &Transaction,
-    ) -> bool {
-        if vote.slots.is_empty() {
-            return false;
-        }
-        let last_vote_slot = vote.slots.last().unwrap();
-        // Votes from gossip need to be verified as they have not been
-        // verified by the replay pipeline. Determine the authorized voter
-        // based on the last vote slot. This will  drop votes from authorized
-        // voters trying to make votes for slots earlier than the epoch for
-        // which they are authorized
-        let actual_authorized_voter =
-            vote_tracker.get_authorized_voter(vote_pubkey, *last_vote_slot);
-
-        if actual_authorized_voter.is_none() {
-            return false;
-        }
-
-        // Voting without the correct authorized pubkey, dump the vote
-        if !VoteTracker::vote_contains_authorized_voter(
-            gossip_tx,
-            &actual_authorized_voter.unwrap(),
-        ) {
-            return false;
-        }
-
-        true
-    }
-
-=======
->>>>>>> 69d71f8f8 (removes epoch_authorized_voters from VoteTracker (#22192))
     fn filter_and_confirm_with_new_votes(
         vote_tracker: &VoteTracker,
         gossip_vote_txs: Vec<Transaction>,
