@@ -6,7 +6,6 @@ use {
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
-        account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         compute_budget::ComputeBudget,
         feature_set::{
@@ -566,7 +565,7 @@ impl<'a> InvokeContext<'a> {
         // Finds the index of each account in the instruction by its pubkey.
         // Then normalizes / unifies the privileges of duplicate accounts.
         // Note: This works like visit_each_account_once() and is an O(n^2) algorithm too.
-        let caller_keyed_accounts = self.get_keyed_accounts()?;
+        let instruction_context = self.transaction_context.get_current_instruction_context()?;
         let mut deduplicated_instruction_accounts: Vec<InstructionAccount> = Vec::new();
         let mut duplicate_indicies = Vec::with_capacity(instruction.accounts.len());
         for account_meta in instruction.accounts.iter() {
@@ -593,9 +592,8 @@ impl<'a> InvokeContext<'a> {
                 instruction_account.is_signer |= account_meta.is_signer;
                 instruction_account.is_writable |= account_meta.is_writable;
             } else {
-                let index_in_caller = caller_keyed_accounts
-                    .iter()
-                    .position(|keyed_account| *keyed_account.unsigned_key() == account_meta.pubkey)
+                let index_in_caller = instruction_context
+                    .find_index_of_account(self.transaction_context, &account_meta.pubkey)
                     .ok_or_else(|| {
                         ic_msg!(
                             self,
@@ -604,10 +602,38 @@ impl<'a> InvokeContext<'a> {
                         );
                         InstructionError::MissingAccount
                     })?;
+                let borrowed_account = instruction_context
+                    .try_borrow_account(self.transaction_context, index_in_caller)?;
+
+                // Readonly in caller cannot become writable in callee
+                if account_meta.is_writable && !borrowed_account.is_writable() {
+                    ic_msg!(
+                        self,
+                        "{}'s writable privilege escalated",
+                        borrowed_account.get_key(),
+                    );
+                    return Err(InstructionError::PrivilegeEscalation);
+                }
+
+                // To be signed in the callee,
+                // it must be either signed in the caller or by the program
+                if account_meta.is_signer
+                    && !(borrowed_account.is_signer()
+                        || signers.contains(borrowed_account.get_key()))
+                {
+                    ic_msg!(
+                        self,
+                        "{}'s signer privilege escalated",
+                        borrowed_account.get_key()
+                    );
+                    return Err(InstructionError::PrivilegeEscalation);
+                }
+
                 duplicate_indicies.push(deduplicated_instruction_accounts.len());
                 deduplicated_instruction_accounts.push(InstructionAccount {
                     index_in_transaction,
-                    index_in_caller,
+                    index_in_caller: index_in_caller
+                        .saturating_sub(instruction_context.get_number_of_program_accounts()),
                     is_signer: account_meta.is_signer,
                     is_writable: account_meta.is_writable,
                 });
@@ -622,62 +648,33 @@ impl<'a> InvokeContext<'a> {
         let caller_write_privileges = instruction_accounts
             .iter()
             .map(|instruction_account| {
-                let keyed_account = &caller_keyed_accounts[instruction_account.index_in_caller];
-
-                // Readonly in caller cannot become writable in callee
-                if instruction_account.is_writable && !keyed_account.is_writable() {
-                    ic_msg!(
-                        self,
-                        "{}'s writable privilege escalated",
-                        keyed_account.unsigned_key(),
-                    );
-                    return Err(InstructionError::PrivilegeEscalation);
-                }
-
-                // To be signed in the callee,
-                // it must be either signed in the caller or by the program
-                if instruction_account.is_signer
-                    && !(keyed_account.signer_key().is_some()
-                        || signers.contains(keyed_account.unsigned_key()))
-                {
-                    ic_msg!(
-                        self,
-                        "{}'s signer privilege escalated",
-                        keyed_account.unsigned_key()
-                    );
-                    return Err(InstructionError::PrivilegeEscalation);
-                }
-
-                Ok(keyed_account.is_writable())
+                let borrowed_account = instruction_context.try_borrow_instruction_account(
+                    self.transaction_context,
+                    instruction_account.index_in_caller,
+                )?;
+                Ok(borrowed_account.is_writable())
             })
             .collect::<Result<Vec<bool>, InstructionError>>()?;
 
         // Find and validate executables / program accounts
         let callee_program_id = instruction.program_id;
-        let program_account_index = caller_keyed_accounts
-            .iter()
-            .find(|keyed_account| &callee_program_id == keyed_account.unsigned_key())
-            .and_then(|_keyed_account| {
-                self.transaction_context
-                    .find_index_of_program_account(&callee_program_id)
-            })
+        let program_account_index = instruction_context
+            .find_index_of_account(self.transaction_context, &callee_program_id)
             .ok_or_else(|| {
                 ic_msg!(self, "Unknown program {}", callee_program_id);
                 InstructionError::MissingAccount
             })?;
-        let program_account = self
-            .transaction_context
-            .get_account_at_index(program_account_index)
-            .borrow();
-        if !program_account.executable() {
+        let borrowed_program_account = instruction_context
+            .try_borrow_account(self.transaction_context, program_account_index)?;
+        if !borrowed_program_account.is_executable() {
             ic_msg!(self, "Account {} is not executable", callee_program_id);
             return Err(InstructionError::AccountNotExecutable);
         }
         let mut program_indices = vec![];
-        if program_account.owner() == &bpf_loader_upgradeable::id() {
+        if borrowed_program_account.get_owner() == &bpf_loader_upgradeable::id() {
             if let UpgradeableLoaderState::Program {
                 programdata_address,
-            } = program_account.state()?
+            } = borrowed_program_account.get_state()?
             {
                 if let Some(programdata_account_index) = self
                     .transaction_context
@@ -701,7 +698,7 @@ impl<'a> InvokeContext<'a> {
                 return Err(InstructionError::MissingAccount);
             }
         }
-        program_indices.push(program_account_index);
+        program_indices.push(borrowed_program_account.get_index_in_transaction());
 
         Ok((
             instruction_accounts,
