@@ -12,7 +12,7 @@ use {
         fmt::Debug,
         sync::{
             atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering},
-            Arc, Mutex,
+            Arc,
         },
         time::Duration,
     },
@@ -32,7 +32,7 @@ pub struct BucketMapHolder<T: IndexValue> {
 
     // used by bg processing to know when any bucket has become dirty
     pub wait_dirty_or_aged: Arc<WaitableCondvar>,
-    next_bucket_to_flush: Mutex<usize>,
+    next_bucket_to_flush: AtomicUsize,
     bins: usize,
 
     pub threads: usize,
@@ -163,7 +163,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
             age: AtomicU8::default(),
             stats: BucketMapHolderStats::new(bins),
             wait_dirty_or_aged: Arc::default(),
-            next_bucket_to_flush: Mutex::new(0),
+            next_bucket_to_flush: AtomicUsize::new(0),
             age_timer: AtomicInterval::default(),
             bins,
             startup: AtomicBool::default(),
@@ -175,12 +175,11 @@ impl<T: IndexValue> BucketMapHolder<T> {
     // get the next bucket to flush, with the idea that the previous bucket
     // is perhaps being flushed by another thread already.
     pub fn next_bucket_to_flush(&self) -> usize {
-        // could be lock-free as an optimization
-        // wrapping is tricky
-        let mut lock = self.next_bucket_to_flush.lock().unwrap();
-        let result = *lock;
-        *lock = (result + 1) % self.bins;
-        result
+        self.next_bucket_to_flush
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |bucket| {
+                Some((bucket + 1) % self.bins)
+            })
+            .unwrap()
     }
 
     /// prepare for this to be dynamic if necessary
@@ -299,14 +298,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
 
 #[cfg(test)]
 pub mod tests {
-    use {
-        super::*,
-        rayon::prelude::*,
-        std::{
-            sync::atomic::{AtomicUsize, Ordering},
-            time::Instant,
-        },
-    };
+    use {super::*, rayon::prelude::*, std::time::Instant};
 
     #[test]
     fn test_next_bucket_to_flush() {
