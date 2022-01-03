@@ -708,6 +708,9 @@ impl Validator {
         };
 
         let (stats_reporter_sender, stats_reporter_receiver) = channel();
+        // https://github.com/rust-lang/rust/issues/39364#issuecomment-634545136
+        let _stats_reporter_sender = stats_reporter_sender.clone();
+
         let stats_reporter_service = StatsReporterService::new(stats_reporter_receiver, &exit);
 
         let gossip_service = GossipService::new(
