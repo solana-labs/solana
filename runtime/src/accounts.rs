@@ -2588,14 +2588,15 @@ mod tests {
             0,
             true,
             true, // leave_nonce_on_success
+            0,
         );
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
             .iter()
-            .any(|(pubkey, _account)| *pubkey == &keypair0.pubkey()));
+            .any(|(pubkey, _account, _slot)| *pubkey == &keypair0.pubkey()));
         assert!(collected_accounts
             .iter()
-            .any(|(pubkey, _account)| *pubkey == &keypair1.pubkey()));
+            .any(|(pubkey, _account, _slot)| *pubkey == &keypair1.pubkey()));
 
         // Ensure readonly_lock reflects lock
         assert_eq!(
@@ -3017,21 +3018,22 @@ mod tests {
             0,
             true,
             true, // leave_nonce_on_success
+            0,
         );
         assert_eq!(collected_accounts.len(), 2);
         assert_eq!(
             collected_accounts
                 .iter()
-                .find(|(pubkey, _account)| *pubkey == &from_address)
-                .map(|(_pubkey, account)| *account)
+                .find(|(pubkey, _account, _slot)| *pubkey == &from_address)
+                .map(|(_pubkey, account, _slot)| *account)
                 .cloned()
                 .unwrap(),
             from_account_pre,
         );
         let collected_nonce_account = collected_accounts
             .iter()
-            .find(|(pubkey, _account)| *pubkey == &nonce_address)
-            .map(|(_pubkey, account)| *account)
+            .find(|(pubkey, _account, _slot)| *pubkey == &nonce_address)
+            .map(|(_pubkey, account, _slot)| *account)
             .cloned()
             .unwrap();
         assert_eq!(
@@ -3127,12 +3129,13 @@ mod tests {
             0,
             true,
             true, // leave_nonce_on_success
+            0,
         );
         assert_eq!(collected_accounts.len(), 1);
         let collected_nonce_account = collected_accounts
             .iter()
-            .find(|(pubkey, _account)| *pubkey == &nonce_address)
-            .map(|(_pubkey, account)| *account)
+            .find(|(pubkey, _account, _slot)| *pubkey == &nonce_address)
+            .map(|(_pubkey, account, _slot)| *account)
             .cloned()
             .unwrap();
         assert_eq!(

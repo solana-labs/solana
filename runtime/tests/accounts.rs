@@ -125,7 +125,7 @@ fn test_bad_bank_hash() {
             .collect();
         db.store_uncached(some_slot, &account_refs);
 
-        for (key, account) in &account_refs {
+        for (key, account, _slot) in &account_refs {
             assert_eq!(
                 db.load_account_hash(&ancestors, key, None, LoadHint::Unspecified)
                     .unwrap(),
