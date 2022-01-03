@@ -39,7 +39,7 @@ fi
 
 case "$CI_OS_NAME" in
 osx)
-  TARGET=x86_64-apple-darwin
+  TARGET=$(uname -m)-apple-darwin
   ;;
 linux)
   TARGET=x86_64-unknown-linux-gnu

@@ -14,7 +14,7 @@ use {
     },
     solana_ledger::{blockstore::Blockstore, blockstore_db::AccessType},
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
-    solana_transaction_status::{ConfirmedBlock, EncodedTransaction, UiTransactionEncoding},
+    solana_transaction_status::{ConfirmedBlock, Encodable, UiTransactionEncoding},
     std::{
         path::Path,
         process::exit,
@@ -109,10 +109,10 @@ async fn confirm(
         match bigtable.get_confirmed_transaction(signature).await {
             Ok(Some(confirmed_transaction)) => {
                 transaction = Some(CliTransaction {
-                    transaction: EncodedTransaction::encode(
-                        confirmed_transaction.transaction.transaction.clone(),
-                        UiTransactionEncoding::Json,
-                    ),
+                    transaction: confirmed_transaction
+                        .transaction
+                        .transaction
+                        .encode(UiTransactionEncoding::Json),
                     meta: confirmed_transaction.transaction.meta.map(|m| m.into()),
                     block_time: confirmed_transaction.block_time,
                     slot: Some(confirmed_transaction.slot),

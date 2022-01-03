@@ -43,8 +43,8 @@ use {
         transaction::{self, uses_durable_nonce, Transaction},
     },
     solana_transaction_status::{
-        EncodedConfirmedBlock, EncodedConfirmedTransaction, TransactionStatus, UiConfirmedBlock,
-        UiTransactionEncoding,
+        EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus,
+        UiConfirmedBlock, UiTransactionEncoding,
     },
     solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY,
     std::{
@@ -2943,7 +2943,7 @@ impl RpcClient {
         &self,
         signature: &Signature,
         encoding: UiTransactionEncoding,
-    ) -> ClientResult<EncodedConfirmedTransaction> {
+    ) -> ClientResult<EncodedConfirmedTransactionWithStatusMeta> {
         self.send(
             self.maybe_map_request(RpcRequest::GetTransaction)?,
             json!([signature.to_string(), encoding]),
@@ -3006,7 +3006,7 @@ impl RpcClient {
         &self,
         signature: &Signature,
         config: RpcTransactionConfig,
-    ) -> ClientResult<EncodedConfirmedTransaction> {
+    ) -> ClientResult<EncodedConfirmedTransactionWithStatusMeta> {
         self.send(
             self.maybe_map_request(RpcRequest::GetTransaction)?,
             json!([signature.to_string(), config]),
@@ -3022,7 +3022,7 @@ impl RpcClient {
         &self,
         signature: &Signature,
         encoding: UiTransactionEncoding,
-    ) -> ClientResult<EncodedConfirmedTransaction> {
+    ) -> ClientResult<EncodedConfirmedTransactionWithStatusMeta> {
         self.send(
             RpcRequest::GetConfirmedTransaction,
             json!([signature.to_string(), encoding]),
@@ -3038,7 +3038,7 @@ impl RpcClient {
         &self,
         signature: &Signature,
         config: RpcConfirmedTransactionConfig,
-    ) -> ClientResult<EncodedConfirmedTransaction> {
+    ) -> ClientResult<EncodedConfirmedTransactionWithStatusMeta> {
         self.send(
             RpcRequest::GetConfirmedTransaction,
             json!([signature.to_string(), config]),
