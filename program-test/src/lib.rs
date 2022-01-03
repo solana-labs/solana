@@ -101,7 +101,7 @@ pub fn builtin_process_instruction(
     set_invoke_context(invoke_context);
 
     let log_collector = invoke_context.get_log_collector();
-    let program_id = invoke_context.get_caller()?;
+    let program_id = invoke_context.transaction_context.get_program_key()?;
     stable_log::program_invoke(&log_collector, program_id, invoke_context.invoke_depth());
 
     // Skip the processor account
@@ -233,7 +233,10 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         let invoke_context = get_invoke_context();
         let log_collector = invoke_context.get_log_collector();
 
-        let caller = *invoke_context.get_caller().expect("get_caller");
+        let caller = *invoke_context
+            .transaction_context
+            .get_program_key()
+            .unwrap();
 
         stable_log::program_invoke(
             &log_collector,
