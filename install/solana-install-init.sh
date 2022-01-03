@@ -67,7 +67,7 @@ main() {
       TARGET=x86_64-unknown-linux-gnu
       ;;
     Darwin)
-      TARGET=x86_64-apple-darwin
+      TARGET=$(uname -m)-apple-darwin
       ;;
     *)
       err "machine architecture is currently unsupported"
