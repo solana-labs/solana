@@ -20,7 +20,9 @@ extern uint64_t entrypoint(const uint8_t *input) {
 
   size_t current = 1;
 
-  uint64_t iterations = params.data[0] * 18;
+  uint64_t iterations = 0;
+  uint64_t size = params.data_len > sizeof(uint64_t) ? (uint64_t)sizeof(uint64_t) : params.data_len;
+  sol_memcpy(&iterations, params.data, size);
   iterations = iterations == 0 ? UINT64_MAX : iterations;
   size_t rand = params.data[1];
   size_t account_index = rand % params.ka_num;
