@@ -4502,7 +4502,7 @@ impl AccountsDb {
     }
 
     pub fn flush_accounts_cache_slot(&self, slot: Slot) {
-        self.flush_slot_cache(slot, None::<&mut fn(&_, &_) -> bool>);
+        self.flush_slot_cache(slot, &[slot], None::<&mut fn(&_, &_) -> bool>);
     }
 
     /// true if write cache is too big
@@ -4563,7 +4563,7 @@ impl AccountsDb {
             let old_slots = self.accounts_cache.cached_frozen_slots();
             excess_slot_count = old_slots.len();
             let mut flush_stats = FlushStats::default();
-            (0..(excess_slot_count / FLUSH_WINDOW_SIZE + 1))
+            (0..((excess_slot_count / FLUSH_WINDOW_SIZE) + 1))
                 .into_iter()
                 .for_each(|chunk_index| {
                     let old_slots = &old_slots[chunk_index * FLUSH_WINDOW_SIZE..];
@@ -4573,16 +4573,16 @@ impl AccountsDb {
                         .take(FLUSH_WINDOW_SIZE)
                         .all(|old_slot| *old_slot > max_flushed_root)
                     {
-                        if true {
-                            panic!("fix this");
-                        } else {
-                            if let Some(stats) =
-                                self.flush_slot_cache(old_slots[0], None::<&mut fn(&_, &_) -> bool>)
-                            {
+                        if let Some(stats) = self.flush_slot_cache(
+                            *old_slots.last().unwrap(),
+                            old_slots,
+                            None::<&mut fn(&_, &_) -> bool>,
+                        ) {
+                            stats.into_iter().for_each(|stats| {
                                 flush_stats.num_flushed += stats.num_flushed;
                                 flush_stats.num_purged += stats.num_purged;
                                 flush_stats.total_size += stats.total_size;
-                            }
+                            });
                         }
                     } else {
                         unflushable_unrooted_slot_count += old_slots.len();
@@ -4631,8 +4631,11 @@ impl AccountsDb {
             // Remove a random index 0 <= i < `frozen_slots.len()`
             let rand_slot = frozen_slots.choose(&mut thread_rng());
             if let Some(rand_slot) = rand_slot {
-                let random_flush_stats =
-                    self.flush_slot_cache(*rand_slot, None::<&mut fn(&_, &_) -> bool>);
+                let random_flush_stats = self.flush_slot_cache(
+                    *rand_slot,
+                    &[*rand_slot],
+                    None::<&mut fn(&_, &_) -> bool>,
+                );
                 info!(
                     "Flushed random slot: num_remaining: {} {:?}",
                     num_slots_remaining, random_flush_stats,
@@ -4697,7 +4700,10 @@ impl AccountsDb {
                 should_flush_f.as_mut()
             };
 
-            if self.flush_slot_cache(root, should_flush_f).is_some() {
+            if self
+                .flush_slot_cache(root, &[root], should_flush_f)
+                .is_some()
+            {
                 num_roots_flushed += 1;
             }
 
@@ -4723,7 +4729,7 @@ impl AccountsDb {
         &self,
         new_slot: Slot,
         slot_caches: &[(Slot, SlotCache)],
-        mut should_flush_f: Option<&mut impl FnMut(&Pubkey, &AccountSharedData) -> bool>,
+        should_flush_f: &mut Option<&mut impl FnMut(&Pubkey, &AccountSharedData) -> bool>,
     ) -> FlushStats {
         let mut num_purged = 0;
         let mut total_size = 0;
@@ -4831,56 +4837,77 @@ impl AccountsDb {
     /// accounts
     fn flush_slot_cache(
         &self,
-        slot: Slot,
-        should_flush_f: Option<&mut impl FnMut(&Pubkey, &AccountSharedData) -> bool>,
-    ) -> Option<FlushStats> {
-        let is_being_purged = {
+        new_slot: Slot,
+        slots: &[Slot],
+        mut should_flush_f: Option<&mut impl FnMut(&Pubkey, &AccountSharedData) -> bool>,
+    ) -> Option<Vec<FlushStats>> {
+        {
             let mut slots_under_contention = self
                 .remove_unrooted_slots_synchronization
                 .slots_under_contention
                 .lock()
                 .unwrap();
-            // If we're purging this slot, don't flush it here
-            if slots_under_contention.contains(&slot) {
-                true
-            } else {
-                slots_under_contention.insert(slot);
-                false
-            }
-        };
 
-        if !is_being_purged {
-            let flush_stats = self.accounts_cache.slot_cache(slot).map(|slot_cache| {
-                #[cfg(test)]
-                {
-                    // Give some time for cache flushing to occur here for unit tests
-                    sleep(Duration::from_millis(self.load_delay));
+            for i in 0..slots.len() {
+                let slot = slots[i];
+                // If we're purging this slot, don't flush it here
+                if slots_under_contention.contains(&slot) {
+                    for j in 0..i {
+                        let slot = slots[j];
+                        slots_under_contention.remove(&slot);
+                    }
+                    self.remove_unrooted_slots_synchronization
+                        .signal
+                        .notify_all();
+                    return None;
+                } else {
+                    slots_under_contention.insert(slot);
                 }
-                // Since we added the slot to `slots_under_contention` AND this slot
-                // still exists in the cache, we know the slot cannot be removed
-                // by any other threads past this point. We are now responsible for
-                // flushing this slot.
-                self.do_flush_slot_cache(slot, &[(slot, slot_cache)], should_flush_f)
-            });
+            }
+        }
 
-            // Nobody else should have been purging this slot, so should not have been removed
-            // from `self.remove_unrooted_slots_synchronization`.
+        let flush_stats = Some(
+            slots
+                .iter()
+                .filter_map(|slot| {
+                    self.accounts_cache.slot_cache(*slot).map(|slot_cache| {
+                        #[cfg(test)]
+                        {
+                            // Give some time for cache flushing to occur here for unit tests
+                            sleep(Duration::from_millis(self.load_delay));
+                        }
+                        // Since we added the slot to `slots_under_contention` AND this slot
+                        // still exists in the cache, we know the slot cannot be removed
+                        // by any other threads past this point. We are now responsible for
+                        // flushing this slot.
+                        self.do_flush_slot_cache(
+                            new_slot,
+                            &[(*slot, slot_cache)],
+                            &mut should_flush_f,
+                        )
+                    })
+                })
+                .collect::<Vec<_>>(),
+        );
+
+        // Nobody else should have been purging this slot, so should not have been removed
+        // from `self.remove_unrooted_slots_synchronization`.
+
+        slots.iter().for_each(|slot| {
             assert!(self
                 .remove_unrooted_slots_synchronization
                 .slots_under_contention
                 .lock()
                 .unwrap()
                 .remove(&slot));
+        });
 
-            // Signal to any threads blocked on `remove_unrooted_slots(slot)` that we have finished
-            // flushing
-            self.remove_unrooted_slots_synchronization
-                .signal
-                .notify_all();
-            flush_stats
-        } else {
-            None
-        }
+        // Signal to any threads blocked on `remove_unrooted_slots(slot)` that we have finished
+        // flushing
+        self.remove_unrooted_slots_synchronization
+            .signal
+            .notify_all();
+        flush_stats
     }
 
     fn write_accounts_to_cache(
@@ -12869,7 +12896,7 @@ pub mod tests {
                     if flush_trial_start_receiver.recv().is_err() {
                         return;
                     }
-                    db.flush_slot_cache(10, None::<&mut fn(&_, &_) -> bool>);
+                    db.flush_slot_cache(10, &[10], None::<&mut fn(&_, &_) -> bool>);
                     flush_done_sender.send(()).unwrap();
                 })
                 .unwrap()
@@ -12938,7 +12965,7 @@ pub mod tests {
                         return;
                     }
                     for slot in 0..num_cached_slots {
-                        db.flush_slot_cache(slot, None::<&mut fn(&_, &_) -> bool>);
+                        db.flush_slot_cache(slot, &[slot], None::<&mut fn(&_, &_) -> bool>);
                     }
                     flush_done_sender.send(()).unwrap();
                 })
