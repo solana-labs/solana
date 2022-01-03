@@ -59,9 +59,6 @@ pub const MAX_BLOCK_UNITS: u64 =
 /// limit is to prevent too many transactions write to same account, therefore
 /// reduce block's parallelism.
 pub const MAX_WRITABLE_ACCOUNT_UNITS: u64 = MAX_BLOCK_REPLAY_TIME_US * COMPUTE_UNIT_TO_US_RATIO;
-<<<<<<< HEAD
-=======
 
 /// max length of account data in a slot (bytes)
 pub const MAX_ACCOUNT_DATA_LEN: u64 = 100_000_000;
->>>>>>> d743c2917 (re-calibrate limit based on mainnet data, see issue #21917)
