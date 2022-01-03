@@ -1742,8 +1742,8 @@ impl Bank {
         *self.hash.read().unwrap() != Hash::default()
     }
 
-    pub fn freeze_started(&self) -> bool {
-        self.freeze_started.load(Relaxed)
+    pub fn is_freeze_started(&self) -> bool {
+        self.freeze_started.load(Acquire)
     }
 
     pub fn status_cache_ancestors(&self) -> Vec<u64> {
@@ -2635,7 +2635,7 @@ impl Bank {
             self.run_incinerator();
 
             // freeze is a one-way trip, idempotent
-            self.freeze_started.store(true, Relaxed);
+            self.freeze_started.store(true, Release);
             *hash = self.hash_internal_state();
             self.rc.accounts.accounts_db.mark_slot_frozen(self.slot());
         }
@@ -2841,7 +2841,7 @@ impl Bank {
         }
 
         assert!(
-            !self.freeze_started(),
+            !self.is_freeze_started(),
             "Can't change frozen bank by adding not-existing new builtin program ({}, {}). \
             Maybe, inconsistent program activation is detected on snapshot restore?",
             name,
@@ -2869,7 +2869,7 @@ impl Bank {
         };
 
         assert!(
-            !self.freeze_started(),
+            !self.is_freeze_started(),
             "Can't change frozen bank by adding not-existing new precompiled program ({}). \
                 Maybe, inconsistent program activation is detected on snapshot restore?",
             program_id
@@ -3037,7 +3037,7 @@ impl Bank {
     /// bank will reject transactions using that `hash`.
     pub fn register_tick(&self, hash: &Hash) {
         assert!(
-            !self.freeze_started(),
+            !self.is_freeze_started(),
             "register_tick() working on a bank that is already frozen or is undergoing freezing!"
         );
 
@@ -3848,7 +3848,7 @@ impl Bank {
         timings: &mut ExecuteTimings,
     ) -> TransactionResults {
         assert!(
-            !self.freeze_started(),
+            !self.is_freeze_started(),
             "commit_transactions() working on a bank that is already frozen or is undergoing freezing!"
         );
 
@@ -4745,7 +4745,7 @@ impl Bank {
     }
 
     pub fn store_account(&self, pubkey: &Pubkey, account: &AccountSharedData) {
-        assert!(!self.freeze_started());
+        assert!(!self.is_freeze_started());
         self.rc
             .accounts
             .store_slow_cached(self.slot(), pubkey, account);
