@@ -251,6 +251,7 @@ mod tests {
         {
             let accumulated_us: u64 = 1000;
             let accumulated_units: u64 = 100;
+            let total_errored_units = 0;
             let count: u32 = 10;
             expected_cost = accumulated_units / count as u64;
 
@@ -261,6 +262,7 @@ mod tests {
                     accumulated_units,
                     count,
                     errored_txs_compute_consumed: vec![],
+                    total_errored_units,
                 },
             );
             CostUpdateService::update_cost_model(&cost_model, &mut execute_timings);
@@ -297,6 +299,7 @@ mod tests {
                     accumulated_units,
                     count,
                     errored_txs_compute_consumed: vec![],
+                    total_errored_units: 0,
                 },
             );
             CostUpdateService::update_cost_model(&cost_model, &mut execute_timings);
@@ -335,6 +338,7 @@ mod tests {
                     accumulated_units: 0,
                     count: 0,
                     errored_txs_compute_consumed: vec![],
+                    total_errored_units: 0,
                 },
             );
             CostUpdateService::update_cost_model(&cost_model, &mut execute_timings);
@@ -352,13 +356,16 @@ mod tests {
         // new erroring compute costs
         let cost_per_error = 1000;
         {
+            let errored_txs_compute_consumed = vec![cost_per_error; 3];
+            let total_errored_units = errored_txs_compute_consumed.iter().sum();
             execute_timings.details.per_program_timings.insert(
                 program_key_1,
                 ProgramTiming {
                     accumulated_us: 1000,
                     accumulated_units: 0,
                     count: 0,
-                    errored_txs_compute_consumed: vec![cost_per_error; 3],
+                    errored_txs_compute_consumed,
+                    total_errored_units,
                 },
             );
             CostUpdateService::update_cost_model(&cost_model, &mut execute_timings);
@@ -385,13 +392,16 @@ mod tests {
         // The cost should not decrease for these new lesser errors
         let smaller_cost_per_error = cost_per_error - 10;
         {
+            let errored_txs_compute_consumed = vec![smaller_cost_per_error; 3];
+            let total_errored_units = errored_txs_compute_consumed.iter().sum();
             execute_timings.details.per_program_timings.insert(
                 program_key_1,
                 ProgramTiming {
                     accumulated_us: 1000,
                     accumulated_units: 0,
                     count: 0,
-                    errored_txs_compute_consumed: vec![smaller_cost_per_error; 3],
+                    errored_txs_compute_consumed,
+                    total_errored_units,
                 },
             );
             CostUpdateService::update_cost_model(&cost_model, &mut execute_timings);
