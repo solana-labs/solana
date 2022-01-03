@@ -30,7 +30,7 @@ use {
         transaction::{self, Transaction, TransactionError},
     },
     solana_transaction_status::{
-        EncodedConfirmedBlock, EncodedConfirmedTransaction, EncodedTransaction,
+        EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, EncodedTransaction,
         EncodedTransactionWithStatusMeta, Rewards, TransactionConfirmationStatus,
         TransactionStatus, UiCompiledInstruction, UiMessage, UiRawMessage, UiTransaction,
         UiTransactionEncoding, UiTransactionStatusMeta,
@@ -185,7 +185,7 @@ impl RpcSender for MockSender {
                     value: statuses,
                 })?
             }
-            "getTransaction" => serde_json::to_value(EncodedConfirmedTransaction {
+            "getTransaction" => serde_json::to_value(EncodedConfirmedTransactionWithStatusMeta {
                 slot: 2,
                 transaction: EncodedTransactionWithStatusMeta {
                     transaction: EncodedTransaction::Json(

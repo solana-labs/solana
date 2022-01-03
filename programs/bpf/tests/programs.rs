@@ -52,8 +52,8 @@ use solana_sdk::{
     transaction::{SanitizedTransaction, Transaction, TransactionError},
 };
 use solana_transaction_status::{
-    token_balances::collect_token_balances, ConfirmedTransaction, InnerInstructions,
-    TransactionStatusMeta, TransactionWithStatusMeta, UiTransactionEncoding,
+    token_balances::collect_token_balances, ConfirmedTransactionWithStatusMeta, Encodable,
+    InnerInstructions, TransactionStatusMeta, TransactionWithStatusMeta, UiTransactionEncoding,
 };
 use std::{
     collections::HashMap, convert::TryFrom, env, fs::File, io::Read, path::PathBuf, str::FromStr,
@@ -320,7 +320,10 @@ fn process_transaction_and_record_inner(
     )
 }
 
-fn execute_transactions(bank: &Bank, txs: Vec<Transaction>) -> Vec<ConfirmedTransaction> {
+fn execute_transactions(
+    bank: &Bank,
+    txs: Vec<Transaction>,
+) -> Vec<ConfirmedTransactionWithStatusMeta> {
     let batch = bank.prepare_batch_for_tests(txs.clone());
     let mut timings = ExecuteTimings::default();
     let mut mint_decimals = HashMap::new();
@@ -402,7 +405,7 @@ fn execute_transactions(bank: &Bank, txs: Vec<Transaction>) -> Vec<ConfirmedTran
                 rewards: None,
             };
 
-            ConfirmedTransaction {
+            ConfirmedTransactionWithStatusMeta {
                 slot: bank.slot(),
                 transaction: TransactionWithStatusMeta {
                     transaction: tx.clone(),
@@ -415,7 +418,7 @@ fn execute_transactions(bank: &Bank, txs: Vec<Transaction>) -> Vec<ConfirmedTran
     .collect()
 }
 
-fn print_confirmed_tx(name: &str, confirmed_tx: ConfirmedTransaction) {
+fn print_confirmed_tx(name: &str, confirmed_tx: ConfirmedTransactionWithStatusMeta) {
     let block_time = confirmed_tx.block_time;
     let tx = confirmed_tx.transaction.transaction.clone();
     let encoded = confirmed_tx.encode(UiTransactionEncoding::JsonParsed);
@@ -1739,13 +1742,8 @@ fn test_program_bpf_upgrade() {
         "solana_bpf_rust_upgradeable",
     );
 
-    let mut instruction = Instruction::new_with_bytes(
-        program_id,
-        &[0],
-        vec![
-            AccountMeta::new(clock::id(), false),
-        ],
-    );
+    let mut instruction =
+        Instruction::new_with_bytes(program_id, &[0], vec![AccountMeta::new(clock::id(), false)]);
 
     // Call upgrade program
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction.clone());
@@ -1833,13 +1831,8 @@ fn test_program_bpf_upgrade_and_invoke_in_same_tx() {
         "solana_bpf_rust_noop",
     );
 
-    let invoke_instruction = Instruction::new_with_bytes(
-        program_id,
-        &[0],
-        vec![
-            AccountMeta::new(clock::id(), false),
-        ],
-    );
+    let invoke_instruction =
+        Instruction::new_with_bytes(program_id, &[0], vec![AccountMeta::new(clock::id(), false)]);
 
     // Call upgradeable program
     let result =
