@@ -100,16 +100,14 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize,
     }
     let mut npkts = 0;
     let mut total_size = 0;
-    addrs
-        .iter()
-        .zip(hdrs)
-        .zip(packets.iter_mut())
+
+    izip!(addrs, hdrs, packets.iter_mut())
         .take(nrecv as usize)
-        .filter_map(|((addr, hdr), pkt)| {
-            let addr = cast_socket_addr(addr, &hdr)?.to_std();
-            Some(((addr, hdr), pkt))
+        .filter_map(|(addr, hdr, pkt)| {
+            let addr = cast_socket_addr(&addr, &hdr)?.to_std();
+            Some((addr, hdr, pkt))
         })
-        .for_each(|((addr, hdr), pkt)| {
+        .for_each(|(addr, hdr, pkt)| {
             pkt.meta.size = hdr.msg_len as usize;
             pkt.meta.set_addr(&addr);
             npkts += 1;
