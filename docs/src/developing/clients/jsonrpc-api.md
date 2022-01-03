@@ -589,7 +589,7 @@ The JSON structure of token balances is defined as a list of objects in the foll
 
 - `accountIndex: <number>` - Index of the account in which the token balance is provided for.
 - `mint: <string>` - Pubkey of the token's mint.
-- `owner: <string>` - Pubkey of token balance's owner.
+- `owner: <string | undefined>` - Pubkey of token balance's owner.
 - `uiTokenAmount: <object>` -
   - `amount: <string>` - Raw amount of tokens as a string, ignoring decimals.
   - `decimals: <number>` - Number of decimals configured for token's mint.
