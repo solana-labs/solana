@@ -903,11 +903,13 @@ impl Accounts {
     /// WARNING: This noncached version is only to be used for tests/benchmarking
     /// as bypassing the cache in general is not supported
     pub fn store_slow_uncached(&self, slot: Slot, pubkey: &Pubkey, account: &AccountSharedData) {
-        self.accounts_db.store_uncached(slot, &[(pubkey, account)]);
+        self.accounts_db
+            .store_uncached(slot, &[(pubkey, account, slot)]);
     }
 
     pub fn store_slow_cached(&self, slot: Slot, pubkey: &Pubkey, account: &AccountSharedData) {
-        self.accounts_db.store_cached(slot, &[(pubkey, account)]);
+        self.accounts_db
+            .store_cached(slot, &[(pubkey, account, slot)]);
     }
 
     fn lock_account(
@@ -1060,6 +1062,7 @@ impl Accounts {
             lamports_per_signature,
             rent_for_sysvars,
             leave_nonce_on_success,
+            slot,
         );
         self.accounts_db.store_cached(slot, &accounts_to_store);
     }
@@ -1087,7 +1090,8 @@ impl Accounts {
         lamports_per_signature: u64,
         rent_for_sysvars: bool,
         leave_nonce_on_success: bool,
-    ) -> Vec<(&'a Pubkey, &'a AccountSharedData)> {
+        slot: Slot,
+    ) -> Vec<(&'a Pubkey, &'a AccountSharedData, Slot)> {
         let mut accounts = Vec::with_capacity(load_results.len());
         for (i, ((tx_load_result, _), tx)) in load_results.iter_mut().zip(txs).enumerate() {
             if tx_load_result.is_err() {
@@ -1149,7 +1153,7 @@ impl Accounts {
                         }
 
                         // Add to the accounts to store
-                        accounts.push((&*address, &*account));
+                        accounts.push((&*address, &*account, slot));
                     }
                 }
             }

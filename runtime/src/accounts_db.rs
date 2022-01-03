@@ -2732,7 +2732,7 @@ impl AccountsDb {
             let mut write_versions = Vec::with_capacity(alive_accounts.len());
 
             for (pubkey, alive_account) in alive_accounts {
-                accounts.push((pubkey, &alive_account.account));
+                accounts.push((pubkey, &alive_account.account, slot));
                 hashes.push(alive_account.account.hash);
                 write_versions.push(alive_account.account.meta.write_version);
             }
@@ -4728,13 +4728,19 @@ impl AccountsDb {
         let mut num_purged = 0;
         let mut total_size = 0;
         let mut num_flushed = 0;
-        let mut all_accounts: Vec<(&Pubkey, &AccountSharedData, &Slot)> = Vec::new();
+        let mut all_accounts: Vec<(&Pubkey, &AccountSharedData, Slot)> = Vec::new();
         let mut all_hashes: Vec<Hash> = Vec::new();
+        let mut all_items = Vec::new();
         for (slot, slot_cache) in slot_caches {
             let iter_items: Vec<_> = slot_cache.iter().collect();
+            all_items.push((slot, iter_items));
+        }
+
+        for i in 0..slot_caches.len() {
+            let (slot, iter_items) = &all_items[i];
             let mut purged_slot_pubkeys: HashSet<(Slot, Pubkey)> = HashSet::new();
             let mut pubkey_to_slot_set: Vec<(Pubkey, Slot)> = vec![];
-            let (mut accounts, mut hashes): (Vec<(&Pubkey, &AccountSharedData, &Slot)>, Vec<Hash>) =
+            let (mut accounts, mut hashes): (Vec<(&Pubkey, &AccountSharedData, Slot)>, Vec<Hash>) =
                 iter_items
                     .iter()
                     .filter_map(|iter_item| {
@@ -4748,12 +4754,12 @@ impl AccountsDb {
                             let hash = iter_item.value().hash();
                             total_size += (account.data().len() + STORE_META_OVERHEAD) as u64;
                             num_flushed += 1;
-                            Some(((key, account, slot), hash))
+                            Some(((key, account, **slot), hash))
                         } else {
                             // If we don't flush, we have to remove the entry from the
                             // index, since it's equivalent to purging
-                            purged_slot_pubkeys.insert((*slot, *key));
-                            pubkey_to_slot_set.push((*key, *slot));
+                            purged_slot_pubkeys.insert((**slot, *key));
+                            pubkey_to_slot_set.push((*key, **slot));
                             num_purged += 1;
                             None
                         }
@@ -4763,7 +4769,7 @@ impl AccountsDb {
             // Remove the account index entries from earlier roots that are outdated by later roots.
             // Safe because queries to the index will be reading updates from later roots.
             self.purge_slot_cache_pubkeys(
-                *slot,
+                **slot,
                 purged_slot_pubkeys,
                 pubkey_to_slot_set,
                 accounts.is_empty(),
@@ -4799,17 +4805,17 @@ impl AccountsDb {
                 1
             );
         }
-
+        use itertools::Itertools;
         slot_caches
             .iter()
-            .map(|(slot, _)| slot)
+            .map(|(slot, _): &(Slot, _)| *slot)
             .unique()
             .for_each(|slot| {
                 // Remove this slot from the cache, which will to AccountsDb's new readers should look like an
                 // atomic switch from the cache to storage.
                 // There is some racy condition for existing readers who just has read exactly while
                 // flushing. That case is handled by retry_to_get_account_accessor()
-                assert!(self.accounts_cache.remove_slot(*slot).is_some());
+                assert!(self.accounts_cache.remove_slot(slot).is_some());
             });
 
         FlushStats {
@@ -4925,7 +4931,7 @@ impl AccountsDb {
     >(
         &self,
         slot: Slot,
-        accounts: &[(&Pubkey, &(impl ReadableAccount + ZeroLamport))],
+        accounts: &[(&Pubkey, &(impl ReadableAccount + ZeroLamport), Slot)],
         hashes: Option<&[impl Borrow<Hash>]>,
         storage_finder: F,
         mut write_version_producer: P,
@@ -4934,7 +4940,7 @@ impl AccountsDb {
         let mut calc_stored_meta_time = Measure::start("calc_stored_meta");
         let accounts_and_meta_to_store: Vec<_> = accounts
             .iter()
-            .map(|(pubkey, account)| {
+            .map(|(pubkey, account, _account_slot)| {
                 self.read_only_accounts_cache.remove(pubkey, slot);
                 // this is the source of Some(Account) or None.
                 // Some(Account) = store 'Account'
@@ -5926,7 +5932,7 @@ impl AccountsDb {
         &self,
         slot: Slot,
         infos: Vec<AccountInfo>,
-        accounts: &[(&Pubkey, &T)], // bprumo TODO: add Slot to tuple
+        accounts: &[(&Pubkey, &T, Slot)],
         previous_slot_entry_was_cached: bool,
     ) -> SlotList<AccountInfo> {
         // using a thread pool here results in deadlock panics from bank_hashes.write()
@@ -6234,17 +6240,22 @@ impl AccountsDb {
             .fetch_add(measure.as_us(), Ordering::Relaxed);
     }
 
-    pub fn store_cached(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
+    pub fn store_cached(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData, Slot)]) {
         self.store(slot, accounts, self.caching_enabled);
     }
 
     /// Store the account update.
     /// only called by tests
-    pub fn store_uncached(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
+    pub fn store_uncached(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData, Slot)]) {
         self.store(slot, accounts, false);
     }
 
-    fn store(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)], is_cached_store: bool) {
+    fn store(
+        &self,
+        slot: Slot,
+        accounts: &[(&Pubkey, &AccountSharedData, Slot)],
+        is_cached_store: bool,
+    ) {
         // If all transactions in a batch are errored,
         // it's possible to get a store with no accounts.
         if accounts.is_empty() {
@@ -6253,7 +6264,7 @@ impl AccountsDb {
 
         let mut stats = BankHashStats::default();
         let mut total_data = 0;
-        accounts.iter().for_each(|(_pubkey, account)| {
+        accounts.iter().for_each(|(_pubkey, account, _slot)| {
             total_data += account.data().len();
             stats.update(*account);
         });
@@ -6390,7 +6401,7 @@ impl AccountsDb {
     fn store_accounts_unfrozen(
         &self,
         slot: Slot,
-        accounts: &[(&Pubkey, &AccountSharedData)],
+        accounts: &[(&Pubkey, &AccountSharedData, Slot)],
         hashes: Option<&[&Hash]>,
         is_cached_store: bool,
     ) {
@@ -6416,7 +6427,7 @@ impl AccountsDb {
     fn store_accounts_frozen<'a, T: ReadableAccount + Sync + ZeroLamport>(
         &'a self,
         slot: Slot,
-        accounts: &[(&Pubkey, &T)],
+        accounts: &[(&Pubkey, &T, Slot)],
         hashes: Option<&[impl Borrow<Hash>]>,
         storage_finder: Option<StorageFinder<'a>>,
         write_version_producer: Option<Box<dyn Iterator<Item = StoredMetaWriteVersion>>>,
@@ -6440,7 +6451,7 @@ impl AccountsDb {
     fn store_accounts_custom<'a, T: ReadableAccount + Sync + ZeroLamport>(
         &'a self,
         slot: Slot,
-        accounts: &[(&Pubkey, &T)],
+        accounts: &[(&Pubkey, &T, Slot)],
         hashes: Option<&[impl Borrow<Hash>]>,
         storage_finder: Option<StorageFinder<'a>>,
         write_version_producer: Option<Box<dyn Iterator<Item = u64>>>,
@@ -6860,7 +6871,7 @@ impl AccountsDb {
                     .collect::<Vec<_>>();
                 let add = accounts
                     .iter()
-                    .map(|key| (key, &account))
+                    .map(|key| (key, &account, *slot))
                     .collect::<Vec<_>>();
                 let hashes = (0..filler_entries).map(|_| hash).collect::<Vec<_>>();
                 self.store_accounts_frozen(*slot, &add[..], Some(&hashes[..]), None, None);
@@ -8438,7 +8449,7 @@ pub mod tests {
             assert!(accounts
                 .load_without_fixed_root(&ancestors, &pubkey)
                 .is_none());
-            accounts.store_uncached(slot, &[(&pubkey, &account)]);
+            accounts.store_uncached(slot, &[(&pubkey, &account, slot)]);
         }
         for t in 0..num_vote {
             let pubkey = solana_sdk::pubkey::new_rand();
@@ -8449,7 +8460,7 @@ pub mod tests {
             assert!(accounts
                 .load_without_fixed_root(&ancestors, &pubkey)
                 .is_none());
-            accounts.store_uncached(slot, &[(&pubkey, &account)]);
+            accounts.store_uncached(slot, &[(&pubkey, &account, slot)]);
         }
     }
 
@@ -9851,11 +9862,11 @@ pub mod tests {
         let account = AccountSharedData::new(1, some_data_len, &key);
         let ancestors = vec![(some_slot, 0)].into_iter().collect();
 
-        db.store_uncached(some_slot, &[(&key, &account)]);
+        db.store_uncached(some_slot, &[(&key, &account, some_slot)]);
         let mut account = db.load_without_fixed_root(&ancestors, &key).unwrap().0;
         account.checked_sub_lamports(1).unwrap();
         account.set_executable(true);
-        db.store_uncached(some_slot, &[(&key, &account)]);
+        db.store_uncached(some_slot, &[(&key, &account, some_slot)]);
         db.add_root(some_slot);
 
         let bank_hashes = db.bank_hashes.read().unwrap();
@@ -10237,8 +10248,8 @@ pub mod tests {
         // create intermediate updates to purged_pubkey1 so that
         // generate_index must add slots as root last at once
         current_slot += 1;
-        accounts.store_uncached(current_slot, &[(&pubkey, &account)]);
-        accounts.store_uncached(current_slot, &[(&purged_pubkey1, &account2)]);
+        accounts.store_uncached(current_slot, &[(&pubkey, &account, current_slot)]);
+        accounts.store_uncached(current_slot, &[(&purged_pubkey1, &account2, current_slot)]);
         accounts.add_root(current_slot);
 
         current_slot += 1;
@@ -10246,11 +10257,11 @@ pub mod tests {
         accounts.add_root(current_slot);
 
         current_slot += 1;
-        accounts.store_uncached(current_slot, &[(&purged_pubkey1, &account2)]);
+        accounts.store_uncached(current_slot, &[(&purged_pubkey1, &account2, current_slot)]);
         accounts.add_root(current_slot);
 
         current_slot += 1;
-        accounts.store_uncached(current_slot, &[(&purged_pubkey1, &zero_lamport_account)]);
+        accounts.store_uncached(current_slot, &[(&purged_pubkey1, &zero_lamport_account, current_slot)]);
         accounts.store_uncached(current_slot, &[(&purged_pubkey2, &account3)]);
         accounts.add_root(current_slot);
 
