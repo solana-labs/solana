@@ -3080,7 +3080,7 @@ impl Bank {
             .into_iter()
             .map(|tx| {
                 let message_hash = tx.message.hash();
-                SanitizedTransaction::try_create(tx, message_hash, None, |_| {
+                SanitizedTransaction::try_create(tx, message_hash, None, None, |_| {
                     Err(TransactionError::UnsupportedVersion)
                 })
             })
@@ -5242,7 +5242,7 @@ impl Bank {
                 tx.message.hash()
             };
 
-            SanitizedTransaction::try_create(tx, message_hash, None, |_| {
+            SanitizedTransaction::try_create(tx, message_hash, None, Some(size), |_| {
                 Err(TransactionError::UnsupportedVersion)
             })
         }?;

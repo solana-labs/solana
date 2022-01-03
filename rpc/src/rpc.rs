@@ -4252,7 +4252,7 @@ where
 
 fn sanitize_transaction(transaction: VersionedTransaction) -> Result<SanitizedTransaction> {
     let message_hash = transaction.message.hash();
-    SanitizedTransaction::try_create(transaction, message_hash, None, |_| {
+    SanitizedTransaction::try_create(transaction, message_hash, None, None, |_| {
         Err(TransactionError::UnsupportedVersion)
     })
     .map_err(|err| Error::invalid_params(format!("invalid transaction: {}", err)))

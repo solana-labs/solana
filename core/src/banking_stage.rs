@@ -1295,6 +1295,7 @@ impl BankingStage {
                     tx,
                     message_hash,
                     Some(p.get_meta().is_simple_vote_tx),
+                    None,
                     |_| Err(TransactionError::UnsupportedVersion),
                 )
                 .ok()?;

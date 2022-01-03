@@ -50,11 +50,15 @@ impl SanitizedTransaction {
         tx: VersionedTransaction,
         message_hash: Hash,
         is_simple_vote_tx: Option<bool>,
+        serialized_size: Option<u64>,
         address_loader: impl Fn(&v0::Message) -> Result<LoadedAddresses>,
     ) -> Result<Self> {
         tx.sanitize()?;
 
-        let size = bincode::serialized_size(&tx).map_err(|_| TransactionError::SanitizeFailure)?;
+        let size = match serialized_size {
+            Some(size) => size,
+            None => bincode::serialized_size(&tx).map_err(|_| TransactionError::SanitizeFailure)?
+        };
 
         let is_large_transaction = size > (PACKET_DATA_SIZE as u64);
 

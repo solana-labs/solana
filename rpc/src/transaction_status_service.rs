@@ -308,7 +308,7 @@ pub(crate) mod tests {
         let transaction = build_test_transaction_legacy();
         let transaction = VersionedTransaction::from(transaction);
         let transaction =
-            SanitizedTransaction::try_create(transaction, message_hash, Some(true), |_| {
+            SanitizedTransaction::try_create(transaction, message_hash, Some(true), None, |_| {
                 Err(TransactionError::UnsupportedVersion)
             })
             .unwrap();

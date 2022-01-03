@@ -1082,7 +1082,7 @@ mod tests {
                             versioned_tx.message.hash()
                         };
 
-                    SanitizedTransaction::try_create(versioned_tx, message_hash, None, |_| {
+                    SanitizedTransaction::try_create(versioned_tx, message_hash, None, None, |_| {
                         Err(TransactionError::UnsupportedVersion)
                     })
                 }?;

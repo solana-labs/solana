@@ -1294,7 +1294,7 @@ pub(crate) mod tests {
         let transaction = VersionedTransaction::from(transaction);
 
         let transaction =
-            SanitizedTransaction::try_create(transaction, message_hash, Some(true), |_| {
+            SanitizedTransaction::try_create(transaction, message_hash, Some(true), None, |_| {
                 Err(TransactionError::UnsupportedVersion)
             })
             .unwrap();
@@ -1333,7 +1333,7 @@ pub(crate) mod tests {
         transaction.sanitize().unwrap();
 
         let transaction =
-            SanitizedTransaction::try_create(transaction, message_hash, Some(true), |_message| {
+            SanitizedTransaction::try_create(transaction, message_hash, Some(true), None, |_message| {
                 Ok(LoadedAddresses {
                     writable: vec![Pubkey::new_unique(), Pubkey::new_unique()],
                     readonly: vec![Pubkey::new_unique(), Pubkey::new_unique()],
