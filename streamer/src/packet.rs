@@ -112,6 +112,10 @@ mod tests {
         }
         send_to(&batch, &send_socket, &SocketAddrSpace::Unspecified).unwrap();
 
+        batch
+            .packets
+            .iter_mut()
+            .for_each(|pkt| pkt.meta = Meta::default());
         let recvd = recv_from(&mut batch, &recv_socket, 1).unwrap();
 
         assert_eq!(recvd, batch.packets.len());
