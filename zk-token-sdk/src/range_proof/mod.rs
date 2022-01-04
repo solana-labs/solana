@@ -24,6 +24,7 @@ use {
 pub mod generators;
 pub mod inner_product;
 pub mod util;
+pub mod errors;
 
 #[allow(non_snake_case)]
 #[derive(Clone)]
@@ -222,29 +223,16 @@ impl RangeProof {
         bit_lengths: Vec<usize>,
         transcript: &mut Transcript,
     ) -> Result<(), ProofError> {
-        if self
-            .verify_challenges(comms, bit_lengths, transcript)
-            .is_ok()
-        {
-            Ok(())
-        } else {
-            Err(ProofError::VerificationError)
-        }
-    }
-
-    #[allow(clippy::many_single_char_names)]
-    pub fn verify_challenges(
-        &self,
-        comms: Vec<&CompressedRistretto>,
-        bit_lengths: Vec<usize>,
-        transcript: &mut Transcript,
-    ) -> Result<(Scalar, Scalar), ProofError> {
         let G = PedersenBase::default().G;
         let H = PedersenBase::default().H;
 
         let m = bit_lengths.len();
         let nm: usize = bit_lengths.iter().sum();
         let bp_gens = BulletproofGens::new(nm);
+
+        if !nm.is_power_of_two() {
+            return Err(ProofError::InvalidBitsize);
+        }
 
         if !(nm == 8 || nm == 16 || nm == 32 || nm == 64 || nm == 128) {
             return Err(ProofError::InvalidBitsize);
