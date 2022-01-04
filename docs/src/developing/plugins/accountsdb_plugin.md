@@ -381,8 +381,11 @@ psql -U solana -p 5433 -h 10.138.0.9 -w -d solana -f drop_schema.sql
 
 ### Capture Historical Account Data
 
-The account historical data is captured using a database trigger as shown in
-`create_schema.sql`,
+To capture account historical data, in the configuration file, turn
+`store_account_historical_data` to true.
+
+And ensure the database trigger is created to save data in the `audit_table` when
+records in `account` are updated, as shown in `create_schema.sql`,
 
 ```
 CREATE FUNCTION audit_account_update() RETURNS trigger AS $audit_account_update$
@@ -399,10 +402,7 @@ CREATE TRIGGER account_update_trigger AFTER UPDATE OR DELETE ON account
     FOR EACH ROW EXECUTE PROCEDURE audit_account_update();
 ```
 
-The historical data is stored in the account_audit table.
-
 The trigger can be dropped to disable this feature, for example,
-
 
 ```
 DROP TRIGGER account_update_trigger ON account;
@@ -410,7 +410,6 @@ DROP TRIGGER account_update_trigger ON account;
 
 Over time, the account_audit can accumulate large amount of data. You may choose to
 limit that by deleting older historical data.
-
 
 For example, the following SQL statement can be used to keep up to 1000 of the most
 recent records for an account:
