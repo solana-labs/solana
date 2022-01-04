@@ -2932,8 +2932,7 @@ mod tests {
                     .unwrap();
 
                 let mut packets = vec![Packet::default(); 2];
-                let (_, num_received) =
-                    recv_mmsg(recv_socket, &mut packets[..]).unwrap_or_default();
+                let num_received = recv_mmsg(recv_socket, &mut packets[..]).unwrap_or_default();
                 assert_eq!(num_received, expected_num_forwarded, "{}", name);
             }
 
@@ -3032,8 +3031,7 @@ mod tests {
                     .unwrap();
 
                 let mut packets = vec![Packet::default(); 2];
-                let (_, num_received) =
-                    recv_mmsg(recv_socket, &mut packets[..]).unwrap_or_default();
+                let num_received = recv_mmsg(recv_socket, &mut packets[..]).unwrap_or_default();
                 assert_eq!(num_received, expected_ids.len(), "{}", name);
                 for (i, expected_id) in expected_ids.iter().enumerate() {
                     assert_eq!(packets[i].meta.size, 1);
