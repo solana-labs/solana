@@ -38,6 +38,7 @@ solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.10.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.10.0" }
 solana-measure = { path = "../measure", version = "=1.10.0" }
 solana-metrics = { path = "../metrics", version = "=1.10.0" }
+solana-program-runtime = { path = "../program-runtime", version = "=1.10.0" }
 solana-perf = { path = "../perf", version = "=1.10.0" }
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.10.0" }
 solana-runtime = { path = "../runtime", version = "=1.10.0" }

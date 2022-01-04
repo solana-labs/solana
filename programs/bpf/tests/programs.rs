@@ -17,7 +17,7 @@ use solana_bpf_loader_program::{
 use solana_bpf_rust_invoke::instructions::*;
 use solana_bpf_rust_realloc::instructions::*;
 use solana_bpf_rust_realloc_invoke::instructions::*;
-use solana_program_runtime::invoke_context::with_mock_invoke_context;
+use solana_program_runtime::{invoke_context::with_mock_invoke_context, timings::ExecuteTimings};
 use solana_rbpf::{
     elf::Executable,
     static_analysis::Analysis,
@@ -25,7 +25,7 @@ use solana_rbpf::{
 };
 use solana_runtime::{
     bank::{
-        Bank, DurableNonceFee, ExecuteTimings, TransactionBalancesSet, TransactionExecutionDetails,
+        Bank, DurableNonceFee, TransactionBalancesSet, TransactionExecutionDetails,
         TransactionExecutionResult, TransactionResults,
     },
     bank_client::BankClient,

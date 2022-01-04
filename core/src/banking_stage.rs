@@ -18,12 +18,10 @@ use {
         perf_libs,
     },
     solana_poh::poh_recorder::{BankStart, PohRecorder, PohRecorderError, TransactionRecorder},
+    solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
         accounts_db::ErrorCounters,
-        bank::{
-            Bank, ExecuteTimings, TransactionBalancesSet, TransactionCheckResult,
-            TransactionExecutionResult,
-        },
+        bank::{Bank, TransactionBalancesSet, TransactionCheckResult, TransactionExecutionResult},
         bank_utils,
         cost_model::CostModel,
         transaction_batch::TransactionBatch,

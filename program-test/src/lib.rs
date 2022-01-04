@@ -11,9 +11,11 @@ use {
     log::*,
     solana_banks_client::start_client,
     solana_banks_server::banks_server::start_local_server,
-    solana_program_runtime::{ic_msg, invoke_context::ProcessInstructionWithContext, stable_log},
+    solana_program_runtime::{
+        ic_msg, invoke_context::ProcessInstructionWithContext, stable_log, timings::ExecuteTimings,
+    },
     solana_runtime::{
-        bank::{Bank, ExecuteTimings},
+        bank::Bank,
         bank_forks::BankForks,
         builtins::Builtin,
         commitment::BlockCommitmentCache,
