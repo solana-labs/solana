@@ -478,7 +478,8 @@ impl Blockstore {
         )?;
 
         let (ledger_signal_sender, ledger_signal_receiver) = bounded(1);
-        let (completed_slots_sender, completed_slots_receiver) = bounded(MAX_COMPLETED_SLOTS_IN_CHANNEL);
+        let (completed_slots_sender, completed_slots_receiver) =
+            bounded(MAX_COMPLETED_SLOTS_IN_CHANNEL);
 
         blockstore.new_shreds_signals = vec![ledger_signal_sender];
         blockstore.completed_slots_senders = vec![completed_slots_sender];
