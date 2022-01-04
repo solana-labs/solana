@@ -454,7 +454,13 @@ impl ProgressMap {
             .map(|fork_progress| &mut fork_progress.fork_stats)
     }
 
-    pub fn get_retransmit_info(&mut self, slot: Slot) -> Option<&mut RetransmitInfo> {
+    pub fn get_retransmit_info(&self, slot: Slot) -> Option<&RetransmitInfo> {
+        self.progress_map
+            .get(&slot)
+            .map(|fork_progress| &fork_progress.retransmit_info)
+    }
+
+    pub fn get_retransmit_info_mut(&mut self, slot: Slot) -> Option<&mut RetransmitInfo> {
         self.progress_map
             .get_mut(&slot)
             .map(|fork_progress| &mut fork_progress.retransmit_info)

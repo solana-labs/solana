@@ -860,8 +860,11 @@ impl ReplayStage {
         let first_leader_group_slot = first_of_consecutive_leader_slots(latest_leader_slot);
 
         for slot in first_leader_group_slot..=latest_leader_slot {
-            if !progress.is_propagated(slot).unwrap_or(true) {
-                if let Some(retransmit_info) = progress.get_retransmit_info(slot) {
+            let is_propagated = progress.is_propagated(slot);
+            if let Some(retransmit_info) = progress.get_retransmit_info_mut(slot) {
+                if !is_propagated.expect(
+                    "presence of retransmit_info ensures that propagation status is present",
+                ) {
                     if retransmit_info.reached_retransmit_threshold() {
                         info!(
                             "Retrying retransmit: latest_leader_slot={} slot={} retransmit_info={:?}",
@@ -5998,7 +6001,7 @@ pub mod tests {
             "retry_iteration=0, elapsed < 2^0 * RETRANSMIT_BASE_DELAY_MS"
         );
 
-        progress.get_retransmit_info(0).unwrap().retry_time =
+        progress.get_retransmit_info_mut(0).unwrap().retry_time =
             Some(Instant::now() - Duration::from_millis(RETRANSMIT_BASE_DELAY_MS + 1));
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
@@ -6027,7 +6030,7 @@ pub mod tests {
             "retry_iteration=1, elapsed < 2^1 * RETRY_BASE_DELAY_MS"
         );
 
-        progress.get_retransmit_info(0).unwrap().retry_time =
+        progress.get_retransmit_info_mut(0).unwrap().retry_time =
             Some(Instant::now() - Duration::from_millis(RETRANSMIT_BASE_DELAY_MS + 1));
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
@@ -6040,7 +6043,7 @@ pub mod tests {
             "retry_iteration=1, elapsed < 2^1 * RETRANSMIT_BASE_DELAY_MS"
         );
 
-        progress.get_retransmit_info(0).unwrap().retry_time =
+        progress.get_retransmit_info_mut(0).unwrap().retry_time =
             Some(Instant::now() - Duration::from_millis(2 * RETRANSMIT_BASE_DELAY_MS + 1));
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
@@ -6060,11 +6063,11 @@ pub mod tests {
 
         // increment to retry iteration 3
         progress
-            .get_retransmit_info(0)
+            .get_retransmit_info_mut(0)
             .unwrap()
             .increment_retry_iteration();
 
-        progress.get_retransmit_info(0).unwrap().retry_time =
+        progress.get_retransmit_info_mut(0).unwrap().retry_time =
             Some(Instant::now() - Duration::from_millis(2 * RETRANSMIT_BASE_DELAY_MS + 1));
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
@@ -6077,7 +6080,7 @@ pub mod tests {
             "retry_iteration=3, elapsed < 2^3 * RETRANSMIT_BASE_DELAY_MS"
         );
 
-        progress.get_retransmit_info(0).unwrap().retry_time =
+        progress.get_retransmit_info_mut(0).unwrap().retry_time =
             Some(Instant::now() - Duration::from_millis(8 * RETRANSMIT_BASE_DELAY_MS + 1));
         ReplayStage::retransmit_latest_unpropagated_leader_slot(
             &poh_recorder,
@@ -6121,9 +6124,10 @@ pub mod tests {
 
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
 
-        for i in 1..10 {
+        let mut prev_index = 0;
+        for i in (1..10).chain(11..15) {
             let bank = Bank::new_from_parent(
-                bank_forks.read().unwrap().get(i - 1).unwrap(),
+                bank_forks.read().unwrap().get(prev_index).unwrap(),
                 &leader_schedule_cache.slot_leader_at(i, None).unwrap(),
                 i,
             );
@@ -6143,25 +6147,41 @@ pub mod tests {
             assert!(progress.get_propagated_stats(i).unwrap().is_leader_slot);
             bank.freeze();
             bank_forks.write().unwrap().insert(bank);
+            prev_index = i;
         }
 
+        // expect single slot when latest_leader_slot is the start of a consecutive range
+        let latest_leader_slot = 0;
         ReplayStage::maybe_retransmit_unpropagated_slots(
             "test",
             &retransmit_slots_sender,
             &mut progress,
-            0,
+            latest_leader_slot,
         );
         let received_slots = receive_slots(&retransmit_slots_receiver);
         assert_eq!(received_slots, vec![0]);
 
+        // expect range of slots from start of consecutive slots
+        let latest_leader_slot = 6;
         ReplayStage::maybe_retransmit_unpropagated_slots(
             "test",
             &retransmit_slots_sender,
             &mut progress,
-            6,
+            latest_leader_slot,
         );
         let received_slots = receive_slots(&retransmit_slots_receiver);
         assert_eq!(received_slots, vec![4, 5, 6]);
+
+        // expect range of slots skipping a discontinuity in the range
+        let latest_leader_slot = 11;
+        ReplayStage::maybe_retransmit_unpropagated_slots(
+            "test",
+            &retransmit_slots_sender,
+            &mut progress,
+            latest_leader_slot,
+        );
+        let received_slots = receive_slots(&retransmit_slots_receiver);
+        assert_eq!(received_slots, vec![8, 9, 11]);
     }
 
     fn run_compute_and_select_forks(
