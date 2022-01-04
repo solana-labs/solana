@@ -136,7 +136,7 @@ impl WithdrawProof {
             &mut transcript,
         );
 
-        let range_proof = RangeProof::create(
+        let range_proof = RangeProof::new(
             vec![final_balance],
             vec![64],
             vec![&opening],
