@@ -1,75 +1,75 @@
 //! Errors related to proving and verifying sigma proofs.
-use thiserror::Error;
 use crate::errors::TranscriptError;
+use thiserror::Error;
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
 pub enum EqualityProofError {
     #[error("the required algebraic relation does not hold")]
-    AlgebraicRelationError,
+    AlgebraicRelation,
     #[error("malformed proof")]
-    FormatError,
+    Format,
     #[error("multiscalar multiplication failed")]
-    MultiscalarMulError,
+    MultiscalarMul,
     #[error("transcript failed to produce a challenge")]
-    TranscriptError,
+    Transcript,
 }
 
 impl From<TranscriptError> for EqualityProofError {
     fn from(_err: TranscriptError) -> Self {
-        Self::TranscriptError
+        Self::Transcript
     }
 }
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
 pub enum ValidityProofError {
     #[error("the required algebraic relation does not hold")]
-    AlgebraicRelationError,
+    AlgebraicRelation,
     #[error("malformed proof")]
-    FormatError,
+    Format,
     #[error("multiscalar multiplication failed")]
-    MultiscalarMulError,
+    MultiscalarMul,
     #[error("transcript failed to produce a challenge")]
-    TranscriptError,
+    Transcript,
 }
 
 impl From<TranscriptError> for ValidityProofError {
     fn from(_err: TranscriptError) -> Self {
-        Self::TranscriptError
+        Self::Transcript
     }
 }
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
 pub enum ZeroBalanceProofError {
     #[error("the required algebraic relation does not hold")]
-    AlgebraicRelationError,
+    AlgebraicRelation,
     #[error("malformed proof")]
-    FormatError,
+    Format,
     #[error("multiscalar multiplication failed")]
-    MultiscalarMulError,
+    MultiscalarMul,
     #[error("transcript failed to produce a challenge")]
-    TranscriptError,
+    Transcript,
 }
 
 impl From<TranscriptError> for ZeroBalanceProofError {
     fn from(_err: TranscriptError) -> Self {
-        Self::TranscriptError
+        Self::Transcript
     }
 }
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
 pub enum FeeProofError {
     #[error("the required algebraic relation does not hold")]
-    AlgebraicRelationError,
+    AlgebraicRelation,
     #[error("malformed proof")]
-    FormatError,
+    Format,
     #[error("multiscalar multiplication failed")]
-    MultiscalarMulError,
+    MultiscalarMul,
     #[error("transcript failed to produce a challenge")]
-    TranscriptError,
+    Transcript,
 }
 
 impl From<TranscriptError> for FeeProofError {
     fn from(_err: TranscriptError) -> Self {
-        Self::TranscriptError
+        Self::Transcript
     }
 }

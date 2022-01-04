@@ -8,7 +8,9 @@ use {
 use {
     crate::{
         encryption::pedersen::PedersenBase,
-        range_proof::{errors::RangeProofError, generators::BulletproofGens, inner_product::InnerProductProof},
+        range_proof::{
+            errors::RangeProofError, generators::BulletproofGens, inner_product::InnerProductProof,
+        },
         transcript::TranscriptProtocol,
     },
     core::iter,
@@ -20,10 +22,10 @@ use {
     merlin::Transcript,
 };
 
+pub mod errors;
 pub mod generators;
 pub mod inner_product;
 pub mod util;
-pub mod errors;
 
 #[allow(non_snake_case)]
 #[derive(Clone)]
@@ -94,12 +96,13 @@ impl RangeProof {
 
         // generate blinding factor for Pedersen commitment; `s_blinding` should not to be confused
         // with blinding factors for the actual inner product vector
-        let s_blinding = Scalar::random(&mut OsRng); 
+        let s_blinding = Scalar::random(&mut OsRng);
 
         let S = RistrettoPoint::multiscalar_mul(
             iter::once(&s_blinding).chain(s_L.iter()).chain(s_R.iter()),
             iter::once(&H).chain(bp_gens.G(nm)).chain(bp_gens.H(nm)),
-        ).compress();
+        )
+        .compress();
 
         // add the Pedersen vector commitments to the transcript (send the commitments to the verifier)
         transcript.append_point(b"A", &A);
@@ -190,6 +193,9 @@ impl RangeProof {
         let G_factors: Vec<Scalar> = iter::repeat(Scalar::one()).take(nm).collect();
         let H_factors: Vec<Scalar> = util::exp_iter(y.invert()).take(nm).collect();
 
+        // generate challenge `c` for consistency with the verifier's transcript
+        transcript.challenge_scalar(b"c");
+
         let ipp_proof = InnerProductProof::create(
             &Q,
             &G_factors,
@@ -201,9 +207,7 @@ impl RangeProof {
             transcript,
         );
 
-        // generate challenge `c` for consistency with the verifier's transcript
-        transcript.challenge_scalar(b"c");
-
+        println!("{:?}", w);
         RangeProof {
             A,
             S,
@@ -288,6 +292,9 @@ impl RangeProof {
             w * (self.t_x - a * b) + c * (delta(&bit_lengths, &y, &z) - self.t_x);
         let value_commitment_scalars = util::exp_iter(z).take(m).map(|z_exp| c * zz * z_exp);
 
+        println!("here");
+        println!("{:?}", w);
+
         let mega_check = RistrettoPoint::optional_multiscalar_mul(
             iter::once(Scalar::one())
                 .chain(iter::once(x))
@@ -312,12 +319,16 @@ impl RangeProof {
                 .chain(bp_gens.H(nm).map(|&x| Some(x)))
                 .chain(comms.iter().map(|V| V.decompress())),
         )
-        .ok_or(RangeProofError::MultiscalarMulError)?;
+        .ok_or(RangeProofError::MultiscalarMul)?;
+
+        println!("here2");
+        println!("{:?}", mega_check.compress());
 
         if mega_check.is_identity() {
             Ok(())
         } else {
-            Err(RangeProofError::AlgebraicRelationError)
+            println!("here3");
+            Err(RangeProofError::AlgebraicRelation)
         }
     }
 
@@ -340,10 +351,10 @@ impl RangeProof {
     // changed.
     pub fn from_bytes(slice: &[u8]) -> Result<RangeProof, RangeProofError> {
         if slice.len() % 32 != 0 {
-            return Err(RangeProofError::FormatError);
+            return Err(RangeProofError::Format);
         }
         if slice.len() < 7 * 32 {
-            return Err(RangeProofError::FormatError);
+            return Err(RangeProofError::Format);
         }
 
         let A = CompressedRistretto(util::read32(&slice[0..]));
@@ -352,11 +363,11 @@ impl RangeProof {
         let T_2 = CompressedRistretto(util::read32(&slice[3 * 32..]));
 
         let t_x = Scalar::from_canonical_bytes(util::read32(&slice[4 * 32..]))
-            .ok_or(RangeProofError::FormatError)?;
+            .ok_or(RangeProofError::Format)?;
         let t_x_blinding = Scalar::from_canonical_bytes(util::read32(&slice[5 * 32..]))
-            .ok_or(RangeProofError::FormatError)?;
+            .ok_or(RangeProofError::Format)?;
         let e_blinding = Scalar::from_canonical_bytes(util::read32(&slice[6 * 32..]))
-            .ok_or(RangeProofError::FormatError)?;
+            .ok_or(RangeProofError::Format)?;
 
         let ipp_proof = InnerProductProof::from_bytes(&slice[7 * 32..])?;
 
