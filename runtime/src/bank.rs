@@ -15190,6 +15190,7 @@ pub(crate) mod tests {
         let mut bank = Bank::new_for_tests(&genesis_config);
         bank.activate_feature(&solana_sdk::feature_set::cap_accounts_data_len::id());
 
+        let mut i = 0;
         let result = loop {
             let txn = system_transaction::create_account(
                 &mint_keypair,
@@ -15205,6 +15206,12 @@ pub(crate) mod tests {
             if result.is_err() {
                 break result;
             }
+
+            assert!(
+                i < MAX_ACCOUNTS_DATA_LEN / MAX_PERMITTED_DATA_LENGTH,
+                "test must complete within bounded limits"
+            );
+            i += 1;
         };
 
         assert!(matches!(
