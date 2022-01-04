@@ -36,7 +36,7 @@ use {
         pubkey::Pubkey,
         system_program,
         sysvar::{self, instructions::construct_instructions_data},
-        transaction::{Result, SanitizedTransaction, TransactionError},
+        transaction::{Result, SanitizedTransaction, TransactionAccountLocks, TransactionError},
         transaction_context::TransactionAccount,
     },
     std::{
@@ -978,12 +978,11 @@ impl Accounts {
     pub fn lock_accounts<'a>(
         &self,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
+        feature_set: &FeatureSet,
     ) -> Vec<Result<()>> {
-        let keys: Vec<_> = txs.map(|tx| tx.get_account_locks()).collect();
-        let account_locks = &mut self.account_locks.lock().unwrap();
-        keys.into_iter()
-            .map(|keys| self.lock_account(account_locks, keys.writable, keys.readonly))
-            .collect()
+        let tx_account_locks_results: Vec<Result<_>> =
+            txs.map(|tx| tx.get_account_locks(feature_set)).collect();
+        self.lock_accounts_inner(tx_account_locks_results)
     }
 
     #[must_use]
@@ -992,20 +991,33 @@ impl Accounts {
         &self,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
         results: impl Iterator<Item = Result<()>>,
+        feature_set: &FeatureSet,
     ) -> Vec<Result<()>> {
-        let key_results: Vec<_> = txs
+        let tx_account_locks_results: Vec<Result<_>> = txs
             .zip(results)
             .map(|(tx, result)| match result {
-                Ok(()) => Ok(tx.get_account_locks()),
-                Err(e) => Err(e),
+                Ok(()) => tx.get_account_locks(feature_set),
+                Err(err) => Err(err),
             })
             .collect();
+        self.lock_accounts_inner(tx_account_locks_results)
+    }
+
+    #[must_use]
+    fn lock_accounts_inner(
+        &self,
+        tx_account_locks_results: Vec<Result<TransactionAccountLocks>>,
+    ) -> Vec<Result<()>> {
         let account_locks = &mut self.account_locks.lock().unwrap();
-        key_results
+        tx_account_locks_results
             .into_iter()
-            .map(|key_result| match key_result {
-                Ok(keys) => self.lock_account(account_locks, keys.writable, keys.readonly),
-                Err(e) => Err(e),
+            .map(|tx_account_locks_result| match tx_account_locks_result {
+                Ok(tx_account_locks) => self.lock_account(
+                    account_locks,
+                    tx_account_locks.writable,
+                    tx_account_locks.readonly,
+                ),
+                Err(err) => Err(err),
             })
             .collect()
     }
@@ -1020,13 +1032,14 @@ impl Accounts {
         let keys: Vec<_> = txs
             .zip(results)
             .filter_map(|(tx, res)| match res {
-                Err(TransactionError::AccountInUse)
+                Err(TransactionError::AccountLoadedTwice)
+                | Err(TransactionError::AccountInUse)
                 | Err(TransactionError::SanitizeFailure)
-                | Err(TransactionError::AccountLoadedTwice)
+                | Err(TransactionError::TooManyAccountLocks)
                 | Err(TransactionError::WouldExceedMaxBlockCostLimit)
                 | Err(TransactionError::WouldExceedMaxAccountCostLimit)
                 | Err(TransactionError::WouldExceedMaxAccountDataCostLimit) => None,
-                _ => Some(tx.get_account_locks()),
+                _ => Some(tx.get_account_locks_unchecked()),
             })
             .collect();
         let mut account_locks = self.account_locks.lock().unwrap();
@@ -1249,12 +1262,12 @@ mod tests {
             genesis_config::ClusterType,
             hash::Hash,
             instruction::{CompiledInstruction, InstructionError},
-            message::Message,
+            message::{Message, MessageHeader},
             nonce, nonce_account,
             rent::Rent,
             signature::{keypair_from_seed, signers::Signers, Keypair, Signer},
             system_instruction, system_program,
-            transaction::Transaction,
+            transaction::{Transaction, MAX_TX_ACCOUNT_LOCKS},
         },
         std::{
             convert::TryFrom,
@@ -2137,6 +2150,109 @@ mod tests {
     }
 
     #[test]
+    fn test_lock_accounts_with_duplicates() {
+        let accounts = Accounts::new_with_config_for_tests(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            false,
+            AccountShrinkThreshold::default(),
+        );
+
+        let keypair = Keypair::new();
+        let message = Message {
+            header: MessageHeader {
+                num_required_signatures: 1,
+                ..MessageHeader::default()
+            },
+            account_keys: vec![keypair.pubkey(), keypair.pubkey()],
+            ..Message::default()
+        };
+
+        let tx = new_sanitized_tx(&[&keypair], message, Hash::default());
+        let results = accounts.lock_accounts([tx].iter(), &FeatureSet::all_enabled());
+        assert_eq!(results[0], Err(TransactionError::AccountLoadedTwice));
+    }
+
+    #[test]
+    fn test_lock_accounts_with_too_many_accounts() {
+        let accounts = Accounts::new_with_config_for_tests(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            false,
+            AccountShrinkThreshold::default(),
+        );
+
+        let keypair = Keypair::new();
+
+        // Allow up to MAX_TX_ACCOUNT_LOCKS
+        {
+            let num_account_keys = MAX_TX_ACCOUNT_LOCKS;
+            let mut account_keys: Vec<_> = (0..num_account_keys)
+                .map(|_| Pubkey::new_unique())
+                .collect();
+            account_keys[0] = keypair.pubkey();
+            let message = Message {
+                header: MessageHeader {
+                    num_required_signatures: 1,
+                    ..MessageHeader::default()
+                },
+                account_keys,
+                ..Message::default()
+            };
+
+            let txs = vec![new_sanitized_tx(&[&keypair], message, Hash::default())];
+            let results = accounts.lock_accounts(txs.iter(), &FeatureSet::all_enabled());
+            assert_eq!(results[0], Ok(()));
+            accounts.unlock_accounts(txs.iter(), &results);
+        }
+
+        // Allow over MAX_TX_ACCOUNT_LOCKS before feature activation
+        {
+            let num_account_keys = MAX_TX_ACCOUNT_LOCKS + 1;
+            let mut account_keys: Vec<_> = (0..num_account_keys)
+                .map(|_| Pubkey::new_unique())
+                .collect();
+            account_keys[0] = keypair.pubkey();
+            let message = Message {
+                header: MessageHeader {
+                    num_required_signatures: 1,
+                    ..MessageHeader::default()
+                },
+                account_keys,
+                ..Message::default()
+            };
+
+            let txs = vec![new_sanitized_tx(&[&keypair], message, Hash::default())];
+            let results = accounts.lock_accounts(txs.iter(), &FeatureSet::default());
+            assert_eq!(results[0], Ok(()));
+            accounts.unlock_accounts(txs.iter(), &results);
+        }
+
+        // Disallow over MAX_TX_ACCOUNT_LOCKS after feature activation
+        {
+            let num_account_keys = MAX_TX_ACCOUNT_LOCKS + 1;
+            let mut account_keys: Vec<_> = (0..num_account_keys)
+                .map(|_| Pubkey::new_unique())
+                .collect();
+            account_keys[0] = keypair.pubkey();
+            let message = Message {
+                header: MessageHeader {
+                    num_required_signatures: 1,
+                    ..MessageHeader::default()
+                },
+                account_keys,
+                ..Message::default()
+            };
+
+            let txs = vec![new_sanitized_tx(&[&keypair], message, Hash::default())];
+            let results = accounts.lock_accounts(txs.iter(), &FeatureSet::all_enabled());
+            assert_eq!(results[0], Err(TransactionError::TooManyAccountLocks));
+        }
+    }
+
+    #[test]
     fn test_accounts_locks() {
         let keypair0 = Keypair::new();
         let keypair1 = Keypair::new();
@@ -2170,7 +2286,7 @@ mod tests {
             instructions,
         );
         let tx = new_sanitized_tx(&[&keypair0], message, Hash::default());
-        let results0 = accounts.lock_accounts([tx.clone()].iter());
+        let results0 = accounts.lock_accounts([tx.clone()].iter(), &FeatureSet::all_enabled());
 
         assert!(results0[0].is_ok());
         assert_eq!(
@@ -2205,7 +2321,7 @@ mod tests {
         );
         let tx1 = new_sanitized_tx(&[&keypair1], message, Hash::default());
         let txs = vec![tx0, tx1];
-        let results1 = accounts.lock_accounts(txs.iter());
+        let results1 = accounts.lock_accounts(txs.iter(), &FeatureSet::all_enabled());
 
         assert!(results1[0].is_ok()); // Read-only account (keypair1) can be referenced multiple times
         assert!(results1[1].is_err()); // Read-only account (keypair1) cannot also be locked as writable
@@ -2232,7 +2348,7 @@ mod tests {
             instructions,
         );
         let tx = new_sanitized_tx(&[&keypair1], message, Hash::default());
-        let results2 = accounts.lock_accounts([tx].iter());
+        let results2 = accounts.lock_accounts([tx].iter(), &FeatureSet::all_enabled());
         assert!(results2[0].is_ok()); // Now keypair1 account can be locked as writable
 
         // Check that read-only lock with zero references is deleted
@@ -2301,7 +2417,9 @@ mod tests {
             let exit_clone = exit_clone.clone();
             loop {
                 let txs = vec![writable_tx.clone()];
-                let results = accounts_clone.clone().lock_accounts(txs.iter());
+                let results = accounts_clone
+                    .clone()
+                    .lock_accounts(txs.iter(), &FeatureSet::all_enabled());
                 for result in results.iter() {
                     if result.is_ok() {
                         counter_clone.clone().fetch_add(1, Ordering::SeqCst);
@@ -2316,7 +2434,9 @@ mod tests {
         let counter_clone = counter;
         for _ in 0..5 {
             let txs = vec![readonly_tx.clone()];
-            let results = accounts_arc.clone().lock_accounts(txs.iter());
+            let results = accounts_arc
+                .clone()
+                .lock_accounts(txs.iter(), &FeatureSet::all_enabled());
             if results[0].is_ok() {
                 let counter_value = counter_clone.clone().load(Ordering::SeqCst);
                 thread::sleep(time::Duration::from_millis(50));
@@ -2362,7 +2482,7 @@ mod tests {
             instructions,
         );
         let tx = new_sanitized_tx(&[&keypair0], message, Hash::default());
-        let results0 = accounts.lock_accounts([tx].iter());
+        let results0 = accounts.lock_accounts([tx].iter(), &FeatureSet::all_enabled());
 
         assert!(results0[0].is_ok());
         // Instruction program-id account demoted to readonly
@@ -2453,7 +2573,11 @@ mod tests {
             Ok(()),
         ];
 
-        let results = accounts.lock_accounts_with_results(txs.iter(), qos_results.into_iter());
+        let results = accounts.lock_accounts_with_results(
+            txs.iter(),
+            qos_results.into_iter(),
+            &FeatureSet::all_enabled(),
+        );
 
         assert!(results[0].is_ok()); // Read-only account (keypair0) can be referenced multiple times
         assert!(results[1].is_err()); // is not locked due to !qos_results[1].is_ok()

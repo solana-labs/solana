@@ -270,12 +270,10 @@ impl OldestSlot {
 struct Rocks(rocksdb::DB, ActualAccessType, OldestSlot);
 
 impl Rocks {
-    fn open(
-        path: &Path,
-        access_type: AccessType,
-        recovery_mode: Option<BlockstoreRecoveryMode>,
-    ) -> Result<Rocks> {
+    fn open(path: &Path, options: BlockstoreOptions) -> Result<Rocks> {
         use columns::*;
+        let access_type = options.access_type;
+        let recovery_mode = options.recovery_mode;
 
         fs::create_dir_all(&path)?;
 
@@ -1016,13 +1014,26 @@ pub struct WriteBatch<'a> {
     map: HashMap<&'static str, &'a ColumnFamily>,
 }
 
+pub struct BlockstoreOptions {
+    pub access_type: AccessType,
+    pub recovery_mode: Option<BlockstoreRecoveryMode>,
+    pub enforce_ulimit_nofile: bool,
+}
+
+impl Default for BlockstoreOptions {
+    /// The default options are the values used by [`Blockstore::open`].
+    fn default() -> Self {
+        Self {
+            access_type: AccessType::PrimaryOnly,
+            recovery_mode: None,
+            enforce_ulimit_nofile: true,
+        }
+    }
+}
+
 impl Database {
-    pub fn open(
-        path: &Path,
-        access_type: AccessType,
-        recovery_mode: Option<BlockstoreRecoveryMode>,
-    ) -> Result<Self> {
-        let backend = Arc::new(Rocks::open(path, access_type, recovery_mode)?);
+    pub fn open(path: &Path, options: BlockstoreOptions) -> Result<Self> {
+        let backend = Arc::new(Rocks::open(path, options)?);
 
         Ok(Database {
             backend,

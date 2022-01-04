@@ -498,6 +498,7 @@ export type ParsedInnerInstruction = {
 export type TokenBalance = {
   accountIndex: number;
   mint: string;
+  owner?: string;
   uiTokenAmount: TokenAmount;
 };
 
@@ -1437,6 +1438,7 @@ const ParsedConfirmedTransactionResult = pick({
 const TokenBalanceResult = pick({
   accountIndex: number(),
   mint: string(),
+  owner: optional(string()),
   uiTokenAmount: TokenAmountResult,
 });
 
@@ -1709,6 +1711,16 @@ export type GetParsedProgramAccountsConfig = {
   commitment?: Commitment;
   /** Optional array of filters to apply to accounts */
   filters?: GetProgramAccountsFilter[];
+};
+
+/**
+ * Configuration object for getMultipleAccounts
+ */
+export type GetMultipleAccountsConfig = {
+  /** Optional commitment level */
+  commitment?: Commitment;
+  /** Optional encoding for account data (default base64) */
+  encoding?: 'base64' | 'jsonParsed';
 };
 
 /**
@@ -2479,14 +2491,27 @@ export class Connection {
    */
   async getMultipleAccountsInfo(
     publicKeys: PublicKey[],
-    commitment?: Commitment,
-  ): Promise<(AccountInfo<Buffer> | null)[]> {
+    configOrCommitment?: GetMultipleAccountsConfig | Commitment,
+  ): Promise<(AccountInfo<Buffer | ParsedAccountData> | null)[]> {
     const keys = publicKeys.map(key => key.toBase58());
-    const args = this._buildArgs([keys], commitment, 'base64');
+
+    let commitment;
+    let encoding: 'base64' | 'jsonParsed' = 'base64';
+    if (configOrCommitment) {
+      if (typeof configOrCommitment === 'string') {
+        commitment = configOrCommitment;
+        encoding = 'base64';
+      } else {
+        commitment = configOrCommitment.commitment;
+        encoding = configOrCommitment.encoding || 'base64';
+      }
+    }
+
+    const args = this._buildArgs([keys], commitment, encoding);
     const unsafeRes = await this._rpcRequest('getMultipleAccounts', args);
     const res = create(
       unsafeRes,
-      jsonRpcResultAndContext(array(nullable(AccountInfoResult))),
+      jsonRpcResultAndContext(array(nullable(ParsedAccountInfoResult))),
     );
     if ('error' in res) {
       throw new Error(

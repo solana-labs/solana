@@ -238,7 +238,7 @@ impl ExecuteTimings {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "2pPboTQ9ixNuR1hvRt7McJriam5EHfd3vpBWfxnVbmF3")]
+#[frozen_abi(digest = "6XG6H1FChrDdY39K62KFWj5XfDao4dd24WZgcJkdMu1E")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 // Eager rent collection repeats in cyclic manner.
@@ -3069,7 +3069,10 @@ impl Bank {
             .into_iter()
             .map(SanitizedTransaction::from_transaction_for_tests)
             .collect::<Vec<_>>();
-        let lock_results = self.rc.accounts.lock_accounts(sanitized_txs.iter());
+        let lock_results = self
+            .rc
+            .accounts
+            .lock_accounts(sanitized_txs.iter(), &FeatureSet::all_enabled());
         TransactionBatch::new(lock_results, self, Cow::Owned(sanitized_txs))
     }
 
@@ -3085,7 +3088,10 @@ impl Bank {
                 })
             })
             .collect::<Result<Vec<_>>>()?;
-        let lock_results = self.rc.accounts.lock_accounts(sanitized_txs.iter());
+        let lock_results = self
+            .rc
+            .accounts
+            .lock_accounts(sanitized_txs.iter(), &FeatureSet::all_enabled());
         Ok(TransactionBatch::new(
             lock_results,
             self,
@@ -3098,7 +3104,10 @@ impl Bank {
         &'a self,
         txs: &'b [SanitizedTransaction],
     ) -> TransactionBatch<'a, 'b> {
-        let lock_results = self.rc.accounts.lock_accounts(txs.iter());
+        let lock_results = self
+            .rc
+            .accounts
+            .lock_accounts(txs.iter(), &self.feature_set);
         TransactionBatch::new(lock_results, self, Cow::Borrowed(txs))
     }
 
@@ -3110,10 +3119,11 @@ impl Bank {
         transaction_results: impl Iterator<Item = Result<()>>,
     ) -> TransactionBatch<'a, 'b> {
         // this lock_results could be: Ok, AccountInUse, WouldExceedBlockMaxLimit or WouldExceedAccountMaxLimit
-        let lock_results = self
-            .rc
-            .accounts
-            .lock_accounts_with_results(transactions.iter(), transaction_results);
+        let lock_results = self.rc.accounts.lock_accounts_with_results(
+            transactions.iter(),
+            transaction_results,
+            &self.feature_set,
+        );
         TransactionBatch::new(lock_results, self, Cow::Borrowed(transactions))
     }
 
@@ -3122,7 +3132,9 @@ impl Bank {
         &'a self,
         transaction: SanitizedTransaction,
     ) -> TransactionBatch<'a, '_> {
-        let mut batch = TransactionBatch::new(vec![Ok(())], self, Cow::Owned(vec![transaction]));
+        let lock_result = transaction.get_account_locks(&self.feature_set).map(|_| ());
+        let mut batch =
+            TransactionBatch::new(vec![lock_result], self, Cow::Owned(vec![transaction]));
         batch.needs_unlock = false;
         batch
     }
@@ -6218,6 +6230,7 @@ pub(crate) mod tests {
             system_program,
             sysvar::rewards::Rewards,
             timing::duration_as_s,
+            transaction::MAX_TX_ACCOUNT_LOCKS,
         },
         solana_vote_program::{
             vote_instruction,
@@ -11584,6 +11597,43 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn test_process_transaction_with_too_many_account_locks() {
+        solana_logger::setup();
+        let (genesis_config, mint_keypair) = create_genesis_config(500);
+        let mut bank = Bank::new_for_tests(&genesis_config);
+
+        let from_pubkey = solana_sdk::pubkey::new_rand();
+        let to_pubkey = solana_sdk::pubkey::new_rand();
+
+        let account_metas = vec![
+            AccountMeta::new(from_pubkey, false),
+            AccountMeta::new(to_pubkey, false),
+        ];
+
+        bank.add_builtin(
+            "mock_vote",
+            &solana_vote_program::id(),
+            mock_ok_vote_processor,
+        );
+
+        let instruction =
+            Instruction::new_with_bincode(solana_vote_program::id(), &10, account_metas);
+        let mut tx = Transaction::new_signed_with_payer(
+            &[instruction],
+            Some(&mint_keypair.pubkey()),
+            &[&mint_keypair],
+            bank.last_blockhash(),
+        );
+
+        while tx.message.account_keys.len() <= MAX_TX_ACCOUNT_LOCKS {
+            tx.message.account_keys.push(solana_sdk::pubkey::new_rand());
+        }
+
+        let result = bank.process_transaction(&tx);
+        assert_eq!(result, Err(TransactionError::TooManyAccountLocks));
+    }
+
+    #[test]
     fn test_program_id_as_payer() {
         solana_logger::setup();
         let (genesis_config, mint_keypair) = create_genesis_config(500);
@@ -14953,44 +15003,6 @@ pub(crate) mod tests {
                 bank.verify_transaction(tx.into(), TransactionVerificationMode::FullVerification)
                     .err(),
                 Some(TransactionError::SanitizeFailure),
-            );
-        }
-    }
-
-    #[test]
-    fn test_verify_transactions_load_duplicate_account() {
-        let GenesisConfigInfo { genesis_config, .. } =
-            create_genesis_config_with_leader(42, &solana_sdk::pubkey::new_rand(), 42);
-        let bank = Bank::new_for_tests(&genesis_config);
-
-        let mut rng = rand::thread_rng();
-        let recent_blockhash = hash::new_rand(&mut rng);
-        let from_keypair = Keypair::new();
-        let to_keypair = Keypair::new();
-        let from_pubkey = from_keypair.pubkey();
-        let to_pubkey = to_keypair.pubkey();
-
-        let make_transaction = || {
-            let mut message = Message::new(
-                &[system_instruction::transfer(&from_pubkey, &to_pubkey, 1)],
-                Some(&from_pubkey),
-            );
-            let to_index = message
-                .account_keys
-                .iter()
-                .position(|k| k == &to_pubkey)
-                .unwrap();
-            message.account_keys[to_index] = from_pubkey;
-            Transaction::new(&[&from_keypair], message, recent_blockhash)
-        };
-
-        // Duplicate account
-        {
-            let tx = make_transaction();
-            assert_eq!(
-                bank.verify_transaction(tx.into(), TransactionVerificationMode::FullVerification)
-                    .err(),
-                Some(TransactionError::AccountLoadedTwice),
             );
         }
     }
