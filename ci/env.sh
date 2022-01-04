@@ -23,6 +23,9 @@ if [[ -n $CI ]]; then
   elif [[ -n $BUILDKITE ]]; then
     export CI_BRANCH=$BUILDKITE_BRANCH
     export CI_BUILD_ID=$BUILDKITE_BUILD_ID
+    if [[ $BUILDKITE_COMMIT = HEAD ]]; then
+      BUILDKITE_COMMIT="$(git rev-parse HEAD)"
+    fi
     export CI_COMMIT=$BUILDKITE_COMMIT
     export CI_JOB_ID=$BUILDKITE_JOB_ID
     # The standard BUILDKITE_PULL_REQUEST environment variable is always "false" due
