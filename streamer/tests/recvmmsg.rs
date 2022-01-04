@@ -25,7 +25,7 @@ pub fn test_recv_mmsg_batch_size() {
         }
         let mut packets = vec![Packet::default(); TEST_BATCH_SIZE];
         let now = Instant::now();
-        let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
+        let recv = recv_mmsg(&reader, &mut packets[..]).unwrap();
         elapsed_in_max_batch += now.elapsed().as_nanos();
         assert_eq!(TEST_BATCH_SIZE, recv);
     });
@@ -40,7 +40,7 @@ pub fn test_recv_mmsg_batch_size() {
         let mut recv = 0;
         let now = Instant::now();
         while let Ok(num) = recv_mmsg(&reader, &mut packets[..]) {
-            recv += num.1;
+            recv += num;
             if recv >= TEST_BATCH_SIZE {
                 break;
             }
