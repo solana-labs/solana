@@ -124,7 +124,7 @@ pub(crate) const CACHE_VIRTUAL_OFFSET: Offset = 0;
 const CACHE_VIRTUAL_STORED_SIZE: StoredSize = 0;
 
 /// bprumo TODO: doc
-const FLUSH_WINDOW_SIZE: usize = 1; // bprumo TODO: put back to 2
+const FLUSH_WINDOW_SIZE: usize = 2; // bprumo TODO: put back to 2
 
 pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
