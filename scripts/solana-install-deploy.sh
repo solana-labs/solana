@@ -31,7 +31,7 @@ fi
 
 case "$OS" in
 osx)
-  TARGET=$(uname -m)-apple-darwin
+  TARGET=x86_64-apple-darwin
   ;;
 linux)
   TARGET=x86_64-unknown-linux-gnu
