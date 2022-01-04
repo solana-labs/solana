@@ -348,10 +348,10 @@ impl LedgerStorage {
     pub async fn new(
         read_only: bool,
         timeout: Option<std::time::Duration>,
-        cred_path: Option<String>,
+        credential_path: Option<String>,
     ) -> Result<Self> {
         let connection =
-            bigtable::BigTableConnection::new("solana-ledger", read_only, timeout, cred_path)
+            bigtable::BigTableConnection::new("solana-ledger", read_only, timeout, credential_path)
                 .await?;
         Ok(Self { connection })
     }
