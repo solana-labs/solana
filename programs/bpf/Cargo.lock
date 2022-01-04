@@ -3375,6 +3375,7 @@ dependencies = [
  "num-traits",
  "rustc_version 0.4.0",
  "serde",
+ "solana-measure",
  "solana-sdk",
  "thiserror",
 ]
