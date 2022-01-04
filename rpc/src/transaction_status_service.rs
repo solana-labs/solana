@@ -123,7 +123,7 @@ impl TransactionStatusService {
                             transaction.message(),
                             lamports_per_signature,
                         );
-                        let tx_account_locks = transaction.get_account_locks();
+                        let tx_account_locks = transaction.get_account_locks_unchecked();
 
                         let inner_instructions = inner_instructions.map(|inner_instructions| {
                             inner_instructions

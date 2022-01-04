@@ -287,6 +287,10 @@ pub mod cap_accounts_data_len {
     solana_sdk::declare_id!("capRxUrBjNkkCpjrJxPGfPaWijB7q3JoDfsWXAnt46r");
 }
 
+pub mod max_tx_account_locks {
+    solana_sdk::declare_id!("CBkDroRDqm8HwHe6ak9cguPjUomrASEkfmxEaZ5CNNxz");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -353,6 +357,7 @@ lazy_static! {
         (allow_votes_to_directly_update_vote_state::id(), "enable direct vote state update"),
         (reject_all_elf_rw::id(), "reject all read-write data in program elfs"),
         (cap_accounts_data_len::id(), "cap the accounts data len"),
+        (max_tx_account_locks::id(), "enforce max number of locked accounts per transaction"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

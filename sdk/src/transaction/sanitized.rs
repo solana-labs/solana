@@ -20,6 +20,11 @@ use {
     std::sync::Arc,
 };
 
+/// Maximum number of accounts that a transaction may lock.
+/// 64 was chosen because it is roughly twice the previous
+/// number of account keys that could fit in a legacy tx.
+pub const MAX_TX_ACCOUNT_LOCKS: usize = 64;
+
 /// Sanitized transaction and the hash of its message
 #[derive(Debug, Clone)]
 pub struct SanitizedTransaction {
@@ -59,10 +64,6 @@ impl SanitizedTransaction {
             }),
         };
 
-        if message.has_duplicates() {
-            return Err(TransactionError::AccountLoadedTwice);
-        }
-
         let is_simple_vote_tx = is_simple_vote_tx.unwrap_or_else(|| {
             let mut ix_iter = message.program_instructions_iter();
             ix_iter.next().map(|(program_id, _ix)| program_id) == Some(&crate::vote::program::id())
@@ -78,10 +79,6 @@ impl SanitizedTransaction {
 
     pub fn try_from_legacy_transaction(tx: Transaction) -> Result<Self> {
         tx.sanitize()?;
-
-        if tx.message.has_duplicates() {
-            return Err(TransactionError::AccountLoadedTwice);
-        }
 
         Ok(Self {
             message_hash: tx.message.hash(),
@@ -143,8 +140,24 @@ impl SanitizedTransaction {
         }
     }
 
+    /// Validate and return the account keys locked by this transaction
+    pub fn get_account_locks(
+        &self,
+        feature_set: &feature_set::FeatureSet,
+    ) -> Result<TransactionAccountLocks> {
+        if self.message.has_duplicates() {
+            Err(TransactionError::AccountLoadedTwice)
+        } else if feature_set.is_active(&feature_set::max_tx_account_locks::id())
+            && self.message.account_keys_len() > MAX_TX_ACCOUNT_LOCKS
+        {
+            Err(TransactionError::TooManyAccountLocks)
+        } else {
+            Ok(self.get_account_locks_unchecked())
+        }
+    }
+
     /// Return the list of accounts that must be locked during processing this transaction.
-    pub fn get_account_locks(&self) -> TransactionAccountLocks {
+    pub fn get_account_locks_unchecked(&self) -> TransactionAccountLocks {
         let message = &self.message;
         let num_readonly_accounts = message.num_readonly_accounts();
         let num_writable_accounts = message
