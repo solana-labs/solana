@@ -40,45 +40,38 @@ pub struct RangeProof {
 
 #[allow(non_snake_case)]
 impl RangeProof {
+    /// Create an aggregated range proof.
+    ///
+    /// The proof is created with respect to a vector of Pedersen commitments C_1, ..., C_m. The
+    /// method itself does not take in these commitments, but the values associated with the commitments:
+    /// - vector of committed amounts v_1, ..., v_m represented as u64
+    /// - bit-lengths of the committed amounts
+    /// - Pedersen openings for each commitments
+    ///
+    /// The sum of the bit-lengths of the commitments amounts must be a power-of-two
     #[allow(clippy::many_single_char_names)]
     #[cfg(not(target_arch = "bpf"))]
-    pub fn create(
+    pub fn new(
         amounts: Vec<u64>,
         bit_lengths: Vec<usize>,
-        opens: Vec<&PedersenOpening>,
+        openings: Vec<&PedersenOpening>,
         transcript: &mut Transcript,
     ) -> Self {
-        let t_1_blinding = PedersenOpening::random(&mut OsRng);
-        let t_2_blinding = PedersenOpening::random(&mut OsRng);
+        // amounts, bit-lengths, openings must be same length vectors
+        let m = amounts.len();
+        assert_eq!(bit_lengths.len(), m);
+        assert_eq!(openings.len(), m);
 
-        Self::create_with(
-            amounts,
-            bit_lengths,
-            opens,
-            &t_1_blinding,
-            &t_2_blinding,
-            transcript,
-        )
-    }
+        // total vector dimension to compute the ultimate inner product proof for
+        let nm: usize = bit_lengths.iter().sum();
+        assert!(nm.is_power_of_two());
 
-    #[allow(clippy::many_single_char_names)]
-    #[cfg(not(target_arch = "bpf"))]
-    pub fn create_with(
-        amounts: Vec<u64>,
-        bit_lengths: Vec<usize>,
-        opens: Vec<&PedersenOpening>,
-        t_1_blinding: &PedersenOpening,
-        t_2_blinding: &PedersenOpening,
-        transcript: &mut Transcript,
-    ) -> Self {
-        let nm = bit_lengths.iter().sum();
-
-        // Computing the generators online for now. It should ultimately be precomputed.
+        // TODO: precompute generators
         let bp_gens = BulletproofGens::new(nm);
         let G = PedersenBase::default().G;
         let H = PedersenBase::default().H;
 
-        // bit-decompose values and commit to the bits
+        // bit-decompose values and generate their Pedersen vector commitment
         let a_blinding = Scalar::random(&mut OsRng);
         let mut A = a_blinding * H;
 
@@ -92,31 +85,40 @@ impl RangeProof {
                 A += point;
             }
         }
+        let A = A.compress();
 
-        // generate blinding factors and commit as vectors
-        let s_blinding = Scalar::random(&mut OsRng);
-
+        // generate blinding factors and generate their Pedersen vector commitment
         let s_L: Vec<Scalar> = (0..nm).map(|_| Scalar::random(&mut OsRng)).collect();
         let s_R: Vec<Scalar> = (0..nm).map(|_| Scalar::random(&mut OsRng)).collect();
+
+        // generate blinding factor for Pedersen commitment; `s_blinding` should not to be confused
+        // with blinding factors for the actual inner product vector
+        let s_blinding = Scalar::random(&mut OsRng); 
 
         let S = RistrettoPoint::multiscalar_mul(
             iter::once(&s_blinding).chain(s_L.iter()).chain(s_R.iter()),
             iter::once(&H).chain(bp_gens.G(nm)).chain(bp_gens.H(nm)),
-        );
+        ).compress();
 
-        transcript.append_point(b"A", &A.compress());
-        transcript.append_point(b"S", &S.compress());
+        // add the Pedersen vector commitments to the transcript (send the commitments to the verifier)
+        transcript.append_point(b"A", &A);
+        transcript.append_point(b"S", &S);
 
-        // commit to T1 and T2
+        // derive challenge scalars from the transcript (receive challenge from the verifier): `y`
+        // and `z` used for merge multiple inner product relations into one single inner product
         let y = transcript.challenge_scalar(b"y");
         let z = transcript.challenge_scalar(b"z");
 
+        // define blinded vectors:
+        // - l(x) = (a_L - z*1) + s_L*x
+        // - r(x) = (y^n * (a_R + z*1) + [z^2*2^n | z^3*2^n | ... | z^m*2^n]) + y^n * s_R*x
         let mut l_poly = util::VecPoly1::zero(nm);
         let mut r_poly = util::VecPoly1::zero(nm);
 
         let mut i = 0;
         let mut exp_z = z * z;
         let mut exp_y = Scalar::one();
+
         for (amount_i, n_i) in amounts.iter().zip(bit_lengths.iter()) {
             let mut exp_2 = Scalar::one();
 
@@ -136,49 +138,53 @@ impl RangeProof {
             exp_z *= z;
         }
 
+        // define t(x) = <l(x), r(x)> = t_0 + t_1*x + t_2*x
         let t_poly = l_poly.inner_product(&r_poly);
 
-        let T_1 = Pedersen::with(t_poly.1, t_1_blinding)
-            .get_point()
-            .compress();
-        let T_2 = Pedersen::with(t_poly.2, t_2_blinding)
-            .get_point()
-            .compress();
+        // generate Pedersen commitment for the coefficients t_1 and t_2
+        let (T_1, t_1_blinding) = Pedersen::new(t_poly.1);
+        let (T_2, t_2_blinding) = Pedersen::new(t_poly.2);
+
+        let T_1 = T_1.get_point().compress();
+        let T_2 = T_2.get_point().compress();
 
         transcript.append_point(b"T_1", &T_1);
         transcript.append_point(b"T_2", &T_2);
 
+        // evaluate t(x) on challenge x and homomorphically compute the openings for
+        // z^2 * V_1 + z^3 * V_2 + ... + z^{m+1} * V_m + delta(y, z)*G + x*T_1 + x^2*T_2
         let x = transcript.challenge_scalar(b"x");
 
-        let mut agg_open = Scalar::zero();
-        let mut exp_z = z * z;
-        for open in opens {
-            agg_open += exp_z * open.get_scalar();
+        let mut agg_opening = Scalar::zero();
+        let mut exp_z = z;
+        for opening in openings {
             exp_z *= z;
+            agg_opening += exp_z * opening.get_scalar();
         }
 
         let t_blinding_poly = util::Poly2(
-            agg_open,
+            agg_opening,
             t_1_blinding.get_scalar(),
             t_2_blinding.get_scalar(),
         );
 
-        // compute t_x
         let t_x = t_poly.eval(x);
         let t_x_blinding = t_blinding_poly.eval(x);
 
+        transcript.append_scalar(b"t_x", &t_x);
+        transcript.append_scalar(b"t_x_blinding", &t_x_blinding);
+
+        // homomorphically compuate the openings for A + x*S
         let e_blinding = a_blinding + s_blinding * x;
         let l_vec = l_poly.eval(x);
         let r_vec = r_poly.eval(x);
 
-        transcript.append_scalar(b"t_x", &t_x);
-        transcript.append_scalar(b"t_x_blinding", &t_x_blinding);
         transcript.append_scalar(b"e_blinding", &e_blinding);
 
+        // compute the inner product argument on the commitment:
+        // P = <l(x), G> + <r(x), H'> + <l(x), r(x)>*Q
         let w = transcript.challenge_scalar(b"w");
         let Q = w * G;
-
-        transcript.challenge_scalar(b"c");
 
         let G_factors: Vec<Scalar> = iter::repeat(Scalar::one()).take(nm).collect();
         let H_factors: Vec<Scalar> = util::exp_iter(y.invert()).take(nm).collect();
@@ -194,9 +200,12 @@ impl RangeProof {
             transcript,
         );
 
+        // generate challenge `c` for consistency with the verifier's transcript
+        transcript.challenge_scalar(b"c");
+
         RangeProof {
-            A: A.compress(),
-            S: S.compress(),
+            A,
+            S,
             T_1,
             T_2,
             t_x,
