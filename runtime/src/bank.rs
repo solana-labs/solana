@@ -15190,4 +15190,48 @@ pub(crate) mod tests {
             Some(Vec::<TransactionLogInfo>::new()),
         );
     }
+
+    /// Test exceeding the accounts data budget by creating accounts in a loop
+    #[test]
+    fn test_accounts_data_budget_exceeded() {
+        use solana_program_runtime::accounts_data_meter::MAX_ACCOUNTS_DATA_LEN;
+        use solana_sdk::system_instruction::MAX_PERMITTED_DATA_LENGTH;
+
+        solana_logger::setup();
+        let (genesis_config, mint_keypair) = create_genesis_config(1_000_000_000_000);
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.activate_feature(&solana_sdk::feature_set::cap_accounts_data_len::id());
+
+        let mut i = 0;
+        let result = loop {
+            let txn = system_transaction::create_account(
+                &mint_keypair,
+                &Keypair::new(),
+                bank.last_blockhash(),
+                1,
+                MAX_PERMITTED_DATA_LENGTH,
+                &solana_sdk::system_program::id(),
+            );
+
+            let result = bank.process_transaction(&txn);
+            assert!(bank.load_accounts_data_len() <= MAX_ACCOUNTS_DATA_LEN);
+            if result.is_err() {
+                break result;
+            }
+
+            assert!(
+                i < MAX_ACCOUNTS_DATA_LEN / MAX_PERMITTED_DATA_LENGTH,
+                "test must complete within bounded limits"
+            );
+            i += 1;
+        };
+
+        assert!(matches!(
+            result,
+            Err(TransactionError::InstructionError(
+                _,
+                solana_sdk::instruction::InstructionError::AccountsDataBudgetExceeded,
+            ))
+        ));
+    }
 }
