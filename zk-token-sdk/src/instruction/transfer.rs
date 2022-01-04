@@ -266,7 +266,7 @@ impl TransferProof {
             ValidityProof::new(dest_pk, auditor_pk, transfer_amt, openings, &mut transcript);
 
         // generate the range proof
-        let range_proof = RangeProof::create(
+        let range_proof = RangeProof::new(
             vec![source_new_balance, transfer_amt.0, transfer_amt.1],
             vec![64, 32, 32],
             vec![&source_open, openings.0, openings.1],

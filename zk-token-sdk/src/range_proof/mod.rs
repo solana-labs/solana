@@ -67,6 +67,7 @@ impl RangeProof {
         assert!(nm.is_power_of_two());
 
         // TODO: precompute generators
+        // TODO: double check Pedersen generators and range proof generators does not interfere
         let bp_gens = BulletproofGens::new(nm);
         let G = PedersenBase::default().G;
         let H = PedersenBase::default().H;
@@ -222,6 +223,9 @@ impl RangeProof {
         bit_lengths: Vec<usize>,
         transcript: &mut Transcript,
     ) -> Result<(), RangeProofError> {
+        // commitments and bit-lengths must be same length vectors
+        assert_eq!(comms.len(), bit_lengths.len());
+
         let G = PedersenBase::default().G;
         let H = PedersenBase::default().H;
 
@@ -233,6 +237,7 @@ impl RangeProof {
             return Err(RangeProofError::InvalidBitsize);
         }
 
+        // append proof data to transcript and derive appropriate challenge scalars
         transcript.validate_and_append_point(b"A", &self.A)?;
         transcript.validate_and_append_point(b"S", &self.S)?;
 
@@ -252,17 +257,16 @@ impl RangeProof {
         transcript.append_scalar(b"e_blinding", &self.e_blinding);
 
         let w = transcript.challenge_scalar(b"w");
+        let c = transcript.challenge_scalar(b"c"); // challenge value for batching multiscalar mul
 
-        // Challenge value for batching statements to be verified
-        let c = transcript.challenge_scalar(b"c");
-
+        // verify inner product proof
         let (x_sq, x_inv_sq, s) = self.ipp_proof.verification_scalars(nm, transcript)?;
         let s_inv = s.iter().rev();
 
         let a = self.ipp_proof.a;
         let b = self.ipp_proof.b;
 
-        // Construct concat_z_and_2, an iterator of the values of
+        // construct concat_z_and_2, an iterator of the values of
         // z^0 * \vec(2)^n || z^1 * \vec(2)^n || ... || z^(m-1) * \vec(2)^n
         let concat_z_and_2: Vec<Scalar> = util::exp_iter(z)
             .zip(bit_lengths.iter())
@@ -308,12 +312,12 @@ impl RangeProof {
                 .chain(bp_gens.H(nm).map(|&x| Some(x)))
                 .chain(comms.iter().map(|V| V.decompress())),
         )
-        .ok_or(ProofError::VerificationError)?;
+        .ok_or(RangeProofError::MultiscalarMulError)?;
 
         if mega_check.is_identity() {
-            Ok((z, x))
+            Ok(())
         } else {
-            Err(ProofError::VerificationError)
+            Err(RangeProofError::AlgebraicRelationError)
         }
     }
 
@@ -334,12 +338,12 @@ impl RangeProof {
 
     // Following the dalek rangeproof library signature for now. The exact method signature can be
     // changed.
-    pub fn from_bytes(slice: &[u8]) -> Result<RangeProof, ProofError> {
+    pub fn from_bytes(slice: &[u8]) -> Result<RangeProof, RangeProofError> {
         if slice.len() % 32 != 0 {
-            return Err(ProofError::FormatError);
+            return Err(RangeProofError::FormatError);
         }
         if slice.len() < 7 * 32 {
-            return Err(ProofError::FormatError);
+            return Err(RangeProofError::FormatError);
         }
 
         let A = CompressedRistretto(util::read32(&slice[0..]));
@@ -348,11 +352,11 @@ impl RangeProof {
         let T_2 = CompressedRistretto(util::read32(&slice[3 * 32..]));
 
         let t_x = Scalar::from_canonical_bytes(util::read32(&slice[4 * 32..]))
-            .ok_or(ProofError::FormatError)?;
+            .ok_or(RangeProofError::FormatError)?;
         let t_x_blinding = Scalar::from_canonical_bytes(util::read32(&slice[5 * 32..]))
-            .ok_or(ProofError::FormatError)?;
+            .ok_or(RangeProofError::FormatError)?;
         let e_blinding = Scalar::from_canonical_bytes(util::read32(&slice[6 * 32..]))
-            .ok_or(ProofError::FormatError)?;
+            .ok_or(RangeProofError::FormatError)?;
 
         let ipp_proof = InnerProductProof::from_bytes(&slice[7 * 32..])?;
 
@@ -398,7 +402,7 @@ mod tests {
         let mut transcript_create = Transcript::new(b"Test");
         let mut transcript_verify = Transcript::new(b"Test");
 
-        let proof = RangeProof::create(vec![55], vec![32], vec![&open], &mut transcript_create);
+        let proof = RangeProof::new(vec![55], vec![32], vec![&open], &mut transcript_create);
 
         assert!(proof
             .verify(
@@ -418,7 +422,7 @@ mod tests {
         let mut transcript_create = Transcript::new(b"Test");
         let mut transcript_verify = Transcript::new(b"Test");
 
-        let proof = RangeProof::create(
+        let proof = RangeProof::new(
             vec![55, 77, 99],
             vec![64, 32, 32],
             vec![&open_1, &open_2, &open_3],
