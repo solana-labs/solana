@@ -4113,7 +4113,7 @@ defineSymbol(symbols_math, main, rel, "\u21C1", "\\rightharpoondown", true);
 defineSymbol(symbols_math, main, rel, "\u2196", "\\nwarrow", true);
 defineSymbol(symbols_math, main, rel, "\u21CC", "\\rightleftharpoons", true); // AMS Negated Binary Relations
 
-defineSymbol(symbols_math, ams, rel, "\u226E", "\\nless", true); // Symbol names preceeded by "@" each have a corresponding macro.
+defineSymbol(symbols_math, ams, rel, "\u226E", "\\nless", true); // Symbol names preceded by "@" each have a corresponding macro.
 
 defineSymbol(symbols_math, ams, rel, "\uE010", "\\@nleqslant");
 defineSymbol(symbols_math, ams, rel, "\uE011", "\\@nleqq");
