@@ -14,13 +14,14 @@ use {
     },
     solana_measure::measure::Measure,
     solana_metrics::{datapoint_error, inc_new_counter_debug},
+    solana_program_runtime::timings::ExecuteTimings,
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{
         accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::{
-            Bank, ExecuteTimings, RentDebits, TransactionBalancesSet, TransactionExecutionResult,
+            Bank, RentDebits, TransactionBalancesSet, TransactionExecutionResult,
             TransactionResults,
         },
         bank_forks::BankForks,

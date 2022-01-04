@@ -45,6 +45,7 @@ solana-metrics = { path = "../metrics", version = "=1.9.4" }
 solana-net-utils = { path = "../net-utils", version = "=1.9.4" }
 solana-perf = { path = "../perf", version = "=1.9.4" }
 solana-poh = { path = "../poh", version = "=1.9.4" }
+solana-program-runtime = { path = "../program-runtime", version = "=1.9.4" }
 solana-rpc = { path = "../rpc", version = "=1.9.4" }
 solana-replica-lib = { path = "../replica-lib", version = "=1.9.4" }
 solana-runtime = { path = "../runtime", version = "=1.9.4" }

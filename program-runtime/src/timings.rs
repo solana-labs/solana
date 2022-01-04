@@ -35,6 +35,39 @@ impl ProgramTiming {
     }
 }
 
+#[derive(Default, Debug)]
+pub struct ExecuteTimings {
+    pub check_us: u64,
+    pub load_us: u64,
+    pub execute_us: u64,
+    pub store_us: u64,
+    pub update_stakes_cache_us: u64,
+    pub total_batches_len: usize,
+    pub num_execute_batches: u64,
+    pub collect_logs_us: u64,
+    pub details: ExecuteDetailsTimings,
+}
+
+impl ExecuteTimings {
+    pub fn accumulate(&mut self, other: &ExecuteTimings) {
+        self.check_us = self.check_us.saturating_add(other.check_us);
+        self.load_us = self.load_us.saturating_add(other.load_us);
+        self.execute_us = self.execute_us.saturating_add(other.execute_us);
+        self.store_us = self.store_us.saturating_add(other.store_us);
+        self.update_stakes_cache_us = self
+            .update_stakes_cache_us
+            .saturating_add(other.update_stakes_cache_us);
+        self.total_batches_len = self
+            .total_batches_len
+            .saturating_add(other.total_batches_len);
+        self.num_execute_batches = self
+            .num_execute_batches
+            .saturating_add(other.num_execute_batches);
+        self.collect_logs_us = self.collect_logs_us.saturating_add(other.collect_logs_us);
+        self.details.accumulate(&other.details);
+    }
+}
+
 #[derive(Default, Debug, PartialEq)]
 pub struct ExecuteDetailsTimings {
     pub serialize_us: u64,
