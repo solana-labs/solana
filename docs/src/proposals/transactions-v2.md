@@ -53,11 +53,16 @@ store up to 256 addresses each. In addition to stored addresses, address table
 accounts also tracks various metadata explained below.
 
 ```rust
+/// The maximum number of addresses that a lookup table can hold
+pub const LOOKUP_TABLE_MAX_ADDRESSES: usize = 256;
+
+/// The serialized size of lookup table metadata
+pub const LOOKUP_TABLE_META_SIZE: usize = 56;
+
 pub struct LookupTableMeta {
-    /// The slot used to derive the table's address. The table cannot
-    /// be closed until the derivation slot is no longer "recent"
-    /// (not accessible in the `SlotHashes` sysvar).
-    pub derivation_slot: Slot,
+    /// Lookup tables cannot be closed until the deactivation slot is
+    /// no longer "recent" (not accessible in the `SlotHashes` sysvar).
+    pub ddeactivation_slot: Slot,
     /// The slot that the table was last extended. Address tables may
     /// only be used to lookup addresses that were extended before
     /// the current bank's slot.
@@ -67,6 +72,8 @@ pub struct LookupTableMeta {
     pub last_extended_slot_start_index: u8,
     /// Authority address which must sign for each modification.
     pub authority: Option<Pubkey>,
+    // Padding to keep addresses 8-byte aligned
+    pub _padding: u16,
     // Raw list of addresses follows this serialized structure in
     // the account's data, starting from `LOOKUP_TABLE_META_SIZE`.
 }
@@ -88,10 +95,16 @@ pub struct BufferMeta {
 
 #### Cleanup
 
-Once an address lookup table is no longer needed, it can be closed
-and have its rent balance reclaimed. Address lookup tables may not be recreated
+Once an address lookup table is no longer needed, it can be deactivated and closed
+to have its rent balance reclaimed. Address lookup tables may not be recreated
 at the same address because each new lookup table must be initialized at an address
 derived from a recent slot.
+
+Address lookup tables can be deactivated at any time but can continue to be used
+by transactions until the deactivation slot is no longer present in the slot hashes
+sysvar. This cool-down period ensures that in-flight transactions cannot be
+censored and that address lookup tables cannot be closed and recreated for the same
+slot.
 
 #### Cost
 
@@ -226,7 +239,7 @@ If an address lookup table can be closed and re-initialized with new addresses,
 any client which is unaware of the change could inadvertently lookup unexpected
 addresses. To avoid this, all address lookup tables must be initialized at an
 address derived from a recent slot and they cannot be closed until the slot
-used for derivation is no longer "recent."
+used for deactivation is no longer in the slot hashes sysvar.
 
 ### Resource consumption
 
@@ -259,7 +272,8 @@ similar to sysvar accounts.
 For this reason, special handling should be given to address lookup tables.
 When an address lookup table is used to lookup addresses for a transaction,
 it can be loaded without waiting for a read lock. To avoid race conditions,
-only the addresses appended in previous blocks can be used for lookups.
+only the addresses appended in previous blocks can be used for lookups and
+deactivation requires a cool-down period.
 
 ### Duplicate accounts
 
