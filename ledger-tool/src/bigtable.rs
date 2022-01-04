@@ -415,15 +415,16 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .required(true)
                                 .default_value("1000")
                                 .help("Maximum number of slots to return"),
-                        ).arg(
+                        )
+                        .arg(
                             Arg::with_name("credential")
-                            .long("credential")
-                            .value_name("CREDENTIAL")
-                            .takes_value(true)
-                            .index(3)
-                            .required(true)
-                            .default_value("")
-                            .help("File path of credential with a standard source"),
+                                .long("credential")
+                                .value_name("CREDENTIAL")
+                                .takes_value(true)
+                                .index(3)
+                                .required(true)
+                                .default_value("")
+                                .help("File path of credential with a standard source"),
                         ),
                 )
                 .subcommand(
