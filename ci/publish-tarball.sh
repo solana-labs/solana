@@ -39,7 +39,11 @@ fi
 
 case "$CI_OS_NAME" in
 osx)
-  TARGET=$(uname -m)-apple-darwin
+  _cputype="$(uname -m)"
+  if [[ $_cputype = arm64 ]]; then
+    _cputype=aarch64
+  fi
+  TARGET=${_cputype}-apple-darwin
   ;;
 linux)
   TARGET=x86_64-unknown-linux-gnu
