@@ -41,7 +41,7 @@ pub fn recv_from(batch: &mut PacketBatch, socket: &UdpSocket, max_wait_ms: u64) 
                 trace!("recv_from err {:?}", e);
                 return Err(e);
             }
-            Ok((_, npkts)) => {
+            Ok(npkts) => {
                 if i == 0 {
                     socket.set_nonblocking(true)?;
                 }
