@@ -484,9 +484,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         for slot_list_index in 0..slot_list.len() {
             let (cur_slot, cur_account_info) = &slot_list[slot_list_index];
             if *cur_slot == new_slot || Some(*cur_slot) == other_slot {
+                let is_cur_account_cached = cur_account_info.is_cached();
                 if !found {
                     found = true;
-                    let is_cur_account_cached = cur_account_info.is_cached();
                     let mut new_item = (new_slot, new_account_info);
                     std::mem::swap(&mut new_item, &mut slot_list[slot_list_index]);
 
@@ -495,39 +495,28 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     } else {
                         reclaims.push(new_item);
                     }
-                    if let Some(other_slot) = other_slot {
-                        (slot_list_index + 1..slot_list.len()).
-                        into_iter().rev().for_each(|i| {
-                            let found_slot = slot_list[i].0;
-                            if found_slot == new_slot || found_slot == other_slot {
-                                let removed = slot_list.remove(i);
-                                if previous_slot_entry_was_cached {
-                                    assert!(is_cur_account_cached);
-                                } else {
-                                    reclaims.push(removed);
-                                }
-                                
-                            }
-                        });
-                    }
-                    else {
+                    if other_slot.is_none() {
                         assert!(slot_list
                             .iter()
                             .skip(slot_list_index + 1)
                             .all(|(slot, _)| *slot != new_slot));
                         // If there's no `old_slot`, then we've found and updated the only account.
                         // Return early!
+                        return is_cur_account_cached && !is_new_account_cached;
                     }
-                    return is_cur_account_cached && !is_new_account_cached;
                 } else {
                     // If the new account has already been swapped into the slot list in a previous
                     // iteration, then just remove this second dirty account.
                     let removed = slot_list.swap_remove(slot_list_index);
-                    reclaims.push(removed); // bprumo TODO: *always* reclaim?
+                    if previous_slot_entry_was_cached {
+                        assert!(is_cur_account_cached);
+                    } else {
+                        reclaims.push(removed);
+                    }
                     assert!(slot_list
                         .iter()
                         .skip(slot_list_index + 1)
-                        .all(|(slot, _)| *slot != removed.0));
+                        .all(|(slot, _)| *slot != new_slot && Some(*slot) != other_slot));
                     // bprumo TODO: handle addref
                     return removed.1.is_cached() && !is_new_account_cached;
                 }

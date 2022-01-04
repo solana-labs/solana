@@ -4564,6 +4564,7 @@ impl AccountsDb {
             let old_slots = self.accounts_cache.cached_frozen_slots();
             excess_slot_count = old_slots.len();
             let mut flush_stats = FlushStats::default();
+            const FLUSH_WINDOW_SIZE: usize = 1; // always has to be 1
             for chunk_index in 0..((excess_slot_count / FLUSH_WINDOW_SIZE) + 1) {
                 let start = chunk_index * FLUSH_WINDOW_SIZE;
                 let end = std::cmp::min(start + FLUSH_WINDOW_SIZE, excess_slot_count);
@@ -11674,8 +11675,8 @@ pub mod tests {
                 vec![(slot, 1)].into_iter().collect()
             };
             assert_eq!(
-                db.load_without_fixed_root(&ancestors, &key),
-                Some((account0.clone(), slot))
+                db.load_without_fixed_root(&ancestors, &key).unwrap().0,
+                account0
             );
         }
     }
