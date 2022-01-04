@@ -62,7 +62,7 @@ pub const LOOKUP_TABLE_META_SIZE: usize = 56;
 pub struct LookupTableMeta {
     /// Lookup tables cannot be closed until the deactivation slot is
     /// no longer "recent" (not accessible in the `SlotHashes` sysvar).
-    pub ddeactivation_slot: Slot,
+    pub deactivation_slot: Slot,
     /// The slot that the table was last extended. Address tables may
     /// only be used to lookup addresses that were extended before
     /// the current bank's slot.
