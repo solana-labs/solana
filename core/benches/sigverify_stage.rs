@@ -15,9 +15,7 @@ use {
         system_transaction,
         timing::duration_as_ms,
     },
-    std::{
-        time::{Duration, Instant},
-    },
+    std::time::{Duration, Instant},
     test::Bencher,
 };
 

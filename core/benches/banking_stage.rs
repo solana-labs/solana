@@ -4,7 +4,7 @@
 extern crate test;
 
 use {
-    crossbeam_channel::{Receiver, unbounded},
+    crossbeam_channel::{unbounded, Receiver},
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
