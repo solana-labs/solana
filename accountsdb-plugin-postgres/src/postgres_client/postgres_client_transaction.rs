@@ -330,6 +330,8 @@ pub enum DbTransactionErrorCode {
     WouldExceedMaxBlockCostLimit,
     UnsupportedVersion,
     InvalidWritableAccount,
+    WouldExceedMaxAccountDataCostLimit,
+    TooManyAccountLocks,
 }
 
 impl From<&TransactionError> for DbTransactionErrorCode {
@@ -358,6 +360,10 @@ impl From<&TransactionError> for DbTransactionErrorCode {
             TransactionError::WouldExceedMaxBlockCostLimit => Self::WouldExceedMaxBlockCostLimit,
             TransactionError::UnsupportedVersion => Self::UnsupportedVersion,
             TransactionError::InvalidWritableAccount => Self::InvalidWritableAccount,
+            TransactionError::WouldExceedMaxAccountDataCostLimit => {
+                Self::WouldExceedMaxAccountDataCostLimit
+            }
+            TransactionError::TooManyAccountLocks => Self::TooManyAccountLocks,
         }
     }
 }
