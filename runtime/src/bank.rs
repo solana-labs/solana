@@ -384,13 +384,23 @@ impl CachedExecutors {
         })
     }
 
-    fn put(&mut self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {
-        let entry = if let Some(mut entry) = self.executors.remove(pubkey) {
-            saturating_add_assign!(self.stats.hits, 1);
-            entry.executor = executor;
-            entry
-        } else {
-            saturating_add_assign!(self.stats.misses, 1);
+    fn put(&mut self, executors: &[(&Pubkey, Arc<dyn Executor>)]) {
+        let mut new_executors: Vec<_> = executors
+            .iter()
+            .filter_map(|(key, executor)| {
+                if let Some(mut entry) = self.executors.remove(key) {
+                    saturating_add_assign!(self.stats.hits, 1);
+                    entry.executor = executor.clone();
+                    let _ = self.executors.insert(**key, entry);
+                    None
+                } else {
+                    saturating_add_assign!(self.stats.misses, 1);
+                    Some((*key, executor))
+                }
+            })
+            .collect();
+
+        if !new_executors.is_empty() {
             let mut counts = self
                 .executors
                 .iter()
@@ -401,10 +411,15 @@ impl CachedExecutors {
                 .collect::<Vec<_>>();
             counts.sort_unstable_by_key(|(_, count)| *count);
 
-            let primer_count = Self::get_primer_count(counts.as_slice());
+            let primer_counts = Self::get_primer_counts(counts.as_slice(), new_executors.len());
 
             if self.executors.len() >= self.max {
-                if let Some(least_key) = counts.first().map(|least| *least.0) {
+                let mut least_keys = counts
+                    .iter()
+                    .take(new_executors.len())
+                    .map(|least| *least.0)
+                    .collect::<Vec<_>>();
+                for least_key in least_keys.drain(..) {
                     let _ = self.executors.remove(&least_key);
                     self.stats
                         .evictions
@@ -414,13 +429,15 @@ impl CachedExecutors {
                 }
             }
 
-            CachedExecutorsEntry {
-                prev_epoch_count: 0,
-                epoch_count: AtomicU64::new(primer_count),
-                executor,
+            for ((key, executor), primer_count) in new_executors.drain(..).zip(primer_counts) {
+                let entry = CachedExecutorsEntry {
+                    prev_epoch_count: 0,
+                    epoch_count: AtomicU64::new(primer_count),
+                    executor: executor.clone(),
+                };
+                let _ = self.executors.insert(*key, entry);
             }
-        };
-        let _ = self.executors.insert(*pubkey, entry);
+        }
     }
 
     fn remove(&mut self, pubkey: &Pubkey) {
@@ -453,10 +470,13 @@ impl CachedExecutors {
             .unwrap_or(0)
     }
 
-    fn get_primer_count(counts: &[(&Pubkey, u64)]) -> u64 {
+    fn get_primer_counts(counts: &[(&Pubkey, u64)], num_counts: usize) -> Vec<u64> {
         let max_primer_count = Self::get_primer_count_upper_bound_inclusive(counts);
         let mut rng = rand::thread_rng();
-        rng.gen_range(0, max_primer_count.saturating_add(1))
+
+        (0..num_counts)
+            .map(|_| rng.gen_range(0, max_primer_count.saturating_add(1)))
+            .collect::<Vec<_>>()
     }
 }
 
@@ -3585,9 +3605,7 @@ impl Bank {
         if !dirty_executors.is_empty() {
             let mut cache = self.cached_executors.write().unwrap();
             let cache = Arc::make_mut(&mut cache);
-            for (key, executor) in dirty_executors.into_iter() {
-                cache.put(key, executor);
-            }
+            cache.put(&dirty_executors);
         }
     }
 
@@ -12831,9 +12849,9 @@ pub(crate) mod tests {
         let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
         let mut cache = CachedExecutors::new(3, 0);
 
-        cache.put(&key1, executor.clone());
-        cache.put(&key2, executor.clone());
-        cache.put(&key3, executor.clone());
+        cache.put(&[(&key1, executor.clone())]);
+        cache.put(&[(&key2, executor.clone())]);
+        cache.put(&[(&key3, executor.clone())]);
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key2).is_some());
         assert!(cache.get(&key3).is_some());
@@ -12841,7 +12859,7 @@ pub(crate) mod tests {
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key2).is_some());
-        cache.put(&key4, executor.clone());
+        cache.put(&[(&key4, executor.clone())]);
         assert!(cache.get(&key4).is_some());
         let num_retained = [&key1, &key2, &key3]
             .iter()
@@ -12853,7 +12871,7 @@ pub(crate) mod tests {
         assert!(cache.get(&key4).is_some());
         assert!(cache.get(&key4).is_some());
         assert!(cache.get(&key4).is_some());
-        cache.put(&key3, executor.clone());
+        cache.put(&[(&key3, executor.clone())]);
         assert!(cache.get(&key3).is_some());
         let num_retained = [&key1, &key2, &key4]
             .iter()
@@ -12864,7 +12882,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_cached_executors_eviction() {
+    fn test_cached_executor_eviction() {
         let key1 = solana_sdk::pubkey::new_rand();
         let key2 = solana_sdk::pubkey::new_rand();
         let key3 = solana_sdk::pubkey::new_rand();
@@ -12873,9 +12891,9 @@ pub(crate) mod tests {
         let mut cache = CachedExecutors::new(3, 0);
         assert!(cache.current_epoch == 0);
 
-        cache.put(&key1, executor.clone());
-        cache.put(&key2, executor.clone());
-        cache.put(&key3, executor.clone());
+        cache.put(&[(&key1, executor.clone())]);
+        cache.put(&[(&key2, executor.clone())]);
+        cache.put(&[(&key3, executor.clone())]);
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key1).is_some());
@@ -12886,7 +12904,7 @@ pub(crate) mod tests {
         assert!(cache.get(&key2).is_some());
         assert!(cache.get(&key2).is_some());
         assert!(cache.get(&key3).is_some());
-        Arc::make_mut(&mut cache).put(&key4, executor.clone());
+        Arc::make_mut(&mut cache).put(&[(&key4, executor.clone())]);
 
         assert!(cache.get(&key4).is_some());
         let num_retained = [&key1, &key2, &key3]
@@ -12896,8 +12914,8 @@ pub(crate) mod tests {
             .count();
         assert_eq!(num_retained, 2);
 
-        Arc::make_mut(&mut cache).put(&key1, executor.clone());
-        Arc::make_mut(&mut cache).put(&key3, executor.clone());
+        Arc::make_mut(&mut cache).put(&[(&key1, executor.clone())]);
+        Arc::make_mut(&mut cache).put(&[(&key3, executor.clone())]);
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key3).is_some());
         let num_retained = [&key2, &key4]
@@ -12910,7 +12928,7 @@ pub(crate) mod tests {
         cache = cache.clone_with_epoch(2);
         assert!(cache.current_epoch == 2);
 
-        Arc::make_mut(&mut cache).put(&key3, executor.clone());
+        Arc::make_mut(&mut cache).put(&[(&key3, executor.clone())]);
         assert!(cache.get(&key3).is_some());
     }
 
@@ -12922,11 +12940,11 @@ pub(crate) mod tests {
         let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
         let mut cache = CachedExecutors::new(2, 0);
 
-        cache.put(&key1, executor.clone());
+        cache.put(&[(&key1, executor.clone())]);
         for _ in 0..5 {
             let _ = cache.get(&key1);
         }
-        cache.put(&key2, executor.clone());
+        cache.put(&[(&key2, executor.clone())]);
         // make key1's use-count for sure greater than key2's
         let _ = cache.get(&key1);
 
@@ -12938,7 +12956,7 @@ pub(crate) mod tests {
         entries.sort_by_key(|(_, v)| *v);
         assert!(entries[0].1 < entries[1].1);
 
-        cache.put(&key3, executor.clone());
+        cache.put(&[(&key3, executor.clone())]);
         assert!(cache.get(&entries[0].0).is_none());
         assert!(cache.get(&entries[1].0).is_some());
     }
