@@ -160,6 +160,8 @@ use {
     },
 };
 
+mod transaction_account_state_info;
+
 pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
