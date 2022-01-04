@@ -518,7 +518,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         .skip(slot_list_index + 1)
                         .all(|(slot, _)| *slot != new_slot && Some(*slot) != other_slot));
                     // bprumo TODO: handle addref
-                    return removed.1.is_cached() && !is_new_account_cached;
+                    return is_cur_account_cached && !is_new_account_cached;
                 }
             }
         }
