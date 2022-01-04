@@ -65,7 +65,7 @@ see the [overview](overview#loaders).
 Currently there are two supported loaders [BPF
 Loader](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/bpf_loader.rs#L17)
 and [BPF loader
-deprecated](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/bpf_loader_deprecated.rs#L14)
+deprecated](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/bpf_loader_deprecated.rs#L14).
 
 They both have the same raw entrypoint definition, the following is the raw
 symbol that the runtime looks up and calls:
