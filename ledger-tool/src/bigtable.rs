@@ -381,8 +381,8 @@ impl BigTableSubCommand for App<'_, '_> {
                 )
                 .subcommand(
                     SubCommand::with_name("compare-blocks")
-                        .about("Find the confirmed missing-blocks of an owned bigtable by \
-                                    comparing to a reference bigtable for the given range")
+                        .about("Find the missing confirmed blocks of an owned bigtable for a given range \
+                                by comparing to a reference bigtable")
                         .arg(
                             Arg::with_name("starting_slot")
                                 .validator(is_slot)
