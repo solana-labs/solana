@@ -124,7 +124,7 @@ pub(crate) const CACHE_VIRTUAL_OFFSET: Offset = 0;
 const CACHE_VIRTUAL_STORED_SIZE: StoredSize = 0;
 
 /// bprumo TODO: doc
-const FLUSH_WINDOW_SIZE: usize = 2; // bprumo TODO: put back to 2
+const FLUSH_WINDOW_SIZE: usize = 5; // bprumo TODO: put back to 2
 
 pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
@@ -4502,7 +4502,7 @@ impl AccountsDb {
     }
 
     pub fn flush_accounts_cache_slot(&self, slot: Slot) {
-        self.flush_slot_cache(slot, &[slot], None::<&mut fn(&_, &_) -> bool>);
+        self.flush_slot_cache(slot, &[slot], None::<&mut fn(&_, &_, _) -> bool>);
     }
 
     /// true if write cache is too big
@@ -4563,35 +4563,72 @@ impl AccountsDb {
             let old_slots = self.accounts_cache.cached_frozen_slots();
             excess_slot_count = old_slots.len();
             let mut flush_stats = FlushStats::default();
-            (0..((excess_slot_count / FLUSH_WINDOW_SIZE) + 1))
-                .into_iter()
-                .for_each(|chunk_index| {
+            for chunk_index in 0..((excess_slot_count / FLUSH_WINDOW_SIZE) + 1) {
                     let start = chunk_index * FLUSH_WINDOW_SIZE;
                     let end = std::cmp::min(start + FLUSH_WINDOW_SIZE, excess_slot_count);
                     let old_slots = &old_slots[start..end];
-                    if old_slots.len() == 0 || !self.should_aggressively_flush_cache() {
-                        return;
+                let len_now = old_slots.len();
+                let old_slots_2 = &old_slots;
+                let old_slots = old_slots
+                    .iter()
+                    .filter_map(|slot| {
+                        if *slot > max_flushed_root {
+                            Some(*slot)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                let len_after = old_slots.len();
+                unflushable_unrooted_slot_count += len_now - len_after;
+                if old_slots.len() == 0 {
+                    error!(
+                        "{}{}, none: {:?} {:?}",
+                        file!(),
+                        line!(),
+                        old_slots_2,
+                        old_slots
+                    );
+                    break;
+                }
+                if !self.should_aggressively_flush_cache() {
+                    error!(
+                        "{}{}, stop aggresively flush: {:?}",
+                        file!(),
+                        line!(),
+                        old_slots_2
+                    );
+                    break;
                     }
                     // Don't flush slots that are known to be unrooted
-                    if old_slots
-                        .iter()
-                        .all(|old_slot| *old_slot > max_flushed_root)
-                    {
                         if let Some(stats) = self.flush_slot_cache(
                             *old_slots.last().unwrap(),
+                    &old_slots,
+                    None::<&mut fn(&_, &_, _) -> bool>,
+                ) {
+                    error!(
+                        "{}{}, flushed: {:?} {:?}, max: {}",
+                        file!(),
+                        line!(),
+                        old_slots_2,
                             old_slots,
-                            None::<&mut fn(&_, &_) -> bool>,
-                        ) {
+                        max_flushed_root
+                    );
                             stats.into_iter().for_each(|stats| {
                                 flush_stats.num_flushed += stats.num_flushed;
                                 flush_stats.num_purged += stats.num_purged;
                                 flush_stats.total_size += stats.total_size;
                             });
-                        }
                     } else {
-                        unflushable_unrooted_slot_count += old_slots.len();
+                    error!(
+                        "{}{}, did not flush: {:?} {:?}",
+                        file!(),
+                        line!(),
+                        old_slots_2,
+                        old_slots
+                    );
                     }
-                });
+            }
             datapoint_info!(
                 "accounts_db-flush_accounts_cache_aggressively",
                 ("num_flushed", flush_stats.num_flushed, i64),
@@ -4638,7 +4675,7 @@ impl AccountsDb {
                 let random_flush_stats = self.flush_slot_cache(
                     *rand_slot,
                     &[*rand_slot],
-                    None::<&mut fn(&_, &_) -> bool>,
+                    None::<&mut fn(&_, &_, _) -> bool>,
                 );
                 info!(
                     "Flushed random slot: num_remaining: {} {:?}",
@@ -4665,8 +4702,17 @@ impl AccountsDb {
         // If `should_clean` is None, then`should_flush_f` is also None, which will cause
         // `flush_slot_cache` to flush all accounts to storage without cleaning any accounts.
         let mut should_flush_f = should_clean.map(|(account_bytes_saved, num_accounts_saved)| {
-            move |&pubkey: &Pubkey, account: &AccountSharedData| {
+            move |&pubkey: &Pubkey, account: &AccountSharedData, slot: Slot| {
                 use std::collections::hash_map::Entry::{Occupied, Vacant};
+                if let Some(max_clean_root) = max_clean_root {
+                    if slot > max_clean_root {
+                        // Only if the root is greater than the `max_clean_root` do we
+                        // have to prevent cleaning, otherwise, just default to `should_flush_f`
+                        // for any slots <= `max_clean_root`
+                        return true;
+                    }
+                }
+                // fall through and check
                 let should_flush = match written_accounts.entry(pubkey) {
                     Vacant(vacant_entry) => {
                         vacant_entry.insert(());
@@ -4690,25 +4736,14 @@ impl AccountsDb {
         // Iterate from highest to lowest so that we don't need to flush earlier
         // outdated updates in earlier roots
         let mut num_roots_flushed = 0;
-        for &root in cached_roots.iter().rev() {
-            let should_flush_f = if let Some(max_clean_root) = max_clean_root {
-                if root > max_clean_root {
-                    // Only if the root is greater than the `max_clean_root` do we
-                    // have to prevent cleaning, otherwise, just default to `should_flush_f`
-                    // for any slots <= `max_clean_root`
-                    None
-                } else {
-                    should_flush_f.as_mut()
-                }
-            } else {
-                should_flush_f.as_mut()
-            };
-
+        if !cached_roots.is_empty() {
+            let max_root = *cached_roots.iter().max().unwrap();
+            let roots = cached_roots.iter().rev().cloned().collect::<Vec<_>>();
             if self
-                .flush_slot_cache(root, &[root], should_flush_f)
+                .flush_slot_cache(max_root, &roots, should_flush_f.as_mut())
                 .is_some()
             {
-                num_roots_flushed += 1;
+                num_roots_flushed += roots.len();
             }
 
             // Regardless of whether this slot was *just* flushed from the cache by the above
@@ -4719,7 +4754,7 @@ impl AccountsDb {
             // 2) Random evictions
             // These slots may then *later* be marked as root, so we still need to handle updating the
             // `max_flush_root` in the accounts cache.
-            self.accounts_cache.set_max_flush_root(root);
+            self.accounts_cache.set_max_flush_root(max_root);
         }
 
         // Only add to the uncleaned roots set *after* we've flushed the previous roots,
@@ -4733,7 +4768,7 @@ impl AccountsDb {
         &self,
         new_slot: Slot,
         slot_caches: &[(Slot, SlotCache)],
-        should_flush_f: &mut Option<&mut impl FnMut(&Pubkey, &AccountSharedData) -> bool>,
+        should_flush_f: &mut Option<&mut impl FnMut(&Pubkey, &AccountSharedData, Slot) -> bool>,
     ) -> FlushStats {
         let mut num_purged = 0;
         let mut total_size = 0;
@@ -4758,7 +4793,7 @@ impl AccountsDb {
                         let account = &iter_item.value().account;
                         let should_flush = should_flush_f
                             .as_mut()
-                            .map(|should_flush_f| should_flush_f(key, account))
+                            .map(|should_flush_f| should_flush_f(key, account, **slot))
                             .unwrap_or(true);
                         if should_flush {
                             let hash = iter_item.value().hash();
@@ -4843,7 +4878,7 @@ impl AccountsDb {
         &self,
         new_slot: Slot,
         slots: &[Slot],
-        mut should_flush_f: Option<&mut impl FnMut(&Pubkey, &AccountSharedData) -> bool>,
+        mut should_flush_f: Option<&mut impl FnMut(&Pubkey, &AccountSharedData, Slot) -> bool>,
     ) -> Option<Vec<FlushStats>> {
         {
             let mut slots_under_contention = self
