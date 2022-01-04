@@ -1450,8 +1450,8 @@ fn test_program_bpf_instruction_introspection() {
 
     // Passing transaction
     let account_metas = vec![
-        AccountMeta::new(program_id, false),
-        AccountMeta::new(sysvar::instructions::id(), false),
+        AccountMeta::new_readonly(program_id, false),
+        AccountMeta::new_readonly(sysvar::instructions::id(), false),
     ];
     let instruction0 = Instruction::new_with_bytes(program_id, &[0u8, 0u8], account_metas.clone());
     let instruction1 = Instruction::new_with_bytes(program_id, &[0u8, 1u8], account_metas.clone());
@@ -1743,7 +1743,6 @@ fn test_program_bpf_upgrade() {
         program_id,
         &[0],
         vec![
-            AccountMeta::new(program_id.clone(), false),
             AccountMeta::new(clock::id(), false),
         ],
     );
@@ -1838,7 +1837,6 @@ fn test_program_bpf_upgrade_and_invoke_in_same_tx() {
         program_id,
         &[0],
         vec![
-            AccountMeta::new(program_id.clone(), false),
             AccountMeta::new(clock::id(), false),
         ],
     );
@@ -1925,7 +1923,6 @@ fn test_program_bpf_invoke_upgradeable_via_cpi() {
         invoke_and_return,
         &[0],
         vec![
-            AccountMeta::new_readonly(program_id, false),
             AccountMeta::new_readonly(program_id, false),
             AccountMeta::new_readonly(clock::id(), false),
         ],
@@ -2115,7 +2112,6 @@ fn test_program_bpf_upgrade_via_cpi() {
         &[0],
         vec![
             AccountMeta::new_readonly(program_id, false),
-            AccountMeta::new_readonly(program_id, false),
             AccountMeta::new_readonly(clock::id(), false),
         ],
     );
@@ -2218,7 +2214,6 @@ fn test_program_bpf_upgrade_self_via_cpi() {
         program_id,
         &[0],
         vec![
-            AccountMeta::new_readonly(noop_program_id, false),
             AccountMeta::new_readonly(noop_program_id, false),
             AccountMeta::new_readonly(clock::id(), false),
         ],
