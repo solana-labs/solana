@@ -2,7 +2,7 @@
 
 use {
     solana_streamer::{
-        packet::{Packet, PACKET_DATA_SIZE},
+        packet::{Meta, Packet, PACKET_DATA_SIZE},
         recvmmsg::*,
     },
     std::{net::UdpSocket, time::Instant},
@@ -44,6 +44,9 @@ pub fn test_recv_mmsg_batch_size() {
             if recv >= TEST_BATCH_SIZE {
                 break;
             }
+            packets
+                .iter_mut()
+                .for_each(|pkt| pkt.meta = Meta::default());
         }
         elapsed_in_small_batch += now.elapsed().as_nanos();
         assert_eq!(TEST_BATCH_SIZE, recv);
