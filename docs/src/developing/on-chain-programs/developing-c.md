@@ -46,7 +46,7 @@ make -C <program directory>
 
 Solana uses the [Criterion](https://github.com/Snaipe/Criterion) test framework
 and tests are executed each time the program is built [How to
-Build](#how-to-build)].
+Build](#how-to-build).
 
 To add tests, create a new file next to your source file named `test_<program name>.c` and populate it with criterion test cases. For an example see the
 [helloworld C
@@ -65,7 +65,7 @@ see the [overview](overview#loaders).
 Currently there are two supported loaders [BPF
 Loader](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/bpf_loader.rs#L17)
 and [BPF loader
-deprecated](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/bpf_loader_deprecated.rs#L14)
+deprecated](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/bpf_loader_deprecated.rs#L14).
 
 They both have the same raw entrypoint definition, the following is the raw
 symbol that the runtime looks up and calls:
