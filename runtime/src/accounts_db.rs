@@ -4566,11 +4566,15 @@ impl AccountsDb {
             (0..((excess_slot_count / FLUSH_WINDOW_SIZE) + 1))
                 .into_iter()
                 .for_each(|chunk_index| {
-                    let old_slots = &old_slots[chunk_index * FLUSH_WINDOW_SIZE..];
+                    let start = chunk_index * FLUSH_WINDOW_SIZE;
+                    let end = std::cmp::min(start + FLUSH_WINDOW_SIZE, excess_slot_count);
+                    let old_slots = &old_slots[start..end];
+                    if old_slots.len() == 0 || !self.should_aggressively_flush_cache() {
+                        return;
+                    }
                     // Don't flush slots that are known to be unrooted
                     if old_slots
                         .iter()
-                        .take(FLUSH_WINDOW_SIZE)
                         .all(|old_slot| *old_slot > max_flushed_root)
                     {
                         if let Some(stats) = self.flush_slot_cache(
@@ -4866,29 +4870,15 @@ impl AccountsDb {
             }
         }
 
-        let flush_stats = Some(
-            slots
-                .iter()
-                .filter_map(|slot| {
-                    self.accounts_cache.slot_cache(*slot).map(|slot_cache| {
-                        #[cfg(test)]
-                        {
-                            // Give some time for cache flushing to occur here for unit tests
-                            sleep(Duration::from_millis(self.load_delay));
+        let flush_stats = Some(vec![{
+            let mut data = Vec::default();
+            slots.iter().for_each(|slot| {
+                if let Some(slot_cache) = self.accounts_cache.slot_cache(*slot) {
+                    data.push((*slot, slot_cache));
                         }
-                        // Since we added the slot to `slots_under_contention` AND this slot
-                        // still exists in the cache, we know the slot cannot be removed
-                        // by any other threads past this point. We are now responsible for
-                        // flushing this slot.
-                        self.do_flush_slot_cache(
-                            new_slot,
-                            &[(*slot, slot_cache)],
-                            &mut should_flush_f,
-                        )
-                    })
-                })
-                .collect::<Vec<_>>(),
-        );
+            });
+            self.do_flush_slot_cache(new_slot, &data, &mut should_flush_f)
+        }]);
 
         // Nobody else should have been purging this slot, so should not have been removed
         // from `self.remove_unrooted_slots_synchronization`.
@@ -11610,10 +11600,12 @@ pub mod tests {
                         db.accounts_cache
                             .slot_cache(unrooted_slot as Slot)
                             .is_some(),
-                        "unrooted_slot: {}, total_slots: {}, expected_size: {}",
+                        "unrooted_slot: {}, total_slots: {}, expected_size: {}, num_unrooted: {}, max_cache_slots: {}",
                         unrooted_slot,
                         total_slots,
-                        expected_size
+                        expected_size,
+                        num_unrooted,
+                        max_cache_slots(),
                     );
                 }
             }
