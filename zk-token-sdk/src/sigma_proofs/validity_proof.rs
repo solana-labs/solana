@@ -8,7 +8,7 @@ use {
     rand::rngs::OsRng,
 };
 use {
-    crate::{errors::ProofError, transcript::TranscriptProtocol},
+    crate::{sigma_proofs::errors::ValidityProofError, transcript::TranscriptProtocol},
     arrayref::{array_ref, array_refs},
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
@@ -87,7 +87,7 @@ impl ValidityProof {
         handle_dest: (&PedersenDecryptHandle, &PedersenDecryptHandle),
         handle_auditor: (&PedersenDecryptHandle, &PedersenDecryptHandle),
         transcript: &mut Transcript,
-    ) -> Result<(), ProofError> {
+    ) -> Result<(), ValidityProofError> {
         // extract the relevant scalar and Ristretto points from the inputs
         let G = PedersenBase::default().G;
         let H = PedersenBase::default().H;
@@ -103,9 +103,9 @@ impl ValidityProof {
         let ww = w * w;
 
         // check the required algebraic conditions
-        let Y_0 = self.Y_0.decompress().ok_or(ProofError::VerificationError)?;
-        let Y_1 = self.Y_1.decompress().ok_or(ProofError::VerificationError)?;
-        let Y_2 = self.Y_2.decompress().ok_or(ProofError::VerificationError)?;
+        let Y_0 = self.Y_0.decompress().ok_or(ValidityProofError::FormatError)?;
+        let Y_1 = self.Y_1.decompress().ok_or(ValidityProofError::FormatError)?;
+        let Y_2 = self.Y_2.decompress().ok_or(ValidityProofError::FormatError)?;
 
         let P_dest = elgamal_pubkey_dest.get_point();
         let P_auditor = elgamal_pubkey_auditor.get_point();
@@ -133,7 +133,7 @@ impl ValidityProof {
         if check.is_identity() {
             Ok(())
         } else {
-            Err(ProofError::VerificationError)
+            Err(ValidityProofError::AlgebraicRelationError)
         }
     }
 
@@ -147,7 +147,7 @@ impl ValidityProof {
         buf
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ProofError> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ValidityProofError> {
         let bytes = array_ref![bytes, 0, 160];
         let (Y_0, Y_1, Y_2, z_r, z_x) = array_refs![bytes, 32, 32, 32, 32, 32];
 
@@ -155,8 +155,8 @@ impl ValidityProof {
         let Y_1 = CompressedRistretto::from_slice(Y_1);
         let Y_2 = CompressedRistretto::from_slice(Y_2);
 
-        let z_r = Scalar::from_canonical_bytes(*z_r).ok_or(ProofError::FormatError)?;
-        let z_x = Scalar::from_canonical_bytes(*z_x).ok_or(ProofError::FormatError)?;
+        let z_r = Scalar::from_canonical_bytes(*z_r).ok_or(ValidityProofError::FormatError)?;
+        let z_x = Scalar::from_canonical_bytes(*z_x).ok_or(ValidityProofError::FormatError)?;
 
         Ok(ValidityProof {
             Y_0,

@@ -4,7 +4,7 @@ use {
     rand::rngs::OsRng,
 };
 use {
-    crate::{errors::ProofError, transcript::TranscriptProtocol},
+    crate::{sigma_proofs::errors::FeeProofError, transcript::TranscriptProtocol},
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
@@ -172,7 +172,7 @@ impl FeeProof {
         commitment_delta_real: PedersenCommitment,
         commitment_delta_claimed: PedersenCommitment,
         transcript: &mut Transcript,
-    ) -> Result<(), ProofError> {
+    ) -> Result<(), FeeProofError> {
         // extract the relevant scalar and Ristretto points from the input
         let G = PedersenBase::default().G;
         let H = PedersenBase::default().H;
@@ -202,19 +202,19 @@ impl FeeProof {
             .fee_max_proof
             .Y_max
             .decompress()
-            .ok_or(ProofError::VerificationError)?;
+            .ok_or(FeeProofError::FormatError)?;
         let z_max = self.fee_max_proof.z_max;
 
         let Y_delta_real = self
             .fee_equality_proof
             .Y_delta_real
             .decompress()
-            .ok_or(ProofError::VerificationError)?;
+            .ok_or(FeeProofError::FormatError)?;
         let Y_delta_claimed = self
             .fee_equality_proof
             .Y_delta_claimed
             .decompress()
-            .ok_or(ProofError::VerificationError)?;
+            .ok_or(FeeProofError::FormatError)?;
         let z_x = self.fee_equality_proof.z_x;
         let z_delta_real = self.fee_equality_proof.z_delta_real;
         let z_delta_claimed = self.fee_equality_proof.z_delta_claimed;
@@ -262,7 +262,7 @@ impl FeeProof {
         if check.is_identity() {
             Ok(())
         } else {
-            Err(ProofError::VerificationError)
+            Err(FeeProofError::AlgebraicRelationError)
         }
     }
 }

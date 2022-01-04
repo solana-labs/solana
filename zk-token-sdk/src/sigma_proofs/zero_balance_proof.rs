@@ -8,7 +8,7 @@ use {
     rand::rngs::OsRng,
 };
 use {
-    crate::{errors::ProofError, transcript::TranscriptProtocol},
+    crate::{sigma_proofs::errors::ZeroBalanceProofError, transcript::TranscriptProtocol},
     arrayref::{array_ref, array_refs},
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
@@ -68,7 +68,7 @@ impl ZeroBalanceProof {
         elgamal_pubkey: &ElGamalPubkey,
         elgamal_ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
-    ) -> Result<(), ProofError> {
+    ) -> Result<(), ZeroBalanceProofError> {
         // extract the relevant scalar and Ristretto points from the input
         let P = elgamal_pubkey.get_point();
         let C = elgamal_ciphertext.message_comm.get_point();
@@ -89,8 +89,8 @@ impl ZeroBalanceProof {
         let w = transcript.challenge_scalar(b"w"); // w used for multiscalar multiplication verification
 
         // decompress R or return verification error
-        let Y_P = self.Y_P.decompress().ok_or(ProofError::VerificationError)?;
-        let Y_D = self.Y_D.decompress().ok_or(ProofError::VerificationError)?;
+        let Y_P = self.Y_P.decompress().ok_or(ZeroBalanceProofError::FormatError)?;
+        let Y_D = self.Y_D.decompress().ok_or(ZeroBalanceProofError::FormatError)?;
         let z = self.z;
 
         // check the required algebraic relation
@@ -102,7 +102,7 @@ impl ZeroBalanceProof {
         if check.is_identity() {
             Ok(())
         } else {
-            Err(ProofError::VerificationError)
+            Err(ZeroBalanceProofError::AlgebraicRelationError)
         }
     }
 
@@ -114,14 +114,14 @@ impl ZeroBalanceProof {
         buf
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ProofError> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ZeroBalanceProofError> {
         let bytes = array_ref![bytes, 0, 96];
         let (Y_P, Y_D, z) = array_refs![bytes, 32, 32, 32];
 
         let Y_P = CompressedRistretto::from_slice(Y_P);
         let Y_D = CompressedRistretto::from_slice(Y_D);
 
-        let z = Scalar::from_canonical_bytes(*z).ok_or(ProofError::FormatError)?;
+        let z = Scalar::from_canonical_bytes(*z).ok_or(ZeroBalanceProofError::FormatError)?;
 
         Ok(ZeroBalanceProof { Y_P, Y_D, z })
     }
