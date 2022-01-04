@@ -1,7 +1,7 @@
 #![allow(clippy::integer_arithmetic)]
 use {
     clap::{crate_description, crate_name, value_t, App, Arg},
-    crossbeam_channel::unbounded,
+    crossbeam_channel::{unbounded, Receiver},
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
@@ -28,7 +28,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     std::{
-        sync::{atomic::Ordering, mpsc::Receiver, Arc, Mutex, RwLock},
+        sync::{atomic::Ordering, Arc, Mutex, RwLock},
         thread::sleep,
         time::{Duration, Instant},
     },

@@ -10,9 +10,7 @@ use {
         repair_service::{OutstandingShredRepairs, RepairInfo, RepairService},
         result::{Error, Result},
     },
-    crossbeam_channel::{
-        unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
-    },
+    crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
     rayon::{prelude::*, ThreadPool},
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
@@ -32,7 +30,6 @@ use {
         net::{SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, Ordering},
-            mpsc::Sender,
             Arc, RwLock,
         },
         thread::{self, Builder, JoinHandle},
@@ -40,8 +37,8 @@ use {
     },
 };
 
-type DuplicateSlotSender = CrossbeamSender<Slot>;
-pub(crate) type DuplicateSlotReceiver = CrossbeamReceiver<Slot>;
+type DuplicateSlotSender = Sender<Slot>;
+pub(crate) type DuplicateSlotReceiver = Receiver<Slot>;
 
 #[derive(Default)]
 struct WindowServiceMetrics {
@@ -97,8 +94,8 @@ impl WindowServiceMetrics {
     fn record_error(&mut self, err: &Error) {
         self.num_errors += 1;
         match err {
-            Error::TryCrossbeamSend => self.num_errors_try_crossbeam_send += 1,
-            Error::CrossbeamRecvTimeout(_) => self.num_errors_cross_beam_recv_timeout += 1,
+            Error::TrySend => self.num_errors_try_crossbeam_send += 1,
+            Error::RecvTimeout(_) => self.num_errors_cross_beam_recv_timeout += 1,
             Error::Blockstore(err) => {
                 self.num_errors_blockstore += 1;
                 error!("blockstore error: {}", err);
@@ -211,7 +208,7 @@ pub(crate) fn should_retransmit_and_persist(
 fn run_check_duplicate(
     cluster_info: &ClusterInfo,
     blockstore: &Blockstore,
-    shred_receiver: &CrossbeamReceiver<Shred>,
+    shred_receiver: &Receiver<Shred>,
     duplicate_slot_sender: &DuplicateSlotSender,
 ) -> Result<()> {
     let check_duplicate = |shred: Shred| -> Result<()> {
@@ -287,7 +284,7 @@ fn prune_shreds_invalid_repair(
 }
 
 fn run_insert<F>(
-    shred_receiver: &CrossbeamReceiver<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
+    shred_receiver: &Receiver<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
     blockstore: &Blockstore,
     leader_schedule_cache: &LeaderScheduleCache,
     handle_duplicate: F,
@@ -345,8 +342,8 @@ where
 fn recv_window<F>(
     blockstore: &Blockstore,
     bank_forks: &RwLock<BankForks>,
-    insert_shred_sender: &CrossbeamSender<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
-    verified_receiver: &CrossbeamReceiver<Vec<PacketBatch>>,
+    insert_shred_sender: &Sender<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
+    verified_receiver: &Receiver<Vec<PacketBatch>>,
     retransmit_sender: &Sender<Vec<Shred>>,
     shred_filter: F,
     thread_pool: &ThreadPool,
@@ -451,7 +448,7 @@ impl WindowService {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new<F>(
         blockstore: Arc<Blockstore>,
-        verified_receiver: CrossbeamReceiver<Vec<PacketBatch>>,
+        verified_receiver: Receiver<Vec<PacketBatch>>,
         retransmit_sender: Sender<Vec<Shred>>,
         repair_socket: Arc<UdpSocket>,
         ancestor_hashes_socket: Arc<UdpSocket>,
@@ -532,7 +529,7 @@ impl WindowService {
         cluster_info: Arc<ClusterInfo>,
         exit: Arc<AtomicBool>,
         blockstore: Arc<Blockstore>,
-        duplicate_receiver: CrossbeamReceiver<Shred>,
+        duplicate_receiver: Receiver<Shred>,
         duplicate_slot_sender: DuplicateSlotSender,
     ) -> JoinHandle<()> {
         let handle_error = || {
@@ -564,8 +561,8 @@ impl WindowService {
         exit: Arc<AtomicBool>,
         blockstore: Arc<Blockstore>,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
-        insert_receiver: CrossbeamReceiver<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
-        check_duplicate_sender: CrossbeamSender<Shred>,
+        insert_receiver: Receiver<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
+        check_duplicate_sender: Sender<Shred>,
         completed_data_sets_sender: CompletedDataSetsSender,
         retransmit_sender: Sender<Vec<Shred>>,
         outstanding_requests: Arc<RwLock<OutstandingShredRepairs>>,
@@ -623,8 +620,8 @@ impl WindowService {
         id: Pubkey,
         exit: Arc<AtomicBool>,
         blockstore: Arc<Blockstore>,
-        insert_sender: CrossbeamSender<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
-        verified_receiver: CrossbeamReceiver<Vec<PacketBatch>>,
+        insert_sender: Sender<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
+        verified_receiver: Receiver<Vec<PacketBatch>>,
         shred_filter: F,
         bank_forks: Arc<RwLock<BankForks>>,
         retransmit_sender: Sender<Vec<Shred>>,
@@ -688,12 +685,12 @@ impl WindowService {
         H: Fn(),
     {
         match e {
-            Error::CrossbeamRecvTimeout(RecvTimeoutError::Disconnected) => true,
-            Error::CrossbeamRecvTimeout(RecvTimeoutError::Timeout) => {
+            Error::RecvTimeout(RecvTimeoutError::Disconnected) => true,
+            Error::RecvTimeout(RecvTimeoutError::Timeout) => {
                 handle_timeout();
                 false
             }
-            Error::CrossbeamSend => true,
+            Error::Send => true,
             _ => {
                 handle_error();
                 error!("thread {:?} error {:?}", thread::current().name(), e);

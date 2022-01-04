@@ -2,6 +2,7 @@
 
 use {
     crate::packet_hasher::PacketHasher,
+    crossbeam_channel::unbounded,
     lru::LruCache,
     solana_ledger::shred::{get_shred_slot_index_type, ShredFetchStats},
     solana_perf::{
@@ -14,7 +15,7 @@ use {
     solana_streamer::streamer::{self, PacketBatchReceiver, PacketBatchSender},
     std::{
         net::UdpSocket,
-        sync::{atomic::AtomicBool, mpsc::channel, Arc, RwLock},
+        sync::{atomic::AtomicBool, Arc, RwLock},
         thread::{self, Builder, JoinHandle},
         time::Instant,
     },
@@ -142,7 +143,7 @@ impl ShredFetchStage {
     where
         F: Fn(&mut Packet) + Send + 'static,
     {
-        let (packet_sender, packet_receiver) = channel();
+        let (packet_sender, packet_receiver) = unbounded();
         let streamers = sockets
             .into_iter()
             .map(|s| {

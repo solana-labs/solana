@@ -1,12 +1,13 @@
 use {
     crate::result::Result,
+    crossbeam_channel::Receiver,
     solana_entry::entry::Entry,
     solana_ledger::shred::Shred,
     solana_poh::poh_recorder::WorkingBankEntry,
     solana_runtime::bank::Bank,
     solana_sdk::clock::Slot,
     std::{
-        sync::{mpsc::Receiver, Arc},
+        sync::Arc,
         time::{Duration, Instant},
     },
 };

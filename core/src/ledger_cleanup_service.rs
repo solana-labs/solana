@@ -1,6 +1,7 @@
 //! The `ledger_cleanup_service` drops older ledger data to limit disk space usage
 
 use {
+    crossbeam_channel::{Receiver, RecvTimeoutError},
     rand::{thread_rng, Rng},
     solana_ledger::{
         blockstore::{Blockstore, PurgeType},
@@ -12,7 +13,6 @@ use {
         string::ToString,
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
-            mpsc::{Receiver, RecvTimeoutError},
             Arc,
         },
         thread::{self, sleep, Builder, JoinHandle},

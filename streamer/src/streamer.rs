@@ -7,6 +7,7 @@ use {
         recvmmsg::NUM_RCVMMSGS,
         socket::SocketAddrSpace,
     },
+    crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
     histogram::Histogram,
     solana_sdk::{packet::Packet, timing::timestamp},
     std::{
@@ -15,7 +16,6 @@ use {
         net::UdpSocket,
         sync::{
             atomic::{AtomicBool, Ordering},
-            mpsc::{Receiver, RecvTimeoutError, SendError, Sender},
             Arc,
         },
         thread::{Builder, JoinHandle},

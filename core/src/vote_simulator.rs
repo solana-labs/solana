@@ -13,6 +13,7 @@ use {
         replay_stage::{HeaviestForkFailures, ReplayStage},
         unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
     },
+    crossbeam_channel::unbounded,
     solana_runtime::{
         accounts_background_service::AbsRequestSender,
         bank::Bank,
@@ -204,7 +205,7 @@ impl VoteSimulator {
     }
 
     pub fn set_root(&mut self, new_root: Slot) {
-        let (drop_bank_sender, _drop_bank_receiver) = std::sync::mpsc::channel();
+        let (drop_bank_sender, _drop_bank_receiver) = unbounded();
         ReplayStage::handle_new_root(
             new_root,
             &self.bank_forks,

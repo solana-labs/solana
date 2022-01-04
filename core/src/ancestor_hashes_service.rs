@@ -29,7 +29,6 @@ use {
         net::UdpSocket,
         sync::{
             atomic::{AtomicBool, Ordering},
-            mpsc::channel,
             Arc, RwLock,
         },
         thread::{self, sleep, Builder, JoinHandle},
@@ -147,7 +146,7 @@ impl AncestorHashesService {
     ) -> Self {
         let outstanding_requests: Arc<RwLock<OutstandingAncestorHashesRepairs>> =
             Arc::new(RwLock::new(OutstandingAncestorHashesRepairs::default()));
-        let (response_sender, response_receiver) = channel();
+        let (response_sender, response_receiver) = unbounded();
         let t_receiver = streamer::receiver(
             ancestor_hashes_request_socket.clone(),
             &exit,
@@ -896,8 +895,8 @@ mod test {
             // Set up thread to give us responses
             let ledger_path = get_tmp_ledger_path!();
             let exit = Arc::new(AtomicBool::new(false));
-            let (requests_sender, requests_receiver) = channel();
-            let (response_sender, response_receiver) = channel();
+            let (requests_sender, requests_receiver) = unbounded();
+            let (response_sender, response_receiver) = unbounded();
 
             // Set up blockstore for responses
             let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());

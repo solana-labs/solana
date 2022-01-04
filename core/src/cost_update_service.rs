@@ -4,6 +4,7 @@
 //! table to blockstore.
 
 use {
+    crossbeam_channel::Receiver,
     solana_ledger::blockstore::Blockstore,
     solana_measure::measure::Measure,
     solana_runtime::{
@@ -14,7 +15,6 @@ use {
     std::{
         sync::{
             atomic::{AtomicBool, Ordering},
-            mpsc::Receiver,
             Arc, RwLock,
         },
         thread::{self, Builder, JoinHandle},
