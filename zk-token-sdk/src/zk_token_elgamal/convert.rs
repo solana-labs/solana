@@ -21,8 +21,9 @@ mod target_arch {
                 pedersen::{PedersenCommitment, PedersenDecryptHandle},
             },
             errors::ProofError,
-            range_proof::RangeProof,
+            range_proof::{errors::RangeProofError, RangeProof},
             sigma_proofs::{
+                errors::*,
                 equality_proof::EqualityProof, validity_proof::ValidityProof,
                 zero_balance_proof::ZeroBalanceProof,
             },
@@ -151,7 +152,7 @@ mod target_arch {
     }
 
     impl TryFrom<pod::EqualityProof> for EqualityProof {
-        type Error = ProofError;
+        type Error = EqualityProofError;
 
         fn try_from(pod: pod::EqualityProof) -> Result<Self, Self::Error> {
             Self::from_bytes(&pod.0)
@@ -165,7 +166,7 @@ mod target_arch {
     }
 
     impl TryFrom<pod::ValidityProof> for ValidityProof {
-        type Error = ProofError;
+        type Error = ValidityProofError;
 
         fn try_from(pod: pod::ValidityProof) -> Result<Self, Self::Error> {
             Self::from_bytes(&pod.0)
@@ -179,7 +180,7 @@ mod target_arch {
     }
 
     impl TryFrom<pod::ZeroBalanceProof> for ZeroBalanceProof {
-        type Error = ProofError;
+        type Error = ZeroBalanceProofError;
 
         fn try_from(pod: pod::ZeroBalanceProof) -> Result<Self, Self::Error> {
             Self::from_bytes(&pod.0)
@@ -187,11 +188,11 @@ mod target_arch {
     }
 
     impl TryFrom<RangeProof> for pod::RangeProof64 {
-        type Error = ProofError;
+        type Error = RangeProofError;
 
         fn try_from(proof: RangeProof) -> Result<Self, Self::Error> {
             if proof.ipp_proof.serialized_size() != 448 {
-                return Err(ProofError::VerificationError);
+                return Err(RangeProofError::FormatError);
             }
 
             let mut buf = [0_u8; 672];
@@ -208,7 +209,7 @@ mod target_arch {
     }
 
     impl TryFrom<pod::RangeProof64> for RangeProof {
-        type Error = ProofError;
+        type Error = RangeProofError;
 
         fn try_from(pod: pod::RangeProof64) -> Result<Self, Self::Error> {
             Self::from_bytes(&pod.0)
@@ -217,11 +218,11 @@ mod target_arch {
 
     #[cfg(not(target_arch = "bpf"))]
     impl TryFrom<RangeProof> for pod::RangeProof128 {
-        type Error = ProofError;
+        type Error = RangeProofError;
 
         fn try_from(proof: RangeProof) -> Result<Self, Self::Error> {
             if proof.ipp_proof.serialized_size() != 512 {
-                return Err(ProofError::VerificationError);
+                return Err(RangeProofError::FormatError);
             }
 
             let mut buf = [0_u8; 736];
@@ -238,7 +239,7 @@ mod target_arch {
     }
 
     impl TryFrom<pod::RangeProof128> for RangeProof {
-        type Error = ProofError;
+        type Error = RangeProofError;
 
         fn try_from(pod: pod::RangeProof128) -> Result<Self, Self::Error> {
             Self::from_bytes(&pod.0)
@@ -266,7 +267,7 @@ mod tests {
         let mut transcript_create = Transcript::new(b"Test");
         let mut transcript_verify = Transcript::new(b"Test");
 
-        let proof = RangeProof::create(vec![55], vec![64], vec![&open], &mut transcript_create);
+        let proof = RangeProof::new(vec![55], vec![64], vec![&open], &mut transcript_create);
 
         let proof_serialized: pod::RangeProof64 = proof.try_into().unwrap();
         let proof_deserialized: RangeProof = proof_serialized.try_into().unwrap();
@@ -280,7 +281,7 @@ mod tests {
             .is_ok());
 
         // should fail to serialize to pod::RangeProof128
-        let proof = RangeProof::create(vec![55], vec![64], vec![&open], &mut transcript_create);
+        let proof = RangeProof::new(vec![55], vec![64], vec![&open], &mut transcript_create);
 
         assert!(TryInto::<pod::RangeProof128>::try_into(proof).is_err());
     }
@@ -294,7 +295,7 @@ mod tests {
         let mut transcript_create = Transcript::new(b"Test");
         let mut transcript_verify = Transcript::new(b"Test");
 
-        let proof = RangeProof::create(
+        let proof = RangeProof::new(
             vec![55, 77, 99],
             vec![64, 32, 32],
             vec![&open_1, &open_2, &open_3],
@@ -317,7 +318,7 @@ mod tests {
             .is_ok());
 
         // should fail to serialize to pod::RangeProof64
-        let proof = RangeProof::create(
+        let proof = RangeProof::new(
             vec![55, 77, 99],
             vec![64, 32, 32],
             vec![&open_1, &open_2, &open_3],

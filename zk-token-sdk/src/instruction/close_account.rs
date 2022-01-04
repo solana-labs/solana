@@ -99,7 +99,8 @@ impl CloseAccountProof {
 
         // verify zero balance proof
         let proof: ZeroBalanceProof = self.proof.try_into()?;
-        proof.verify(elgamal_pubkey, balance, &mut transcript)
+        proof.verify(elgamal_pubkey, balance, &mut transcript)?;
+        Ok(())
     }
 }
 

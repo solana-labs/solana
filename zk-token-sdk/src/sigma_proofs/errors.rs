@@ -3,7 +3,7 @@ use thiserror::Error;
 use crate::errors::TranscriptError;
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
-pub enum EqualityProof {
+pub enum EqualityProofError {
     #[error("the required algebraic relation does not hold")]
     AlgebraicRelationError,
     #[error("malformed proof")]
@@ -14,14 +14,14 @@ pub enum EqualityProof {
     TranscriptError,
 }
 
-impl From<TranscriptError> for EqualityProof {
-    fn from(err: TranscriptError) -> Self {
+impl From<TranscriptError> for EqualityProofError {
+    fn from(_err: TranscriptError) -> Self {
         Self::TranscriptError
     }
 }
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
-pub enum ValidityProof {
+pub enum ValidityProofError {
     #[error("the required algebraic relation does not hold")]
     AlgebraicRelationError,
     #[error("malformed proof")]
@@ -32,14 +32,14 @@ pub enum ValidityProof {
     TranscriptError,
 }
 
-impl From<TranscriptError> for ValidityProof {
-    fn from(err: TranscriptError) -> Self {
+impl From<TranscriptError> for ValidityProofError {
+    fn from(_err: TranscriptError) -> Self {
         Self::TranscriptError
     }
 }
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
-pub enum ZeroBalanceProof {
+pub enum ZeroBalanceProofError {
     #[error("the required algebraic relation does not hold")]
     AlgebraicRelationError,
     #[error("malformed proof")]
@@ -50,8 +50,26 @@ pub enum ZeroBalanceProof {
     TranscriptError,
 }
 
-impl From<TranscriptError> for ZeroBalanceProof {
-    fn from(err: TranscriptError) -> Self {
+impl From<TranscriptError> for ZeroBalanceProofError {
+    fn from(_err: TranscriptError) -> Self {
+        Self::TranscriptError
+    }
+}
+
+#[derive(Error, Clone, Debug, Eq, PartialEq)]
+pub enum FeeProofError {
+    #[error("the required algebraic relation does not hold")]
+    AlgebraicRelationError,
+    #[error("malformed proof")]
+    FormatError,
+    #[error("multiscalar multiplication failed")]
+    MultiscalarMulError,
+    #[error("transcript failed to produce a challenge")]
+    TranscriptError,
+}
+
+impl From<TranscriptError> for FeeProofError {
+    fn from(_err: TranscriptError) -> Self {
         Self::TranscriptError
     }
 }

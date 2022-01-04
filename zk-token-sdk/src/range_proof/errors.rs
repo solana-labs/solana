@@ -21,7 +21,7 @@ pub enum RangeProofError {
 }
 
 impl From<TranscriptError> for RangeProofError {
-    fn from(err: TranscriptError) -> Self {
+    fn from(_err: TranscriptError) -> Self {
         Self::TranscriptError
     }
 }
