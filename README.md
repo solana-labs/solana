@@ -38,12 +38,6 @@ $ sudo apt-get update
 $ sudo apt-get install libssl-dev libudev-dev pkg-config zlib1g-dev llvm clang make
 ```
 
-On Mac M1s, make sure you set up your terminal & homebrew [to use](https://5balloons.info/correct-way-to-install-and-use-homebrew-on-m1-macs/) Rosetta. You can install it with:
-
-```bash
-$ softwareupdate --install-rosetta
-```
-
 ## **2. Download the source code.**
 
 ```bash
