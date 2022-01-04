@@ -519,6 +519,16 @@ pub struct TransactionExecutionDetails {
     pub durable_nonce_fee: Option<DurableNonceFee>,
 }
 
+/// Type safe representation of a transaction execution attempt which
+/// differentiates between a transaction that was executed (will be
+/// committed to the ledger) and a transaction which wasn't executed
+/// and will be dropped.
+///
+/// Note: `Result<TransactionExecutionDetails, TransactionError>` is not
+/// used because it's easy to forget that the inner `details.status` field
+/// is what should be checked to detect a successful transaction. This
+/// enum provides a convenience method `Self::was_executed_successfully` to
+/// make such checks hard to do incorrectly.
 #[derive(Debug, Clone)]
 pub enum TransactionExecutionResult {
     Executed(TransactionExecutionDetails),
@@ -3263,12 +3273,16 @@ impl Bank {
         debug!("simulate_transaction: {:?}", timings);
 
         let execution_result = execution_results.pop().unwrap();
+        let flattened_result = execution_result.flattened_result();
+        let logs = match execution_result {
+            TransactionExecutionResult::Executed(details) => details.log_messages,
+            TransactionExecutionResult::NotExecuted(_) => None,
+        }
+        .unwrap_or_default();
+
         TransactionSimulationResult {
-            result: execution_result.flattened_result(),
-            logs: execution_result
-                .details()
-                .and_then(|details| details.log_messages.clone())
-                .unwrap_or_default(),
+            result: flattened_result,
+            logs,
             post_simulation_accounts,
             units_consumed,
         }
