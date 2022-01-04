@@ -495,19 +495,29 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     } else {
                         reclaims.push(new_item);
                     }
-                    /*
-                    assert!(slot_list
-                        .iter()
-                        .skip(slot_list_index + 1)
-                        .all(|(slot, _)| *slot != new_slot));
-                        not sure about this
-                        */
-
-                    if other_slot.is_none() {
+                    if let Some(other_slot) = other_slot {
+                        (slot_list_index + 1..slot_list).iter().rev().for_each(|i| {
+                            let found_slot = slot_list[i];
+                            if found_slot == new_slot || found_slot == other_slot {
+                                let removed = slot_list.remove(i);
+                                if previous_slot_entry_was_cached {
+                                    assert!(is_cur_account_cached);
+                                } else {
+                                    reclaims.push(removed);
+                                }
+                                
+                            }
+                        });
+                    }
+                    else {
+                        assert!(slot_list
+                            .iter()
+                            .skip(slot_list_index + 1)
+                            .all(|(slot, _)| *slot != new_slot));
                         // If there's no `old_slot`, then we've found and updated the only account.
                         // Return early!
-                        return is_cur_account_cached && !is_new_account_cached;
                     }
+                    return is_cur_account_cached && !is_new_account_cached;
                 } else {
                     // If the new account has already been swapped into the slot list in a previous
                     // iteration, then just remove this second dirty account.
