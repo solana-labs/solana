@@ -14,10 +14,9 @@ use {
 };
 
 #[cfg(not(target_os = "linux"))]
-pub fn recv_mmsg(socket: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize, usize)> {
+pub fn recv_mmsg(socket: &UdpSocket, packets: &mut [Packet]) -> io::Result</*num packets:*/ usize> {
     let mut i = 0;
     let count = cmp::min(NUM_RCVMMSGS, packets.len());
-    let mut total_size = 0;
     for p in packets.iter_mut().take(count) {
         p.meta.size = 0;
         match socket.recv_from(&mut p.data) {
@@ -28,7 +27,6 @@ pub fn recv_mmsg(socket: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usiz
                 return Err(e);
             }
             Ok((nrecv, from)) => {
-                total_size += nrecv;
                 p.meta.size = nrecv;
                 p.meta.set_addr(&from);
                 if i == 0 {
@@ -38,7 +36,7 @@ pub fn recv_mmsg(socket: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usiz
         }
         i += 1;
     }
-    Ok((total_size, i))
+    Ok(i)
 }
 
 #[cfg(target_os = "linux")]
@@ -67,7 +65,7 @@ fn cast_socket_addr(addr: &sockaddr_storage, hdr: &mmsghdr) -> Option<InetAddr> 
 
 #[cfg(target_os = "linux")]
 #[allow(clippy::uninit_assumed_init)]
-pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize, usize)> {
+pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result</*num packets:*/ usize> {
     const SOCKADDR_STORAGE_SIZE: usize = mem::size_of::<sockaddr_storage>();
 
     let mut hdrs: [mmsghdr; NUM_RCVMMSGS] = unsafe { mem::zeroed() };
@@ -99,7 +97,6 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize,
         return Err(io::Error::last_os_error());
     }
     let mut npkts = 0;
-    let mut total_size = 0;
 
     izip!(addrs, hdrs, packets.iter_mut())
         .take(nrecv as usize)
@@ -111,9 +108,8 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize,
             pkt.meta.size = hdr.msg_len as usize;
             pkt.meta.set_addr(&addr);
             npkts += 1;
-            total_size += pkt.meta.size;
         });
-    Ok((total_size, npkts))
+    Ok(npkts)
 }
 
 #[cfg(test)]
@@ -147,7 +143,7 @@ mod tests {
             }
 
             let mut packets = vec![Packet::default(); TEST_NUM_MSGS];
-            let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
+            let recv = recv_mmsg(&reader, &mut packets[..]).unwrap();
             assert_eq!(sent, recv);
             for packet in packets.iter().take(recv) {
                 assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
@@ -173,14 +169,14 @@ mod tests {
             }
 
             let mut packets = vec![Packet::default(); TEST_NUM_MSGS];
-            let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
+            let recv = recv_mmsg(&reader, &mut packets[..]).unwrap();
             assert_eq!(TEST_NUM_MSGS, recv);
             for packet in packets.iter().take(recv) {
                 assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
                 assert_eq!(packet.meta.addr(), saddr);
             }
 
-            let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
+            let recv = recv_mmsg(&reader, &mut packets[..]).unwrap();
             assert_eq!(sent - TEST_NUM_MSGS, recv);
             for packet in packets.iter().take(recv) {
                 assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
@@ -212,7 +208,7 @@ mod tests {
 
         let start = Instant::now();
         let mut packets = vec![Packet::default(); TEST_NUM_MSGS];
-        let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
+        let recv = recv_mmsg(&reader, &mut packets[..]).unwrap();
         assert_eq!(TEST_NUM_MSGS, recv);
         for packet in packets.iter().take(recv) {
             assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
@@ -249,7 +245,7 @@ mod tests {
 
         let mut packets = vec![Packet::default(); TEST_NUM_MSGS];
 
-        let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
+        let recv = recv_mmsg(&reader, &mut packets[..]).unwrap();
         assert_eq!(TEST_NUM_MSGS, recv);
         for packet in packets.iter().take(sent1) {
             assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
@@ -260,7 +256,7 @@ mod tests {
             assert_eq!(packet.meta.addr(), saddr2);
         }
 
-        let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
+        let recv = recv_mmsg(&reader, &mut packets[..]).unwrap();
         assert_eq!(sent1 + sent2 - TEST_NUM_MSGS, recv);
         for packet in packets.iter().take(recv) {
             assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
