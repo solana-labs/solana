@@ -10,3 +10,9 @@ pub enum ProofError {
     )]
     InconsistentCTData,
 }
+
+#[derive(Error, Clone, Debug, Eq, PartialEq)]
+pub enum TranscriptError {
+    #[error("point is the identity")]
+    ValidationError,
+}

@@ -1,5 +1,5 @@
 use {
-    crate::errors::ProofError,
+    crate::errors::TranscriptError,
     curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar, traits::IsIdentity},
     merlin::Transcript,
 };
@@ -40,7 +40,7 @@ pub trait TranscriptProtocol {
         &mut self,
         label: &'static [u8],
         point: &CompressedRistretto,
-    ) -> Result<(), ProofError>;
+    ) -> Result<(), TranscriptError>;
 
     /// Compute a `label`ed challenge variable.
     fn challenge_scalar(&mut self, label: &'static [u8]) -> Scalar;
@@ -90,9 +90,9 @@ impl TranscriptProtocol for Transcript {
         &mut self,
         label: &'static [u8],
         point: &CompressedRistretto,
-    ) -> Result<(), ProofError> {
+    ) -> Result<(), TranscriptError> {
         if point.is_identity() {
-            Err(ProofError::VerificationError)
+            Err(TranscriptError::ValidationError)
         } else {
             self.append_message(label, point.as_bytes());
             Ok(())

@@ -8,8 +8,7 @@ use {
 use {
     crate::{
         encryption::pedersen::PedersenBase,
-        errors::ProofError,
-        range_proof::{generators::BulletproofGens, inner_product::InnerProductProof},
+        range_proof::{errors::RangeProofError, generators::BulletproofGens, inner_product::InnerProductProof},
         transcript::TranscriptProtocol,
     },
     core::iter,
@@ -222,7 +221,7 @@ impl RangeProof {
         comms: Vec<&CompressedRistretto>,
         bit_lengths: Vec<usize>,
         transcript: &mut Transcript,
-    ) -> Result<(), ProofError> {
+    ) -> Result<(), RangeProofError> {
         let G = PedersenBase::default().G;
         let H = PedersenBase::default().H;
 
@@ -231,11 +230,7 @@ impl RangeProof {
         let bp_gens = BulletproofGens::new(nm);
 
         if !nm.is_power_of_two() {
-            return Err(ProofError::InvalidBitsize);
-        }
-
-        if !(nm == 8 || nm == 16 || nm == 32 || nm == 64 || nm == 128) {
-            return Err(ProofError::InvalidBitsize);
+            return Err(RangeProofError::InvalidBitsize);
         }
 
         transcript.validate_and_append_point(b"A", &self.A)?;
