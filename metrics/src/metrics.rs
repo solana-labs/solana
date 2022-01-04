@@ -2,6 +2,7 @@
 
 use {
     crate::{counter::CounterPoint, datapoint::DataPoint},
+    crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
     gethostname::gethostname,
     lazy_static::lazy_static,
     log::*,
@@ -11,10 +12,7 @@ use {
         collections::HashMap,
         convert::Into,
         env,
-        sync::{
-            mpsc::{channel, Receiver, RecvTimeoutError, Sender},
-            Arc, Barrier, Mutex, Once, RwLock,
-        },
+        sync::{Arc, Barrier, Mutex, Once, RwLock},
         thread,
         time::{Duration, Instant, UNIX_EPOCH},
     },
@@ -155,7 +153,7 @@ impl MetricsAgent {
         write_frequency: Duration,
         max_points_per_sec: usize,
     ) -> Self {
-        let (sender, receiver) = channel::<MetricsCommand>();
+        let (sender, receiver) = unbounded::<MetricsCommand>();
         thread::spawn(move || Self::run(&receiver, &writer, write_frequency, max_points_per_sec));
 
         Self { sender }

@@ -5,6 +5,7 @@ use {
     },
     clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand},
     console::{style, Emoji},
+    crossbeam_channel::unbounded,
     serde::{Deserialize, Serialize},
     solana_clap_utils::{
         input_parsers::*,
@@ -1368,7 +1369,7 @@ pub fn process_ping(
     println_name_value("Source Account:", &config.signers[0].pubkey().to_string());
     println!();
 
-    let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
+    let (signal_sender, signal_receiver) = unbounded();
     ctrlc::set_handler(move || {
         let _ = signal_sender.send(());
     })

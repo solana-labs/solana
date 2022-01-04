@@ -7,6 +7,7 @@
 use {
     bincode::{deserialize, serialize, serialized_size},
     byteorder::{ByteOrder, LittleEndian},
+    crossbeam_channel::{unbounded, Sender},
     log::*,
     serde_derive::{Deserialize, Serialize},
     solana_metrics::datapoint_info,
@@ -25,7 +26,7 @@ use {
         collections::{HashMap, HashSet},
         io::{Read, Write},
         net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream},
-        sync::{mpsc::Sender, Arc, Mutex},
+        sync::{Arc, Mutex},
         thread,
         time::Duration,
     },
@@ -347,7 +348,7 @@ pub fn run_local_faucet_with_port(
 
 // For integration tests. Listens on random open port and reports port to Sender.
 pub fn run_local_faucet(faucet_keypair: Keypair, per_time_cap: Option<u64>) -> SocketAddr {
-    let (sender, receiver) = std::sync::mpsc::channel();
+    let (sender, receiver) = unbounded();
     run_local_faucet_with_port(faucet_keypair, sender, per_time_cap, 0);
     receiver
         .recv()

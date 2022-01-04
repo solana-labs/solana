@@ -20,9 +20,7 @@ use {
         net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
         sync::{
             atomic::{AtomicBool, Ordering},
-            //            mpsc::{channel, Sender},
-            Arc,
-            RwLock,
+            Arc, RwLock,
         },
         thread::{self, sleep, JoinHandle},
         time::{Duration, Instant},
