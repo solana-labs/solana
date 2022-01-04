@@ -4,6 +4,7 @@ extern crate solana_core;
 extern crate test;
 
 use {
+    crossbeam_channel::unbounded,
     log::*,
     solana_core::retransmit_stage::retransmitter,
     solana_entry::entry::Entry,
@@ -30,7 +31,6 @@ use {
         net::UdpSocket,
         sync::{
             atomic::{AtomicUsize, Ordering},
-            mpsc::channel,
             Arc, RwLock,
         },
         thread::{sleep, Builder},
@@ -77,7 +77,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     let bank_forks = BankForks::new(bank0);
     let bank = bank_forks.working_bank();
     let bank_forks = Arc::new(RwLock::new(bank_forks));
-    let (shreds_sender, shreds_receiver) = channel();
+    let (shreds_sender, shreds_receiver) = unbounded();
     const NUM_THREADS: usize = 2;
     let sockets = (0..NUM_THREADS)
         .map(|_| UdpSocket::bind("0.0.0.0:0").unwrap())
