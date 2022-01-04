@@ -46,7 +46,7 @@ make -C <program directory>
 
 Solana uses the [Criterion](https://github.com/Snaipe/Criterion) test framework
 and tests are executed each time the program is built [How to
-Build](#how-to-build)].
+Build](#how-to-build).
 
 To add tests, create a new file next to your source file named `test_<program name>.c` and populate it with criterion test cases. For an example see the
 [helloworld C
