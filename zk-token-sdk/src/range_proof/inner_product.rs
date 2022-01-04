@@ -36,7 +36,7 @@ impl InnerProductProof {
     /// The lengths of the vectors must all be the same, and must all be
     /// either 0 or a power of 2.
     #[allow(clippy::too_many_arguments)]
-    pub fn create(
+    pub fn new(
         Q: &RistrettoPoint,
         G_factors: &[Scalar],
         H_factors: &[Scalar],
@@ -45,7 +45,7 @@ impl InnerProductProof {
         mut a_vec: Vec<Scalar>,
         mut b_vec: Vec<Scalar>,
         transcript: &mut Transcript,
-    ) -> InnerProductProof {
+    ) -> Self {
         // Create slices G, H, a, b backed by their respective
         // vectors.  This lets us reslice as we compress the lengths
         // of the vectors in the main loop below.
@@ -437,7 +437,7 @@ mod tests {
         let mut prover_transcript = Transcript::new(b"innerproducttest");
         let mut verifier_transcript = Transcript::new(b"innerproducttest");
 
-        let proof = InnerProductProof::create(
+        let proof = InnerProductProof::new(
             &Q,
             &G_factors,
             &H_factors,

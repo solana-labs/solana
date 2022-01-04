@@ -196,7 +196,7 @@ impl RangeProof {
         // generate challenge `c` for consistency with the verifier's transcript
         transcript.challenge_scalar(b"c");
 
-        let ipp_proof = InnerProductProof::create(
+        let ipp_proof = InnerProductProof::new(
             &Q,
             &G_factors,
             &H_factors,
