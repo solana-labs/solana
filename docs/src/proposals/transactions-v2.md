@@ -1,4 +1,4 @@
-# Transactions v2 - Address maps
+# Transactions v2 - On-chain Address Lookup Tables
 
 ## Problem
 
@@ -24,76 +24,87 @@ after accounting for signatures and other transaction metadata.
 
 ## Proposed Solution
 
-Introduce a new on-chain program which stores account address maps and add a new
-transaction format which supports concise account references through the
-on-chain address maps.
+1) Introduce a new program which manages on-chain address lookup tables
+2) Add a new transaction format which can make use of on-chain
+address lookup tables to efficiently load more accounts in a single transaction.
 
-### Address Map Program
+### Address Lookup Table Program
 
 Here we describe a program-based solution to the problem, whereby a protocol
 developer or end-user can create collections of related addresses on-chain for
-concise use in a transaction's account inputs. This approach is similar to page
-tables used in operating systems to succinctly map virtual addresses to physical
-memory.
+concise use in a transaction's account inputs.
 
-After addresses are stored on-chain in an address map account, they may be
+After addresses are stored on-chain in an address lookup table account, they may be
 succinctly referenced in a transaction using a 1-byte u8 index rather than a
 full 32-byte address. This will require a new transaction format to make use of
 these succinct references as well as runtime handling for looking up and loading
-accounts from the on-chain mappings.
+addresses from the on-chain lookup tables.
 
 #### State
 
-Address map accounts must be rent-exempt but may be closed with a one epoch
-deactivation period. Address maps must be activated before use.
+Address lookup tables must be rent-exempt when initialized and after
+each time new addresses are appended. Lookup tables can either be extended
+from an on-chain buffered list of addresses or directly by appending
+addresses through instruction data. Newly appended addresses require
+one slot to warmup before being available to transactions for lookups.
 
-Since transactions use a u8 offset to look up mapped addresses, accounts can
-store up to 2^8 addresses each. Anyone may create an address map account of any
-size as long as its big enough to store the necessary metadata. In addition to
-stored addresses, address map accounts must also track the latest count of
-stored addresses and an authority which must be a present signer for all
-appended map entries.
-
-Map additions require one slot to activate so each map should track how many
-addresses are still pending activation in their on-chain state:
+Since transactions use a `u8` index to look up addresses, address tables can
+store up to 256 addresses each. In addition to stored addresses, address table
+accounts also tracks various metadata explained below.
 
 ```rust
-struct AddressMap {
-  // authority must sign for each addition and to close the map account
-  authority: Pubkey,
-  // record a deactivation epoch to help validators know when to remove
-  // the map from their caches.
-  deactivation_epoch: Epoch,
-  // entries may not be modified once activated
-  activated: bool,
-  // list of entries, max capacity of u8::MAX
-  entries: Vec<Pubkey>,
+pub struct LookupTableMeta {
+    /// The slot used to derive the table's address. The table cannot
+    /// be closed until the derivation slot is no longer "recent"
+    /// (not accessible in the `SlotHashes` sysvar).
+    pub derivation_slot: Slot,
+    /// The slot that the table was last extended. Address tables may
+    /// only be used to lookup addresses that were extended before
+    /// the current bank's slot.
+    pub last_extended_slot: Slot,
+    /// The start index where the table was last extended from during
+    /// the `last_extended_slot`.
+    pub last_extended_slot_start_index: u8,
+    /// Authority address which must sign for each modification.
+    pub authority: Option<Pubkey>,
+    // Raw list of addresses follows this serialized structure in
+    // the account's data, starting from `LOOKUP_TABLE_META_SIZE`.
+}
+```
+
+To make it easier for address lookup tables to be updated by multi-sig or
+governance-controlled authorities, addresses can be buffered on-chain in
+a buffer account. Buffer accounts can be used to extend a lookup table
+with many addresses in a single small transaction.
+
+```rust
+pub struct BufferMeta {
+    /// Authority address which must sign for each modification.
+    pub authority: Pubkey,
+
+    // Serialized list of stored addresses follows the above metadata.
 }
 ```
 
 #### Cleanup
 
-Once an address map gets stale and is no longer used, it can be reclaimed by the
-authority withdrawing lamports but the remaining balance must be greater than
-two epochs of rent. This ensures that it takes at least one full epoch to
-deactivate a map.
-
-Maps may not be recreated because each new map must be created at a derived
-address using a monotonically increasing counter as a derivation seed.
+Once an address lookup table is no longer needed, it can be closed
+and have its rent balance reclaimed. Address lookup tables may not be recreated
+at the same address because each new lookup table must be initialized at an address
+derived from a recent slot.
 
 #### Cost
 
-Since address map accounts require caching and special handling in the runtime,
-they should incur higher costs for storage. Cost structure design will be added
-later.
+Since address lookups require extra overhead during transaction processing,
+they should incur higher costs for a transaction.
 
 ### Versioned Transactions
 
-In order to allow accounts to be referenced more succinctly, the structure of
-serialized transactions must be modified. The new transaction format should not
-affect transaction processing in the Solana VM beyond the increased capacity for
-accounts and program invocations. Invoked programs will be unaware of which
-transaction format was used.
+In order to support address table lookups, the structure of serialized
+transactions must be modified. The new transaction format should not
+affect transaction processing in the Solana program runtime beyond the
+increased capacity for accounts and program invocations. Invoked
+programs will be unaware of which transaction format was used.
 
 The new transaction format must be distinguished from the current transaction
 format. Current transactions can fit at most 19 signatures (64-bytes each) but
@@ -112,22 +123,18 @@ pub struct Transaction {
     pub message: Message,
 }
 
-// Uses custom serialization. If the first bit is set, a versioned message is
-// encoded starting from the next byte. If the first bit is not set, all bytes
-// are used to encode the original unversioned `Message` format.
-pub enum Message {
-  Unversioned(UnversionedMessage),
-  Versioned(VersionedMessage),
-}
-
-// use bincode varint encoding to use u8 instead of u32 for enum tags
-#[derive(Serialize, Deserialize)]
+// Uses custom serialization. If the first bit is set, the remaining bits
+// in the first byte will encode a version number. If the first bit is not
+// set, the first byte will be treated as the first byte of an encoded
+// legacy message.
 pub enum VersionedMessage {
-  Current(Box<MessageV2>)
+    Legacy(Message),
+    V0(v0::Message),
 }
 
+// The structure of the new v0 Message
 #[derive(Serialize, Deserialize)]
-pub struct MessageV2 {
+pub struct Message {
   // unchanged
   pub header: MessageHeader,
 
@@ -135,51 +142,57 @@ pub struct MessageV2 {
   #[serde(with = "short_vec")]
   pub account_keys: Vec<Pubkey>,
 
-  /// The last `address_maps.len()` number of readonly unsigned account_keys
-  /// should be loaded as address maps
-  #[serde(with = "short_vec")]
-  pub address_maps: Vec<AddressMap>,
-
   // unchanged
   pub recent_blockhash: Hash,
 
-  // unchanged. Account indices are still `u8` encoded so the max number of accounts
-  // in account_keys + address_maps is limited to 256.
+  // unchanged
+  //
+  // # Notes
+  //
+  // Account and program indexes will index into the list of addresses
+  // constructed from the concatenation of three key lists:
+  //   1) message `account_keys`
+  //   2) ordered list of keys loaded from address table `writable_indexes`
+  //   3) ordered list of keys loaded from address table `readable_indexes`
   #[serde(with = "short_vec")]
   pub instructions: Vec<CompiledInstruction>,
+
+  /// List of address table lookups used to load additional accounts
+  /// for this transaction.
+  #[serde(with = "short_vec")]
+  pub address_table_lookups: Vec<MessageAddressTableLookup>,
 }
 
+/// Address table lookups describe an on-chain address lookup table to use
+/// for loading more readonly and writable accounts in a single tx.
 #[derive(Serialize, Deserialize)]
-pub struct AddressMap {
-  /// The last num_readonly_entries of entries are read-only
-  pub num_readonly_entries: u8,
-
-  /// List of map entries to load
+pub struct MessageAddressTableLookup {
+  /// Address lookup table account key
+  pub account_key: Pubkey,
+  /// List of indexes used to load writable account addresses
   #[serde(with = "short_vec")]
-  pub entries: Vec<u8>,
+  pub writable_indexes: Vec<u8>,
+  /// List of indexes used to load readonly account addresses
+  #[serde(with = "short_vec")]
+  pub readonly_indexes: Vec<u8>,
 }
 ```
 
 #### Size changes
 
-- 1 byte for `prefix` field
-- 1 byte for version enum discriminant
-- 1 byte for `address_maps` length
-- Each map requires 2 bytes for `entries` length and `num_readonly`
-- Each map entry is 1 byte (u8)
-
-#### Cost changes
-
-Using an address map in a transaction should incur an extra cost due to
-the extra work validators need to do to load and cache them.
+- 1 extra byte for `version` field
+- 1 extra byte for `address_table_lookups` length
+- 34 extra bytes for the address and lengths of the `writable_indexes`
+and `readonly_indexes` indexes in each address table lookup
+- 1 extra byte for each lookup table index
 
 #### Metadata changes
 
-Each account accessed via an address map should be stored in the transaction
-metadata for quick reference. This will avoid the need for clients to make
-multiple RPC round trips to fetch all accounts referenced in a v2 transaction.
-It will also make it easier to use the ledger tool to analyze account access
-patterns.
+Each resolved address from an address lookup table should be stored in
+the transaction metadata for quick reference. This will avoid the need for
+clients to make multiple RPC round trips to fetch all accounts loaded by a
+v2 transaction. It will also make it easier to use the ledger tool to
+analyze account access patterns.
 
 #### RPC changes
 
@@ -190,63 +203,74 @@ attempting to fetch a versioned transaction which will indicate that they
 must upgrade.
 
 The RPC API should also support an option for returning fully expanded
-transactions to abstract away the address map details from downstream clients.
+transactions to abstract away the address lookup table details from
+downstream clients.
 
 ### Limitations
 
-- Max of 256 accounts may be specified in a transaction because u8 is used by compiled
-instructions to index into transaction message account keys.
-- Address maps can hold up to 256 addresses because references to map entries
-are encoded as `u8` in transactions.
-- Transaction signers may not be referenced with an address map, the full
+- Max of 256 unique accounts may be loaded by a transaction because `u8`
+is used by compiled instructions to index into transaction message `account_keys`.
+- Address lookup tables can hold up to 256 entries because lookup table indexes are also `u8`.
+- Transaction signers may not be loaded through an address lookup table, the full
 address of each signer must be serialized in the transaction. This ensures that
 the performance of transaction signature checks is not affected.
 - Hardware wallets will probably not be able to display details about accounts
-referenced through address maps due to inability to verify on-chain data.
-- Only single level address maps can be used. Recursive maps will not be supported.
+referenced through address lookup tables due to inability to verify on-chain data.
+- Only single level address lookup tables can be used. Recursive lookups will not be supported.
 
 ## Security Concerns
+
+### Lookup table re-initialization
+
+If an address lookup table can be closed and re-initialized with new addresses,
+any client which is unaware of the change could inadvertently lookup unexpected
+addresses. To avoid this, all address lookup tables must be initialized at an
+address derived from a recent slot and they cannot be closed until the slot
+used for derivation is no longer "recent."
 
 ### Resource consumption
 
 Enabling more account inputs in a transaction allows for more program
-invocations, write-locks, and data reads / writes. Before address maps are
+invocations, write-locks, and data reads / writes. Before address tables are
 enabled, transaction-wide compute limits and increased costs for write locks and
 data reads are required.
 
 ### Front running
 
-If the addresses listed within an address map account are modifiable, front
-running attacks could modify which mapped accounts are resolved for a later
-transaction. For this reason, we propose that any stored address is immutable
-and that address map accounts themselves may not be recreated.
+If the addresses listed within an address lookup table are mutable, front
+running attacks could modify which addresses are resolved for a later
+transaction. For this reason, address lookup tables are append-only and may
+only be closed if it's no longer possible to create a new lookup table at the
+same derived address.
 
 Additionally, a malicious actor could try to fork the chain immediately after a
-new address map account is added to a block. If successful, they could add a
-different unexpected map entry in the fork. In order to deter this attack,
-clients should wait for address maps to be finalized before using them in a
-transaction.  Clients may also append integrity check instructions to the
-transaction which verify that the correct accounts are used.
+new address lookup table account is added to a block. If successful, they could
+add a different unexpected table entry in the fork. In order to deter this attack,
+clients should wait for address lookup tables to be finalized before using them in a
+transaction. Clients may also append integrity check instructions to the
+transaction which verify that the correct accounts are looked up.
 
 ### Denial of service
 
-Address map accounts will be read very frequently and will therefore be a
-more high profile target for denial of service attacks through write locks
+Address lookup table accounts may be read very frequently and will therefore
+be a more high profile target for denial of service attacks through write locks
 similar to sysvar accounts.
 
-For this reason, special handling should be given to address map lookups.
-Address maps lookups should not be affected by account read/write locks.
+For this reason, special handling should be given to address lookup tables.
+When an address lookup table is used to lookup addresses for a transaction,
+it can be loaded without waiting for a read lock. To avoid race conditions,
+only the addresses appended in previous blocks can be used for lookups.
 
 ### Duplicate accounts
 
 Transactions may not load an account more than once whether directly through
-`account_keys` or indirectly through `address_maps`.
+`account_keys` or indirectly through `address_table_lookups`.
 
 ## Other Proposals
 
 1) Account prefixes
 
-Needing to pre-register accounts in an on-chain address map is cumbersome
+Needing to pre-register accounts in an on-chain address lookup table is cumbersome
 because it adds an extra step for transaction processing. Instead, Solana
 transactions could use variable length address prefixes to specify accounts.
 These prefix shortcuts can save on data usage without needing to setup on-chain
@@ -300,3 +324,11 @@ transaction to aid the sanitization of account indexes.  We would also need to
 encode how many addresses in the list should be loaded as readonly vs
 read-write. Lastly, special attention must be given to watch out for addresses
 that exist in multiple account lists.
+
+5) Increase transaction size
+
+Significantly larger serialized transactions have an increased likelihood of being
+dropped over the wire but this might not be a big issue since clients can retry
+transactions anyways. The only time validators need to send individual transactions
+over the network is when a leader forwards unprocessed transactions to the next
+leader.
