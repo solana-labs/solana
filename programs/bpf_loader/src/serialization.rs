@@ -5,7 +5,6 @@ use {
         bpf_loader_deprecated,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE},
         instruction::InstructionError,
-        keyed_account::KeyedAccount,
         pubkey::Pubkey,
         system_instruction::MAX_PERMITTED_DATA_LENGTH,
         transaction_context::{InstructionContext, TransactionContext},
@@ -66,7 +65,12 @@ pub fn deserialize_parameters(
         .get_owner()
         == bpf_loader_deprecated::id();
     if is_loader_deprecated {
-        deserialize_parameters_unaligned(transaction_context, instruction_context, buffer)
+        deserialize_parameters_unaligned(
+            transaction_context,
+            instruction_context,
+            buffer,
+            account_lengths,
+        )
     } else {
         deserialize_parameters_aligned(
             transaction_context,
@@ -76,23 +80,6 @@ pub fn deserialize_parameters(
             do_support_realloc,
         )
     }
-}
-
-pub fn get_serialized_account_size_unaligned(
-    keyed_account: &KeyedAccount,
-) -> Result<usize, InstructionError> {
-    let data_len = keyed_account.data_len()?;
-    Ok(
-        size_of::<u8>() // is_signer
-            + size_of::<u8>() // is_writable
-            + size_of::<Pubkey>() // key
-            + size_of::<u64>()  // lamports
-            + size_of::<u64>()  // data len
-            + data_len // data
-            + size_of::<Pubkey>() // owner
-            + size_of::<u8>() // executable
-            + size_of::<u64>(), // rent_epoch
-    )
 }
 
 pub fn serialize_parameters_unaligned(
@@ -179,10 +166,12 @@ pub fn deserialize_parameters_unaligned(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
     buffer: &[u8],
+    account_lengths: &[usize],
 ) -> Result<(), InstructionError> {
     let mut start = size_of::<u64>(); // number of accounts
-    for index_in_instruction in instruction_context.get_number_of_program_accounts()
-        ..instruction_context.get_number_of_accounts()
+    for (index_in_instruction, pre_len) in (instruction_context.get_number_of_program_accounts()
+        ..instruction_context.get_number_of_accounts())
+        .zip(account_lengths.iter())
     {
         let duplicate = is_duplicate(instruction_context, index_in_instruction);
         start += 1; // is_dup
@@ -195,9 +184,8 @@ pub fn deserialize_parameters_unaligned(
             let _ = borrowed_account.set_lamports(LittleEndian::read_u64(&buffer[start..]));
             start += size_of::<u64>() // lamports
                 + size_of::<u64>(); // data length
-            let end = start + borrowed_account.get_data().len();
-            let _ = borrowed_account.set_data(&buffer[start..end]);
-            start += borrowed_account.get_data().len() // data
+            let _ = borrowed_account.set_data(&buffer[start..start + pre_len]);
+            start += pre_len // data
                 + size_of::<Pubkey>() // owner
                 + size_of::<u8>() // executable
                 + size_of::<u64>(); // rent_epoch
@@ -363,7 +351,7 @@ mod tests {
         super::*,
         solana_program_runtime::invoke_context::{prepare_mock_invoke_context, InvokeContext},
         solana_sdk::{
-            account::{Account, AccountSharedData, ReadableAccount},
+            account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
             account_info::AccountInfo,
             bpf_loader,
             entrypoint::deserialize,
@@ -462,6 +450,7 @@ mod tests {
             .collect();
         let instruction_data = vec![1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
         let program_indices = [0];
+        let mut original_accounts = transaction_accounts.clone();
         let preparation = prepare_mock_invoke_context(
             transaction_accounts,
             instruction_accounts,
@@ -524,7 +513,15 @@ mod tests {
             );
         }
 
-        let de_keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
+        for index_in_transaction in 1..original_accounts.len() {
+            let mut account = invoke_context
+                .transaction_context
+                .get_account_at_index(index_in_transaction)
+                .borrow_mut();
+            account.set_lamports(0);
+            account.set_data(vec![0; 0]);
+            account.set_owner(Pubkey::default());
+        }
         deserialize_parameters(
             invoke_context.transaction_context,
             instruction_context,
@@ -533,20 +530,19 @@ mod tests {
             true,
         )
         .unwrap();
-        for keyed_account in de_keyed_accounts {
-            let index_in_transaction = invoke_context
-                .transaction_context
-                .find_index_of_account(keyed_account.unsigned_key())
-                .unwrap();
+        for (index_in_transaction, (_key, original_account)) in original_accounts.iter().enumerate()
+        {
             let account = invoke_context
                 .transaction_context
                 .get_account_at_index(index_in_transaction)
                 .borrow();
-            assert_eq!(account.executable(), keyed_account.executable().unwrap());
-            assert_eq!(account.rent_epoch(), keyed_account.rent_epoch().unwrap());
+            assert_eq!(&*account, original_account);
         }
 
         // check serialize_parameters_unaligned
+        original_accounts[0]
+            .1
+            .set_owner(bpf_loader_deprecated::id());
         let _ = invoke_context
             .transaction_context
             .get_current_instruction_context()
@@ -578,7 +574,14 @@ mod tests {
             assert_eq!(account.rent_epoch(), account_info.rent_epoch);
         }
 
-        let de_keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
+        for index_in_transaction in 1..original_accounts.len() {
+            let mut account = invoke_context
+                .transaction_context
+                .get_account_at_index(index_in_transaction)
+                .borrow_mut();
+            account.set_lamports(0);
+            account.set_data(vec![0; 0]);
+        }
         deserialize_parameters(
             invoke_context.transaction_context,
             instruction_context,
@@ -587,23 +590,13 @@ mod tests {
             true,
         )
         .unwrap();
-        for keyed_account in de_keyed_accounts {
-            let index_in_transaction = invoke_context
-                .transaction_context
-                .find_index_of_account(keyed_account.unsigned_key())
-                .unwrap();
+        for (index_in_transaction, (_key, original_account)) in original_accounts.iter().enumerate()
+        {
             let account = invoke_context
                 .transaction_context
                 .get_account_at_index(index_in_transaction)
                 .borrow();
-            assert_eq!(account.lamports(), keyed_account.lamports().unwrap());
-            assert_eq!(
-                account.data(),
-                keyed_account.try_account_ref().unwrap().data()
-            );
-            assert_eq!(*account.owner(), keyed_account.owner().unwrap());
-            assert_eq!(account.executable(), keyed_account.executable().unwrap());
-            assert_eq!(account.rent_epoch(), keyed_account.rent_epoch().unwrap());
+            assert_eq!(&*account, original_account);
         }
     }
 
