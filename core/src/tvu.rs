@@ -398,6 +398,7 @@ pub mod tests {
         solana_gossip::cluster_info::{ClusterInfo, Node},
         solana_ledger::{
             blockstore::BlockstoreSignals,
+            blockstore_db::BlockstoreOptions,
             create_new_tmp_ledger,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
         },
@@ -438,7 +439,7 @@ pub mod tests {
             blockstore,
             ledger_signal_receiver,
             ..
-        } = Blockstore::open_with_signal(&blockstore_path, None, true)
+        } = Blockstore::open_with_signal(&blockstore_path, BlockstoreOptions::default())
             .expect("Expected to successfully open ledger");
         let blockstore = Arc::new(blockstore);
         let bank = bank_forks.working_bank();

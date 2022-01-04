@@ -36,7 +36,7 @@ use {
     solana_ledger::{
         bank_forks_utils,
         blockstore::{Blockstore, BlockstoreSignals, CompletedSlotsReceiver, PurgeType},
-        blockstore_db::BlockstoreRecoveryMode,
+        blockstore_db::{BlockstoreOptions, BlockstoreRecoveryMode},
         blockstore_processor::{self, TransactionStatusSender},
         leader_schedule::FixedSchedule,
         leader_schedule_cache::LeaderScheduleCache,
@@ -1265,8 +1265,11 @@ fn new_banks_from_ledger(
         ..
     } = Blockstore::open_with_signal(
         ledger_path,
-        config.wal_recovery_mode.clone(),
-        enforce_ulimit_nofile,
+        BlockstoreOptions {
+            recovery_mode: config.wal_recovery_mode.clone(),
+            enforce_ulimit_nofile,
+            ..BlockstoreOptions::default()
+        },
     )
     .expect("Failed to open ledger database");
     blockstore.set_no_compaction(config.no_rocksdb_compaction);

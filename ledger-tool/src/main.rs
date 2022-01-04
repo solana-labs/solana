@@ -22,7 +22,9 @@ use {
         ancestor_iterator::AncestorIterator,
         bank_forks_utils,
         blockstore::{create_new_ledger, Blockstore, PurgeType},
-        blockstore_db::{self, AccessType, BlockstoreRecoveryMode, Column, Database},
+        blockstore_db::{
+            self, AccessType, BlockstoreOptions, BlockstoreRecoveryMode, Column, Database,
+        },
         blockstore_processor::ProcessOptions,
         shred::Shred,
     },
@@ -676,7 +678,14 @@ fn open_blockstore(
     access_type: AccessType,
     wal_recovery_mode: Option<BlockstoreRecoveryMode>,
 ) -> Blockstore {
-    match Blockstore::open_with_access_type(ledger_path, access_type, wal_recovery_mode, true) {
+    match Blockstore::open_with_access_type(
+        ledger_path,
+        BlockstoreOptions {
+            access_type,
+            recovery_mode: wal_recovery_mode,
+            enforce_ulimit_nofile: true,
+        },
+    ) {
         Ok(blockstore) => blockstore,
         Err(err) => {
             eprintln!("Failed to open ledger at {:?}: {:?}", ledger_path, err);
@@ -686,7 +695,14 @@ fn open_blockstore(
 }
 
 fn open_database(ledger_path: &Path, access_type: AccessType) -> Database {
-    match Database::open(&ledger_path.join("rocksdb"), access_type, None) {
+    match Database::open(
+        &ledger_path.join("rocksdb"),
+        BlockstoreOptions {
+            access_type,
+            recovery_mode: None,
+            ..BlockstoreOptions::default()
+        },
+    ) {
         Ok(database) => database,
         Err(err) => {
             eprintln!("Unable to read the Ledger rocksdb: {:?}", err);
