@@ -495,10 +495,13 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     } else {
                         reclaims.push(new_item);
                     }
+                    /*
                     assert!(slot_list
                         .iter()
                         .skip(slot_list_index + 1)
                         .all(|(slot, _)| *slot != new_slot));
+                        not sure about this
+                        */
 
                     if other_slot.is_none() {
                         // If there's no `old_slot`, then we've found and updated the only account.
