@@ -91,7 +91,6 @@ mod tests {
             path::PathBuf,
             sync::{
                 atomic::{AtomicBool, Ordering},
-                mpsc::channel,
                 Arc, RwLock,
             },
             time::Duration,
@@ -248,7 +247,7 @@ mod tests {
         let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
 
         let (s, snapshot_request_receiver) = unbounded();
-        let (accounts_package_sender, _r) = channel();
+        let (accounts_package_sender, _r) = unbounded();
         let request_sender = AbsRequestSender::new(Some(s));
         let snapshot_request_handler = SnapshotRequestHandler {
             snapshot_config: snapshot_test_config.snapshot_config.clone(),
@@ -368,8 +367,8 @@ mod tests {
             .unwrap();
 
         // Set up snapshotting channels
-        let (sender, receiver) = channel();
-        let (fake_sender, _fake_receiver) = channel();
+        let (sender, receiver) = unbounded();
+        let (fake_sender, _fake_receiver) = unbounded();
 
         // Create next MAX_CACHE_ENTRIES + 2 banks and snapshots. Every bank will get snapshotted
         // and the snapshot purging logic will run on every snapshot taken. This means the three
@@ -671,7 +670,7 @@ mod tests {
         let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
 
         let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
-        let (accounts_package_sender, _accounts_package_receiver) = channel();
+        let (accounts_package_sender, _accounts_package_receiver) = unbounded();
         let request_sender = AbsRequestSender::new(Some(snapshot_request_sender));
         let snapshot_request_handler = SnapshotRequestHandler {
             snapshot_config: snapshot_test_config.snapshot_config.clone(),
@@ -895,7 +894,7 @@ mod tests {
 
         let (pruned_banks_sender, pruned_banks_receiver) = unbounded();
         let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
-        let (accounts_package_sender, accounts_package_receiver) = channel();
+        let (accounts_package_sender, accounts_package_receiver) = unbounded();
         let pending_snapshot_package = PendingSnapshotPackage::default();
 
         let bank_forks = Arc::new(RwLock::new(snapshot_test_config.bank_forks));

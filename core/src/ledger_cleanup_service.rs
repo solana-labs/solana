@@ -312,8 +312,8 @@ impl LedgerCleanupService {
 mod tests {
     use {
         super::*,
+        crossbeam_channel::unbounded,
         solana_ledger::{blockstore::make_many_slot_entries, get_tmp_ledger_path},
-        std::sync::mpsc::channel,
     };
 
     #[test]
@@ -324,7 +324,7 @@ mod tests {
         let (shreds, _) = make_many_slot_entries(0, 50, 5);
         blockstore.insert_shreds(shreds, None, false).unwrap();
         let blockstore = Arc::new(blockstore);
-        let (sender, receiver) = channel();
+        let (sender, receiver) = unbounded();
 
         //send a signal to kill all but 5 shreds, which will be in the newest slots
         let mut last_purge_slot = 0;
@@ -371,7 +371,7 @@ mod tests {
         let mut blockstore = Blockstore::open(&blockstore_path).unwrap();
         blockstore.set_no_compaction(true);
         let blockstore = Arc::new(blockstore);
-        let (sender, receiver) = channel();
+        let (sender, receiver) = unbounded();
 
         let mut first_insert = Measure::start("first_insert");
         let initial_slots = 50;

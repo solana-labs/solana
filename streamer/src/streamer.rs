@@ -324,6 +324,7 @@ mod test {
             packet::{Packet, PacketBatch, PACKET_DATA_SIZE},
             streamer::{receiver, responder},
         },
+        crossbeam_channel::unbounded,
         solana_perf::recycler::Recycler,
         std::{
             io,
@@ -331,7 +332,6 @@ mod test {
             net::UdpSocket,
             sync::{
                 atomic::{AtomicBool, Ordering},
-                mpsc::channel,
                 Arc,
             },
             time::Duration,
@@ -366,7 +366,7 @@ mod test {
         let addr = read.local_addr().unwrap();
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
-        let (s_reader, r_reader) = channel();
+        let (s_reader, r_reader) = unbounded();
         let t_receiver = receiver(
             Arc::new(read),
             &exit,
@@ -377,7 +377,7 @@ mod test {
             true,
         );
         let t_responder = {
-            let (s_responder, r_responder) = channel();
+            let (s_responder, r_responder) = unbounded();
             let t_responder = responder(
                 "streamer_send_test",
                 Arc::new(send),

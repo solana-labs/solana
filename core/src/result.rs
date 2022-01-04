@@ -95,7 +95,7 @@ mod tests {
     };
 
     fn send_error() -> Result<()> {
-        let (s, r) = channel();
+        let (s, r) = unbounded();
         drop(r);
         s.send(())?;
         Ok(())

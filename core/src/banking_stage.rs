@@ -1482,7 +1482,7 @@ where
 mod tests {
     use {
         super::*,
-        crossbeam_channel::unbounded,
+        crossbeam_channel::{unbounded, Receiver},
         itertools::Itertools,
         solana_entry::entry::{next_entry, Entry, EntrySlice},
         solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
@@ -1513,10 +1513,7 @@ mod tests {
         std::{
             net::SocketAddr,
             path::Path,
-            sync::{
-                atomic::{AtomicBool, Ordering},
-                mpsc::Receiver,
-            },
+            sync::atomic::{AtomicBool, Ordering},
             thread::sleep,
         },
     };

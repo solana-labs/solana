@@ -702,7 +702,7 @@ mod test {
         solana_runtime::{accounts_background_service::AbsRequestSender, bank_forks::BankForks},
         solana_sdk::{hash::Hash, signature::Keypair},
         solana_streamer::socket::SocketAddrSpace,
-        std::{collections::HashMap, sync::mpsc::channel},
+        std::collections::HashMap,
         trees::tr,
     };
 

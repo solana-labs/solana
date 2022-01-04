@@ -468,7 +468,7 @@ pub mod test {
         },
         std::{
             path::Path,
-            sync::{atomic::AtomicBool, mpsc::channel, Arc},
+            sync::{atomic::AtomicBool, Arc},
             thread::sleep,
         },
     };
@@ -540,7 +540,7 @@ pub mod test {
         // Setup
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-        let (transmit_sender, transmit_receiver) = channel();
+        let (transmit_sender, transmit_receiver) = unbounded();
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
 
         // Make some shreds
@@ -645,7 +645,7 @@ pub mod test {
             // Create the leader scheduler
             let leader_keypair = Keypair::new();
 
-            let (entry_sender, entry_receiver) = channel();
+            let (entry_sender, entry_receiver) = unbounded();
             let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
             let broadcast_service = setup_dummy_broadcast_service(
                 &leader_keypair.pubkey(),

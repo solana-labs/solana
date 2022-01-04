@@ -1534,10 +1534,7 @@ pub mod tests {
             vote_state::{VoteState, VoteStateVersions, MAX_LOCKOUT_HISTORY},
             vote_transaction,
         },
-        std::{
-            collections::BTreeSet,
-            sync::{mpsc::channel, RwLock},
-        },
+        std::{collections::BTreeSet, sync::RwLock},
         tempfile::TempDir,
         trees::tr,
     };
@@ -1547,7 +1544,7 @@ pub mod tests {
         blockstore: &Blockstore,
         opts: ProcessOptions,
     ) -> BlockstoreProcessorInner {
-        let (accounts_package_sender, _) = channel();
+        let (accounts_package_sender, _) = unbounded();
         process_blockstore(
             genesis_config,
             blockstore,
@@ -3123,7 +3120,7 @@ pub mod tests {
         bank1.squash();
 
         // Test process_blockstore_from_root() from slot 1 onwards
-        let (accounts_package_sender, _) = channel();
+        let (accounts_package_sender, _) = unbounded();
         let (bank_forks, ..) = do_process_blockstore_from_root(
             &blockstore,
             bank1,
@@ -3227,7 +3224,7 @@ pub mod tests {
             ..SnapshotConfig::default()
         };
 
-        let (accounts_package_sender, accounts_package_receiver) = channel();
+        let (accounts_package_sender, accounts_package_receiver) = unbounded();
 
         do_process_blockstore_from_root(
             &blockstore,

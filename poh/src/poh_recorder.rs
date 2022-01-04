@@ -825,7 +825,6 @@ mod tests {
         solana_ledger::{blockstore::Blockstore, blockstore_meta::SlotMeta, get_tmp_ledger_path},
         solana_perf::test_tx::test_tx,
         solana_sdk::{clock::DEFAULT_TICKS_PER_SLOT, hash::hash},
-        std::sync::mpsc::sync_channel,
     };
 
     #[test]
@@ -1428,7 +1427,7 @@ mod tests {
                 .expect("Expected to be able to open database ledger");
             let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
             let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-            let (sender, receiver) = sync_channel(1);
+            let (sender, receiver) = unbounded(); // sync_channel(1); // TODO
             let (mut poh_recorder, _entry_receiver, _record_receiver) =
                 PohRecorder::new_with_clear_signal(
                     0,

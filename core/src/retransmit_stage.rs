@@ -552,7 +552,7 @@ mod tests {
             full_leader_cache: true,
             ..ProcessOptions::default()
         };
-        let (accounts_package_sender, _) = channel();
+        let (accounts_package_sender, _) = unbounded();
         let (bank_forks, cached_leader_schedule, _) = process_blockstore(
             &genesis_config,
             &blockstore,
@@ -596,7 +596,7 @@ mod tests {
         let retransmit_socket = Arc::new(vec![UdpSocket::bind("0.0.0.0:0").unwrap()]);
         let cluster_info = Arc::new(cluster_info);
 
-        let (retransmit_sender, retransmit_receiver) = channel();
+        let (retransmit_sender, retransmit_receiver) = unbounded();
         let _retransmit_sender = retransmit_sender.clone();
         let _t_retransmit = retransmitter(
             retransmit_socket,

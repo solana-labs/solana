@@ -283,7 +283,7 @@ mod tests {
         // No new messages, should time out
         assert_matches!(
             verified_vote_packets.receive_and_process_vote_packets(&r, true),
-            Err(Error::CrossbeamRecvTimeout(_))
+            Err(Error::RecvTimeout(_))
         );
     }
 

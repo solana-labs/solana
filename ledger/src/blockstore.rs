@@ -8978,7 +8978,7 @@ pub mod tests {
         {
             let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
             let (slot_sender, slot_receiver) = unbounded();
-            let (shred_sender, shred_receiver) = unbounded(); //channel::<Vec<Shred>>();
+            let (shred_sender, shred_receiver) = unbounded::<Vec<Shred>>();
             let (signal_sender, signal_receiver) = unbounded();
 
             let t_entry_getter = {
