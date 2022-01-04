@@ -3578,6 +3578,7 @@ impl AccountsDb {
                 // If the entry was missing from the cache, that means it must have been flushed,
                 // and the accounts index is always updated before cache flush, so store_id must
                 // not indicate being cached at this point.
+                error!("slot: {:?}, location: {:?}", new_slot, new_storage_location);
                 assert!(!new_storage_location.is_cached());
 
                 // If this is not a cache entry, then this was a minor fork slot
@@ -4564,9 +4565,9 @@ impl AccountsDb {
             excess_slot_count = old_slots.len();
             let mut flush_stats = FlushStats::default();
             for chunk_index in 0..((excess_slot_count / FLUSH_WINDOW_SIZE) + 1) {
-                    let start = chunk_index * FLUSH_WINDOW_SIZE;
-                    let end = std::cmp::min(start + FLUSH_WINDOW_SIZE, excess_slot_count);
-                    let old_slots = &old_slots[start..end];
+                let start = chunk_index * FLUSH_WINDOW_SIZE;
+                let end = std::cmp::min(start + FLUSH_WINDOW_SIZE, excess_slot_count);
+                let old_slots = &old_slots[start..end];
                 let len_now = old_slots.len();
                 let old_slots_2 = &old_slots;
                 let old_slots = old_slots
@@ -4599,10 +4600,10 @@ impl AccountsDb {
                         old_slots_2
                     );
                     break;
-                    }
-                    // Don't flush slots that are known to be unrooted
-                        if let Some(stats) = self.flush_slot_cache(
-                            *old_slots.last().unwrap(),
+                }
+                // Don't flush slots that are known to be unrooted
+                if let Some(stats) = self.flush_slot_cache(
+                    *old_slots.last().unwrap(),
                     &old_slots,
                     None::<&mut fn(&_, &_, _) -> bool>,
                 ) {
@@ -4611,15 +4612,15 @@ impl AccountsDb {
                         file!(),
                         line!(),
                         old_slots_2,
-                            old_slots,
+                        old_slots,
                         max_flushed_root
                     );
-                            stats.into_iter().for_each(|stats| {
-                                flush_stats.num_flushed += stats.num_flushed;
-                                flush_stats.num_purged += stats.num_purged;
-                                flush_stats.total_size += stats.total_size;
-                            });
-                    } else {
+                    stats.into_iter().for_each(|stats| {
+                        flush_stats.num_flushed += stats.num_flushed;
+                        flush_stats.num_purged += stats.num_purged;
+                        flush_stats.total_size += stats.total_size;
+                    });
+                } else {
                     error!(
                         "{}{}, did not flush: {:?} {:?}",
                         file!(),
@@ -4627,7 +4628,7 @@ impl AccountsDb {
                         old_slots_2,
                         old_slots
                     );
-                    }
+                }
             }
             datapoint_info!(
                 "accounts_db-flush_accounts_cache_aggressively",
@@ -4860,6 +4861,7 @@ impl AccountsDb {
                 // atomic switch from the cache to storage.
                 // There is some racy condition for existing readers who just has read exactly while
                 // flushing. That case is handled by retry_to_get_account_accessor()
+                error!("remove: {}", slot);
                 assert!(self.accounts_cache.remove_slot(slot).is_some());
             });
 
@@ -4910,7 +4912,7 @@ impl AccountsDb {
             slots.iter().for_each(|slot| {
                 if let Some(slot_cache) = self.accounts_cache.slot_cache(*slot) {
                     data.push((*slot, slot_cache));
-                        }
+                }
             });
             self.do_flush_slot_cache(new_slot, &data, &mut should_flush_f)
         }]);
@@ -5982,7 +5984,7 @@ impl AccountsDb {
     //  that there are no items we would have put in reclaims that are not cached
     fn update_index<T: ReadableAccount + Sync>(
         &self,
-        slot: Slot,
+        new_slot: Slot,
         infos: Vec<AccountInfo>,
         accounts: &[(&Pubkey, &T, Slot)],
         previous_slot_entry_was_cached: bool,
@@ -5997,8 +5999,10 @@ impl AccountsDb {
                 let mut reclaims = Vec::with_capacity(infos_chunk.len() / 2);
                 for (info, pubkey_account) in infos_chunk.iter().zip(accounts_chunk.iter()) {
                     let pubkey = pubkey_account.0;
+                    let old_slot = pubkey_account.2;
                     self.accounts_index.upsert(
-                        slot,
+                        new_slot,
+                        old_slot,
                         pubkey,
                         pubkey_account.1.owner(),
                         pubkey_account.1.data(),
@@ -11143,7 +11147,7 @@ pub mod tests {
         let info3 = AccountInfo::new(StorageLocation::AppendVec(3, 0), 0, 0);
         let mut reclaims = vec![];
         accounts_index.upsert(
-            0,
+            0,0,
             &key0,
             &Pubkey::default(),
             &[],
@@ -11153,7 +11157,7 @@ pub mod tests {
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.upsert(
-            1,
+            1,1,
             &key0,
             &Pubkey::default(),
             &[],
@@ -11163,7 +11167,7 @@ pub mod tests {
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.upsert(
-            1,
+            1,1,
             &key1,
             &Pubkey::default(),
             &[],
@@ -11173,7 +11177,7 @@ pub mod tests {
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.upsert(
-            2,
+            2,2,
             &key1,
             &Pubkey::default(),
             &[],
@@ -11183,7 +11187,7 @@ pub mod tests {
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.upsert(
-            2,
+            2,2,
             &key2,
             &Pubkey::default(),
             &[],
@@ -11193,7 +11197,7 @@ pub mod tests {
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.upsert(
-            3,
+            3,3,
             &key2,
             &Pubkey::default(),
             &[],
@@ -11589,14 +11593,23 @@ pub mod tests {
 
     #[test]
     fn test_flush_accounts_cache_if_needed() {
+        solana_logger::setup();
         run_test_flush_accounts_cache_if_needed(0, 2 * max_cache_slots());
+        error!("{}{}", file!(), line!());
         run_test_flush_accounts_cache_if_needed(2 * max_cache_slots(), 0);
+        error!("{}{}", file!(), line!());
         run_test_flush_accounts_cache_if_needed(max_cache_slots() - 1, 0);
+        error!("{}{}", file!(), line!());
         run_test_flush_accounts_cache_if_needed(0, max_cache_slots() - 1);
+        error!("{}{}", file!(), line!());
         run_test_flush_accounts_cache_if_needed(max_cache_slots(), 0);
+        error!("{}{}", file!(), line!());
         run_test_flush_accounts_cache_if_needed(0, max_cache_slots());
+        error!("{}{}", file!(), line!());
         run_test_flush_accounts_cache_if_needed(2 * max_cache_slots(), 2 * max_cache_slots());
+        error!("{}{}", file!(), line!());
         run_test_flush_accounts_cache_if_needed(max_cache_slots() - 1, max_cache_slots() - 1);
+        error!("{}{}", file!(), line!());
         run_test_flush_accounts_cache_if_needed(max_cache_slots(), max_cache_slots());
     }
 
@@ -11608,6 +11621,7 @@ pub mod tests {
         let account0 = AccountSharedData::new(1, space, &Pubkey::default());
         let mut keys = vec![];
         let num_slots = 2 * max_cache_slots();
+        error!("{}{}", file!(), line!());
         for i in 0..num_roots + num_unrooted {
             let key = Pubkey::new_unique();
             db.store_cached(i as Slot, &[(&key, &account0, i as Slot)]);
@@ -11618,7 +11632,9 @@ pub mod tests {
             }
         }
 
+        error!("{}{}", file!(), line!());
         db.flush_accounts_cache(false, None);
+        error!("{}{}", file!(), line!());
 
         let total_slots = num_roots + num_unrooted;
         // If there's <= the max size, then nothing will be flushed from the slot
@@ -11631,17 +11647,21 @@ pub mod tests {
             if expected_size > 0 {
                 // +1: slot is 1-based. slot 1 has 1 byte of data
                 for unrooted_slot in (total_slots - expected_size + 1)..total_slots {
-                    assert!(
-                        db.accounts_cache
-                            .slot_cache(unrooted_slot as Slot)
-                            .is_some(),
-                        "unrooted_slot: {}, total_slots: {}, expected_size: {}, num_unrooted: {}, max_cache_slots: {}",
-                        unrooted_slot,
-                        total_slots,
-                        expected_size,
-                        num_unrooted,
-                        max_cache_slots(),
-                    );
+                    if !db.accounts_cache
+                        .slot_cache(unrooted_slot as Slot)
+                        .is_some() {
+                        if unrooted_slot > total_slots - expected_size + 1 + FLUSH_WINDOW_SIZE {
+                            panic!(
+       
+                                "unrooted_slot: {}, total_slots: {}, expected_size: {}, num_unrooted: {}, max_cache_slots: {}",
+                                unrooted_slot,
+                                total_slots,
+                                expected_size,
+                                num_unrooted,
+                                max_cache_slots(),
+                            );
+                        }
+                    }
                 }
             }
         }
@@ -12923,7 +12943,7 @@ pub mod tests {
                     if flush_trial_start_receiver.recv().is_err() {
                         return;
                     }
-                    db.flush_slot_cache(10, &[10], None::<&mut fn(&_, &_) -> bool>);
+                    db.flush_slot_cache(10, &[10], None::<&mut fn(&_, &_, _) -> bool>);
                     flush_done_sender.send(()).unwrap();
                 })
                 .unwrap()
@@ -12992,7 +13012,7 @@ pub mod tests {
                         return;
                     }
                     for slot in 0..num_cached_slots {
-                        db.flush_slot_cache(slot, &[slot], None::<&mut fn(&_, &_) -> bool>);
+                        db.flush_slot_cache(slot, &[slot], None::<&mut fn(&_, &_, _) -> bool>);
                     }
                     flush_done_sender.send(()).unwrap();
                 })

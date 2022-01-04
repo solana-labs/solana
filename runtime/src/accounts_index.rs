@@ -1717,8 +1717,8 @@ impl<T: IndexValue> AccountsIndex<T> {
     // pubkey updates an existing entry in the index, returns false.
     pub fn upsert(
         &self,
-        slot: Slot, // bprumo TODO: need prev slot and new slot
-        // bprumo TODO: add old_slot here
+        new_slot: Slot,
+        old_slot: Slot,
         pubkey: &Pubkey,
         account_owner: &Pubkey,
         account_data: &[u8],
@@ -1742,7 +1742,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         //  So, what the accounts_index sees alone is sufficient as a source of truth for other non-scan
         //  account operations.
         let new_item =
-            PreAllocatedAccountMapEntry::new(slot, account_info, &self.storage.storage, store_raw);
+            PreAllocatedAccountMapEntry::new(new_slot, account_info, &self.storage.storage, store_raw);
         let map = &self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)];
 
         {
@@ -1750,7 +1750,7 @@ impl<T: IndexValue> AccountsIndex<T> {
             r_account_maps.upsert(
                 pubkey,
                 new_item,
-                None, // bprumo TODO: needs real value
+                Some(old_slot),
                 reclaims,
                 previous_slot_entry_was_cached,
             );
@@ -2838,6 +2838,7 @@ pub mod tests {
         let mut gc = Vec::new();
         index.upsert(
             0,
+            0,
             &key.pubkey(),
             &Pubkey::default(),
             &[],
@@ -3049,7 +3050,7 @@ pub mod tests {
         if upsert {
             // insert first entry for pubkey. This will use new_entry_after_update and not call update.
             index.upsert(
-                slot0,
+                slot0,slot0,
                 &key,
                 &Pubkey::default(),
                 &[],
@@ -3086,7 +3087,7 @@ pub mod tests {
         // insert second entry for pubkey. This will use update and NOT use new_entry_after_update.
         if upsert {
             index.upsert(
-                slot1,
+                slot1,slot1,
                 &key,
                 &Pubkey::default(),
                 &[],
@@ -3200,7 +3201,7 @@ pub mod tests {
         let index = AccountsIndex::<bool>::default_for_tests();
         let mut gc = Vec::new();
         index.upsert(
-            0,
+            0,0,
             &key.pubkey(),
             &Pubkey::default(),
             &[],
@@ -3232,7 +3233,7 @@ pub mod tests {
         let index = AccountsIndex::<bool>::default_for_tests();
         let mut gc = Vec::new();
         index.upsert(
-            0,
+            0,0,
             &key.pubkey(),
             &Pubkey::default(),
             &[],
@@ -3273,7 +3274,7 @@ pub mod tests {
         let mut pubkeys: Vec<Pubkey> = std::iter::repeat_with(|| {
             let new_pubkey = solana_sdk::pubkey::new_rand();
             index.upsert(
-                root_slot,
+                root_slot,root_slot,
                 &new_pubkey,
                 &Pubkey::default(),
                 &[],
@@ -3290,7 +3291,7 @@ pub mod tests {
         if num_pubkeys != 0 {
             pubkeys.push(Pubkey::default());
             index.upsert(
-                root_slot,
+                root_slot,root_slot,
                 &Pubkey::default(),
                 &Pubkey::default(),
                 &[],
@@ -3433,7 +3434,7 @@ pub mod tests {
         assert!(iter.next().is_none());
         let mut gc = vec![];
         index.upsert(
-            0,
+            0,0,
             &solana_sdk::pubkey::new_rand(),
             &Pubkey::default(),
             &[],
@@ -3459,7 +3460,7 @@ pub mod tests {
         let index = AccountsIndex::<bool>::default_for_tests();
         let mut gc = Vec::new();
         index.upsert(
-            0,
+            0,0,
             &key.pubkey(),
             &Pubkey::default(),
             &[],
@@ -3574,7 +3575,7 @@ pub mod tests {
         let ancestors = vec![(0, 0)].into_iter().collect();
         let mut gc = Vec::new();
         index.upsert(
-            0,
+            0,0,
             &key.pubkey(),
             &Pubkey::default(),
             &[],
@@ -3592,7 +3593,7 @@ pub mod tests {
 
         let mut gc = Vec::new();
         index.upsert(
-            0,
+            0,0,
             &key.pubkey(),
             &Pubkey::default(),
             &[],
@@ -3616,7 +3617,7 @@ pub mod tests {
         let ancestors = vec![(0, 0)].into_iter().collect();
         let mut gc = Vec::new();
         index.upsert(
-            0,
+            0,0,
             &key.pubkey(),
             &Pubkey::default(),
             &[],
@@ -3627,7 +3628,7 @@ pub mod tests {
         );
         assert!(gc.is_empty());
         index.upsert(
-            1,
+            1,1,
             &key.pubkey(),
             &Pubkey::default(),
             &[],
@@ -3654,7 +3655,7 @@ pub mod tests {
         let index = AccountsIndex::<bool>::default_for_tests();
         let mut gc = Vec::new();
         index.upsert(
-            0,
+            0,0,
             &key.pubkey(),
             &Pubkey::default(),
             &[],
@@ -3665,7 +3666,7 @@ pub mod tests {
         );
         assert!(gc.is_empty());
         index.upsert(
-            1,
+            1,1,
             &key.pubkey(),
             &Pubkey::default(),
             &[],
@@ -3675,7 +3676,7 @@ pub mod tests {
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         index.upsert(
-            2,
+            2,2,
             &key.pubkey(),
             &Pubkey::default(),
             &[],
@@ -3685,7 +3686,7 @@ pub mod tests {
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         index.upsert(
-            3,
+            3,3,
             &key.pubkey(),
             &Pubkey::default(),
             &[],
@@ -3698,7 +3699,7 @@ pub mod tests {
         index.add_root(1, false);
         index.add_root(3, false);
         index.upsert(
-            4,
+            4,4,
             &key.pubkey(),
             &Pubkey::default(),
             &[],
@@ -3744,6 +3745,7 @@ pub mod tests {
         assert_eq!(0, account_maps_stats_len(&index));
         index.upsert(
             1,
+            1,
             &key.pubkey(),
             &Pubkey::default(),
             &[],
@@ -3755,6 +3757,7 @@ pub mod tests {
         assert_eq!(1, account_maps_stats_len(&index));
 
         index.upsert(
+            1,
             1,
             &key.pubkey(),
             &Pubkey::default(),
@@ -3775,6 +3778,7 @@ pub mod tests {
 
         assert_eq!(1, account_maps_stats_len(&index));
         index.upsert(
+            1,
             1,
             &key.pubkey(),
             &Pubkey::default(),
@@ -3850,6 +3854,7 @@ pub mod tests {
         // Insert slots into secondary index
         for slot in &slots {
             index.upsert(
+                *slot,
                 *slot,
                 &account_key,
                 // Make sure these accounts are added to secondary index
@@ -4024,7 +4029,7 @@ pub mod tests {
 
         // Wrong program id
         index.upsert(
-            0,
+            0,0,
             &account_key,
             &Pubkey::default(),
             &account_data,
@@ -4038,7 +4043,7 @@ pub mod tests {
 
         // Wrong account data size
         index.upsert(
-            0,
+            0,0,
             &account_key,
             &inline_spl_token::id(),
             &account_data[1..],
@@ -4158,7 +4163,7 @@ pub mod tests {
 
         // First write one mint index
         index.upsert(
-            slot,
+            slot,slot,
             &account_key,
             &inline_spl_token::id(),
             &account_data1,
@@ -4170,7 +4175,7 @@ pub mod tests {
 
         // Now write a different mint index for the same account
         index.upsert(
-            slot,
+            slot,slot,
             &account_key,
             &inline_spl_token::id(),
             &account_data2,
@@ -4190,7 +4195,7 @@ pub mod tests {
         // If a later slot also introduces secondary_key1, then it should still exist in the index
         let later_slot = slot + 1;
         index.upsert(
-            later_slot,
+            later_slot,later_slot,
             &account_key,
             &inline_spl_token::id(),
             &account_data1,
