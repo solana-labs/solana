@@ -99,21 +99,20 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize,
         return Err(io::Error::last_os_error());
     }
     let mut npkts = 0;
-    addrs
-        .iter()
-        .zip(hdrs)
+    let mut total_size = 0;
+
+    izip!(addrs, hdrs, packets.iter_mut())
         .take(nrecv as usize)
-        .filter_map(|(addr, hdr)| {
-            let addr = cast_socket_addr(addr, &hdr)?.to_std();
-            Some((addr, hdr))
+        .filter_map(|(addr, hdr, pkt)| {
+            let addr = cast_socket_addr(&addr, &hdr)?.to_std();
+            Some((addr, hdr, pkt))
         })
-        .zip(packets.iter_mut())
-        .for_each(|((addr, hdr), pkt)| {
+        .for_each(|(addr, hdr, pkt)| {
             pkt.meta.size = hdr.msg_len as usize;
             pkt.meta.set_addr(&addr);
             npkts += 1;
+            total_size += pkt.meta.size;
         });
-    let total_size = packets.iter().take(npkts).map(|pkt| pkt.meta.size).sum();
     Ok((total_size, npkts))
 }
 
