@@ -18,7 +18,7 @@ use {
         },
     },
     bincode::deserialize,
-    crossbeam_channel::{unbounded, Receiver, Sender, TrySendError},
+    crossbeam_channel::{bounded, Receiver, Sender, TrySendError},
     log::*,
     rayon::{
         iter::{IntoParallelRefIterator, ParallelIterator},
@@ -476,10 +476,9 @@ impl Blockstore {
             recovery_mode,
             enforce_ulimit_nofile,
         )?;
-        //TODO
-        let (ledger_signal_sender, ledger_signal_receiver) = unbounded(); //sync_channel(1);
-                                                                          //TODO
-        let (completed_slots_sender, completed_slots_receiver) = unbounded(); //sync_channel(MAX_COMPLETED_SLOTS_IN_CHANNEL);
+
+        let (ledger_signal_sender, ledger_signal_receiver) = bounded(1);
+        let (completed_slots_sender, completed_slots_receiver) = bounded(MAX_COMPLETED_SLOTS_IN_CHANNEL);
 
         blockstore.new_shreds_signals = vec![ledger_signal_sender];
         blockstore.completed_slots_senders = vec![completed_slots_sender];
@@ -4152,6 +4151,7 @@ pub mod tests {
         },
         assert_matches::assert_matches,
         bincode::serialize,
+        crossbeam_channel::unbounded,
         itertools::Itertools,
         rand::{seq::SliceRandom, thread_rng},
         solana_account_decoder::parse_token::UiTokenAmount,

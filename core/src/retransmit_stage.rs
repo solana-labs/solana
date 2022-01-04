@@ -450,8 +450,6 @@ impl RetransmitStage {
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = unbounded();
-        // https://github.com/rust-lang/rust/issues/39364#issuecomment-634545136
-        //let _retransmit_sender = retransmit_sender.clone(); //TODO
 
         let retransmit_thread_handle = retransmitter(
             retransmit_sockets,

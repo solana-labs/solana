@@ -61,8 +61,6 @@ impl GossipService {
             false,
         );
         let (consume_sender, listen_receiver) = unbounded();
-        // https://github.com/rust-lang/rust/issues/39364#issuecomment-634545136
-        let _consume_sender = consume_sender.clone();
         let t_socket_consume = cluster_info.clone().start_socket_consume_thread(
             request_receiver,
             consume_sender,
@@ -82,10 +80,6 @@ impl GossipService {
             gossip_validators,
             exit.clone(),
         );
-        // To work around:
-        // https://github.com/rust-lang/rust/issues/54267
-        // responder thread should start after response_sender.clone(). see:
-        // https://github.com/rust-lang/rust/issues/39364#issuecomment-381446873
         let t_responder = streamer::responder(
             "gossip",
             gossip_socket,
