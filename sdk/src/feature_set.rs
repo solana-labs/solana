@@ -275,6 +275,17 @@ pub mod reject_all_elf_rw {
     solana_sdk::declare_id!("DeMpxgMq51j3rZfNK2hQKZyXknQvqevPSFPJFNTbXxsS");
 }
 
+<<<<<<< HEAD
+=======
+pub mod cap_accounts_data_len {
+    solana_sdk::declare_id!("capRxUrBjNkkCpjrJxPGfPaWijB7q3JoDfsWXAnt46r");
+}
+
+pub mod max_tx_account_locks {
+    solana_sdk::declare_id!("CBkDroRDqm8HwHe6ak9cguPjUomrASEkfmxEaZ5CNNxz");
+}
+
+>>>>>>> 2b5e00d36 (Limit number of accounts that a transaction can lock (#22201))
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -338,6 +349,11 @@ lazy_static! {
         (reject_non_rent_exempt_vote_withdraws::id(), "fail vote withdraw instructions which leave the account non-rent-exempt"),
         (evict_invalid_stakes_cache_entries::id(), "evict invalid stakes cache entries on epoch boundaries"),
         (reject_all_elf_rw::id(), "reject all read-write data in program elfs"),
+<<<<<<< HEAD
+=======
+        (cap_accounts_data_len::id(), "cap the accounts data len"),
+        (max_tx_account_locks::id(), "enforce max number of locked accounts per transaction"),
+>>>>>>> 2b5e00d36 (Limit number of accounts that a transaction can lock (#22201))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
