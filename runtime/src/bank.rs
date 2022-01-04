@@ -6254,7 +6254,7 @@ impl Bank {
                         // Adjust capitalization.... it has been wrapping, reducing the real capitalization by 1-lamport
                         self.capitalization.fetch_add(1, Relaxed);
                         info!(
-                            "purged rewards pool accont: {}, new capitalization: {}",
+                            "purged rewards pool account: {}, new capitalization: {}",
                             reward_pubkey,
                             self.capitalization()
                         );
