@@ -237,11 +237,7 @@ impl ExecuteTimings {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
-<<<<<<< HEAD
-#[frozen_abi(digest = "32EjVUc6shHHVPpsnBAVfyBziMgyFzH8qxisLwmwwdS1")]
-=======
-#[frozen_abi(digest = "6XG6H1FChrDdY39K62KFWj5XfDao4dd24WZgcJkdMu1E")]
->>>>>>> 2b5e00d36 (Limit number of accounts that a transaction can lock (#22201))
+#[frozen_abi(digest = "HvKCvCAizDb2sEGnqVKbSoZT2iCs7iMpqB6ErgU5uzS")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 // Eager rent collection repeats in cyclic manner.

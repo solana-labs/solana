@@ -330,11 +330,8 @@ pub enum DbTransactionErrorCode {
     WouldExceedMaxBlockCostLimit,
     UnsupportedVersion,
     InvalidWritableAccount,
-<<<<<<< HEAD
-=======
     WouldExceedMaxAccountDataCostLimit,
     TooManyAccountLocks,
->>>>>>> 2b5e00d36 (Limit number of accounts that a transaction can lock (#22201))
 }
 
 impl From<&TransactionError> for DbTransactionErrorCode {
@@ -363,13 +360,10 @@ impl From<&TransactionError> for DbTransactionErrorCode {
             TransactionError::WouldExceedMaxBlockCostLimit => Self::WouldExceedMaxBlockCostLimit,
             TransactionError::UnsupportedVersion => Self::UnsupportedVersion,
             TransactionError::InvalidWritableAccount => Self::InvalidWritableAccount,
-<<<<<<< HEAD
-=======
             TransactionError::WouldExceedMaxAccountDataCostLimit => {
                 Self::WouldExceedMaxAccountDataCostLimit
             }
             TransactionError::TooManyAccountLocks => Self::TooManyAccountLocks,
->>>>>>> 2b5e00d36 (Limit number of accounts that a transaction can lock (#22201))
         }
     }
 }

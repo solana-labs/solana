@@ -45,11 +45,8 @@ enum TransactionErrorType {
     UNSUPPORTED_VERSION = 18;
     INVALID_WRITABLE_ACCOUNT = 19;
     WOULD_EXCEED_MAX_ACCOUNT_COST_LIMIT = 20;
-<<<<<<< HEAD
-=======
     WOULD_EXCEED_MAX_ACCOUNT_DATA_COST_LIMIT = 21;
     TOO_MANY_ACCOUNT_LOCKS = 22;
->>>>>>> 2b5e00d36 (Limit number of accounts that a transaction can lock (#22201))
 }
 
 message InstructionError {

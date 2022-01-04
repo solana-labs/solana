@@ -36,12 +36,7 @@ use {
         pubkey::Pubkey,
         system_program,
         sysvar::{self, instructions::construct_instructions_data},
-<<<<<<< HEAD
-        transaction::{Result, SanitizedTransaction, TransactionError},
-=======
         transaction::{Result, SanitizedTransaction, TransactionAccountLocks, TransactionError},
-        transaction_context::TransactionAccount,
->>>>>>> 2b5e00d36 (Limit number of accounts that a transaction can lock (#22201))
     },
     std::{
         cmp::Reverse,
@@ -1011,14 +1006,6 @@ impl Accounts {
         let keys: Vec<_> = txs
             .zip(results)
             .filter_map(|(tx, res)| match res {
-<<<<<<< HEAD
-                Err(TransactionError::AccountInUse) => None,
-                Err(TransactionError::SanitizeFailure) => None,
-                Err(TransactionError::AccountLoadedTwice) => None,
-                Err(TransactionError::WouldExceedMaxBlockCostLimit) => None,
-                Err(TransactionError::WouldExceedMaxAccountCostLimit) => None,
-                _ => Some(tx.get_account_locks()),
-=======
                 Err(TransactionError::AccountLoadedTwice)
                 | Err(TransactionError::AccountInUse)
                 | Err(TransactionError::SanitizeFailure)
@@ -1027,7 +1014,6 @@ impl Accounts {
                 | Err(TransactionError::WouldExceedMaxAccountCostLimit)
                 | Err(TransactionError::WouldExceedMaxAccountDataCostLimit) => None,
                 _ => Some(tx.get_account_locks_unchecked()),
->>>>>>> 2b5e00d36 (Limit number of accounts that a transaction can lock (#22201))
             })
             .collect();
         let mut account_locks = self.account_locks.lock().unwrap();

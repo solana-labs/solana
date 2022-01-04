@@ -567,11 +567,8 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
             18 => TransactionError::UnsupportedVersion,
             19 => TransactionError::InvalidWritableAccount,
             20 => TransactionError::WouldExceedMaxAccountCostLimit,
-<<<<<<< HEAD
-=======
             21 => TransactionError::WouldExceedMaxAccountDataCostLimit,
             22 => TransactionError::TooManyAccountLocks,
->>>>>>> 2b5e00d36 (Limit number of accounts that a transaction can lock (#22201))
             _ => return Err("Invalid TransactionError"),
         })
     }
@@ -642,15 +639,12 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                 TransactionError::WouldExceedMaxAccountCostLimit => {
                     tx_by_addr::TransactionErrorType::WouldExceedMaxAccountCostLimit
                 }
-<<<<<<< HEAD
-=======
                 TransactionError::WouldExceedMaxAccountDataCostLimit => {
                     tx_by_addr::TransactionErrorType::WouldExceedMaxAccountDataCostLimit
                 }
                 TransactionError::TooManyAccountLocks => {
                     tx_by_addr::TransactionErrorType::TooManyAccountLocks
                 }
->>>>>>> 2b5e00d36 (Limit number of accounts that a transaction can lock (#22201))
             } as i32,
             instruction_error: match transaction_error {
                 TransactionError::InstructionError(index, ref instruction_error) => {

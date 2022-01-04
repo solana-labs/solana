@@ -101,8 +101,6 @@ pub enum TransactionError {
     /// Transaction would exceed max account limit within the block
     #[error("Transaction would exceed max account limit within the block")]
     WouldExceedMaxAccountCostLimit,
-<<<<<<< HEAD
-=======
 
     /// Transaction would exceed max account data limit within the block
     #[error("Transaction would exceed max account data limit within the block")]
@@ -111,7 +109,6 @@ pub enum TransactionError {
     /// Transaction locked too many accounts
     #[error("Transaction locked too many accounts")]
     TooManyAccountLocks,
->>>>>>> 2b5e00d36 (Limit number of accounts that a transaction can lock (#22201))
 }
 
 impl From<SanitizeError> for TransactionError {
