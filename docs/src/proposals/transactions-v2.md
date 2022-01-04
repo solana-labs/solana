@@ -54,10 +54,16 @@ accounts also tracks various metadata explained below.
 
 ```rust
 pub struct LookupTableMeta {
+<<<<<<< HEAD
     /// The slot used to derive the table's address. The table cannot
     /// be closed until the derivation slot is no longer "recent"
     /// (not accessible in the `SlotHashes` sysvar).
     pub derivation_slot: Slot,
+=======
+    /// Lookup tables cannot be closed until the deactivation slot is
+    /// no longer "recent" (not accessible in the `SlotHashes` sysvar).
+    pub deactivation_slot: Slot,
+>>>>>>> 9725f2e31 (docs: Fix typo in proposal (#22282))
     /// The slot that the table was last extended. Address tables may
     /// only be used to lookup addresses that were extended before
     /// the current bank's slot.
