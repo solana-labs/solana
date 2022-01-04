@@ -129,16 +129,19 @@ impl ReplaySlotStats {
             .iter()
             .collect();
         per_pubkey_timings.sort_by(|a, b| b.1.accumulated_us.cmp(&a.1.accumulated_us));
-        let (total_us, total_units, total_count) =
-            per_pubkey_timings
-                .iter()
-                .fold((0, 0, 0), |(sum_us, sum_units, sum_count), a| {
+        let (total_us, total_units, total_count, total_errored_units, total_errored_count) =
+            per_pubkey_timings.iter().fold(
+                (0, 0, 0, 0, 0),
+                |(sum_us, sum_units, sum_count, sum_errored_units, sum_errored_count), a| {
                     (
                         sum_us + a.1.accumulated_us,
                         sum_units + a.1.accumulated_units,
                         sum_count + a.1.count,
+                        sum_errored_units + a.1.total_errored_units,
+                        sum_errored_count + a.1.errored_txs_compute_consumed.len(),
                     )
-                });
+                },
+            );
 
         for (pubkey, time) in per_pubkey_timings.iter().take(5) {
             datapoint_info!(
@@ -147,7 +150,13 @@ impl ReplaySlotStats {
                 ("pubkey", pubkey.to_string(), String),
                 ("execute_us", time.accumulated_us, i64),
                 ("accumulated_units", time.accumulated_units, i64),
-                ("count", time.count, i64)
+                ("errored_units", time.total_errored_units, i64),
+                ("count", time.count, i64),
+                (
+                    "errored_count",
+                    time.errored_txs_compute_consumed.len(),
+                    i64
+                ),
             );
         }
         datapoint_info!(
@@ -156,7 +165,9 @@ impl ReplaySlotStats {
             ("pubkey", "all", String),
             ("execute_us", total_us, i64),
             ("accumulated_units", total_units, i64),
-            ("count", total_count, i64)
+            ("count", total_count, i64),
+            ("errored_units", total_errored_units, i64),
+            ("count", total_errored_count, i64)
         );
     }
 }
