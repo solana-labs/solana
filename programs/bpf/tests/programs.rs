@@ -26,7 +26,7 @@ use solana_rbpf::{
 use solana_runtime::{
     bank::{
         Bank, DurableNonceFee, ExecuteTimings, TransactionBalancesSet, TransactionExecutionDetails,
-        TransactionResults,
+        TransactionExecutionResult, TransactionResults,
     },
     bank_client::BankClient,
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
@@ -320,12 +320,14 @@ fn process_transaction_and_record_inner(
         .fee_collection_results
         .swap_remove(0)
         .and_then(|_| bank.get_signature_status(&signature).unwrap());
-    let inner_instructions = match results.execution_results.swap_remove(0) {
-        Ok(details) => details
-            .inner_instructions
-            .expect("cpi recording should be enabled"),
-        Err(_) => panic!("tx should be executed"),
-    };
+    let inner_instructions = results
+        .execution_results
+        .swap_remove(0)
+        .details()
+        .expect("tx should be executed")
+        .clone()
+        .inner_instructions
+        .expect("cpi recording should be enabled");
     (result, inner_instructions)
 }
 
@@ -373,61 +375,65 @@ fn execute_transactions(
             pre_token_balances,
             post_token_balances,
         )| {
-            execution_result.map(|details| {
-                let TransactionExecutionDetails {
-                    status,
-                    log_messages,
-                    inner_instructions,
-                    durable_nonce_fee,
-                } = details;
+            match execution_result {
+                TransactionExecutionResult::Executed(details) => {
+                    let TransactionExecutionDetails {
+                        status,
+                        log_messages,
+                        inner_instructions,
+                        durable_nonce_fee,
+                    } = details;
 
-                let lamports_per_signature = match durable_nonce_fee {
-                    Some(DurableNonceFee::Valid(lamports_per_signature)) => {
-                        Some(lamports_per_signature)
+                    let lamports_per_signature = match durable_nonce_fee {
+                        Some(DurableNonceFee::Valid(lamports_per_signature)) => {
+                            Some(lamports_per_signature)
+                        }
+                        Some(DurableNonceFee::Invalid) => None,
+                        None => bank.get_lamports_per_signature_for_blockhash(
+                            &tx.message().recent_blockhash,
+                        ),
                     }
-                    Some(DurableNonceFee::Invalid) => None,
-                    None => bank
-                        .get_lamports_per_signature_for_blockhash(&tx.message().recent_blockhash),
+                    .expect("lamports_per_signature must be available");
+                    let fee = Bank::get_fee_for_message_with_lamports_per_signature(
+                        &SanitizedMessage::try_from(tx.message().clone()).unwrap(),
+                        lamports_per_signature,
+                    );
+
+                    let inner_instructions = inner_instructions.map(|inner_instructions| {
+                        inner_instructions
+                            .into_iter()
+                            .enumerate()
+                            .map(|(index, instructions)| InnerInstructions {
+                                index: index as u8,
+                                instructions,
+                            })
+                            .filter(|i| !i.instructions.is_empty())
+                            .collect()
+                    });
+
+                    let tx_status_meta = TransactionStatusMeta {
+                        status,
+                        fee,
+                        pre_balances,
+                        post_balances,
+                        pre_token_balances: Some(pre_token_balances),
+                        post_token_balances: Some(post_token_balances),
+                        inner_instructions,
+                        log_messages,
+                        rewards: None,
+                    };
+
+                    Ok(ConfirmedTransactionWithStatusMeta {
+                        slot: bank.slot(),
+                        transaction: TransactionWithStatusMeta {
+                            transaction: tx.clone(),
+                            meta: Some(tx_status_meta),
+                        },
+                        block_time: None,
+                    })
                 }
-                .expect("lamports_per_signature must be available");
-                let fee = Bank::get_fee_for_message_with_lamports_per_signature(
-                    &SanitizedMessage::try_from(tx.message().clone()).unwrap(),
-                    lamports_per_signature,
-                );
-
-                let inner_instructions = inner_instructions.map(|inner_instructions| {
-                    inner_instructions
-                        .into_iter()
-                        .enumerate()
-                        .map(|(index, instructions)| InnerInstructions {
-                            index: index as u8,
-                            instructions,
-                        })
-                        .filter(|i| !i.instructions.is_empty())
-                        .collect()
-                });
-
-                let tx_status_meta = TransactionStatusMeta {
-                    status,
-                    fee,
-                    pre_balances,
-                    post_balances,
-                    pre_token_balances: Some(pre_token_balances),
-                    post_token_balances: Some(post_token_balances),
-                    inner_instructions,
-                    log_messages,
-                    rewards: None,
-                };
-
-                ConfirmedTransactionWithStatusMeta {
-                    slot: bank.slot(),
-                    transaction: TransactionWithStatusMeta {
-                        transaction: tx.clone(),
-                        meta: Some(tx_status_meta),
-                    },
-                    block_time: None,
-                }
-            })
+                TransactionExecutionResult::NotExecuted(err) => Err(err.clone()),
+            }
         },
     )
     .collect()

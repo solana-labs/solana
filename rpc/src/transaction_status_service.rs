@@ -6,7 +6,9 @@ use {
         blockstore::Blockstore,
         blockstore_processor::{TransactionStatusBatch, TransactionStatusMessage},
     },
-    solana_runtime::bank::{Bank, DurableNonceFee, TransactionExecutionDetails},
+    solana_runtime::bank::{
+        Bank, DurableNonceFee, TransactionExecutionDetails, TransactionExecutionResult,
+    },
     solana_transaction_status::{
         extract_and_fmt_memos, InnerInstructions, Reward, TransactionStatusMeta,
     },
@@ -90,7 +92,7 @@ impl TransactionStatusService {
                     token_balances.post_token_balances,
                     rent_debits,
                 ) {
-                    if let Ok(details) = execution_result {
+                    if let TransactionExecutionResult::Executed(details) = execution_result {
                         let TransactionExecutionDetails {
                             status,
                             log_messages,
@@ -319,20 +321,21 @@ pub(crate) mod tests {
         let mut rent_debits = RentDebits::default();
         rent_debits.insert(&pubkey, 123, 456);
 
-        let transaction_result = Ok(TransactionExecutionDetails {
-            status: Ok(()),
-            log_messages: None,
-            inner_instructions: None,
-            durable_nonce_fee: Some(DurableNonceFee::from(
-                &NonceFull::from_partial(
-                    rollback_partial,
-                    &SanitizedMessage::Legacy(message),
-                    &[(pubkey, nonce_account)],
-                    &rent_debits,
-                )
-                .unwrap(),
-            )),
-        });
+        let transaction_result =
+            TransactionExecutionResult::Executed(TransactionExecutionDetails {
+                status: Ok(()),
+                log_messages: None,
+                inner_instructions: None,
+                durable_nonce_fee: Some(DurableNonceFee::from(
+                    &NonceFull::from_partial(
+                        rollback_partial,
+                        &SanitizedMessage::Legacy(message),
+                        &[(pubkey, nonce_account)],
+                        &rent_debits,
+                    )
+                    .unwrap(),
+                )),
+            });
 
         let balances = TransactionBalancesSet {
             pre_balances: vec![vec![123456]],

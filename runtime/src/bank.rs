@@ -504,12 +504,55 @@ impl StatusCacheRc {
 }
 
 pub type TransactionCheckResult = (Result<()>, Option<NoncePartial>);
-pub type TransactionExecutionResult = Result<TransactionExecutionDetails>;
 
 pub struct TransactionResults {
     pub fee_collection_results: Vec<Result<()>>,
     pub execution_results: Vec<TransactionExecutionResult>,
     pub rent_debits: Vec<RentDebits>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TransactionExecutionDetails {
+    pub status: Result<()>,
+    pub log_messages: Option<Vec<String>>,
+    pub inner_instructions: Option<Vec<Vec<CompiledInstruction>>>,
+    pub durable_nonce_fee: Option<DurableNonceFee>,
+}
+
+#[derive(Debug, Clone)]
+pub enum TransactionExecutionResult {
+    Executed(TransactionExecutionDetails),
+    NotExecuted(TransactionError),
+}
+
+impl TransactionExecutionResult {
+    pub fn was_executed_successfully(&self) -> bool {
+        match self {
+            Self::Executed(details) => details.status.is_ok(),
+            Self::NotExecuted { .. } => false,
+        }
+    }
+
+    pub fn was_executed(&self) -> bool {
+        match self {
+            Self::Executed(_) => true,
+            Self::NotExecuted(_) => false,
+        }
+    }
+
+    pub fn details(&self) -> Option<&TransactionExecutionDetails> {
+        match self {
+            Self::Executed(details) => Some(details),
+            Self::NotExecuted(_) => None,
+        }
+    }
+
+    pub fn flattened_result(&self) -> Result<()> {
+        match self {
+            Self::Executed(details) => details.status.clone(),
+            Self::NotExecuted(err) => Err(err.clone()),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -534,14 +577,6 @@ impl DurableNonceFee {
             Self::Invalid => None,
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct TransactionExecutionDetails {
-    pub status: Result<()>,
-    pub log_messages: Option<Vec<String>>,
-    pub inner_instructions: Option<Vec<Vec<CompiledInstruction>>>,
-    pub durable_nonce_fee: Option<DurableNonceFee>,
 }
 
 pub struct TransactionSimulationResult {
@@ -3035,7 +3070,7 @@ impl Bank {
         let mut status_cache = self.src.status_cache.write().unwrap();
         assert_eq!(sanitized_txs.len(), execution_results.len());
         for (tx, execution_result) in sanitized_txs.iter().zip(execution_results) {
-            if let Ok(details) = execution_result {
+            if let TransactionExecutionResult::Executed(details) = execution_result {
                 // Add the message hash to the status cache to ensure that this message
                 // won't be processed again with a different signature.
                 status_cache.insert(
@@ -3202,16 +3237,6 @@ impl Bank {
             &mut timings,
         );
 
-        let execution_result = execution_results.pop().unwrap();
-        let result = match &execution_result {
-            Ok(details) => details.status.clone(),
-            Err(err) => Err(err.clone()),
-        };
-        let logs = match execution_result {
-            Ok(details) => details.log_messages,
-            Err(_) => None,
-        }
-        .unwrap_or_default();
         let post_simulation_accounts = loaded_transactions
             .into_iter()
             .next()
@@ -3237,9 +3262,13 @@ impl Bank {
 
         debug!("simulate_transaction: {:?}", timings);
 
+        let execution_result = execution_results.pop().unwrap();
         TransactionSimulationResult {
-            result,
-            logs,
+            result: execution_result.flattened_result(),
+            logs: execution_result
+                .details()
+                .and_then(|details| details.log_messages.clone())
+                .unwrap_or_default(),
             post_simulation_accounts,
             units_consumed,
         }
@@ -3522,12 +3551,14 @@ impl Bank {
         error_counters: &mut ErrorCounters,
     ) -> TransactionExecutionResult {
         let legacy_message = match tx.message().legacy_message() {
-            Some(message) => Ok(message),
+            Some(message) => message,
             None => {
                 // TODO: support versioned messages
-                Err(TransactionError::UnsupportedVersion)
+                return TransactionExecutionResult::NotExecuted(
+                    TransactionError::UnsupportedVersion,
+                );
             }
-        }?;
+        };
 
         let executors = self.get_executors(
             tx.message(),
@@ -3598,7 +3629,7 @@ impl Bank {
                 err
             });
 
-        Ok(TransactionExecutionDetails {
+        TransactionExecutionResult::Executed(TransactionExecutionDetails {
             status,
             log_messages,
             inner_instructions,
@@ -3672,14 +3703,16 @@ impl Bank {
             .iter_mut()
             .zip(sanitized_txs.iter())
             .map(|(accs, tx)| match accs {
-                (Err(e), _nonce) => Err(e.clone()),
+                (Err(e), _nonce) => TransactionExecutionResult::NotExecuted(e.clone()),
                 (Ok(loaded_transaction), nonce) => {
                     let feature_set = self.feature_set.clone();
                     signature_count += u64::from(tx.message().header().num_required_signatures);
 
                     let mut compute_budget = self.compute_budget.unwrap_or_else(ComputeBudget::new);
                     if feature_set.is_active(&tx_wide_compute_cap::id()) {
-                        compute_budget.process_transaction(tx, feature_set)?;
+                        if let Err(err) = compute_budget.process_transaction(tx, feature_set) {
+                            return TransactionExecutionResult::NotExecuted(err);
+                        }
                     }
 
                     let durable_nonce_fee = nonce.as_ref().map(DurableNonceFee::from);
@@ -3720,16 +3753,14 @@ impl Bank {
             if let Some(debug_keys) = &self.transaction_debug_keys {
                 for key in tx.message().account_keys_iter() {
                     if debug_keys.contains(key) {
-                        let result = execution_result
-                            .as_ref()
-                            .and_then(|details| details.status.as_ref());
+                        let result = execution_result.flattened_result();
                         info!("slot: {} result: {:?} tx: {:?}", self.slot, result, tx);
                         break;
                     }
                 }
             }
 
-            if execution_result.is_ok() // Skip log collection for unprocessed transactions
+            if execution_result.was_executed() // Skip log collection for unprocessed transactions
                 && transaction_log_collector_config.filter != TransactionLogCollectorFilter::None
             {
                 let mut filtered_mentioned_addresses = Vec::new();
@@ -3760,7 +3791,7 @@ impl Bank {
                 };
 
                 if store {
-                    if let Ok(TransactionExecutionDetails {
+                    if let TransactionExecutionResult::Executed(TransactionExecutionDetails {
                         status,
                         log_messages: Some(log_messages),
                         ..
@@ -3787,14 +3818,11 @@ impl Bank {
                 }
             }
 
-            match &execution_result {
-                Ok(TransactionExecutionDetails { status: Ok(()), .. }) => {
+            match execution_result.flattened_result() {
+                Ok(()) => {
                     tx_count += 1;
                 }
-                Ok(TransactionExecutionDetails {
-                    status: Err(err), ..
-                })
-                | Err(err) => {
+                Err(err) => {
                     if *err_count == 0 {
                         debug!("tx error: {:?} {:?}", err, tx);
                     }
@@ -3856,8 +3884,10 @@ impl Bank {
             .zip(execution_results)
             .map(|(tx, execution_result)| {
                 let (execution_status, durable_nonce_fee) = match &execution_result {
-                    Ok(details) => Ok((&details.status, details.durable_nonce_fee.as_ref())),
-                    Err(err) => Err(err.clone()),
+                    TransactionExecutionResult::Executed(details) => {
+                        Ok((&details.status, details.durable_nonce_fee.as_ref()))
+                    }
+                    TransactionExecutionResult::NotExecuted(err) => Err(err.clone()),
                 }?;
 
                 let (lamports_per_signature, is_nonce) = durable_nonce_fee
@@ -3924,7 +3954,7 @@ impl Bank {
                 .fetch_max(processed_tx_count, Relaxed);
         }
 
-        if execution_results.iter().any(|result| result.is_ok()) {
+        if execution_results.iter().any(|result| result.was_executed()) {
             self.is_delta.store(true, Relaxed);
         }
 
@@ -4136,10 +4166,8 @@ impl Bank {
             .iter_mut()
             .zip(execution_results)
             .map(|((load_result, _nonce), execution_result)| {
-                if let (
-                    Ok(loaded_transaction),
-                    Ok(TransactionExecutionDetails { status: Ok(()), .. }),
-                ) = (load_result, execution_result)
+                if let (Ok(loaded_transaction), true) =
+                    (load_result, execution_result.was_executed_successfully())
                 {
                     collected_rent += loaded_transaction.rent;
                     mem::take(&mut loaded_transaction.rent_debits)
@@ -5518,11 +5546,10 @@ impl Bank {
         loaded_txs: &[TransactionLoadResult],
     ) {
         for (i, ((load_result, _load_nonce), tx)) in loaded_txs.iter().zip(txs).enumerate() {
-            if let (
-                Ok(loaded_transaction),
-                Ok(TransactionExecutionDetails { status: Ok(()), .. }),
-            ) = (load_result, &execution_results[i])
-            {
+            if let (Ok(loaded_transaction), true) = (
+                load_result,
+                execution_results[i].was_executed_successfully(),
+            ) {
                 let message = tx.message();
                 for (_i, (pubkey, account)) in
                     (0..message.account_keys_len()).zip(loaded_transaction.accounts.iter())
@@ -6287,7 +6314,7 @@ pub(crate) mod tests {
         status: Result<()>,
         nonce: Option<&NonceFull>,
     ) -> TransactionExecutionResult {
-        Ok(TransactionExecutionDetails {
+        TransactionExecutionResult::Executed(TransactionExecutionDetails {
             status,
             log_messages: None,
             inner_instructions: None,
@@ -11415,29 +11442,31 @@ pub(crate) mod tests {
         assert_eq!(transaction_balances_set.pre_balances.len(), 3);
         assert_eq!(transaction_balances_set.post_balances.len(), 3);
 
-        assert!(transaction_results.execution_results[0].is_ok());
-        assert!(transaction_results.execution_results[0]
-            .as_ref()
-            .unwrap()
-            .status
-            .is_ok());
+        assert!(transaction_results.execution_results[0].was_executed_successfully());
         assert_eq!(transaction_balances_set.pre_balances[0], vec![8, 11, 1]);
         assert_eq!(transaction_balances_set.post_balances[0], vec![5, 13, 1]);
 
         // Failed transactions still produce balance sets
         // This is a TransactionError - not possible to charge fees
-        assert!(transaction_results.execution_results[1].is_err());
+        assert!(matches!(
+            transaction_results.execution_results[1],
+            TransactionExecutionResult::NotExecuted(TransactionError::AccountNotFound),
+        ));
         assert_eq!(transaction_balances_set.pre_balances[1], vec![0, 0, 1]);
         assert_eq!(transaction_balances_set.post_balances[1], vec![0, 0, 1]);
 
         // Failed transactions still produce balance sets
         // This is an InstructionError - fees charged
-        assert!(transaction_results.execution_results[2].is_ok());
-        assert!(transaction_results.execution_results[2]
-            .as_ref()
-            .unwrap()
-            .status
-            .is_err());
+        assert!(matches!(
+            transaction_results.execution_results[2],
+            TransactionExecutionResult::Executed(TransactionExecutionDetails {
+                status: Err(TransactionError::InstructionError(
+                    0,
+                    InstructionError::Custom(1),
+                )),
+                ..
+            }),
+        ));
         assert_eq!(transaction_balances_set.pre_balances[2], vec![9, 0, 1]);
         assert_eq!(transaction_balances_set.post_balances[2], vec![8, 0, 1]);
     }
@@ -14556,23 +14585,23 @@ pub(crate) mod tests {
 
         assert_eq!(execution_results.len(), 3);
 
-        assert!(execution_results[0].is_ok());
+        assert!(execution_results[0].details().is_some());
         assert!(execution_results[0]
-            .as_ref()
+            .details()
             .unwrap()
             .log_messages
             .as_ref()
             .unwrap()[1]
             .contains(&"success".to_string()));
-        assert!(execution_results[1].is_ok());
+        assert!(execution_results[1].details().is_some());
         assert!(execution_results[1]
-            .as_ref()
+            .details()
             .unwrap()
             .log_messages
             .as_ref()
-            .unwrap()[1]
+            .unwrap()[2]
             .contains(&"failed".to_string()));
-        assert!(execution_results[2].is_err());
+        assert!(!execution_results[2].was_executed());
 
         let stored_logs = &bank.transaction_log_collector.read().unwrap().logs;
         let success_log_info = stored_logs

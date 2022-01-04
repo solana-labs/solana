@@ -1109,9 +1109,9 @@ impl Accounts {
             }
 
             let execution_status = match &execution_results[i] {
+                TransactionExecutionResult::Executed(details) => &details.status,
                 // Don't store any accounts if tx wasn't executed
-                Err(_) => continue,
-                Ok(details) => &details.status,
+                TransactionExecutionResult::NotExecuted(_) => continue,
             };
 
             let maybe_nonce = match (execution_status, &*nonce) {
@@ -1304,7 +1304,7 @@ mod tests {
         status: Result<()>,
         nonce: Option<&NonceFull>,
     ) -> TransactionExecutionResult {
-        Ok(TransactionExecutionDetails {
+        TransactionExecutionResult::Executed(TransactionExecutionDetails {
             status,
             log_messages: None,
             inner_instructions: None,

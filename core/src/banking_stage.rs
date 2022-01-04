@@ -804,7 +804,7 @@ impl BankingStage {
                 .zip(txs)
                 .enumerate()
                 .filter_map(|(i, (execution_result, tx))| {
-                    if execution_result.is_ok() {
+                    if execution_result.was_executed() {
                         Some((tx.to_versioned_transaction(), i))
                     } else {
                         None
@@ -1527,7 +1527,7 @@ mod tests {
     }
 
     fn new_execution_result(status: Result<(), TransactionError>) -> TransactionExecutionResult {
-        Ok(TransactionExecutionDetails {
+        TransactionExecutionResult::Executed(TransactionExecutionDetails {
             status,
             log_messages: None,
             inner_instructions: None,
@@ -1944,7 +1944,7 @@ mod tests {
             assert_eq!(entry.transactions.len(), txs.len());
 
             // Other TransactionErrors should not be recorded
-            results[0] = Err(TransactionError::AccountNotFound);
+            results[0] = TransactionExecutionResult::NotExecuted(TransactionError::AccountNotFound);
             let (res, retryable) =
                 BankingStage::record_transactions(bank.slot(), &txs, &results, &recorder);
             res.unwrap();

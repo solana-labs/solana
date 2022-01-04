@@ -1421,7 +1421,7 @@ impl TransactionStatusSender {
         let slot = bank.slot();
         if !self.enable_cpi_and_log_storage {
             execution_results.iter_mut().for_each(|execution_result| {
-                if let Ok(details) = execution_result {
+                if let TransactionExecutionResult::Executed(details) = execution_result {
                     details.log_messages.take();
                     details.inner_instructions.take();
                 }
