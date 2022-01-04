@@ -176,7 +176,7 @@ impl TransferData {
         if let (Some(amount_lo), Some(amount_hi)) = (amount_lo, amount_hi) {
             Ok((amount_lo as u64) + (TWO_32 * amount_hi as u64))
         } else {
-            Err(ProofError::VerificationError)
+            Err(ProofError::Verification)
         }
     }
 }

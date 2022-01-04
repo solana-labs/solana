@@ -202,19 +202,19 @@ impl FeeProof {
             .fee_max_proof
             .Y_max
             .decompress()
-            .ok_or(FeeProofError::FormatError)?;
+            .ok_or(FeeProofError::Format)?;
         let z_max = self.fee_max_proof.z_max;
 
         let Y_delta_real = self
             .fee_equality_proof
             .Y_delta_real
             .decompress()
-            .ok_or(FeeProofError::FormatError)?;
+            .ok_or(FeeProofError::Format)?;
         let Y_delta_claimed = self
             .fee_equality_proof
             .Y_delta_claimed
             .decompress()
-            .ok_or(FeeProofError::FormatError)?;
+            .ok_or(FeeProofError::Format)?;
         let z_x = self.fee_equality_proof.z_x;
         let z_delta_real = self.fee_equality_proof.z_delta_real;
         let z_delta_claimed = self.fee_equality_proof.z_delta_claimed;
@@ -262,7 +262,7 @@ impl FeeProof {
         if check.is_identity() {
             Ok(())
         } else {
-            Err(FeeProofError::AlgebraicRelationError)
+            Err(FeeProofError::AlgebraicRelation)
         }
     }
 }

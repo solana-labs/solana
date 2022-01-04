@@ -23,8 +23,7 @@ mod target_arch {
             errors::ProofError,
             range_proof::{errors::RangeProofError, RangeProof},
             sigma_proofs::{
-                errors::*,
-                equality_proof::EqualityProof, validity_proof::ValidityProof,
+                equality_proof::EqualityProof, errors::*, validity_proof::ValidityProof,
                 zero_balance_proof::ZeroBalanceProof,
             },
         },
@@ -192,7 +191,7 @@ mod target_arch {
 
         fn try_from(proof: RangeProof) -> Result<Self, Self::Error> {
             if proof.ipp_proof.serialized_size() != 448 {
-                return Err(RangeProofError::FormatError);
+                return Err(RangeProofError::Format);
             }
 
             let mut buf = [0_u8; 672];
@@ -222,7 +221,7 @@ mod target_arch {
 
         fn try_from(proof: RangeProof) -> Result<Self, Self::Error> {
             if proof.ipp_proof.serialized_size() != 512 {
-                return Err(RangeProofError::FormatError);
+                return Err(RangeProofError::Format);
             }
 
             let mut buf = [0_u8; 736];

@@ -89,8 +89,8 @@ impl ZeroBalanceProof {
         let w = transcript.challenge_scalar(b"w"); // w used for multiscalar multiplication verification
 
         // decompress R or return verification error
-        let Y_P = self.Y_P.decompress().ok_or(ZeroBalanceProofError::FormatError)?;
-        let Y_D = self.Y_D.decompress().ok_or(ZeroBalanceProofError::FormatError)?;
+        let Y_P = self.Y_P.decompress().ok_or(ZeroBalanceProofError::Format)?;
+        let Y_D = self.Y_D.decompress().ok_or(ZeroBalanceProofError::Format)?;
         let z = self.z;
 
         // check the required algebraic relation
@@ -102,7 +102,7 @@ impl ZeroBalanceProof {
         if check.is_identity() {
             Ok(())
         } else {
-            Err(ZeroBalanceProofError::AlgebraicRelationError)
+            Err(ZeroBalanceProofError::AlgebraicRelation)
         }
     }
 
@@ -121,7 +121,7 @@ impl ZeroBalanceProof {
         let Y_P = CompressedRistretto::from_slice(Y_P);
         let Y_D = CompressedRistretto::from_slice(Y_D);
 
-        let z = Scalar::from_canonical_bytes(*z).ok_or(ZeroBalanceProofError::FormatError)?;
+        let z = Scalar::from_canonical_bytes(*z).ok_or(ZeroBalanceProofError::Format)?;
 
         Ok(ZeroBalanceProof { Y_P, Y_D, z })
     }

@@ -109,9 +109,9 @@ impl EqualityProof {
         let ww = w * w;
 
         // check that the required algebraic condition holds
-        let Y_0 = self.Y_0.decompress().ok_or(EqualityProofError::FormatError)?;
-        let Y_1 = self.Y_1.decompress().ok_or(EqualityProofError::FormatError)?;
-        let Y_2 = self.Y_2.decompress().ok_or(EqualityProofError::FormatError)?;
+        let Y_0 = self.Y_0.decompress().ok_or(EqualityProofError::Format)?;
+        let Y_1 = self.Y_1.decompress().ok_or(EqualityProofError::Format)?;
+        let Y_2 = self.Y_2.decompress().ok_or(EqualityProofError::Format)?;
 
         let check = RistrettoPoint::vartime_multiscalar_mul(
             vec![
@@ -133,7 +133,7 @@ impl EqualityProof {
         if check.is_identity() {
             Ok(())
         } else {
-            Err(EqualityProofError::AlgebraicRelationError)
+            Err(EqualityProofError::AlgebraicRelation)
         }
     }
 
@@ -156,9 +156,9 @@ impl EqualityProof {
         let Y_1 = CompressedRistretto::from_slice(Y_1);
         let Y_2 = CompressedRistretto::from_slice(Y_2);
 
-        let z_s = Scalar::from_canonical_bytes(*z_s).ok_or(EqualityProofError::FormatError)?;
-        let z_x = Scalar::from_canonical_bytes(*z_x).ok_or(EqualityProofError::FormatError)?;
-        let z_r = Scalar::from_canonical_bytes(*z_r).ok_or(EqualityProofError::FormatError)?;
+        let z_s = Scalar::from_canonical_bytes(*z_s).ok_or(EqualityProofError::Format)?;
+        let z_x = Scalar::from_canonical_bytes(*z_x).ok_or(EqualityProofError::Format)?;
+        let z_r = Scalar::from_canonical_bytes(*z_r).ok_or(EqualityProofError::Format)?;
 
         Ok(EqualityProof {
             Y_0,
