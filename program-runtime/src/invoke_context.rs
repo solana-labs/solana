@@ -63,18 +63,32 @@ pub trait Executor: Debug + Send + Sync {
     ) -> Result<(), InstructionError>;
 }
 
-#[derive(Default)]
-pub struct Executors {
-    pub executors: HashMap<Pubkey, Arc<dyn Executor>>,
+pub type Executors = HashMap<Pubkey, TransactionExecutor>;
+
+/// Tracks whether a given executor is "dirty" and needs to
+/// updated in the executors cache
+pub struct TransactionExecutor {
+    pub executor: Arc<dyn Executor>,
     pub is_dirty: bool,
 }
-impl Executors {
-    pub fn insert(&mut self, key: Pubkey, executor: Arc<dyn Executor>) {
-        let _ = self.executors.insert(key, executor);
-        self.is_dirty = true;
+
+impl TransactionExecutor {
+    /// Wraps an executor and tracks that it doesn't need
+    /// to be updated in the executors cache.
+    pub fn cached(executor: Arc<dyn Executor>) -> Self {
+        Self {
+            executor,
+            is_dirty: false,
+        }
     }
-    pub fn get(&self, key: &Pubkey) -> Option<Arc<dyn Executor>> {
-        self.executors.get(key).cloned()
+
+    /// Wraps an executor and tracks that it needs to be
+    /// updated in the executors cache.
+    pub fn dirty(executor: Arc<dyn Executor>) -> Self {
+        Self {
+            executor,
+            is_dirty: true,
+        }
     }
 }
 
@@ -883,12 +897,17 @@ impl<'a> InvokeContext<'a> {
     /// Loaders may need to do work in order to execute a program. Cache
     /// the work that can be re-used across executions
     pub fn add_executor(&self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {
-        self.executors.borrow_mut().insert(*pubkey, executor);
+        self.executors
+            .borrow_mut()
+            .insert(*pubkey, TransactionExecutor::dirty(executor));
     }
 
     /// Get the completed loader work that can be re-used across execution
     pub fn get_executor(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
-        self.executors.borrow().get(pubkey)
+        self.executors
+            .borrow()
+            .get(pubkey)
+            .map(|tx_executor| tx_executor.executor.clone())
     }
 
     /// Get this invocation's compute budget
