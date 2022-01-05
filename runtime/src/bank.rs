@@ -3515,9 +3515,7 @@ impl Bank {
                             process_result = Err(e);
                         }
 
-                        if process_result.is_ok() {
-                            self.update_executors(executors);
-                        }
+                        self.update_executors(executors);
                     } else {
                         transaction_log_messages.push(None);
                         inner_instructions.push(None);
