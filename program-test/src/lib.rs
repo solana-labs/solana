@@ -416,7 +416,7 @@ fn setup_fees(bank: Bank) -> Bank {
     bank.commit_transactions(
         &[],     // transactions
         &mut [], // loaded accounts
-        &[],     // transaction execution results
+        vec![],  // transaction execution results
         0,       // tx count
         1,       // signature count
         &mut ExecuteTimings::default(),
