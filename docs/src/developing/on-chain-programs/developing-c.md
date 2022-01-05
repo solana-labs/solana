@@ -95,7 +95,7 @@ parameters into C types:
 - [BPF Loader deprecated
   deserialization](https://github.com/solana-labs/solana/blob/8415c22b593f164020adc7afe782e8041d756ddf/sdk/bpf/c/inc/deserialize_deprecated.h#L25)
 
-Some programs may want to perform deserialzaiton themselves and they can by
+Some programs may want to perform deserialization themselves, and they can by
 providing their own implementation of the [raw entrypoint](#program-entrypoint).
 Take note that the provided deserialization functions retain references back to
 the serialized byte array for variables that the program is allowed to modify
