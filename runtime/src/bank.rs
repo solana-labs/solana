@@ -73,6 +73,17 @@ use {
     },
     solana_measure::measure::Measure,
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
+<<<<<<< HEAD
+=======
+    solana_program_runtime::{
+        instruction_recorder::InstructionRecorder,
+        invoke_context::{
+            BuiltinProgram, Executor, Executors, ProcessInstructionWithContext, TransactionExecutor,
+        },
+        log_collector::LogCollector,
+        timings::ExecuteDetailsTimings,
+    },
+>>>>>>> f2ed6f09e (Skip updating already cached executors if unmodified)
     solana_sdk::{
         account::{
             create_account_shared_data_with_fields as create_account, from_account, Account,
@@ -3328,31 +3339,47 @@ impl Bank {
 
         for key in message.account_keys.iter() {
             if let Some(executor) = cache.get(key) {
-                executors.insert(*key, executor);
+                executors.insert(*key, TransactionExecutor::cached(executor));
             }
         }
+<<<<<<< HEAD
         for instruction_loaders in loaders.iter() {
             for (key, _) in instruction_loaders.iter() {
                 if let Some(executor) = cache.get(key) {
                     executors.insert(*key, executor);
+=======
+        for program_indices_of_instruction in program_indices.iter() {
+            for account_index in program_indices_of_instruction.iter() {
+                let key = accounts[*account_index].0;
+                if let Some(executor) = cache.get(&key) {
+                    executors.insert(key, TransactionExecutor::cached(executor));
+>>>>>>> f2ed6f09e (Skip updating already cached executors if unmodified)
                 }
             }
         }
 
-        Rc::new(RefCell::new(Executors {
-            executors,
-            is_dirty: false,
-        }))
+        Rc::new(RefCell::new(executors))
     }
 
     /// Add executors back to the bank's cache if modified
     fn update_executors(&self, executors: Rc<RefCell<Executors>>) {
         let executors = executors.borrow();
-        if executors.is_dirty {
+        let dirty_executors: Vec<_> = executors
+            .iter()
+            .filter_map(|(key, TransactionExecutor { executor, is_dirty })| {
+                if *is_dirty {
+                    Some((key, executor.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if !dirty_executors.is_empty() {
             let mut cow_cache = self.cached_executors.write().unwrap();
             let mut cache = cow_cache.write().unwrap();
-            for (key, executor) in executors.executors.iter() {
-                cache.put(key, (*executor).clone());
+            for (key, executor) in dirty_executors.into_iter() {
+                cache.put(key, executor);
             }
         }
     }
@@ -11948,24 +11975,30 @@ pub(crate) mod tests {
 
         // don't do any work if not dirty
         let mut executors = Executors::default();
-        executors.insert(key1, executor.clone());
-        executors.insert(key2, executor.clone());
-        executors.insert(key3, executor.clone());
-        executors.insert(key4, executor.clone());
+        executors.insert(key1, TransactionExecutor::cached(executor.clone()));
+        executors.insert(key2, TransactionExecutor::cached(executor.clone()));
+        executors.insert(key3, TransactionExecutor::cached(executor.clone()));
+        executors.insert(key4, TransactionExecutor::cached(executor.clone()));
         let executors = Rc::new(RefCell::new(executors));
-        executors.borrow_mut().is_dirty = false;
+        executors.borrow_mut().get_mut(&key1).unwrap().is_dirty = false;
         bank.update_executors(executors);
+<<<<<<< HEAD
         let executors = bank.get_executors(&message, loaders);
         assert_eq!(executors.borrow().executors.len(), 0);
+=======
+        let executors = bank.get_executors(&message, accounts, program_indices);
+        assert_eq!(executors.borrow().len(), 0);
+>>>>>>> f2ed6f09e (Skip updating already cached executors if unmodified)
 
         // do work
         let mut executors = Executors::default();
-        executors.insert(key1, executor.clone());
-        executors.insert(key2, executor.clone());
-        executors.insert(key3, executor.clone());
-        executors.insert(key4, executor.clone());
+        executors.insert(key1, TransactionExecutor::dirty(executor.clone()));
+        executors.insert(key2, TransactionExecutor::dirty(executor.clone()));
+        executors.insert(key3, TransactionExecutor::dirty(executor.clone()));
+        executors.insert(key4, TransactionExecutor::dirty(executor.clone()));
         let executors = Rc::new(RefCell::new(executors));
         bank.update_executors(executors);
+<<<<<<< HEAD
         let executors = bank.get_executors(&message, loaders);
         assert_eq!(executors.borrow().executors.len(), 4);
         assert!(executors.borrow().executors.contains_key(&key1));
@@ -11981,17 +12014,43 @@ pub(crate) mod tests {
         assert!(executors.borrow().executors.contains_key(&key2));
         assert!(executors.borrow().executors.contains_key(&key3));
         assert!(executors.borrow().executors.contains_key(&key4));
+=======
+        let executors = bank.get_executors(&message, accounts, program_indices);
+        assert_eq!(executors.borrow().len(), 4);
+        assert!(executors.borrow().contains_key(&key1));
+        assert!(executors.borrow().contains_key(&key2));
+        assert!(executors.borrow().contains_key(&key3));
+        assert!(executors.borrow().contains_key(&key4));
+
+        // Check inheritance
+        let bank = Bank::new_from_parent(&Arc::new(bank), &solana_sdk::pubkey::new_rand(), 1);
+        let executors = bank.get_executors(&message, accounts, program_indices);
+        assert_eq!(executors.borrow().len(), 4);
+        assert!(executors.borrow().contains_key(&key1));
+        assert!(executors.borrow().contains_key(&key2));
+        assert!(executors.borrow().contains_key(&key3));
+        assert!(executors.borrow().contains_key(&key4));
+>>>>>>> f2ed6f09e (Skip updating already cached executors if unmodified)
 
         bank.remove_executor(&key1);
         bank.remove_executor(&key2);
         bank.remove_executor(&key3);
         bank.remove_executor(&key4);
+<<<<<<< HEAD
         let executors = bank.get_executors(&message, loaders);
         assert_eq!(executors.borrow().executors.len(), 0);
         assert!(!executors.borrow().executors.contains_key(&key1));
         assert!(!executors.borrow().executors.contains_key(&key2));
         assert!(!executors.borrow().executors.contains_key(&key3));
         assert!(!executors.borrow().executors.contains_key(&key4));
+=======
+        let executors = bank.get_executors(&message, accounts, program_indices);
+        assert_eq!(executors.borrow().len(), 0);
+        assert!(!executors.borrow().contains_key(&key1));
+        assert!(!executors.borrow().contains_key(&key2));
+        assert!(!executors.borrow().contains_key(&key3));
+        assert!(!executors.borrow().contains_key(&key4));
+>>>>>>> f2ed6f09e (Skip updating already cached executors if unmodified)
     }
 
     #[test]
@@ -12012,25 +12071,38 @@ pub(crate) mod tests {
 
         // add one to root bank
         let mut executors = Executors::default();
-        executors.insert(key1, executor.clone());
+        executors.insert(key1, TransactionExecutor::dirty(executor.clone()));
         let executors = Rc::new(RefCell::new(executors));
         root.update_executors(executors);
+<<<<<<< HEAD
         let executors = root.get_executors(&Message::default(), loaders);
         assert_eq!(executors.borrow().executors.len(), 1);
+=======
+        let executors = root.get_executors(&message, accounts, program_indices);
+        assert_eq!(executors.borrow().len(), 1);
+>>>>>>> f2ed6f09e (Skip updating already cached executors if unmodified)
 
         let fork1 = Bank::new_from_parent(&root, &Pubkey::default(), 1);
         let fork2 = Bank::new_from_parent(&root, &Pubkey::default(), 1);
 
+<<<<<<< HEAD
         let executors = fork1.get_executors(&Message::default(), loaders);
         assert_eq!(executors.borrow().executors.len(), 1);
         let executors = fork2.get_executors(&Message::default(), loaders);
         assert_eq!(executors.borrow().executors.len(), 1);
+=======
+        let executors = fork1.get_executors(&message, accounts, program_indices);
+        assert_eq!(executors.borrow().len(), 1);
+        let executors = fork2.get_executors(&message, accounts, program_indices);
+        assert_eq!(executors.borrow().len(), 1);
+>>>>>>> f2ed6f09e (Skip updating already cached executors if unmodified)
 
         let mut executors = Executors::default();
-        executors.insert(key2, executor.clone());
+        executors.insert(key2, TransactionExecutor::dirty(executor.clone()));
         let executors = Rc::new(RefCell::new(executors));
         fork1.update_executors(executors);
 
+<<<<<<< HEAD
         let executors = fork1.get_executors(&Message::default(), loaders);
         assert_eq!(executors.borrow().executors.len(), 2);
         let executors = fork2.get_executors(&Message::default(), loaders);
@@ -12042,6 +12114,19 @@ pub(crate) mod tests {
         assert_eq!(executors.borrow().executors.len(), 1);
         let executors = fork2.get_executors(&Message::default(), loaders);
         assert_eq!(executors.borrow().executors.len(), 1);
+=======
+        let executors = fork1.get_executors(&message, accounts, program_indices);
+        assert_eq!(executors.borrow().len(), 2);
+        let executors = fork2.get_executors(&message, accounts, program_indices);
+        assert_eq!(executors.borrow().len(), 1);
+
+        fork1.remove_executor(&key1);
+
+        let executors = fork1.get_executors(&message, accounts, program_indices);
+        assert_eq!(executors.borrow().len(), 1);
+        let executors = fork2.get_executors(&message, accounts, program_indices);
+        assert_eq!(executors.borrow().len(), 1);
+>>>>>>> f2ed6f09e (Skip updating already cached executors if unmodified)
     }
 
     #[test]
