@@ -57,10 +57,6 @@ use solana_transaction_status::{
     token_balances::collect_token_balances, ConfirmedTransaction, InnerInstructions,
     TransactionStatusMeta, TransactionWithStatusMeta,
 };
-use std::{
-    collections::HashMap, env, fs::File, io::Read, path::PathBuf, str::FromStr,
-    sync::Arc,
-};
 use std::{collections::HashMap, env, fs::File, io::Read, path::PathBuf, str::FromStr, sync::Arc};
 
 /// BPF program file extension
@@ -1751,13 +1747,8 @@ fn test_program_bpf_upgrade() {
         "solana_bpf_rust_upgradeable",
     );
 
-    let mut instruction = Instruction::new_with_bytes(
-        program_id,
-        &[0],
-        vec![
-            AccountMeta::new(clock::id(), false),
-        ],
-    );
+    let mut instruction =
+        Instruction::new_with_bytes(program_id, &[0], vec![AccountMeta::new(clock::id(), false)]);
 
     // Call upgrade program
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction.clone());
@@ -1845,13 +1836,8 @@ fn test_program_bpf_upgrade_and_invoke_in_same_tx() {
         "solana_bpf_rust_noop",
     );
 
-    let invoke_instruction = Instruction::new_with_bytes(
-        program_id,
-        &[0],
-        vec![
-            AccountMeta::new(clock::id(), false),
-        ],
-    );
+    let invoke_instruction =
+        Instruction::new_with_bytes(program_id, &[0], vec![AccountMeta::new(clock::id(), false)]);
 
     // Call upgradeable program
     let result =
@@ -2464,7 +2450,7 @@ fn test_program_upgradeable_locks() {
 
     assert!(matches!(
         results1[0],
-        Ok(ConfirmedTransactionWithStatusMeta {
+        Ok(ConfirmedTransaction {
             transaction: TransactionWithStatusMeta {
                 meta: Some(TransactionStatusMeta { status: Ok(()), .. }),
                 ..
@@ -2476,7 +2462,7 @@ fn test_program_upgradeable_locks() {
 
     assert!(matches!(
         results2[0],
-        Ok(ConfirmedTransactionWithStatusMeta {
+        Ok(ConfirmedTransaction {
             transaction: TransactionWithStatusMeta {
                 meta: Some(TransactionStatusMeta {
                     status: Err(TransactionError::InstructionError(
