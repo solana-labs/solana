@@ -125,10 +125,7 @@ impl Message {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        crate::message::VersionedMessage,
-    };
+    use {super::*, crate::message::VersionedMessage};
 
     #[test]
     fn test_sanitize() {
@@ -250,7 +247,6 @@ mod tests {
         .sanitize()
         .is_err());
     }
-
 
     #[test]
     fn test_sanitize_with_max_account_keys() {

@@ -2,7 +2,11 @@ use {
     crate::{
         hash::Hash,
         instruction::{CompiledInstruction, Instruction},
-        message::{v0::{self, LoadedAddresses}, legacy::Message as LegacyMessage, MessageHeader},
+        message::{
+            legacy::Message as LegacyMessage,
+            v0::{self, LoadedAddresses},
+            MessageHeader,
+        },
         pubkey::Pubkey,
         sanitize::{Sanitize, SanitizeError},
         serialize_utils::{append_slice, append_u16, append_u8},

@@ -5,7 +5,7 @@ use {
         pubkey::Pubkey,
         sysvar,
     },
-    std::{collections::HashSet, ops::Deref, convert::TryFrom},
+    std::{collections::HashSet, convert::TryFrom, ops::Deref},
 };
 
 /// Combination of a version #0 message and its loaded addresses
