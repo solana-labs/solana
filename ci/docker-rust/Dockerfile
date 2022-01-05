@@ -12,6 +12,8 @@ RUN set -x \
  && echo deb https://apt.buildkite.com/buildkite-agent stable main > /etc/apt/sources.list.d/buildkite-agent.list \
  && apt-key adv --no-tty --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 32A37959C2FA5C3C99EFBC32A79206696452D198 \
  && curl -fsSL https://deb.nodesource.com/setup_current.x | bash - \
+ && sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list' \
+ && wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - \
  && apt update \
  && apt install -y \
       buildkite-agent \
@@ -22,6 +24,7 @@ RUN set -x \
       mscgen \
       nodejs \
       net-tools \
+      postgresql-14 \
       rsync \
       sudo \
       golang \
@@ -45,3 +48,9 @@ RUN set -x \
  && unzip -o $PROTOC_ZIP -d /usr/local bin/protoc \
  && unzip -o $PROTOC_ZIP -d /usr/local include/* \
  && rm -f $PROTOC_ZIP
+
+# Setup the PostgreSQL for plugin tests
+USER postgres
+RUN /etc/init.d/postgresql start \
+ && psql --command "CREATE USER solana WITH SUPERUSER PASSWORD 'solana';" \
+ && createdb -O solana solana
