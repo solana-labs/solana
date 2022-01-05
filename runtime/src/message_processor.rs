@@ -37,6 +37,13 @@ impl ::solana_frozen_abi::abi_example::AbiExample for MessageProcessor {
     }
 }
 
+/// Resultant information gathered from calling process_message()
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct ProcessedMessageInfo {
+    /// The amount that the accounts data len has changed
+    pub accounts_data_len_delta: i64,
+}
+
 impl MessageProcessor {
     /// Process a message.
     /// This method calls each instruction in the message over the set of loaded accounts.
@@ -59,7 +66,7 @@ impl MessageProcessor {
         sysvars: &[(Pubkey, Vec<u8>)],
         blockhash: Hash,
         lamports_per_signature: u64,
-    ) -> Result<(), TransactionError> {
+    ) -> Result<ProcessedMessageInfo, TransactionError> {
         let mut invoke_context = InvokeContext::new(
             rent,
             accounts,
@@ -123,7 +130,7 @@ impl MessageProcessor {
             result
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
-        Ok(())
+        Ok(ProcessedMessageInfo::default())
     }
 }
 
@@ -249,7 +256,7 @@ mod tests {
             Hash::default(),
             0,
         );
-        assert_eq!(result, Ok(()));
+        assert!(result.is_ok());
         assert_eq!(accounts[0].1.borrow().lamports(), 100);
         assert_eq!(accounts[1].1.borrow().lamports(), 0);
 
@@ -488,7 +495,7 @@ mod tests {
             Hash::default(),
             0,
         );
-        assert_eq!(result, Ok(()));
+        assert!(result.is_ok());
 
         // Do work on the same account but at different location in keyed_accounts[]
         let message = Message::new(
@@ -518,7 +525,7 @@ mod tests {
             Hash::default(),
             0,
         );
-        assert_eq!(result, Ok(()));
+        assert!(result.is_ok());
         assert_eq!(accounts[0].1.borrow().lamports(), 80);
         assert_eq!(accounts[1].1.borrow().lamports(), 20);
         assert_eq!(accounts[0].1.borrow().data(), &vec![42]);
