@@ -2562,6 +2562,7 @@ name = "solana-banks-server"
 version = "1.10.0"
 dependencies = [
  "bincode",
+ "crossbeam-channel",
  "futures",
  "solana-banks-interface",
  "solana-runtime",
@@ -2994,6 +2995,7 @@ dependencies = [
  "bincode",
  "bs58 0.4.0",
  "clap",
+ "crossbeam-channel",
  "indicatif",
  "jsonrpc-core",
  "log",
@@ -3045,6 +3047,7 @@ dependencies = [
  "bincode",
  "byteorder 1.4.3",
  "clap",
+ "crossbeam-channel",
  "log",
  "serde",
  "serde_derive",
@@ -3150,6 +3153,7 @@ dependencies = [
 name = "solana-metrics"
 version = "1.10.0"
 dependencies = [
+ "crossbeam-channel",
  "gethostname",
  "lazy_static",
  "log",
@@ -3163,6 +3167,7 @@ version = "1.10.0"
 dependencies = [
  "bincode",
  "clap",
+ "crossbeam-channel",
  "log",
  "nix",
  "rand 0.7.3",
@@ -3465,6 +3470,7 @@ dependencies = [
 name = "solana-send-transaction-service"
 version = "1.10.0"
 dependencies = [
+ "crossbeam-channel",
  "log",
  "solana-metrics",
  "solana-runtime",
