@@ -17,7 +17,6 @@ use solana_bpf_loader_program::{
 use solana_bpf_rust_invoke::instructions::*;
 use solana_bpf_rust_realloc::instructions::*;
 use solana_bpf_rust_realloc_invoke::instructions::*;
-use solana_cli_output::display::println_transaction;
 use solana_program_runtime::invoke_context::with_mock_invoke_context;
 use solana_rbpf::{
     elf::Executable,
@@ -25,7 +24,10 @@ use solana_rbpf::{
     vm::{Config, Tracer},
 };
 use solana_runtime::{
-    bank::{Bank, ExecuteTimings, NonceInfo, TransactionBalancesSet, TransactionResults},
+    bank::{
+        Bank, DurableNonceFee, ExecuteTimings, TransactionBalancesSet, TransactionExecutionDetails,
+        TransactionExecutionResult, TransactionResults,
+    },
     bank_client::BankClient,
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
     loader_utils::{
@@ -52,13 +54,10 @@ use solana_sdk::{
     transaction::{SanitizedTransaction, Transaction, TransactionError},
 };
 use solana_transaction_status::{
-    token_balances::collect_token_balances, ConfirmedTransactionWithStatusMeta, Encodable,
-    InnerInstructions, TransactionStatusMeta, TransactionWithStatusMeta, UiTransactionEncoding,
+    token_balances::collect_token_balances, ConfirmedTransactionWithStatusMeta, InnerInstructions,
+    TransactionStatusMeta, TransactionWithStatusMeta,
 };
-use std::{
-    collections::HashMap, convert::TryFrom, env, fs::File, io::Read, path::PathBuf, str::FromStr,
-    sync::Arc,
-};
+use std::{collections::HashMap, env, fs::File, io::Read, path::PathBuf, str::FromStr, sync::Arc};
 
 /// BPF program file extension
 const PLATFORM_FILE_EXTENSION_BPF: &str = "so";
@@ -198,7 +197,10 @@ fn run_program(name: &str) -> u64 {
     with_mock_invoke_context(loader_id, 0, |invoke_context| {
         let (parameter_bytes, account_lengths) = serialize_parameters(
             invoke_context.transaction_context,
-            invoke_context.transaction_context.get_current_instruction_context().unwrap(),
+            invoke_context
+                .transaction_context
+                .get_current_instruction_context()
+                .unwrap(),
         )
         .unwrap();
 
@@ -224,7 +226,13 @@ fn run_program(name: &str) -> u64 {
         let mut instruction_count = 0;
         let mut tracer = None;
         for i in 0..2 {
-            invoke_context.return_data = (*invoke_context.transaction_context.get_program_key().unwrap(), Vec::new());
+            invoke_context.return_data = (
+                *invoke_context
+                    .transaction_context
+                    .get_program_key()
+                    .unwrap(),
+                Vec::new(),
+            );
             let mut parameter_bytes = parameter_bytes.clone();
             {
                 let mut vm = create_vm(
@@ -277,7 +285,10 @@ fn run_program(name: &str) -> u64 {
             }
             deserialize_parameters(
                 invoke_context.transaction_context,
-                invoke_context.transaction_context.get_current_instruction_context().unwrap(),
+                invoke_context
+                    .transaction_context
+                    .get_current_instruction_context()
+                    .unwrap(),
                 parameter_bytes.as_slice(),
                 &account_lengths,
                 true,
@@ -295,7 +306,7 @@ fn process_transaction_and_record_inner(
     let signature = tx.signatures.get(0).unwrap().clone();
     let txs = vec![tx];
     let tx_batch = bank.prepare_batch_for_tests(txs);
-    let (mut results, _, mut inner_instructions, _transaction_logs) = bank
+    let mut results = bank
         .load_execute_and_commit_transactions(
             &tx_batch,
             MAX_PROCESSING_AGE,
@@ -303,23 +314,27 @@ fn process_transaction_and_record_inner(
             true,
             false,
             &mut ExecuteTimings::default(),
-        );
+        )
+        .0;
     let result = results
         .fee_collection_results
         .swap_remove(0)
         .and_then(|_| bank.get_signature_status(&signature).unwrap());
-    (
-        result,
-        inner_instructions
-            .swap_remove(0)
-            .expect("cpi recording should be enabled"),
-    )
+    let inner_instructions = results
+        .execution_results
+        .swap_remove(0)
+        .details()
+        .expect("tx should be executed")
+        .clone()
+        .inner_instructions
+        .expect("cpi recording should be enabled");
+    (result, inner_instructions)
 }
 
 fn execute_transactions(
     bank: &Bank,
     txs: Vec<Transaction>,
-) -> Vec<ConfirmedTransactionWithStatusMeta> {
+) -> Vec<Result<ConfirmedTransactionWithStatusMeta, TransactionError>> {
     let batch = bank.prepare_batch_for_tests(txs.clone());
     let mut timings = ExecuteTimings::default();
     let mut mint_decimals = HashMap::new();
@@ -333,8 +348,6 @@ fn execute_transactions(
             post_balances,
             ..
         },
-        inner_instructions,
-        transaction_logs,
     ) = bank.load_execute_and_commit_transactions(
         &batch,
         std::usize::MAX,
@@ -348,78 +361,82 @@ fn execute_transactions(
     izip!(
         txs.iter(),
         execution_results.into_iter(),
-        inner_instructions.into_iter(),
         pre_balances.into_iter(),
         post_balances.into_iter(),
         tx_pre_token_balances.into_iter(),
         tx_post_token_balances.into_iter(),
-        transaction_logs.into_iter(),
     )
     .map(
         |(
             tx,
-            (execute_result, nonce),
-            inner_instructions,
+            execution_result,
             pre_balances,
             post_balances,
             pre_token_balances,
             post_token_balances,
-            log_messages,
         )| {
-            let lamports_per_signature = nonce
-                .map(|nonce| nonce.lamports_per_signature())
-                .unwrap_or_else(|| {
-                    bank.get_lamports_per_signature_for_blockhash(&tx.message().recent_blockhash)
-                })
-                .expect("lamports_per_signature must exist");
-            let fee = Bank::get_fee_for_message_with_lamports_per_signature(
-                &SanitizedMessage::try_from(tx.message().clone()).unwrap(),
-                lamports_per_signature,
-            );
+            match execution_result {
+                TransactionExecutionResult::Executed(details) => {
+                    let TransactionExecutionDetails {
+                        status,
+                        log_messages,
+                        inner_instructions,
+                        durable_nonce_fee,
+                    } = details;
 
-            let inner_instructions = inner_instructions.map(|inner_instructions| {
-                inner_instructions
-                    .into_iter()
-                    .enumerate()
-                    .map(|(index, instructions)| InnerInstructions {
-                        index: index as u8,
-                        instructions,
+                    let lamports_per_signature = match durable_nonce_fee {
+                        Some(DurableNonceFee::Valid(lamports_per_signature)) => {
+                            Some(lamports_per_signature)
+                        }
+                        Some(DurableNonceFee::Invalid) => None,
+                        None => bank.get_lamports_per_signature_for_blockhash(
+                            &tx.message().recent_blockhash,
+                        ),
+                    }
+                    .expect("lamports_per_signature must be available");
+                    let fee = Bank::get_fee_for_message_with_lamports_per_signature(
+                        &SanitizedMessage::try_from(tx.message().clone()).unwrap(),
+                        lamports_per_signature,
+                    );
+
+                    let inner_instructions = inner_instructions.map(|inner_instructions| {
+                        inner_instructions
+                            .into_iter()
+                            .enumerate()
+                            .map(|(index, instructions)| InnerInstructions {
+                                index: index as u8,
+                                instructions,
+                            })
+                            .filter(|i| !i.instructions.is_empty())
+                            .collect()
+                    });
+
+                    let tx_status_meta = TransactionStatusMeta {
+                        status,
+                        fee,
+                        pre_balances,
+                        post_balances,
+                        pre_token_balances: Some(pre_token_balances),
+                        post_token_balances: Some(post_token_balances),
+                        inner_instructions,
+                        log_messages,
+                        rewards: None,
+                    };
+
+                    Ok(ConfirmedTransactionWithStatusMeta {
+                        slot: bank.slot(),
+                        transaction: TransactionWithStatusMeta {
+                            transaction: tx.clone(),
+                            meta: Some(tx_status_meta),
+                        },
+                        block_time: None,
                     })
-                    .filter(|i| !i.instructions.is_empty())
-                    .collect()
-            });
-
-            let tx_status_meta = TransactionStatusMeta {
-                status: execute_result,
-                fee,
-                pre_balances,
-                post_balances,
-                pre_token_balances: Some(pre_token_balances),
-                post_token_balances: Some(post_token_balances),
-                inner_instructions,
-                log_messages,
-                rewards: None,
-            };
-
-            ConfirmedTransactionWithStatusMeta {
-                slot: bank.slot(),
-                transaction: TransactionWithStatusMeta {
-                    transaction: tx.clone(),
-                    meta: Some(tx_status_meta),
-                },
-                block_time: None,
+                }
+                TransactionExecutionResult::NotExecuted(err) => Err(err.clone()),
             }
         },
     )
     .collect()
-}
-
-fn print_confirmed_tx(name: &str, confirmed_tx: ConfirmedTransactionWithStatusMeta) {
-    let block_time = confirmed_tx.block_time;
-    let tx = confirmed_tx.transaction.transaction.clone();
-    let encoded = confirmed_tx.encode(UiTransactionEncoding::JsonParsed);
-    println!("EXECUTE {} (slot {})", name, encoded.slot);
-    println_transaction(&tx, &encoded.transaction.meta, "  ", None, block_time);
 }
 
 #[test]
@@ -2439,43 +2456,35 @@ fn test_program_upgradeable_locks() {
         execute_transactions(&bank, vec![invoke_tx, upgrade_tx])
     };
 
-    if false {
-        println!("upgrade and invoke");
-        for result in &results1 {
-            print_confirmed_tx("result", result.clone());
-        }
-        println!("invoke and upgrade");
-        for result in &results2 {
-            print_confirmed_tx("result", result.clone());
-        }
-    }
+    assert!(matches!(
+        results1[0],
+        Ok(ConfirmedTransactionWithStatusMeta {
+            transaction: TransactionWithStatusMeta {
+                meta: Some(TransactionStatusMeta { status: Ok(()), .. }),
+                ..
+            },
+            ..
+        })
+    ));
+    assert_eq!(results1[1], Err(TransactionError::AccountInUse));
 
-    if let Some(ref meta) = results1[0].transaction.meta {
-        assert_eq!(meta.status, Ok(()));
-    } else {
-        panic!("no meta");
-    }
-    if let Some(ref meta) = results1[1].transaction.meta {
-        assert_eq!(meta.status, Err(TransactionError::AccountInUse));
-    } else {
-        panic!("no meta");
-    }
-    if let Some(ref meta) = results2[0].transaction.meta {
-        assert_eq!(
-            meta.status,
-            Err(TransactionError::InstructionError(
-                0,
-                InstructionError::ProgramFailedToComplete
-            ))
-        );
-    } else {
-        panic!("no meta");
-    }
-    if let Some(ref meta) = results2[1].transaction.meta {
-        assert_eq!(meta.status, Err(TransactionError::AccountInUse));
-    } else {
-        panic!("no meta");
-    }
+    assert!(matches!(
+        results2[0],
+        Ok(ConfirmedTransactionWithStatusMeta {
+            transaction: TransactionWithStatusMeta {
+                meta: Some(TransactionStatusMeta {
+                    status: Err(TransactionError::InstructionError(
+                        0,
+                        InstructionError::ProgramFailedToComplete
+                    )),
+                    ..
+                }),
+                ..
+            },
+            ..
+        })
+    ));
+    assert_eq!(results2[1], Err(TransactionError::AccountInUse));
 }
 
 #[cfg(feature = "bpf_rust")]

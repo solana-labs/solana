@@ -794,22 +794,23 @@ impl BankingStage {
     fn record_transactions(
         bank_slot: Slot,
         txs: &[SanitizedTransaction],
-        results: &[TransactionExecutionResult],
+        execution_results: &[TransactionExecutionResult],
         recorder: &TransactionRecorder,
     ) -> (Result<usize, PohRecorderError>, Vec<usize>) {
         let mut processed_generation = Measure::start("record::process_generation");
-        let (processed_transactions, processed_transactions_indexes): (Vec<_>, Vec<_>) = results
-            .iter()
-            .zip(txs)
-            .enumerate()
-            .filter_map(|(i, ((r, _n), tx))| {
-                if Bank::can_commit(r) {
-                    Some((tx.to_versioned_transaction(), i))
-                } else {
-                    None
-                }
-            })
-            .unzip();
+        let (processed_transactions, processed_transactions_indexes): (Vec<_>, Vec<_>) =
+            execution_results
+                .iter()
+                .zip(txs)
+                .enumerate()
+                .filter_map(|(i, (execution_result, tx))| {
+                    if execution_result.was_executed() {
+                        Some((tx.to_versioned_transaction(), i))
+                    } else {
+                        None
+                    }
+                })
+                .unzip();
 
         processed_generation.stop();
         let num_to_commit = processed_transactions.len();
@@ -875,28 +876,25 @@ impl BankingStage {
         };
 
         let mut execute_timings = ExecuteTimings::default();
-        let (
-            mut loaded_accounts,
-            results,
-            inner_instructions,
-            transaction_logs,
-            mut retryable_txs,
-            tx_count,
-            signature_count,
-        ) = bank.load_and_execute_transactions(
-            batch,
-            MAX_PROCESSING_AGE,
-            transaction_status_sender.is_some(),
-            transaction_status_sender.is_some(),
-            &mut execute_timings,
-        );
+        let (mut loaded_accounts, execution_results, mut retryable_txs, tx_count, signature_count) =
+            bank.load_and_execute_transactions(
+                batch,
+                MAX_PROCESSING_AGE,
+                transaction_status_sender.is_some(),
+                transaction_status_sender.is_some(),
+                &mut execute_timings,
+            );
         load_execute_time.stop();
 
         let freeze_lock = bank.freeze_lock();
 
         let mut record_time = Measure::start("record_time");
-        let (num_to_commit, retryable_record_txs) =
-            Self::record_transactions(bank.slot(), batch.sanitized_transactions(), &results, poh);
+        let (num_to_commit, retryable_record_txs) = Self::record_transactions(
+            bank.slot(),
+            batch.sanitized_transactions(),
+            &execution_results,
+            poh,
+        );
         inc_new_counter_info!(
             "banking_stage-record_transactions_num_to_commit",
             *num_to_commit.as_ref().unwrap_or(&0)
@@ -918,7 +916,7 @@ impl BankingStage {
             let tx_results = bank.commit_transactions(
                 sanitized_txs,
                 &mut loaded_accounts,
-                &results,
+                execution_results,
                 tx_count,
                 signature_count,
                 &mut execute_timings,
@@ -935,8 +933,6 @@ impl BankingStage {
                     tx_results.execution_results,
                     TransactionBalancesSet::new(pre_balances, post_balances),
                     TransactionTokenBalancesSet::new(pre_token_balances, post_token_balances),
-                    inner_instructions,
-                    transaction_logs,
                     tx_results.rent_debits,
                 );
             }
@@ -1491,6 +1487,7 @@ mod tests {
             poh_service::PohService,
         },
         solana_rpc::transaction_status_service::TransactionStatusService,
+        solana_runtime::bank::TransactionExecutionDetails,
         solana_sdk::{
             hash::Hash,
             instruction::InstructionError,
@@ -1520,6 +1517,15 @@ mod tests {
             Arc::new(Keypair::new()),
             SocketAddrSpace::Unspecified,
         )
+    }
+
+    fn new_execution_result(status: Result<(), TransactionError>) -> TransactionExecutionResult {
+        TransactionExecutionResult::Executed(TransactionExecutionDetails {
+            status,
+            log_messages: None,
+            inner_instructions: None,
+            durable_nonce_fee: None,
+        })
     }
 
     #[test]
@@ -1913,19 +1919,16 @@ mod tests {
                 system_transaction::transfer(&keypair2, &pubkey2, 1, genesis_config.hash()),
             ]);
 
-            let mut results = vec![(Ok(()), None), (Ok(()), None)];
+            let mut results = vec![new_execution_result(Ok(())); 2];
             let _ = BankingStage::record_transactions(bank.slot(), &txs, &results, &recorder);
             let (_bank, (entry, _tick_height)) = entry_receiver.recv().unwrap();
             assert_eq!(entry.transactions.len(), txs.len());
 
             // InstructionErrors should still be recorded
-            results[0] = (
-                Err(TransactionError::InstructionError(
-                    1,
-                    SystemError::ResultWithNegativeLamports.into(),
-                )),
-                None,
-            );
+            results[0] = new_execution_result(Err(TransactionError::InstructionError(
+                1,
+                SystemError::ResultWithNegativeLamports.into(),
+            )));
             let (res, retryable) =
                 BankingStage::record_transactions(bank.slot(), &txs, &results, &recorder);
             res.unwrap();
@@ -1934,7 +1937,7 @@ mod tests {
             assert_eq!(entry.transactions.len(), txs.len());
 
             // Other TransactionErrors should not be recorded
-            results[0] = (Err(TransactionError::AccountNotFound), None);
+            results[0] = TransactionExecutionResult::NotExecuted(TransactionError::AccountNotFound);
             let (res, retryable) =
                 BankingStage::record_transactions(bank.slot(), &txs, &results, &recorder);
             res.unwrap();
