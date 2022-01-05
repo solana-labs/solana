@@ -1,5 +1,4 @@
 #[allow(deprecated)]
-use solana_sdk::sysvar::fees::Fees;
 use {
     crate::{alloc, BpfError},
     alloc::Alloc,
@@ -24,7 +23,7 @@ use {
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         epoch_schedule::EpochSchedule,
         feature_set::{
-            blake3_syscall_enabled, disable_fees_sysvar, do_support_realloc,
+            self, blake3_syscall_enabled, disable_fees_sysvar, do_support_realloc,
             fixed_memcpy_nonoverlapping_check, libsecp256k1_0_5_upgrade_enabled,
             prevent_calling_precompiles_as_programs, return_data_syscall_enabled,
             secp256k1_recover_syscall_enabled, sol_log_data_syscall_enabled,
@@ -40,7 +39,7 @@ use {
         secp256k1_recover::{
             Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
         },
-        sysvar::{self, Sysvar, SysvarId},
+        sysvar::{self, fees::Fees, Sysvar, SysvarId},
         transaction_context::InstructionAccount,
     },
     std::{
@@ -158,6 +157,22 @@ pub fn register_syscalls(
         syscall_registry.register_syscall_by_name(b"sol_blake3", SyscallBlake3::call)?;
     }
 
+    if invoke_context
+        .feature_set
+        .is_active(&feature_set::zk_token_sdk_enabled::id())
+    {
+        syscall_registry
+            .register_syscall_by_name(b"sol_zk_token_elgamal_op", SyscallZkTokenElgamalOp::call)?;
+        syscall_registry.register_syscall_by_name(
+            b"sol_zk_token_elgamal_op_with_lo_hi",
+            SyscallZkTokenElgamalOpWithLoHi::call,
+        )?;
+        syscall_registry.register_syscall_by_name(
+            b"sol_zk_token_elgamal_op_with_scalar",
+            SyscallZkTokenElgamalOpWithScalar::call,
+        )?;
+    }
+
     syscall_registry
         .register_syscall_by_name(b"sol_get_clock_sysvar", SyscallGetClockSysvar::call)?;
     syscall_registry.register_syscall_by_name(
@@ -244,6 +259,9 @@ pub fn bind_syscall_context_objects<'a, 'b>(
     let is_sol_log_data_syscall_active = invoke_context
         .feature_set
         .is_active(&sol_log_data_syscall_enabled::id());
+    let is_zk_token_sdk_enabled = invoke_context
+        .feature_set
+        .is_active(&feature_set::zk_token_sdk_enabled::id());
 
     let loader_id = invoke_context
         .transaction_context
@@ -348,6 +366,28 @@ pub fn bind_syscall_context_objects<'a, 'b>(
         vm,
         is_blake3_syscall_active,
         Box::new(SyscallBlake3 {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_zk_token_sdk_enabled,
+        Box::new(SyscallZkTokenElgamalOp {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_zk_token_sdk_enabled,
+        Box::new(SyscallZkTokenElgamalOpWithLoHi {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_zk_token_sdk_enabled,
+        Box::new(SyscallZkTokenElgamalOpWithScalar {
             invoke_context: invoke_context.clone(),
         }),
     );
@@ -1593,6 +1633,195 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSecp256k1Recover<'a, 'b> {
 
         secp256k1_recover_result.copy_from_slice(&public_key[1..65]);
         *result = Ok(SUCCESS);
+    }
+}
+
+pub struct SyscallZkTokenElgamalOp<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+
+impl<'a, 'b> SyscallObject<BpfError> for SyscallZkTokenElgamalOp<'a, 'b> {
+    fn call(
+        &mut self,
+        op: u64,
+        ct_0_addr: u64,
+        ct_1_addr: u64,
+        ct_result_addr: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        use solana_zk_token_sdk::zk_token_elgamal::{ops, pod};
+
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+        let cost = invoke_context.get_compute_budget().zk_token_elgamal_op_cost;
+        question_mark!(invoke_context.get_compute_meter().consume(cost), result);
+
+        let loader_id = question_mark!(
+            invoke_context
+                .transaction_context
+                .get_loader_key()
+                .map_err(SyscallError::InstructionError),
+            result
+        );
+
+        let ct_0 = question_mark!(
+            translate_type::<pod::ElGamalCiphertext>(memory_mapping, ct_0_addr, &loader_id),
+            result
+        );
+        let ct_1 = question_mark!(
+            translate_type::<pod::ElGamalCiphertext>(memory_mapping, ct_1_addr, &loader_id),
+            result
+        );
+
+        if let Some(ct_result) = match op {
+            ops::OP_ADD => ops::add(ct_0, ct_1),
+            ops::OP_SUB => ops::subtract(ct_0, ct_1),
+            _ => None,
+        } {
+            *question_mark!(
+                translate_type_mut::<pod::ElGamalCiphertext>(
+                    memory_mapping,
+                    ct_result_addr,
+                    &loader_id,
+                ),
+                result
+            ) = ct_result;
+            *result = Ok(0);
+        } else {
+            *result = Ok(1);
+        }
+    }
+}
+
+pub struct SyscallZkTokenElgamalOpWithLoHi<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+
+impl<'a, 'b> SyscallObject<BpfError> for SyscallZkTokenElgamalOpWithLoHi<'a, 'b> {
+    fn call(
+        &mut self,
+        op: u64,
+        ct_0_addr: u64,
+        ct_1_lo_addr: u64,
+        ct_1_hi_addr: u64,
+        ct_result_addr: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        use solana_zk_token_sdk::zk_token_elgamal::{ops, pod};
+
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+        let cost = invoke_context.get_compute_budget().zk_token_elgamal_op_cost;
+        question_mark!(invoke_context.get_compute_meter().consume(cost), result);
+
+        let loader_id = question_mark!(
+            invoke_context
+                .transaction_context
+                .get_loader_key()
+                .map_err(SyscallError::InstructionError),
+            result
+        );
+
+        let ct_0 = question_mark!(
+            translate_type::<pod::ElGamalCiphertext>(memory_mapping, ct_0_addr, &loader_id),
+            result
+        );
+        let ct_1_lo = question_mark!(
+            translate_type::<pod::ElGamalCiphertext>(memory_mapping, ct_1_lo_addr, &loader_id),
+            result
+        );
+        let ct_1_hi = question_mark!(
+            translate_type::<pod::ElGamalCiphertext>(memory_mapping, ct_1_hi_addr, &loader_id),
+            result
+        );
+
+        if let Some(ct_result) = match op {
+            ops::OP_ADD => ops::add_with_lo_hi(ct_0, ct_1_lo, ct_1_hi),
+            ops::OP_SUB => ops::subtract_with_lo_hi(ct_0, ct_1_lo, ct_1_hi),
+            _ => None,
+        } {
+            *question_mark!(
+                translate_type_mut::<pod::ElGamalCiphertext>(
+                    memory_mapping,
+                    ct_result_addr,
+                    &loader_id,
+                ),
+                result
+            ) = ct_result;
+            *result = Ok(0);
+        } else {
+            *result = Ok(1);
+        }
+    }
+}
+
+pub struct SyscallZkTokenElgamalOpWithScalar<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+
+impl<'a, 'b> SyscallObject<BpfError> for SyscallZkTokenElgamalOpWithScalar<'a, 'b> {
+    fn call(
+        &mut self,
+        op: u64,
+        ct_addr: u64,
+        scalar: u64,
+        ct_result_addr: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        use solana_zk_token_sdk::zk_token_elgamal::{ops, pod};
+
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+        let cost = invoke_context.get_compute_budget().zk_token_elgamal_op_cost;
+        question_mark!(invoke_context.get_compute_meter().consume(cost), result);
+
+        let loader_id = question_mark!(
+            invoke_context
+                .transaction_context
+                .get_loader_key()
+                .map_err(SyscallError::InstructionError),
+            result
+        );
+
+        let ct = question_mark!(
+            translate_type::<pod::ElGamalCiphertext>(memory_mapping, ct_addr, &loader_id),
+            result
+        );
+
+        if let Some(ct_result) = match op {
+            ops::OP_ADD => ops::add_to(ct, scalar),
+            ops::OP_SUB => ops::subtract_from(ct, scalar),
+            _ => None,
+        } {
+            *question_mark!(
+                translate_type_mut::<pod::ElGamalCiphertext>(
+                    memory_mapping,
+                    ct_result_addr,
+                    &loader_id,
+                ),
+                result
+            ) = ct_result;
+            *result = Ok(0);
+        } else {
+            *result = Ok(1);
+        }
     }
 }
 

@@ -181,6 +181,15 @@ fn feature_builtins() -> Vec<(Builtin, Pubkey, ActivationType)> {
             feature_set::versioned_tx_message_enabled::id(),
             ActivationType::NewProgram,
         ),
+        (
+            Builtin::new(
+                "zk_token_proof_program",
+                solana_zk_token_sdk::zk_token_proof_program::id(),
+                with_program_logging!(solana_zk_token_proof_program::process_instruction),
+            ),
+            feature_set::zk_token_sdk_enabled::id(),
+            ActivationType::NewProgram,
+        ),
     ]
 }
 

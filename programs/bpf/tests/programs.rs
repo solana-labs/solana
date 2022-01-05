@@ -484,6 +484,7 @@ fn test_program_bpf_sanity() {
             ("solana_bpf_rust_sanity", true),
             ("solana_bpf_rust_secp256k1_recover", true),
             ("solana_bpf_rust_sha", true),
+            ("solana_bpf_rust_zk_token_elgamal", true),
         ]);
     }
 
