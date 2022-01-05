@@ -792,37 +792,3 @@ impl Drop for LocalCluster {
         self.close();
     }
 }
-
-#[cfg(test)]
-mod test {
-    use {super::*, solana_sdk::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH};
-
-    #[test]
-    fn test_local_cluster_start_and_exit() {
-        solana_logger::setup();
-        let num_nodes = 1;
-        let cluster =
-            LocalCluster::new_with_equal_stakes(num_nodes, 100, 3, SocketAddrSpace::Unspecified);
-        assert_eq!(cluster.validators.len(), num_nodes);
-    }
-
-    #[test]
-    fn test_local_cluster_start_and_exit_with_config() {
-        solana_logger::setup();
-        const NUM_NODES: usize = 1;
-        let mut config = ClusterConfig {
-            validator_configs: make_identical_validator_configs(
-                &ValidatorConfig::default(),
-                NUM_NODES,
-            ),
-            node_stakes: vec![3; NUM_NODES],
-            cluster_lamports: 100,
-            ticks_per_slot: 8,
-            slots_per_epoch: MINIMUM_SLOTS_PER_EPOCH as u64,
-            stakers_slot_offset: MINIMUM_SLOTS_PER_EPOCH as u64,
-            ..ClusterConfig::default()
-        };
-        let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
-        assert_eq!(cluster.validators.len(), NUM_NODES);
-    }
-}
