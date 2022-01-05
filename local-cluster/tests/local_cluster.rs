@@ -1,6 +1,11 @@
 #![allow(clippy::integer_arithmetic)]
 use {
     assert_matches::assert_matches,
+    common::{
+        create_custom_leader_schedule, last_vote_in_tower, ms_for_n_slots, open_blockstore,
+        purge_slots, remove_tower, restore_tower, run_cluster_partition,
+        run_kill_partition_switch_threshold, test_faulty_node, RUST_LOG_FILTER,
+    },
     crossbeam_channel::{unbounded, Receiver},
     gag::BufferRedirect,
     log::*,
@@ -13,11 +18,16 @@ use {
         thin_client::{create_client, ThinClient},
     },
     solana_core::{
+<<<<<<< HEAD
         broadcast_stage::{BroadcastDuplicatesConfig, BroadcastStageType},
+=======
+        broadcast_stage::BroadcastStageType,
+>>>>>>> 0e1afcbb2 (Split up local cluster tests into separate CI steps (#22295))
         consensus::{Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
         validator::ValidatorConfig,
     },
+<<<<<<< HEAD
     solana_download_utils::download_snapshot,
     solana_gossip::{
         cluster_info::{self, VALIDATOR_PORT_RANGE},
@@ -30,6 +40,11 @@ use {
         blockstore_db::AccessType,
         leader_schedule::{FixedSchedule, LeaderSchedule},
     },
+=======
+    solana_download_utils::download_snapshot_archive,
+    solana_gossip::{cluster_info::VALIDATOR_PORT_RANGE, gossip_service::discover_cluster},
+    solana_ledger::{ancestor_iterator::AncestorIterator, blockstore::Blockstore},
+>>>>>>> 0e1afcbb2 (Split up local cluster tests into separate CI steps (#22295))
     solana_local_cluster::{
         cluster::{Cluster, ClusterValidatorInfo},
         cluster_tests,
@@ -43,11 +58,10 @@ use {
     solana_sdk::{
         account::AccountSharedData,
         client::{AsyncClient, SyncClient},
-        clock::{self, Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE},
+        clock::{self, Slot, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE},
         commitment_config::CommitmentConfig,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         genesis_config::ClusterType,
-        hash::Hash,
         poh_config::PohConfig,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
@@ -56,12 +70,16 @@ use {
         transaction::Transaction,
     },
     solana_streamer::socket::SocketAddrSpace,
+<<<<<<< HEAD
     solana_vote_program::{
         vote_instruction,
         vote_state::{Vote, MAX_LOCKOUT_HISTORY},
     },
+=======
+    solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY,
+>>>>>>> 0e1afcbb2 (Split up local cluster tests into separate CI steps (#22295))
     std::{
-        collections::{BTreeSet, HashMap, HashSet},
+        collections::{HashMap, HashSet},
         fs,
         io::Read,
         iter,
@@ -76,8 +94,33 @@ use {
     tempfile::TempDir,
 };
 
-const RUST_LOG_FILTER: &str =
-    "error,solana_core::replay_stage=warn,solana_local_cluster=info,local_cluster=info";
+mod common;
+
+#[test]
+fn test_local_cluster_start_and_exit() {
+    solana_logger::setup();
+    let num_nodes = 1;
+    let cluster =
+        LocalCluster::new_with_equal_stakes(num_nodes, 100, 3, SocketAddrSpace::Unspecified);
+    assert_eq!(cluster.validators.len(), num_nodes);
+}
+
+#[test]
+fn test_local_cluster_start_and_exit_with_config() {
+    solana_logger::setup();
+    const NUM_NODES: usize = 1;
+    let mut config = ClusterConfig {
+        validator_configs: make_identical_validator_configs(&ValidatorConfig::default(), NUM_NODES),
+        node_stakes: vec![3; NUM_NODES],
+        cluster_lamports: 100,
+        ticks_per_slot: 8,
+        slots_per_epoch: MINIMUM_SLOTS_PER_EPOCH as u64,
+        stakers_slot_offset: MINIMUM_SLOTS_PER_EPOCH as u64,
+        ..ClusterConfig::default()
+    };
+    let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
+    assert_eq!(cluster.validators.len(), NUM_NODES);
+}
 
 #[test]
 #[serial]
@@ -297,148 +340,6 @@ fn test_leader_failure_4() {
     );
 }
 
-/// This function runs a network, initiates a partition based on a
-/// configuration, resolve the partition, then checks that the network
-/// continues to achieve consensus
-/// # Arguments
-/// * `partitions` - A slice of partition configurations, where each partition
-/// configuration is a slice of (usize, bool), representing a node's stake and
-/// whether or not it should be killed during the partition
-/// * `leader_schedule` - An option that specifies whether the cluster should
-/// run with a fixed, predetermined leader schedule
-#[allow(clippy::cognitive_complexity)]
-fn run_cluster_partition<C>(
-    partitions: &[Vec<usize>],
-    leader_schedule: Option<(LeaderSchedule, Vec<Arc<Keypair>>)>,
-    mut context: C,
-    on_partition_start: impl FnOnce(&mut LocalCluster, &mut C),
-    on_before_partition_resolved: impl FnOnce(&mut LocalCluster, &mut C),
-    on_partition_resolved: impl FnOnce(&mut LocalCluster, &mut C),
-    partition_duration: Option<u64>,
-    ticks_per_slot: Option<u64>,
-    additional_accounts: Vec<(Pubkey, AccountSharedData)>,
-) {
-    solana_logger::setup_with_default(RUST_LOG_FILTER);
-    info!("PARTITION_TEST!");
-    let num_nodes = partitions.len();
-    let node_stakes: Vec<_> = partitions
-        .iter()
-        .flat_map(|p| p.iter().map(|stake_weight| 100 * *stake_weight as u64))
-        .collect();
-    assert_eq!(node_stakes.len(), num_nodes);
-    let cluster_lamports = node_stakes.iter().sum::<u64>() * 2;
-    let enable_partition = Arc::new(AtomicBool::new(true));
-    let mut validator_config = ValidatorConfig {
-        enable_partition: Some(enable_partition.clone()),
-        ..ValidatorConfig::default()
-    };
-
-    // Returns:
-    // 1) The keys for the validators
-    // 2) The amount of time it would take to iterate through one full iteration of the given
-    // leader schedule
-    let (validator_keys, leader_schedule_time): (Vec<_>, u64) = {
-        if let Some((leader_schedule, validator_keys)) = leader_schedule {
-            assert_eq!(validator_keys.len(), num_nodes);
-            let num_slots_per_rotation = leader_schedule.num_slots() as u64;
-            let fixed_schedule = FixedSchedule {
-                start_epoch: 0,
-                leader_schedule: Arc::new(leader_schedule),
-            };
-            validator_config.fixed_leader_schedule = Some(fixed_schedule);
-            (
-                validator_keys,
-                num_slots_per_rotation * clock::DEFAULT_MS_PER_SLOT,
-            )
-        } else {
-            (
-                iter::repeat_with(|| Arc::new(Keypair::new()))
-                    .take(partitions.len())
-                    .collect(),
-                10_000,
-            )
-        }
-    };
-
-    let slots_per_epoch = 2048;
-    let mut config = ClusterConfig {
-        cluster_lamports,
-        node_stakes,
-        validator_configs: make_identical_validator_configs(&validator_config, num_nodes),
-        validator_keys: Some(
-            validator_keys
-                .into_iter()
-                .zip(iter::repeat_with(|| true))
-                .collect(),
-        ),
-        slots_per_epoch,
-        stakers_slot_offset: slots_per_epoch,
-        skip_warmup_slots: true,
-        additional_accounts,
-        ticks_per_slot: ticks_per_slot.unwrap_or(DEFAULT_TICKS_PER_SLOT),
-        ..ClusterConfig::default()
-    };
-
-    info!(
-        "PARTITION_TEST starting cluster with {:?} partitions slots_per_epoch: {}",
-        partitions, config.slots_per_epoch,
-    );
-    let mut cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
-
-    info!("PARTITION_TEST spend_and_verify_all_nodes(), ensure all nodes are caught up");
-    cluster_tests::spend_and_verify_all_nodes(
-        &cluster.entry_point_info,
-        &cluster.funding_keypair,
-        num_nodes,
-        HashSet::new(),
-        SocketAddrSpace::Unspecified,
-    );
-
-    let cluster_nodes = discover_cluster(
-        &cluster.entry_point_info.gossip,
-        num_nodes,
-        SocketAddrSpace::Unspecified,
-    )
-    .unwrap();
-
-    // Check epochs have correct number of slots
-    info!("PARTITION_TEST sleeping until partition starting condition",);
-    for node in &cluster_nodes {
-        let node_client = RpcClient::new_socket(node.rpc);
-        let epoch_info = node_client.get_epoch_info().unwrap();
-        assert_eq!(epoch_info.slots_in_epoch, slots_per_epoch);
-    }
-
-    info!("PARTITION_TEST start partition");
-    on_partition_start(&mut cluster, &mut context);
-    enable_partition.store(false, Ordering::Relaxed);
-
-    sleep(Duration::from_millis(
-        partition_duration.unwrap_or(leader_schedule_time),
-    ));
-
-    on_before_partition_resolved(&mut cluster, &mut context);
-    info!("PARTITION_TEST remove partition");
-    enable_partition.store(true, Ordering::Relaxed);
-
-    // Give partitions time to propagate their blocks from during the partition
-    // after the partition resolves
-    let timeout = 10_000;
-    let propagation_time = leader_schedule_time;
-    info!(
-        "PARTITION_TEST resolving partition. sleeping {} ms",
-        timeout
-    );
-    sleep(Duration::from_millis(timeout));
-    info!(
-        "PARTITION_TEST waiting for blocks to propagate after partition {}ms",
-        propagation_time
-    );
-    sleep(Duration::from_millis(propagation_time));
-    info!("PARTITION_TEST resuming normal operation");
-    on_partition_resolved(&mut cluster, &mut context);
-}
-
 #[allow(unused_attributes)]
 #[ignore]
 #[test]
@@ -501,6 +402,7 @@ fn test_cluster_partition_1_1_1() {
     )
 }
 
+<<<<<<< HEAD
 fn create_custom_leader_schedule(
     validator_num_slots: &[usize],
 ) -> (LeaderSchedule, Vec<Arc<Keypair>>) {
@@ -1269,6 +1171,8 @@ fn test_fork_choice_refresh_old_votes() {
     );
 }
 
+=======
+>>>>>>> 0e1afcbb2 (Split up local cluster tests into separate CI steps (#22295))
 #[test]
 #[serial]
 fn test_two_unbalanced_stakes() {
@@ -1377,26 +1281,6 @@ fn test_restart_node() {
         10,
         1,
     );
-}
-
-#[test]
-#[serial]
-fn test_listener_startup() {
-    let mut config = ClusterConfig {
-        node_stakes: vec![100; 1],
-        cluster_lamports: 1_000,
-        num_listeners: 3,
-        validator_configs: make_identical_validator_configs(&ValidatorConfig::default(), 1),
-        ..ClusterConfig::default()
-    };
-    let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
-    let cluster_nodes = discover_cluster(
-        &cluster.entry_point_info.gossip,
-        4,
-        SocketAddrSpace::Unspecified,
-    )
-    .unwrap();
-    assert_eq!(cluster_nodes.len(), 4);
 }
 
 #[test]
@@ -2033,6 +1917,7 @@ fn test_fake_shreds_broadcast_leader() {
 }
 
 #[test]
+<<<<<<< HEAD
 #[serial]
 #[ignore]
 #[allow(unused_attributes)]
@@ -2081,6 +1966,8 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
 }
 
 #[test]
+=======
+>>>>>>> 0e1afcbb2 (Split up local cluster tests into separate CI steps (#22295))
 fn test_wait_for_max_stake() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     let validator_config = ValidatorConfig::default();
@@ -2413,6 +2300,7 @@ fn test_validator_saves_tower() {
     assert_eq!(tower4.root(), tower3.root() + 1);
 }
 
+<<<<<<< HEAD
 fn open_blockstore(ledger_path: &Path) -> Blockstore {
     Blockstore::open_with_access_type(ledger_path, AccessType::TryPrimaryThenSecondary, None, true)
         .unwrap_or_else(|e| {
@@ -2469,12 +2357,19 @@ fn wait_for_last_vote_in_tower_to_land_in_ledger(ledger_path: &Path, node_pubkey
         sleep(Duration::from_millis(100));
     }
     last_vote
+=======
+fn save_tower(tower_path: &Path, tower: &Tower, node_keypair: &Keypair) {
+    let file_tower_storage = FileTowerStorage::new(tower_path.to_path_buf());
+    let saved_tower = SavedTower::new(tower, node_keypair).unwrap();
+    file_tower_storage.store(&saved_tower).unwrap();
+>>>>>>> 0e1afcbb2 (Split up local cluster tests into separate CI steps (#22295))
 }
 
 fn root_in_tower(tower_path: &Path, node_pubkey: &Pubkey) -> Option<Slot> {
     restore_tower(tower_path, node_pubkey).map(|tower| tower.root())
 }
 
+<<<<<<< HEAD
 fn remove_tower(ledger_path: &Path, node_pubkey: &Pubkey) {
     fs::remove_file(Tower::get_filename(ledger_path, node_pubkey)).unwrap();
 }
@@ -2794,6 +2689,8 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     }
 }
 
+=======
+>>>>>>> 0e1afcbb2 (Split up local cluster tests into separate CI steps (#22295))
 enum ClusterMode {
     MasterOnly,
     MasterSlave,
@@ -3038,18 +2935,6 @@ fn test_hard_fork_invalidates_tower() {
         .lock()
         .unwrap()
         .check_for_new_roots(16, "hard fork", SocketAddrSpace::Unspecified);
-}
-
-#[test]
-#[serial]
-fn test_no_optimistic_confirmation_violation_with_tower() {
-    do_test_optimistic_confirmation_violation_with_or_without_tower(true);
-}
-
-#[test]
-#[serial]
-fn test_optimistic_confirmation_violation_without_tower() {
-    do_test_optimistic_confirmation_violation_with_or_without_tower(false);
 }
 
 #[test]
@@ -3494,11 +3379,4 @@ fn setup_snapshot_validator_config(
         account_storage_dirs,
         validator_config,
     }
-}
-
-/// Computes the numbr of milliseconds `num_blocks` blocks will take given
-/// each slot contains `ticks_per_slot`
-fn ms_for_n_slots(num_blocks: u64, ticks_per_slot: u64) -> u64 {
-    ((ticks_per_slot * DEFAULT_MS_PER_SLOT * num_blocks) + DEFAULT_TICKS_PER_SLOT - 1)
-        / DEFAULT_TICKS_PER_SLOT
 }
