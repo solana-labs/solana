@@ -515,25 +515,20 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     env::set_var("AR", llvm_bin.join("llvm-ar"));
     env::set_var("OBJDUMP", llvm_bin.join("llvm-objdump"));
     env::set_var("OBJCOPY", llvm_bin.join("llvm-objcopy"));
-    const RF_LTO: &str = "-C lto=no";
-    let mut rustflags = match env::var("RUSTFLAGS") {
-        Ok(rf) => {
-            if rf.contains(&RF_LTO) {
-                rf
-            } else {
-                format!("{} {}", rf, RF_LTO)
-            }
+
+    if let Ok(mut rustflags) = env::var("RUSTFLAGS") {
+        if cfg!(windows) && !rustflags.contains("-C linker=") {
+            let ld_path = llvm_bin.join("ld.lld");
+            rustflags = format!("{} -C linker={}", rustflags, ld_path.display());
         }
-        _ => RF_LTO.to_string(),
+
+        if config.verbose {
+            println!("RUSTFLAGS={}", rustflags);
+        }
+
+        env::set_var("RUSTFLAGS", rustflags);
     };
-    if cfg!(windows) && !rustflags.contains("-C linker=") {
-        let ld_path = llvm_bin.join("ld.lld");
-        rustflags = format!("{} -C linker={}", rustflags, ld_path.display());
-    }
-    if config.verbose {
-        println!("RUSTFLAGS={}", rustflags);
-    }
-    env::set_var("RUSTFLAGS", rustflags);
+
     let cargo_build = PathBuf::from("cargo");
     let mut cargo_build_args = vec![
         "+bpf",
