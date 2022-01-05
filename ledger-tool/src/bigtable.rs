@@ -128,13 +128,9 @@ async fn compare_blocks(
     println!(
         "{}",
         json!({
-            "reference_slots_count": json!(reference_bigtable_slots.len()),
-            "owned_slots_count": json!(owned_bigtable_slots.len()),
-            "reference_last_block": if reference_bigtable_slots.is_empty() {
-                json!(null)
-            } else {
-                json!(reference_bigtable_slots[reference_bigtable_slots.len() - 1])
-            },
+            "num_reference_slots": json!(reference_bigtable_slots.len()),
+            "num_owned_slots": json!(owned_bigtable_slots.len()),
+            "reference_last_block": json!(reference_bigtable_slots.len().checked_sub(1).map(|i| reference_bigtable_slots[i])),
             "missing_blocks":  json!(missing_blocks(&reference_bigtable_slots, &owned_bigtable_slots)),
         })
     );
@@ -401,11 +397,11 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .index(2)
                                 .required(true)
                                 .default_value("1000")
-                                .help("Maximum number of slots to return"),
+                                .help("Maximum number of slots to check"),
                         ).arg(
                             Arg::with_name("reference_credential")
                                 .long("reference-credential")
-                                .short("f")
+                                .short("c")
                                 .value_name("REFERENCE_CREDENTIAL_FILEPATH")
                                 .takes_value(true)
                                 .required(true)
