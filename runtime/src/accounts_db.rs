@@ -124,7 +124,7 @@ pub(crate) const CACHE_VIRTUAL_OFFSET: Offset = 0;
 const CACHE_VIRTUAL_STORED_SIZE: StoredSize = 0;
 
 /// bprumo TODO: doc
-const FLUSH_WINDOW_SIZE: usize = 5; // bprumo TODO: put back to 2
+//const FLUSH_WINDOW_SIZE: usize = 5; // bprumo TODO: put back to 2
 
 pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
@@ -4583,7 +4583,7 @@ impl AccountsDb {
                     .collect::<Vec<_>>();
                 let len_after = old_slots.len();
                 unflushable_unrooted_slot_count += len_now - len_after;
-                if old_slots.len() == 0 {
+                if old_slots.is_empty() {
                     error!(
                         "{}{}, none: {:?} {:?}",
                         file!(),
@@ -4783,8 +4783,7 @@ impl AccountsDb {
             all_items.push((slot, iter_items));
         }
 
-        for i in 0..slot_caches.len() {
-            let (slot, iter_items) = &all_items[i];
+        for (slot, iter_items) in slot_caches {
             let mut purged_slot_pubkeys: HashSet<(Slot, Pubkey)> = HashSet::new();
             let mut pubkey_to_slot_set: Vec<(Pubkey, Slot)> = vec![];
             let (mut accounts, mut hashes): (Vec<(&Pubkey, &AccountSharedData, Slot)>, Vec<Hash>) =
@@ -4795,18 +4794,18 @@ impl AccountsDb {
                         let account = &iter_item.value().account;
                         let should_flush = should_flush_f
                             .as_mut()
-                            .map(|should_flush_f| should_flush_f(key, account, **slot))
+                            .map(|should_flush_f| should_flush_f(key, account, *slot))
                             .unwrap_or(true);
                         if should_flush {
                             let hash = iter_item.value().hash();
                             total_size += (account.data().len() + STORE_META_OVERHEAD) as u64;
                             num_flushed += 1;
-                            Some(((key, account, **slot), hash))
+                            Some(((key, account, *slot), hash))
                         } else {
                             // If we don't flush, we have to remove the entry from the
                             // index, since it's equivalent to purging
-                            purged_slot_pubkeys.insert((**slot, *key));
-                            pubkey_to_slot_set.push((*key, **slot));
+                            purged_slot_pubkeys.insert((*slot, *key));
+                            pubkey_to_slot_set.push((*key, *slot));
                             num_purged += 1;
                             None
                         }
@@ -4816,7 +4815,7 @@ impl AccountsDb {
             // Remove the account index entries from earlier roots that are outdated by later roots.
             // Safe because queries to the index will be reading updates from later roots.
             self.purge_slot_cache_pubkeys(
-                **slot,
+                *slot,
                 purged_slot_pubkeys,
                 pubkey_to_slot_set,
                 accounts.is_empty(),
@@ -4827,6 +4826,13 @@ impl AccountsDb {
         }
 
         if !all_accounts.is_empty() {
+            if slot_caches.len() > 1 {
+                error!(
+                    "combining slots into 1 slot: {}, {:?}",
+                    new_slot,
+                    slot_caches.iter().map(|(slot, _)| slot).collect::<Vec<_>>()
+                );
+            }
             let aligned_total_size = Self::page_align(total_size);
             // This ensures that all updates are written to an AppendVec, before any
             // updates to the index happen, so anybody that sees a real entry in the index,
@@ -4894,9 +4900,8 @@ impl AccountsDb {
                 let slot = slots[i];
                 // If we're purging this slot, don't flush it here
                 if slots_under_contention.contains(&slot) {
-                    for j in 0..i {
-                        let slot = slots[j];
-                        slots_under_contention.remove(&slot);
+                    for slot in slots.iter().take(i) {
+                        slots_under_contention.remove(slot);
                     }
                     self.remove_unrooted_slots_synchronization
                         .signal
@@ -4927,7 +4932,7 @@ impl AccountsDb {
                 .slots_under_contention
                 .lock()
                 .unwrap()
-                .remove(&slot));
+                .remove(slot));
         });
 
         // Signal to any threads blocked on `remove_unrooted_slots(slot)` that we have finished
@@ -11651,16 +11656,17 @@ pub mod tests {
             // Otherwise, all the roots are flushed, and only at most max_cache_slots()
             // of the unrooted slots are kept in the cache
             let expected_size = std::cmp::min(num_unrooted, max_cache_slots());
+            const FLUSH_WINDOW_SIZE: usize = 1;
             if expected_size > 0 {
                 // +1: slot is 1-based. slot 1 has 1 byte of data
                 for unrooted_slot in (total_slots - expected_size + 1)..total_slots {
-                    if !db
+                    if db
                         .accounts_cache
                         .slot_cache(unrooted_slot as Slot)
-                        .is_some()
+                        .is_none()
+                        && unrooted_slot > total_slots - expected_size + 1 + FLUSH_WINDOW_SIZE
                     {
-                        if unrooted_slot > total_slots - expected_size + 1 + FLUSH_WINDOW_SIZE {
-                            panic!(
+                        panic!(
                                 "unrooted_slot: {}, total_slots: {}, expected_size: {}, num_unrooted: {}, max_cache_slots: {}",
                                 unrooted_slot,
                                 total_slots,
@@ -11668,7 +11674,6 @@ pub mod tests {
                                 num_unrooted,
                                 max_cache_slots(),
                             );
-                        }
                     }
                 }
             }

@@ -1715,6 +1715,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     // Updates the given pubkey at the given slot with the new account information.
     // Returns true if the pubkey was newly inserted into the index, otherwise, if the
     // pubkey updates an existing entry in the index, returns false.
+    #[allow(clippy::too_many_arguments)]
     pub fn upsert(
         &self,
         new_slot: Slot,
