@@ -496,20 +496,21 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         reclaims.push(new_item);
                     }
                     if let Some(other_slot) = other_slot {
-                        (slot_list_index + 1..slot_list.len()).
-                        into_iter().rev().for_each(|i| {
-                            let found_slot = slot_list[i].0;
-                            if found_slot == new_slot || found_slot == other_slot {
-                                let removed = slot_list.remove(i);
-                                if previous_slot_entry_was_cached {
-                                    assert!(is_cur_account_cached);
-                                } else {
-                                    reclaims.push(removed);
+                        (slot_list_index + 1..slot_list.len())
+                            .into_iter()
+                            .rev()
+                            .for_each(|i| {
+                                let found_slot = slot_list[i].0;
+                                if found_slot == new_slot || found_slot == other_slot {
+                                    let removed = slot_list.remove(i);
+                                    if previous_slot_entry_was_cached {
+                                        assert!(is_cur_account_cached);
+                                    } else {
+                                        reclaims.push(removed);
+                                    }
                                 }
-                            }
-                        });
-                    }
-                    else {
+                            });
+                    } else {
                         assert!(slot_list
                             .iter()
                             .skip(slot_list_index + 1)

@@ -11148,7 +11148,8 @@ pub mod tests {
         let info3 = AccountInfo::new(StorageLocation::AppendVec(3, 0), 0, 0);
         let mut reclaims = vec![];
         accounts_index.upsert(
-            0,0,
+            0,
+            0,
             &key0,
             &Pubkey::default(),
             &[],
@@ -11158,7 +11159,8 @@ pub mod tests {
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.upsert(
-            1,1,
+            1,
+            1,
             &key0,
             &Pubkey::default(),
             &[],
@@ -11168,7 +11170,8 @@ pub mod tests {
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.upsert(
-            1,1,
+            1,
+            1,
             &key1,
             &Pubkey::default(),
             &[],
@@ -11178,7 +11181,8 @@ pub mod tests {
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.upsert(
-            2,2,
+            2,
+            2,
             &key1,
             &Pubkey::default(),
             &[],
@@ -11188,7 +11192,8 @@ pub mod tests {
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.upsert(
-            2,2,
+            2,
+            2,
             &key2,
             &Pubkey::default(),
             &[],
@@ -11198,7 +11203,8 @@ pub mod tests {
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.upsert(
-            3,3,
+            3,
+            3,
             &key2,
             &Pubkey::default(),
             &[],
@@ -11648,12 +11654,13 @@ pub mod tests {
             if expected_size > 0 {
                 // +1: slot is 1-based. slot 1 has 1 byte of data
                 for unrooted_slot in (total_slots - expected_size + 1)..total_slots {
-                    if !db.accounts_cache
+                    if !db
+                        .accounts_cache
                         .slot_cache(unrooted_slot as Slot)
-                        .is_some() {
+                        .is_some()
+                    {
                         if unrooted_slot > total_slots - expected_size + 1 + FLUSH_WINDOW_SIZE {
                             panic!(
-       
                                 "unrooted_slot: {}, total_slots: {}, expected_size: {}, num_unrooted: {}, max_cache_slots: {}",
                                 unrooted_slot,
                                 total_slots,
