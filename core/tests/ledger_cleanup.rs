@@ -151,6 +151,42 @@ mod tests {
         }
     }
 
+    /// Obtains the benchmark config from the following environmental arguments:
+    ///
+    /// Basic benchmark settings:
+    /// - `BENCHMARK_SLOTS`: the number of slots in the benchmark.
+    /// - `BATCH_SIZE`: the number of slots in each write batch.
+    /// - `SHREDS_PER_SLOT`: the number of shreds in each slot.  Together with
+    ///   the `BATCH_SIZE` and `BENCHMARK_SLOTS`, it means:
+    ///    - the number of shreds in one write batch is `BATCH_SIZE` * `SHREDS_PER_SLOT`.
+    ///    - the total number of batches is `BENCHMARK_SLOTS` / `BATCH_SIZE`.
+    ///    - the total number of shreds is `BENCHMARK_SLOTS` * `SHREDS_PER_SLOT`.
+    /// - `NUM_WRITERS`: controls the number of concurrent threads performing
+    ///   shred insertion.  Default: 1.
+    ///
+    /// Advanced benchmark settings:
+    /// - `STOP_SIZE_BYTES`: if specified, the benchmark will count how
+    ///   many times the ledger store size exceeds the specified threshold.
+    /// - `STOP_SIZE_ITERATIONS`: when `STOP_SIZE_BYTES` is specified, the
+    ///   benchmark will stop immediately when the number of times where the
+    ///   ledger store size exceeds the configured `STOP_SIZE_BYTES`.  These
+    ///   configs are used to make sure the benchmark runs successfully under
+    ///   the storage limitation.
+    /// - `CLEANUP_BLOCKSTORE`: if true, the ledger store created in the current
+    ///   benchmark run will be deleted.  Default: true.
+    /// - `NO_COMPACTION`: whether to stop rocksdb's background compaction
+    ///   completely.  Default: false.
+    ///
+    /// Cleanup-service related settings:
+    /// - `MAX_LEDGER_SHREDS`: when the clean-up service is on, the service will
+    ///   clean up the ledger store when the number of shreds exceeds this value.
+    /// - `COMPACTION_INTERVAL`: if set, the clean-up service will compact all
+    ///   slots that are older than the specified interval.  The interval is
+    ///   measured by slots.
+    ///   Default: the number of slots per day (`TICKS_PER_DAY` / `DEFAULT_TICKS_PER_SLOT`)
+    /// - `ASSERT_COMPACTION`: if true, then the benchmark will perform a sanity check
+    ///   on whether clean-up service triggers the expected compaction at the end of
+    ///   the benchmark run.  Default: false.
     fn get_benchmark_config() -> BenchmarkConfig {
         let benchmark_slots = read_env("BENCHMARK_SLOTS", DEFAULT_BENCHMARK_SLOTS);
         let batch_size_slots = read_env("BATCH_SIZE", DEFAULT_BATCH_SIZE_SLOTS);
@@ -223,12 +259,16 @@ mod tests {
         *storage_previous = storage_now;
     }
 
-    /**
-     * Example run command:
-     * BENCHMARK_SLOTS=10000 BATCH_SIZE=10 SHREDS_PER_SLOT=1000 NUM_WRITERS=1 \
-     * PRE_GENERATE_DATA=true cargo test --release tests::test_ledger_cleanup_compaction \
-     * -- --exact --nocapture
-     */
+    /// The ledger cleanup compaction test which can also be used as a benchmark
+    /// measuring shred insertion performance of the blockstore.
+    ///
+    /// The benchmark is controlled by several environmental arguments.
+    /// Check [`get_benchmark_config`] for the full list of arguments.
+    ///
+    /// Example command:
+    /// BENCHMARK_SLOTS=1000000 BATCH_SIZE=1 SHREDS_PER_SLOT=25 NUM_WRITERS=8 \
+    /// PRE_GENERATE_DATA=false cargo test --release tests::test_ledger_cleanup_compaction \
+    /// -- --exact --nocapture
     #[test]
     fn test_ledger_cleanup_compaction() {
         solana_logger::setup_with("error,ledger_cleanup::tests=info");
