@@ -125,6 +125,10 @@ pub struct ExecuteDetailsTimings {
     pub total_account_count: u64,
     pub total_data_size: usize,
     pub data_size_changed: usize,
+    pub create_executor_register_syscalls_us: u64,
+    pub create_executor_load_elf_us: u64,
+    pub create_executor_verify_code_us: u64,
+    pub create_executor_jit_compile_us: u64,
     pub per_program_timings: HashMap<Pubkey, ProgramTiming>,
 }
 impl ExecuteDetailsTimings {
@@ -146,6 +150,18 @@ impl ExecuteDetailsTimings {
         self.data_size_changed = self
             .data_size_changed
             .saturating_add(other.data_size_changed);
+        self.create_executor_register_syscalls_us = self
+            .create_executor_register_syscalls_us
+            .saturating_add(other.create_executor_register_syscalls_us);
+        self.create_executor_load_elf_us = self
+            .create_executor_load_elf_us
+            .saturating_add(other.create_executor_load_elf_us);
+        self.create_executor_verify_code_us = self
+            .create_executor_verify_code_us
+            .saturating_add(other.create_executor_verify_code_us);
+        self.create_executor_jit_compile_us = self
+            .create_executor_jit_compile_us
+            .saturating_add(other.create_executor_jit_compile_us);
         for (id, other) in &other.per_program_timings {
             let program_timing = self.per_program_timings.entry(*id).or_default();
             program_timing.accumulate_program_timings(other);
