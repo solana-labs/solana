@@ -256,11 +256,11 @@ EOF
 
   command_step "local-cluster" \
     ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster.sh" \
-    30
+    40
 
   command_step "local-cluster-flakey" \
     ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster-flakey.sh" \
-    5
+    10
 
   command_step "local-cluster-slow" \
     ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster-slow.sh" \
