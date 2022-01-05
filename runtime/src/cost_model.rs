@@ -7,8 +7,15 @@
 use {
     crate::{block_cost_limits::*, execute_cost_table::ExecuteCostTable},
     log::*,
+<<<<<<< HEAD
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
     std::collections::HashMap,
+=======
+    solana_sdk::{
+        instruction::CompiledInstruction, program_utils::limited_deserialize, pubkey::Pubkey,
+        system_instruction::SystemInstruction, system_program, transaction::SanitizedTransaction,
+    },
+>>>>>>> a25ac1c98 (- estimate a program cost as 2 standard deviation above mean)
 };
 
 const MAX_WRITABLE_ACCOUNTS: usize = 256;
@@ -74,28 +81,9 @@ impl CostModel {
             .map(|(key, cost)| (key, cost))
             .chain(BUILT_IN_INSTRUCTION_COSTS.iter())
             .for_each(|(program_id, cost)| {
-                match self
-                    .instruction_execution_cost_table
-                    .upsert(program_id, *cost)
-                {
-                    Some(c) => {
-                        debug!(
-                            "initiating cost table, instruction {:?} has cost {}",
-                            program_id, c
-                        );
-                    }
-                    None => {
-                        debug!(
-                            "initiating cost table, failed for instruction {:?}",
-                            program_id
-                        );
-                    }
-                }
+                self.instruction_execution_cost_table
+                    .upsert(program_id, *cost);
             });
-        debug!(
-            "restored cost model instruction cost table from blockstore, current values: {:?}",
-            self.get_instruction_cost_table()
-        );
     }
 
     pub fn calculate_cost(&self, transaction: &SanitizedTransaction) -> TransactionCost {
@@ -118,22 +106,18 @@ impl CostModel {
         self.instruction_execution_cost_table
             .upsert(program_key, cost);
         match self.instruction_execution_cost_table.get_cost(program_key) {
-            Some(cost) => Ok(*cost),
+            Some(cost) => Ok(cost),
             None => Err("failed to upsert to ExecuteCostTable"),
         }
     }
 
-    pub fn get_instruction_cost_table(&self) -> &HashMap<Pubkey, u64> {
-        self.instruction_execution_cost_table.get_cost_table()
-    }
-
     pub fn find_instruction_cost(&self, program_key: &Pubkey) -> u64 {
         match self.instruction_execution_cost_table.get_cost(program_key) {
-            Some(cost) => *cost,
+            Some(cost) => cost,
             None => {
-                let default_value = self.instruction_execution_cost_table.get_mode();
+                let default_value = self.instruction_execution_cost_table.get_default();
                 debug!(
-                    "Program key {:?} does not have assigned cost, using mode {}",
+                    "Program key {:?} does not have assigned cost, using default value {}",
                     program_key, default_value
                 );
                 default_value
@@ -241,7 +225,7 @@ mod tests {
 
         // unknown program is assigned with default cost
         assert_eq!(
-            testee.instruction_execution_cost_table.get_mode(),
+            testee.instruction_execution_cost_table.get_default(),
             testee.find_instruction_cost(
                 &Pubkey::from_str("unknown111111111111111111111111111111111111").unwrap()
             )
@@ -329,7 +313,7 @@ mod tests {
         let result = testee.get_transaction_cost(&tx);
 
         // expected cost for two random/unknown program is
-        let expected_cost = testee.instruction_execution_cost_table.get_mode() * 2;
+        let expected_cost = testee.instruction_execution_cost_table.get_default() * 2;
         assert_eq!(expected_cost, result);
     }
 
@@ -373,7 +357,7 @@ mod tests {
         let mut cost_model = CostModel::default();
         // Using default cost for unknown instruction
         assert_eq!(
-            cost_model.instruction_execution_cost_table.get_mode(),
+            cost_model.instruction_execution_cost_table.get_default(),
             cost_model.find_instruction_cost(&key1)
         );
 
@@ -412,7 +396,8 @@ mod tests {
         let key1 = Pubkey::new_unique();
         let cost1 = 100;
         let cost2 = 200;
-        let updated_cost = (cost1 + cost2) / 2;
+        // updated_cost = (mean + 2*std) = 150 + 2 * 50 = 250
+        let updated_cost = 250;
 
         let mut cost_model = CostModel::default();
 
