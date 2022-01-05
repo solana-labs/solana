@@ -1,3 +1,5 @@
+#![allow(clippy::integer_arithmetic)]
+
 #[cfg(not(target_arch = "bpf"))]
 #[macro_use]
 pub(crate) mod macros;

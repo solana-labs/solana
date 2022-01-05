@@ -4,7 +4,7 @@ use {
     bytemuck::Pod,
     solana_program_runtime::{ic_msg, invoke_context::InvokeContext},
     solana_sdk::instruction::InstructionError,
-    spl_zk_token_sdk::zk_token_proof_instruction::*,
+    solana_zk_token_sdk::zk_token_proof_instruction::*,
     std::result::Result,
 };
 
@@ -36,7 +36,8 @@ pub fn process_instruction(
     // Consume compute units since proof verification is an expensive operation
     {
         let compute_meter = invoke_context.get_compute_meter();
-        compute_meter.borrow_mut().consume(25_000)?; // TODO: Tune the number of units consumed?
+        // TODO: Tune the number of units consumed.  The current value is just a rough estimate
+        compute_meter.borrow_mut().consume(100_000)?;
     }
 
     match ProofInstruction::decode_type(input).ok_or(InstructionError::InvalidInstructionData)? {
