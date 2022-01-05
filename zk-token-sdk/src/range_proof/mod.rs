@@ -207,7 +207,6 @@ impl RangeProof {
             transcript,
         );
 
-        println!("{:?}", w);
         RangeProof {
             A,
             S,
@@ -292,9 +291,6 @@ impl RangeProof {
             w * (self.t_x - a * b) + c * (delta(&bit_lengths, &y, &z) - self.t_x);
         let value_commitment_scalars = util::exp_iter(z).take(m).map(|z_exp| c * zz * z_exp);
 
-        println!("here");
-        println!("{:?}", w);
-
         let mega_check = RistrettoPoint::optional_multiscalar_mul(
             iter::once(Scalar::one())
                 .chain(iter::once(x))
@@ -321,13 +317,9 @@ impl RangeProof {
         )
         .ok_or(RangeProofError::MultiscalarMul)?;
 
-        println!("here2");
-        println!("{:?}", mega_check.compress());
-
         if mega_check.is_identity() {
             Ok(())
         } else {
-            println!("here3");
             Err(RangeProofError::AlgebraicRelation)
         }
     }

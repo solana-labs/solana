@@ -226,8 +226,6 @@ impl FeeProof {
         let w = transcript.challenge_scalar(b"w");
         let ww = w * w;
 
-        println!("{:?}", C_delta_real.compress());
-
         let check = RistrettoPoint::vartime_multiscalar_mul(
             vec![
                 c_max,
