@@ -127,6 +127,28 @@ impl ReplaySlotStats {
                 i64
             ),
             (
+                "execute_details_create_executor_register_syscalls_us",
+                self.execute_timings
+                    .details
+                    .create_executor_register_syscalls_us,
+                i64
+            ),
+            (
+                "execute_details_create_executor_load_elf_us",
+                self.execute_timings.details.create_executor_load_elf_us,
+                i64
+            ),
+            (
+                "execute_details_create_executor_verify_code_us",
+                self.execute_timings.details.create_executor_verify_code_us,
+                i64
+            ),
+            (
+                "execute_details_create_executor_jit_compile_us",
+                self.execute_timings.details.create_executor_jit_compile_us,
+                i64
+            ),
+            (
                 "execute_accessories_feature_set_clone_us",
                 self.execute_timings
                     .execute_accessories
