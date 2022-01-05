@@ -694,23 +694,6 @@ fn open_blockstore(
     }
 }
 
-fn open_database(ledger_path: &Path, access_type: AccessType) -> Database {
-    match Database::open(
-        &ledger_path.join("rocksdb"),
-        BlockstoreOptions {
-            access_type,
-            recovery_mode: None,
-            ..BlockstoreOptions::default()
-        },
-    ) {
-        Ok(database) => database,
-        Err(err) => {
-            eprintln!("Unable to read the Ledger rocksdb: {:?}", err);
-            exit(1);
-        }
-    }
-}
-
 // This function is duplicated in validator/src/main.rs...
 fn hardforks_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Slot>> {
     if matches.is_present(name) {
@@ -3317,10 +3300,14 @@ fn main() {
                 };
             }
             ("analyze-storage", _) => {
-                analyze_storage(&open_database(
-                    &ledger_path,
-                    AccessType::TryPrimaryThenSecondary,
-                ));
+                analyze_storage(
+                    &open_blockstore(
+                        &ledger_path,
+                        AccessType::TryPrimaryThenSecondary,
+                        wal_recovery_mode,
+                    )
+                    .db(),
+                );
                 println!("Ok.");
             }
             ("compute-slot-cost", Some(arg_matches)) => {
