@@ -74,7 +74,7 @@ minutes to execute. Use that time to write a detailed problem description. Once
 the description is written and CI succeeds, click the "Ready to Review" button
 and add reviewers. Adding reviewers before CI succeeds is a fast path to losing
 reviewer engagement. Not only will they be notified and see the PR is not yet
-ready for them, they will also be bombarded them with additional notifications
+ready for them, they will also be bombarded with additional notifications
 each time you push a commit to get past CI or until they "mute" the PR. Once
 muted, you'll need to reach out over some other medium, such as Discord, to
 request they have another look. When you use draft PRs, no notifications are
