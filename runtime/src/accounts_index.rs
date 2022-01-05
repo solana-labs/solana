@@ -637,6 +637,10 @@ impl RootsTracker {
         }
     }
 
+    pub fn max_root(&self) -> Slot {
+        self.roots.max()
+    }
+
     pub fn min_root(&self) -> Option<Slot> {
         self.roots.min()
     }

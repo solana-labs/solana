@@ -2611,11 +2611,13 @@ impl AccountsDb {
         alive_total
     }
 
-    fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I) -> usize
+    fn get_unique_accounts_from_storages<'a, I>(
+        &'a self,
+        stores: I,
+    ) -> (HashMap<Pubkey, FoundStoredAccount>, usize, u64)
     where
         I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
     {
-        debug!("do_shrink_slot_stores: slot: {}", slot);
         let mut stored_accounts: HashMap<Pubkey, FoundStoredAccount> = HashMap::new();
         let mut original_bytes = 0;
         let mut num_stores = 0;
@@ -2645,6 +2647,16 @@ impl AccountsDb {
             }
             num_stores += 1;
         }
+        (stored_accounts, num_stores, original_bytes)
+    }
+
+    fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I) -> usize
+    where
+        I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
+    {
+        debug!("do_shrink_slot_stores: slot: {}", slot);
+        let (stored_accounts, num_stores, original_bytes) =
+            self.get_unique_accounts_from_storages(stores);
 
         // sort by pubkey to keep account index lookups close
         let mut stored_accounts = stored_accounts.into_iter().collect::<Vec<_>>();
@@ -2739,26 +2751,8 @@ impl AccountsDb {
             start.stop();
             find_alive_elapsed = start.as_us();
 
-            let mut start = Measure::start("create_and_insert_store_elapsed");
-            let shrunken_store = if let Some(new_store) =
-                self.try_recycle_and_insert_store(slot, aligned_total, aligned_total + 1024)
-            {
-                new_store
-            } else {
-                let maybe_shrink_paths = self.shrink_paths.read().unwrap();
-                if let Some(ref shrink_paths) = *maybe_shrink_paths {
-                    self.create_and_insert_store_with_paths(
-                        slot,
-                        aligned_total,
-                        "shrink-w-path",
-                        shrink_paths,
-                    )
-                } else {
-                    self.create_and_insert_store(slot, aligned_total, "shrink")
-                }
-            };
-            start.stop();
-            create_and_insert_store_elapsed = start.as_us();
+            let (shrunken_store, time) = self.get_store_for_shrink(slot, aligned_total);
+            create_and_insert_store_elapsed = time;
 
             // here, we're writing back alive_accounts. That should be an atomic operation
             // without use of rather wide locks in this whole function, because we're
@@ -2865,6 +2859,52 @@ impl AccountsDb {
         self.shrink_stats.report();
 
         total_accounts_after_shrink
+    }
+
+    fn drop_or_recycle_stores(&self, dead_storages: Vec<Arc<AccountStorageEntry>>) {
+        let mut recycle_stores_write_elapsed = Measure::start("recycle_stores_write_time");
+        let mut recycle_stores = self.recycle_stores.write().unwrap();
+        recycle_stores_write_elapsed.stop();
+
+        let mut drop_storage_entries_elapsed = Measure::start("drop_storage_entries_elapsed");
+        if recycle_stores.entry_count() < MAX_RECYCLE_STORES {
+            recycle_stores.add_entries(dead_storages);
+            drop(recycle_stores);
+        } else {
+            self.stats
+                .dropped_stores
+                .fetch_add(dead_storages.len() as u64, Ordering::Relaxed);
+            drop(recycle_stores);
+            drop(dead_storages);
+        }
+        drop_storage_entries_elapsed.stop();
+    }
+
+    fn get_store_for_shrink(
+        &self,
+        slot: Slot,
+        aligned_total: u64,
+    ) -> (Arc<AccountStorageEntry>, u64) {
+        let mut start = Measure::start("create_and_insert_store_elapsed");
+        let shrunken_store = if let Some(new_store) =
+            self.try_recycle_and_insert_store(slot, aligned_total, aligned_total + 1024)
+        {
+            new_store
+        } else {
+            let maybe_shrink_paths = self.shrink_paths.read().unwrap();
+            if let Some(ref shrink_paths) = *maybe_shrink_paths {
+                self.create_and_insert_store_with_paths(
+                    slot,
+                    aligned_total,
+                    "shrink-w-path",
+                    shrink_paths,
+                )
+            } else {
+                self.create_and_insert_store(slot, aligned_total, "shrink")
+            }
+        };
+        start.stop();
+        (shrunken_store, start.as_us())
     }
 
     // Reads all accounts in given slot's AppendVecs and filter only to alive,
@@ -2986,7 +3026,132 @@ impl AccountsDb {
         (shrink_slots, shrink_slots_next_batch)
     }
 
+    fn shrink_ancient_slots(&self) {
+        let max_root = self.accounts_index.max_root();
+        use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
+        let epoch_width = DEFAULT_SLOTS_PER_EPOCH; // todo
+        let old_root = max_root.saturating_sub(epoch_width);
+
+        let mut m = Measure::start("get slots");
+        let mut old_slots = self
+            .storage
+            .0
+            .iter()
+            .filter_map(|k| {
+                let slot = *k.key() as Slot;
+                if slot <= old_root {
+                    Some(slot)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        m.stop();
+        old_slots.sort_unstable();
+        self.combine_ancient_slots(old_slots);
+    }
+
+    /// combine all these slots into ancient append vecs
+    fn combine_ancient_slots(&self, sorted_slots: Vec<Slot>) {
+        use crate::append_vec::MAXIMUM_APPEND_VEC_FILE_SIZE;
+        let mut current_storage = None;
+        for slot in sorted_slots {
+            if let Some(storages) = self.storage.0.get(&slot) {
+                let mut dead_storages = Vec::default();
+                let storages = storages.value();
+                let read = storages.read().unwrap();
+                let mut all_storages = read.values();
+                if current_storage.is_none() {
+                    if all_storages.len() == 1 {
+                        // maybe this is good
+                        let first_storage = all_storages.next().unwrap();
+                        let capacity = first_storage.accounts.capacity();
+                        if capacity >= MAXIMUM_APPEND_VEC_FILE_SIZE {
+                            error!("ancient_append_vec: reusing existing ancient append vec: {}, capacity: {}", slot, capacity);
+                            current_storage = Some((slot, Arc::clone(&first_storage)));
+                        }
+                    }
+                }
+                if current_storage.is_none() {
+                    // our oldest slot is not an append vec of max size, so we need to start with rewriting that storage to create an ancient append vec for the oldest slot
+                    error!("ancient_append_vec: creating initial ancient append vec: {}", slot);
+                    let (shrunken_store, _time) =
+                        self.get_store_for_shrink(slot, MAXIMUM_APPEND_VEC_FILE_SIZE);
+                    current_storage = Some((slot, shrunken_store));
+                }
+                let writer = current_storage.as_ref().unwrap();
+                let (stored_accounts, _num_stores, _original_bytes) =
+                    self.get_unique_accounts_from_storages(all_storages.clone());
+                let mut available_bytes = writer.1.accounts.remaining_bytes();
+                let mut hashes_this_append_vec = Vec::default();
+                let mut hashes_next_append_vec = Vec::default();
+                let mut accounts_this_append_vec = Vec::default();
+                let mut accounts_next_append_vec = Vec::default();
+
+                stored_accounts.iter().for_each(|account| {
+                    available_bytes = available_bytes.saturating_sub(account.1.account_size as u64);
+                    if available_bytes > 0 {
+                        hashes_this_append_vec.push(account.1.account.hash);
+                        &mut accounts_this_append_vec
+                    } else {
+                        hashes_next_append_vec.push(account.1.account.hash);
+                        &mut accounts_next_append_vec
+                    }
+                    .push((
+                        &account.1.account.meta.pubkey,
+                        &account.1.account,
+                        slot,
+                    ));
+                });
+
+                let mut drop_root = slot > writer.0;
+                // write what we can to the current ancient storage
+                let _store_accounts_timing = self.store_accounts_frozen(
+                    writer.0,
+                    &accounts_this_append_vec,
+                    Some(&hashes_this_append_vec),
+                    Some(Box::new(move |_, _| writer.1.clone())),
+                    None,
+                );
+
+                if !accounts_next_append_vec.is_empty() {
+                    drop_root = false;
+                    // we need a new ancient append vec
+                    assert!(slot > writer.0);
+                    // our oldest slot is not an append vec of max size, so we need to start with rewriting that storage to create an ancient append vec for the oldest slot
+                    let (shrunken_store, _time) =
+                        self.get_store_for_shrink(slot, MAXIMUM_APPEND_VEC_FILE_SIZE);
+                    error!("ancient_append_vec: creating ancient append vec because previous one was full: {}, full one: {}", slot, writer.0);
+                        current_storage = Some((slot, shrunken_store));
+                    let writer = current_storage.as_ref().unwrap();
+
+                    // write the rest to the next ancient storage
+                    let _store_accounts_timing = self.store_accounts_frozen(
+                        writer.0,
+                        &accounts_next_append_vec,
+                        Some(&hashes_next_append_vec),
+                        Some(Box::new(move |_, _| writer.1.clone())),
+                        None,
+                    );
+                }
+
+                dead_storages.extend(all_storages.map(Arc::clone));
+
+                self.drop_or_recycle_stores(dead_storages);
+
+                if drop_root {
+                    // todo: afterwards, we need to remove the roots sometime
+                    self.accounts_index.clean_dead_slot(slot, &mut AccountsIndexRootsStats::default());
+                    error!("ancient_append_vec: dropping root: {}", slot);
+                }
+            }
+        }
+    }
+    /*
+        fn write_accounts_to_ancient_append_vec(storage: &Arc<AccountStorageEntry>, )
+    */
     pub fn shrink_candidate_slots(&self) -> usize {
+        self.shrink_ancient_slots();
         let shrink_candidates_slots =
             std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
         let (shrink_slots, shrink_slots_next_batch) = {
@@ -3003,7 +3168,7 @@ impl AccountsDb {
         let num_candidates = shrink_slots.len();
         let shrink_candidates_count: usize = self.thread_pool_clean.install(|| {
             shrink_slots
-                .into_par_iter()
+                .into_iter()
                 .map(|(slot, slot_shrink_candidates)| {
                     let mut measure = Measure::start("shrink_candidate_slots-ms");
                     self.do_shrink_slot_stores(slot, slot_shrink_candidates.values());

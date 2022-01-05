@@ -4186,12 +4186,13 @@ impl Bank {
                 self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
             );
             total_rent += rent;
-            // Store all of them unconditionally to purge old AppendVec,
-            // even if collected rent is 0 (= not updated).
-            // Also, there's another subtle side-effect from this: this
-            // ensures we verify the whole on-chain state (= all accounts)
-            // via the account delta hash slowly once per an epoch.
-            self.store_account(&pubkey, &account);
+            // only store accounts where we collected rent
+            // because of this, we are not doing this:
+            //  verify the whole on-chain state (= all accounts)
+            //  via the account delta hash slowly once per an epoch.
+            if rent != 0 {
+                self.store_account(&pubkey, &account);
+            }
             rent_debits.insert(&pubkey, rent, account.lamports());
         }
         self.collected_rent.fetch_add(total_rent, Relaxed);
