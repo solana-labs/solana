@@ -54,3 +54,5 @@ USER postgres
 RUN /etc/init.d/postgresql start \
  && psql --command "CREATE USER solana WITH SUPERUSER PASSWORD 'solana';" \
  && createdb -O solana solana
+
+USER root
