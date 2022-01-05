@@ -160,7 +160,6 @@ mod tests {
         solana_sdk::{
             account::{AccountSharedData, ReadableAccount},
             instruction::{AccountMeta, Instruction, InstructionError},
-            keyed_account::keyed_account_at_index,
             message::Message,
             native_loader::{self, create_loadable_account_for_test},
             secp256k1_instruction::new_secp256k1_instruction,
@@ -182,36 +181,33 @@ mod tests {
         #[derive(Serialize, Deserialize)]
         enum MockSystemInstruction {
             Correct,
-            AttemptCredit { lamports: u64 },
-            AttemptDataChange { data: u8 },
+            TransferLamports { lamports: u64 },
+            ChangeData { data: u8 },
         }
 
         fn mock_system_process_instruction(
-            first_instruction_account: usize,
+            _first_instruction_account: usize,
             data: &[u8],
             invoke_context: &mut InvokeContext,
         ) -> Result<(), InstructionError> {
-            let keyed_accounts = invoke_context.get_keyed_accounts()?;
+            let transaction_context = &invoke_context.transaction_context;
+            let instruction_context = transaction_context.get_current_instruction_context()?;
             if let Ok(instruction) = bincode::deserialize(data) {
                 match instruction {
                     MockSystemInstruction::Correct => Ok(()),
-                    MockSystemInstruction::AttemptCredit { lamports } => {
-                        keyed_account_at_index(keyed_accounts, first_instruction_account)?
-                            .account
-                            .borrow_mut()
+                    MockSystemInstruction::TransferLamports { lamports } => {
+                        instruction_context
+                            .try_borrow_instruction_account(transaction_context, 0)?
                             .checked_sub_lamports(lamports)?;
-                        keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?
-                            .account
-                            .borrow_mut()
+                        instruction_context
+                            .try_borrow_instruction_account(transaction_context, 1)?
                             .checked_add_lamports(lamports)?;
                         Ok(())
                     }
-                    // Change data in a read-only account
-                    MockSystemInstruction::AttemptDataChange { data } => {
-                        keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?
-                            .account
-                            .borrow_mut()
-                            .set_data(vec![data]);
+                    MockSystemInstruction::ChangeData { data } => {
+                        instruction_context
+                            .try_borrow_instruction_account(transaction_context, 1)?
+                            .set_data(&[data])?;
                         Ok(())
                     }
                 }
@@ -293,7 +289,7 @@ mod tests {
         let message = Message::new(
             &[Instruction::new_with_bincode(
                 mock_system_program_id,
-                &MockSystemInstruction::AttemptCredit { lamports: 50 },
+                &MockSystemInstruction::TransferLamports { lamports: 50 },
                 account_metas.clone(),
             )],
             Some(transaction_context.get_key_of_account_at_index(0)),
@@ -326,7 +322,7 @@ mod tests {
         let message = Message::new(
             &[Instruction::new_with_bincode(
                 mock_system_program_id,
-                &MockSystemInstruction::AttemptDataChange { data: 50 },
+                &MockSystemInstruction::ChangeData { data: 50 },
                 account_metas,
             )],
             Some(transaction_context.get_key_of_account_at_index(0)),
@@ -367,67 +363,49 @@ mod tests {
         }
 
         fn mock_system_process_instruction(
-            first_instruction_account: usize,
+            _first_instruction_account: usize,
             data: &[u8],
             invoke_context: &mut InvokeContext,
         ) -> Result<(), InstructionError> {
-            let keyed_accounts = invoke_context.get_keyed_accounts()?;
+            let transaction_context = &invoke_context.transaction_context;
+            let instruction_context = transaction_context.get_current_instruction_context()?;
+            let mut to_account =
+                instruction_context.try_borrow_instruction_account(transaction_context, 1)?;
             if let Ok(instruction) = bincode::deserialize(data) {
                 match instruction {
                     MockSystemInstruction::BorrowFail => {
-                        let from_account =
-                            keyed_account_at_index(keyed_accounts, first_instruction_account)?
-                                .try_account_ref_mut()?;
-                        let dup_account =
-                            keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?
-                                .try_account_ref_mut()?;
-                        if from_account.lamports() != dup_account.lamports() {
+                        let from_account = instruction_context
+                            .try_borrow_instruction_account(transaction_context, 0)?;
+                        let dup_account = instruction_context
+                            .try_borrow_instruction_account(transaction_context, 2)?;
+                        if from_account.get_lamports() != dup_account.get_lamports() {
                             return Err(InstructionError::InvalidArgument);
                         }
                         Ok(())
                     }
                     MockSystemInstruction::MultiBorrowMut => {
-                        let from_lamports = {
-                            let from_account =
-                                keyed_account_at_index(keyed_accounts, first_instruction_account)?
-                                    .try_account_ref_mut()?;
-                            from_account.lamports()
-                        };
-                        let dup_lamports = {
-                            let dup_account = keyed_account_at_index(
-                                keyed_accounts,
-                                first_instruction_account + 2,
-                            )?
-                            .try_account_ref_mut()?;
-                            dup_account.lamports()
-                        };
-                        if from_lamports != dup_lamports {
+                        let lamports_a = instruction_context
+                            .try_borrow_instruction_account(transaction_context, 0)?
+                            .get_lamports();
+                        let lamports_b = instruction_context
+                            .try_borrow_instruction_account(transaction_context, 2)?
+                            .get_lamports();
+                        if lamports_a != lamports_b {
                             return Err(InstructionError::InvalidArgument);
                         }
                         Ok(())
                     }
                     MockSystemInstruction::DoWork { lamports, data } => {
-                        {
-                            let mut to_account = keyed_account_at_index(
-                                keyed_accounts,
-                                first_instruction_account + 1,
-                            )?
-                            .try_account_ref_mut()?;
-                            let mut dup_account = keyed_account_at_index(
-                                keyed_accounts,
-                                first_instruction_account + 2,
-                            )?
-                            .try_account_ref_mut()?;
-                            dup_account.checked_sub_lamports(lamports)?;
-                            to_account.checked_add_lamports(lamports)?;
-                            dup_account.set_data(vec![data]);
-                        }
-                        keyed_account_at_index(keyed_accounts, first_instruction_account)?
-                            .try_account_ref_mut()?
-                            .checked_sub_lamports(lamports)?;
-                        keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?
-                            .try_account_ref_mut()?
-                            .checked_add_lamports(lamports)?;
+                        let mut dup_account = instruction_context
+                            .try_borrow_instruction_account(transaction_context, 2)?;
+                        dup_account.checked_sub_lamports(lamports)?;
+                        to_account.checked_add_lamports(lamports)?;
+                        dup_account.set_data(&[data])?;
+                        drop(dup_account);
+                        let mut from_account = instruction_context
+                            .try_borrow_instruction_account(transaction_context, 0)?;
+                        from_account.checked_sub_lamports(lamports)?;
+                        to_account.checked_add_lamports(lamports)?;
                         Ok(())
                     }
                 }
@@ -528,7 +506,7 @@ mod tests {
         );
         assert!(result.is_ok());
 
-        // Do work on the same account but at different location in keyed_accounts[]
+        // Do work on the same transaction account but at different instruction accounts
         let message = Message::new(
             &[Instruction::new_with_bincode(
                 mock_program_id,
