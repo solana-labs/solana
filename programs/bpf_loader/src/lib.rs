@@ -86,7 +86,16 @@ pub fn create_executor(
     use_jit: bool,
     reject_deployment_of_broken_elfs: bool,
 ) -> Result<Arc<BpfExecutor>, InstructionError> {
-    let syscall_registry = syscalls::register_syscalls(invoke_context).map_err(|e| {
+    let mut register_syscalls_time = Measure::start("register_syscalls_time");
+    let register_syscall_result = syscalls::register_syscalls(invoke_context);
+    register_syscalls_time.stop();
+    invoke_context
+        .get_timings()
+        .create_executor_register_syscalls_us = invoke_context
+        .get_timings()
+        .create_executor_register_syscalls_us
+        .saturating_add(register_syscalls_time.as_us());
+    let syscall_registry = register_syscall_result.map_err(|e| {
         ic_msg!(invoke_context, "Failed to register syscalls: {}", e);
         InstructionError::ProgramEnvironmentSetupFailure
     })?;
@@ -108,9 +117,8 @@ pub fn create_executor(
     };
     let program_id;
     let load_elf_us: u64;
-    let verify_elf_us: u64;
     let mut jit_compile_us = 0u64;
-    let mut executable = {
+    let executable_result = {
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
         let program = keyed_account_at_index(keyed_accounts, program_account_index)?;
         program_id = *program.unsigned_key();
@@ -126,20 +134,35 @@ pub fn create_executor(
         load_elf_time.stop();
         load_elf_us = load_elf_time.as_us();
         executable
-    }
-    .map_err(|e| map_ebpf_error(invoke_context, e))?;
+    };
+
+    let timings = invoke_context.get_timings();
+    timings.create_executor_load_elf_us = timings
+        .create_executor_load_elf_us
+        .saturating_add(load_elf_us);
+
+    let mut executable = executable_result.map_err(|e| map_ebpf_error(invoke_context, e))?;
+
     let text_bytes = executable.get_text_bytes().1;
     let mut verify_code_time = Measure::start("verify_code_time");
     verifier::check(text_bytes, &config)
         .map_err(|e| map_ebpf_error(invoke_context, EbpfError::UserError(e.into())))?;
     verify_code_time.stop();
-    verify_elf_us = verify_code_time.as_us();
+    let verify_elf_us = verify_code_time.as_us();
+    invoke_context.get_timings().create_executor_verify_code_us = invoke_context
+        .get_timings()
+        .create_executor_verify_code_us
+        .saturating_add(verify_elf_us);
     if use_jit {
         let mut jit_compile_time = Measure::start("jit_compile_time");
         let jit_compile_result =
             Executable::<BpfError, ThisInstructionMeter>::jit_compile(&mut executable);
         jit_compile_time.stop();
         jit_compile_us = jit_compile_time.as_us();
+        invoke_context.get_timings().create_executor_jit_compile_us = invoke_context
+            .get_timings()
+            .create_executor_jit_compile_us
+            .saturating_add(jit_compile_us);
         if let Err(err) = jit_compile_result {
             ic_msg!(invoke_context, "Failed to compile program {:?}", err);
             return Err(InstructionError::ProgramFailedToCompile);
