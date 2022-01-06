@@ -1721,7 +1721,7 @@ mod tests {
                 &MockInstruction::Resize { new_len },
                 metas.clone(),
             );
-            let message = Message::new(&[instruction.clone()], None);
+            let message = Message::new(&[instruction], None);
             let caller_write_privileges = message
                 .account_keys
                 .iter()
@@ -1751,7 +1751,7 @@ mod tests {
                 &MockInstruction::Resize { new_len },
                 metas.clone(),
             );
-            let message = Message::new(&[instruction.clone()], None);
+            let message = Message::new(&[instruction], None);
             let caller_write_privileges = message
                 .account_keys
                 .iter()
@@ -1779,9 +1779,9 @@ mod tests {
             let instruction = Instruction::new_with_bincode(
                 program_key,
                 &MockInstruction::Resize { new_len },
-                metas.clone(),
+                metas,
             );
-            let message = Message::new(&[instruction.clone()], None);
+            let message = Message::new(&[instruction], None);
             let caller_write_privileges = message
                 .account_keys
                 .iter()
