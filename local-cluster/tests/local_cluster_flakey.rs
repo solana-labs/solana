@@ -10,9 +10,7 @@ use {
     serial_test::serial,
     solana_core::validator::ValidatorConfig,
     solana_ledger::{
-        ancestor_iterator::AncestorIterator,
-        blockstore::Blockstore,
-        blockstore_db::{AccessType, BlockstoreOptions},
+        ancestor_iterator::AncestorIterator, blockstore::Blockstore, blockstore_db::AccessType,
     },
     solana_local_cluster::{
         cluster::Cluster,
@@ -327,11 +325,9 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
             a_votes.push(last_vote);
             let blockstore = Blockstore::open_with_access_type(
                 &val_a_ledger_path,
-                BlockstoreOptions {
-                    access_type: AccessType::TryPrimaryThenSecondary,
-                    recovery_mode: None,
-                    enforce_ulimit_nofile: true,
-                },
+                AccessType::TryPrimaryThenSecondary,
+                None,
+                true,
             )
             .unwrap();
             let mut ancestors = AncestorIterator::new(last_vote, &blockstore);

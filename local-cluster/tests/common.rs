@@ -5,14 +5,13 @@ use {
     solana_core::{
         broadcast_stage::BroadcastStageType,
         consensus::{Tower, SWITCH_FORK_THRESHOLD},
-        tower_storage::FileTowerStorage,
         validator::ValidatorConfig,
     },
     solana_gossip::gossip_service::discover_cluster,
     solana_ledger::{
         ancestor_iterator::AncestorIterator,
         blockstore::{Blockstore, PurgeType},
-        blockstore_db::{AccessType, BlockstoreOptions},
+        blockstore_db::AccessType,
         leader_schedule::{FixedSchedule, LeaderSchedule},
     },
     solana_local_cluster::{
@@ -24,6 +23,7 @@ use {
     solana_sdk::{
         account::AccountSharedData,
         clock::{self, Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT},
+        epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         hash::Hash,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
@@ -45,14 +45,12 @@ use {
 pub const RUST_LOG_FILTER: &str =
     "error,solana_core::replay_stage=warn,solana_local_cluster=info,local_cluster=info";
 
-pub fn last_vote_in_tower(tower_path: &Path, node_pubkey: &Pubkey) -> Option<(Slot, Hash)> {
-    restore_tower(tower_path, node_pubkey).map(|tower| tower.last_voted_slot_hash().unwrap())
+pub fn last_vote_in_tower(ledger_path: &Path, node_pubkey: &Pubkey) -> Option<(Slot, Hash)> {
+    restore_tower(ledger_path, node_pubkey).map(|tower| tower.last_voted_slot_hash().unwrap())
 }
 
-pub fn restore_tower(tower_path: &Path, node_pubkey: &Pubkey) -> Option<Tower> {
-    let file_tower_storage = FileTowerStorage::new(tower_path.to_path_buf());
-
-    let tower = Tower::restore(&file_tower_storage, node_pubkey);
+pub fn restore_tower(ledger_path: &Path, node_pubkey: &Pubkey) -> Option<Tower> {
+    let tower = Tower::restore(ledger_path, node_pubkey);
     if let Err(tower_err) = tower {
         if tower_err.is_file_missing() {
             return None;
@@ -61,26 +59,18 @@ pub fn restore_tower(tower_path: &Path, node_pubkey: &Pubkey) -> Option<Tower> {
         }
     }
     // actually saved tower must have at least one vote.
-    Tower::restore(&file_tower_storage, node_pubkey).ok()
+    Tower::restore(ledger_path, node_pubkey).ok()
 }
 
-pub fn remove_tower(tower_path: &Path, node_pubkey: &Pubkey) {
-    let file_tower_storage = FileTowerStorage::new(tower_path.to_path_buf());
-    fs::remove_file(file_tower_storage.filename(node_pubkey)).unwrap();
+pub fn remove_tower(ledger_path: &Path, node_pubkey: &Pubkey) {
+    fs::remove_file(Tower::get_filename(ledger_path, node_pubkey)).unwrap();
 }
 
 pub fn open_blockstore(ledger_path: &Path) -> Blockstore {
-    Blockstore::open_with_access_type(
-        ledger_path,
-        BlockstoreOptions {
-            access_type: AccessType::TryPrimaryThenSecondary,
-            recovery_mode: None,
-            enforce_ulimit_nofile: true,
-        },
-    )
-    .unwrap_or_else(|e| {
-        panic!("Failed to open ledger at {:?}, err: {}", ledger_path, e);
-    })
+    Blockstore::open_with_access_type(ledger_path, AccessType::TryPrimaryThenSecondary, None, true)
+        .unwrap_or_else(|e| {
+            panic!("Failed to open ledger at {:?}, err: {}", ledger_path, e);
+        })
 }
 
 pub fn purge_slots(blockstore: &Blockstore, start_slot: Slot, slot_count: Slot) {
@@ -366,26 +356,22 @@ pub fn run_cluster_partition<C>(
     on_partition_resolved(&mut cluster, &mut context);
 }
 
-pub fn test_faulty_node(
-    faulty_node_type: BroadcastStageType,
-    node_stakes: Vec<u64>,
-) -> (LocalCluster, Vec<Arc<Keypair>>) {
+pub fn test_faulty_node(faulty_node_type: BroadcastStageType) {
     solana_logger::setup_with_default("solana_local_cluster=info");
-    let num_nodes = node_stakes.len();
+    let num_nodes = 3;
 
     let error_validator_config = ValidatorConfig {
         broadcast_stage_type: faulty_node_type,
         ..ValidatorConfig::default()
     };
     let mut validator_configs = Vec::with_capacity(num_nodes);
-
-    // First validator is the bootstrap leader with the malicious broadcast logic.
+    validator_configs.resize_with(num_nodes - 1, ValidatorConfig::default);
     validator_configs.push(error_validator_config);
-    validator_configs.resize_with(num_nodes, ValidatorConfig::default);
 
     let mut validator_keys = Vec::with_capacity(num_nodes);
     validator_keys.resize_with(num_nodes, || (Arc::new(Keypair::new()), true));
 
+    let node_stakes = vec![60, 50, 60];
     assert_eq!(node_stakes.len(), num_nodes);
     assert_eq!(validator_keys.len(), num_nodes);
 
@@ -393,16 +379,14 @@ pub fn test_faulty_node(
         cluster_lamports: 10_000,
         node_stakes,
         validator_configs,
-        validator_keys: Some(validator_keys.clone()),
-        skip_warmup_slots: true,
+        validator_keys: Some(validator_keys),
+        slots_per_epoch: MINIMUM_SLOTS_PER_EPOCH * 2u64,
+        stakers_slot_offset: MINIMUM_SLOTS_PER_EPOCH * 2u64,
         ..ClusterConfig::default()
     };
 
     let cluster = LocalCluster::new(&mut cluster_config, SocketAddrSpace::Unspecified);
-    let validator_keys: Vec<Arc<Keypair>> = validator_keys
-        .into_iter()
-        .map(|(keypair, _)| keypair)
-        .collect();
 
-    (cluster, validator_keys)
+    // Check for new roots
+    cluster.check_for_new_roots(16, "test_faulty_node", SocketAddrSpace::Unspecified);
 }
