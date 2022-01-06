@@ -48,6 +48,7 @@ mod tests {
         compaction_interval: Option<u64>,
         no_compaction: bool,
         num_writers: u64,
+        cleanup_service: bool,
     }
 
     #[derive(Clone, Copy, Debug)]
@@ -187,6 +188,9 @@ mod tests {
     /// - `ASSERT_COMPACTION`: if true, then the benchmark will perform a sanity check
     ///   on whether clean-up service triggers the expected compaction at the end of
     ///   the benchmark run.  Default: false.
+    /// - `CLEANUP_SERVICE`: whether to enable the background cleanup service.
+    ///   If set to false, the ledger store in the benchmark will be purely relied
+    ///   on RocksDB's compaction.  Default: true.
     fn get_benchmark_config() -> BenchmarkConfig {
         let benchmark_slots = read_env("BENCHMARK_SLOTS", DEFAULT_BENCHMARK_SLOTS);
         let batch_size_slots = read_env("BATCH_SIZE", DEFAULT_BATCH_SIZE_SLOTS);
@@ -204,6 +208,10 @@ mod tests {
         };
         let no_compaction = read_env("NO_COMPACTION", false);
         let num_writers = read_env("NUM_WRITERS", 1);
+        // A flag indicating whether to have a background clean-up service.
+        // If set to false, the ledger store will purely rely on RocksDB's
+        // compaction to perform the clean-up.
+        let cleanup_service = read_env("CLEANUP_SERVICE", true);
 
         BenchmarkConfig {
             benchmark_slots,
@@ -218,6 +226,7 @@ mod tests {
             compaction_interval,
             no_compaction,
             num_writers,
+            cleanup_service,
         }
     }
 
@@ -293,20 +302,26 @@ mod tests {
         let pre_generate_data = config.pre_generate_data;
         let compaction_interval = config.compaction_interval;
         let num_writers = config.num_writers;
+        let cleanup_service = config.cleanup_service;
 
         let num_batches = benchmark_slots / batch_size_slots;
         let num_shreds_total = benchmark_slots * shreds_per_slot;
 
         let (sender, receiver) = channel();
         let exit = Arc::new(AtomicBool::new(false));
-        let cleaner = LedgerCleanupService::new(
-            receiver,
-            blockstore.clone(),
-            max_ledger_shreds,
-            &exit,
-            compaction_interval,
-            None,
-        );
+
+        let cleaner = if cleanup_service {
+            Some(LedgerCleanupService::new(
+                receiver,
+                blockstore.clone(),
+                max_ledger_shreds,
+                &exit,
+                compaction_interval,
+                None,
+            ))
+        } else {
+            None
+        };
 
         let exit_cpu = Arc::new(AtomicBool::new(false));
         let sys = CpuStatsUpdater::new(&exit_cpu);
@@ -468,7 +483,9 @@ mod tests {
             let finished_batch = finished_batch_count.load(Ordering::Relaxed);
             let finished_slot = (finished_batch + 1) * batch_size_slots - 1;
 
-            sender.send(finished_slot).unwrap();
+            if cleanup_service {
+                sender.send(finished_slot).unwrap();
+            }
 
             emit_stats(
                 time_initial,
@@ -532,7 +549,9 @@ mod tests {
         let u2 = storage_previous;
 
         exit.store(true, Ordering::SeqCst);
-        cleaner.join().unwrap();
+        if cleanup_service {
+            cleaner.unwrap().join().unwrap();
+        }
 
         exit_cpu.store(true, Ordering::SeqCst);
         sys.join().unwrap();
