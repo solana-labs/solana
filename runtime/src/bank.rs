@@ -12790,6 +12790,11 @@ pub(crate) mod tests {
         assert!(cache.get(&key4).is_some());
         assert!(cache.get(&key3).is_none());
 
+        cache.put(&key1, executor.clone());
+        cache.put(&key3, executor.clone());
+        assert!(cache.get(&key1).is_some());
+        assert!(cache.get(&key4).is_none());
+
         cache = cache.clone_with_epoch(2);
         assert!(cache.current_epoch == 2);
 
@@ -12866,6 +12871,7 @@ pub(crate) mod tests {
         assert!(executors.borrow().contains_key(&key3));
         assert!(executors.borrow().contains_key(&key4));
 
+        // Remove all
         bank.remove_executor(&key1);
         bank.remove_executor(&key2);
         bank.remove_executor(&key3);
