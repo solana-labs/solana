@@ -9,8 +9,14 @@ pub enum ProofError {
     Verification,
     #[error("range proof failed to verify")]
     RangeProof,
-    #[error("sigma proof failed to verify")]
-    SigmaProof,
+    #[error("equality proof failed to verify")]
+    EqualityProof,
+    #[error("fee proof failed to verify")]
+    FeeProof,
+    #[error("zero-balance proof failed to verify")]
+    ZeroBalanceProof,
+    #[error("validity proof failed to verify")]
+    ValidityProof,
     #[error(
         "`zk_token_elgamal::pod::ElGamalCiphertext` contains invalid ElGamalCiphertext ciphertext"
     )]
@@ -31,23 +37,23 @@ impl From<RangeProofError> for ProofError {
 
 impl From<EqualityProofError> for ProofError {
     fn from(_err: EqualityProofError) -> Self {
-        Self::SigmaProof
+        Self::EqualityProof
     }
 }
 
 impl From<FeeProofError> for ProofError {
     fn from(_err: FeeProofError) -> Self {
-        Self::SigmaProof
+        Self::FeeProof
     }
 }
 
 impl From<ZeroBalanceProofError> for ProofError {
     fn from(_err: ZeroBalanceProofError) -> Self {
-        Self::SigmaProof
+        Self::ZeroBalanceProof
     }
 }
 impl From<ValidityProofError> for ProofError {
     fn from(_err: ValidityProofError) -> Self {
-        Self::SigmaProof
+        Self::ValidityProof
     }
 }
