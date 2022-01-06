@@ -28,7 +28,7 @@ use {
         },
         pubkey::Pubkey,
         rent::Rent,
-        system_program,
+        saturating_add_assign, system_program,
         sysvar::instructions,
         transaction::TransactionError,
     },
@@ -1299,10 +1299,10 @@ impl MessageProcessor {
         );
 
         timings.details.accumulate(&invoke_context.timings);
-        timings.execute_accessories.process_instructions_us = timings
-            .execute_accessories
-            .process_instructions_us
-            .saturating_add(time.as_us());
+        saturating_add_assign!(
+            timings.execute_accessories.process_instructions_us,
+            time.as_us()
+        );
 
         execute_or_verify_result
     }
