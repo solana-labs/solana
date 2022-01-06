@@ -441,7 +441,7 @@ fn process_loader_upgradeable_instruction(
 
             // Load and verify the program bits
             let executor = create_executor(3, buffer_data_offset, invoke_context, use_jit, true)?;
-            invoke_context.add_executor(&new_program_id, executor);
+            invoke_context.update_executor(&new_program_id, executor);
 
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let payer = keyed_account_at_index(keyed_accounts, 0)?;
@@ -573,7 +573,7 @@ fn process_loader_upgradeable_instruction(
 
             // Load and verify the program bits
             let executor = create_executor(2, buffer_data_offset, invoke_context, use_jit, true)?;
-            invoke_context.add_executor(&new_program_id, executor);
+            invoke_context.update_executor(&new_program_id, executor);
 
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let programdata = keyed_account_at_index(keyed_accounts, 0)?;
@@ -844,7 +844,7 @@ fn process_loader_instruction(
             let executor = create_executor(0, 0, invoke_context, use_jit, true)?;
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let program = keyed_account_at_index(keyed_accounts, 0)?;
-            invoke_context.add_executor(program.unsigned_key(), executor);
+            invoke_context.update_executor(program.unsigned_key(), executor);
             program.try_account_ref_mut()?.set_executable(true);
             ic_msg!(
                 invoke_context,

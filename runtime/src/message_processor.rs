@@ -41,30 +41,55 @@ use {
 
 pub type Executors = HashMap<Pubkey, TransactionExecutor>;
 
-/// Tracks whether a given executor is "dirty" and needs to
-/// updated in the executors cache
+/// Tracks whether a given executor is "dirty" and needs to updated in the
+/// executors cache
 pub struct TransactionExecutor {
-    pub executor: Arc<dyn Executor>,
-    pub is_dirty: bool,
+    executor: Arc<dyn Executor>,
+    is_miss: bool,
+    is_updated: bool,
 }
 
 impl TransactionExecutor {
-    /// Wraps an executor and tracks that it doesn't need
-    /// to be updated in the executors cache.
-    pub fn cached(executor: Arc<dyn Executor>) -> Self {
+    /// Wraps an executor and tracks that it doesn't need to be updated in the
+    /// executors cache.
+    pub fn new_cached(executor: Arc<dyn Executor>) -> Self {
         Self {
             executor,
-            is_dirty: false,
+            is_miss: false,
+            is_updated: false,
         }
     }
 
-    /// Wraps an executor and tracks that it needs to be
-    /// updated in the executors cache.
-    pub fn dirty(executor: Arc<dyn Executor>) -> Self {
+    /// Wraps an executor and tracks that it needs to be updated in the
+    /// executors cache.
+    pub fn new_miss(executor: Arc<dyn Executor>) -> Self {
         Self {
             executor,
-            is_dirty: true,
+            is_miss: true,
+            is_updated: false,
         }
+    }
+
+    /// Wraps an executor and tracks that it needs to be updated in the
+    /// executors cache only if the transaction succeeded.
+    pub fn new_updated(executor: Arc<dyn Executor>) -> Self {
+        Self {
+            executor,
+            is_miss: false,
+            is_updated: true,
+        }
+    }
+
+    pub fn is_dirty(&self, include_updates: bool) -> bool {
+        self.is_miss || (include_updates && self.is_updated)
+    }
+
+    pub fn get(&self) -> Arc<dyn Executor> {
+        self.executor.clone()
+    }
+
+    pub fn clear_miss_for_test(&mut self) {
+        self.is_miss = false;
     }
 }
 
@@ -540,7 +565,12 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn add_executor(&self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {
         self.executors
             .borrow_mut()
-            .insert(*pubkey, TransactionExecutor::dirty(executor));
+            .insert(*pubkey, TransactionExecutor::new_miss(executor));
+    }
+    fn update_executor(&self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {
+        self.executors
+            .borrow_mut()
+            .insert(*pubkey, TransactionExecutor::new_updated(executor));
     }
     fn get_executor(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
         self.executors
