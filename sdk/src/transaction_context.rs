@@ -8,6 +8,7 @@ use crate::{
 };
 use std::{
     cell::{RefCell, RefMut},
+    collections::HashSet,
     pin::Pin,
 };
 
@@ -284,7 +285,7 @@ impl InstructionContext {
         })
     }
 
-    /// Gets the last program account of the current InstructionContext
+    /// Gets the last program account of this Instruction
     pub fn try_borrow_program_account<'a, 'b: 'a>(
         &'a self,
         transaction_context: &'b TransactionContext,
@@ -295,7 +296,7 @@ impl InstructionContext {
         )
     }
 
-    /// Gets an instruction account of the current InstructionContext
+    /// Gets an instruction account of this Instruction
     pub fn try_borrow_instruction_account<'a, 'b: 'a>(
         &'a self,
         transaction_context: &'b TransactionContext,
@@ -307,6 +308,19 @@ impl InstructionContext {
                 .len()
                 .saturating_add(index_in_instruction),
         )
+    }
+
+    /// Calculates the set of all keys of signer accounts in this Instruction
+    pub fn get_signers(&self, transaction_context: &TransactionContext) -> HashSet<Pubkey> {
+        let mut result = HashSet::new();
+        for instruction_account in self.instruction_accounts.iter() {
+            if instruction_account.is_signer {
+                result.insert(
+                    transaction_context.account_keys[instruction_account.index_in_transaction],
+                );
+            }
+        }
+        result
     }
 }
 
@@ -344,11 +358,8 @@ impl<'a> BorrowedAccount<'a> {
     /// Assignes the owner of this account (transaction wide)
     pub fn set_owner(&mut self, pubkey: &[u8]) -> Result<(), InstructionError> {
         self.account.copy_into_owner_from_slice(pubkey);
-        if self.is_writable() {
-            Ok(())
-        } else {
-            Err(InstructionError::Immutable)
-        }
+        self.verify_writability()
+        // TODO: return Err(InstructionError::ModifiedProgramId);
     }
 
     /// Returns the number of lamports of this account (transaction wide)
@@ -359,11 +370,14 @@ impl<'a> BorrowedAccount<'a> {
     /// Overwrites the number of lamports of this account (transaction wide)
     pub fn set_lamports(&mut self, lamports: u64) -> Result<(), InstructionError> {
         self.account.set_lamports(lamports);
-        if self.is_writable() {
-            Ok(())
-        } else {
-            Err(InstructionError::Immutable)
+        if self.index_in_instruction < self.instruction_context.program_accounts.len() {
+            return Err(InstructionError::ExecutableLamportChange);
         }
+        if !self.is_writable() {
+            return Err(InstructionError::ReadonlyLamportChange);
+        }
+        // TODO: return Err(InstructionError::ExternalAccountLamportSpend);
+        Ok(())
     }
 
     /// Adds lamports to this account (transaction wide)
@@ -384,6 +398,18 @@ impl<'a> BorrowedAccount<'a> {
         )
     }
 
+    /// Verifies that this account is writable (instruction wide)
+    fn verify_writability(&self) -> Result<(), InstructionError> {
+        if self.index_in_instruction < self.instruction_context.program_accounts.len() {
+            return Err(InstructionError::ExecutableDataModified);
+        }
+        if !self.is_writable() {
+            return Err(InstructionError::ReadonlyDataModified);
+        }
+        // TODO: return Err(InstructionError::ExternalAccountDataModified);
+        Ok(())
+    }
+
     /// Returns a read-only slice of the account data (transaction wide)
     pub fn get_data(&self) -> &[u8] {
         self.account.data()
@@ -395,16 +421,14 @@ impl<'a> BorrowedAccount<'a> {
             self.account.data_as_mut_slice().copy_from_slice(data);
         } else {
             self.account.set_data_from_slice(data);
+            // TODO: return Err(InstructionError::AccountDataSizeChanged);
         }
-        if self.is_writable() {
-            Ok(())
-        } else {
-            Err(InstructionError::Immutable)
-        }
+        self.verify_writability()
     }
 
     /*pub fn realloc(&self, new_len: usize, zero_init: bool) {
-        // TODO
+        // TODO: return Err(InstructionError::InvalidRealloc);
+        // TODO: return Err(InstructionError::AccountDataSizeChanged);
     }*/
 
     /// Deserializes the account data into a state
@@ -423,11 +447,7 @@ impl<'a> BorrowedAccount<'a> {
             return Err(InstructionError::AccountDataTooSmall);
         }
         bincode::serialize_into(&mut *data, state).map_err(|_| InstructionError::GenericError)?;
-        if self.is_writable() {
-            Ok(())
-        } else {
-            Err(InstructionError::Immutable)
-        }
+        self.verify_writability()
     }
 
     /// Returns whether this account is executable (transaction wide)
@@ -438,11 +458,9 @@ impl<'a> BorrowedAccount<'a> {
     /// Configures whether this account is executable (transaction wide)
     pub fn set_executable(&mut self, is_executable: bool) -> Result<(), InstructionError> {
         self.account.set_executable(is_executable);
-        if self.is_writable() {
-            Ok(())
-        } else {
-            Err(InstructionError::Immutable)
-        }
+        self.verify_writability()
+        // TODO: return Err(InstructionError::ExecutableAccountNotRentExempt);
+        // TODO: return Err(InstructionError::ExecutableModified);
     }
 
     /// Returns the rent epoch of this account (transaction wide)

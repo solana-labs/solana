@@ -6,7 +6,9 @@ use {
         blockstore::Blockstore,
         blockstore_processor::{TransactionStatusBatch, TransactionStatusMessage},
     },
-    solana_runtime::bank::{Bank, InnerInstructionsList, NonceInfo, TransactionLogMessages},
+    solana_runtime::bank::{
+        Bank, DurableNonceFee, TransactionExecutionDetails, TransactionExecutionResult,
+    },
     solana_transaction_status::{
         extract_and_fmt_memos, InnerInstructions, Reward, TransactionStatusMeta,
     },
@@ -67,58 +69,46 @@ impl TransactionStatusService {
             TransactionStatusMessage::Batch(TransactionStatusBatch {
                 bank,
                 transactions,
-                statuses,
+                execution_results,
                 balances,
                 token_balances,
-                inner_instructions,
-                transaction_logs,
                 rent_debits,
             }) => {
                 let slot = bank.slot();
-                let inner_instructions_iter: Box<
-                    dyn Iterator<Item = Option<InnerInstructionsList>>,
-                > = if let Some(inner_instructions) = inner_instructions {
-                    Box::new(inner_instructions.into_iter())
-                } else {
-                    Box::new(std::iter::repeat_with(|| None))
-                };
-                let transaction_logs_iter: Box<
-                    dyn Iterator<Item = Option<TransactionLogMessages>>,
-                > = if let Some(transaction_logs) = transaction_logs {
-                    Box::new(transaction_logs.into_iter())
-                } else {
-                    Box::new(std::iter::repeat_with(|| None))
-                };
                 for (
                     transaction,
-                    (status, nonce),
+                    execution_result,
                     pre_balances,
                     post_balances,
                     pre_token_balances,
                     post_token_balances,
-                    inner_instructions,
-                    log_messages,
                     rent_debits,
                 ) in izip!(
                     transactions,
-                    statuses,
+                    execution_results,
                     balances.pre_balances,
                     balances.post_balances,
                     token_balances.pre_token_balances,
                     token_balances.post_token_balances,
-                    inner_instructions_iter,
-                    transaction_logs_iter,
                     rent_debits,
                 ) {
-                    if Bank::can_commit(&status) {
-                        let lamports_per_signature = nonce
-                            .map(|nonce| nonce.lamports_per_signature())
-                            .unwrap_or_else(|| {
-                                bank.get_lamports_per_signature_for_blockhash(
-                                    transaction.message().recent_blockhash(),
-                                )
-                            })
-                            .expect("lamports_per_signature must be available");
+                    if let TransactionExecutionResult::Executed(details) = execution_result {
+                        let TransactionExecutionDetails {
+                            status,
+                            log_messages,
+                            inner_instructions,
+                            durable_nonce_fee,
+                        } = details;
+                        let lamports_per_signature = match durable_nonce_fee {
+                            Some(DurableNonceFee::Valid(lamports_per_signature)) => {
+                                Some(lamports_per_signature)
+                            }
+                            Some(DurableNonceFee::Invalid) => None,
+                            None => bank.get_lamports_per_signature_for_blockhash(
+                                transaction.message().recent_blockhash(),
+                            ),
+                        }
+                        .expect("lamports_per_signature must be available");
                         let fee = Bank::get_fee_for_message_with_lamports_per_signature(
                             transaction.message(),
                             lamports_per_signature,
@@ -331,18 +321,21 @@ pub(crate) mod tests {
         let mut rent_debits = RentDebits::default();
         rent_debits.insert(&pubkey, 123, 456);
 
-        let transaction_result = (
-            Ok(()),
-            Some(
-                NonceFull::from_partial(
-                    rollback_partial,
-                    &SanitizedMessage::Legacy(message),
-                    &[(pubkey, nonce_account)],
-                    &rent_debits,
-                )
-                .unwrap(),
-            ),
-        );
+        let transaction_result =
+            TransactionExecutionResult::Executed(TransactionExecutionDetails {
+                status: Ok(()),
+                log_messages: None,
+                inner_instructions: None,
+                durable_nonce_fee: Some(DurableNonceFee::from(
+                    &NonceFull::from_partial(
+                        rollback_partial,
+                        &SanitizedMessage::Legacy(message),
+                        &[(pubkey, nonce_account)],
+                        &rent_debits,
+                    )
+                    .unwrap(),
+                )),
+            });
 
         let balances = TransactionBalancesSet {
             pre_balances: vec![vec![123456]],
@@ -374,11 +367,9 @@ pub(crate) mod tests {
         let transaction_status_batch = TransactionStatusBatch {
             bank,
             transactions: vec![transaction],
-            statuses: vec![transaction_result],
+            execution_results: vec![transaction_result],
             balances,
             token_balances,
-            inner_instructions: None,
-            transaction_logs: None,
             rent_debits: vec![rent_debits],
         };
 

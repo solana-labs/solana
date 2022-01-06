@@ -11,9 +11,11 @@ use {
     log::*,
     solana_banks_client::start_client,
     solana_banks_server::banks_server::start_local_server,
-    solana_program_runtime::{ic_msg, invoke_context::ProcessInstructionWithContext, stable_log},
+    solana_program_runtime::{
+        ic_msg, invoke_context::ProcessInstructionWithContext, stable_log, timings::ExecuteTimings,
+    },
     solana_runtime::{
-        bank::{Bank, ExecuteTimings},
+        bank::Bank,
         bank_forks::BankForks,
         builtins::Builtin,
         commitment::BlockCommitmentCache,
@@ -301,6 +303,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                 &instruction_accounts,
                 &program_indices,
                 &mut compute_units_consumed,
+                &mut ExecuteTimings::default(),
             )
             .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;
 
@@ -397,7 +400,7 @@ fn setup_fees(bank: Bank) -> Bank {
     bank.commit_transactions(
         &[],     // transactions
         &mut [], // loaded accounts
-        &[],     // transaction execution results
+        vec![],  // transaction execution results
         0,       // tx count
         1,       // signature count
         &mut ExecuteTimings::default(),

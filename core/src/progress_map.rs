@@ -82,43 +82,131 @@ impl ReplaySlotStats {
                 i64
             ),
             (
-                "serialize_us",
+                "execute_details_serialize_us",
                 self.execute_timings.details.serialize_us,
                 i64
             ),
             (
-                "create_vm_us",
+                "execute_details_create_vm_us",
                 self.execute_timings.details.create_vm_us,
                 i64
             ),
             (
-                "execute_inner_us",
+                "execute_details_execute_inner_us",
                 self.execute_timings.details.execute_us,
                 i64
             ),
             (
-                "deserialize_us",
+                "execute_details_deserialize_us",
                 self.execute_timings.details.deserialize_us,
                 i64
             ),
             (
-                "changed_account_count",
+                "execute_details_get_or_create_executor_us",
+                self.execute_timings.details.get_or_create_executor_us,
+                i64
+            ),
+            (
+                "execute_details_changed_account_count",
                 self.execute_timings.details.changed_account_count,
                 i64
             ),
             (
-                "total_account_count",
+                "execute_details_total_account_count",
                 self.execute_timings.details.total_account_count,
                 i64
             ),
             (
-                "total_data_size",
+                "execute_details_total_data_size",
                 self.execute_timings.details.total_data_size,
                 i64
             ),
             (
-                "data_size_changed",
+                "execute_details_data_size_changed",
                 self.execute_timings.details.data_size_changed,
+                i64
+            ),
+            (
+                "execute_details_create_executor_register_syscalls_us",
+                self.execute_timings
+                    .details
+                    .create_executor_register_syscalls_us,
+                i64
+            ),
+            (
+                "execute_details_create_executor_load_elf_us",
+                self.execute_timings.details.create_executor_load_elf_us,
+                i64
+            ),
+            (
+                "execute_details_create_executor_verify_code_us",
+                self.execute_timings.details.create_executor_verify_code_us,
+                i64
+            ),
+            (
+                "execute_details_create_executor_jit_compile_us",
+                self.execute_timings.details.create_executor_jit_compile_us,
+                i64
+            ),
+            (
+                "execute_accessories_feature_set_clone_us",
+                self.execute_timings
+                    .execute_accessories
+                    .feature_set_clone_us,
+                i64
+            ),
+            (
+                "execute_accessories_compute_budget_process_transaction_us",
+                self.execute_timings
+                    .execute_accessories
+                    .compute_budget_process_transaction_us,
+                i64
+            ),
+            (
+                "execute_accessories_get_executors_us",
+                self.execute_timings.execute_accessories.get_executors_us,
+                i64
+            ),
+            (
+                "execute_accessories_process_message_us",
+                self.execute_timings.execute_accessories.process_message_us,
+                i64
+            ),
+            (
+                "execute_accessories_update_executors_us",
+                self.execute_timings.execute_accessories.update_executors_us,
+                i64
+            ),
+            (
+                "execute_accessories_process_instructions_total_us",
+                self.execute_timings
+                    .execute_accessories
+                    .process_instructions
+                    .total_us,
+                i64
+            ),
+            (
+                "execute_accessories_process_instructions_verify_caller_us",
+                self.execute_timings
+                    .execute_accessories
+                    .process_instructions
+                    .verify_caller_us,
+                i64
+            ),
+            (
+                "execute_accessories_process_instructions_process_executable_chain_us",
+                self.execute_timings
+                    .execute_accessories
+                    .process_instructions
+                    .process_executable_chain_us,
+                i64
+            ),
+            (
+                "execute_accessories_process_instructions_verify_callee_us",
+                self.execute_timings
+                    .execute_accessories
+                    .process_instructions
+                    .verify_callee_us,
                 i64
             ),
         );

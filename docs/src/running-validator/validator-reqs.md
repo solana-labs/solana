@@ -100,7 +100,7 @@ any traversal issues on their own.
 
 #### Required
 - 8000-10000 TCP/UDP - P2P protocols (gossip, turbine, repair, etc). This can
-be limited to any free 11 port range with `--dynamic-port-range`
+be limited to any free 12 port range with `--dynamic-port-range`
 
 #### Optional
 For security purposes, it is not suggested that the following ports be open to

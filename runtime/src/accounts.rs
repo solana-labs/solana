@@ -1102,26 +1102,35 @@ impl Accounts {
         leave_nonce_on_success: bool,
     ) -> Vec<(&'a Pubkey, &'a AccountSharedData)> {
         let mut accounts = Vec::with_capacity(load_results.len());
-        for (i, ((tx_load_result, _), tx)) in load_results.iter_mut().zip(txs).enumerate() {
+        for (i, ((tx_load_result, nonce), tx)) in load_results.iter_mut().zip(txs).enumerate() {
             if tx_load_result.is_err() {
                 // Don't store any accounts if tx failed to load
                 continue;
             }
 
-            let (execution_result, nonce) = &execution_results[i];
-            let maybe_nonce = match (execution_result, nonce) {
-                (Ok(_), Some(nonce)) => {
+            let execution_status = match &execution_results[i] {
+                TransactionExecutionResult::Executed(details) => &details.status,
+                // Don't store any accounts if tx wasn't executed
+                TransactionExecutionResult::NotExecuted(_) => continue,
+            };
+
+            let maybe_nonce = match (execution_status, &*nonce) {
+                (Ok(()), Some(nonce)) => {
                     if leave_nonce_on_success {
                         None
                     } else {
                         Some((nonce, false /* rollback */))
                     }
                 }
-                (Err(TransactionError::InstructionError(_, _)), Some(nonce)) => {
+                (Err(_), Some(nonce)) => {
                     Some((nonce, true /* rollback */))
                 }
-                (Ok(_), _) => None, // Success, don't do any additional nonce processing
-                (Err(_), _) => continue, // Not nonce, don't store any accounts
+                (Ok(_), None) => None, // Success, don't do any additional nonce processing
+                (Err(_), None) => {
+                    // Fees for failed transactions which don't use durable nonces are
+                    // deducted in Bank::filter_program_errors_and_collect_fee
+                    continue;
+                }
             };
 
             let message = tx.message();
@@ -1139,14 +1148,14 @@ impl Accounts {
                     let is_nonce_account = prepare_if_nonce_account(
                         address,
                         account,
-                        execution_result,
+                        execution_status,
                         is_fee_payer,
                         maybe_nonce,
                         blockhash,
                         lamports_per_signature,
                     );
 
-                    if execution_result.is_ok() || is_nonce_account || is_fee_payer {
+                    if execution_status.is_ok() || is_nonce_account || is_fee_payer {
                         if account.rent_epoch() == INITIAL_RENT_EPOCH {
                             let rent = rent_collector.collect_from_created_account(
                                 address,
@@ -1255,7 +1264,10 @@ pub fn update_accounts_bench(accounts: &Accounts, pubkeys: &[Pubkey], slot: u64)
 mod tests {
     use {
         super::*,
-        crate::rent_collector::RentCollector,
+        crate::{
+            bank::{DurableNonceFee, TransactionExecutionDetails},
+            rent_collector::RentCollector,
+        },
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
             epoch_schedule::EpochSchedule,
@@ -1286,6 +1298,18 @@ mod tests {
             message,
             recent_blockhash,
         ))
+    }
+
+    fn new_execution_result(
+        status: Result<()>,
+        nonce: Option<&NonceFull>,
+    ) -> TransactionExecutionResult {
+        TransactionExecutionResult::Executed(TransactionExecutionDetails {
+            status,
+            log_messages: None,
+            inner_instructions: None,
+            durable_nonce_fee: nonce.map(DurableNonceFee::from),
+        })
     }
 
     fn load_accounts_with_fee_and_rent(
@@ -2698,10 +2722,10 @@ mod tests {
                 .insert_new_readonly(&pubkey);
         }
         let txs = vec![tx0, tx1];
-        let programs = vec![(Ok(()), None), (Ok(()), None)];
+        let execution_results = vec![new_execution_result(Ok(()), None); 2];
         let collected_accounts = accounts.collect_accounts_to_store(
             &txs,
-            &programs,
+            &execution_results,
             loaded.as_mut_slice(),
             &rent_collector,
             &Hash::default(),
@@ -3121,16 +3145,16 @@ mod tests {
             AccountShrinkThreshold::default(),
         );
         let txs = vec![tx];
-        let programs = vec![(
+        let execution_results = vec![new_execution_result(
             Err(TransactionError::InstructionError(
                 1,
                 InstructionError::InvalidArgument,
             )),
-            nonce,
+            nonce.as_ref(),
         )];
         let collected_accounts = accounts.collect_accounts_to_store(
             &txs,
-            &programs,
+            &execution_results,
             loaded.as_mut_slice(),
             &rent_collector,
             &next_blockhash,
@@ -3231,16 +3255,16 @@ mod tests {
             AccountShrinkThreshold::default(),
         );
         let txs = vec![tx];
-        let programs = vec![(
+        let execution_results = vec![new_execution_result(
             Err(TransactionError::InstructionError(
                 1,
                 InstructionError::InvalidArgument,
             )),
-            nonce,
+            nonce.as_ref(),
         )];
         let collected_accounts = accounts.collect_accounts_to_store(
             &txs,
-            &programs,
+            &execution_results,
             loaded.as_mut_slice(),
             &rent_collector,
             &next_blockhash,

@@ -1,0 +1,40 @@
+[package]
+name = "solana-zk-token-sdk"
+description = "Solana Zk Token SDK"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana"
+version = "1.10.0"
+license = "Apache-2.0"
+edition = "2021"
+
+[dependencies]
+base64 = "0.13"
+bytemuck = { version = "1.7.2", features = ["derive"] }
+num-derive = "0.3"
+num-traits = "0.2"
+solana-program = { path = "../sdk/program", version = "=1.10.0" }
+
+[target.'cfg(not(target_arch = "bpf"))'.dependencies]
+aes-gcm-siv = "0.10.3"
+arrayref = "0.3.6"
+bincode = "1"
+byteorder = "1"
+cipher = "0.3"
+curve25519-dalek = { version = "3.2.0", features = ["serde"]}
+getrandom = { version = "0.1", features = ["dummy"] }
+lazy_static = "1.4.0"
+merlin = "2"
+rand = "0.7"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha3 = "0.9"
+solana-sdk = { path = "../sdk", version = "=1.10.0" }
+subtle = "2"
+thiserror = "1"
+zeroize = { version = "1.2.0", default-features = false, features = ["zeroize_derive"] }
+
+[dev-dependencies]
+time = "0.1.40"
+
+[lib]
+crate-type = ["cdylib", "rlib"]

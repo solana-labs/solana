@@ -88,6 +88,8 @@ pub struct ComputeBudget {
     pub secp256k1_recover_cost: u64,
     /// Number of compute units consumed to do a syscall without any work
     pub syscall_base_cost: u64,
+    /// Number of compute units consumed to call zktoken_crypto_op
+    pub zk_token_elgamal_op_cost: u64,
     /// Optional program heap region size, if `None` then loader default
     pub heap_size: Option<usize>,
     /// Number of compute units per additional 32k heap above the default (~.5
@@ -117,6 +119,7 @@ impl ComputeBudget {
             sysvar_base_cost: 100,
             secp256k1_recover_cost: 25_000,
             syscall_base_cost: 100,
+            zk_token_elgamal_op_cost: 25_000,
             heap_size: None,
             heap_cost: 8,
         }

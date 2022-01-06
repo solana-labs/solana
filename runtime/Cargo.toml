@@ -35,18 +35,20 @@ regex = "1.5.4"
 serde = { version = "1.0.133", features = ["rc"] }
 serde_derive = "1.0.103"
 solana-address-lookup-table-program = { path = "../programs/address-lookup-table", version = "=1.10.0" }
-solana-config-program = { path = "../programs/config", version = "=1.10.0" }
+solana-bucket-map = { path = "../bucket_map", version = "=1.10.0" }
 solana-compute-budget-program = { path = "../programs/compute-budget", version = "=1.10.0" }
+solana-config-program = { path = "../programs/config", version = "=1.10.0" }
 solana-frozen-abi = { path = "../frozen-abi", version = "=1.10.0" }
 solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.10.0" }
 solana-measure = { path = "../measure", version = "=1.10.0" }
 solana-metrics = { path = "../metrics", version = "=1.10.0" }
-solana-bucket-map = { path = "../bucket_map", version = "=1.10.0" }
 solana-program-runtime = { path = "../program-runtime", version = "=1.10.0" }
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.10.0" }
 solana-sdk = { path = "../sdk", version = "=1.10.0" }
 solana-stake-program = { path = "../programs/stake", version = "=1.10.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.10.0" }
+solana-zk-token-proof-program = { path = "../programs/zk-token-proof", version = "=1.10.0" }
+solana-zk-token-sdk = { path = "../zk-token-sdk", version = "=1.10.0" }
 symlink = "0.1.0"
 tar = "0.4.38"
 tempfile = "3.2.0"

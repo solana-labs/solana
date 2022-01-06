@@ -1,9 +1,14 @@
 use {
     crate::{
-        accounts_data_meter::AccountsDataMeter, ic_logger_msg, ic_msg,
-        instruction_recorder::InstructionRecorder, log_collector::LogCollector,
-        native_loader::NativeLoader, pre_account::PreAccount, timings::ExecuteDetailsTimings,
+        accounts_data_meter::AccountsDataMeter,
+        ic_logger_msg, ic_msg,
+        instruction_recorder::InstructionRecorder,
+        log_collector::LogCollector,
+        native_loader::NativeLoader,
+        pre_account::PreAccount,
+        timings::{ExecuteDetailsTimings, ExecuteTimings},
     },
+    solana_measure::measure::Measure,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
@@ -19,6 +24,7 @@ use {
         native_loader,
         pubkey::Pubkey,
         rent::Rent,
+        saturating_add_assign,
         sysvar::Sysvar,
         transaction_context::{InstructionAccount, TransactionAccount, TransactionContext},
     },
@@ -63,18 +69,57 @@ pub trait Executor: Debug + Send + Sync {
     ) -> Result<(), InstructionError>;
 }
 
-#[derive(Default)]
-pub struct Executors {
-    pub executors: HashMap<Pubkey, Arc<dyn Executor>>,
-    pub is_dirty: bool,
+pub type Executors = HashMap<Pubkey, TransactionExecutor>;
+
+/// Tracks whether a given executor is "dirty" and needs to updated in the
+/// executors cache
+pub struct TransactionExecutor {
+    executor: Arc<dyn Executor>,
+    is_miss: bool,
+    is_updated: bool,
 }
-impl Executors {
-    pub fn insert(&mut self, key: Pubkey, executor: Arc<dyn Executor>) {
-        let _ = self.executors.insert(key, executor);
-        self.is_dirty = true;
+
+impl TransactionExecutor {
+    /// Wraps an executor and tracks that it doesn't need to be updated in the
+    /// executors cache.
+    pub fn new_cached(executor: Arc<dyn Executor>) -> Self {
+        Self {
+            executor,
+            is_miss: false,
+            is_updated: false,
+        }
     }
-    pub fn get(&self, key: &Pubkey) -> Option<Arc<dyn Executor>> {
-        self.executors.get(key).cloned()
+
+    /// Wraps an executor and tracks that it needs to be updated in the
+    /// executors cache.
+    pub fn new_miss(executor: Arc<dyn Executor>) -> Self {
+        Self {
+            executor,
+            is_miss: true,
+            is_updated: false,
+        }
+    }
+
+    /// Wraps an executor and tracks that it needs to be updated in the
+    /// executors cache only if the transaction succeeded.
+    pub fn new_updated(executor: Arc<dyn Executor>) -> Self {
+        Self {
+            executor,
+            is_miss: false,
+            is_updated: true,
+        }
+    }
+
+    pub fn is_dirty(&self, include_updates: bool) -> bool {
+        self.is_miss || (include_updates && self.is_updated)
+    }
+
+    pub fn get(&self) -> Arc<dyn Executor> {
+        self.executor.clone()
+    }
+
+    pub fn clear_miss_for_test(&mut self) {
+        self.is_miss = false;
     }
 }
 
@@ -564,6 +609,7 @@ impl<'a> InvokeContext<'a> {
             &instruction_accounts,
             &program_indices,
             &mut compute_units_consumed,
+            &mut ExecuteTimings::default(),
         )?;
 
         // Verify the called program has not misbehaved
@@ -734,6 +780,7 @@ impl<'a> InvokeContext<'a> {
         instruction_accounts: &[InstructionAccount],
         program_indices: &[usize],
         compute_units_consumed: &mut u64,
+        timings: &mut ExecuteTimings,
     ) -> Result<(), InstructionError> {
         *compute_units_consumed = 0;
         let program_id = program_indices
@@ -751,7 +798,17 @@ impl<'a> InvokeContext<'a> {
             }
         } else {
             // Verify the calling program hasn't misbehaved
-            self.verify_and_update(instruction_accounts, true)?;
+            let mut verify_caller_time = Measure::start("verify_caller_time");
+            let verify_caller_result = self.verify_and_update(instruction_accounts, true);
+            verify_caller_time.stop();
+            saturating_add_assign!(
+                timings
+                    .execute_accessories
+                    .process_instructions
+                    .verify_caller_us,
+                verify_caller_time.as_us()
+            );
+            verify_caller_result?;
 
             // Record instruction
             if let Some(instruction_recorder) = &self.instruction_recorder {
@@ -766,6 +823,7 @@ impl<'a> InvokeContext<'a> {
                         .map(|instruction_account| instruction_account.index_in_transaction as u8)
                         .collect(),
                 };
+
                 instruction_recorder
                     .borrow_mut()
                     .record_compiled_instruction(compiled_instruction);
@@ -775,19 +833,42 @@ impl<'a> InvokeContext<'a> {
         let result = self
             .push(instruction_accounts, program_indices, instruction_data)
             .and_then(|_| {
+                let mut process_executable_chain_time =
+                    Measure::start("process_executable_chain_time");
                 self.return_data = (program_id, Vec::new());
                 let pre_remaining_units = self.compute_meter.borrow().get_remaining();
                 let execution_result = self.process_executable_chain(instruction_data);
                 let post_remaining_units = self.compute_meter.borrow().get_remaining();
                 *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
-                execution_result?;
+                process_executable_chain_time.stop();
 
                 // Verify the called program has not misbehaved
-                if is_lowest_invocation_level {
-                    self.verify(instruction_accounts, program_indices)
-                } else {
-                    self.verify_and_update(instruction_accounts, false)
-                }
+                let mut verify_callee_time = Measure::start("verify_callee_time");
+                let result = execution_result.and_then(|_| {
+                    if is_lowest_invocation_level {
+                        self.verify(instruction_accounts, program_indices)
+                    } else {
+                        self.verify_and_update(instruction_accounts, false)
+                    }
+                });
+                verify_callee_time.stop();
+
+                saturating_add_assign!(
+                    timings
+                        .execute_accessories
+                        .process_instructions
+                        .process_executable_chain_us,
+                    process_executable_chain_time.as_us()
+                );
+                saturating_add_assign!(
+                    timings
+                        .execute_accessories
+                        .process_instructions
+                        .verify_callee_us,
+                    verify_callee_time.as_us()
+                );
+
+                result
             });
 
         // Pop the invoke_stack to restore previous state
@@ -880,15 +961,26 @@ impl<'a> InvokeContext<'a> {
         &self.accounts_data_meter
     }
 
-    /// Loaders may need to do work in order to execute a program. Cache
-    /// the work that can be re-used across executions
+    /// Cache an executor that wasn't found in the cache
     pub fn add_executor(&self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {
-        self.executors.borrow_mut().insert(*pubkey, executor);
+        self.executors
+            .borrow_mut()
+            .insert(*pubkey, TransactionExecutor::new_miss(executor));
+    }
+
+    /// Cache an executor that has changed
+    pub fn update_executor(&self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {
+        self.executors
+            .borrow_mut()
+            .insert(*pubkey, TransactionExecutor::new_updated(executor));
     }
 
     /// Get the completed loader work that can be re-used across execution
     pub fn get_executor(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
-        self.executors.borrow().get(pubkey)
+        self.executors
+            .borrow()
+            .get(pubkey)
+            .map(|tx_executor| tx_executor.executor.clone())
     }
 
     /// Get this invocation's compute budget
@@ -1064,10 +1156,7 @@ mod tests {
     use {
         super::*,
         serde::{Deserialize, Serialize},
-        solana_sdk::{
-            account::{ReadableAccount, WritableAccount},
-            keyed_account::keyed_account_at_index,
-        },
+        solana_sdk::account::{ReadableAccount, WritableAccount},
     };
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -1167,41 +1256,41 @@ mod tests {
 
     #[allow(clippy::integer_arithmetic)]
     fn mock_process_instruction(
-        first_instruction_account: usize,
+        _first_instruction_account: usize,
         data: &[u8],
         invoke_context: &mut InvokeContext,
     ) -> Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
+        let instruction_context = transaction_context.get_current_instruction_context()?;
         let program_id = transaction_context.get_program_key()?;
-        let keyed_accounts = invoke_context.get_keyed_accounts()?;
         assert_eq!(
-            *program_id,
-            keyed_account_at_index(keyed_accounts, first_instruction_account)?.owner()?
+            program_id,
+            instruction_context
+                .try_borrow_instruction_account(transaction_context, 0)?
+                .get_owner()
         );
         assert_ne!(
-            keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?.owner()?,
-            *keyed_account_at_index(keyed_accounts, first_instruction_account)?.unsigned_key()
+            instruction_context
+                .try_borrow_instruction_account(transaction_context, 1)?
+                .get_owner(),
+            instruction_context
+                .try_borrow_instruction_account(transaction_context, 0)?
+                .get_key()
         );
 
         if let Ok(instruction) = bincode::deserialize(data) {
             match instruction {
                 MockInstruction::NoopSuccess => (),
                 MockInstruction::NoopFail => return Err(InstructionError::GenericError),
-                MockInstruction::ModifyOwned => {
-                    keyed_account_at_index(keyed_accounts, first_instruction_account)?
-                        .try_account_ref_mut()?
-                        .data_as_mut_slice()[0] = 1
-                }
-                MockInstruction::ModifyNotOwned => {
-                    keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?
-                        .try_account_ref_mut()?
-                        .data_as_mut_slice()[0] = 1
-                }
-                MockInstruction::ModifyReadonly => {
-                    keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?
-                        .try_account_ref_mut()?
-                        .data_as_mut_slice()[0] = 1
-                }
+                MockInstruction::ModifyOwned => instruction_context
+                    .try_borrow_instruction_account(transaction_context, 0)?
+                    .set_data(&[1])?,
+                MockInstruction::ModifyNotOwned => instruction_context
+                    .try_borrow_instruction_account(transaction_context, 1)?
+                    .set_data(&[1])?,
+                MockInstruction::ModifyReadonly => instruction_context
+                    .try_borrow_instruction_account(transaction_context, 2)?
+                    .set_data(&[1])?,
                 MockInstruction::ConsumeComputeUnits {
                     compute_units_to_consume,
                     desired_result,
@@ -1213,12 +1302,9 @@ mod tests {
                         .unwrap();
                     return desired_result;
                 }
-                MockInstruction::Resize { new_len } => {
-                    keyed_account_at_index(keyed_accounts, first_instruction_account)?
-                        .try_account_ref_mut()?
-                        .data_mut()
-                        .resize_with(new_len, Default::default)
-                }
+                MockInstruction::Resize { new_len } => instruction_context
+                    .try_borrow_instruction_account(transaction_context, 0)?
+                    .set_data(&vec![0; new_len])?,
             }
         } else {
             return Err(InstructionError::InvalidInstructionData);
@@ -1482,6 +1568,7 @@ mod tests {
                 &inner_instruction_accounts,
                 &program_indices,
                 &mut compute_units_consumed,
+                &mut ExecuteTimings::default(),
             );
 
             // Because the instruction had compute cost > 0, then regardless of the execution result,
@@ -1587,7 +1674,6 @@ mod tests {
         // Test 1: Resize the account to use up all the space; this must succeed
         {
             let new_len = user_account_data_len + remaining_account_data_len;
-            dbg!(new_len);
             let instruction_data =
                 bincode::serialize(&MockInstruction::Resize { new_len }).unwrap();
 
@@ -1596,6 +1682,7 @@ mod tests {
                 &instruction_accounts,
                 &[2],
                 &mut 0,
+                &mut ExecuteTimings::default(),
             );
 
             assert!(result.is_ok());
@@ -1605,7 +1692,6 @@ mod tests {
         // Test 2: Resize the account to *the same size*, so not consuming any additional size; this must succeed
         {
             let new_len = user_account_data_len + remaining_account_data_len;
-            dbg!(new_len);
             let instruction_data =
                 bincode::serialize(&MockInstruction::Resize { new_len }).unwrap();
 
@@ -1614,6 +1700,7 @@ mod tests {
                 &instruction_accounts,
                 &[2],
                 &mut 0,
+                &mut ExecuteTimings::default(),
             );
 
             assert!(result.is_ok());
@@ -1623,7 +1710,6 @@ mod tests {
         // Test 3: Resize the account to exceed the budget; this must fail
         {
             let new_len = user_account_data_len + remaining_account_data_len + 1;
-            dbg!(new_len);
             let instruction_data =
                 bincode::serialize(&MockInstruction::Resize { new_len }).unwrap();
 
@@ -1632,6 +1718,7 @@ mod tests {
                 &instruction_accounts,
                 &[2],
                 &mut 0,
+                &mut ExecuteTimings::default(),
             );
 
             assert!(result.is_err());
