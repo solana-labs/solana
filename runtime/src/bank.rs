@@ -404,29 +404,35 @@ impl CachedExecutors {
         })
     }
     fn put(&mut self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {
-        if !self.executors.contains_key(pubkey) && self.executors.len() >= self.max {
-            let mut least = u64::MAX;
-            let default_key = Pubkey::default();
-            let mut least_key = &default_key;
-
-            for (key, entry) in self.executors.iter() {
-                let count = entry.prev_epoch_count + entry.epoch_count.load(Relaxed);
-                if count < least {
-                    least = count;
-                    least_key = key;
-                }
+        let entry = if let Some(entry) = self.executors.get(pubkey) {
+            CachedExecutorsEntry {
+                prev_epoch_count: entry.prev_epoch_count,
+                epoch_count: AtomicU64::new(entry.epoch_count.load(Relaxed)),
+                executor,
             }
-            let least_key = *least_key;
-            let _ = self.executors.remove(&least_key);
-        }
-        let _ = self.executors.insert(
-            *pubkey,
+        } else {
+            if self.executors.len() >= self.max {
+                let mut least = u64::MAX;
+                let default_key = Pubkey::default();
+                let mut least_key = &default_key;
+
+                for (key, entry) in self.executors.iter() {
+                    let count = entry.prev_epoch_count + entry.epoch_count.load(Relaxed);
+                    if count < least {
+                        least = count;
+                        least_key = key;
+                    }
+                }
+                let least_key = *least_key;
+                let _ = self.executors.remove(&least_key);
+            }
             CachedExecutorsEntry {
                 prev_epoch_count: 0,
                 epoch_count: AtomicU64::new(0),
                 executor,
-            },
-        );
+            }
+        };
+        let _ = self.executors.insert(*pubkey, entry);
     }
     fn remove(&mut self, pubkey: &Pubkey) {
         let _ = self.executors.remove(pubkey);
