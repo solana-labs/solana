@@ -4404,6 +4404,7 @@ dependencies = [
  "chrono",
  "crossbeam-channel",
  "libc",
+ "libloading",
  "log 0.4.14",
  "postgres",
  "postgres-types",

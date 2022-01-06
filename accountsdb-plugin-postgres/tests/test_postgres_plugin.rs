@@ -4,12 +4,16 @@
 
 use {
     log::*,
+    libloading::{Library, Symbol},
     serial_test::serial,
     solana_core::validator::ValidatorConfig,
+    solana_accountsdb_plugin_postgres,
 };
 
 #[test]
 #[serial]
 fn test_postgres_plugin() {
-    libc::dl_iterate_phdr();
+    unsafe {
+        let lib = Library::new("libsolana_accountsdb_plugin_postgres.so").unwrap();
+    }
 }
