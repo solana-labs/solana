@@ -78,12 +78,8 @@ use {
     solana_program_runtime::{
         instruction_recorder::InstructionRecorder,
         invoke_context::{
-<<<<<<< HEAD
             BuiltinProgram, Executor, Executors, ProcessInstructionWithContext,
-            TransactionAccountRefCells,
-=======
-            BuiltinProgram, Executor, Executors, ProcessInstructionWithContext, TransactionExecutor,
->>>>>>> f2ed6f09e (Skip updating already cached executors if unmodified)
+            TransactionAccountRefCells, TransactionExecutor,
         },
         log_collector::LogCollector,
         timings::ExecuteDetailsTimings,
