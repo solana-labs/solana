@@ -158,8 +158,9 @@ impl RentCollector {
 
     /// Update the account for its next rent epoch
     fn handle_rent_epoch(&self, account: &mut AccountSharedData, rent_due: &RentDue) {
-        self.next_rent_epoch(rent_due)
-            .map(|epoch| account.set_rent_epoch(epoch));
+        if let Some(epoch) = self.next_rent_epoch(rent_due) {
+            account.set_rent_epoch(epoch)
+        }
     }
 
     /// Deduct the applicable rent amount from the account
