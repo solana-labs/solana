@@ -34,7 +34,6 @@ pub struct TransferData {
     pub new_spendable_ct: pod::ElGamalCiphertext, // 64 bytes
 
     // pub fee: EncryptedTransferFee,
-
     /// Zero-knowledge proofs for Transfer
     pub proof: TransferProof,
 }
@@ -81,7 +80,6 @@ impl TransferData {
 
         // auditor ElGamal pubkey
         auditor_pk: ElGamalPubkey,
-
         // // fee collector ElGamal pubkey
         // fee_collector_pk: ElGamalPubkey,
 
@@ -164,7 +162,8 @@ impl TransferData {
 
     /// Extracts the lo ciphertexts associated with a transfer data
     fn ciphertext_lo(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
-        let transfer_comm_lo: PedersenCommitment = self.encrypted_transfer_amount.amount_comm_lo.try_into()?;
+        let transfer_comm_lo: PedersenCommitment =
+            self.encrypted_transfer_amount.amount_comm_lo.try_into()?;
 
         let decryption_handle_lo = match role {
             Role::Source => self.encrypted_transfer_amount.decrypt_handles_lo.source,
@@ -178,7 +177,8 @@ impl TransferData {
 
     /// Extracts the lo ciphertexts associated with a transfer data
     fn ciphertext_hi(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
-        let transfer_comm_hi: PedersenCommitment = self.encrypted_transfer_amount.amount_comm_hi.try_into()?;
+        let transfer_comm_hi: PedersenCommitment =
+            self.encrypted_transfer_amount.amount_comm_hi.try_into()?;
 
         let decryption_handle_hi = match role {
             Role::Source => self.encrypted_transfer_amount.decrypt_handles_hi.source,
@@ -396,9 +396,9 @@ impl TransferProof {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferPubkeys {
-    pub source_pk: pod::ElGamalPubkey,        // 32 bytes
-    pub dest_pk: pod::ElGamalPubkey,          // 32 bytes
-    pub auditor_pk: pod::ElGamalPubkey,       // 32 bytes
+    pub source_pk: pod::ElGamalPubkey,  // 32 bytes
+    pub dest_pk: pod::ElGamalPubkey,    // 32 bytes
+    pub auditor_pk: pod::ElGamalPubkey, // 32 bytes
 }
 
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -430,7 +430,6 @@ pub struct TransferCommitments {
     pub lo: pod::PedersenCommitment,
     pub hi: pod::PedersenCommitment,
 }
-
 
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
