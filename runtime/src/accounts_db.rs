@@ -3029,7 +3029,7 @@ impl AccountsDb {
     fn shrink_ancient_slots(&self) {
         let max_root = self.accounts_index.max_root();
         use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
-        let epoch_width = DEFAULT_SLOTS_PER_EPOCH; // todo
+        let epoch_width = DEFAULT_SLOTS_PER_EPOCH / 2; // todo
         let old_root = max_root.saturating_sub(epoch_width);
 
         let mut m = Measure::start("get slots");
