@@ -33,7 +33,12 @@ thiserror = "1.0.30"
 tokio-postgres = "0.7.4"
 
 [dev-dependencies]
+libc = "0.2.112"
+serial_test = "0.5.1"
 solana-account-decoder = { path = "../account-decoder", version = "=1.10.0" }
+solana-core = { path = "../core", version = "=1.10.0" }
+solana-local-cluster = { path = "../local-cluster", version = "=1.10.0" }
+tempfile = "3.2.0"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
