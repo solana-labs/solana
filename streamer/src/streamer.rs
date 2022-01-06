@@ -3,12 +3,15 @@
 
 use {
     crate::{
-        packet::{self, send_to, PacketBatch, PacketBatchRecycler, PACKETS_PER_BATCH},
+        packet::{self, send_to, PacketBatch, PacketBatchRecycler, PACKETS_PER_BATCH, PacketInterface},
         recvmmsg::NUM_RCVMMSGS,
         socket::SocketAddrSpace,
     },
-    solana_sdk::timing::timestamp,
+    histogram::Histogram,
+    solana_sdk::{packet::Packet, timing::timestamp},
     std::{
+        cmp::Reverse,
+        collections::HashMap,
         net::UdpSocket,
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -21,11 +24,11 @@ use {
     thiserror::Error,
 };
 
-pub type PacketBatchReceiver = Receiver<PacketBatch>;
-pub type PacketBatchSender = Sender<PacketBatch>;
+pub type PacketBatchReceiver<P: PacketInterface + 'static> = Receiver<PacketBatch<P>>;
+pub type PacketBatchSender<P: PacketInterface + 'static> = Sender<PacketBatch<P>>;
 
 #[derive(Error, Debug)]
-pub enum StreamerError {
+pub enum StreamerError<P: PacketInterface> {
     #[error("I/O error")]
     Io(#[from] std::io::Error),
 
@@ -33,20 +36,20 @@ pub enum StreamerError {
     RecvTimeout(#[from] RecvTimeoutError),
 
     #[error("send packets error")]
-    Send(#[from] SendError<PacketBatch>),
+    Send(#[from] SendError<PacketBatch<P>>),
 }
 
-pub type Result<T> = std::result::Result<T, StreamerError>;
+pub type Result<T, P: PacketInterface + 'static> = std::result::Result<T, StreamerError<P>>;
 
-fn recv_loop(
+fn recv_loop<P: PacketInterface + 'static>(
     sock: &UdpSocket,
     exit: Arc<AtomicBool>,
-    channel: &PacketBatchSender,
-    recycler: &PacketBatchRecycler,
+    channel: &PacketBatchSender<P>,
+    recycler: &PacketBatchRecycler<P>,
     name: &'static str,
     coalesce_ms: u64,
     use_pinned_memory: bool,
-) -> Result<()> {
+) -> Result<(), P> {
     let mut recv_count = 0;
     let mut call_count = 0;
     let mut now = Instant::now();
@@ -91,11 +94,11 @@ fn recv_loop(
     }
 }
 
-pub fn receiver(
+pub fn receiver<P: PacketInterface + 'static>(
     sock: Arc<UdpSocket>,
     exit: &Arc<AtomicBool>,
-    packet_sender: PacketBatchSender,
-    recycler: PacketBatchRecycler,
+    packet_sender: PacketBatchSender<P>,
+    recycler: PacketBatchRecycler<P>,
     name: &'static str,
     coalesce_ms: u64,
     use_pinned_memory: bool,
@@ -130,17 +133,6 @@ struct SendStats {
 struct StreamerSendStats {
     host_map: HashMap<[u16; 8], SendStats>,
     since: Option<Instant>,
-}
-
-fn recv_send<P: PacketInterface>(
-    sock: &UdpSocket,
-    receiver: &PacketBatchReceiver<P>,
-    socket_addr_space: &SocketAddrSpace,
-) -> Result<(), P> {
-    let timer = Duration::new(1, 0);
-    let packet_batch = receiver.recv_timeout(timer)?;
-    send_to(&packet_batch, sock, socket_addr_space)?;
-    Ok(())
 }
 
 impl StreamerSendStats {
@@ -233,19 +225,19 @@ impl StreamerSendStats {
         };
     }
 
-    fn record(&mut self, pkt: &Packet) {
-        let ent = self.host_map.entry(pkt.meta.addr).or_default();
+    fn record<P: PacketInterface>(&mut self, pkt: &P) {
+        let ent = self.host_map.entry(pkt.get_meta().addr).or_default();
         ent.count += 1;
-        ent.bytes += pkt.data.len() as u64;
+        ent.bytes += pkt.get_data().len() as u64;
     }
 }
 
-fn recv_send(
+fn recv_send<P: PacketInterface + 'static>(
     sock: &UdpSocket,
-    r: &PacketBatchReceiver,
+    r: &PacketBatchReceiver<P>,
     socket_addr_space: &SocketAddrSpace,
     stats: &mut Option<StreamerSendStats>,
-) -> Result<()> {
+) -> Result<(), P> {
     let timer = Duration::new(1, 0);
     let packet_batch = r.recv_timeout(timer)?;
     if let Some(stats) = stats {
@@ -255,9 +247,9 @@ fn recv_send(
     Ok(())
 }
 
-pub fn recv_packet_batches(
-    recvr: &PacketBatchReceiver,
-) -> Result<(Vec<PacketBatch>, usize, Duration)> {
+pub fn recv_packet_batches<P: PacketInterface>(
+    recvr: &PacketBatchReceiver<P>,
+) -> Result<(Vec<PacketBatch<P>>, usize, Duration), P> {
     let timer = Duration::new(1, 0);
     let packet_batch = recvr.recv_timeout(timer)?;
     let recv_start = Instant::now();
@@ -278,11 +270,12 @@ pub fn recv_packet_batches(
     Ok((packet_batches, num_packets, recv_duration))
 }
 
-pub fn responder(
+pub fn responder<P: PacketInterface + 'static>(
     name: &'static str,
     sock: Arc<UdpSocket>,
-    r: PacketBatchReceiver,
+    r: PacketBatchReceiver<P>,
     socket_addr_space: SocketAddrSpace,
+    stats_reporter_sender: Option<Sender<Box<dyn FnOnce() + Send>>>,
 ) -> JoinHandle<()> {
     Builder::new()
         .name(format!("solana-responder-{}", name))
@@ -290,6 +283,11 @@ pub fn responder(
             let mut errors = 0;
             let mut last_error = None;
             let mut last_print = 0;
+            let mut stats = None;
+
+            if stats_reporter_sender.is_some() {
+                stats = Some(StreamerSendStats::default());
+            }
             loop {
                 if let Err(e) = recv_send(&sock, &r, &socket_addr_space, &mut stats) {
                     match e {
@@ -307,6 +305,11 @@ pub fn responder(
                     info!("{} last-error: {:?} count: {}", name, last_error, errors);
                     last_print = now;
                     errors = 0;
+                }
+                if let Some(ref stats_reporter_sender) = stats_reporter_sender {
+                    if let Some(ref mut stats) = stats {
+                        stats.maybe_submit(name, stats_reporter_sender);
+                    }
                 }
             }
         })
