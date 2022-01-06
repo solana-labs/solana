@@ -19,6 +19,7 @@ use {
         precompiles::is_precompile,
         pubkey::Pubkey,
         rent::Rent,
+        saturating_add_assign,
         sysvar::instructions,
         transaction::TransactionError,
     },
@@ -136,7 +137,10 @@ impl MessageProcessor {
                 result.is_err(),
             );
             timings.details.accumulate(&invoke_context.timings);
-            timings.execute_accessories.process_instructions_us += time.as_us();
+            saturating_add_assign!(
+                timings.execute_accessories.process_instructions_us,
+                time.as_us()
+            );
             result
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }

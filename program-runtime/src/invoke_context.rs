@@ -25,6 +25,7 @@ use {
         message::Message,
         pubkey::Pubkey,
         rent::Rent,
+        saturating_add_assign,
         sysvar::Sysvar,
     },
     std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, sync::Arc},
@@ -724,12 +725,12 @@ impl<'a> InvokeContext<'a> {
             let result =
                 self.verify_and_update(instruction, account_indices, caller_write_privileges);
             verify_caller_time.stop();
-            timings
-                .execute_accessories
-                .process_instruction_verify_caller_us = timings
-                .execute_accessories
-                .process_instruction_verify_caller_us
-                .saturating_add(verify_caller_time.as_us());
+            saturating_add_assign!(
+                timings
+                    .execute_accessories
+                    .process_instruction_verify_caller_us,
+                verify_caller_time.as_us()
+            );
             if result.is_err() {
                 return ProcessInstructionResult {
                     compute_units_consumed: 0,
@@ -765,18 +766,18 @@ impl<'a> InvokeContext<'a> {
                 });
                 verify_callee_time.stop();
 
-                timings
-                    .execute_accessories
-                    .process_instruction_process_executable_chain_us = timings
-                    .execute_accessories
-                    .process_instruction_process_executable_chain_us
-                    .saturating_add(process_executable_chain_time.as_us());
-                timings
-                    .execute_accessories
-                    .process_instruction_verify_callee_us = timings
-                    .execute_accessories
-                    .process_instruction_verify_callee_us
-                    .saturating_add(verify_callee_time.as_us());
+                saturating_add_assign!(
+                    timings
+                        .execute_accessories
+                        .process_instruction_process_executable_chain_us,
+                    process_executable_chain_time.as_us()
+                );
+                saturating_add_assign!(
+                    timings
+                        .execute_accessories
+                        .process_instruction_verify_callee_us,
+                    verify_callee_time.as_us()
+                );
 
                 result
             });

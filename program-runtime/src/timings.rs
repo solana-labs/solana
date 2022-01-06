@@ -1,4 +1,7 @@
-use {solana_sdk::pubkey::Pubkey, std::collections::HashMap};
+use {
+    solana_sdk::{pubkey::Pubkey, saturating_add_assign},
+    std::collections::HashMap,
+};
 
 #[derive(Default, Debug, PartialEq)]
 pub struct ProgramTiming {
@@ -15,23 +18,19 @@ impl ProgramTiming {
         for tx_error_compute_consumed in self.errored_txs_compute_consumed.drain(..) {
             let compute_units_update =
                 std::cmp::max(current_estimated_program_cost, tx_error_compute_consumed);
-            self.accumulated_units = self.accumulated_units.saturating_add(compute_units_update);
-            self.count = self.count.saturating_add(1);
+            saturating_add_assign!(self.accumulated_units, compute_units_update);
+            saturating_add_assign!(self.count, 1);
         }
     }
 
     pub fn accumulate_program_timings(&mut self, other: &ProgramTiming) {
-        self.accumulated_us = self.accumulated_us.saturating_add(other.accumulated_us);
-        self.accumulated_units = self
-            .accumulated_units
-            .saturating_add(other.accumulated_units);
-        self.count = self.count.saturating_add(other.count);
+        saturating_add_assign!(self.accumulated_us, other.accumulated_us);
+        saturating_add_assign!(self.accumulated_units, other.accumulated_units);
+        saturating_add_assign!(self.count, other.count);
         // Clones the entire vector, maybe not great...
         self.errored_txs_compute_consumed
             .extend(other.errored_txs_compute_consumed.clone());
-        self.total_errored_units = self
-            .total_errored_units
-            .saturating_add(other.total_errored_units);
+        saturating_add_assign!(self.total_errored_units, other.total_errored_units);
     }
 }
 
@@ -51,20 +50,14 @@ pub struct ExecuteTimings {
 
 impl ExecuteTimings {
     pub fn accumulate(&mut self, other: &ExecuteTimings) {
-        self.check_us = self.check_us.saturating_add(other.check_us);
-        self.load_us = self.load_us.saturating_add(other.load_us);
-        self.execute_us = self.execute_us.saturating_add(other.execute_us);
-        self.store_us = self.store_us.saturating_add(other.store_us);
-        self.update_stakes_cache_us = self
-            .update_stakes_cache_us
-            .saturating_add(other.update_stakes_cache_us);
-        self.total_batches_len = self
-            .total_batches_len
-            .saturating_add(other.total_batches_len);
-        self.num_execute_batches = self
-            .num_execute_batches
-            .saturating_add(other.num_execute_batches);
-        self.collect_logs_us = self.collect_logs_us.saturating_add(other.collect_logs_us);
+        saturating_add_assign!(self.check_us, other.check_us);
+        saturating_add_assign!(self.load_us, other.load_us);
+        saturating_add_assign!(self.execute_us, other.execute_us);
+        saturating_add_assign!(self.store_us, other.store_us);
+        saturating_add_assign!(self.update_stakes_cache_us, other.update_stakes_cache_us);
+        saturating_add_assign!(self.total_batches_len, other.total_batches_len);
+        saturating_add_assign!(self.num_execute_batches, other.num_execute_batches);
+        saturating_add_assign!(self.collect_logs_us, other.collect_logs_us);
         self.details.accumulate(&other.details);
         self.execute_accessories
             .accumulate(&other.execute_accessories);
@@ -86,31 +79,30 @@ pub struct ExecuteAccessoryTimings {
 
 impl ExecuteAccessoryTimings {
     pub fn accumulate(&mut self, other: &ExecuteAccessoryTimings) {
-        self.compute_budget_process_transaction_us = self
-            .feature_set_clone_us
-            .saturating_add(other.feature_set_clone_us);
-        self.compute_budget_process_transaction_us = self
-            .compute_budget_process_transaction_us
-            .saturating_add(other.compute_budget_process_transaction_us);
-        self.get_executors_us = self.get_executors_us.saturating_add(other.get_executors_us);
-        self.process_message_us = self
-            .process_message_us
-            .saturating_add(other.process_message_us);
-        self.update_executors_us = self
-            .update_executors_us
-            .saturating_add(other.update_executors_us);
-        self.process_instructions_us = self
-            .process_instructions_us
-            .saturating_add(other.process_instructions_us);
-        self.process_instruction_verify_caller_us = self
-            .process_instruction_verify_caller_us
-            .saturating_add(other.process_instruction_verify_caller_us);
-        self.process_instruction_process_executable_chain_us = self
-            .process_instruction_process_executable_chain_us
-            .saturating_add(other.process_instruction_process_executable_chain_us);
-        self.process_instruction_verify_callee_us = self
-            .process_instruction_verify_callee_us
-            .saturating_add(other.process_instruction_verify_callee_us);
+        saturating_add_assign!(
+            self.compute_budget_process_transaction_us,
+            other.feature_set_clone_us
+        );
+        saturating_add_assign!(
+            self.compute_budget_process_transaction_us,
+            other.compute_budget_process_transaction_us
+        );
+        saturating_add_assign!(self.get_executors_us, other.get_executors_us);
+        saturating_add_assign!(self.process_message_us, other.process_message_us);
+        saturating_add_assign!(self.update_executors_us, other.update_executors_us);
+        saturating_add_assign!(self.process_instructions_us, other.process_instructions_us);
+        saturating_add_assign!(
+            self.process_instruction_verify_caller_us,
+            other.process_instruction_verify_caller_us
+        );
+        saturating_add_assign!(
+            self.process_instruction_process_executable_chain_us,
+            other.process_instruction_process_executable_chain_us
+        );
+        saturating_add_assign!(
+            self.process_instruction_verify_callee_us,
+            other.process_instruction_verify_callee_us
+        );
     }
 }
 
@@ -133,35 +125,34 @@ pub struct ExecuteDetailsTimings {
 }
 impl ExecuteDetailsTimings {
     pub fn accumulate(&mut self, other: &ExecuteDetailsTimings) {
-        self.serialize_us = self.serialize_us.saturating_add(other.serialize_us);
-        self.create_vm_us = self.create_vm_us.saturating_add(other.create_vm_us);
-        self.execute_us = self.execute_us.saturating_add(other.execute_us);
-        self.deserialize_us = self.deserialize_us.saturating_add(other.deserialize_us);
-        self.get_or_create_executor_us = self
-            .get_or_create_executor_us
-            .saturating_add(other.get_or_create_executor_us);
-        self.changed_account_count = self
-            .changed_account_count
-            .saturating_add(other.changed_account_count);
-        self.total_account_count = self
-            .total_account_count
-            .saturating_add(other.total_account_count);
-        self.total_data_size = self.total_data_size.saturating_add(other.total_data_size);
-        self.data_size_changed = self
-            .data_size_changed
-            .saturating_add(other.data_size_changed);
-        self.create_executor_register_syscalls_us = self
-            .create_executor_register_syscalls_us
-            .saturating_add(other.create_executor_register_syscalls_us);
-        self.create_executor_load_elf_us = self
-            .create_executor_load_elf_us
-            .saturating_add(other.create_executor_load_elf_us);
-        self.create_executor_verify_code_us = self
-            .create_executor_verify_code_us
-            .saturating_add(other.create_executor_verify_code_us);
-        self.create_executor_jit_compile_us = self
-            .create_executor_jit_compile_us
-            .saturating_add(other.create_executor_jit_compile_us);
+        saturating_add_assign!(self.serialize_us, other.serialize_us);
+        saturating_add_assign!(self.create_vm_us, other.create_vm_us);
+        saturating_add_assign!(self.execute_us, other.execute_us);
+        saturating_add_assign!(self.deserialize_us, other.deserialize_us);
+        saturating_add_assign!(
+            self.get_or_create_executor_us,
+            other.get_or_create_executor_us
+        );
+        saturating_add_assign!(self.changed_account_count, other.changed_account_count);
+        saturating_add_assign!(self.total_account_count, other.total_account_count);
+        saturating_add_assign!(self.total_data_size, other.total_data_size);
+        saturating_add_assign!(self.data_size_changed, other.data_size_changed);
+        saturating_add_assign!(
+            self.create_executor_register_syscalls_us,
+            other.create_executor_register_syscalls_us
+        );
+        saturating_add_assign!(
+            self.create_executor_load_elf_us,
+            other.create_executor_load_elf_us
+        );
+        saturating_add_assign!(
+            self.create_executor_verify_code_us,
+            other.create_executor_verify_code_us
+        );
+        saturating_add_assign!(
+            self.create_executor_jit_compile_us,
+            other.create_executor_jit_compile_us
+        );
         for (id, other) in &other.per_program_timings {
             let program_timing = self.per_program_timings.entry(*id).or_default();
             program_timing.accumulate_program_timings(other);
