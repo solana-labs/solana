@@ -16,17 +16,15 @@ use {
     },
 };
 
-fn load_credentials() -> Result<Credentials, String> {
-    // Use standard GOOGLE_APPLICATION_CREDENTIALS environment variable
-    let credentials_file = std::env::var("GOOGLE_APPLICATION_CREDENTIALS")
-        .map_err(|_| "GOOGLE_APPLICATION_CREDENTIALS environment variable not found".to_string())?;
-
-    Credentials::from_file(&credentials_file).map_err(|err| {
-        format!(
-            "Failed to read GCP credentials from {}: {}",
-            credentials_file, err
-        )
-    })
+fn load_credentials(filepath: Option<String>) -> Result<Credentials, String> {
+    let path = match filepath {
+        Some(f) => f,
+        None => std::env::var("GOOGLE_APPLICATION_CREDENTIALS").map_err(|_| {
+            "GOOGLE_APPLICATION_CREDENTIALS environment variable not found".to_string()
+        })?,
+    };
+    Credentials::from_file(&path)
+        .map_err(|err| format!("Failed to read GCP credentials from {}: {}", path, err))
 }
 
 #[derive(Clone)]
@@ -38,8 +36,8 @@ pub struct AccessToken {
 }
 
 impl AccessToken {
-    pub async fn new(scope: Scope) -> Result<Self, String> {
-        let credentials = load_credentials()?;
+    pub async fn new(scope: Scope, credential_filepath: Option<String>) -> Result<Self, String> {
+        let credentials = load_credentials(credential_filepath)?;
         if let Err(err) = credentials.rsa_key() {
             Err(format!("Invalid rsa key: {}", err))
         } else {
