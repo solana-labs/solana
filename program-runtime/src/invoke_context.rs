@@ -71,20 +71,6 @@ pub trait Executor: Debug + Send + Sync {
     ) -> Result<(), InstructionError>;
 }
 
-<<<<<<< HEAD
-#[derive(Default)]
-pub struct Executors {
-    pub executors: HashMap<Pubkey, Arc<dyn Executor>>,
-    pub is_dirty: bool,
-}
-impl Executors {
-    pub fn insert(&mut self, key: Pubkey, executor: Arc<dyn Executor>) {
-        let _ = self.executors.insert(key, executor);
-        self.is_dirty = true;
-    }
-    pub fn get(&self, key: &Pubkey) -> Option<Arc<dyn Executor>> {
-        self.executors.get(key).cloned()
-=======
 pub type Executors = HashMap<Pubkey, TransactionExecutor>;
 
 /// Tracks whether a given executor is "dirty" and needs to updated in the
@@ -114,7 +100,6 @@ impl TransactionExecutor {
             is_miss: true,
             is_updated: false,
         }
->>>>>>> 12e160269 (cache executors on failed transactions (#22308))
     }
 
     /// Wraps an executor and tracks that it needs to be updated in the
@@ -864,9 +849,6 @@ impl<'a> InvokeContext<'a> {
 
     /// Cache an executor that wasn't found in the cache
     pub fn add_executor(&self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {
-<<<<<<< HEAD
-        self.executors.borrow_mut().insert(*pubkey, executor);
-=======
         self.executors
             .borrow_mut()
             .insert(*pubkey, TransactionExecutor::new_miss(executor));
@@ -877,12 +859,14 @@ impl<'a> InvokeContext<'a> {
         self.executors
             .borrow_mut()
             .insert(*pubkey, TransactionExecutor::new_updated(executor));
->>>>>>> 12e160269 (cache executors on failed transactions (#22308))
     }
 
     /// Get the completed loader work that can be re-used across execution
     pub fn get_executor(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
-        self.executors.borrow().get(pubkey)
+        self.executors
+            .borrow()
+            .get(pubkey)
+            .map(|tx_executor| tx_executor.executor.clone())
     }
 
     /// Find an account_index and account by its key
