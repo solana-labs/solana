@@ -1680,29 +1680,31 @@ mod tests {
 
     #[test]
     fn test_process_instruction_accounts_data_meter() {
-        solana_logger::setup();
-
         let program_key = Pubkey::new_unique();
         let user_account_data_len = 123;
         let user_account = AccountSharedData::new(100, user_account_data_len, &program_key);
-        let dummy_account = AccountSharedData::new(10, 0, &program_key);
+        let dummy1_account = AccountSharedData::new(10, 0, &program_key);
         let mut program_account = AccountSharedData::new(500, 500, &native_loader::id());
         program_account.set_executable(true);
         let accounts = vec![
-            (Pubkey::new_unique(), user_account),
-            (Pubkey::new_unique(), dummy_account),
-            (program_key, program_account),
+            (Pubkey::new_unique(), Rc::new(RefCell::new(user_account))),
+            (Pubkey::new_unique(), Rc::new(RefCell::new(dummy1_account))),
+            (program_key, Rc::new(RefCell::new(program_account))),
         ];
+        let account_indices = [];
+        let program_indices = [accounts.len() - 1];
+
+        let metas = accounts
+            .iter()
+            .map(|account| AccountMeta::new(account.0, false))
+            .collect::<Vec<_>>();
 
         let builtin_programs = [BuiltinProgram {
             program_id: program_key,
             process_instruction: mock_process_instruction,
         }];
 
-        let mut transaction_context = TransactionContext::new(accounts, 1);
-        let mut invoke_context =
-            InvokeContext::new_mock(&mut transaction_context, &builtin_programs);
-
+        let mut invoke_context = InvokeContext::new_mock(&accounts, &builtin_programs);
         invoke_context
             .accounts_data_meter
             .set_current(user_account_data_len as u64);
@@ -1711,34 +1713,31 @@ mod tests {
             .set_maximum(user_account_data_len as u64 * 3);
         let remaining_account_data_len = invoke_context.accounts_data_meter.remaining() as usize;
 
-        let instruction_accounts = [
-            InstructionAccount {
-                index_in_transaction: 0,
-                index_in_caller: 1,
-                is_signer: false,
-                is_writable: true,
-            },
-            InstructionAccount {
-                index_in_transaction: 1,
-                index_in_caller: 2,
-                is_signer: false,
-                is_writable: false,
-            },
-        ];
-
         // Test 1: Resize the account to use up all the space; this must succeed
         {
             let new_len = user_account_data_len + remaining_account_data_len;
-            dbg!(new_len);
-            let instruction_data =
-                bincode::serialize(&MockInstruction::Resize { new_len }).unwrap();
-
-            let result = invoke_context.process_instruction(
-                &instruction_data,
-                &instruction_accounts,
-                &[2],
-                &mut 0,
+            let instruction = Instruction::new_with_bincode(
+                program_key,
+                &MockInstruction::Resize { new_len },
+                metas.clone(),
             );
+            let message = Message::new(&[instruction.clone()], None);
+            let caller_write_privileges = message
+                .account_keys
+                .iter()
+                .enumerate()
+                .map(|(i, _)| message.is_writable(i))
+                .collect::<Vec<_>>();
+
+            let result = invoke_context
+                .process_instruction(
+                    &message,
+                    &message.instructions[0],
+                    &program_indices,
+                    &account_indices,
+                    &caller_write_privileges,
+                )
+                .result;
 
             assert!(result.is_ok());
             assert_eq!(invoke_context.accounts_data_meter.remaining(), 0);
@@ -1747,16 +1746,28 @@ mod tests {
         // Test 2: Resize the account to *the same size*, so not consuming any additional size; this must succeed
         {
             let new_len = user_account_data_len + remaining_account_data_len;
-            dbg!(new_len);
-            let instruction_data =
-                bincode::serialize(&MockInstruction::Resize { new_len }).unwrap();
-
-            let result = invoke_context.process_instruction(
-                &instruction_data,
-                &instruction_accounts,
-                &[2],
-                &mut 0,
+            let instruction = Instruction::new_with_bincode(
+                program_key,
+                &MockInstruction::Resize { new_len },
+                metas.clone(),
             );
+            let message = Message::new(&[instruction.clone()], None);
+            let caller_write_privileges = message
+                .account_keys
+                .iter()
+                .enumerate()
+                .map(|(i, _)| message.is_writable(i))
+                .collect::<Vec<_>>();
+
+            let result = invoke_context
+                .process_instruction(
+                    &message,
+                    &message.instructions[0],
+                    &program_indices,
+                    &account_indices,
+                    &caller_write_privileges,
+                )
+                .result;
 
             assert!(result.is_ok());
             assert_eq!(invoke_context.accounts_data_meter.remaining(), 0);
@@ -1765,16 +1776,28 @@ mod tests {
         // Test 3: Resize the account to exceed the budget; this must fail
         {
             let new_len = user_account_data_len + remaining_account_data_len + 1;
-            dbg!(new_len);
-            let instruction_data =
-                bincode::serialize(&MockInstruction::Resize { new_len }).unwrap();
-
-            let result = invoke_context.process_instruction(
-                &instruction_data,
-                &instruction_accounts,
-                &[2],
-                &mut 0,
+            let instruction = Instruction::new_with_bincode(
+                program_key,
+                &MockInstruction::Resize { new_len },
+                metas.clone(),
             );
+            let message = Message::new(&[instruction.clone()], None);
+            let caller_write_privileges = message
+                .account_keys
+                .iter()
+                .enumerate()
+                .map(|(i, _)| message.is_writable(i))
+                .collect::<Vec<_>>();
+
+            let result = invoke_context
+                .process_instruction(
+                    &message,
+                    &message.instructions[0],
+                    &program_indices,
+                    &account_indices,
+                    &caller_write_privileges,
+                )
+                .result;
 
             assert!(result.is_err());
             assert!(matches!(
