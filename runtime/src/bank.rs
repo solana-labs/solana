@@ -3719,7 +3719,7 @@ impl Bank {
         let (blockhash, lamports_per_signature) = self.last_blockhash_and_lamports_per_signature();
 
         let mut process_message_time = Measure::start("process_message_time");
-        let mut process_result = MessageProcessor::process_message(
+        let process_result = MessageProcessor::process_message(
             &self.builtin_programs.vec,
             tx.message(),
             &loaded_transaction.program_indices,
@@ -3750,22 +3750,17 @@ impl Bank {
             update_executors_time.as_us()
         );
 
-        let post_account_state_info =
-            self.get_transaction_account_state_info(&transaction_context, tx.message());
-
-        if self
-            .feature_set
-            .is_active(&feature_set::require_rent_exempt_accounts::id())
-        {
-            Self::verify_transaction_account_state_changes(
-                &mut process_result,
-                &pre_account_state_info,
-                &post_account_state_info,
-                &transaction_context,
-            );
-        }
-
         let status = process_result
+            .and_then(|info| {
+                let post_account_state_info =
+                    self.get_transaction_account_state_info(&transaction_context, tx.message());
+                self.verify_transaction_account_state_changes(
+                    &pre_account_state_info,
+                    &post_account_state_info,
+                    &transaction_context,
+                )
+                .map(|_| info)
+            })
             .map(|info| {
                 self.store_accounts_data_len(info.accounts_data_len);
             })
