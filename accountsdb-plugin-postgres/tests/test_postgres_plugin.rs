@@ -41,6 +41,51 @@ use {
 const RUST_LOG_FILTER: &str =
     "error,solana_core::replay_stage=warn,solana_local_cluster=info,local_cluster=info";
 
+fn wait_for_next_snapshot(
+    cluster: &LocalCluster,
+    snapshot_archives_dir: &Path,
+) -> (PathBuf, (Slot, Hash)) {
+    // Get slot after which this was generated
+    let client = cluster
+        .get_validator_client(&cluster.entry_point_info.id)
+        .unwrap();
+    let last_slot = client
+        .get_slot_with_commitment(CommitmentConfig::processed())
+        .expect("Couldn't get slot");
+
+    // Wait for a snapshot for a bank >= last_slot to be made so we know that the snapshot
+    // must include the transactions just pushed
+    trace!(
+        "Waiting for snapshot archive to be generated with slot > {}",
+        last_slot
+    );
+    loop {
+        if let Some(full_snapshot_archive_info) =
+            snapshot_utils::get_highest_full_snapshot_archive_info(snapshot_archives_dir)
+        {
+            trace!(
+                "full snapshot for slot {} exists",
+                full_snapshot_archive_info.slot()
+            );
+            if full_snapshot_archive_info.slot() >= last_slot {
+                return (
+                    full_snapshot_archive_info.path().clone(),
+                    (
+                        full_snapshot_archive_info.slot(),
+                        *full_snapshot_archive_info.hash(),
+                    ),
+                );
+            }
+            trace!(
+                "full snapshot slot {} < last_slot {}",
+                full_snapshot_archive_info.slot(),
+                last_slot
+            );
+        }
+        sleep(Duration::from_millis(1000));
+    }
+}
+
 fn farf_dir() -> PathBuf {
     std::env::var("FARF_DIR")
         .unwrap_or_else(|_| "farf".to_string())
@@ -146,9 +191,9 @@ fn test_postgres_plugin() {
         }
     }
 
+    solana_logger::setup_with_default(RUST_LOG_FILTER);
     let socket_addr_space = SocketAddrSpace::new(true);
     test_local_cluster_start_and_exit_with_config(socket_addr_space);
-    solana_logger::setup_with_default(RUST_LOG_FILTER);
 
     // First set up the cluster with 1 node
     let snapshot_interval_slots = 50;
@@ -156,4 +201,35 @@ fn test_postgres_plugin() {
 
     let leader_snapshot_test_config =
         setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
-}
+
+        let stake = 10_000;
+        let mut config = ClusterConfig {
+            node_stakes: vec![stake],
+            cluster_lamports: 1_000_000,
+            validator_configs: make_identical_validator_configs(
+                &leader_snapshot_test_config.validator_config,
+                1,
+            ),
+            ..ClusterConfig::default()
+        };
+    
+        let cluster = LocalCluster::new(&mut config, socket_addr_space);
+    
+        assert_eq!(cluster.validators.len(), 1);
+        let contact_info = &cluster.entry_point_info;
+    
+        info!("Contact info: {:?}", contact_info);
+    
+        // Get slot after which this was generated
+        let snapshot_archives_dir = &leader_snapshot_test_config
+            .validator_config
+            .snapshot_config
+            .as_ref()
+            .unwrap()
+            .snapshot_archives_dir;
+        info!("Waiting for snapshot");
+        let (archive_filename, archive_snapshot_hash) =
+            wait_for_next_snapshot(&cluster, snapshot_archives_dir);
+        info!("found: {:?}", archive_filename);
+    
+    }
