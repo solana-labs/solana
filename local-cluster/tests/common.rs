@@ -12,7 +12,7 @@ use {
     solana_ledger::{
         ancestor_iterator::AncestorIterator,
         blockstore::{Blockstore, PurgeType},
-        blockstore_db::{AccessType, BlockstoreOptions},
+        blockstore_db::AccessType,
         leader_schedule::{FixedSchedule, LeaderSchedule},
     },
     solana_local_cluster::{
@@ -70,17 +70,10 @@ pub fn remove_tower(tower_path: &Path, node_pubkey: &Pubkey) {
 }
 
 pub fn open_blockstore(ledger_path: &Path) -> Blockstore {
-    Blockstore::open_with_access_type(
-        ledger_path,
-        BlockstoreOptions {
-            access_type: AccessType::TryPrimaryThenSecondary,
-            recovery_mode: None,
-            enforce_ulimit_nofile: true,
-        },
-    )
-    .unwrap_or_else(|e| {
-        panic!("Failed to open ledger at {:?}, err: {}", ledger_path, e);
-    })
+    Blockstore::open_with_access_type(ledger_path, AccessType::TryPrimaryThenSecondary, None, true)
+        .unwrap_or_else(|e| {
+            panic!("Failed to open ledger at {:?}, err: {}", ledger_path, e);
+        })
 }
 
 pub fn purge_slots(blockstore: &Blockstore, start_slot: Slot, slot_count: Slot) {
