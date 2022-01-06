@@ -116,6 +116,7 @@ struct SnapshotValidatorConfig {
     snapshot_archives_dir: TempDir,
     account_storage_dirs: Vec<TempDir>,
     validator_config: ValidatorConfig,
+    plugin_config_dir: TempDir,
 }
 
 fn setup_snapshot_validator_config(
@@ -141,7 +142,7 @@ fn setup_snapshot_validator_config(
         solana_net_utils::find_available_port_in_range(bind_ip_addr, (1024, 65535)).unwrap();
     let replica_server_addr = SocketAddr::new(bind_ip_addr, accountsdb_repl_port);
 
-    let (_, config_file, path) = generate_accountsdb_plugin_config();
+    let (plugin_config_dir, config_file, path) = generate_accountsdb_plugin_config();
 
     let accountsdb_plugin_config_files = Some(
         vec![path]
@@ -161,6 +162,7 @@ fn setup_snapshot_validator_config(
         snapshot_archives_dir,
         account_storage_dirs,
         validator_config,
+        plugin_config_dir,
     }
 }
 
