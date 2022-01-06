@@ -344,14 +344,7 @@ impl<'a> InvokeContext<'a> {
     ) -> Result<(), InstructionError> {
         let program_id = instruction.program_id(&message.account_keys);
         let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
-<<<<<<< HEAD
-=======
         let cap_accounts_data_len = self.feature_set.is_active(&cap_accounts_data_len::id());
-        let program_id = self
-            .transaction_context
-            .get_program_key()
-            .map_err(|_| InstructionError::CallDepth)?;
->>>>>>> 1460f00e0 (Consume from AccountsDataMeter (#21994))
 
         // Verify all executable accounts have zero outstanding refs
         for account_index in program_indices.iter() {
@@ -425,7 +418,7 @@ impl<'a> InvokeContext<'a> {
         write_privileges: &[bool],
     ) -> Result<(), InstructionError> {
         let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
-<<<<<<< HEAD
+        let cap_accounts_data_len = self.feature_set.is_active(&cap_accounts_data_len::id());
         let program_id = self
             .invoke_stack
             .last()
@@ -436,14 +429,6 @@ impl<'a> InvokeContext<'a> {
         let accounts = &self.accounts;
         let pre_accounts = &mut self.pre_accounts;
         let timings = &mut self.timings;
-=======
-        let cap_accounts_data_len = self.feature_set.is_active(&cap_accounts_data_len::id());
-        let transaction_context = &self.transaction_context;
-        let instruction_context = transaction_context.get_current_instruction_context()?;
-        let program_id = transaction_context
-            .get_program_key()
-            .map_err(|_| InstructionError::CallDepth)?;
->>>>>>> 1460f00e0 (Consume from AccountsDataMeter (#21994))
 
         // Verify the per-account instruction results
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
