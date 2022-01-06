@@ -72,7 +72,7 @@ async fn setup_vote(context: &mut ProgramTestContext) -> Pubkey {
     instructions.push(system_instruction::create_account(
         &context.payer.pubkey(),
         &validator_keypair.pubkey(),
-        42,
+        Rent::default().minimum_balance(0),
         0,
         &system_program::id(),
     ));

@@ -3821,10 +3821,12 @@ pub mod tests {
     #[test]
     fn test_write_persist_transaction_status() {
         let GenesisConfigInfo {
-            genesis_config,
+            mut genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_config(1000);
+        } = create_genesis_config(solana_sdk::native_token::sol_to_lamports(1000.0));
+        genesis_config.rent.lamports_per_byte_year = 50;
+        genesis_config.rent.exemption_threshold = 2.0;
         let (ledger_path, _) = create_new_tmp_ledger!(&genesis_config);
         {
             let blockstore = Blockstore::open(&ledger_path)
@@ -3837,7 +3839,11 @@ pub mod tests {
 
             let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
             bank0
-                .transfer(4, &mint_keypair, &keypair2.pubkey())
+                .transfer(
+                    bank0.get_minimum_balance_for_rent_exemption(0),
+                    &mint_keypair,
+                    &keypair2.pubkey(),
+                )
                 .unwrap();
 
             let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));

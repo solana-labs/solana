@@ -4273,23 +4273,32 @@ pub fn create_test_transactions_and_populate_blockstore(
     let keypair3 = keypairs[3];
     let slot = bank.slot();
     let blockhash = bank.confirmed_last_blockhash();
+    let rent_exempt_amount = bank.get_minimum_balance_for_rent_exemption(0);
 
     // Generate transactions for processing
     // Successful transaction
-    let success_tx =
-        solana_sdk::system_transaction::transfer(mint_keypair, &keypair1.pubkey(), 2, blockhash);
+    let success_tx = solana_sdk::system_transaction::transfer(
+        mint_keypair,
+        &keypair1.pubkey(),
+        rent_exempt_amount,
+        blockhash,
+    );
     let success_signature = success_tx.signatures[0];
     let entry_1 = solana_entry::entry::next_entry(&blockhash, 1, vec![success_tx]);
     // Failed transaction, InstructionError
-    let ix_error_tx =
-        solana_sdk::system_transaction::transfer(keypair2, &keypair3.pubkey(), 10, blockhash);
+    let ix_error_tx = solana_sdk::system_transaction::transfer(
+        keypair2,
+        &keypair3.pubkey(),
+        2 * rent_exempt_amount,
+        blockhash,
+    );
     let ix_error_signature = ix_error_tx.signatures[0];
     let entry_2 = solana_entry::entry::next_entry(&entry_1.hash, 1, vec![ix_error_tx]);
     // Failed transaction
     let fail_tx = solana_sdk::system_transaction::transfer(
         mint_keypair,
         &keypair2.pubkey(),
-        2,
+        rent_exempt_amount,
         Hash::default(),
     );
     let entry_3 = solana_entry::entry::next_entry(&entry_2.hash, 1, vec![fail_tx]);
@@ -4412,6 +4421,7 @@ pub mod tests {
     ) -> RpcHandler {
         let (bank_forks, alice, leader_vote_keypair) = new_bank_forks();
         let bank = bank_forks.read().unwrap().working_bank();
+        let rent_exempt_amount = bank.get_minimum_balance_for_rent_exemption(0);
 
         let vote_pubkey = leader_vote_keypair.pubkey();
         let mut vote_account = bank.get_account(&vote_pubkey).unwrap_or_default();
@@ -4431,7 +4441,8 @@ pub mod tests {
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         let keypair3 = Keypair::new();
-        bank.transfer(4, &alice, &keypair2.pubkey()).unwrap();
+        bank.transfer(rent_exempt_amount, &alice, &keypair2.pubkey())
+            .unwrap();
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(blockstore.max_root()));
         let confirmed_block_signatures = create_test_transactions_and_populate_blockstore(
             vec![&alice, &keypair1, &keypair2, &keypair3],
@@ -4501,10 +4512,14 @@ pub mod tests {
         let validator_exit = create_validator_exit(&exit);
 
         let blockhash = bank.confirmed_last_blockhash();
-        let tx = system_transaction::transfer(&alice, pubkey, 20, blockhash);
+        let tx = system_transaction::transfer(&alice, pubkey, rent_exempt_amount, blockhash);
         bank.process_transaction(&tx).expect("process transaction");
-        let tx =
-            system_transaction::transfer(&alice, &non_circulating_accounts()[0], 20, blockhash);
+        let tx = system_transaction::transfer(
+            &alice,
+            &non_circulating_accounts()[0],
+            rent_exempt_amount,
+            blockhash,
+        );
         bank.process_transaction(&tx).expect("process transaction");
 
         let tx = system_transaction::transfer(&alice, pubkey, std::u64::MAX, blockhash);
@@ -4812,13 +4827,16 @@ pub mod tests {
     #[test]
     fn test_get_supply() {
         let bob_pubkey = solana_sdk::pubkey::new_rand();
-        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+        let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&bob_pubkey);
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getSupply"}"#;
         let res = io.handle_request_sync(req, meta);
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
         let supply: RpcSupply = serde_json::from_value(json["result"]["value"].clone())
             .expect("actual response deserialization");
-        assert_eq!(supply.non_circulating, 20);
+        assert_eq!(
+            supply.non_circulating,
+            bank.get_minimum_balance_for_rent_exemption(0)
+        );
         assert!(supply.circulating >= TEST_MINT_LAMPORTS);
         assert!(supply.total >= TEST_MINT_LAMPORTS + 20);
         let expected_accounts: Vec<String> = non_circulating_accounts()
@@ -4837,13 +4855,16 @@ pub mod tests {
     #[test]
     fn test_get_supply_exclude_account_list() {
         let bob_pubkey = solana_sdk::pubkey::new_rand();
-        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+        let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&bob_pubkey);
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getSupply","params":[{"excludeNonCirculatingAccountsList":true}]}"#;
         let res = io.handle_request_sync(req, meta);
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
         let supply: RpcSupply = serde_json::from_value(json["result"]["value"].clone())
             .expect("actual response deserialization");
-        assert_eq!(supply.non_circulating, 20);
+        assert_eq!(
+            supply.non_circulating,
+            bank.get_minimum_balance_for_rent_exemption(0)
+        );
         assert!(supply.circulating >= TEST_MINT_LAMPORTS);
         assert!(supply.total >= TEST_MINT_LAMPORTS + 20);
         assert!(supply.non_circulating_accounts.is_empty());
@@ -5165,7 +5186,7 @@ pub mod tests {
                 "context":{"slot":0},
                 "value":{
                     "owner": "11111111111111111111111111111111",
-                    "lamports": 20,
+                    "lamports": bank.get_minimum_balance_for_rent_exemption(0),
                     "data": "",
                     "executable": false,
                     "rentEpoch": 0
@@ -5236,9 +5257,11 @@ pub mod tests {
         let bob_pubkey = solana_sdk::pubkey::new_rand();
         let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
+        let rent_exempt_amount = bank.get_minimum_balance_for_rent_exemption(0);
+
         let address = Pubkey::new(&[9; 32]);
         let data = vec![1, 2, 3, 4, 5];
-        let mut account = AccountSharedData::new(42, 5, &Pubkey::default());
+        let mut account = AccountSharedData::new(rent_exempt_amount + 1, 5, &Pubkey::default());
         account.set_data(data.clone());
         bank.store_account(&address, &account);
 
@@ -5256,7 +5279,7 @@ pub mod tests {
                 "context":{"slot":0},
                 "value":[{
                     "owner": "11111111111111111111111111111111",
-                    "lamports": 20,
+                    "lamports": rent_exempt_amount,
                     "data": ["", "base64"],
                     "executable": false,
                     "rentEpoch": 0
@@ -5264,7 +5287,7 @@ pub mod tests {
                 null,
                 {
                     "owner": "11111111111111111111111111111111",
-                    "lamports": 42,
+                    "lamports": rent_exempt_amount + 1,
                     "data": [base64::encode(&data), "base64"],
                     "executable": false,
                     "rentEpoch": 0
@@ -5376,7 +5399,7 @@ pub mod tests {
                         "pubkey": "{}",
                         "account": {{
                             "owner": "{}",
-                            "lamports": 20,
+                            "lamports": {},
                             "data": "",
                             "executable": false,
                             "rentEpoch": 0
@@ -5386,7 +5409,8 @@ pub mod tests {
                 "id":1}}
             "#,
             bob.pubkey(),
-            new_program_id
+            new_program_id,
+            bank.get_minimum_balance_for_rent_exemption(0),
         );
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
@@ -5579,8 +5603,10 @@ pub mod tests {
             ..
         } = start_rpc_handler_with_tx(&solana_sdk::pubkey::new_rand());
 
+        let rent_exempt_amount = bank.get_minimum_balance_for_rent_exemption(0);
         let bob_pubkey = solana_sdk::pubkey::new_rand();
-        let mut tx = system_transaction::transfer(&alice, &bob_pubkey, 1234, blockhash);
+        let mut tx =
+            system_transaction::transfer(&alice, &bob_pubkey, rent_exempt_amount, blockhash);
         let tx_serialized_encoded = bs58::encode(serialize(&tx).unwrap()).into_string();
         tx.signatures[0] = Signature::default();
         let tx_badsig_serialized_encoded = bs58::encode(serialize(&tx).unwrap()).into_string();
@@ -5621,7 +5647,7 @@ pub mod tests {
                             "data": ["", "base64"],
                             "executable": false,
                             "owner": "11111111111111111111111111111111",
-                            "lamports": 1234,
+                            "lamports": rent_exempt_amount,
                             "rentEpoch": 0
                         }
                     ],
@@ -5871,6 +5897,7 @@ pub mod tests {
             blockhash,
             alice,
             confirmed_block_signatures,
+            bank,
             ..
         } = start_rpc_handler_with_tx(&bob_pubkey);
 
@@ -5889,7 +5916,12 @@ pub mod tests {
         assert_eq!(None, result.confirmations);
 
         // Test getSignatureStatus request on unprocessed tx
-        let tx = system_transaction::transfer(&alice, &bob_pubkey, 10, blockhash);
+        let tx = system_transaction::transfer(
+            &alice,
+            &bob_pubkey,
+            bank.get_minimum_balance_for_rent_exemption(0) + 10,
+            blockhash,
+        );
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatuses","params":[["{}"]]}}"#,
             tx.signatures[0]
