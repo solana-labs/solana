@@ -3546,14 +3546,22 @@ impl Bank {
 
         for key in message.account_keys_iter() {
             if let Some(executor) = cache.get(key) {
+<<<<<<< HEAD
                 executors.insert(*key, executor);
+=======
+                executors.insert(*key, TransactionExecutor::new_cached(executor));
+>>>>>>> 12e160269 (cache executors on failed transactions (#22308))
             }
         }
         for program_indices_of_instruction in program_indices.iter() {
             for account_index in program_indices_of_instruction.iter() {
                 let key = accounts[*account_index].0;
                 if let Some(executor) = cache.get(&key) {
+<<<<<<< HEAD
                     executors.insert(key, executor);
+=======
+                    executors.insert(key, TransactionExecutor::new_cached(executor));
+>>>>>>> 12e160269 (cache executors on failed transactions (#22308))
                 }
             }
         }
@@ -3565,9 +3573,24 @@ impl Bank {
     }
 
     /// Add executors back to the bank's cache if modified
-    fn update_executors(&self, executors: Rc<RefCell<Executors>>) {
+    fn update_executors(&self, allow_updates: bool, executors: Rc<RefCell<Executors>>) {
         let executors = executors.borrow();
+<<<<<<< HEAD
         if executors.is_dirty {
+=======
+        let dirty_executors: Vec<_> = executors
+            .iter()
+            .filter_map(|(key, executor)| {
+                if executor.is_dirty(allow_updates) {
+                    Some((key, executor.get()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if !dirty_executors.is_empty() {
+>>>>>>> 12e160269 (cache executors on failed transactions (#22308))
             let mut cow_cache = self.cached_executors.write().unwrap();
             let mut cache = cow_cache.write().unwrap();
             for (key, executor) in executors.executors.iter() {
@@ -3648,6 +3671,17 @@ impl Bank {
             self.load_accounts_data_len(),
         );
 
+        self.update_executors(process_result.is_ok(), executors);
+
+        let status = process_result
+            .map(|info| {
+                self.store_accounts_data_len(info.accounts_data_len);
+            })
+            .map_err(|err| {
+                error_counters.instruction_error += 1;
+                err
+            });
+
         let log_messages: Option<TransactionLogMessages> =
             log_collector.and_then(|log_collector| {
                 Rc::try_unwrap(log_collector)
@@ -3669,16 +3703,6 @@ impl Bank {
             warn!("Account lifetime mismanagement");
             return TransactionExecutionResult::NotExecuted(e);
         }
-
-        let status = process_result
-            .map(|info| {
-                self.store_accounts_data_len(info.accounts_data_len);
-                self.update_executors(executors);
-            })
-            .map_err(|err| {
-                error_counters.instruction_error += 1;
-                err
-            });
 
         TransactionExecutionResult::Executed(TransactionExecutionDetails {
             status,
@@ -12891,6 +12915,7 @@ pub(crate) mod tests {
 
         // don't do any work if not dirty
         let mut executors = Executors::default();
+<<<<<<< HEAD
         executors.insert(key1, executor.clone());
         executors.insert(key2, executor.clone());
         executors.insert(key3, executor.clone());
@@ -12898,17 +12923,37 @@ pub(crate) mod tests {
         let executors = Rc::new(RefCell::new(executors));
         executors.borrow_mut().is_dirty = false;
         bank.update_executors(executors);
+=======
+        executors.insert(key1, TransactionExecutor::new_cached(executor.clone()));
+        executors.insert(key2, TransactionExecutor::new_cached(executor.clone()));
+        executors.insert(key3, TransactionExecutor::new_cached(executor.clone()));
+        executors.insert(key4, TransactionExecutor::new_cached(executor.clone()));
+        let executors = Rc::new(RefCell::new(executors));
+        executors
+            .borrow_mut()
+            .get_mut(&key1)
+            .unwrap()
+            .clear_miss_for_test();
+        bank.update_executors(true, executors);
+>>>>>>> 12e160269 (cache executors on failed transactions (#22308))
         let executors = bank.get_executors(&message, accounts, program_indices);
         assert_eq!(executors.borrow().executors.len(), 0);
 
         // do work
         let mut executors = Executors::default();
+<<<<<<< HEAD
         executors.insert(key1, executor.clone());
         executors.insert(key2, executor.clone());
         executors.insert(key3, executor.clone());
         executors.insert(key4, executor.clone());
+=======
+        executors.insert(key1, TransactionExecutor::new_miss(executor.clone()));
+        executors.insert(key2, TransactionExecutor::new_miss(executor.clone()));
+        executors.insert(key3, TransactionExecutor::new_miss(executor.clone()));
+        executors.insert(key4, TransactionExecutor::new_miss(executor.clone()));
+>>>>>>> 12e160269 (cache executors on failed transactions (#22308))
         let executors = Rc::new(RefCell::new(executors));
-        bank.update_executors(executors);
+        bank.update_executors(true, executors);
         let executors = bank.get_executors(&message, accounts, program_indices);
         assert_eq!(executors.borrow().executors.len(), 4);
         assert!(executors.borrow().executors.contains_key(&key1));
@@ -12958,9 +13003,13 @@ pub(crate) mod tests {
 
         // add one to root bank
         let mut executors = Executors::default();
+<<<<<<< HEAD
         executors.insert(key1, executor.clone());
+=======
+        executors.insert(key1, TransactionExecutor::new_miss(executor.clone()));
+>>>>>>> 12e160269 (cache executors on failed transactions (#22308))
         let executors = Rc::new(RefCell::new(executors));
-        root.update_executors(executors);
+        root.update_executors(true, executors);
         let executors = root.get_executors(&message, accounts, program_indices);
         assert_eq!(executors.borrow().executors.len(), 1);
 
@@ -12973,9 +13022,13 @@ pub(crate) mod tests {
         assert_eq!(executors.borrow().executors.len(), 1);
 
         let mut executors = Executors::default();
+<<<<<<< HEAD
         executors.insert(key2, executor.clone());
+=======
+        executors.insert(key2, TransactionExecutor::new_miss(executor.clone()));
+>>>>>>> 12e160269 (cache executors on failed transactions (#22308))
         let executors = Rc::new(RefCell::new(executors));
-        fork1.update_executors(executors);
+        fork1.update_executors(true, executors);
 
         let executors = fork1.get_executors(&message, accounts, program_indices);
         assert_eq!(executors.borrow().executors.len(), 2);
