@@ -3699,7 +3699,8 @@ impl Bank {
             compute_budget.max_invoke_depth.saturating_add(1),
         );
 
-        let pre_account_state_info = self.get_transaction_account_state_info(&transaction_context);
+        let pre_account_state_info =
+            self.get_transaction_account_state_info(&transaction_context, tx.message());
 
         let instruction_recorder = if enable_cpi_recording {
             Some(InstructionRecorder::new_ref(
@@ -3749,7 +3750,8 @@ impl Bank {
             update_executors_time.as_us()
         );
 
-        let post_account_state_info = self.get_transaction_account_state_info(&transaction_context);
+        let post_account_state_info =
+            self.get_transaction_account_state_info(&transaction_context, tx.message());
 
         if self
             .feature_set

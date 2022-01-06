@@ -1,31 +1,36 @@
 use {
     crate::{
-        account_rent_state::{submit_rent_state_metrics, RentState},
+        account_rent_state::{check_rent_state, RentState},
         bank::Bank,
         message_processor::ProcessedMessageInfo,
     },
-    log::debug,
     solana_sdk::{
-        transaction::{Result, TransactionError},
-        transaction_context::TransactionContext,
+        message::SanitizedMessage, transaction::Result, transaction_context::TransactionContext,
     },
 };
 
 pub(crate) struct TransactionAccountStateInfo {
-    rent_state: RentState,
+    rent_state: Option<RentState>, // None: readonly account
 }
 
 impl Bank {
     pub(crate) fn get_transaction_account_state_info(
         &self,
         transaction_context: &TransactionContext,
+        message: &SanitizedMessage,
     ) -> Vec<TransactionAccountStateInfo> {
         (0..transaction_context.get_number_of_accounts())
             .map(|i| {
-                let account = transaction_context.get_account_at_index(i).borrow();
-                TransactionAccountStateInfo {
-                    rent_state: RentState::from_account(&account, &self.rent_collector().rent),
-                }
+                let rent_state = if message.is_writable(i) {
+                    let account = transaction_context.get_account_at_index(i).borrow();
+                    Some(RentState::from_account(
+                        &account,
+                        &self.rent_collector().rent,
+                    ))
+                } else {
+                    None
+                };
+                TransactionAccountStateInfo { rent_state }
             })
             .collect()
     }
@@ -40,20 +45,13 @@ impl Bank {
             for (i, (pre_state_info, post_state_info)) in
                 pre_state_infos.iter().zip(post_state_infos).enumerate()
             {
-                if !post_state_info
-                    .rent_state
-                    .transition_allowed_from(&pre_state_info.rent_state)
-                {
-                    debug!(
-                        "Account {:?} not rent exempt, state {:?}",
-                        transaction_context.get_key_of_account_at_index(i),
-                        transaction_context.get_account_at_index(i).borrow(),
-                    );
-                    submit_rent_state_metrics(
-                        &pre_state_info.rent_state,
-                        &post_state_info.rent_state,
-                    );
-                    *process_result = Err(TransactionError::InvalidRentPayingAccount)
+                if let Err(err) = check_rent_state(
+                    pre_state_info.rent_state.as_ref(),
+                    post_state_info.rent_state.as_ref(),
+                    transaction_context,
+                    i,
+                ) {
+                    *process_result = Err(err)
                 }
             }
         }
