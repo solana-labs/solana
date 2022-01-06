@@ -2608,11 +2608,15 @@ impl AccountsDb {
         alive_total
     }
 
-    fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I) -> usize
+    /// get all accounts in all the storages passed in
+    /// for duplicate pubkeys, the account with the highest write_value is returned
+    fn get_unique_accounts_from_storages<'a, I>(
+        &'a self,
+        stores: I,
+    ) -> (HashMap<Pubkey, FoundStoredAccount>, usize, u64)
     where
         I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
     {
-        debug!("do_shrink_slot_stores: slot: {}", slot);
         let mut stored_accounts: HashMap<Pubkey, FoundStoredAccount> = HashMap::new();
         let mut original_bytes = 0;
         let mut num_stores = 0;
@@ -2642,6 +2646,16 @@ impl AccountsDb {
             }
             num_stores += 1;
         }
+        (stored_accounts, num_stores, original_bytes)
+    }
+
+    fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I) -> usize
+    where
+        I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
+    {
+        debug!("do_shrink_slot_stores: slot: {}", slot);
+        let (stored_accounts, num_stores, original_bytes) =
+            self.get_unique_accounts_from_storages(stores);
 
         // sort by pubkey to keep account index lookups close
         let mut stored_accounts = stored_accounts.into_iter().collect::<Vec<_>>();
