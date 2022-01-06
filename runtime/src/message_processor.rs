@@ -146,7 +146,7 @@ impl MessageProcessor {
             );
             timings.details.accumulate(&invoke_context.timings);
             saturating_add_assign!(
-                timings.execute_accessories.process_instructions_us,
+                timings.execute_accessories.process_instructions.total_us,
                 time.as_us()
             );
             result

@@ -178,24 +178,35 @@ impl ReplaySlotStats {
                 i64
             ),
             (
-                "execute_accessories_process_instruction_verify_caller_us",
+                "execute_accessories_process_instructions_total_us",
                 self.execute_timings
                     .execute_accessories
-                    .process_instruction_verify_caller_us,
+                    .process_instructions
+                    .total_us,
                 i64
             ),
             (
-                "execute_accessories_process_instruction_process_executable_chain_us",
+                "execute_accessories_process_instructions_verify_caller_us",
                 self.execute_timings
                     .execute_accessories
-                    .process_instruction_process_executable_chain_us,
+                    .process_instructions
+                    .verify_caller_us,
                 i64
             ),
             (
-                "execute_accessories_process_instruction_verify_callee_us",
+                "execute_accessories_process_instructions_process_executable_chain_us",
                 self.execute_timings
                     .execute_accessories
-                    .process_instruction_verify_callee_us,
+                    .process_instructions
+                    .process_executable_chain_us,
+                i64
+            ),
+            (
+                "execute_accessories_process_instructions_verify_callee_us",
+                self.execute_timings
+                    .execute_accessories
+                    .process_instructions
+                    .verify_callee_us,
                 i64
             ),
         );
