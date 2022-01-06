@@ -134,15 +134,12 @@ impl<'a> AddressLookupTable<'a> {
         Ok(())
     }
 
-    /// Lookup addresses for provided table indexes. Since lookups are performed on
-    /// tables which are not read-locked, this implementation needs to be careful
-    /// about resolving addresses consistently.
-    pub fn lookup(
+    /// Get the length of addresses that are active for lookups
+    pub fn get_active_addresses_len(
         &self,
         current_slot: Slot,
-        indexes: &[u8],
         slot_hashes: &SlotHashes,
-    ) -> Result<Vec<Pubkey>, AddressLookupError> {
+    ) -> Result<usize, AddressLookupError> {
         if !self.meta.is_active(current_slot, slot_hashes) {
             // Once a lookup table is no longer active, it can be closed
             // at any point, so returning a specific error for deactivated
@@ -159,6 +156,19 @@ impl<'a> AddressLookupTable<'a> {
             self.meta.last_extended_slot_start_index as usize
         };
 
+        Ok(active_addresses_len)
+    }
+
+    /// Lookup addresses for provided table indexes. Since lookups are performed on
+    /// tables which are not read-locked, this implementation needs to be careful
+    /// about resolving addresses consistently.
+    pub fn lookup(
+        &self,
+        current_slot: Slot,
+        indexes: &[u8],
+        slot_hashes: &SlotHashes,
+    ) -> Result<Vec<Pubkey>, AddressLookupError> {
+        let active_addresses_len = self.get_active_addresses_len(current_slot, slot_hashes)?;
         let active_addresses = &self.addresses[0..active_addresses_len];
         indexes
             .iter()
