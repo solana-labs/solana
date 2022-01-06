@@ -324,6 +324,27 @@ fn metrics_submit_lamport_balance(lamport_balance: u64) {
     );
 }
 
+/// Create and sign new large transaction of many system_instruction::Transfer
+pub fn big_transfer(
+    from_keypair: &Keypair,
+    to: &Pubkey,
+    lamports: u64,
+    recent_blockhash: Hash,
+) -> Transaction {
+    let from_pubkey = from_keypair.pubkey();
+
+    let instructions = (0..128).map(|_|
+        system_instruction::transfer(&from_pubkey, &to, lamports)
+        ).collect::<Vec<_>>();
+
+    Transaction::new(&[from_keypair],
+        Message::new(
+        &instructions,
+        Some(&from_pubkey),
+    ),
+    recent_blockhash)
+}
+
 fn generate_system_txs(
     source: &[&Keypair],
     dest: &VecDeque<&Keypair>,
@@ -340,7 +361,7 @@ fn generate_system_txs(
         .par_iter()
         .map(|(from, to)| {
             (
-                system_transaction::transfer(from, &to.pubkey(), 1, *blockhash),
+                big_transfer(from, &to.pubkey(), 1, *blockhash),
                 timestamp(),
             )
         })
