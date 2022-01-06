@@ -6,8 +6,13 @@ use {
     log::*,
     libloading::{Library, Symbol},
     serial_test::serial,
-    solana_core::validator::ValidatorConfig,
     solana_accountsdb_plugin_postgres,
+    solana_core::validator::ValidatorConfig,
+    solana_local_cluster::{
+        cluster::Cluster,
+        local_cluster::{ClusterConfig, LocalCluster},
+        validator_configs::*,
+    },    
     solana_runtime::{
         accounts_index::AccountSecondaryIndexes, snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig, snapshot_utils,
@@ -32,6 +37,9 @@ use {
     },    
     tempfile::TempDir,
 };
+
+const RUST_LOG_FILTER: &str =
+    "error,solana_core::replay_stage=warn,solana_local_cluster=info,local_cluster=info";
 
 fn farf_dir() -> PathBuf {
     std::env::var("FARF_DIR")
@@ -111,6 +119,22 @@ fn setup_snapshot_validator_config(
     }
 }
 
+fn test_local_cluster_start_and_exit_with_config(socket_addr_space: SocketAddrSpace) {
+    solana_logger::setup();
+    const NUM_NODES: usize = 1;
+    let mut config = ClusterConfig {
+        validator_configs: make_identical_validator_configs(&ValidatorConfig::default(), NUM_NODES),
+        node_stakes: vec![3; NUM_NODES],
+        cluster_lamports: 100,
+        ticks_per_slot: 8,
+        slots_per_epoch: MINIMUM_SLOTS_PER_EPOCH as u64,
+        stakers_slot_offset: MINIMUM_SLOTS_PER_EPOCH as u64,
+        ..ClusterConfig::default()
+    };
+    let cluster = LocalCluster::new(&mut config, socket_addr_space);
+    assert_eq!(cluster.validators.len(), NUM_NODES);
+}
+
 #[test]
 #[serial]
 fn test_postgres_plugin() {
@@ -121,6 +145,11 @@ fn test_postgres_plugin() {
             return;
         }
     }
+
+    let socket_addr_space = SocketAddrSpace::new(true);
+    test_local_cluster_start_and_exit_with_config(socket_addr_space);
+    solana_logger::setup_with_default(RUST_LOG_FILTER);
+
     // First set up the cluster with 1 node
     let snapshot_interval_slots = 50;
     let num_account_paths = 3;
