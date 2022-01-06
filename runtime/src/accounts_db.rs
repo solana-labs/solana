@@ -5064,6 +5064,10 @@ impl AccountsDb {
             );
         }
         use itertools::Itertools;
+        error!(
+            "removing: {:?}",
+            slot_caches.iter().map(|(slot, _)| slot).collect::<Vec<_>>()
+        );
         slot_caches
             .iter()
             .map(|(slot, _): &(Slot, _)| *slot)
@@ -5073,7 +5077,6 @@ impl AccountsDb {
                 // atomic switch from the cache to storage.
                 // There is some racy condition for existing readers who just has read exactly while
                 // flushing. That case is handled by retry_to_get_account_accessor()
-                //error!("remove: {}", slot);
                 assert!(self.accounts_cache.remove_slot(slot).is_some());
             });
 
