@@ -24,40 +24,71 @@ use {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferData {
-    /// The transfer amount encoded as Pedersen commitments
-    pub amount_comms: TransferCommitments,
-
-    /// The decryption handles that allow decryption of the lo-bits of the transfer amount
-    pub decrypt_handles_lo: TransferDecryptHandles,
-
-    /// The decryption handles that allow decryption of the hi-bits of the transfer amount
-    pub decrypt_handles_hi: TransferDecryptHandles,
+    /// The encrypted transfer amount
+    pub encrypted_transfer_amount: EncryptedTransferAmount,
 
     /// The public encryption keys associated with the transfer: source, dest, and auditor
-    pub transfer_public_keys: TransferPubkeys, // 96 bytes
+    pub transfer_public_keys: TransferPubkeys, // 128 bytes
 
     /// The final spendable ciphertext after the transfer
     pub new_spendable_ct: pod::ElGamalCiphertext, // 64 bytes
 
+    // pub fee: EncryptedTransferFee,
+
     /// Zero-knowledge proofs for Transfer
     pub proof: TransferProof,
+}
+
+#[derive(Clone, Copy)]
+#[repr(C)]
+pub struct FeeParameters {
+    /// Fee rate expressed as basis points of the transfer amount, i.e. increments of 0.01%
+    pub fee_rate_basis_points: u16,
+    /// Maximum fee assessed on transfers, expressed as an amount of tokens
+    pub maximum_fee: u64,
+}
+
+#[allow(dead_code)]
+fn calculate_fee(transfer_amount: u64, fee_parameters: FeeParameters) -> u64 {
+    // TODO: temporary way to calculate fees for now. Should account for overflows/compiler
+    // optimizations
+    let fee = (transfer_amount * (fee_parameters.fee_rate_basis_points as u64)) / 10000;
+    if fee % 10000 > 0 {
+        fee + 1
+    } else {
+        fee
+    }
 }
 
 #[cfg(not(target_arch = "bpf"))]
 impl TransferData {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
+        // amount of the transfer
         transfer_amount: u64,
+
+        // available balance in the source account as u64
         spendable_balance: u64,
-        spendable_ct: ElGamalCiphertext,
+
+        // available balance in the source account as ElGamalCiphertext
+        spendable_balance_ciphertext: ElGamalCiphertext,
+
+        // source account ElGamal keypair
         source_keypair: &ElGamalKeypair,
+
+        // destination account ElGamal pubkey
         dest_pk: ElGamalPubkey,
+
+        // auditor ElGamal pubkey
         auditor_pk: ElGamalPubkey,
+
+        // // fee collector ElGamal pubkey
+        // fee_collector_pk: ElGamalPubkey,
+
+        // // fee rate and cap value
+        // fee_parameters: FeeParameters,
     ) -> Self {
         // split and encrypt transfer amount
-        //
-        // encryption is a bit more involved since we are generating each components of an ElGamalKeypair
-        // ciphertext separately.
         let (amount_lo, amount_hi) = split_u64_into_u32(transfer_amount);
 
         let (comm_lo, open_lo) = Pedersen::new(amount_lo);
@@ -71,13 +102,7 @@ impl TransferData {
         let handle_dest_hi = dest_pk.decrypt_handle(&open_hi);
         let handle_auditor_hi = auditor_pk.decrypt_handle(&open_hi);
 
-        // message encoding as Pedersen commitments, which will be included in range proof data
-        let amount_comms = TransferCommitments {
-            lo: comm_lo.into(),
-            hi: comm_hi.into(),
-        };
-
-        // decryption handles, which will be included in the validity proof data
+        // organize transfer amount commitments and decrypt handles
         let decrypt_handles_lo = TransferDecryptHandles {
             source: handle_source_lo.into(),
             dest: handle_dest_lo.into(),
@@ -90,7 +115,14 @@ impl TransferData {
             auditor: handle_auditor_hi.into(),
         };
 
-        // grouping of the public keys for the transfer
+        let encrypted_transfer_amount = EncryptedTransferAmount {
+            amount_comm_lo: comm_lo.into(),
+            amount_comm_hi: comm_hi.into(),
+            decrypt_handles_lo,
+            decrypt_handles_hi,
+        };
+
+        // group public keys for transfer
         let transfer_public_keys = TransferPubkeys {
             source_pk: source_keypair.public.into(),
             dest_pk: dest_pk.into(),
@@ -98,8 +130,8 @@ impl TransferData {
         };
 
         // subtract transfer amount from the spendable ciphertext
-        let spendable_comm = spendable_ct.message_comm;
-        let spendable_handle = spendable_ct.decrypt_handle;
+        let spendable_comm = spendable_balance_ciphertext.message_comm;
+        let spendable_handle = spendable_balance_ciphertext.decrypt_handle;
 
         let new_spendable_balance = spendable_balance - transfer_amount;
         let new_spendable_comm = spendable_comm - combine_u32_comms(comm_lo, comm_hi);
@@ -123,9 +155,7 @@ impl TransferData {
         );
 
         Self {
-            amount_comms,
-            decrypt_handles_lo,
-            decrypt_handles_hi,
+            encrypted_transfer_amount,
             new_spendable_ct: new_spendable_ct.into(),
             transfer_public_keys,
             proof,
@@ -134,12 +164,12 @@ impl TransferData {
 
     /// Extracts the lo ciphertexts associated with a transfer data
     fn ciphertext_lo(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
-        let transfer_comm_lo: PedersenCommitment = self.amount_comms.lo.try_into()?;
+        let transfer_comm_lo: PedersenCommitment = self.encrypted_transfer_amount.amount_comm_lo.try_into()?;
 
         let decryption_handle_lo = match role {
-            Role::Source => self.decrypt_handles_lo.source,
-            Role::Dest => self.decrypt_handles_lo.dest,
-            Role::Auditor => self.decrypt_handles_lo.auditor,
+            Role::Source => self.encrypted_transfer_amount.decrypt_handles_lo.source,
+            Role::Dest => self.encrypted_transfer_amount.decrypt_handles_lo.dest,
+            Role::Auditor => self.encrypted_transfer_amount.decrypt_handles_lo.auditor,
         }
         .try_into()?;
 
@@ -148,12 +178,12 @@ impl TransferData {
 
     /// Extracts the lo ciphertexts associated with a transfer data
     fn ciphertext_hi(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
-        let transfer_comm_hi: PedersenCommitment = self.amount_comms.hi.try_into()?;
+        let transfer_comm_hi: PedersenCommitment = self.encrypted_transfer_amount.amount_comm_hi.try_into()?;
 
         let decryption_handle_hi = match role {
-            Role::Source => self.decrypt_handles_hi.source,
-            Role::Dest => self.decrypt_handles_hi.dest,
-            Role::Auditor => self.decrypt_handles_hi.auditor,
+            Role::Source => self.encrypted_transfer_amount.decrypt_handles_hi.source,
+            Role::Dest => self.encrypted_transfer_amount.decrypt_handles_hi.dest,
+            Role::Auditor => self.encrypted_transfer_amount.decrypt_handles_hi.auditor,
         }
         .try_into()?;
 
@@ -184,10 +214,15 @@ impl TransferData {
 #[cfg(not(target_arch = "bpf"))]
 impl Verifiable for TransferData {
     fn verify(&self) -> Result<(), ProofError> {
+        let transfer_commitments = TransferCommitments {
+            lo: self.encrypted_transfer_amount.amount_comm_lo,
+            hi: self.encrypted_transfer_amount.amount_comm_hi,
+        };
+
         self.proof.verify(
-            &self.amount_comms,
-            &self.decrypt_handles_lo,
-            &self.decrypt_handles_hi,
+            &transfer_commitments,
+            &self.encrypted_transfer_amount.decrypt_handles_lo,
+            &self.encrypted_transfer_amount.decrypt_handles_hi,
             &self.new_spendable_ct,
             &self.transfer_public_keys,
         )
@@ -361,17 +396,23 @@ impl TransferProof {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferPubkeys {
-    pub source_pk: pod::ElGamalPubkey,  // 32 bytes
-    pub dest_pk: pod::ElGamalPubkey,    // 32 bytes
-    pub auditor_pk: pod::ElGamalPubkey, // 32 bytes
+    pub source_pk: pod::ElGamalPubkey,        // 32 bytes
+    pub dest_pk: pod::ElGamalPubkey,          // 32 bytes
+    pub auditor_pk: pod::ElGamalPubkey,       // 32 bytes
 }
 
-/// The transfer amount commitments needed for a transfer
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
-pub struct TransferCommitments {
-    pub lo: pod::PedersenCommitment, // 32 bytes
-    pub hi: pod::PedersenCommitment, // 32 bytes
+pub struct EncryptedTransferAmount {
+    pub amount_comm_lo: pod::PedersenCommitment,
+
+    pub amount_comm_hi: pod::PedersenCommitment,
+
+    /// The decryption handles that allow decryption of the lo-bits of the transfer amount
+    pub decrypt_handles_lo: TransferDecryptHandles,
+
+    /// The decryption handles that allow decryption of the hi-bits of the transfer amount
+    pub decrypt_handles_hi: TransferDecryptHandles,
 }
 
 /// The decryption handles needed for a transfer
@@ -381,6 +422,25 @@ pub struct TransferDecryptHandles {
     pub source: pod::PedersenDecryptHandle,  // 32 bytes
     pub dest: pod::PedersenDecryptHandle,    // 32 bytes
     pub auditor: pod::PedersenDecryptHandle, // 32 bytes
+}
+
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(C)]
+pub struct TransferCommitments {
+    pub lo: pod::PedersenCommitment,
+    pub hi: pod::PedersenCommitment,
+}
+
+
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(C)]
+pub struct EncryptedTransferFee {
+    /// The transfer fee commitment
+    pub fee_comm: pod::PedersenCommitment,
+    /// The decryption handle for destination ElGamal pubkey
+    pub decrypt_handle_dest: pod::PedersenDecryptHandle,
+    /// The decryption handle for fee collector ElGamal pubkey
+    pub decrypt_handle_fee_collector: pod::PedersenDecryptHandle,
 }
 
 /// Split u64 number into two u32 numbers
