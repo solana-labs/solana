@@ -3,9 +3,8 @@
 /// Integration testing for the PostgreSQL plugin
 use {
     log::*,
-    libloading::{Library, Symbol},
+    libloading::Library,
     serial_test::serial,
-    solana_accountsdb_plugin_postgres,
     solana_core::validator::ValidatorConfig,
     solana_local_cluster::{
         cluster::Cluster,
@@ -13,7 +12,7 @@ use {
         validator_configs::*,
     },    
     solana_runtime::{
-        accounts_index::AccountSecondaryIndexes, snapshot_archive_info::SnapshotArchiveInfoGetter,
+        snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig, snapshot_utils,
     },
     solana_sdk::{
@@ -21,17 +20,13 @@ use {
         clock::Slot,
         commitment_config::CommitmentConfig,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
-        exit::Exit,
         hash::Hash,
-        signature::{Keypair, Signer},
     },
     solana_streamer::socket::SocketAddrSpace,
     std::{
         fs::File,
         io::Write,
-        net::{IpAddr, Ipv4Addr, SocketAddr},
         path::{Path, PathBuf},
-        sync::{Arc, RwLock},
         thread::sleep,
         time::Duration,
     },    
@@ -103,7 +98,7 @@ fn generate_account_paths(num_account_paths: usize) -> (Vec<TempDir>, Vec<PathBu
     (account_storage_dirs, account_storage_paths)
 }
 
-fn generate_accountsdb_plugin_config() -> (TempDir, File, PathBuf) {
+fn generate_accountsdb_plugin_config() -> (TempDir, PathBuf) {
     let tmp_dir = tempfile::tempdir_in(farf_dir()).unwrap();
     let mut path = tmp_dir.path().to_path_buf();
     path.push("accounts_db_plugin.json");
@@ -127,11 +122,12 @@ fn generate_accountsdb_plugin_config() -> (TempDir, File, PathBuf) {
     }
     "#;
     write!(config_file, "{}", config_content).unwrap();
-    (tmp_dir, config_file, path)
+    (tmp_dir, path)
 }
 
+#[allow(dead_code)]
 struct SnapshotValidatorConfig {
-    _snapshot_dir: TempDir,
+    snapshot_dir: TempDir,
     snapshot_archives_dir: TempDir,
     account_storage_dirs: Vec<TempDir>,
     validator_config: ValidatorConfig,
@@ -156,12 +152,7 @@ fn setup_snapshot_validator_config(
     // Create the account paths
     let (account_storage_dirs, account_storage_paths) = generate_account_paths(num_account_paths);
 
-    let bind_ip_addr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-    let accountsdb_repl_port =
-        solana_net_utils::find_available_port_in_range(bind_ip_addr, (1024, 65535)).unwrap();
-    let replica_server_addr = SocketAddr::new(bind_ip_addr, accountsdb_repl_port);
-
-    let (plugin_config_dir, config_file, path) = generate_accountsdb_plugin_config();
+    let (plugin_config_dir, path) = generate_accountsdb_plugin_config();
 
     let accountsdb_plugin_config_files = Some(
         vec![path]
@@ -177,7 +168,7 @@ fn setup_snapshot_validator_config(
     };
 
     SnapshotValidatorConfig {
-        _snapshot_dir: bank_snapshots_dir,
+        snapshot_dir: bank_snapshots_dir,
         snapshot_archives_dir,
         account_storage_dirs,
         validator_config,
@@ -251,6 +242,6 @@ fn test_postgres_plugin() {
         info!("Waiting for snapshot");
         let (archive_filename, archive_snapshot_hash) =
             wait_for_next_snapshot(&cluster, snapshot_archives_dir);
-        info!("found: {:?}", archive_filename);
+        info!("Found: {:?} {:?}", archive_filename, archive_snapshot_hash);
     
     }
