@@ -21,6 +21,7 @@ pub mod ed25519_instruction;
 pub mod entrypoint;
 pub mod entrypoint_deprecated;
 pub mod epoch_info;
+pub mod example_mocks;
 pub mod exit;
 pub mod feature;
 pub mod feature_set;
