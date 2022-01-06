@@ -4763,12 +4763,12 @@ impl AccountsDb {
                     break;
                 }
                 if !self.should_aggressively_flush_cache() {
-                    error!(
+                    /*error!(
                         "{}{}, stop aggresively flush: {:?}",
                         file!(),
                         line!(),
                         old_slots_2
-                    );
+                    );*/
                     break;
                 }
                 // Don't flush slots that are known to be unrooted
@@ -4776,7 +4776,7 @@ impl AccountsDb {
                     *old_slots.last().unwrap(),
                     &old_slots,
                     None::<&mut fn(&_, &_, _) -> bool>,
-                ) {
+                ) {/*
                     error!(
                         "{}{}, flushed: {:?} {:?}, max: {}",
                         file!(),
@@ -4784,20 +4784,20 @@ impl AccountsDb {
                         old_slots_2,
                         old_slots,
                         max_flushed_root
-                    );
+                    );*/
                     stats.into_iter().for_each(|stats| {
                         flush_stats.num_flushed += stats.num_flushed;
                         flush_stats.num_purged += stats.num_purged;
                         flush_stats.total_size += stats.total_size;
                     });
-                } else {
+                } else {/*
                     error!(
                         "{}{}, did not flush: {:?} {:?}",
                         file!(),
                         line!(),
                         old_slots_2,
                         old_slots
-                    );
+                    );*/
                 }
             }
             datapoint_info!(
@@ -5064,10 +5064,10 @@ impl AccountsDb {
             );
         }
         use itertools::Itertools;
-        error!(
+        /*error!(
             "removing: {:?}",
             slot_caches.iter().map(|(slot, _)| slot).collect::<Vec<_>>()
-        );
+        );*/
         slot_caches
             .iter()
             .map(|(slot, _): &(Slot, _)| *slot)
