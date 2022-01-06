@@ -51,7 +51,7 @@ $ solana-validator \
     --only-known-rpc \
     --ledger ledger \
     --rpc-port 8899 \
-    --dynamic-port-range 8000-8010 \
+    --dynamic-port-range 8000-8020 \
     --entrypoint entrypoint.devnet.solana.com:8001 \
     --entrypoint entrypoint2.devnet.solana.com:8001 \
     --entrypoint entrypoint3.devnet.solana.com:8001 \
@@ -103,7 +103,7 @@ $ solana-validator \
     --only-known-rpc \
     --ledger ledger \
     --rpc-port 8899 \
-    --dynamic-port-range 8000-8010 \
+    --dynamic-port-range 8000-8020 \
     --entrypoint entrypoint.testnet.solana.com:8001 \
     --entrypoint entrypoint2.testnet.solana.com:8001 \
     --entrypoint entrypoint3.testnet.solana.com:8001 \
@@ -158,7 +158,7 @@ $ solana-validator \
     --ledger ledger \
     --rpc-port 8899 \
     --private-rpc \
-    --dynamic-port-range 8000-8010 \
+    --dynamic-port-range 8000-8020 \
     --entrypoint entrypoint.mainnet-beta.solana.com:8001 \
     --entrypoint entrypoint2.mainnet-beta.solana.com:8001 \
     --entrypoint entrypoint3.mainnet-beta.solana.com:8001 \
