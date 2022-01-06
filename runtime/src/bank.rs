@@ -115,7 +115,7 @@ use {
         precompiles::get_precompiles,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
-        secp256k1_program,
+        saturating_add_assign, secp256k1_program,
         signature::{Keypair, Signature},
         slot_hashes::SlotHashes,
         slot_history::SlotHistory,
@@ -3561,7 +3561,10 @@ impl Bank {
             &loaded_transaction.program_indices,
         );
         get_executors_time.stop();
-        timings.execute_accessories.get_executors_us += get_executors_time.as_us();
+        saturating_add_assign!(
+            timings.execute_accessories.get_executors_us,
+            get_executors_time.as_us()
+        );
 
         let mut transaction_accounts = Vec::new();
         std::mem::swap(&mut loaded_transaction.accounts, &mut transaction_accounts);
@@ -3605,12 +3608,18 @@ impl Bank {
             self.load_accounts_data_len(),
         );
         process_message_time.stop();
-        timings.execute_accessories.process_message_us += process_message_time.as_us();
+        saturating_add_assign!(
+            timings.execute_accessories.process_message_us,
+            process_message_time.as_us()
+        );
 
         let mut update_executors_time = Measure::start("update_executors_time");
         self.update_executors(process_result.is_ok(), executors);
         update_executors_time.stop();
-        timings.execute_accessories.update_executors_us += update_executors_time.as_us();
+        saturating_add_assign!(
+            timings.execute_accessories.update_executors_us,
+            update_executors_time.as_us()
+        );
 
         let status = process_result
             .map(|info| {
@@ -3712,8 +3721,10 @@ impl Bank {
                     let mut feature_set_clone_time = Measure::start("feature_set_clone");
                     let feature_set = self.feature_set.clone();
                     feature_set_clone_time.stop();
-                    timings.execute_accessories.feature_set_clone_us +=
-                        feature_set_clone_time.as_us();
+                    saturating_add_assign!(
+                        timings.execute_accessories.feature_set_clone_us,
+                        feature_set_clone_time.as_us()
+                    );
 
                     signature_count += u64::from(tx.message().header().num_required_signatures);
 
@@ -3724,10 +3735,12 @@ impl Bank {
                         let process_transaction_result =
                             compute_budget.process_transaction(tx, feature_set);
                         compute_budget_process_transaction_time.stop();
-                        timings
-                            .execute_accessories
-                            .compute_budget_process_transaction_us +=
-                            compute_budget_process_transaction_time.as_us();
+                        saturating_add_assign!(
+                            timings
+                                .execute_accessories
+                                .compute_budget_process_transaction_us,
+                            compute_budget_process_transaction_time.as_us()
+                        );
                         if let Err(err) = process_transaction_result {
                             return TransactionExecutionResult::NotExecuted(err);
                         }
