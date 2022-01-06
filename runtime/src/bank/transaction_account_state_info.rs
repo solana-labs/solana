@@ -4,8 +4,8 @@ use {
         bank::Bank,
     },
     solana_sdk::{
-        feature_set, message::SanitizedMessage, transaction::Result,
-        transaction_context::TransactionContext,
+        account::ReadableAccount, feature_set, message::SanitizedMessage, native_loader,
+        transaction::Result, transaction_context::TransactionContext,
     },
 };
 
@@ -23,6 +23,11 @@ impl Bank {
             .map(|i| {
                 let rent_state = if message.is_writable(i) {
                     let account = transaction_context.get_account_at_index(i).borrow();
+
+                    // Native programs appear to be RentPaying because they carry low lamport
+                    // balances; however they will never be loaded as writable
+                    debug_assert!(!native_loader::check_id(account.owner()));
+
                     Some(RentState::from_account(
                         &account,
                         &self.rent_collector().rent,

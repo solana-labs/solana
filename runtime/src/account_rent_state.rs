@@ -3,9 +3,7 @@ use {
     log::*,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
-        native_loader,
         rent::Rent,
-        sysvar,
         transaction::{Result, TransactionError},
         transaction_context::TransactionContext,
     },
@@ -14,18 +12,14 @@ use {
 #[derive(Debug, PartialEq, IntoEnumIterator)]
 pub(crate) enum RentState {
     Uninitialized, // account.lamports == 0
-    NativeOrSysvar,
-    RentPaying, // 0 < account.lamports < rent-exempt-minimum
-    RentExempt, // account.lamports >= rent-exempt-minimum
+    RentPaying,    // 0 < account.lamports < rent-exempt-minimum
+    RentExempt,    // account.lamports >= rent-exempt-minimum
 }
 
 impl RentState {
     pub(crate) fn from_account(account: &AccountSharedData, rent: &Rent) -> Self {
         if account.lamports() == 0 {
             Self::Uninitialized
-        } else if native_loader::check_id(account.owner()) || sysvar::is_sysvar_id(account.owner())
-        {
-            Self::NativeOrSysvar
         } else if !rent.is_exempt(account.lamports(), account.data().len()) {
             Self::RentPaying
         } else {
@@ -82,8 +76,6 @@ mod tests {
     fn test_from_account() {
         let program_id = Pubkey::new_unique();
         let uninitialized_account = AccountSharedData::new(0, 0, &Pubkey::default());
-        let native_program_account = AccountSharedData::new(1, 42, &native_loader::id());
-        let sysvar_account = AccountSharedData::new(1, 42, &sysvar::clock::id());
 
         let account_data_size = 100;
 
@@ -93,14 +85,6 @@ mod tests {
         assert_eq!(
             RentState::from_account(&uninitialized_account, &rent),
             RentState::Uninitialized
-        );
-        assert_eq!(
-            RentState::from_account(&native_program_account, &rent),
-            RentState::NativeOrSysvar
-        );
-        assert_eq!(
-            RentState::from_account(&sysvar_account, &rent),
-            RentState::NativeOrSysvar
         );
         assert_eq!(
             RentState::from_account(&rent_exempt_account, &rent),
@@ -123,14 +107,6 @@ mod tests {
         assert_eq!(
             RentState::from_account(&uninitialized_account, &rent),
             RentState::Uninitialized
-        );
-        assert_eq!(
-            RentState::from_account(&native_program_account, &rent),
-            RentState::NativeOrSysvar
-        );
-        assert_eq!(
-            RentState::from_account(&sysvar_account, &rent),
-            RentState::NativeOrSysvar
         );
         assert_eq!(
             RentState::from_account(&rent_paying_account, &rent),
