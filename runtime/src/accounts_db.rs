@@ -3074,7 +3074,10 @@ impl AccountsDb {
                 }
                 if current_storage.is_none() {
                     // our oldest slot is not an append vec of max size, so we need to start with rewriting that storage to create an ancient append vec for the oldest slot
-                    error!("ancient_append_vec: creating initial ancient append vec: {}", slot);
+                    error!(
+                        "ancient_append_vec: creating initial ancient append vec: {}",
+                        slot
+                    );
                     let (shrunken_store, _time) =
                         self.get_store_for_shrink(slot, MAXIMUM_APPEND_VEC_FILE_SIZE);
                     current_storage = Some((slot, shrunken_store));
@@ -3122,7 +3125,7 @@ impl AccountsDb {
                     let (shrunken_store, _time) =
                         self.get_store_for_shrink(slot, MAXIMUM_APPEND_VEC_FILE_SIZE);
                     error!("ancient_append_vec: creating ancient append vec because previous one was full: {}, full one: {}", slot, writer.0);
-                        current_storage = Some((slot, shrunken_store));
+                    current_storage = Some((slot, shrunken_store));
                     let writer = current_storage.as_ref().unwrap();
 
                     // write the rest to the next ancient storage
@@ -3141,7 +3144,8 @@ impl AccountsDb {
 
                 if drop_root {
                     // todo: afterwards, we need to remove the roots sometime
-                    self.accounts_index.clean_dead_slot(slot, &mut AccountsIndexRootsStats::default());
+                    self.accounts_index
+                        .clean_dead_slot(slot, &mut AccountsIndexRootsStats::default());
                     error!("ancient_append_vec: dropping root: {}", slot);
                 }
             }
@@ -4903,25 +4907,61 @@ impl AccountsDb {
         // Iterate from highest to lowest so that we don't need to flush earlier
         // outdated updates in earlier roots
         let mut num_roots_flushed = 0;
-        if !cached_roots.is_empty() {
-            let max_root = *cached_roots.iter().max().unwrap();
-            let roots = cached_roots.iter().rev().cloned().collect::<Vec<_>>();
-            if self
-                .flush_slot_cache(max_root, &roots, should_flush_f.as_mut())
-                .is_some()
-            {
-                num_roots_flushed += roots.len();
-            }
+        if true {
+            // outdated updates in earlier roots
+            let mut num_roots_flushed = 0;
+            for &root in cached_roots.iter().rev() {
+                let should_flush_f = if let Some(max_clean_root) = max_clean_root {
+                    if root > max_clean_root {
+                        // Only if the root is greater than the `max_clean_root` do we
+                        // have to prevent cleaning, otherwise, just default to `should_flush_f`
+                        // for any slots <= `max_clean_root`
+                        None
+                    } else {
+                        should_flush_f.as_mut()
+                    }
+                } else {
+                    should_flush_f.as_mut()
+                };
 
-            // Regardless of whether this slot was *just* flushed from the cache by the above
-            // `flush_slot_cache()`, we should update the `max_flush_root`.
-            // This is because some rooted slots may be flushed to storage *before* they are marked as root.
-            // This can occur for instance when:
-            // 1) The cache is overwhelmed, we we flushed some yet to be rooted frozen slots
-            // 2) Random evictions
-            // These slots may then *later* be marked as root, so we still need to handle updating the
-            // `max_flush_root` in the accounts cache.
-            self.accounts_cache.set_max_flush_root(max_root);
+                if self
+                    .flush_slot_cache(root, &[root], should_flush_f)
+                    .is_some()
+                {
+                    num_roots_flushed += 1;
+                }
+
+                // Regardless of whether this slot was *just* flushed from the cache by the above
+                // `flush_slot_cache()`, we should update the `max_flush_root`.
+                // This is because some rooted slots may be flushed to storage *before* they are marked as root.
+                // This can occur for instance when:
+                // 1) The cache is overwhelmed, we we flushed some yet to be rooted frozen slots
+                // 2) Random evictions
+                // These slots may then *later* be marked as root, so we still need to handle updating the
+                // `max_flush_root` in the accounts cache.
+                self.accounts_cache.set_max_flush_root(root);
+            }
+        } else {
+            if !cached_roots.is_empty() {
+                let max_root = *cached_roots.iter().max().unwrap();
+                let roots = cached_roots.iter().rev().cloned().collect::<Vec<_>>();
+                if self
+                    .flush_slot_cache(max_root, &roots, should_flush_f.as_mut())
+                    .is_some()
+                {
+                    num_roots_flushed += roots.len();
+                }
+
+                // Regardless of whether this slot was *just* flushed from the cache by the above
+                // `flush_slot_cache()`, we should update the `max_flush_root`.
+                // This is because some rooted slots may be flushed to storage *before* they are marked as root.
+                // This can occur for instance when:
+                // 1) The cache is overwhelmed, we we flushed some yet to be rooted frozen slots
+                // 2) Random evictions
+                // These slots may then *later* be marked as root, so we still need to handle updating the
+                // `max_flush_root` in the accounts cache.
+                self.accounts_cache.set_max_flush_root(max_root);
+            }
         }
 
         // Only add to the uncleaned roots set *after* we've flushed the previous roots,
