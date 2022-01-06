@@ -64,7 +64,18 @@ impl AccountsDataMeter {
             let amount = amount.abs() as u64;
             self.current = self.current.saturating_sub(amount);
         }
+
         Ok(())
+    }
+}
+
+#[cfg(test)]
+impl AccountsDataMeter {
+    pub fn set_maximum(&mut self, maximum: u64) {
+        self.maximum = maximum;
+    }
+    pub fn set_current(&mut self, current: u64) {
+        self.current = current;
     }
 }
 

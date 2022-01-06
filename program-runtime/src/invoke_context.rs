@@ -10,8 +10,9 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         compute_budget::ComputeBudget,
         feature_set::{
-            do_support_realloc, neon_evm_compute_budget, reject_empty_instruction_without_program,
-            remove_native_loader, requestable_heap_size, tx_wide_compute_cap, FeatureSet,
+            cap_accounts_data_len, do_support_realloc, neon_evm_compute_budget,
+            reject_empty_instruction_without_program, remove_native_loader, requestable_heap_size,
+            tx_wide_compute_cap, FeatureSet,
         },
         hash::Hash,
         instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
@@ -382,6 +383,7 @@ impl<'a> InvokeContext<'a> {
     ) -> Result<(), InstructionError> {
         let program_id = instruction.program_id(&message.account_keys);
         let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
+        let cap_accounts_data_len = self.feature_set.is_active(&cap_accounts_data_len::id());
 
         // Verify all executable accounts have zero outstanding refs
         for account_index in program_indices.iter() {
@@ -428,6 +430,14 @@ impl<'a> InvokeContext<'a> {
             post_sum = post_sum
                 .checked_add(u128::from(account.lamports()))
                 .ok_or(InstructionError::UnbalancedInstruction)?;
+
+            if cap_accounts_data_len {
+                let pre_data_len = pre_account.data().len() as i64;
+                let post_data_len = account.data().len() as i64;
+                let data_len_delta = post_data_len.saturating_sub(pre_data_len);
+                self.accounts_data_meter.consume(data_len_delta)?;
+            }
+
             Ok(())
         };
         instruction.visit_each_account(&mut work)?;
@@ -447,6 +457,7 @@ impl<'a> InvokeContext<'a> {
         write_privileges: &[bool],
     ) -> Result<(), InstructionError> {
         let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
+        let cap_accounts_data_len = self.feature_set.is_active(&cap_accounts_data_len::id());
         let program_id = self
             .invoke_stack
             .last()
@@ -505,6 +516,14 @@ impl<'a> InvokeContext<'a> {
                         if is_writable && !pre_account.executable() {
                             pre_account.update(&account);
                         }
+
+                        if cap_accounts_data_len {
+                            let pre_data_len = pre_account.data().len() as i64;
+                            let post_data_len = account.data().len() as i64;
+                            let data_len_delta = post_data_len.saturating_sub(pre_data_len);
+                            self.accounts_data_meter.consume(data_len_delta)?;
+                        }
+
                         return Ok(());
                     }
                 }
@@ -1064,6 +1083,9 @@ mod tests {
             compute_units_consumed: u64,
             desired_result: Result<(), InstructionError>,
         },
+        Resize {
+            new_len: usize,
+        },
     }
 
     #[test]
@@ -1143,6 +1165,12 @@ mod tests {
                         .consume(compute_units_consumed)
                         .unwrap();
                     return desired_result;
+                }
+                MockInstruction::Resize { new_len } => {
+                    keyed_account_at_index(keyed_accounts, first_instruction_account)?
+                        .try_account_ref_mut()?
+                        .data_mut()
+                        .resize_with(new_len, Default::default)
                 }
             }
         } else {
@@ -1697,6 +1725,136 @@ mod tests {
                     result: desired_result,
                 }
             );
+        }
+    }
+
+    #[test]
+    fn test_process_instruction_accounts_data_meter() {
+        let program_key = Pubkey::new_unique();
+        let user_account_data_len = 123;
+        let user_account = AccountSharedData::new(100, user_account_data_len, &program_key);
+        let dummy1_account = AccountSharedData::new(10, 0, &program_key);
+        let mut program_account = AccountSharedData::new(500, 500, &native_loader::id());
+        program_account.set_executable(true);
+        let accounts = vec![
+            (Pubkey::new_unique(), Rc::new(RefCell::new(user_account))),
+            (Pubkey::new_unique(), Rc::new(RefCell::new(dummy1_account))),
+            (program_key, Rc::new(RefCell::new(program_account))),
+        ];
+        let account_indices = [];
+        let program_indices = [accounts.len() - 1];
+
+        let metas = accounts
+            .iter()
+            .map(|account| AccountMeta::new(account.0, false))
+            .collect::<Vec<_>>();
+
+        let builtin_programs = [BuiltinProgram {
+            program_id: program_key,
+            process_instruction: mock_process_instruction,
+        }];
+
+        let mut invoke_context = InvokeContext::new_mock(&accounts, &builtin_programs);
+        invoke_context
+            .accounts_data_meter
+            .set_current(user_account_data_len as u64);
+        invoke_context
+            .accounts_data_meter
+            .set_maximum(user_account_data_len as u64 * 3);
+        let remaining_account_data_len = invoke_context.accounts_data_meter.remaining() as usize;
+
+        // Test 1: Resize the account to use up all the space; this must succeed
+        {
+            let new_len = user_account_data_len + remaining_account_data_len;
+            let instruction = Instruction::new_with_bincode(
+                program_key,
+                &MockInstruction::Resize { new_len },
+                metas.clone(),
+            );
+            let message = Message::new(&[instruction], None);
+            let caller_write_privileges = message
+                .account_keys
+                .iter()
+                .enumerate()
+                .map(|(i, _)| message.is_writable(i))
+                .collect::<Vec<_>>();
+
+            let result = invoke_context
+                .process_instruction(
+                    &message,
+                    &message.instructions[0],
+                    &program_indices,
+                    &account_indices,
+                    &caller_write_privileges,
+                )
+                .result;
+
+            assert!(result.is_ok());
+            assert_eq!(invoke_context.accounts_data_meter.remaining(), 0);
+        }
+
+        // Test 2: Resize the account to *the same size*, so not consuming any additional size; this must succeed
+        {
+            let new_len = user_account_data_len + remaining_account_data_len;
+            let instruction = Instruction::new_with_bincode(
+                program_key,
+                &MockInstruction::Resize { new_len },
+                metas.clone(),
+            );
+            let message = Message::new(&[instruction], None);
+            let caller_write_privileges = message
+                .account_keys
+                .iter()
+                .enumerate()
+                .map(|(i, _)| message.is_writable(i))
+                .collect::<Vec<_>>();
+
+            let result = invoke_context
+                .process_instruction(
+                    &message,
+                    &message.instructions[0],
+                    &program_indices,
+                    &account_indices,
+                    &caller_write_privileges,
+                )
+                .result;
+
+            assert!(result.is_ok());
+            assert_eq!(invoke_context.accounts_data_meter.remaining(), 0);
+        }
+
+        // Test 3: Resize the account to exceed the budget; this must fail
+        {
+            let new_len = user_account_data_len + remaining_account_data_len + 1;
+            let instruction = Instruction::new_with_bincode(
+                program_key,
+                &MockInstruction::Resize { new_len },
+                metas,
+            );
+            let message = Message::new(&[instruction], None);
+            let caller_write_privileges = message
+                .account_keys
+                .iter()
+                .enumerate()
+                .map(|(i, _)| message.is_writable(i))
+                .collect::<Vec<_>>();
+
+            let result = invoke_context
+                .process_instruction(
+                    &message,
+                    &message.instructions[0],
+                    &program_indices,
+                    &account_indices,
+                    &caller_write_privileges,
+                )
+                .result;
+
+            assert!(result.is_err());
+            assert!(matches!(
+                result,
+                Err(solana_sdk::instruction::InstructionError::AccountsDataBudgetExceeded)
+            ));
+            assert_eq!(invoke_context.accounts_data_meter.remaining(), 0);
         }
     }
 }
