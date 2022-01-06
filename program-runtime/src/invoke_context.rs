@@ -1631,7 +1631,6 @@ mod tests {
         // Test 1: Resize the account to use up all the space; this must succeed
         {
             let new_len = user_account_data_len + remaining_account_data_len;
-            dbg!(new_len);
             let instruction_data =
                 bincode::serialize(&MockInstruction::Resize { new_len }).unwrap();
 
@@ -1649,7 +1648,6 @@ mod tests {
         // Test 2: Resize the account to *the same size*, so not consuming any additional size; this must succeed
         {
             let new_len = user_account_data_len + remaining_account_data_len;
-            dbg!(new_len);
             let instruction_data =
                 bincode::serialize(&MockInstruction::Resize { new_len }).unwrap();
 
@@ -1667,7 +1665,6 @@ mod tests {
         // Test 3: Resize the account to exceed the budget; this must fail
         {
             let new_len = user_account_data_len + remaining_account_data_len + 1;
-            dbg!(new_len);
             let instruction_data =
                 bincode::serialize(&MockInstruction::Resize { new_len }).unwrap();
 
