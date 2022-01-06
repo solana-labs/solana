@@ -12,6 +12,7 @@ use {
     },
     solana_sdk::{
         clock::Slot,
+        signature::Signature,
         transaction::{self, SanitizedTransaction, TransactionError},
     },
     std::{
@@ -23,6 +24,20 @@ use {
         time::Duration,
     },
 };
+
+pub enum QosMetrics {
+    BlockBatchUpdate {
+        bank: Arc<Bank>,
+    },
+    TransactionCost {
+        slot: Slot,
+        tx_signature: Signature,
+        signature_cost: u64,
+        write_lock_cost: u64,
+        data_bytes_cost: u64,
+        execution_cost: u64,
+    },
+}
 
 // QosService is local to each banking thread, each instance of QosService provides services to
 // one banking thread.
@@ -39,7 +54,7 @@ pub struct QosService {
     cost_model: Arc<RwLock<CostModel>>,
     // QosService hosts metrics object and a private reporting thread, as well as sender to
     // communicate with thread.
-    report_sender: Sender<Arc<Bank>>,
+    report_sender: Sender<QosMetrics>,
     metrics: Arc<QosServiceMetrics>,
     // metrics reporting runs on a private thread
     reporting_thread: Option<JoinHandle<()>>,
@@ -128,6 +143,16 @@ impl QosService {
                 Ok(current_block_cost) => {
                     debug!("slot {:?}, transaction {:?}, cost {:?}, fit into current block, current block cost {}", bank.slot(), tx, cost, current_block_cost);
                     self.metrics.selected_txs_count.fetch_add(1, Ordering::Relaxed);
+                    self.report_sender
+                        .send(QosMetrics::TransactionCost {
+                            slot: bank.slot(),
+                            tx_signature: *tx.signature(),
+                            signature_cost: cost.signature_cost,
+                            write_lock_cost: cost.write_lock_cost,
+                            data_bytes_cost: cost.data_bytes_cost,
+                            execution_cost: cost.execution_cost,
+                        } )
+                        .unwrap_or_else(|err| warn!("qos service report tx cost details failed: {:?}", err));
                     Ok(())
                 },
                 Err(e) => {
@@ -163,7 +188,7 @@ impl QosService {
     // metrics are reported by bank slot
     pub fn report_metrics(&self, bank: Arc<Bank>) {
         self.report_sender
-            .send(bank)
+            .send(QosMetrics::BlockBatchUpdate { bank })
             .unwrap_or_else(|err| warn!("qos service report metrics failed: {:?}", err));
     }
 
@@ -198,14 +223,56 @@ impl QosService {
             .fetch_add(count, Ordering::Relaxed);
     }
 
+    pub fn accumulate_estimated_execution_units(&self, estimated_execute_units: u64) {
+        self.metrics
+            .estimated_execute_units
+            .fetch_add(estimated_execute_units, Ordering::Relaxed);
+    }
+
+    pub fn accumulate_actual_execute_units(&self, units: u64) {
+        self.metrics
+            .actual_execute_units
+            .fetch_add(units, Ordering::Relaxed);
+    }
+
+    pub fn accumulate_actual_execute_time(&self, micro_sec: u64) {
+        self.metrics
+            .actual_execute_time
+            .fetch_add(micro_sec, Ordering::Relaxed);
+    }
+
     fn reporting_loop(
         running_flag: Arc<AtomicBool>,
         metrics: Arc<QosServiceMetrics>,
-        report_receiver: Receiver<Arc<Bank>>,
+        report_receiver: Receiver<QosMetrics>,
     ) {
         while running_flag.load(Ordering::Relaxed) {
-            for bank in report_receiver.try_iter() {
-                metrics.report(bank.slot());
+            for qos_metrics in report_receiver.try_iter() {
+                match qos_metrics {
+                    QosMetrics::BlockBatchUpdate { bank } => {
+                        metrics.report(bank.slot());
+                    }
+                    QosMetrics::TransactionCost {
+                        slot,
+                        tx_signature,
+                        signature_cost,
+                        write_lock_cost,
+                        data_bytes_cost,
+                        execution_cost,
+                    } => {
+                        // report transaction cost details per slot|signature
+                        datapoint_info!(
+                            "qos-service-transaction-costs",
+                            ("id", metrics.id as i64, i64),
+                            ("bank_slot", slot as i64, i64),
+                            ("tx_signature", tx_signature.to_string(), String),
+                            ("signature_cost", signature_cost as i64, i64),
+                            ("write_lock_cost", write_lock_cost as i64, i64),
+                            ("data_bytes_cost", data_bytes_cost as i64, i64),
+                            ("execution_cost", execution_cost as i64, i64),
+                        );
+                    }
+                }
             }
             thread::sleep(Duration::from_millis(100));
         }
@@ -267,6 +334,15 @@ struct QosServiceMetrics {
 
     // number of transactions to be queued for retry due to its account data limits
     retried_txs_per_account_data_limit_count: AtomicU64,
+
+    // accumulated estimated program Compute Units to be packed into block
+    estimated_execute_units: AtomicU64,
+
+    // accumulated actual program Compute Units that have been packed into block
+    actual_execute_units: AtomicU64,
+
+    // accumulated actual program execute micro-sec that have been packed into block
+    actual_execute_time: AtomicU64,
 }
 
 impl QosServiceMetrics {
@@ -350,6 +426,21 @@ impl QosServiceMetrics {
                     "retried_txs_per_account_data_limit_count",
                     self.retried_txs_per_account_data_limit_count
                         .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "estimated_execute_units",
+                    self.estimated_execute_units.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "actual_execute_units",
+                    self.actual_execute_units.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "actual_execute_time",
+                    self.actual_execute_time.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
             );

@@ -23,7 +23,7 @@ use {
         accounts_db::ErrorCounters,
         bank::{Bank, TransactionBalancesSet, TransactionCheckResult, TransactionExecutionResult},
         bank_utils,
-        cost_model::CostModel,
+        cost_model::{CostModel, TransactionCost},
         transaction_batch::TransactionBatch,
         vote_sender_types::ReplayVoteSender,
     },
@@ -856,7 +856,7 @@ impl BankingStage {
         batch: &TransactionBatch,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
-    ) -> (Result<usize, PohRecorderError>, Vec<usize>) {
+    ) -> (Result<usize, PohRecorderError>, Vec<usize>, ExecuteTimings) {
         let mut load_execute_time = Measure::start("load_execute_time");
         // Use a shorter maximum age when adding transactions into the pipeline.  This will reduce
         // the likelihood of any single thread getting starved and processing old ids.
@@ -906,7 +906,7 @@ impl BankingStage {
         );
         retryable_txs.extend(retryable_record_txs);
         if num_to_commit.is_err() {
-            return (num_to_commit, retryable_txs);
+            return (num_to_commit, retryable_txs, execute_timings);
         }
         record_time.stop();
 
@@ -956,7 +956,7 @@ impl BankingStage {
             execute_timings
         );
 
-        (Ok(num_to_commit), retryable_txs)
+        (Ok(num_to_commit), retryable_txs, execute_timings)
     }
 
     pub fn process_and_record_transactions(
@@ -973,6 +973,11 @@ impl BankingStage {
         let transactions_qos_results =
             qos_service.select_transactions_per_cost(txs.iter(), tx_costs.iter(), bank);
 
+        qos_service.accumulate_estimated_execution_units(Self::accumulate_batched_execution_units(
+            tx_costs.iter(),
+            transactions_qos_results.iter(),
+        ));
+
         // Only lock accounts for those transactions are selected for the block;
         // Once accounts are locked, other threads cannot encode transactions that will modify the
         // same account state
@@ -984,19 +989,24 @@ impl BankingStage {
         // retryable_txs includes AccountInUse, WouldExceedMaxBlockCostLimit
         // WouldExceedMaxAccountCostLimit, WouldExceedMaxVoteCostLimit
         // and WouldExceedMaxAccountDataCostLimit
-        let (result, mut retryable_txs) = Self::process_and_record_transactions_locked(
-            bank,
-            poh,
-            &batch,
-            transaction_status_sender,
-            gossip_vote_sender,
-        );
+        let (result, mut retryable_txs, execute_timings) =
+            Self::process_and_record_transactions_locked(
+                bank,
+                poh,
+                &batch,
+                transaction_status_sender,
+                gossip_vote_sender,
+            );
         retryable_txs.iter_mut().for_each(|x| *x += chunk_offset);
 
         let mut unlock_time = Measure::start("unlock_time");
         // Once the accounts are new transactions can enter the pipeline to process them
         drop(batch);
         unlock_time.stop();
+
+        let (units, micro_sec) = Self::accumulate_execute_units_and_time(&execute_timings);
+        qos_service.accumulate_actual_execute_units(units);
+        qos_service.accumulate_actual_execute_time(micro_sec);
 
         // reports qos service stats for this batch
         qos_service.report_metrics(bank.clone());
@@ -1010,6 +1020,36 @@ impl BankingStage {
         );
 
         (result, retryable_txs)
+    }
+
+    fn accumulate_batched_execution_units<'a>(
+        transactions_costs: impl Iterator<Item = &'a TransactionCost>,
+        transaction_results: impl Iterator<Item = &'a transaction::Result<()>>,
+    ) -> u64 {
+        transactions_costs
+            .zip(transaction_results)
+            .map(|(cost, result)| {
+                if result.is_err() {
+                    return 0u64;
+                }
+                cost.execution_cost
+            })
+            .sum()
+    }
+
+    fn accumulate_execute_units_and_time(execute_timings: &ExecuteTimings) -> (u64, u64) {
+        let (units, times): (Vec<_>, Vec<_>) = execute_timings
+            .details
+            .per_program_timings
+            .iter()
+            .map(|(_program_id, program_timings)| {
+                (
+                    program_timings.accumulated_units,
+                    program_timings.accumulated_us,
+                )
+            })
+            .unzip();
+        (units.iter().sum(), times.iter().sum())
     }
 
     /// Sends transactions to the bank.
@@ -1492,6 +1532,7 @@ mod tests {
             poh_recorder::{create_test_recorder, Record, WorkingBankEntry},
             poh_service::PohService,
         },
+        solana_program_runtime::timings::ProgramTiming,
         solana_rpc::transaction_status_service::TransactionStatusService,
         solana_runtime::bank::TransactionExecutionDetails,
         solana_sdk::{
@@ -3371,5 +3412,61 @@ mod tests {
             assert_eq!(3, txs.len());
             assert_eq!(vec![0, 1, 2], tx_packet_index);
         }
+    }
+
+    #[test]
+    fn test_accumulate_batched_execution_units() {
+        let tx_costs = vec![
+            TransactionCost {
+                execution_cost: 10,
+                ..TransactionCost::default()
+            },
+            TransactionCost {
+                execution_cost: 20,
+                ..TransactionCost::default()
+            },
+            TransactionCost {
+                execution_cost: 40,
+                ..TransactionCost::default()
+            },
+        ];
+        let tx_results = vec![
+            Ok(()),
+            Ok(()),
+            Err(TransactionError::WouldExceedMaxBlockCostLimit),
+        ];
+        // should only accumulate first two cost that are OK
+        let expected_units = 30;
+        assert_eq!(
+            expected_units,
+            BankingStage::accumulate_batched_execution_units(tx_costs.iter(), tx_results.iter())
+        );
+    }
+
+    #[test]
+    fn test_accumulate_execute_units_and_time() {
+        let mut execute_timings = ExecuteTimings::default();
+        let mut expected_units = 0;
+        let mut expected_us = 0;
+
+        for n in 0..10 {
+            execute_timings.details.per_program_timings.insert(
+                Pubkey::new_unique(),
+                ProgramTiming {
+                    accumulated_us: n * 100,
+                    accumulated_units: n * 1000,
+                    count: n as u32,
+                    errored_txs_compute_consumed: vec![],
+                    total_errored_units: 0,
+                },
+            );
+            expected_us += n * 100;
+            expected_units += n * 1000;
+        }
+
+        let (units, us) = BankingStage::accumulate_execute_units_and_time(&execute_timings);
+
+        assert_eq!(expected_units, units);
+        assert_eq!(expected_us, us);
     }
 }
