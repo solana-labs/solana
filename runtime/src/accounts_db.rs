@@ -3202,6 +3202,11 @@ impl AccountsDb {
     pub fn shrink_all_slots(&self, is_startup: bool, last_full_snapshot_slot: Option<Slot>) {
         const DIRTY_STORES_CLEANING_THRESHOLD: usize = 10_000;
         const OUTER_CHUNK_SIZE: usize = 2000;
+
+        if is_startup {
+            self.shrink_ancient_slots();
+        }
+
         if is_startup && self.caching_enabled {
             let slots = self.all_slots_in_storage();
             let threads = num_cpus::get();
