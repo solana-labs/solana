@@ -3061,15 +3061,13 @@ impl AccountsDb {
                 let storages = storages.value();
                 let read = storages.read().unwrap();
                 let mut all_storages = read.values();
-                if current_storage.is_none() {
-                    if all_storages.len() == 1 {
-                        // maybe this is good
-                        let first_storage = all_storages.next().unwrap();
-                        let capacity = first_storage.accounts.capacity();
-                        if capacity >= MAXIMUM_APPEND_VEC_FILE_SIZE {
-                            error!("ancient_append_vec: reusing existing ancient append vec: {}, capacity: {}", slot, capacity);
-                            current_storage = Some((slot, Arc::clone(&first_storage)));
-                        }
+                if current_storage.is_none() && all_storages.len() == 1 {
+                    // maybe this is good
+                    let first_storage = all_storages.next().unwrap();
+                    let capacity = first_storage.accounts.capacity();
+                    if capacity >= MAXIMUM_APPEND_VEC_FILE_SIZE {
+                        error!("ancient_append_vec: reusing existing ancient append vec: {}, capacity: {}", slot, capacity);
+                        current_storage = Some((slot, Arc::clone(first_storage)));
                     }
                 }
                 if current_storage.is_none() {
@@ -4776,7 +4774,8 @@ impl AccountsDb {
                     *old_slots.last().unwrap(),
                     &old_slots,
                     None::<&mut fn(&_, &_, _) -> bool>,
-                ) {/*
+                ) {
+                    /*
                     error!(
                         "{}{}, flushed: {:?} {:?}, max: {}",
                         file!(),
@@ -4790,14 +4789,14 @@ impl AccountsDb {
                         flush_stats.num_purged += stats.num_purged;
                         flush_stats.total_size += stats.total_size;
                     });
-                } else {/*
-                    error!(
-                        "{}{}, did not flush: {:?} {:?}",
-                        file!(),
-                        line!(),
-                        old_slots_2,
-                        old_slots
-                    );*/
+                } else { /*
+                     error!(
+                         "{}{}, did not flush: {:?} {:?}",
+                         file!(),
+                         line!(),
+                         old_slots_2,
+                         old_slots
+                     );*/
                 }
             }
             datapoint_info!(
@@ -4909,7 +4908,6 @@ impl AccountsDb {
         let mut num_roots_flushed = 0;
         if true {
             // outdated updates in earlier roots
-            let mut num_roots_flushed = 0;
             for &root in cached_roots.iter().rev() {
                 let should_flush_f = if let Some(max_clean_root) = max_clean_root {
                     if root > max_clean_root {
@@ -4941,27 +4939,25 @@ impl AccountsDb {
                 // `max_flush_root` in the accounts cache.
                 self.accounts_cache.set_max_flush_root(root);
             }
-        } else {
-            if !cached_roots.is_empty() {
-                let max_root = *cached_roots.iter().max().unwrap();
-                let roots = cached_roots.iter().rev().cloned().collect::<Vec<_>>();
-                if self
-                    .flush_slot_cache(max_root, &roots, should_flush_f.as_mut())
-                    .is_some()
-                {
-                    num_roots_flushed += roots.len();
-                }
-
-                // Regardless of whether this slot was *just* flushed from the cache by the above
-                // `flush_slot_cache()`, we should update the `max_flush_root`.
-                // This is because some rooted slots may be flushed to storage *before* they are marked as root.
-                // This can occur for instance when:
-                // 1) The cache is overwhelmed, we we flushed some yet to be rooted frozen slots
-                // 2) Random evictions
-                // These slots may then *later* be marked as root, so we still need to handle updating the
-                // `max_flush_root` in the accounts cache.
-                self.accounts_cache.set_max_flush_root(max_root);
+        } else if !cached_roots.is_empty() {
+            let max_root = *cached_roots.iter().max().unwrap();
+            let roots = cached_roots.iter().rev().cloned().collect::<Vec<_>>();
+            if self
+                .flush_slot_cache(max_root, &roots, should_flush_f.as_mut())
+                .is_some()
+            {
+                num_roots_flushed += roots.len();
             }
+
+            // Regardless of whether this slot was *just* flushed from the cache by the above
+            // `flush_slot_cache()`, we should update the `max_flush_root`.
+            // This is because some rooted slots may be flushed to storage *before* they are marked as root.
+            // This can occur for instance when:
+            // 1) The cache is overwhelmed, we we flushed some yet to be rooted frozen slots
+            // 2) Random evictions
+            // These slots may then *later* be marked as root, so we still need to handle updating the
+            // `max_flush_root` in the accounts cache.
+            self.accounts_cache.set_max_flush_root(max_root);
         }
 
         // Only add to the uncleaned roots set *after* we've flushed the previous roots,
