@@ -141,7 +141,7 @@ use {
     std::{
         borrow::Cow,
         cell::RefCell,
-        collections::{HashMap, HashSet},
+        collections::{hash_map::Entry, HashMap, HashSet},
         convert::{TryFrom, TryInto},
         fmt, mem,
         ops::RangeInclusive,
@@ -331,33 +331,37 @@ impl CachedExecutors {
         })
     }
 
-    fn put(&mut self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {
-        let entry = if let Some(mut entry) = self.executors.remove(pubkey) {
-            entry.executor = executor;
-            entry
-        } else {
-            if self.executors.len() >= self.max {
-                let mut least = u64::MAX;
-                let default_key = Pubkey::default();
-                let mut least_key = &default_key;
-
-                for (key, entry) in self.executors.iter() {
-                    let count = entry.prev_epoch_count + entry.epoch_count.load(Relaxed);
-                    if count < least {
-                        least = count;
-                        least_key = key;
-                    }
-                }
-                let least_key = *least_key;
-                let _ = self.executors.remove(&least_key);
+    fn put(&mut self, pubkey: Pubkey, executor: Arc<dyn Executor>) {
+        match self.executors.entry(pubkey) {
+            Entry::Vacant(entry) => {
+                entry.insert(CachedExecutorsEntry {
+                    prev_epoch_count: u64::default(),
+                    epoch_count: AtomicU64::default(),
+                    executor,
+                });
             }
-            CachedExecutorsEntry {
-                prev_epoch_count: 0,
-                epoch_count: AtomicU64::new(0),
-                executor,
+            Entry::Occupied(mut entry) => {
+                entry.get_mut().executor = executor;
             }
         };
-        let _ = self.executors.insert(*pubkey, entry);
+        // The cache is allowed to grow up to (1 + x%) * capacity in size. Once
+        // there, extra entries are evicted incurring a linear computation
+        // cost. Since it takes at least O(n) calls to self.put(...) to invoke
+        // another eviction, the amortized cost is constant.
+        if self.executors.len() > self.max.saturating_mul(2) {
+            let counts = self.executors.iter().map(|(&key, entry)| {
+                let count = entry
+                    .prev_epoch_count
+                    .saturating_add(entry.epoch_count.load(Relaxed));
+                (key, count)
+            });
+            let mut counts: Vec<_> = counts.collect();
+            let nth = counts.len().checked_sub(self.max).unwrap();
+            counts.select_nth_unstable_by_key(nth, |(_, count)| *count);
+            for (key, _) in &counts[..nth] {
+                self.executors.remove(key);
+            }
+        }
     }
 
     fn remove(&mut self, pubkey: &Pubkey) {
@@ -3484,7 +3488,7 @@ impl Bank {
             let mut cache = self.cached_executors.write().unwrap();
             let cache = Arc::make_mut(&mut cache);
             for (key, executor) in dirty_executors.into_iter() {
-                cache.put(key, executor);
+                cache.put(*key, executor);
             }
         }
     }
@@ -12729,9 +12733,9 @@ pub(crate) mod tests {
         let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
         let mut cache = CachedExecutors::new(3, 0);
 
-        cache.put(&key1, executor.clone());
-        cache.put(&key2, executor.clone());
-        cache.put(&key3, executor.clone());
+        cache.put(key1, executor.clone());
+        cache.put(key2, executor.clone());
+        cache.put(key3, executor.clone());
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key2).is_some());
         assert!(cache.get(&key3).is_some());
@@ -12739,19 +12743,31 @@ pub(crate) mod tests {
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key2).is_some());
-        cache.put(&key4, executor.clone());
+        cache.put(key4, executor.clone());
+        assert!(cache.get(&key1).is_some());
+        assert!(cache.get(&key2).is_some());
+        assert!(cache.get(&key3).is_some());
+        assert!(cache.get(&key4).is_some());
+
+        assert!(cache.get(&key4).is_some());
+        assert!(cache.get(&key4).is_some());
+        assert!(cache.get(&key4).is_some());
+        cache.put(key3, executor.clone());
+        assert!(cache.get(&key1).is_some());
+        assert!(cache.get(&key2).is_some());
+        assert!(cache.get(&key3).is_some());
+        assert!(cache.get(&key4).is_some());
+
+        // Push number of cached entries above 2 * max to force an eviction.
+        assert_eq!(cache.executors.len(), 4);
+        for _ in 0..3 {
+            let key = solana_sdk::pubkey::new_rand();
+            cache.put(key, executor.clone());
+        }
+        assert_eq!(cache.executors.len(), 3);
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key2).is_some());
         assert!(cache.get(&key3).is_none());
-        assert!(cache.get(&key4).is_some());
-
-        assert!(cache.get(&key4).is_some());
-        assert!(cache.get(&key4).is_some());
-        assert!(cache.get(&key4).is_some());
-        cache.put(&key3, executor.clone());
-        assert!(cache.get(&key1).is_some());
-        assert!(cache.get(&key2).is_none());
-        assert!(cache.get(&key3).is_some());
         assert!(cache.get(&key4).is_some());
     }
 
@@ -12765,34 +12781,48 @@ pub(crate) mod tests {
         let mut cache = CachedExecutors::new(3, 0);
         assert!(cache.current_epoch == 0);
 
-        cache.put(&key1, executor.clone());
-        cache.put(&key2, executor.clone());
-        cache.put(&key3, executor.clone());
+        cache.put(key1, executor.clone());
+        cache.put(key2, executor.clone());
+        cache.put(key3, executor.clone());
+
+        let cache = Arc::new(cache);
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key1).is_some());
 
-        let mut cache = Arc::new(cache).clone_with_epoch(1);
+        let mut cache = cache.clone_with_epoch(1);
         assert!(cache.current_epoch == 1);
 
         assert!(cache.get(&key2).is_some());
         assert!(cache.get(&key2).is_some());
         assert!(cache.get(&key3).is_some());
-        Arc::make_mut(&mut cache).put(&key4, executor.clone());
+        Arc::make_mut(&mut cache).put(key4, executor.clone());
 
         assert!(cache.get(&key4).is_some());
-        assert!(cache.get(&key3).is_none());
+        assert!(cache.get(&key3).is_some());
 
-        Arc::make_mut(&mut cache).put(&key1, executor.clone());
-        Arc::make_mut(&mut cache).put(&key3, executor.clone());
+        Arc::make_mut(&mut cache).put(key1, executor.clone());
+        Arc::make_mut(&mut cache).put(key3, executor.clone());
         assert!(cache.get(&key1).is_some());
-        assert!(cache.get(&key4).is_none());
+        assert!(cache.get(&key4).is_some());
 
         cache = cache.clone_with_epoch(2);
         assert!(cache.current_epoch == 2);
 
-        Arc::make_mut(&mut cache).put(&key3, executor.clone());
+        Arc::make_mut(&mut cache).put(key3, executor.clone());
         assert!(cache.get(&key3).is_some());
+
+        // Push number of cached entries above 2 * max to force an eviction.
+        assert_eq!(cache.executors.len(), 4);
+        for _ in 0..3 {
+            let key = solana_sdk::pubkey::new_rand();
+            Arc::make_mut(&mut cache).put(key, executor.clone());
+        }
+        assert_eq!(cache.executors.len(), 3);
+        assert!(cache.get(&key1).is_none());
+        assert!(cache.get(&key2).is_some());
+        assert!(cache.get(&key3).is_some());
+        assert!(cache.get(&key4).is_some());
     }
 
     #[test]
