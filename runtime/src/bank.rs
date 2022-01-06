@@ -3333,18 +3333,10 @@ impl Bank {
                 executors.insert(*key, TransactionExecutor::new_cached(executor));
             }
         }
-<<<<<<< HEAD
         for instruction_loaders in loaders.iter() {
             for (key, _) in instruction_loaders.iter() {
                 if let Some(executor) = cache.get(key) {
-                    executors.insert(*key, TransactionExecutor::cached(executor));
-=======
-        for program_indices_of_instruction in program_indices.iter() {
-            for account_index in program_indices_of_instruction.iter() {
-                let key = accounts[*account_index].0;
-                if let Some(executor) = cache.get(&key) {
-                    executors.insert(key, TransactionExecutor::new_cached(executor));
->>>>>>> 12e160269 (cache executors on failed transactions (#22308))
+                    executors.insert(*key, TransactionExecutor::new_cached(executor));
                 }
             }
         }
@@ -3382,110 +3374,6 @@ impl Bank {
         cache.remove(pubkey);
     }
 
-<<<<<<< HEAD
-=======
-    /// Execute a transaction using the provided loaded accounts and update
-    /// the executors cache if the transaction was successful.
-    fn execute_loaded_transaction(
-        &self,
-        tx: &SanitizedTransaction,
-        loaded_transaction: &mut LoadedTransaction,
-        compute_budget: ComputeBudget,
-        durable_nonce_fee: Option<DurableNonceFee>,
-        enable_cpi_recording: bool,
-        enable_log_recording: bool,
-        execute_details_timings: &mut ExecuteDetailsTimings,
-        error_counters: &mut ErrorCounters,
-    ) -> TransactionExecutionResult {
-        let legacy_message = match tx.message().legacy_message() {
-            Some(message) => message,
-            None => {
-                // TODO: support versioned messages
-                return TransactionExecutionResult::NotExecuted(
-                    TransactionError::UnsupportedVersion,
-                );
-            }
-        };
-
-        let executors = self.get_executors(
-            tx.message(),
-            &loaded_transaction.accounts,
-            &loaded_transaction.program_indices,
-        );
-
-        let mut transaction_accounts = Vec::new();
-        std::mem::swap(&mut loaded_transaction.accounts, &mut transaction_accounts);
-        let mut transaction_context = TransactionContext::new(
-            transaction_accounts,
-            compute_budget.max_invoke_depth.saturating_add(1),
-        );
-
-        let instruction_recorder = if enable_cpi_recording {
-            Some(InstructionRecorder::new_ref(
-                tx.message().instructions().len(),
-            ))
-        } else {
-            None
-        };
-
-        let log_collector = if enable_log_recording {
-            Some(LogCollector::new_ref())
-        } else {
-            None
-        };
-
-        let (blockhash, lamports_per_signature) = self.last_blockhash_and_lamports_per_signature();
-        let process_result = MessageProcessor::process_message(
-            &self.builtin_programs.vec,
-            legacy_message,
-            &loaded_transaction.program_indices,
-            &mut transaction_context,
-            self.rent_collector.rent,
-            log_collector.clone(),
-            executors.clone(),
-            instruction_recorder.clone(),
-            self.feature_set.clone(),
-            compute_budget,
-            execute_details_timings,
-            &*self.sysvar_cache.read().unwrap(),
-            blockhash,
-            lamports_per_signature,
-            self.load_accounts_data_len(),
-        );
-
-        self.update_executors(process_result.is_ok(), executors);
-
-        let status = process_result
-            .map(|info| {
-                self.store_accounts_data_len(info.accounts_data_len);
-            })
-            .map_err(|err| {
-                error_counters.instruction_error += 1;
-                err
-            });
-
-        let log_messages: Option<TransactionLogMessages> =
-            log_collector.and_then(|log_collector| {
-                Rc::try_unwrap(log_collector)
-                    .map(|log_collector| log_collector.into_inner().into())
-                    .ok()
-            });
-
-        let inner_instructions = instruction_recorder
-            .and_then(|instruction_recorder| Rc::try_unwrap(instruction_recorder).ok())
-            .map(|instruction_recorder| instruction_recorder.into_inner().deconstruct());
-
-        loaded_transaction.accounts = transaction_context.deconstruct();
-
-        TransactionExecutionResult::Executed(TransactionExecutionDetails {
-            status,
-            log_messages,
-            inner_instructions,
-            durable_nonce_fee,
-        })
-    }
-
->>>>>>> 12e160269 (cache executors on failed transactions (#22308))
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
@@ -3637,9 +3525,7 @@ impl Bank {
                             process_result = Err(e);
                         }
 
-                        if process_result.is_ok() {
-                            self.update_executors(executors);
-                        }
+                        self.update_executors(process_result.is_ok(), executors);
                     } else {
                         transaction_log_messages.push(None);
                         inner_instructions.push(None);
@@ -12075,19 +11961,13 @@ pub(crate) mod tests {
         executors.insert(key3, TransactionExecutor::new_cached(executor.clone()));
         executors.insert(key4, TransactionExecutor::new_cached(executor.clone()));
         let executors = Rc::new(RefCell::new(executors));
-<<<<<<< HEAD
-        executors.borrow_mut().get_mut(&key1).unwrap().is_dirty = false;
-        bank.update_executors(executors);
-        let executors = bank.get_executors(&message, loaders);
-=======
         executors
             .borrow_mut()
             .get_mut(&key1)
             .unwrap()
             .clear_miss_for_test();
         bank.update_executors(true, executors);
-        let executors = bank.get_executors(&message, accounts, program_indices);
->>>>>>> 12e160269 (cache executors on failed transactions (#22308))
+        let executors = bank.get_executors(&message, loaders);
         assert_eq!(executors.borrow().len(), 0);
 
         // do work
@@ -12097,13 +11977,8 @@ pub(crate) mod tests {
         executors.insert(key3, TransactionExecutor::new_miss(executor.clone()));
         executors.insert(key4, TransactionExecutor::new_miss(executor.clone()));
         let executors = Rc::new(RefCell::new(executors));
-<<<<<<< HEAD
-        bank.update_executors(executors);
-        let executors = bank.get_executors(&message, loaders);
-=======
         bank.update_executors(true, executors);
-        let executors = bank.get_executors(&message, accounts, program_indices);
->>>>>>> 12e160269 (cache executors on failed transactions (#22308))
+        let executors = bank.get_executors(&message, loaders);
         assert_eq!(executors.borrow().len(), 4);
         assert!(executors.borrow().contains_key(&key1));
         assert!(executors.borrow().contains_key(&key2));
@@ -12151,13 +12026,8 @@ pub(crate) mod tests {
         let mut executors = Executors::default();
         executors.insert(key1, TransactionExecutor::new_miss(executor.clone()));
         let executors = Rc::new(RefCell::new(executors));
-<<<<<<< HEAD
-        root.update_executors(executors);
-        let executors = root.get_executors(&Message::default(), loaders);
-=======
         root.update_executors(true, executors);
-        let executors = root.get_executors(&message, accounts, program_indices);
->>>>>>> 12e160269 (cache executors on failed transactions (#22308))
+        let executors = root.get_executors(&Message::default(), loaders);
         assert_eq!(executors.borrow().len(), 1);
 
         let fork1 = Bank::new_from_parent(&root, &Pubkey::default(), 1);

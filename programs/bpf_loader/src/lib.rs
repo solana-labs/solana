@@ -440,19 +440,8 @@ fn process_loader_upgradeable_instruction(
             )?;
 
             // Load and verify the program bits
-<<<<<<< HEAD
             let executor = create_executor(3, buffer_data_offset, invoke_context, use_jit, true)?;
-            invoke_context.add_executor(&new_program_id, executor);
-=======
-            let executor = create_executor(
-                first_instruction_account + 3,
-                buffer_data_offset,
-                invoke_context,
-                use_jit,
-                true,
-            )?;
             invoke_context.update_executor(&new_program_id, executor);
->>>>>>> 12e160269 (cache executors on failed transactions (#22308))
 
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let payer = keyed_account_at_index(keyed_accounts, 0)?;
@@ -583,19 +572,8 @@ fn process_loader_upgradeable_instruction(
             }
 
             // Load and verify the program bits
-<<<<<<< HEAD
             let executor = create_executor(2, buffer_data_offset, invoke_context, use_jit, true)?;
-            invoke_context.add_executor(&new_program_id, executor);
-=======
-            let executor = create_executor(
-                first_instruction_account + 2,
-                buffer_data_offset,
-                invoke_context,
-                use_jit,
-                true,
-            )?;
             invoke_context.update_executor(&new_program_id, executor);
->>>>>>> 12e160269 (cache executors on failed transactions (#22308))
 
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let programdata = keyed_account_at_index(keyed_accounts, 0)?;
@@ -865,13 +843,8 @@ fn process_loader_instruction(
 
             let executor = create_executor(0, 0, invoke_context, use_jit, true)?;
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
-<<<<<<< HEAD
             let program = keyed_account_at_index(keyed_accounts, 0)?;
-            invoke_context.add_executor(program.unsigned_key(), executor);
-=======
-            let program = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             invoke_context.update_executor(program.unsigned_key(), executor);
->>>>>>> 12e160269 (cache executors on failed transactions (#22308))
             program.try_account_ref_mut()?.set_executable(true);
             ic_msg!(
                 invoke_context,

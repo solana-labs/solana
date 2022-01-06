@@ -85,6 +85,8 @@ pub trait InvokeContext {
     /// Loaders may need to do work in order to execute a program.  Cache
     /// the work that can be re-used across executions
     fn add_executor(&self, pubkey: &Pubkey, executor: Arc<dyn Executor>);
+    /// Cache an executor that has changed
+    fn update_executor(&self, pubkey: &Pubkey, executor: Arc<dyn Executor>);
     /// Get the completed loader work that can be re-used across executions
     fn get_executor(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>>;
     /// Record invoked instruction
@@ -493,6 +495,7 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
         Rc::new(RefCell::new(self.compute_meter.clone()))
     }
     fn add_executor(&self, _pubkey: &Pubkey, _executor: Arc<dyn Executor>) {}
+    fn update_executor(&self, _pubkey: &Pubkey, _executor: Arc<dyn Executor>) {}
     fn get_executor(&self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
         None
     }
