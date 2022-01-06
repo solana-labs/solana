@@ -653,7 +653,7 @@ fn analyze_storage(database: &Database) {
     analyze_column::<ShredData>(database, "ShredData");
     analyze_column::<ShredCode>(database, "ShredCode");
     analyze_column::<TransactionStatus>(database, "TransactionStatus");
-    analyze_column::<TransactionStatus>(database, "TransactionStatusIndex");
+    analyze_column::<TransactionStatusIndex>(database, "TransactionStatusIndex");
     analyze_column::<AddressSignatures>(database, "AddressSignatures");
     analyze_column::<Rewards>(database, "Rewards");
 }
