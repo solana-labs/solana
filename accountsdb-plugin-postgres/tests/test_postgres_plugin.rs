@@ -1,7 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
+
 /// Integration testing for the PostgreSQL plugin
-
-
 use {
     log::*,
     libloading::{Library, Symbol},
@@ -29,6 +28,7 @@ use {
     solana_streamer::socket::SocketAddrSpace,
     std::{
         fs::File,
+        io::Write,
         net::{IpAddr, Ipv4Addr, SocketAddr},
         path::{Path, PathBuf},
         sync::{Arc, RwLock},
@@ -107,7 +107,26 @@ fn generate_accountsdb_plugin_config() -> (TempDir, File, PathBuf) {
     let tmp_dir = tempfile::tempdir_in(farf_dir()).unwrap();
     let mut path = tmp_dir.path().to_path_buf();
     path.push("accounts_db_plugin.json");
-    let config_file = File::create(path.clone()).unwrap();
+    let mut config_file = File::create(path.clone()).unwrap();
+
+    let config_content = r#"
+    {
+        "libpath": "libsolana_accountsdb_plugin_postgres.so",
+        "host": "localhost",
+        "user": "solana",
+        "port": 5432,
+        "threads": 20,
+        "batch_size": 20,
+        "panic_on_db_errors": true,
+        "accounts_selector" : {
+            "accounts" : ["*"]
+        },
+        "transaction_selector" : {
+            "mentions" : ["*"]
+        }
+    }
+    "#;
+    write!(config_file, "{}", config_content).unwrap();
     (tmp_dir, config_file, path)
 }
 
