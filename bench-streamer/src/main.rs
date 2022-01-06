@@ -73,7 +73,6 @@ fn main() -> Result<()> {
         num_sockets = max(num_sockets, n.to_string().parse().expect("integer"));
     }
 
-    let mut port = 0;
     let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
     let mut addr = SocketAddr::new(ip_addr, 0);
 
@@ -83,11 +82,10 @@ fn main() -> Result<()> {
     let mut read_threads = Vec::new();
     let recycler = PacketBatchRecycler::default();
     for _ in 0..num_sockets {
-        let read = solana_net_utils::bind_to(ip_addr, port, false).unwrap();
+        let read = solana_net_utils::bind_to(ip_addr, /*port:*/ 0, false).unwrap();
         read.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
 
         addr = read.local_addr().unwrap();
-        port = addr.port();
 
         let (s_reader, r_reader) = unbounded();
         read_channels.push(r_reader);
