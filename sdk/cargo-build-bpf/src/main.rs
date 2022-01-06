@@ -516,17 +516,11 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     env::set_var("OBJDUMP", llvm_bin.join("llvm-objdump"));
     env::set_var("OBJCOPY", llvm_bin.join("llvm-objcopy"));
 
-    if let Ok(mut rustflags) = env::var("RUSTFLAGS") {
-        if cfg!(windows) && !rustflags.contains("-C linker=") {
-            let ld_path = llvm_bin.join("ld.lld");
-            rustflags = format!("{} -C linker={}", rustflags, ld_path.display());
-        }
-
-        if config.verbose {
-            println!("RUSTFLAGS={}", rustflags);
-        }
-
-        env::set_var("RUSTFLAGS", rustflags);
+    if config.verbose {
+        println!(
+            "RUSTFLAGS={}",
+            env::var("RUSTFLAGS").ok().as_deref().unwrap_or("")
+        );
     };
 
     let cargo_build = PathBuf::from("cargo");
