@@ -397,19 +397,18 @@ impl CachedExecutors {
             executors: HashMap::new(),
         }
     }
+
     fn get(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
         self.executors.get(pubkey).map(|entry| {
             entry.epoch_count.fetch_add(1, Relaxed);
             entry.executor.clone()
         })
     }
+
     fn put(&mut self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {
-        let entry = if let Some(entry) = self.executors.get(pubkey) {
-            CachedExecutorsEntry {
-                prev_epoch_count: entry.prev_epoch_count,
-                epoch_count: AtomicU64::new(entry.epoch_count.load(Relaxed)),
-                executor,
-            }
+        let entry = if let Some(mut entry) = self.executors.remove(pubkey) {
+            entry.executor = executor;
+            entry
         } else {
             if self.executors.len() >= self.max {
                 let mut least = u64::MAX;
@@ -434,6 +433,7 @@ impl CachedExecutors {
         };
         let _ = self.executors.insert(*pubkey, entry);
     }
+
     fn remove(&mut self, pubkey: &Pubkey) {
         let _ = self.executors.remove(pubkey);
     }
