@@ -647,15 +647,22 @@ fn analyze_storage(database: &Database) {
     analyze_column::<SlotMeta>(database, "SlotMeta");
     analyze_column::<Orphans>(database, "Orphans");
     analyze_column::<DeadSlots>(database, "DeadSlots");
+    analyze_column::<DuplicateSlots>(database, "DuplicateSlots");
     analyze_column::<ErasureMeta>(database, "ErasureMeta");
+    analyze_column::<BankHash>(database, "BankHash");
     analyze_column::<Root>(database, "Root");
     analyze_column::<Index>(database, "Index");
     analyze_column::<ShredData>(database, "ShredData");
     analyze_column::<ShredCode>(database, "ShredCode");
     analyze_column::<TransactionStatus>(database, "TransactionStatus");
-    analyze_column::<TransactionStatusIndex>(database, "TransactionStatusIndex");
     analyze_column::<AddressSignatures>(database, "AddressSignatures");
+    analyze_column::<TransactionMemos>(database, "TransactionMemos");
+    analyze_column::<TransactionStatusIndex>(database, "TransactionStatusIndex");
     analyze_column::<Rewards>(database, "Rewards");
+    analyze_column::<Blocktime>(database, "Blocktime");
+    analyze_column::<PerfSamples>(database, "PerfSamples");
+    analyze_column::<BlockHeight>(database, "BlockHeight");
+    analyze_column::<ProgramCosts>(database, "ProgramCosts");
 }
 
 fn open_blockstore(
