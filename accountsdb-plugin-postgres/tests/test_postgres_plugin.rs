@@ -107,9 +107,7 @@ fn generate_accountsdb_plugin_config() -> (TempDir, PathBuf) {
     let config_content = r#"
     {
         "libpath": "libsolana_accountsdb_plugin_postgres.so",
-        "host": "localhost",
-        "user": "solana",
-        "port": 5432,
+        "connection_str": "host=localhost user=solana password=solana port=5432",
         "threads": 20,
         "batch_size": 20,
         "panic_on_db_errors": true,
