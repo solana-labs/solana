@@ -22,9 +22,7 @@ use {
         ancestor_iterator::AncestorIterator,
         bank_forks_utils,
         blockstore::{create_new_ledger, Blockstore, PurgeType},
-        blockstore_db::{
-            self, AccessType, BlockstoreOptions, BlockstoreRecoveryMode, Column, Database,
-        },
+        blockstore_db::{self, AccessType, BlockstoreOptions, BlockstoreRecoveryMode, Database},
         blockstore_processor::ProcessOptions,
         shred::Shred,
     },
@@ -577,18 +575,17 @@ fn graph_forks(bank_forks: &BankForks, include_all_votes: bool) -> String {
 }
 
 fn analyze_column<
-    T: solana_ledger::blockstore_db::Column + solana_ledger::blockstore_db::ColumnName,
+    C: solana_ledger::blockstore_db::Column + solana_ledger::blockstore_db::ColumnName,
 >(
     db: &Database,
     name: &str,
-    key_size: usize,
 ) {
     let mut key_tot: u64 = 0;
     let mut val_hist = histogram::Histogram::new();
     let mut val_tot: u64 = 0;
     let mut row_hist = histogram::Histogram::new();
-    let a = key_size as u64;
-    for (_x, y) in db.iter::<T>(blockstore_db::IteratorMode::Start).unwrap() {
+    let a = C::key_size() as u64;
+    for (_x, y) in db.iter::<C>(blockstore_db::IteratorMode::Start).unwrap() {
         let b = y.len() as u64;
         key_tot += a;
         val_hist.increment(b).unwrap();
@@ -647,30 +644,18 @@ fn analyze_column<
 
 fn analyze_storage(database: &Database) {
     use blockstore_db::columns::*;
-    analyze_column::<SlotMeta>(database, "SlotMeta", SlotMeta::key_size());
-    analyze_column::<Orphans>(database, "Orphans", Orphans::key_size());
-    analyze_column::<DeadSlots>(database, "DeadSlots", DeadSlots::key_size());
-    analyze_column::<ErasureMeta>(database, "ErasureMeta", ErasureMeta::key_size());
-    analyze_column::<Root>(database, "Root", Root::key_size());
-    analyze_column::<Index>(database, "Index", Index::key_size());
-    analyze_column::<ShredData>(database, "ShredData", ShredData::key_size());
-    analyze_column::<ShredCode>(database, "ShredCode", ShredCode::key_size());
-    analyze_column::<TransactionStatus>(
-        database,
-        "TransactionStatus",
-        TransactionStatus::key_size(),
-    );
-    analyze_column::<TransactionStatus>(
-        database,
-        "TransactionStatusIndex",
-        TransactionStatusIndex::key_size(),
-    );
-    analyze_column::<AddressSignatures>(
-        database,
-        "AddressSignatures",
-        AddressSignatures::key_size(),
-    );
-    analyze_column::<Rewards>(database, "Rewards", Rewards::key_size());
+    analyze_column::<SlotMeta>(database, "SlotMeta");
+    analyze_column::<Orphans>(database, "Orphans");
+    analyze_column::<DeadSlots>(database, "DeadSlots");
+    analyze_column::<ErasureMeta>(database, "ErasureMeta");
+    analyze_column::<Root>(database, "Root");
+    analyze_column::<Index>(database, "Index");
+    analyze_column::<ShredData>(database, "ShredData");
+    analyze_column::<ShredCode>(database, "ShredCode");
+    analyze_column::<TransactionStatus>(database, "TransactionStatus");
+    analyze_column::<TransactionStatus>(database, "TransactionStatusIndex");
+    analyze_column::<AddressSignatures>(database, "AddressSignatures");
+    analyze_column::<Rewards>(database, "Rewards");
 }
 
 fn open_blockstore(
