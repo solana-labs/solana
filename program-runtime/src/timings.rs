@@ -65,16 +65,33 @@ impl ExecuteTimings {
 }
 
 #[derive(Default, Debug)]
+pub struct ExecuteProcessInstructionTimings {
+    pub total_us: u64,
+    pub verify_caller_us: u64,
+    pub process_executable_chain_us: u64,
+    pub verify_callee_us: u64,
+}
+
+impl ExecuteProcessInstructionTimings {
+    pub fn accumulate(&mut self, other: &ExecuteProcessInstructionTimings) {
+        saturating_add_assign!(self.total_us, other.total_us);
+        saturating_add_assign!(self.verify_caller_us, other.verify_caller_us);
+        saturating_add_assign!(
+            self.process_executable_chain_us,
+            other.process_executable_chain_us
+        );
+        saturating_add_assign!(self.verify_callee_us, other.verify_callee_us);
+    }
+}
+
+#[derive(Default, Debug)]
 pub struct ExecuteAccessoryTimings {
     pub feature_set_clone_us: u64,
     pub compute_budget_process_transaction_us: u64,
     pub get_executors_us: u64,
     pub process_message_us: u64,
     pub update_executors_us: u64,
-    pub process_instructions_us: u64,
-    pub process_instruction_verify_caller_us: u64,
-    pub process_instruction_process_executable_chain_us: u64,
-    pub process_instruction_verify_callee_us: u64,
+    pub process_instructions: ExecuteProcessInstructionTimings,
 }
 
 impl ExecuteAccessoryTimings {
@@ -90,19 +107,8 @@ impl ExecuteAccessoryTimings {
         saturating_add_assign!(self.get_executors_us, other.get_executors_us);
         saturating_add_assign!(self.process_message_us, other.process_message_us);
         saturating_add_assign!(self.update_executors_us, other.update_executors_us);
-        saturating_add_assign!(self.process_instructions_us, other.process_instructions_us);
-        saturating_add_assign!(
-            self.process_instruction_verify_caller_us,
-            other.process_instruction_verify_caller_us
-        );
-        saturating_add_assign!(
-            self.process_instruction_process_executable_chain_us,
-            other.process_instruction_process_executable_chain_us
-        );
-        saturating_add_assign!(
-            self.process_instruction_verify_callee_us,
-            other.process_instruction_verify_callee_us
-        );
+        self.process_instructions
+            .accumulate(&other.process_instructions);
     }
 }
 
