@@ -50,7 +50,7 @@ impl SanitizedTransaction {
         tx: VersionedTransaction,
         message_hash: Hash,
         is_simple_vote_tx: Option<bool>,
-        address_loader: impl FnOnce(&[MessageAddressTableLookup]) -> Result<LoadedAddresses>,
+        address_loader: impl Fn(&[MessageAddressTableLookup]) -> Result<LoadedAddresses>,
     ) -> Result<Self> {
         tx.sanitize()?;
 
