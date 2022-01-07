@@ -290,7 +290,7 @@ impl AppendVec {
     }
 
     pub fn remaining_bytes(&self) -> u64 {
-        self.len() as u64 - self.capacity()
+        self.capacity() - self.len() as u64
     }
 
     pub fn len(&self) -> usize {

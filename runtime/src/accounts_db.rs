@@ -3061,6 +3061,7 @@ impl AccountsDb {
     fn combine_ancient_slots(&self, sorted_slots: Vec<Slot>) {
         use crate::append_vec::MAXIMUM_APPEND_VEC_FILE_SIZE;
         let mut current_storage = None;
+        let mut dropped_roots = vec![];
         for slot in sorted_slots {
             if let Some(storages) = self.storage.0.get(&slot) {
                 let mut dead_storages = Vec::default();
@@ -3095,10 +3096,6 @@ impl AccountsDb {
                 let writer = current_storage.as_ref().unwrap();
                 let (stored_accounts, _num_stores, _original_bytes) =
                     self.get_unique_accounts_from_storages(all_storages.iter());
-                error!(
-                    "ancient_append_vec: get_unique_accounts_from_storages: {}",
-                    stored_accounts.len()
-                );
                 let mut available_bytes = writer.1.accounts.remaining_bytes();
                 let mut hashes_this_append_vec = Vec::default();
                 let mut hashes_next_append_vec = Vec::default();
@@ -3159,17 +3156,19 @@ impl AccountsDb {
 
                 dead_storages.extend(all_storages.iter().map(Arc::clone));
 
-                error!("ancient_append_vec: drop_or_recycle_stores {:?}", dead_storages);
+                error!("ancient_append_vec: drop_or_recycle_stores {:?}", dead_storages.len());
                 self.drop_or_recycle_stores(dead_storages);
 
                 if drop_root {
-                    // todo: afterwards, we need to remove the roots sometime
-                    self.accounts_index
-                        .clean_dead_slot(slot, &mut AccountsIndexRootsStats::default());
-                    error!("ancient_append_vec: dropping root: {}", slot);
+                    dropped_roots.push(slot);
                 }
             }
         }
+        // todo: afterwards, we need to remove the roots sometime
+        error!("ancient_append_vec: dropping roots: {:?}", dropped_roots);
+        dropped_roots.iter().for_each(|slot| {
+        self.accounts_index
+            .clean_dead_slot(*slot, &mut AccountsIndexRootsStats::default());});
     }
     /*
         fn write_accounts_to_ancient_append_vec(storage: &Arc<AccountStorageEntry>, )
