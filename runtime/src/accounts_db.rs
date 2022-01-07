@@ -6818,7 +6818,7 @@ impl AccountsDb {
         // equivalent to asserting there will be no dead slots, is safe.
         let no_purge_stats = None;
         let mut handle_reclaims_time = Measure::start("handle_reclaims");
-        self.handle_reclaims(&reclaims, Some(slot), no_purge_stats, None, reset_accounts);
+        self.handle_reclaims(&reclaims, None/*Some(slot)*/, no_purge_stats, None, reset_accounts);
         handle_reclaims_time.stop();
         self.stats
             .store_handle_reclaims
