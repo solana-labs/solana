@@ -25,9 +25,7 @@ use {
 };
 
 pub enum QosMetrics {
-    BlockBatchUpdate {
-        bank: Arc<Bank>,
-    },
+    BlockBatchUpdate { bank: Arc<Bank> },
 }
 
 // QosService is local to each banking thread, each instance of QosService provides services to
@@ -204,7 +202,22 @@ impl QosService {
             .fetch_add(count, Ordering::Relaxed);
     }
 
-    pub fn accumulate_estimated_execution_units(&self, estimated_execute_units: u64) {
+    pub fn accumulate_estimated_transaction_costs(&self, units: (u64, u64, u64, u64)) {
+        let (
+            estimated_signature_units,
+            estimated_write_lock_units,
+            estimated_data_bytes_units,
+            estimated_execute_units,
+        ) = units;
+        self.metrics
+            .estimated_signature_units
+            .fetch_add(estimated_signature_units, Ordering::Relaxed);
+        self.metrics
+            .estimated_write_lock_units
+            .fetch_add(estimated_write_lock_units, Ordering::Relaxed);
+        self.metrics
+            .estimated_data_bytes_units
+            .fetch_add(estimated_data_bytes_units, Ordering::Relaxed);
         self.metrics
             .estimated_execute_units
             .fetch_add(estimated_execute_units, Ordering::Relaxed);
@@ -295,6 +308,15 @@ struct QosServiceMetrics {
 
     // number of transactions to be queued for retry due to its account data limits
     retried_txs_per_account_data_limit_count: AtomicU64,
+
+    // accumulated estimated signature Compute Unites to be packed into block
+    estimated_signature_units: AtomicU64,
+
+    // accumulated estimated write locks Compute Units to be packed into block
+    estimated_write_lock_units: AtomicU64,
+
+    // accumulated estimated instructino data Compute Units to be packed into block
+    estimated_data_bytes_units: AtomicU64,
 
     // accumulated estimated program Compute Units to be packed into block
     estimated_execute_units: AtomicU64,
@@ -387,6 +409,21 @@ impl QosServiceMetrics {
                     "retried_txs_per_account_data_limit_count",
                     self.retried_txs_per_account_data_limit_count
                         .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "estimated_signature_units",
+                    self.estimated_signature_units.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "estimated_write_lock_units",
+                    self.estimated_write_lock_units.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "estimated_data_bytes_units",
+                    self.estimated_data_bytes_units.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (

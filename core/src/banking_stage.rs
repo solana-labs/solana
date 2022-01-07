@@ -973,10 +973,12 @@ impl BankingStage {
         let transactions_qos_results =
             qos_service.select_transactions_per_cost(txs.iter(), tx_costs.iter(), bank);
 
-        qos_service.accumulate_estimated_execution_units(Self::accumulate_batched_execution_units(
-            tx_costs.iter(),
-            transactions_qos_results.iter(),
-        ));
+        qos_service.accumulate_estimated_transaction_costs(
+            Self::accumulate_batched_transaction_costs(
+                tx_costs.iter(),
+                transactions_qos_results.iter(),
+            ),
+        );
 
         // Only lock accounts for those transactions are selected for the block;
         // Once accounts are locked, other threads cannot encode transactions that will modify the
@@ -1022,19 +1024,34 @@ impl BankingStage {
         (result, retryable_txs)
     }
 
-    fn accumulate_batched_execution_units<'a>(
+    // rollup transaction cost details, eg signature_cost, write_lock_cost, data_bytes_cost and
+    // execution_cost from the batch of transactions selected for block.
+    fn accumulate_batched_transaction_costs<'a>(
         transactions_costs: impl Iterator<Item = &'a TransactionCost>,
         transaction_results: impl Iterator<Item = &'a transaction::Result<()>>,
-    ) -> u64 {
-        transactions_costs
+    ) -> (u64, u64, u64, u64) {
+        let ((signature_costs, write_lock_costs), (data_bytes_costs, execution_costs)): (
+            (Vec<_>, Vec<_>),
+            (Vec<_>, Vec<_>),
+        ) = transactions_costs
             .zip(transaction_results)
-            .map(|(cost, result)| {
-                if result.is_err() {
-                    return 0u64;
+            .filter_map(|(cost, result)| {
+                if result.is_ok() {
+                    Some((
+                        (cost.signature_cost, cost.write_lock_cost),
+                        (cost.data_bytes_cost, cost.execution_cost),
+                    ))
+                } else {
+                    None
                 }
-                cost.execution_cost
             })
-            .sum()
+            .unzip();
+        (
+            signature_costs.iter().sum(),
+            write_lock_costs.iter().sum(),
+            data_bytes_costs.iter().sum(),
+            execution_costs.iter().sum(),
+        )
     }
 
     fn accumulate_execute_units_and_time(execute_timings: &ExecuteTimings) -> (u64, u64) {
@@ -3415,17 +3432,26 @@ mod tests {
     }
 
     #[test]
-    fn test_accumulate_batched_execution_units() {
+    fn test_accumulate_batched_transaction_costs() {
         let tx_costs = vec![
             TransactionCost {
+                signature_cost: 1,
+                write_lock_cost: 2,
+                data_bytes_cost: 3,
                 execution_cost: 10,
                 ..TransactionCost::default()
             },
             TransactionCost {
+                signature_cost: 4,
+                write_lock_cost: 5,
+                data_bytes_cost: 6,
                 execution_cost: 20,
                 ..TransactionCost::default()
             },
             TransactionCost {
+                signature_cost: 7,
+                write_lock_cost: 8,
+                data_bytes_cost: 9,
                 execution_cost: 40,
                 ..TransactionCost::default()
             },
@@ -3436,11 +3462,16 @@ mod tests {
             Err(TransactionError::WouldExceedMaxBlockCostLimit),
         ];
         // should only accumulate first two cost that are OK
-        let expected_units = 30;
-        assert_eq!(
-            expected_units,
-            BankingStage::accumulate_batched_execution_units(tx_costs.iter(), tx_results.iter())
-        );
+        let expected_signatures = 5;
+        let expected_write_locks = 7;
+        let expected_data_bytes = 9;
+        let expected_executions = 30;
+        let (signatures, write_locks, data_bytes, executions) =
+            BankingStage::accumulate_batched_transaction_costs(tx_costs.iter(), tx_results.iter());
+        assert_eq!(expected_signatures, signatures);
+        assert_eq!(expected_write_locks, write_locks);
+        assert_eq!(expected_data_bytes, data_bytes);
+        assert_eq!(expected_executions, executions);
     }
 
     #[test]
