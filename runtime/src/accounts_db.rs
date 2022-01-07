@@ -2887,15 +2887,12 @@ impl AccountsDb {
         aligned_total: u64,
     ) -> (Arc<AccountStorageEntry>, u64) {
         let mut start = Measure::start("create_and_insert_store_elapsed");
-        error!("try_recycle_and_insert_store");
         let shrunken_store = if let Some(new_store) =
             self.try_recycle_and_insert_store(slot, aligned_total, aligned_total + 1024)
         {
-            error!("done try_recycle_and_insert_store");
             new_store
         } else {
             let maybe_shrink_paths = self.shrink_paths.read().unwrap();
-            error!("create_and_insert_store_with_paths");
             if let Some(ref shrink_paths) = *maybe_shrink_paths {
                 self.create_and_insert_store_with_paths(
                     slot,
@@ -2904,12 +2901,10 @@ impl AccountsDb {
                     shrink_paths,
                 )
             } else {
-                error!("create_and_insert_store_with_paths2");
                 self.create_and_insert_store(slot, aligned_total, "shrink")
             }
         };
         start.stop();
-        error!("get_store done");
         (shrunken_store, start.as_us())
     }
 
