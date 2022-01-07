@@ -66,6 +66,7 @@ use {
     dashmap::DashMap,
     itertools::Itertools,
     log::*,
+    rand::Rng,
     rayon::{
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
         ThreadPool, ThreadPoolBuilder,
@@ -253,6 +254,7 @@ struct CachedExecutorsEntry {
 #[derive(Debug)]
 struct CachedExecutors {
     max: usize,
+    eviction_size: usize, // The size at which cache is evicted.
     current_epoch: Epoch,
     executors: HashMap<Pubkey, CachedExecutorsEntry>,
 }
@@ -260,6 +262,7 @@ impl Default for CachedExecutors {
     fn default() -> Self {
         Self {
             max: MAX_CACHED_EXECUTORS,
+            eviction_size: Self::new_rand_eviction_size(MAX_CACHED_EXECUTORS),
             current_epoch: Epoch::default(),
             executors: HashMap::default(),
         }
@@ -287,9 +290,8 @@ impl Clone for CachedExecutors {
             (key, entry)
         });
         Self {
-            max: self.max,
-            current_epoch: self.current_epoch,
             executors: executors.collect(),
+            ..*self
         }
     }
 }
@@ -310,15 +312,16 @@ impl CachedExecutors {
             (key, entry)
         });
         Arc::new(Self {
-            max: self.max,
             current_epoch: epoch,
             executors: executors.collect(),
+            ..**self
         })
     }
 
     fn new(max: usize, current_epoch: Epoch) -> Self {
         Self {
             max,
+            eviction_size: Self::new_rand_eviction_size(max),
             current_epoch,
             executors: HashMap::new(),
         }
@@ -348,7 +351,7 @@ impl CachedExecutors {
         // there, extra entries are evicted incurring a linear computation
         // cost. Since it takes at least O(n) calls to self.put(...) to invoke
         // another eviction, the amortized cost is constant.
-        if self.executors.len() > self.max.saturating_mul(2) {
+        if self.executors.len() > self.eviction_size.max(self.max) {
             let counts = self.executors.iter().map(|(&key, entry)| {
                 let count = entry
                     .prev_epoch_count
@@ -361,11 +364,19 @@ impl CachedExecutors {
             for (key, _) in &counts[..nth] {
                 self.executors.remove(key);
             }
+            self.eviction_size = Self::new_rand_eviction_size(self.max);
         }
     }
 
     fn remove(&mut self, pubkey: &Pubkey) {
         let _ = self.executors.remove(pubkey);
+    }
+
+    fn new_rand_eviction_size(capacity: usize) -> usize {
+        // Allow 30%-70% overshoot above capacity before evicting cache.
+        let factor = 100 + rand::thread_rng().gen_range(30, 71);
+        let size = capacity.saturating_mul(factor).saturating_add(99) / 100;
+        size.max(capacity.saturating_add(1))
     }
 }
 
@@ -12732,6 +12743,8 @@ pub(crate) mod tests {
         let key4 = solana_sdk::pubkey::new_rand();
         let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
         let mut cache = CachedExecutors::new(3, 0);
+        // Overwrite the eviction size so that the test is deterministic.
+        cache.eviction_size = 6;
 
         cache.put(key1, executor.clone());
         cache.put(key2, executor.clone());
@@ -12780,6 +12793,8 @@ pub(crate) mod tests {
         let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
         let mut cache = CachedExecutors::new(3, 0);
         assert!(cache.current_epoch == 0);
+        // Overwrite the eviction size so that the test is deterministic.
+        cache.eviction_size = 6;
 
         cache.put(key1, executor.clone());
         cache.put(key2, executor.clone());
