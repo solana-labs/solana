@@ -3062,7 +3062,9 @@ impl AccountsDb {
         use crate::append_vec::MAXIMUM_APPEND_VEC_FILE_SIZE;
         let mut current_storage = None;
         let mut dropped_roots = vec![];
+        let mut i = 0;
         for slot in sorted_slots {
+            i += 1;
             if let Some(storages) = self.storage.0.get(&slot) {
                 let mut dead_storages = Vec::default();
                 let storages = storages.value();
@@ -3118,10 +3120,12 @@ impl AccountsDb {
                     ));
                 });
 
+                if i % 1000 == 0 {
                 error!(
                     "ancient_append_vec: writing to ancient append vec: slot: {}, # accts: {}, available bytes after: {}",
                     slot, accounts_this_append_vec.len(), available_bytes
                 );
+            }
 
                 let mut drop_root = slot > writer.0;
                 // write what we can to the current ancient storage
