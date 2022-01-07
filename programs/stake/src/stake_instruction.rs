@@ -435,7 +435,7 @@ mod tests {
         invoke_context.sysvars = &sysvars;
         invoke_context.push(
             &preparation.message,
-            &preparation.message.instructions[0],
+            &preparation.message.instructions()[0],
             &program_indices,
             &preparation.account_indices,
         )?;
@@ -1082,7 +1082,7 @@ mod tests {
         invoke_context
             .push(
                 &preparation.message,
-                &preparation.message.instructions[0],
+                &preparation.message.instructions()[0],
                 &program_indices,
                 &preparation.account_indices,
             )

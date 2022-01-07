@@ -43,21 +43,28 @@ impl VersionedMessage {
         }
     }
 
-    pub fn unmapped_keys(self) -> Vec<Pubkey> {
+    pub fn static_account_keys(&self) -> &[Pubkey] {
+        match self {
+            Self::Legacy(message) => &message.account_keys,
+            Self::V0(message) => &message.account_keys,
+        }
+    }
+
+    pub fn into_static_account_keys(self) -> Vec<Pubkey> {
         match self {
             Self::Legacy(message) => message.account_keys,
             Self::V0(message) => message.account_keys,
         }
     }
 
-    pub fn unmapped_keys_iter(&self) -> impl Iterator<Item = &Pubkey> {
+    pub fn static_account_keys_iter(&self) -> impl Iterator<Item = &Pubkey> {
         match self {
             Self::Legacy(message) => message.account_keys.iter(),
             Self::V0(message) => message.account_keys.iter(),
         }
     }
 
-    pub fn unmapped_keys_len(&self) -> usize {
+    pub fn static_account_keys_len(&self) -> usize {
         match self {
             Self::Legacy(message) => message.account_keys.len(),
             Self::V0(message) => message.account_keys.len(),

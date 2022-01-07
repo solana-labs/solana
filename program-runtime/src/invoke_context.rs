@@ -22,7 +22,7 @@ use {
         hash::Hash,
         instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
         keyed_account::{create_keyed_accounts_unified, keyed_account_at_index, KeyedAccount},
-        message::Message,
+        message::{Message, SanitizedMessage},
         pubkey::Pubkey,
         rent::Rent,
         saturating_add_assign,
@@ -268,7 +268,7 @@ impl<'a> InvokeContext<'a> {
     /// Push a stack frame onto the invocation stack
     pub fn push(
         &mut self,
-        message: &Message,
+        message: &SanitizedMessage,
         instruction: &CompiledInstruction,
         program_indices: &[usize],
         account_indices: &[usize],
@@ -383,11 +383,13 @@ impl<'a> InvokeContext<'a> {
     /// Verify the results of an instruction
     fn verify(
         &mut self,
-        message: &Message,
+        message: &SanitizedMessage,
         instruction: &CompiledInstruction,
         program_indices: &[usize],
     ) -> Result<(), InstructionError> {
-        let program_id = instruction.program_id(&message.account_keys);
+        let program_id = message
+            .get_account_key(instruction.program_id_index as usize)
+            .expect("invalid program id index");
         let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
         let cap_accounts_data_len = self.feature_set.is_active(&cap_accounts_data_len::id());
 
@@ -567,9 +569,11 @@ impl<'a> InvokeContext<'a> {
         if let Some(instruction_recorder) = &self.instruction_recorder {
             instruction_recorder.record_instruction(instruction);
         }
+
+        let message = SanitizedMessage::Legacy(message);
         self.process_instruction(
             &message,
-            &message.instructions[0],
+            &message.instructions()[0],
             &program_indices,
             &account_indices,
             &caller_write_privileges,
@@ -711,7 +715,7 @@ impl<'a> InvokeContext<'a> {
     /// Processes a cross-program instruction and returns how many compute units were used
     pub fn process_instruction(
         &mut self,
-        message: &Message,
+        message: &SanitizedMessage,
         instruction: &CompiledInstruction,
         program_indices: &[usize],
         account_indices: &[usize],
@@ -746,7 +750,10 @@ impl<'a> InvokeContext<'a> {
             .and_then(|_| {
                 let mut process_executable_chain_time =
                     Measure::start("process_executable_chain_time");
-                self.return_data = (*instruction.program_id(&message.account_keys), Vec::new());
+                let program_id = message
+                    .get_account_key(instruction.program_id_index as usize)
+                    .expect("invalid program id index");
+                self.return_data = (*program_id, Vec::new());
                 let pre_remaining_units = self.compute_meter.borrow().get_remaining();
                 let execution_result = self.process_executable_chain(&instruction.data);
                 let post_remaining_units = self.compute_meter.borrow().get_remaining();
@@ -759,7 +766,7 @@ impl<'a> InvokeContext<'a> {
                     if is_lowest_invocation_level {
                         self.verify(message, instruction, program_indices)
                     } else {
-                        let write_privileges: Vec<bool> = (0..message.account_keys.len())
+                        let write_privileges: Vec<bool> = (0..message.account_keys_len())
                             .map(|i| message.is_writable(i))
                             .collect();
                         self.verify_and_update(instruction, account_indices, &write_privileges)
@@ -963,7 +970,7 @@ impl<'a> InvokeContext<'a> {
 
 pub struct MockInvokeContextPreparation {
     pub accounts: TransactionAccountRefCells,
-    pub message: Message,
+    pub message: SanitizedMessage,
     pub account_indices: Vec<usize>,
 }
 
@@ -994,17 +1001,16 @@ pub fn prepare_mock_invoke_context(
     for program_index in program_indices.iter().rev() {
         metas.remove(*program_index);
     }
-    let message = Message::new(
+    let message = SanitizedMessage::Legacy(Message::new(
         &[Instruction::new_with_bytes(
             program_id,
             instruction_data,
             metas,
         )],
         None,
-    );
+    ));
     let account_indices: Vec<usize> = message
-        .account_keys
-        .iter()
+        .account_keys_iter()
         .map(|search_key| {
             accounts
                 .iter()
@@ -1050,7 +1056,7 @@ pub fn with_mock_invoke_context<R, F: FnMut(&mut InvokeContext) -> R>(
     invoke_context
         .push(
             &preparation.message,
-            &preparation.message.instructions[0],
+            &preparation.message.instructions()[0],
             &program_indices,
             &preparation.account_indices,
         )
@@ -1075,7 +1081,7 @@ pub fn mock_process_instruction_with_sysvars(
     invoke_context.sysvars = sysvars;
     invoke_context.push(
         &preparation.message,
-        &preparation.message.instructions[0],
+        &preparation.message.instructions()[0],
         &program_indices,
         &preparation.account_indices,
     )?;
@@ -1250,10 +1256,10 @@ mod tests {
         }
         let account_indices = (0..accounts.len()).collect::<Vec<usize>>();
 
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bytes(invoke_stack[0], &[0], metas)],
             None,
-        );
+        ));
         let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
 
         // Check call depth increases and has a limit
@@ -1262,7 +1268,7 @@ mod tests {
             if Err(InstructionError::CallDepth)
                 == invoke_context.push(
                     &message,
-                    &message.instructions[0],
+                    &message.instructions()[0],
                     &[MAX_DEPTH + depth_reached],
                     &[],
                 )
@@ -1333,25 +1339,25 @@ mod tests {
             solana_sdk::pubkey::new_rand(),
             Rc::new(RefCell::new(AccountSharedData::default())),
         )];
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bincode(
                 accounts[0].0,
                 &MockInstruction::NoopSuccess,
                 vec![AccountMeta::new_readonly(accounts[0].0, false)],
             )],
             None,
-        );
+        ));
         let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
         invoke_context
-            .push(&message, &message.instructions[0], &[0], &[])
+            .push(&message, &message.instructions()[0], &[0], &[])
             .unwrap();
         assert!(invoke_context
-            .verify(&message, &message.instructions[0], &[0])
+            .verify(&message, &message.instructions()[0], &[0])
             .is_ok());
 
         let mut _borrowed = accounts[0].1.borrow();
         assert_eq!(
-            invoke_context.verify(&message, &message.instructions[0], &[0]),
+            invoke_context.verify(&message, &message.instructions()[0], &[0]),
             Err(InstructionError::AccountBorrowOutstanding)
         );
     }
@@ -1400,7 +1406,7 @@ mod tests {
             &MockInstruction::NoopSuccess,
             metas.clone(),
         );
-        let message = Message::new(&[callee_instruction], None);
+        let message = SanitizedMessage::Legacy(Message::new(&[callee_instruction], None));
 
         let builtin_programs = &[BuiltinProgram {
             program_id: callee_program_id,
@@ -1413,8 +1419,7 @@ mod tests {
 
         // not owned account modified by the caller (before the invoke)
         let caller_write_privileges = message
-            .account_keys
-            .iter()
+            .account_keys_iter()
             .enumerate()
             .map(|(i, _)| message.is_writable(i))
             .collect::<Vec<bool>>();
@@ -1423,7 +1428,7 @@ mod tests {
             invoke_context
                 .process_instruction(
                     &message,
-                    &message.instructions[0],
+                    &message.instructions()[0],
                     &program_indices[1..],
                     &account_indices,
                     &caller_write_privileges,
@@ -1440,7 +1445,7 @@ mod tests {
             invoke_context
                 .process_instruction(
                     &message,
-                    &message.instructions[0],
+                    &message.instructions()[0],
                     &program_indices[1..],
                     &account_indices,
                     &caller_write_privileges,
@@ -1486,20 +1491,19 @@ mod tests {
         for case in cases {
             let callee_instruction =
                 Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
-            let message = Message::new(&[callee_instruction], None);
+            let message = SanitizedMessage::Legacy(Message::new(&[callee_instruction], None));
             invoke_context
                 .push(&message, &caller_instruction, &program_indices[..1], &[])
                 .unwrap();
             let caller_write_privileges = message
-                .account_keys
-                .iter()
+                .account_keys_iter()
                 .enumerate()
                 .map(|(i, _)| message.is_writable(i))
                 .collect::<Vec<bool>>();
             assert_eq!(
                 invoke_context.process_instruction(
                     &message,
-                    &message.instructions[0],
+                    &message.instructions()[0],
                     &program_indices[1..],
                     &account_indices,
                     &caller_write_privileges,
@@ -1553,7 +1557,7 @@ mod tests {
             &MockInstruction::NoopSuccess,
             metas.clone(),
         );
-        let message = Message::new(&[callee_instruction.clone()], None);
+        let message = SanitizedMessage::Legacy(Message::new(&[callee_instruction.clone()], None));
 
         let builtin_programs = &[BuiltinProgram {
             program_id: callee_program_id,
@@ -1602,7 +1606,8 @@ mod tests {
         for case in cases {
             let callee_instruction =
                 Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
-            let message = Message::new(&[callee_instruction.clone()], None);
+            let message =
+                SanitizedMessage::Legacy(Message::new(&[callee_instruction.clone()], None));
             invoke_context
                 .push(&message, &caller_instruction, &program_indices, &[])
                 .unwrap();
@@ -1627,22 +1632,22 @@ mod tests {
             ),
         ];
 
-        let noop_message = Message::new(
+        let noop_message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bincode(
                 accounts[0].0,
                 &MockInstruction::NoopSuccess,
                 vec![AccountMeta::new_readonly(accounts[0].0, false)],
             )],
             None,
-        );
-        let neon_message = Message::new(
+        ));
+        let neon_message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bincode(
                 crate::neon_evm_program::id(),
                 &MockInstruction::NoopSuccess,
                 vec![AccountMeta::new_readonly(accounts[0].0, false)],
             )],
             None,
-        );
+        ));
 
         let mut feature_set = FeatureSet::all_enabled();
         feature_set.deactivate(&tx_wide_compute_cap::id());
@@ -1651,7 +1656,7 @@ mod tests {
         invoke_context.feature_set = Arc::new(feature_set);
 
         invoke_context
-            .push(&noop_message, &noop_message.instructions[0], &[0], &[])
+            .push(&noop_message, &noop_message.instructions()[0], &[0], &[])
             .unwrap();
         assert_eq!(
             *invoke_context.get_compute_budget(),
@@ -1660,7 +1665,7 @@ mod tests {
         invoke_context.pop();
 
         invoke_context
-            .push(&neon_message, &neon_message.instructions[0], &[1], &[])
+            .push(&neon_message, &neon_message.instructions()[0], &[1], &[])
             .unwrap();
         let expected_compute_budget = ComputeBudget {
             max_units: 500_000,
@@ -1674,7 +1679,7 @@ mod tests {
         invoke_context.pop();
 
         invoke_context
-            .push(&noop_message, &noop_message.instructions[0], &[0], &[])
+            .push(&noop_message, &noop_message.instructions()[0], &[0], &[])
             .unwrap();
         assert_eq!(
             *invoke_context.get_compute_budget(),
@@ -1739,19 +1744,19 @@ mod tests {
                 },
                 metas.clone(),
             );
-            let message = Message::new(&[callee_instruction.clone()], None);
+            let message =
+                SanitizedMessage::Legacy(Message::new(&[callee_instruction.clone()], None));
             invoke_context
                 .push(&message, &caller_instruction, &program_indices[..1], &[])
                 .unwrap();
             let caller_write_privileges = message
-                .account_keys
-                .iter()
+                .account_keys_iter()
                 .enumerate()
                 .map(|(i, _)| message.is_writable(i))
                 .collect::<Vec<bool>>();
             let result = invoke_context.process_instruction(
                 &message,
-                &message.instructions[0],
+                &message.instructions()[0],
                 &program_indices[1..],
                 &account_indices,
                 &caller_write_privileges,
@@ -1815,10 +1820,9 @@ mod tests {
                 &MockInstruction::Resize { new_len },
                 metas.clone(),
             );
-            let message = Message::new(&[instruction], None);
+            let message = SanitizedMessage::Legacy(Message::new(&[instruction], None));
             let caller_write_privileges = message
-                .account_keys
-                .iter()
+                .account_keys_iter()
                 .enumerate()
                 .map(|(i, _)| message.is_writable(i))
                 .collect::<Vec<_>>();
@@ -1826,7 +1830,7 @@ mod tests {
             let result = invoke_context
                 .process_instruction(
                     &message,
-                    &message.instructions[0],
+                    &message.instructions()[0],
                     &program_indices,
                     &account_indices,
                     &caller_write_privileges,
@@ -1846,10 +1850,9 @@ mod tests {
                 &MockInstruction::Resize { new_len },
                 metas.clone(),
             );
-            let message = Message::new(&[instruction], None);
+            let message = SanitizedMessage::Legacy(Message::new(&[instruction], None));
             let caller_write_privileges = message
-                .account_keys
-                .iter()
+                .account_keys_iter()
                 .enumerate()
                 .map(|(i, _)| message.is_writable(i))
                 .collect::<Vec<_>>();
@@ -1857,7 +1860,7 @@ mod tests {
             let result = invoke_context
                 .process_instruction(
                     &message,
-                    &message.instructions[0],
+                    &message.instructions()[0],
                     &program_indices,
                     &account_indices,
                     &caller_write_privileges,
@@ -1877,10 +1880,9 @@ mod tests {
                 &MockInstruction::Resize { new_len },
                 metas,
             );
-            let message = Message::new(&[instruction], None);
+            let message = SanitizedMessage::Legacy(Message::new(&[instruction], None));
             let caller_write_privileges = message
-                .account_keys
-                .iter()
+                .account_keys_iter()
                 .enumerate()
                 .map(|(i, _)| message.is_writable(i))
                 .collect::<Vec<_>>();
@@ -1888,7 +1890,7 @@ mod tests {
             let result = invoke_context
                 .process_instruction(
                     &message,
-                    &message.instructions[0],
+                    &message.instructions()[0],
                     &program_indices,
                     &account_indices,
                     &caller_write_privileges,
