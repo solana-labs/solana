@@ -58,7 +58,7 @@ fn test_shrink_and_clean() {
 
             for (pubkey, account) in alive_accounts.iter_mut() {
                 account.checked_sub_lamports(1).unwrap();
-                accounts.store_uncached(current_slot, &[(pubkey, account)]);
+                accounts.store_uncached(current_slot, &[(pubkey, account, current_slot)]);
             }
             accounts.add_root(current_slot);
         }
@@ -121,11 +121,11 @@ fn test_bad_bank_hash() {
 
         let account_refs: Vec<_> = existing
             .iter()
-            .map(|idx| (&accounts_keys[*idx].0, &accounts_keys[*idx].1))
+            .map(|idx| (&accounts_keys[*idx].0, &accounts_keys[*idx].1, some_slot))
             .collect();
         db.store_uncached(some_slot, &account_refs);
 
-        for (key, account) in &account_refs {
+        for (key, account, _slot) in &account_refs {
             assert_eq!(
                 db.load_account_hash(&ancestors, key, None, LoadHint::Unspecified)
                     .unwrap(),
