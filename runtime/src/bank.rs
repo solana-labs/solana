@@ -142,7 +142,7 @@ use {
     std::{
         borrow::Cow,
         cell::RefCell,
-        collections::{hash_map::Entry, HashMap, HashSet},
+        collections::{HashMap, HashSet},
         convert::{TryFrom, TryInto},
         fmt, mem,
         ops::RangeInclusive,
@@ -244,11 +244,16 @@ pub struct SquashTiming {
 type EpochCount = u64;
 
 const MAX_CACHED_EXECUTORS: usize = 100; // 10 MB assuming programs are around 100k
-#[derive(Debug)]
+
+// Cache and update epoch_count and prev_epoch_count for a lot more pubkeys
+// than just above 100 cached executors, so that when a new executor is cached
+// it has non-zero epoch_count.
+const CACHED_EPOCH_COUNTS_EXTEND_FACTOR: usize = 20;
+
+#[derive(Debug, Default)]
 struct CachedExecutorsEntry {
     prev_epoch_count: u64,
     epoch_count: AtomicU64,
-    executor: Arc<dyn Executor>,
 }
 /// LFU Cache of executors with single-epoch memory of usage counts
 #[derive(Debug)]
@@ -256,7 +261,8 @@ struct CachedExecutors {
     max: usize,
     eviction_size: usize, // The size at which cache is evicted.
     current_epoch: Epoch,
-    executors: HashMap<Pubkey, CachedExecutorsEntry>,
+    executors: HashMap<Pubkey, Arc<dyn Executor>>,
+    entries: HashMap<Pubkey, CachedExecutorsEntry>,
 }
 impl Default for CachedExecutors {
     fn default() -> Self {
@@ -265,6 +271,7 @@ impl Default for CachedExecutors {
             eviction_size: Self::new_rand_eviction_size(MAX_CACHED_EXECUTORS),
             current_epoch: Epoch::default(),
             executors: HashMap::default(),
+            entries: HashMap::default(),
         }
     }
 }
@@ -281,16 +288,16 @@ impl AbiExample for CachedExecutors {
 
 impl Clone for CachedExecutors {
     fn clone(&self) -> Self {
-        let executors = self.executors.iter().map(|(&key, entry)| {
+        let entries = self.entries.iter().map(|(&key, entry)| {
             let entry = CachedExecutorsEntry {
                 prev_epoch_count: entry.prev_epoch_count,
                 epoch_count: AtomicU64::new(entry.epoch_count.load(Relaxed)),
-                executor: entry.executor.clone(),
             };
             (key, entry)
         });
         Self {
-            executors: executors.collect(),
+            executors: self.executors.clone(),
+            entries: entries.collect(),
             ..*self
         }
     }
@@ -301,19 +308,19 @@ impl CachedExecutors {
         if self.current_epoch == epoch {
             return self.clone();
         }
-        let executors = self.executors.iter().map(|(&key, entry)| {
+        let entries = self.entries.iter().map(|(&key, entry)| {
             // The total_count = prev_epoch_count + epoch_count will be used for LFU eviction.
             // If the epoch has changed, we store the prev_epoch_count and reset the epoch_count to 0.
             let entry = CachedExecutorsEntry {
                 prev_epoch_count: entry.epoch_count.load(Relaxed),
                 epoch_count: AtomicU64::default(),
-                executor: entry.executor.clone(),
             };
             (key, entry)
         });
         Arc::new(Self {
             current_epoch: epoch,
-            executors: executors.collect(),
+            executors: self.executors.clone(),
+            entries: entries.collect(),
             ..**self
         })
     }
@@ -324,35 +331,31 @@ impl CachedExecutors {
             eviction_size: Self::new_rand_eviction_size(max),
             current_epoch,
             executors: HashMap::new(),
+            entries: HashMap::new(),
         }
     }
 
     fn get(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
-        self.executors.get(pubkey).map(|entry| {
-            entry.epoch_count.fetch_add(1, Relaxed);
-            entry.executor.clone()
-        })
+        // self.entries never discards keys with cached executor;
+        // So if the key is not in the entries, the executor is not cached.
+        let entry = self.entries.get(pubkey)?;
+        entry.epoch_count.fetch_add(1, Relaxed);
+        self.executors.get(pubkey).cloned()
     }
 
     fn put(&mut self, pubkey: Pubkey, executor: Arc<dyn Executor>) {
-        match self.executors.entry(pubkey) {
-            Entry::Vacant(entry) => {
-                entry.insert(CachedExecutorsEntry {
-                    prev_epoch_count: u64::default(),
-                    epoch_count: AtomicU64::default(),
-                    executor,
-                });
-            }
-            Entry::Occupied(mut entry) => {
-                entry.get_mut().executor = executor;
-            }
-        };
+        self.executors.insert(pubkey, executor);
+        self.entries.entry(pubkey).or_default();
         // The cache is allowed to grow up to (1 + x%) * capacity in size. Once
         // there, extra entries are evicted incurring a linear computation
         // cost. Since it takes at least O(n) calls to self.put(...) to invoke
         // another eviction, the amortized cost is constant.
-        if self.executors.len() > self.eviction_size.max(self.max) {
-            let counts = self.executors.iter().map(|(&key, entry)| {
+        let eviction_size = self.eviction_size.max(self.max);
+        if self.executors.len() > eviction_size {
+            let counts = self.executors.keys().map(|&key| {
+                // self.entries should always contain keys if the executor
+                // is indeed cached.
+                let entry = self.entries.get(&key).unwrap();
                 let count = entry
                     .prev_epoch_count
                     .saturating_add(entry.epoch_count.load(Relaxed));
@@ -365,6 +368,30 @@ impl CachedExecutors {
                 self.executors.remove(key);
             }
             self.eviction_size = Self::new_rand_eviction_size(self.max);
+        }
+        // Similar eviction code for self.entries but with an extend size.
+        if self.entries.len() > eviction_size.saturating_mul(CACHED_EPOCH_COUNTS_EXTEND_FACTOR) {
+            let counts = self.entries.iter().map(|(key, entry)| {
+                let count = entry
+                    .prev_epoch_count
+                    .saturating_add(entry.epoch_count.load(Relaxed));
+                // Order the cached entries greater than the others.
+                let cached = self.executors.contains_key(key);
+                (*key, (cached, count))
+            });
+            let mut counts: Vec<_> = counts.collect();
+            let size = self.max.saturating_mul(CACHED_EPOCH_COUNTS_EXTEND_FACTOR);
+            let nth = counts.len().checked_sub(size).unwrap();
+            if nth < counts.len() {
+                counts.select_nth_unstable_by_key(nth, |(_, val)| *val);
+            }
+            counts
+                .into_iter()
+                .take(nth)
+                .take_while(|(_, (cached, _))| !cached)
+                .for_each(|(key, _)| {
+                    self.entries.remove(&key);
+                });
         }
     }
 
