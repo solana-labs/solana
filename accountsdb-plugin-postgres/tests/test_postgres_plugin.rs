@@ -12,8 +12,8 @@
 /// sudo -u postgres psql --command "CREATE USER solana WITH SUPERUSER PASSWORD 'solana';"
 /// sudo -u postgres createdb -O solana solana
 /// PGPASSWORD=solana psql -U solana -p 5432 -h localhost -w -d solana -f scripts/create_schema.sql
-/// 
-/// The test will cover transmitting accounts, transaction and slot and 
+///
+/// The test will cover transmitting accounts, transaction and slot and
 /// block metadata.
 use {
     libloading::Library,
