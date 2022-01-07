@@ -12,7 +12,6 @@ use {
     },
     solana_sdk::{
         clock::Slot,
-        signature::Signature,
         transaction::{self, SanitizedTransaction, TransactionError},
     },
     std::{
@@ -28,14 +27,6 @@ use {
 pub enum QosMetrics {
     BlockBatchUpdate {
         bank: Arc<Bank>,
-    },
-    TransactionCost {
-        slot: Slot,
-        tx_signature: Signature,
-        signature_cost: u64,
-        write_lock_cost: u64,
-        data_bytes_cost: u64,
-        execution_cost: u64,
     },
 }
 
@@ -143,16 +134,6 @@ impl QosService {
                 Ok(current_block_cost) => {
                     debug!("slot {:?}, transaction {:?}, cost {:?}, fit into current block, current block cost {}", bank.slot(), tx, cost, current_block_cost);
                     self.metrics.selected_txs_count.fetch_add(1, Ordering::Relaxed);
-                    self.report_sender
-                        .send(QosMetrics::TransactionCost {
-                            slot: bank.slot(),
-                            tx_signature: *tx.signature(),
-                            signature_cost: cost.signature_cost,
-                            write_lock_cost: cost.write_lock_cost,
-                            data_bytes_cost: cost.data_bytes_cost,
-                            execution_cost: cost.execution_cost,
-                        } )
-                        .unwrap_or_else(|err| warn!("qos service report tx cost details failed: {:?}", err));
                     Ok(())
                 },
                 Err(e) => {
@@ -251,26 +232,6 @@ impl QosService {
                 match qos_metrics {
                     QosMetrics::BlockBatchUpdate { bank } => {
                         metrics.report(bank.slot());
-                    }
-                    QosMetrics::TransactionCost {
-                        slot,
-                        tx_signature,
-                        signature_cost,
-                        write_lock_cost,
-                        data_bytes_cost,
-                        execution_cost,
-                    } => {
-                        // report transaction cost details per slot|signature
-                        datapoint_info!(
-                            "qos-service-transaction-costs",
-                            ("id", metrics.id as i64, i64),
-                            ("bank_slot", slot as i64, i64),
-                            ("tx_signature", tx_signature.to_string(), String),
-                            ("signature_cost", signature_cost as i64, i64),
-                            ("write_lock_cost", write_lock_cost as i64, i64),
-                            ("data_bytes_cost", data_bytes_cost as i64, i64),
-                            ("execution_cost", execution_cost as i64, i64),
-                        );
                     }
                 }
             }
