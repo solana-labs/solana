@@ -57,10 +57,17 @@ impl IndexEntry {
         self.ref_count
     }
 
+    fn storage_offset(&self) -> u64 {
+        self.storage_offset
+    }
+    fn storage_capacity_when_created_pow2(&self) -> u8 {
+        self.storage_capacity_when_created_pow2
+    }
+
     // This function maps the original data location into an index in the current bucket storage.
     // This is coupled with how we resize bucket storages.
     pub fn data_loc(&self, storage: &BucketStorage) -> u64 {
-        self.storage_offset << (storage.capacity_pow2 - self.storage_capacity_when_created_pow2)
+        self.storage_offset() << (storage.capacity_pow2 - self.storage_capacity_when_created_pow2())
     }
 
     pub fn read_value<'a, T>(&self, bucket: &'a Bucket<T>) -> Option<(&'a [T], RefCount)> {
@@ -82,5 +89,41 @@ impl IndexEntry {
         let mut s = DefaultHasher::new();
         key.hash(&mut s);
         s.finish().max(1u64)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    impl IndexEntry {
+        pub fn new(key: Pubkey) -> Self {
+            IndexEntry {
+                key,
+                ref_count: 0,
+                storage_offset: 0,
+                storage_capacity_when_created_pow2: 0,
+                num_slots: 0,
+            }
+        }
+    }
+
+    /// verify that accessors for storage_offset and capacity_when_created are
+    /// correct and independent
+    #[test]
+    fn test_api() {
+        for offset in [0, 1, u32::MAX as u64] {
+            let mut index = IndexEntry::new(solana_sdk::pubkey::new_rand());
+            if offset != 0 {
+                index.set_storage_offset(offset);
+            }
+            assert_eq!(index.storage_offset(), offset);
+            assert_eq!(index.storage_capacity_when_created_pow2(), 0);
+            for pow in [1, 255, 0] {
+                index.set_storage_capacity_when_created_pow2(pow);
+                assert_eq!(index.storage_offset(), offset);
+                assert_eq!(index.storage_capacity_when_created_pow2(), pow);
+            }
+        }
     }
 }

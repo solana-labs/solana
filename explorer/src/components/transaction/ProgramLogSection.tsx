@@ -15,7 +15,11 @@ export function ProgramLogSection({ signature }: SignatureProps) {
 
   const logMessages = transaction.meta?.logMessages || null;
   const err = transaction.meta?.err || null;
-  const prettyLogs = prettyProgramLogs(logMessages, err, cluster);
+
+  let prettyLogs = null;
+  if (logMessages !== null) {
+    prettyLogs = prettyProgramLogs(logMessages, err, cluster);
+  }
 
   return (
     <>
@@ -23,11 +27,17 @@ export function ProgramLogSection({ signature }: SignatureProps) {
         <div className="card-header">
           <h3 className="card-header-title">Program Logs</h3>
         </div>
-        <ProgramLogsCardBody
-          message={message}
-          logs={prettyLogs}
-          cluster={cluster}
-        />
+        {prettyLogs !== null ? (
+          <ProgramLogsCardBody
+            message={message}
+            logs={prettyLogs}
+            cluster={cluster}
+          />
+        ) : (
+          <div className="card-body">
+            Logs not supported for this transaction
+          </div>
+        )}
       </div>
     </>
   );
