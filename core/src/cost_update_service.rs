@@ -6,10 +6,8 @@
 use {
     solana_ledger::blockstore::Blockstore,
     solana_measure::measure::Measure,
-    solana_runtime::{
-        bank::{Bank, ExecuteTimings},
-        cost_model::CostModel,
-    },
+    solana_program_runtime::timings::ExecuteTimings,
+    solana_runtime::{bank::Bank, cost_model::CostModel},
     solana_sdk::timing::timestamp,
     std::{
         sync::{
@@ -71,8 +69,12 @@ impl CostUpdateServiceTiming {
 }
 
 pub enum CostUpdate {
-    FrozenBank { bank: Arc<Bank> },
-    ExecuteTiming { execute_timings: ExecuteTimings },
+    FrozenBank {
+        bank: Arc<Bank>,
+    },
+    ExecuteTiming {
+        execute_timings: Box<ExecuteTimings>,
+    },
 }
 
 pub type CostUpdateReceiver = Receiver<CostUpdate>;

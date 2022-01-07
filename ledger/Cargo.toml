@@ -40,6 +40,7 @@ solana-logger = { path = "../logger", version = "=1.9.4" }
 solana-measure = { path = "../measure", version = "=1.9.4" }
 solana-metrics = { path = "../metrics", version = "=1.9.4" }
 solana-perf = { path = "../perf", version = "=1.9.4" }
+solana-program-runtime = { path = "../program-runtime", version = "=1.9.4" }
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.9.4" }
 solana-runtime = { path = "../runtime", version = "=1.9.4" }
 solana-sdk = { path = "../sdk", version = "=1.9.4" }
