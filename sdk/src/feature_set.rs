@@ -295,6 +295,10 @@ pub mod max_tx_account_locks {
     solana_sdk::declare_id!("CBkDroRDqm8HwHe6ak9cguPjUomrASEkfmxEaZ5CNNxz");
 }
 
+pub mod disable_deprecated_load_instructions {
+    solana_sdk::declare_id!("5hvf5YRyWVNtQsCdQHiNGkw2o1QC6AA6q39rjGJxGQFx");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [

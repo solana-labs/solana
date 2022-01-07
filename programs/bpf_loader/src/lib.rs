@@ -38,8 +38,9 @@ use {
         clock::Clock,
         entrypoint::{HEAP_LENGTH, SUCCESS},
         feature_set::{
-            cap_accounts_data_len, do_support_realloc, reduce_required_deploy_balance,
-            reject_all_elf_rw, reject_deployment_of_unresolved_syscalls,
+            cap_accounts_data_len, disable_deprecated_load_instructions, do_support_realloc,
+            reduce_required_deploy_balance, reject_all_elf_rw,
+            reject_deployment_of_unresolved_syscalls,
             reject_section_virtual_address_file_offset_mismatch, requestable_heap_size,
             start_verify_shift32_imm, stop_verify_mul64_imm_nonzero,
         },
@@ -119,6 +120,9 @@ pub fn create_executor(
         reject_all_writable_sections: invoke_context
             .feature_set
             .is_active(&reject_all_elf_rw::id()),
+        disable_deprecated_load_instructions: invoke_context
+            .feature_set
+            .is_active(&disable_deprecated_load_instructions::id()),
         ..Config::default()
     };
     let mut executable = {
