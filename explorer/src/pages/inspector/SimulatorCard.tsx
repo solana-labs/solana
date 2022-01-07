@@ -101,6 +101,9 @@ function useSimulator(message: Message) {
 
         // Simulate without signers to skip signer verification
         const resp = await connection.simulateTransaction(tx);
+        if (resp.value.logs === null) {
+          throw new Error("Expected to receive logs from simulation");
+        }
 
         // Prettify logs
         setLogs(prettyProgramLogs(resp.value.logs, resp.value.err, cluster));
