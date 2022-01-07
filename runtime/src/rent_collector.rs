@@ -93,7 +93,8 @@ impl RentCollector {
         rent_for_sysvars: bool,
         filler_account_suffix: Option<&Pubkey>,
     ) -> u64 {
-        if self.can_skip_rent_collection(address, account, rent_for_sysvars, filler_account_suffix) {
+        if self.can_skip_rent_collection(address, account, rent_for_sysvars, filler_account_suffix)
+        {
             return 0;
         }
 
@@ -101,44 +102,32 @@ impl RentCollector {
         let rent_due = self.get_rent_due(account);
 
         match rent_due {
-            RentDue::Exempt => {
-                let rent_due = rent_due.lamports();
-                if account.lamports() > rent_due {
-                    account.set_rent_epoch(
-                        self.epoch + 
-                                // Rent isn't collected for the next epoch
-                                // Make sure to check exempt status later in current epoch again
-                                0
-                    );
-                    account.checked_sub_lamports(rent_due).unwrap(); // will not fail. We check above.
-                    rent_due
-                } else {
-                    let rent_charged = account.lamports();
-                    *account = AccountSharedData::default();
-                    rent_charged
-                }
-            }
-            RentDue::Paying(x) if x != 0 => {
-                let rent_due = rent_due.lamports();
-                if account.lamports() > rent_due {
-                    account.set_rent_epoch(
-                        self.epoch + 
-                                // Rent is collected for next epoch
-                                1
-                    );
-                    account.checked_sub_lamports(rent_due).unwrap(); // will not fail. We check above.
-                    rent_due
-                } else {
-                    let rent_charged = account.lamports();
-                    *account = AccountSharedData::default();
-                    rent_charged
-                }
-            }
-            _ => {
+            // NOTE: keep this case first!
+            RentDue::Paying(rent_due) if rent_due == 0 => {
                 // maybe collect rent later, leave account alone
-                0
             }
-        }
+            RentDue::Exempt => {
+                if account.lamports() > 0 {
+                    // Rent isn't collected for the next epoch
+                    // Make sure to check exempt status later in current epoch again
+                    account.set_rent_epoch(self.epoch);
+                } else {
+                    *account = AccountSharedData::default();
+                }
+            }
+            RentDue::Paying(rent_due) => {
+                if account.lamports() > rent_due {
+                    // Rent is collected for next epoch
+                    account.set_rent_epoch(self.epoch + 1);
+                    account.checked_sub_lamports(rent_due).unwrap(); // will not fail. We check above.
+                } else {
+                    *account = AccountSharedData::default();
+                }
+            }
+        };
+
+        let end_lamports = account.lamports();
+        begin_lamports - end_lamports
 
         /*
          *         // OLD
