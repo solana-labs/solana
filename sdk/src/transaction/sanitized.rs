@@ -1,10 +1,9 @@
 #![cfg(feature = "full")]
-
 use {
     crate::{
         hash::Hash,
         message::{
-            v0::{self, LoadedAddresses},
+            v0::{self, LoadedAddresses, MessageAddressTableLookup},
             SanitizedMessage, VersionedMessage,
         },
         nonce::NONCED_TX_MARKER_IX_INDEX,
@@ -51,7 +50,7 @@ impl SanitizedTransaction {
         tx: VersionedTransaction,
         message_hash: Hash,
         is_simple_vote_tx: Option<bool>,
-        address_loader: impl Fn(&v0::Message) -> Result<LoadedAddresses>,
+        address_loader: impl Fn(&[MessageAddressTableLookup]) -> Result<LoadedAddresses>,
     ) -> Result<Self> {
         tx.sanitize()?;
 
@@ -59,7 +58,7 @@ impl SanitizedTransaction {
         let message = match tx.message {
             VersionedMessage::Legacy(message) => SanitizedMessage::Legacy(message),
             VersionedMessage::V0(message) => SanitizedMessage::V0(v0::LoadedMessage {
-                loaded_addresses: address_loader(&message)?,
+                loaded_addresses: address_loader(&message.address_table_lookups)?,
                 message,
             }),
         };

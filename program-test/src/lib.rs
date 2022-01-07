@@ -32,7 +32,7 @@ use {
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
         instruction::{Instruction, InstructionError},
-        message::Message,
+        message::{Message, SanitizedMessage},
         native_token::sol_to_lamports,
         poh_config::PohConfig,
         program_error::{ProgramError, ACCOUNT_BORROW_FAILED, UNSUPPORTED_SYSVAR},
@@ -316,10 +316,11 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             instruction_recorder.record_instruction(instruction.clone());
         }
 
+        let message = SanitizedMessage::Legacy(message);
         invoke_context
             .process_instruction(
                 &message,
-                &message.instructions[0],
+                &message.instructions()[0],
                 &program_indices,
                 &account_indices,
                 &caller_privileges,

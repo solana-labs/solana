@@ -33,7 +33,7 @@ use {
         hash::{Hasher, HASH_BYTES},
         instruction::{AccountMeta, Instruction, InstructionError},
         keccak,
-        message::Message,
+        message::{Message, SanitizedMessage},
         native_loader,
         precompiles::is_precompile,
         program::MAX_RETURN_DATA,
@@ -2365,10 +2365,11 @@ fn call<'a, 'b: 'a>(
     }
 
     // Process instruction
+    let message = SanitizedMessage::Legacy(message);
     invoke_context
         .process_instruction(
             &message,
-            &message.instructions[0],
+            &message.instructions()[0],
             &program_indices,
             &account_indices,
             &caller_write_privileges,
@@ -2962,13 +2963,13 @@ mod tests {
         let program_id = Pubkey::new_unique();
         let program_account = AccountSharedData::new_ref(0, 0, &bpf_loader::id());
         let accounts = [(program_id, program_account)];
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bytes(program_id, &[], vec![])],
             None,
-        );
+        ));
         let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
         invoke_context
-            .push(&message, &message.instructions[0], &[0], &[])
+            .push(&message, &message.instructions()[0], &[0], &[])
             .unwrap();
         let mut syscall_panic = SyscallPanic {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -3039,13 +3040,13 @@ mod tests {
         let program_id = Pubkey::new_unique();
         let program_account = AccountSharedData::new_ref(0, 0, &bpf_loader::id());
         let accounts = [(program_id, program_account)];
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bytes(program_id, &[], vec![])],
             None,
-        );
+        ));
         let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
         invoke_context
-            .push(&message, &message.instructions[0], &[0], &[])
+            .push(&message, &message.instructions()[0], &[0], &[])
             .unwrap();
         let mut syscall_sol_log = SyscallLog {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -3143,13 +3144,13 @@ mod tests {
         let program_id = Pubkey::new_unique();
         let program_account = AccountSharedData::new_ref(0, 0, &bpf_loader::id());
         let accounts = [(program_id, program_account)];
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bytes(program_id, &[], vec![])],
             None,
-        );
+        ));
         let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
         invoke_context
-            .push(&message, &message.instructions[0], &[0], &[])
+            .push(&message, &message.instructions()[0], &[0], &[])
             .unwrap();
         let cost = invoke_context.get_compute_budget().log_64_units;
         let mut syscall_sol_log_u64 = SyscallLogU64 {
@@ -3185,13 +3186,13 @@ mod tests {
         let program_id = Pubkey::new_unique();
         let program_account = AccountSharedData::new_ref(0, 0, &bpf_loader::id());
         let accounts = [(program_id, program_account)];
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bytes(program_id, &[], vec![])],
             None,
-        );
+        ));
         let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
         invoke_context
-            .push(&message, &message.instructions[0], &[0], &[])
+            .push(&message, &message.instructions()[0], &[0], &[])
             .unwrap();
         let cost = invoke_context.get_compute_budget().log_pubkey_units;
         let mut syscall_sol_pubkey = SyscallLogPubkey {
@@ -3397,10 +3398,10 @@ mod tests {
         let program_id = Pubkey::new_unique();
         let program_account = AccountSharedData::new_ref(0, 0, &bpf_loader_deprecated::id());
         let accounts = [(program_id, program_account)];
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bytes(program_id, &[], vec![])],
             None,
-        );
+        ));
 
         let bytes1 = "Gaggablaghblagh!";
         let bytes2 = "flurbos";
@@ -3465,7 +3466,7 @@ mod tests {
                     * 4,
             );
         invoke_context
-            .push(&message, &message.instructions[0], &[0], &[])
+            .push(&message, &message.instructions()[0], &[0], &[])
             .unwrap();
         let mut syscall = SyscallSha256 {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -3526,10 +3527,10 @@ mod tests {
         let program_id = Pubkey::new_unique();
         let program_account = AccountSharedData::new_ref(0, 0, &bpf_loader::id());
         let accounts = [(program_id, program_account)];
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bytes(program_id, &[], vec![])],
             None,
-        );
+        ));
 
         // Test clock sysvar
         {
@@ -3564,7 +3565,7 @@ mod tests {
             let sysvars = [(sysvar::clock::id(), data)];
             invoke_context.sysvars = &sysvars;
             invoke_context
-                .push(&message, &message.instructions[0], &[0], &[])
+                .push(&message, &message.instructions()[0], &[0], &[])
                 .unwrap();
             let mut syscall = SyscallGetClockSysvar {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -3609,7 +3610,7 @@ mod tests {
             let sysvars = [(sysvar::epoch_schedule::id(), data)];
             invoke_context.sysvars = &sysvars;
             invoke_context
-                .push(&message, &message.instructions[0], &[0], &[])
+                .push(&message, &message.instructions()[0], &[0], &[])
                 .unwrap();
             let mut syscall = SyscallGetEpochScheduleSysvar {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -3661,7 +3662,7 @@ mod tests {
             let sysvars = [(sysvar::fees::id(), data)];
             invoke_context.sysvars = &sysvars;
             invoke_context
-                .push(&message, &message.instructions[0], &[0], &[])
+                .push(&message, &message.instructions()[0], &[0], &[])
                 .unwrap();
             let mut syscall = SyscallGetFeesSysvar {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -3704,7 +3705,7 @@ mod tests {
             let sysvars = [(sysvar::rent::id(), data)];
             invoke_context.sysvars = &sysvars;
             invoke_context
-                .push(&message, &message.instructions[0], &[0], &[])
+                .push(&message, &message.instructions()[0], &[0], &[])
                 .unwrap();
             let mut syscall = SyscallGetRentSysvar {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -3836,13 +3837,13 @@ mod tests {
         let program_id = Pubkey::new_unique();
         let program_account = AccountSharedData::new_ref(0, 0, &bpf_loader::id());
         let accounts = [(program_id, program_account)];
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bytes(program_id, &[], vec![])],
             None,
-        );
+        ));
         let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
         invoke_context
-            .push(&message, &message.instructions[0], &[0], &[])
+            .push(&message, &message.instructions()[0], &[0], &[])
             .unwrap();
         let address = bpf_loader_upgradeable::id();
 
@@ -3952,13 +3953,13 @@ mod tests {
         let program_id = Pubkey::new_unique();
         let program_account = AccountSharedData::new_ref(0, 0, &bpf_loader::id());
         let accounts = [(program_id, program_account)];
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bytes(program_id, &[], vec![])],
             None,
-        );
+        ));
         let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
         invoke_context
-            .push(&message, &message.instructions[0], &[0], &[])
+            .push(&message, &message.instructions()[0], &[0], &[])
             .unwrap();
         let cost = invoke_context
             .get_compute_budget()
