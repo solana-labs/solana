@@ -34,6 +34,19 @@ pub struct LoadedAddresses {
     pub readonly: Vec<Pubkey>,
 }
 
+impl FromIterator<LoadedAddresses> for LoadedAddresses {
+    fn from_iter<T: IntoIterator<Item = LoadedAddresses>>(iter: T) -> Self {
+        let (writable, readonly): (Vec<Vec<Pubkey>>, Vec<Vec<Pubkey>>) = iter
+            .into_iter()
+            .map(|addresses| (addresses.writable, addresses.readonly))
+            .unzip();
+        LoadedAddresses {
+            writable: writable.into_iter().flatten().collect(),
+            readonly: readonly.into_iter().flatten().collect(),
+        }
+    }
+}
+
 impl LoadedMessage {
     /// Returns an iterator of account key segments. The ordering of segments
     /// affects how account indexes from compiled instructions are resolved and
@@ -68,8 +81,9 @@ impl LoadedMessage {
     }
 
     /// Returns the address of the account at the specified index of the list of
-    /// message account keys constructed from unmapped keys, followed by mapped
-    /// writable addresses, and lastly the list of mapped readonly addresses.
+    /// message account keys constructed from static keys, followed by dynamically
+    /// loaded writable addresses, and lastly the list of dynamically loaded
+    /// readonly addresses.
     pub fn get_account_key(&self, mut index: usize) -> Option<&Pubkey> {
         for key_segment in self.account_keys_segment_iter() {
             if index < key_segment.len() {
@@ -88,8 +102,8 @@ impl LoadedMessage {
         let num_account_keys = self.message.account_keys.len();
         let num_signed_accounts = usize::from(header.num_required_signatures);
         if key_index >= num_account_keys {
-            let mapped_addresses_index = key_index.saturating_sub(num_account_keys);
-            mapped_addresses_index < self.loaded_addresses.writable.len()
+            let loaded_addresses_index = key_index.saturating_sub(num_account_keys);
+            loaded_addresses_index < self.loaded_addresses.writable.len()
         } else if key_index >= num_signed_accounts {
             let num_unsigned_accounts = num_account_keys.saturating_sub(num_signed_accounts);
             let num_writable_unsigned_accounts = num_unsigned_accounts

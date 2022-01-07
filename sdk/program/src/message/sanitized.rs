@@ -22,7 +22,7 @@ use {
 pub enum SanitizedMessage {
     /// Sanitized legacy message
     Legacy(LegacyMessage),
-    /// Sanitized version #0 message with mapped addresses
+    /// Sanitized version #0 message with dynamically loaded addresses
     V0(v0::LoadedMessage),
 }
 
@@ -130,7 +130,7 @@ impl SanitizedMessage {
         })
     }
 
-    /// Iterator of all account keys referenced in this message, included mapped keys.
+    /// Iterator of all account keys referenced in this message, including dynamically loaded keys.
     pub fn account_keys_iter(&self) -> Box<dyn Iterator<Item = &Pubkey> + '_> {
         match self {
             Self::Legacy(message) => Box::new(message.account_keys.iter()),
@@ -138,7 +138,7 @@ impl SanitizedMessage {
         }
     }
 
-    /// Length of all account keys referenced in this message, included mapped keys.
+    /// Length of all account keys referenced in this message, including dynamically loaded keys.
     pub fn account_keys_len(&self) -> usize {
         match self {
             Self::Legacy(message) => message.account_keys.len(),
@@ -257,11 +257,11 @@ impl SanitizedMessage {
 
     /// Return the number of readonly accounts loaded by this message.
     pub fn num_readonly_accounts(&self) -> usize {
-        let mapped_readonly_addresses = self
+        let loaded_readonly_addresses = self
             .loaded_lookup_table_addresses()
             .map(|keys| keys.readonly.len())
             .unwrap_or_default();
-        mapped_readonly_addresses
+        loaded_readonly_addresses
             .saturating_add(usize::from(self.header().num_readonly_signed_accounts))
             .saturating_add(usize::from(self.header().num_readonly_unsigned_accounts))
     }

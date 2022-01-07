@@ -107,7 +107,10 @@ use {
         inflation::Inflation,
         instruction::CompiledInstruction,
         lamports::LamportsError,
-        message::SanitizedMessage,
+        message::{
+            v0::{LoadedAddresses, MessageAddressTableLookup},
+            SanitizedMessage,
+        },
         native_loader,
         native_token::sol_to_lamports,
         nonce, nonce_account,
@@ -123,7 +126,7 @@ use {
         sysvar::{self, Sysvar, SysvarId},
         timing::years_as_slots,
         transaction::{
-            Result, SanitizedTransaction, Transaction, TransactionError,
+            AddressLookupError, Result, SanitizedTransaction, Transaction, TransactionError,
             TransactionVerificationMode, VersionedTransaction,
         },
         transaction_context::{TransactionAccount, TransactionContext},
@@ -210,7 +213,7 @@ impl RentDebits {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "6XG6H1FChrDdY39K62KFWj5XfDao4dd24WZgcJkdMu1E")]
+#[frozen_abi(digest = "2r36f5cfgP7ABq7D3kRkRfQZWdggGFUnnhwTrVEWhoTC")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 // Eager rent collection repeats in cyclic manner.
@@ -3537,6 +3540,44 @@ impl Bank {
         cache.remove(pubkey);
     }
 
+    /// Get the value of a cached sysvar by its id
+    pub fn get_cached_sysvar<T: Sysvar>(&self, id: &Pubkey) -> Option<T> {
+        self.sysvar_cache
+            .read()
+            .unwrap()
+            .iter()
+            .find_map(|(key, data)| {
+                if id == key {
+                    bincode::deserialize(data).ok()
+                } else {
+                    None
+                }
+            })
+    }
+
+    pub fn load_lookup_table_addresses(
+        &self,
+        address_table_lookups: &[MessageAddressTableLookup],
+    ) -> Result<LoadedAddresses> {
+        if !self.versioned_tx_message_enabled() {
+            return Err(TransactionError::UnsupportedVersion);
+        }
+
+        let slot_hashes: SlotHashes = self
+            .get_cached_sysvar(&sysvar::slot_hashes::id())
+            .ok_or(TransactionError::AccountNotFound)?;
+        Ok(address_table_lookups
+            .iter()
+            .map(|address_table_lookup| {
+                self.rc.accounts.load_lookup_table_addresses(
+                    &self.ancestors,
+                    address_table_lookup,
+                    &slot_hashes,
+                )
+            })
+            .collect::<std::result::Result<_, AddressLookupError>>()?)
+    }
+
     /// Execute a transaction using the provided loaded accounts and update
     /// the executors cache if the transaction was successful.
     fn execute_loaded_transaction(
@@ -3550,16 +3591,6 @@ impl Bank {
         timings: &mut ExecuteTimings,
         error_counters: &mut ErrorCounters,
     ) -> TransactionExecutionResult {
-        let legacy_message = match tx.message().legacy_message() {
-            Some(message) => message,
-            None => {
-                // TODO: support versioned messages
-                return TransactionExecutionResult::NotExecuted(
-                    TransactionError::UnsupportedVersion,
-                );
-            }
-        };
-
         let mut get_executors_time = Measure::start("get_executors_time");
         let executors = self.get_executors(
             tx.message(),
@@ -3598,7 +3629,7 @@ impl Bank {
         let mut process_message_time = Measure::start("process_message_time");
         let process_result = MessageProcessor::process_message(
             &self.builtin_programs.vec,
-            legacy_message,
+            tx.message(),
             &loaded_transaction.program_indices,
             &mut transaction_context,
             self.rent_collector.rent,
@@ -5348,8 +5379,8 @@ impl Bank {
                 tx.message.hash()
             };
 
-            SanitizedTransaction::try_create(tx, message_hash, None, |_| {
-                Err(TransactionError::UnsupportedVersion)
+            SanitizedTransaction::try_create(tx, message_hash, None, |lookups| {
+                self.load_lookup_table_addresses(lookups)
             })
         }?;
 

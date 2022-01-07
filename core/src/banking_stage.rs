@@ -33,7 +33,10 @@ use {
             MAX_TRANSACTION_FORWARDING_DELAY_GPU,
         },
         feature_set,
-        message::Message,
+        message::{
+            v0::{LoadedAddresses, MessageAddressTableLookup},
+            Message,
+        },
         pubkey::Pubkey,
         short_vec::decode_shortu16_len,
         signature::Signature,
@@ -1114,6 +1117,7 @@ impl BankingStage {
         transaction_indexes: &[usize],
         feature_set: &Arc<feature_set::FeatureSet>,
         votes_only: bool,
+        address_loader: impl Fn(&[MessageAddressTableLookup]) -> transaction::Result<LoadedAddresses>,
     ) -> (Vec<SanitizedTransaction>, Vec<usize>) {
         transaction_indexes
             .iter()
@@ -1130,7 +1134,7 @@ impl BankingStage {
                     tx,
                     message_hash,
                     Some(p.meta.is_simple_vote_tx()),
-                    |_| Err(TransactionError::UnsupportedVersion),
+                    &address_loader,
                 )
                 .ok()?;
                 tx.verify_precompiles(feature_set).ok()?;
@@ -1196,6 +1200,7 @@ impl BankingStage {
             &packet_indexes,
             &bank.feature_set,
             bank.vote_only_bank(),
+            |lookup| bank.load_lookup_table_addresses(lookup),
         );
         packet_conversion_time.stop();
         inc_new_counter_info!("banking_stage-packet_conversion", 1);
@@ -1270,6 +1275,7 @@ impl BankingStage {
             transaction_indexes,
             &bank.feature_set,
             bank.vote_only_bank(),
+            |lookup| bank.load_lookup_table_addresses(lookup),
         );
         unprocessed_packet_conversion_time.stop();
 
@@ -3109,6 +3115,7 @@ mod tests {
                 &packet_indexes,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
+                |_| Err(TransactionError::UnsupportedVersion),
             );
             assert_eq!(2, txs.len());
             assert_eq!(vec![0, 1], tx_packet_index);
@@ -3119,6 +3126,7 @@ mod tests {
                 &packet_indexes,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
+                |_| Err(TransactionError::UnsupportedVersion),
             );
             assert_eq!(0, txs.len());
             assert_eq!(0, tx_packet_index.len());
@@ -3138,6 +3146,7 @@ mod tests {
                 &packet_indexes,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
+                |_| Err(TransactionError::UnsupportedVersion),
             );
             assert_eq!(3, txs.len());
             assert_eq!(vec![0, 1, 2], tx_packet_index);
@@ -3148,6 +3157,7 @@ mod tests {
                 &packet_indexes,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
+                |_| Err(TransactionError::UnsupportedVersion),
             );
             assert_eq!(2, txs.len());
             assert_eq!(vec![0, 2], tx_packet_index);
@@ -3167,6 +3177,7 @@ mod tests {
                 &packet_indexes,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
+                |_| Err(TransactionError::UnsupportedVersion),
             );
             assert_eq!(3, txs.len());
             assert_eq!(vec![0, 1, 2], tx_packet_index);
@@ -3177,6 +3188,7 @@ mod tests {
                 &packet_indexes,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
+                |_| Err(TransactionError::UnsupportedVersion),
             );
             assert_eq!(3, txs.len());
             assert_eq!(vec![0, 1, 2], tx_packet_index);
