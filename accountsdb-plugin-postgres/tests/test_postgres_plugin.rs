@@ -166,6 +166,7 @@ fn setup_snapshot_validator_config(
     let validator_config = ValidatorConfig {
         snapshot_config: Some(snapshot_config),
         account_paths: account_storage_paths,
+        accounts_db_caching_enabled: true,
         accounts_hash_interval_slots: snapshot_interval_slots,
         accountsdb_plugin_config_files,
         ..ValidatorConfig::default()
