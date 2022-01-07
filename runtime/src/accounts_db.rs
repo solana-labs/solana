@@ -3064,12 +3064,13 @@ impl AccountsDb {
             if let Some(storages) = self.storage.0.get(&slot) {
                 let mut dead_storages = Vec::default();
                 let storages = storages.value();
-                let read = storages.read().unwrap();
-                let mut all_storages = read.values();
+                let mut read = storages.read().unwrap();
+                let mut all_storages = read.values().cloned().collect::<Vec<_>>();
+                drop(read);
                 let size = MAXIMUM_APPEND_VEC_FILE_SIZE - 2048; // below max?
                 if current_storage.is_none() && all_storages.len() == 1 {
                     // maybe this is good
-                    let first_storage = all_storages.next().unwrap();
+                    let first_storage = all_storages.first().unwrap();
                     let capacity = first_storage.accounts.capacity();
                     if capacity >= size {
                         error!("ancient_append_vec: reusing existing ancient append vec: {}, capacity: {}", slot, capacity);
@@ -3092,7 +3093,7 @@ impl AccountsDb {
                 }
                 let writer = current_storage.as_ref().unwrap();
                 let (stored_accounts, _num_stores, _original_bytes) =
-                    self.get_unique_accounts_from_storages(all_storages.clone());
+                    self.get_unique_accounts_from_storages(all_storages.iter());
                 error!(
                     "ancient_append_vec: get_unique_accounts_from_storages: {}",
                     stored_accounts.len()
@@ -3155,7 +3156,7 @@ impl AccountsDb {
                     );
                 }
 
-                dead_storages.extend(all_storages.map(Arc::clone));
+                dead_storages.extend(all_storages.iter().map(Arc::clone));
 
                 error!("ancient_append_vec: drop_or_recycle_stores {:?}", dead_storages);
                 self.drop_or_recycle_stores(dead_storages);
