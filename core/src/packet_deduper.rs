@@ -7,6 +7,7 @@ use {
         ops::DerefMut,
         sync::{atomic::Ordering, Arc, Mutex},
     },
+    solana_sdk::packet::PacketInterface,
 };
 
 const DEFAULT_LRU_SIZE: usize = 200_000;
@@ -24,9 +25,9 @@ impl Default for PacketDeduper {
 }
 
 impl PacketDeduper {
-    pub fn dedupe_packets(
+    pub fn dedupe_packets<PacketType: 'static + PacketInterface>(
         &self,
-        packet_batch: &PacketBatch,
+        packet_batch: &PacketBatch<PacketType>,
         packet_indexes: &mut Vec<usize>,
         banking_stage_stats: &BankingStageStats,
     ) {
@@ -48,12 +49,22 @@ impl PacketDeduper {
         banking_stage_stats
             .packet_duplicate_check_elapsed
             .fetch_add(packet_duplicate_check_time.as_us(), Ordering::Relaxed);
+            if PacketType::is_extended() {
+                banking_stage_stats
+                .dropped_duplicated_extended_packets_count
+                .fetch_add(
+                    original_packets_count.saturating_sub(packet_indexes.len()),
+                    Ordering::Relaxed,
+                );
+            }
+            else {
         banking_stage_stats
             .dropped_duplicated_packets_count
             .fetch_add(
                 original_packets_count.saturating_sub(packet_indexes.len()),
                 Ordering::Relaxed,
             );
+        }
     }
 
     pub fn reset(&self) {

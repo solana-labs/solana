@@ -93,10 +93,13 @@ pub struct BankingStageStats {
     last_report: AtomicInterval,
     id: u32,
     receive_and_buffer_packets_count: AtomicUsize,
+    receive_and_buffer_extended_packets_count: AtomicUsize,
     dropped_packet_batches_count: AtomicUsize,
     dropped_extended_packet_batches_count: AtomicUsize,
+    dropped_extended_packets_count: AtomicUsize,
     dropped_packets_count: AtomicUsize,
     pub(crate) dropped_duplicated_packets_count: AtomicUsize,
+    pub(crate) dropped_duplicated_extended_packets_count: AtomicUsize,
     newly_buffered_packets_count: AtomicUsize,
     newly_buffered_extended_packets_count: AtomicUsize,
     current_buffered_packets_count: AtomicUsize,
@@ -135,6 +138,9 @@ impl BankingStageStats {
             + self.dropped_packets_count.load(Ordering::Relaxed) as u64
             + self
                 .dropped_duplicated_packets_count
+                .load(Ordering::Relaxed) as u64
+            + self
+                .dropped_duplicated_extended_packets_count
                 .load(Ordering::Relaxed) as u64
             + self.newly_buffered_packets_count.load(Ordering::Relaxed) as u64
             + self.current_buffered_packets_count.load(Ordering::Relaxed) as u64
@@ -420,9 +426,9 @@ impl BankingStage {
                                     batch_limit,
                                     transaction_status_sender,
                                     gossip_vote_sender,
-                                    &duplicates,
+                                    &packet_deduper,
                                     &data_budget,
-                                    qos_service,
+                                    cost_model,
                                 );
                             })
                             .unwrap()
@@ -442,9 +448,9 @@ impl BankingStage {
                                     batch_limit,
                                     transaction_status_sender,
                                     gossip_vote_sender,
-                                    &duplicates,
+                                    &packet_deduper,
                                     &data_budget,
-                                    qos_service,
+                                    cost_model,
                                 );
                             })
                             .unwrap()
@@ -464,9 +470,9 @@ impl BankingStage {
                                     batch_limit,
                                     transaction_status_sender,
                                     gossip_vote_sender,
-                                    &duplicates,
+                                    &packet_deduper,
                                     &data_budget,
-                                    qos_service,
+                                    cost_model,
                                 );
                             })
                             .unwrap()
@@ -486,9 +492,9 @@ impl BankingStage {
                                     batch_limit,
                                     transaction_status_sender,
                                     gossip_vote_sender,
-                                    &duplicates,
+                                    &packet_deduper,
                                     &data_budget,
-                                    qos_service,
+                                    cost_model,
                                 );
                             })
                             .unwrap()
@@ -531,8 +537,8 @@ impl BankingStage {
         let packet_vec: Vec<_> = packets
             .iter()
             .filter_map(|p| {
-                if !p.meta.forwarded && data_budget.take(p.meta.size) {
-                    Some((&p.data[..p.meta.size], tpu_forwards))
+                if !p.get_meta().forwarded && data_budget.take(p.get_meta().size) {
+                    Some((&p.get_data()[..p.get_meta().size], tpu_forwards))
                 } else {
                     None
                 }
@@ -1490,15 +1496,12 @@ impl BankingStage {
 
     #[allow(clippy::too_many_arguments)]
     /// Process the incoming packets
-    fn process_packets<PacketType: 'static + PacketInterface>(
-        my_pubkey: &Pubkey,
-        verified_receiver: &CrossbeamReceiver<Vec<PacketBatch>>,
+    fn receive_and_buffer_packets<PacketType: 'static + PacketInterface>(
+        verified_receiver: &CrossbeamReceiver<Vec<PacketBatch<PacketType>>>,
         recv_start: &mut Instant,
         recv_timeout: Duration,
         id: u32,
         batch_limit: usize,
-        transaction_status_sender: Option<TransactionStatusSender>,
-        gossip_vote_sender: &ReplayVoteSender,
         buffered_packet_batches: &mut UnprocessedPacketBatches<PacketType>,
         banking_stage_stats: &BankingStageStats,
         packet_deduper: &PacketDeduper,
@@ -1548,14 +1551,11 @@ impl BankingStage {
         );
         if PacketType::is_extended() {
             banking_stage_stats
-                .process_packets_elapsed
-                .fetch_add(proc_start.as_us(), Ordering::Relaxed);
+            .receive_and_buffer_packets_elapsed
+            .fetch_add(proc_start.as_us(), Ordering::Relaxed);
             banking_stage_stats
-                .process_extended_packets_count
+                .receive_and_buffer_extended_packets_count
                 .fetch_add(packet_count, Ordering::Relaxed);
-            banking_stage_stats
-                .new_tx_count
-                .fetch_add(new_tx_count, Ordering::Relaxed);
             banking_stage_stats
                 .dropped_extended_packet_batches_count
                 .fetch_add(dropped_packet_batches_count, Ordering::Relaxed);
@@ -1579,33 +1579,30 @@ impl BankingStage {
                 );
         } else {
             banking_stage_stats
-                .process_packets_elapsed
-                .fetch_add(proc_start.as_us(), Ordering::Relaxed);
-            banking_stage_stats
-                .process_packets_count
-                .fetch_add(packet_count, Ordering::Relaxed);
-            banking_stage_stats
-                .new_tx_count
-                .fetch_add(new_tx_count, Ordering::Relaxed);
-            banking_stage_stats
-                .dropped_packet_batches_count
-                .fetch_add(dropped_packet_batches_count, Ordering::Relaxed);
-            banking_stage_stats
-                .dropped_packets_count
-                .fetch_add(dropped_packets_count, Ordering::Relaxed);
-            banking_stage_stats
-                .newly_buffered_packets_count
-                .fetch_add(newly_buffered_packets_count, Ordering::Relaxed);
-            banking_stage_stats
-                .current_buffered_packet_batches_count
-                .swap(buffered_packet_batches.len(), Ordering::Relaxed);
-            banking_stage_stats.current_buffered_packets_count.swap(
-                buffered_packet_batches
-                    .iter()
-                    .map(|packets| packets.1.len())
-                    .sum(),
-                Ordering::Relaxed,
-            );
+            .receive_and_buffer_packets_elapsed
+            .fetch_add(proc_start.as_us(), Ordering::Relaxed);
+        banking_stage_stats
+            .receive_and_buffer_packets_count
+            .fetch_add(packet_count, Ordering::Relaxed);
+        banking_stage_stats
+            .dropped_packet_batches_count
+            .fetch_add(dropped_packet_batches_count, Ordering::Relaxed);
+        banking_stage_stats
+            .dropped_packets_count
+            .fetch_add(dropped_packets_count, Ordering::Relaxed);
+        banking_stage_stats
+            .newly_buffered_packets_count
+            .fetch_add(newly_buffered_packets_count, Ordering::Relaxed);
+        banking_stage_stats
+            .current_buffered_packet_batches_count
+            .swap(buffered_packet_batches.len(), Ordering::Relaxed);
+        banking_stage_stats.current_buffered_packets_count.swap(
+            buffered_packet_batches
+                .iter()
+                .map(|packets| packets.1.len())
+                .sum(),
+            Ordering::Relaxed,
+        );
         }
         *recv_start = Instant::now();
         Ok(())

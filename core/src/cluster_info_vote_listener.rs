@@ -21,7 +21,7 @@ use {
     solana_ledger::blockstore::Blockstore,
     solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_debug,
-    solana_perf::packet::{self, StandardPacketBatch},
+    solana_perf::packet::{self, StandardPacketBatch, Packet},
     solana_poh::poh_recorder::PohRecorder,
     solana_rpc::{
         optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
@@ -299,7 +299,7 @@ impl ClusterInfoVoteListener {
         exit: Arc<AtomicBool>,
         cluster_info: Arc<ClusterInfo>,
         verified_packets_sender: CrossbeamSender<Vec<StandardPacketBatch>>,
-        poh_recorder: &Arc<Mutex<PohRecorder>>,
+        poh_recorder: Arc<Mutex<PohRecorder>>,
         vote_tracker: Arc<VoteTracker>,
         bank_forks: Arc<RwLock<BankForks>>,
         subscriptions: Arc<RpcSubscriptions>,
@@ -396,7 +396,7 @@ impl ClusterInfoVoteListener {
         votes: Vec<Transaction>,
         bank_forks: &RwLock<BankForks>,
     ) -> (Vec<Transaction>, Vec<VerifiedVoteMetadata>) {
-        let mut packet_batches = packet::to_packet_batches(&votes, 1);
+        let mut packet_batches = packet::to_packet_batches::<_, Packet>(&votes, 1);
 
         // Votes should already be filtered by this point.
         sigverify::ed25519_verify_cpu(&mut packet_batches, /*reject_non_vote=*/ false);

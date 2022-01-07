@@ -134,15 +134,15 @@ impl FetchStage {
         sender: &PacketBatchSender<P>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) -> Result<()> {
-        let mark_forwarded = |packet: &mut Packet| {
-            packet.meta.forwarded = true;
+        let mark_forwarded = |packet: &mut P| {
+            packet.get_meta_mut().forwarded = true;
         };
 
-        let mut packet_batch = recvr.recv()?;
+        let mut packet_batch = receiver.recv()?;
         let mut num_packets = packet_batch.packets.len();
         packet_batch.packets.iter_mut().for_each(mark_forwarded);
         let mut packet_batches = vec![packet_batch];
-        while let Ok(mut packet_batch) = recvr.try_recv() {
+        while let Ok(mut packet_batch) = receiver.try_recv() {
             packet_batch.packets.iter_mut().for_each(mark_forwarded);
             num_packets += packet_batch.packets.len();
             packet_batches.push(packet_batch);
@@ -201,7 +201,7 @@ impl FetchStage {
         });
 
         let (forward_sender, forward_receiver) = channel();
-        let tpu_forwards_threads = tpu_tx_forwards_sockets.into_iter().map(|socket| {
+        let tpu_forwards_threads = tpu_forwards_sockets.into_iter().map(|socket| {
             streamer::receiver(
                 socket,
                 exit,

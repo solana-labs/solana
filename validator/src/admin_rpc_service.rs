@@ -69,6 +69,8 @@ impl From<ContactInfo> for AdminRpcContactInfo {
             serve_repair,
             wallclock,
             shred_version,
+            tpu_extended,
+            tpu_extended_forwards,
         } = contact_info;
         Self {
             id: id.to_string(),

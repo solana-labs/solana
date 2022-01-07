@@ -27,6 +27,9 @@ use {
 pub type PacketBatchReceiver<P: PacketInterface + 'static> = Receiver<PacketBatch<P>>;
 pub type PacketBatchSender<P: PacketInterface + 'static> = Sender<PacketBatch<P>>;
 
+pub type StandardPacketReceiver = PacketBatchReceiver<Packet>;
+pub type StandardPacketSender = PacketBatchSender<Packet>;
+
 #[derive(Error, Debug)]
 pub enum StreamerError<P: PacketInterface> {
     #[error("I/O error")]
