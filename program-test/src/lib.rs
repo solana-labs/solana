@@ -12,7 +12,7 @@ use {
     solana_banks_client::start_client,
     solana_banks_server::banks_server::start_local_server,
     solana_runtime::{
-        bank::{Bank, Builtin, ExecuteTimings},
+        bank::{Bank, Builtin},
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
         genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo},
@@ -23,6 +23,7 @@ use {
         clock::{Clock, Slot},
         entrypoint::{ProgramResult, SUCCESS},
         epoch_schedule::EpochSchedule,
+        execute_timings::ExecuteTimings,
         feature_set::demote_program_write_locks,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig},

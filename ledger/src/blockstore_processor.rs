@@ -23,7 +23,7 @@ use {
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::{
-            Bank, ExecuteTimings, InnerInstructionsList, RentDebits, TransactionBalancesSet,
+            Bank, InnerInstructionsList, RentDebits, TransactionBalancesSet,
             TransactionExecutionResult, TransactionLogMessages, TransactionResults,
         },
         bank_forks::BankForks,
@@ -37,6 +37,7 @@ use {
     },
     solana_sdk::{
         clock::{Slot, MAX_PROCESSING_AGE},
+        execute_timings::ExecuteTimings,
         feature_set,
         genesis_config::GenesisConfig,
         hash::Hash,

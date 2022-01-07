@@ -51,9 +51,7 @@ use {
         inline_spl_token,
         instruction_recorder::InstructionRecorder,
         log_collector::LogCollector,
-        message_processor::{
-            ExecuteDetailsTimings, Executors, MessageProcessor, TransactionExecutor,
-        },
+        message_processor::{Executors, MessageProcessor, TransactionExecutor},
         rent_collector::RentCollector,
         stake_weighted_timestamp::{
             calculate_stake_weighted_timestamp, MaxAllowableDrift, MAX_ALLOWABLE_DRIFT_PERCENTAGE,
@@ -90,6 +88,7 @@ use {
         compute_budget,
         epoch_info::EpochInfo,
         epoch_schedule::EpochSchedule,
+        execute_timings::ExecuteTimings,
         feature,
         feature_set::{self, tx_wide_compute_cap, FeatureSet},
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -195,31 +194,6 @@ impl RentDebits {
         self.0
             .into_iter()
             .filter_map(|(address, rent_debit)| Some((address, rent_debit.try_into_reward_info()?)))
-    }
-}
-
-#[derive(Default, Debug)]
-pub struct ExecuteTimings {
-    pub check_us: u64,
-    pub load_us: u64,
-    pub execute_us: u64,
-    pub store_us: u64,
-    pub update_stakes_cache_us: u64,
-    pub total_batches_len: usize,
-    pub num_execute_batches: u64,
-    pub details: ExecuteDetailsTimings,
-}
-
-impl ExecuteTimings {
-    pub fn accumulate(&mut self, other: &ExecuteTimings) {
-        self.check_us += other.check_us;
-        self.load_us += other.load_us;
-        self.execute_us += other.execute_us;
-        self.store_us += other.store_us;
-        self.update_stakes_cache_us += other.update_stakes_cache_us;
-        self.total_batches_len += other.total_batches_len;
-        self.num_execute_batches += other.num_execute_batches;
-        self.details.accumulate(&other.details);
     }
 }
 

@@ -6,11 +6,8 @@
 use {
     solana_ledger::blockstore::Blockstore,
     solana_measure::measure::Measure,
-    solana_runtime::{
-        bank::{Bank, ExecuteTimings},
-        cost_model::CostModel,
-    },
-    solana_sdk::timing::timestamp,
+    solana_runtime::{bank::Bank, cost_model::CostModel},
+    solana_sdk::{execute_timings::ExecuteTimings, timing::timestamp},
     std::{
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -221,7 +218,10 @@ impl CostUpdateService {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, solana_runtime::message_processor::ProgramTiming, solana_sdk::pubkey::Pubkey};
+    use {
+        super::*,
+        solana_sdk::{execute_timings::ProgramTiming, pubkey::Pubkey},
+    };
 
     #[test]
     fn test_update_cost_model_with_empty_execute_timings() {
