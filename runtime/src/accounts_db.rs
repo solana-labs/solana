@@ -3078,11 +3078,19 @@ impl AccountsDb {
                     );
                     let (shrunken_store, _time) =
                         self.get_store_for_shrink(slot, MAXIMUM_APPEND_VEC_FILE_SIZE);
+                    error!(
+                        "ancient_append_vec: got initial ancient append vec: {}",
+                        slot
+                    );
                     current_storage = Some((slot, shrunken_store));
                 }
                 let writer = current_storage.as_ref().unwrap();
                 let (stored_accounts, _num_stores, _original_bytes) =
                     self.get_unique_accounts_from_storages(all_storages.clone());
+                error!(
+                    "ancient_append_vec: get_unique_accounts_from_storages: {}",
+                    stored_accounts.len()
+                );
                 let mut available_bytes = writer.1.accounts.remaining_bytes();
                 let mut hashes_this_append_vec = Vec::default();
                 let mut hashes_next_append_vec = Vec::default();
@@ -3143,6 +3151,7 @@ impl AccountsDb {
 
                 dead_storages.extend(all_storages.map(Arc::clone));
 
+                error!("ancient_append_vec: drop_or_recycle_stores {:?}", dead_storages);
                 self.drop_or_recycle_stores(dead_storages);
 
                 if drop_root {
