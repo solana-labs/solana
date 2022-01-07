@@ -48,7 +48,8 @@ Create TYPE "TransactionErrorCode" AS ENUM (
     'WouldExceedMaxBlockCostLimit',
     'UnsupportedVersion',
     'InvalidWritableAccount',
-    'WouldExceedMaxAccountDataCostLimit'
+    'WouldExceedMaxAccountDataCostLimit',
+    'TooManyAccountLocks'
 );
 
 CREATE TYPE "TransactionError" AS (
