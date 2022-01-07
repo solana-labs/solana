@@ -264,7 +264,7 @@ EOF
 
   command_step "local-cluster-slow" \
     ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster-slow.sh" \
-    25
+    30
 }
 
 pull_or_push_steps() {
