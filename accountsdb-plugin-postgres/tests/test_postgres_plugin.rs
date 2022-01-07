@@ -3,7 +3,7 @@
 /// Integration testing for the PostgreSQL plugin
 /// This requires a PostgreSQL database named 'solana' be setup at localhost at port 5432
 /// This is automatically setup in the CI environment.
-/// To setup manually in Ubuntu Linux, do the following,
+/// To setup manually on Ubuntu Linux, do the following,
 /// sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
 /// wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
 /// apt install -y postgresql-14
@@ -12,6 +12,9 @@
 /// sudo -u postgres psql --command "CREATE USER solana WITH SUPERUSER PASSWORD 'solana';"
 /// sudo -u postgres createdb -O solana solana
 /// PGPASSWORD=solana psql -U solana -p 5432 -h localhost -w -d solana -f scripts/create_schema.sql
+/// 
+/// The test will cover transmitting accounts, transaction and slot and 
+/// block metadata.
 use {
     libloading::Library,
     log::*,
