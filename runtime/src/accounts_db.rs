@@ -2608,11 +2608,15 @@ impl AccountsDb {
         alive_total
     }
 
-    fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I) -> usize
+    /// get all accounts in all the storages passed in
+    /// for duplicate pubkeys, the account with the highest write_value is returned
+    fn get_unique_accounts_from_storages<'a, I>(
+        &'a self,
+        stores: I,
+    ) -> (HashMap<Pubkey, FoundStoredAccount>, usize, u64)
     where
         I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
     {
-        debug!("do_shrink_slot_stores: slot: {}", slot);
         let mut stored_accounts: HashMap<Pubkey, FoundStoredAccount> = HashMap::new();
         let mut original_bytes = 0;
         let mut num_stores = 0;
@@ -2642,6 +2646,16 @@ impl AccountsDb {
             }
             num_stores += 1;
         }
+        (stored_accounts, num_stores, original_bytes)
+    }
+
+    fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I) -> usize
+    where
+        I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
+    {
+        debug!("do_shrink_slot_stores: slot: {}", slot);
+        let (stored_accounts, num_stores, original_bytes) =
+            self.get_unique_accounts_from_storages(stores);
 
         // sort by pubkey to keep account index lookups close
         let mut stored_accounts = stored_accounts.into_iter().collect::<Vec<_>>();
@@ -2736,26 +2750,8 @@ impl AccountsDb {
             start.stop();
             find_alive_elapsed = start.as_us();
 
-            let mut start = Measure::start("create_and_insert_store_elapsed");
-            let shrunken_store = if let Some(new_store) =
-                self.try_recycle_and_insert_store(slot, aligned_total, aligned_total + 1024)
-            {
-                new_store
-            } else {
-                let maybe_shrink_paths = self.shrink_paths.read().unwrap();
-                if let Some(ref shrink_paths) = *maybe_shrink_paths {
-                    self.create_and_insert_store_with_paths(
-                        slot,
-                        aligned_total,
-                        "shrink-w-path",
-                        shrink_paths,
-                    )
-                } else {
-                    self.create_and_insert_store(slot, aligned_total, "shrink")
-                }
-            };
-            start.stop();
-            create_and_insert_store_elapsed = start.as_us();
+            let (shrunken_store, time) = self.get_store_for_shrink(slot, aligned_total);
+            create_and_insert_store_elapsed = time;
 
             // here, we're writing back alive_accounts. That should be an atomic operation
             // without use of rather wide locks in this whole function, because we're
@@ -2862,6 +2858,34 @@ impl AccountsDb {
         self.shrink_stats.report();
 
         total_accounts_after_shrink
+    }
+
+    /// return a store that can contain 'aligned_total' bytes and the time it took to execute
+    fn get_store_for_shrink(
+        &self,
+        slot: Slot,
+        aligned_total: u64,
+    ) -> (Arc<AccountStorageEntry>, u64) {
+        let mut start = Measure::start("create_and_insert_store_elapsed");
+        let shrunken_store = if let Some(new_store) =
+            self.try_recycle_and_insert_store(slot, aligned_total, aligned_total + 1024)
+        {
+            new_store
+        } else {
+            let maybe_shrink_paths = self.shrink_paths.read().unwrap();
+            if let Some(ref shrink_paths) = *maybe_shrink_paths {
+                self.create_and_insert_store_with_paths(
+                    slot,
+                    aligned_total,
+                    "shrink-w-path",
+                    shrink_paths,
+                )
+            } else {
+                self.create_and_insert_store(slot, aligned_total, "shrink")
+            }
+        };
+        start.stop();
+        (shrunken_store, start.as_us())
     }
 
     // Reads all accounts in given slot's AppendVecs and filter only to alive,
