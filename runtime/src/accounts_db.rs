@@ -3027,7 +3027,6 @@ impl AccountsDb {
     }
 
     fn shrink_ancient_slots(&self) {
-        return;
         let max_root = self.accounts_index.max_root();
         use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
         let epoch_width = DEFAULT_SLOTS_PER_EPOCH / 2; // todo
