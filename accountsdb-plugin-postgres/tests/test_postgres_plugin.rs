@@ -1,26 +1,34 @@
 #![allow(clippy::integer_arithmetic)]
 
 /// Integration testing for the PostgreSQL plugin
+/// This requires a PostgreSQL database named 'solana' be setup at localhost at port 5432
+/// This is automatically setup in the CI environment.
+/// To setup manually in Ubuntu Linux, do the following,
+/// sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+/// wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
+/// apt install -y postgresql-14
+/// sudo /etc/init.d/postgresql start
+///
+/// sudo -u postgres psql --command "CREATE USER solana WITH SUPERUSER PASSWORD 'solana';"
+/// sudo -u postgres createdb -O solana solana
+/// PGPASSWORD=solana psql -U solana -p 5432 -h localhost -w -d solana -f scripts/create_schema.sql
 use {
-    log::*,
     libloading::Library,
+    log::*,
     serial_test::serial,
     solana_core::validator::ValidatorConfig,
     solana_local_cluster::{
         cluster::Cluster,
         local_cluster::{ClusterConfig, LocalCluster},
         validator_configs::*,
-    },    
+    },
     solana_runtime::{
-        snapshot_archive_info::SnapshotArchiveInfoGetter,
-        snapshot_config::SnapshotConfig, snapshot_utils,
+        snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_config::SnapshotConfig,
+        snapshot_utils,
     },
     solana_sdk::{
-        client::SyncClient,
-        clock::Slot,
-        commitment_config::CommitmentConfig,
-        epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
-        hash::Hash,
+        client::SyncClient, clock::Slot, commitment_config::CommitmentConfig,
+        epoch_schedule::MINIMUM_SLOTS_PER_EPOCH, hash::Hash,
     },
     solana_streamer::socket::SocketAddrSpace,
     std::{
@@ -29,7 +37,7 @@ use {
         path::{Path, PathBuf},
         thread::sleep,
         time::Duration,
-    },    
+    },
     tempfile::TempDir,
 };
 
@@ -152,9 +160,7 @@ fn setup_snapshot_validator_config(
 
     let (plugin_config_dir, path) = generate_accountsdb_plugin_config();
 
-    let accountsdb_plugin_config_files = Some(
-        vec![path]
-    );
+    let accountsdb_plugin_config_files = Some(vec![path]);
 
     // Create the validator config
     let validator_config = ValidatorConfig {
@@ -212,34 +218,33 @@ fn test_postgres_plugin() {
     let leader_snapshot_test_config =
         setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
 
-        let stake = 10_000;
-        let mut config = ClusterConfig {
-            node_stakes: vec![stake],
-            cluster_lamports: 1_000_000,
-            validator_configs: make_identical_validator_configs(
-                &leader_snapshot_test_config.validator_config,
-                1,
-            ),
-            ..ClusterConfig::default()
-        };
-    
-        let cluster = LocalCluster::new(&mut config, socket_addr_space);
-    
-        assert_eq!(cluster.validators.len(), 1);
-        let contact_info = &cluster.entry_point_info;
-    
-        info!("Contact info: {:?}", contact_info);
-    
-        // Get slot after which this was generated
-        let snapshot_archives_dir = &leader_snapshot_test_config
-            .validator_config
-            .snapshot_config
-            .as_ref()
-            .unwrap()
-            .snapshot_archives_dir;
-        info!("Waiting for snapshot");
-        let (archive_filename, archive_snapshot_hash) =
-            wait_for_next_snapshot(&cluster, snapshot_archives_dir);
-        info!("Found: {:?} {:?}", archive_filename, archive_snapshot_hash);
-    
-    }
+    let stake = 10_000;
+    let mut config = ClusterConfig {
+        node_stakes: vec![stake],
+        cluster_lamports: 1_000_000,
+        validator_configs: make_identical_validator_configs(
+            &leader_snapshot_test_config.validator_config,
+            1,
+        ),
+        ..ClusterConfig::default()
+    };
+
+    let cluster = LocalCluster::new(&mut config, socket_addr_space);
+
+    assert_eq!(cluster.validators.len(), 1);
+    let contact_info = &cluster.entry_point_info;
+
+    info!("Contact info: {:?}", contact_info);
+
+    // Get slot after which this was generated
+    let snapshot_archives_dir = &leader_snapshot_test_config
+        .validator_config
+        .snapshot_config
+        .as_ref()
+        .unwrap()
+        .snapshot_archives_dir;
+    info!("Waiting for snapshot");
+    let (archive_filename, archive_snapshot_hash) =
+        wait_for_next_snapshot(&cluster, snapshot_archives_dir);
+    info!("Found: {:?} {:?}", archive_filename, archive_snapshot_hash);
+}
