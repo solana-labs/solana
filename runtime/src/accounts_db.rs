@@ -3061,11 +3061,12 @@ impl AccountsDb {
                 let storages = storages.value();
                 let read = storages.read().unwrap();
                 let mut all_storages = read.values();
+                let size = MAXIMUM_APPEND_VEC_FILE_SIZE - 2048; // below max?
                 if current_storage.is_none() && all_storages.len() == 1 {
                     // maybe this is good
                     let first_storage = all_storages.next().unwrap();
                     let capacity = first_storage.accounts.capacity();
-                    if capacity >= MAXIMUM_APPEND_VEC_FILE_SIZE {
+                    if capacity >= size {
                         error!("ancient_append_vec: reusing existing ancient append vec: {}, capacity: {}", slot, capacity);
                         current_storage = Some((slot, Arc::clone(first_storage)));
                     }
@@ -3077,7 +3078,7 @@ impl AccountsDb {
                         slot
                     );
                     let (shrunken_store, _time) =
-                        self.get_store_for_shrink(slot, MAXIMUM_APPEND_VEC_FILE_SIZE);
+                        self.get_store_for_shrink(slot, size);
                     error!(
                         "ancient_append_vec: got initial ancient append vec: {}",
                         slot
@@ -3134,7 +3135,7 @@ impl AccountsDb {
                     assert!(slot > writer.0);
                     // our oldest slot is not an append vec of max size, so we need to start with rewriting that storage to create an ancient append vec for the oldest slot
                     let (shrunken_store, _time) =
-                        self.get_store_for_shrink(slot, MAXIMUM_APPEND_VEC_FILE_SIZE);
+                        self.get_store_for_shrink(slot, size);
                     error!("ancient_append_vec: creating ancient append vec because previous one was full: {}, full one: {}", slot, writer.0);
                     current_storage = Some((slot, shrunken_store));
                     let writer = current_storage.as_ref().unwrap();
