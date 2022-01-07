@@ -27,8 +27,7 @@ pub struct IndexEntry {
 }
 
 /// how many bits to shift the capacity value in the mask
-const STORAGE_OFFSET_MASK_CAPACITY_SHIFT: u64 =
-    ((std::mem::size_of::<u64>() - std::mem::size_of::<u8>()) * u8::BITS as usize) as u64;
+const STORAGE_OFFSET_MASK_CAPACITY_SHIFT: u64 = (u64::BITS - u8::BITS) as u64;
 /// mask to use on 'storage_offset_mask' to get the 'storage_offset' portion
 const STORAGE_OFFSET_MASK_STORAGE_OFFSET: u64 = (1 << STORAGE_OFFSET_MASK_CAPACITY_SHIFT) - 1;
 impl IndexEntry {
