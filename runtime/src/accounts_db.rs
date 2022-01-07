@@ -2443,6 +2443,7 @@ impl AccountsDb {
             reclaimed_offsets,
             reset_accounts,
         );
+        /* todo
         if purge_stats.is_none() {
             assert!(dead_slots.is_empty());
         } else if let Some(expected_single_dead_slot) = expected_single_dead_slot {
@@ -2451,7 +2452,7 @@ impl AccountsDb {
                 assert!(dead_slots.contains(&expected_single_dead_slot));
             }
         }
-
+*/
         if let Some(purge_stats) = purge_stats {
             self.process_dead_slots(&dead_slots, purged_account_slots, purge_stats);
         }
