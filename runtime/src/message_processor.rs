@@ -15,7 +15,7 @@ use {
         compute_budget::ComputeBudget,
         feature_set::{prevent_calling_precompiles_as_programs, FeatureSet},
         hash::Hash,
-        message::Message,
+        message::SanitizedMessage,
         precompiles::is_precompile,
         pubkey::Pubkey,
         rent::Rent,
@@ -53,7 +53,7 @@ impl MessageProcessor {
     #[allow(clippy::too_many_arguments)]
     pub fn process_message(
         builtin_programs: &[BuiltinProgram],
-        message: &Message,
+        message: &SanitizedMessage,
         program_indices: &[Vec<usize>],
         accounts: &[TransactionAccountRefCell],
         rent: Rent,
@@ -82,14 +82,12 @@ impl MessageProcessor {
             current_accounts_data_len,
         );
 
-        debug_assert_eq!(program_indices.len(), message.instructions.len());
-        for (instruction_index, (instruction, program_indices)) in message
-            .instructions
-            .iter()
+        debug_assert_eq!(program_indices.len(), message.instructions().len());
+        for (instruction_index, ((program_id, instruction), program_indices)) in message
+            .program_instructions_iter()
             .zip(program_indices.iter())
             .enumerate()
         {
-            let program_id = instruction.program_id(&message.account_keys);
             if invoke_context
                 .feature_set
                 .is_active(&prevent_calling_precompiles_as_programs::id())
@@ -122,8 +120,13 @@ impl MessageProcessor {
                 result,
             } = invoke_context.process_instruction(message, instruction, program_indices, &[], &[]);
             time.stop();
+<<<<<<< HEAD
             timings.accumulate_program(
                 instruction.program_id(&message.account_keys),
+=======
+            timings.details.accumulate_program(
+                program_id,
+>>>>>>> 52d12cc80 (Add runtime support for address table lookups (#22223))
                 time.as_us(),
                 compute_units_consumed,
                 result.is_err(),
@@ -229,6 +232,7 @@ mod tests {
         ];
         let program_indices = vec![vec![2]];
 
+<<<<<<< HEAD
         let executors = Rc::new(RefCell::new(Executors::default()));
 
         let account_metas = vec![
@@ -236,14 +240,22 @@ mod tests {
             AccountMeta::new_readonly(accounts[1].0, false),
         ];
         let message = Message::new(
+=======
+        let message = SanitizedMessage::Legacy(Message::new(
+>>>>>>> 52d12cc80 (Add runtime support for address table lookups (#22223))
             &[Instruction::new_with_bincode(
                 mock_system_program_id,
                 &MockSystemInstruction::Correct,
                 account_metas.clone(),
             )],
+<<<<<<< HEAD
             Some(&accounts[0].0),
         );
 
+=======
+            Some(transaction_context.get_key_of_account_at_index(0)),
+        ));
+>>>>>>> 52d12cc80 (Add runtime support for address table lookups (#22223))
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -265,15 +277,20 @@ mod tests {
         assert_eq!(accounts[0].1.borrow().lamports(), 100);
         assert_eq!(accounts[1].1.borrow().lamports(), 0);
 
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bincode(
                 mock_system_program_id,
                 &MockSystemInstruction::AttemptCredit { lamports: 50 },
                 account_metas.clone(),
             )],
+<<<<<<< HEAD
             Some(&accounts[0].0),
         );
 
+=======
+            Some(transaction_context.get_key_of_account_at_index(0)),
+        ));
+>>>>>>> 52d12cc80 (Add runtime support for address table lookups (#22223))
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -299,15 +316,20 @@ mod tests {
             ))
         );
 
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bincode(
                 mock_system_program_id,
                 &MockSystemInstruction::AttemptDataChange { data: 50 },
                 account_metas,
             )],
+<<<<<<< HEAD
             Some(&accounts[0].0),
         );
 
+=======
+            Some(transaction_context.get_key_of_account_at_index(0)),
+        ));
+>>>>>>> 52d12cc80 (Add runtime support for address table lookups (#22223))
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -445,14 +467,19 @@ mod tests {
         ];
 
         // Try to borrow mut the same account
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bincode(
                 mock_program_id,
                 &MockSystemInstruction::BorrowFail,
                 account_metas.clone(),
             )],
+<<<<<<< HEAD
             Some(&accounts[0].0),
         );
+=======
+            Some(transaction_context.get_key_of_account_at_index(0)),
+        ));
+>>>>>>> 52d12cc80 (Add runtime support for address table lookups (#22223))
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -479,14 +506,19 @@ mod tests {
         );
 
         // Try to borrow mut the same account in a safe way
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bincode(
                 mock_program_id,
                 &MockSystemInstruction::MultiBorrowMut,
                 account_metas.clone(),
             )],
+<<<<<<< HEAD
             Some(&accounts[0].0),
         );
+=======
+            Some(transaction_context.get_key_of_account_at_index(0)),
+        ));
+>>>>>>> 52d12cc80 (Add runtime support for address table lookups (#22223))
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -506,8 +538,13 @@ mod tests {
         );
         assert!(result.is_ok());
 
+<<<<<<< HEAD
         // Do work on the same account but at different location in keyed_accounts[]
         let message = Message::new(
+=======
+        // Do work on the same transaction account but at different instruction accounts
+        let message = SanitizedMessage::Legacy(Message::new(
+>>>>>>> 52d12cc80 (Add runtime support for address table lookups (#22223))
             &[Instruction::new_with_bincode(
                 mock_program_id,
                 &MockSystemInstruction::DoWork {
@@ -516,8 +553,13 @@ mod tests {
                 },
                 account_metas,
             )],
+<<<<<<< HEAD
             Some(&accounts[0].0),
         );
+=======
+            Some(transaction_context.get_key_of_account_at_index(0)),
+        ));
+>>>>>>> 52d12cc80 (Add runtime support for address table lookups (#22223))
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -565,7 +607,7 @@ mod tests {
             (mock_program_id, mock_program_account),
         ];
 
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[
                 new_secp256k1_instruction(
                     &libsecp256k1::SecretKey::random(&mut rand::thread_rng()),
@@ -574,8 +616,12 @@ mod tests {
                 Instruction::new_with_bytes(mock_program_id, &[], vec![]),
             ],
             None,
+<<<<<<< HEAD
         );
 
+=======
+        ));
+>>>>>>> 52d12cc80 (Add runtime support for address table lookups (#22223))
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
