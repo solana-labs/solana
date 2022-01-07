@@ -670,7 +670,7 @@ fn open_blockstore(
     access_type: AccessType,
     wal_recovery_mode: Option<BlockstoreRecoveryMode>,
 ) -> Blockstore {
-    match Blockstore::open_with_access_type(
+    match Blockstore::open_with_options(
         ledger_path,
         BlockstoreOptions {
             access_type,
