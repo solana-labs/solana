@@ -3105,6 +3105,11 @@ impl AccountsDb {
                     ));
                 });
 
+                error!(
+                    "ancient_append_vec: writing to ancient append vec: slot: {}, # accts: {}, available bytes after: {}",
+                    slot, accounts_this_append_vec.len(), available_bytes
+                );
+
                 let mut drop_root = slot > writer.0;
                 // write what we can to the current ancient storage
                 let _store_accounts_timing = self.store_accounts_frozen(
