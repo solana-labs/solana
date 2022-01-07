@@ -3156,7 +3156,6 @@ impl AccountsDb {
 
                 dead_storages.extend(all_storages.iter().map(Arc::clone));
 
-                error!("ancient_append_vec: drop_or_recycle_stores {:?}", dead_storages.len());
                 self.drop_or_recycle_stores(dead_storages);
 
                 if drop_root {
