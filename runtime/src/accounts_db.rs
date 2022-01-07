@@ -2906,9 +2906,9 @@ impl AccountsDb {
                 error!("create_and_insert_store_with_paths2");
                 self.create_and_insert_store(slot, aligned_total, "shrink")
             }
-            error!("get_store done");
         };
         start.stop();
+        error!("get_store done");
         (shrunken_store, start.as_us())
     }
 
