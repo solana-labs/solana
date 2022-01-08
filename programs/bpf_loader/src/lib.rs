@@ -8,6 +8,9 @@ pub mod upgradeable;
 pub mod upgradeable_with_jit;
 pub mod with_jit;
 
+#[macro_use]
+extern crate solana_metrics;
+
 use {
     crate::{
         serialization::{deserialize_parameters, serialize_parameters},
@@ -121,9 +124,14 @@ pub fn create_executor(
             .is_active(&reject_all_elf_rw::id()),
         ..Config::default()
     };
+    let program_id;
+    let load_elf_us: u64;
+    let verify_elf_us: u64;
+    let mut jit_compile_us = 0u64;
     let mut executable = {
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
         let programdata = keyed_account_at_index(keyed_accounts, programdata_account_index)?;
+        program_id = *programdata.unsigned_key();
         let mut load_elf_time = Measure::start("load_elf_time");
         let executable = Executable::<BpfError, ThisInstructionMeter>::from_elf(
             &programdata.try_account_ref()?.data()[programdata_offset..],
@@ -132,10 +140,11 @@ pub fn create_executor(
             syscall_registry,
         );
         load_elf_time.stop();
+        load_elf_us = load_elf_time.as_us();
         invoke_context.timings.create_executor_load_elf_us = invoke_context
             .timings
             .create_executor_load_elf_us
-            .saturating_add(load_elf_time.as_us());
+            .saturating_add(load_elf_us);
         executable
     }
     .map_err(|e| map_ebpf_error(invoke_context, e))?;
@@ -144,24 +153,33 @@ pub fn create_executor(
     verifier::check(text_bytes, &config)
         .map_err(|e| map_ebpf_error(invoke_context, EbpfError::UserError(e.into())))?;
     verify_code_time.stop();
+    verify_elf_us = verify_code_time.as_us();
     invoke_context.timings.create_executor_verify_code_us = invoke_context
         .timings
         .create_executor_verify_code_us
-        .saturating_add(verify_code_time.as_us());
+        .saturating_add(verify_elf_us);
     if use_jit {
         let mut jit_compile_time = Measure::start("jit_compile_time");
         let jit_compile_result =
             Executable::<BpfError, ThisInstructionMeter>::jit_compile(&mut executable);
         jit_compile_time.stop();
+        jit_compile_us = jit_compile_time.as_us();
         invoke_context.timings.create_executor_jit_compile_us = invoke_context
             .timings
             .create_executor_jit_compile_us
-            .saturating_add(jit_compile_time.as_us());
+            .saturating_add(jit_compile_us);
         if let Err(err) = jit_compile_result {
             ic_msg!(invoke_context, "Failed to compile program {:?}", err);
             return Err(InstructionError::ProgramFailedToCompile);
         }
     }
+    datapoint_trace!(
+        "create_executor_trace",
+        ("program_id", program_id.to_string(), String),
+        ("load_elf_us", load_elf_us, i64),
+        ("verify_elf_us", verify_elf_us, i64),
+        ("jit_compile_us", jit_compile_us, i64),
+    );
     Ok(Arc::new(BpfExecutor { executable }))
 }
 
