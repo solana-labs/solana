@@ -394,7 +394,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         burn_percent: value_t_or_exit!(matches, "rent_burn_percentage", u8),
     };
 
-    fn rent_exempt_check(matches: &ArgMatches<'_>, name: &str, exempt: u64) -> io::Result<u64> {
+    fn rent_exempt_check(matches: &ArgMatches, name: &str, exempt: u64) -> io::Result<u64> {
         let lamports = value_t_or_exit!(matches, name, u64);
 
         if lamports < exempt {

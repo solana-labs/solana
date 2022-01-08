@@ -403,7 +403,7 @@ where
 }
 
 fn parse_distribute_tokens_args(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
 ) -> Result<DistributeTokensArgs, Box<dyn Error>> {
     let mut wallet_manager = maybe_wallet_manager()?;
     let signer_matches = ArgMatches::default(); // No default signer
@@ -437,9 +437,7 @@ fn parse_distribute_tokens_args(
     })
 }
 
-fn parse_create_stake_args(
-    matches: &ArgMatches<'_>,
-) -> Result<DistributeTokensArgs, Box<dyn Error>> {
+fn parse_create_stake_args(matches: &ArgMatches) -> Result<DistributeTokensArgs, Box<dyn Error>> {
     let mut wallet_manager = maybe_wallet_manager()?;
     let signer_matches = ArgMatches::default(); // No default signer
 
@@ -490,7 +488,7 @@ fn parse_create_stake_args(
 }
 
 fn parse_distribute_stake_args(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
 ) -> Result<DistributeTokensArgs, Box<dyn Error>> {
     let mut wallet_manager = maybe_wallet_manager()?;
     let signer_matches = ArgMatches::default(); // No default signer
@@ -573,7 +571,7 @@ fn parse_distribute_stake_args(
 }
 
 fn parse_distribute_spl_tokens_args(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
 ) -> Result<DistributeTokensArgs, Box<dyn Error>> {
     let mut wallet_manager = maybe_wallet_manager()?;
     let signer_matches = ArgMatches::default(); // No default signer
@@ -618,7 +616,7 @@ fn parse_distribute_spl_tokens_args(
     })
 }
 
-fn parse_balances_args(matches: &ArgMatches<'_>) -> Result<BalancesArgs, Box<dyn Error>> {
+fn parse_balances_args(matches: &ArgMatches) -> Result<BalancesArgs, Box<dyn Error>> {
     let mut wallet_manager = maybe_wallet_manager()?;
     let spl_token_args =
         pubkey_of_signer(matches, "mint_address", &mut wallet_manager)?.map(|mint| SplTokenArgs {
@@ -631,7 +629,7 @@ fn parse_balances_args(matches: &ArgMatches<'_>) -> Result<BalancesArgs, Box<dyn
     })
 }
 
-fn parse_transaction_log_args(matches: &ArgMatches<'_>) -> TransactionLogArgs {
+fn parse_transaction_log_args(matches: &ArgMatches) -> TransactionLogArgs {
     TransactionLogArgs {
         transaction_db: value_t_or_exit!(matches, "db_path", String),
         output_path: value_t_or_exit!(matches, "output_path", String),

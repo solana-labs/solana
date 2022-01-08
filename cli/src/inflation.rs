@@ -25,7 +25,7 @@ pub trait InflationSubCommands {
     fn inflation_subcommands(self) -> Self;
 }
 
-impl InflationSubCommands for App<'_, '_> {
+impl InflationSubCommands for App<'_> {
     fn inflation_subcommands(self) -> Self {
         self.subcommand(
             SubCommand::with_name("inflation")
@@ -54,7 +54,7 @@ impl InflationSubCommands for App<'_, '_> {
 }
 
 pub fn parse_inflation_subcommand(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     _default_signer: &DefaultSigner,
     _wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {

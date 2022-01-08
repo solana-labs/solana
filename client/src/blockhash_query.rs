@@ -127,7 +127,7 @@ impl BlockhashQuery {
         }
     }
 
-    pub fn new_from_matches(matches: &ArgMatches<'_>) -> Self {
+    pub fn new_from_matches(matches: &ArgMatches) -> Self {
         let blockhash = value_of(matches, BLOCKHASH_ARG.name);
         let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
         let nonce_account = pubkey_of(matches, NONCE_ARG.name);

@@ -45,7 +45,7 @@ pub trait VoteSubCommands {
     fn vote_subcommands(self) -> Self;
 }
 
-impl VoteSubCommands for App<'_, '_> {
+impl VoteSubCommands for App<'_> {
     fn vote_subcommands(self) -> Self {
         self.subcommand(
             SubCommand::with_name("create-vote-account")
@@ -408,7 +408,7 @@ impl VoteSubCommands for App<'_, '_> {
 }
 
 pub fn parse_create_vote_account(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -475,7 +475,7 @@ pub fn parse_create_vote_account(
 }
 
 pub fn parse_vote_authorize(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
     vote_authorize: VoteAuthorize,
@@ -534,7 +534,7 @@ pub fn parse_vote_authorize(
 }
 
 pub fn parse_vote_update_validator(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -579,7 +579,7 @@ pub fn parse_vote_update_validator(
 }
 
 pub fn parse_vote_update_commission(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -623,7 +623,7 @@ pub fn parse_vote_update_commission(
 }
 
 pub fn parse_vote_get_account_command(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey =
@@ -645,7 +645,7 @@ pub fn parse_vote_get_account_command(
 }
 
 pub fn parse_withdraw_from_vote_account(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -699,7 +699,7 @@ pub fn parse_withdraw_from_vote_account(
 }
 
 pub fn parse_close_vote_account(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {

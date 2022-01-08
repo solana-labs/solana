@@ -90,7 +90,7 @@ fn verify_keybase(
     }
 }
 
-fn parse_args(matches: &ArgMatches<'_>) -> Value {
+fn parse_args(matches: &ArgMatches) -> Value {
     let mut map = Map::new();
     map.insert(
         "name".to_string(),
@@ -133,7 +133,7 @@ pub trait ValidatorInfoSubCommands {
     fn validator_info_subcommands(self) -> Self;
 }
 
-impl ValidatorInfoSubCommands for App<'_, '_> {
+impl ValidatorInfoSubCommands for App<'_> {
     fn validator_info_subcommands(self) -> Self {
         self.subcommand(
             SubCommand::with_name("validator-info")
@@ -212,7 +212,7 @@ impl ValidatorInfoSubCommands for App<'_, '_> {
 }
 
 pub fn parse_validator_info_command(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -229,9 +229,7 @@ pub fn parse_validator_info_command(
     })
 }
 
-pub fn parse_get_validator_info_command(
-    matches: &ArgMatches<'_>,
-) -> Result<CliCommandInfo, CliError> {
+pub fn parse_get_validator_info_command(matches: &ArgMatches) -> Result<CliCommandInfo, CliError> {
     let info_pubkey = pubkey_of(matches, "info_pubkey");
     Ok(CliCommandInfo {
         command: CliCommand::GetValidatorInfo(info_pubkey),

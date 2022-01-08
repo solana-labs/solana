@@ -32,7 +32,7 @@ pub fn println_name_value_or(name: &str, value: &str, setting_type: SettingType)
     );
 }
 
-fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error>> {
+fn parse_settings(matches: &ArgMatches) -> Result<bool, Box<dyn error::Error>> {
     let parse_args = match matches.subcommand() {
         ("config", Some(matches)) => {
             let config_file = match matches.value_of("config_file") {
@@ -150,7 +150,7 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
 }
 
 pub fn parse_args<'a>(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<(CliConfig<'a>, CliSigners), Box<dyn error::Error>> {
     let config = if let Some(config_file) = matches.value_of("config_file") {
@@ -247,7 +247,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     do_main(&matches).map_err(|err| DisplayError::new_as_boxed(err).into())
 }
 
-fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
+fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
     if parse_settings(matches)? {
         let mut wallet_manager = None;
 

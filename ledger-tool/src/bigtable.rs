@@ -276,7 +276,7 @@ pub trait BigTableSubCommand {
     fn bigtable_subcommand(self) -> Self;
 }
 
-impl BigTableSubCommand for App<'_, '_> {
+impl BigTableSubCommand for App<'_> {
     fn bigtable_subcommand(self) -> Self {
         self.subcommand(
             SubCommand::with_name("bigtable")
@@ -496,7 +496,7 @@ impl BigTableSubCommand for App<'_, '_> {
     }
 }
 
-pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
+pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches) {
     let runtime = tokio::runtime::Runtime::new().unwrap();
 
     let verbose = matches.is_present("verbose");

@@ -21,7 +21,7 @@ use {
 pub const STDOUT_OUTFILE_TOKEN: &str = "-";
 
 // Return parsed values from matches at `name`
-pub fn values_of<T>(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<T>>
+pub fn values_of<T>(matches: &ArgMatches, name: &str) -> Option<Vec<T>>
 where
     T: std::str::FromStr,
     <T as std::str::FromStr>::Err: std::fmt::Debug,
@@ -32,7 +32,7 @@ where
 }
 
 // Return a parsed value from matches at `name`
-pub fn value_of<T>(matches: &ArgMatches<'_>, name: &str) -> Option<T>
+pub fn value_of<T>(matches: &ArgMatches, name: &str) -> Option<T>
 where
     T: std::str::FromStr,
     <T as std::str::FromStr>::Err: std::fmt::Debug,
@@ -45,7 +45,7 @@ where
 }
 
 pub fn unix_timestamp_from_rfc3339_datetime(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     name: &str,
 ) -> Option<UnixTimestamp> {
     matches.value_of(name).and_then(|value| {
@@ -56,7 +56,7 @@ pub fn unix_timestamp_from_rfc3339_datetime(
 }
 
 // Return the keypair for an argument with filename `name` or None if not present.
-pub fn keypair_of(matches: &ArgMatches<'_>, name: &str) -> Option<Keypair> {
+pub fn keypair_of(matches: &ArgMatches, name: &str) -> Option<Keypair> {
     if let Some(value) = matches.value_of(name) {
         if value == ASK_KEYWORD {
             let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
@@ -69,7 +69,7 @@ pub fn keypair_of(matches: &ArgMatches<'_>, name: &str) -> Option<Keypair> {
     }
 }
 
-pub fn keypairs_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Keypair>> {
+pub fn keypairs_of(matches: &ArgMatches, name: &str) -> Option<Vec<Keypair>> {
     matches.values_of(name).map(|values| {
         values
             .filter_map(|value| {
@@ -86,11 +86,11 @@ pub fn keypairs_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Keypair>>
 
 // Return a pubkey for an argument that can itself be parsed into a pubkey,
 // or is a filename that can be read as a keypair
-pub fn pubkey_of(matches: &ArgMatches<'_>, name: &str) -> Option<Pubkey> {
+pub fn pubkey_of(matches: &ArgMatches, name: &str) -> Option<Pubkey> {
     value_of(matches, name).or_else(|| keypair_of(matches, name).map(|keypair| keypair.pubkey()))
 }
 
-pub fn pubkeys_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Pubkey>> {
+pub fn pubkeys_of(matches: &ArgMatches, name: &str) -> Option<Vec<Pubkey>> {
     matches.values_of(name).map(|values| {
         values
             .map(|value| {
@@ -105,7 +105,7 @@ pub fn pubkeys_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Pubkey>> {
 }
 
 // Return pubkey/signature pairs for a string of the form pubkey=signature
-pub fn pubkeys_sigs_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<(Pubkey, Signature)>> {
+pub fn pubkeys_sigs_of(matches: &ArgMatches, name: &str) -> Option<Vec<(Pubkey, Signature)>> {
     matches.values_of(name).map(|values| {
         values
             .map(|pubkey_signer_string| {
@@ -121,7 +121,7 @@ pub fn pubkeys_sigs_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<(Pubk
 // Return a signer from matches at `name`
 #[allow(clippy::type_complexity)]
 pub fn signer_of(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     name: &str,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<(Option<Box<dyn Signer>>, Option<Pubkey>), Box<dyn std::error::Error>> {
@@ -135,7 +135,7 @@ pub fn signer_of(
 }
 
 pub fn pubkey_of_signer(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     name: &str,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<Option<Pubkey>, Box<dyn std::error::Error>> {
@@ -152,7 +152,7 @@ pub fn pubkey_of_signer(
 }
 
 pub fn pubkeys_of_multiple_signers(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     name: &str,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<Option<Vec<Pubkey>>, Box<dyn std::error::Error>> {
@@ -168,7 +168,7 @@ pub fn pubkeys_of_multiple_signers(
 }
 
 pub fn resolve_signer(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     name: &str,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<Option<String>, Box<dyn std::error::Error>> {
@@ -180,15 +180,15 @@ pub fn resolve_signer(
     )
 }
 
-pub fn lamports_of_sol(matches: &ArgMatches<'_>, name: &str) -> Option<u64> {
+pub fn lamports_of_sol(matches: &ArgMatches, name: &str) -> Option<u64> {
     value_of(matches, name).map(sol_to_lamports)
 }
 
-pub fn cluster_type_of(matches: &ArgMatches<'_>, name: &str) -> Option<ClusterType> {
+pub fn cluster_type_of(matches: &ArgMatches, name: &str) -> Option<ClusterType> {
     value_of(matches, name)
 }
 
-pub fn commitment_of(matches: &ArgMatches<'_>, name: &str) -> Option<CommitmentConfig> {
+pub fn commitment_of(matches: &ArgMatches, name: &str) -> Option<CommitmentConfig> {
     matches
         .value_of(name)
         .map(|value| CommitmentConfig::from_str(value).unwrap_or_default())

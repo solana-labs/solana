@@ -358,7 +358,7 @@ fn hash_validator(hash: String) -> Result<(), String> {
 }
 
 // This function is duplicated in ledger-tool/src/main.rs...
-fn hardforks_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Slot>> {
+fn hardforks_of(matches: &ArgMatches, name: &str) -> Option<Vec<Slot>> {
     if matches.is_present(name) {
         Some(values_t_or_exit!(matches, name, Slot))
     } else {
@@ -368,7 +368,7 @@ fn hardforks_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Slot>> {
 
 fn validators_set(
     identity_pubkey: &Pubkey,
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     matches_name: &str,
     arg_name: &str,
 ) -> Option<HashSet<Pubkey>> {

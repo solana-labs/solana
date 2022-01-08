@@ -68,7 +68,7 @@ const NO_OUTFILE_ARG: ArgConstant<'static> = ArgConstant {
     help: "Only print a seed phrase and pubkey. Do not output a keypair file",
 };
 
-fn word_count_arg<'a, 'b>() -> Arg<'a, 'b> {
+fn word_count_arg<'a>() -> Arg<'a> {
     Arg::with_name(WORD_COUNT_ARG.name)
         .long(WORD_COUNT_ARG.long)
         .possible_values(&["12", "15", "18", "21", "24"])
@@ -78,7 +78,7 @@ fn word_count_arg<'a, 'b>() -> Arg<'a, 'b> {
         .help(WORD_COUNT_ARG.help)
 }
 
-fn language_arg<'a, 'b>() -> Arg<'a, 'b> {
+fn language_arg<'a>() -> Arg<'a> {
     Arg::with_name(LANGUAGE_ARG.name)
         .long(LANGUAGE_ARG.long)
         .possible_values(&[
@@ -97,14 +97,14 @@ fn language_arg<'a, 'b>() -> Arg<'a, 'b> {
         .help(LANGUAGE_ARG.help)
 }
 
-fn no_passphrase_arg<'a, 'b>() -> Arg<'a, 'b> {
+fn no_passphrase_arg<'a>() -> Arg<'a> {
     Arg::with_name(NO_PASSPHRASE_ARG.name)
         .long(NO_PASSPHRASE_ARG.long)
         .alias("no-passphrase")
         .help(NO_PASSPHRASE_ARG.help)
 }
 
-fn no_outfile_arg<'a, 'b>() -> Arg<'a, 'b> {
+fn no_outfile_arg<'a>() -> Arg<'a> {
     Arg::with_name(NO_OUTFILE_ARG.name)
         .long(NO_OUTFILE_ARG.long)
         .conflicts_with_all(&["outfile", "silent"])
@@ -115,7 +115,7 @@ trait KeyGenerationCommonArgs {
     fn key_generation_common_args(self) -> Self;
 }
 
-impl KeyGenerationCommonArgs for App<'_, '_> {
+impl KeyGenerationCommonArgs for App<'_> {
     fn key_generation_common_args(self) -> Self {
         self.arg(word_count_arg())
             .arg(language_arg())
@@ -213,7 +213,7 @@ fn grind_validator_starts_and_ends_with(v: String) -> Result<(), String> {
     Ok(())
 }
 
-fn acquire_language(matches: &ArgMatches<'_>) -> Language {
+fn acquire_language(matches: &ArgMatches) -> Language {
     match matches.value_of(LANGUAGE_ARG.name).unwrap() {
         "english" => Language::English,
         "chinese-simplified" => Language::ChineseSimplified,
@@ -232,7 +232,7 @@ fn no_passphrase_and_message() -> (String, String) {
 }
 
 fn acquire_passphrase_and_message(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
 ) -> Result<(String, String), Box<dyn error::Error>> {
     if matches.is_present(NO_PASSPHRASE_ARG.name) {
         Ok(no_passphrase_and_message())
@@ -525,7 +525,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     do_main(&matches).map_err(|err| DisplayError::new_as_boxed(err).into())
 }
 
-fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
+fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
     let config = if let Some(config_file) = matches.value_of("config_file") {
         Config::load(config_file).unwrap_or_default()
     } else {

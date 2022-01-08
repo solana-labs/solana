@@ -43,7 +43,7 @@ pub trait NonceSubCommands {
     fn nonce_subcommands(self) -> Self;
 }
 
-impl NonceSubCommands for App<'_, '_> {
+impl NonceSubCommands for App<'_> {
     fn nonce_subcommands(self) -> Self {
         self.subcommand(
             SubCommand::with_name("authorize-nonce-account")
@@ -177,7 +177,7 @@ impl NonceSubCommands for App<'_, '_> {
 }
 
 pub fn parse_authorize_nonce_account(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -206,7 +206,7 @@ pub fn parse_authorize_nonce_account(
 }
 
 pub fn parse_nonce_create_account(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -237,7 +237,7 @@ pub fn parse_nonce_create_account(
 }
 
 pub fn parse_get_nonce(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let nonce_account_pubkey =
@@ -250,7 +250,7 @@ pub fn parse_get_nonce(
 }
 
 pub fn parse_new_nonce(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -277,7 +277,7 @@ pub fn parse_new_nonce(
 }
 
 pub fn parse_show_nonce_account(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let nonce_account_pubkey =
@@ -294,7 +294,7 @@ pub fn parse_show_nonce_account(
 }
 
 pub fn parse_withdraw_from_nonce_account(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {

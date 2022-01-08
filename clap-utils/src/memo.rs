@@ -6,7 +6,7 @@ pub const MEMO_ARG: ArgConstant<'static> = ArgConstant {
     help: "Specify a memo string to include in the transaction.",
 };
 
-pub fn memo_arg<'a, 'b>() -> Arg<'a, 'b> {
+pub fn memo_arg<'a>() -> Arg<'a> {
     Arg::with_name(MEMO_ARG.name)
         .long(MEMO_ARG.long)
         .takes_value(true)

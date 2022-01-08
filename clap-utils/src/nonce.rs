@@ -18,7 +18,7 @@ pub const NONCE_AUTHORITY_ARG: ArgConstant<'static> = ArgConstant {
     help: "Provide the nonce authority keypair to use when signing a nonced transaction",
 };
 
-fn nonce_arg<'a, 'b>() -> Arg<'a, 'b> {
+fn nonce_arg<'a>() -> Arg<'a> {
     Arg::with_name(NONCE_ARG.name)
         .long(NONCE_ARG.long)
         .takes_value(true)
@@ -28,7 +28,7 @@ fn nonce_arg<'a, 'b>() -> Arg<'a, 'b> {
         .help(NONCE_ARG.help)
 }
 
-pub fn nonce_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
+pub fn nonce_authority_arg<'a>() -> Arg<'a> {
     Arg::with_name(NONCE_AUTHORITY_ARG.name)
         .long(NONCE_AUTHORITY_ARG.long)
         .takes_value(true)
@@ -41,7 +41,7 @@ pub trait NonceArgs {
     fn nonce_args(self, global: bool) -> Self;
 }
 
-impl NonceArgs for App<'_, '_> {
+impl NonceArgs for App<'_> {
     fn nonce_args(self, global: bool) -> Self {
         self.arg(nonce_arg().global(global)).arg(
             nonce_authority_arg()

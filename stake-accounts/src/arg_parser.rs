@@ -13,11 +13,11 @@ use {
     std::{ffi::OsString, process::exit},
 };
 
-fn fee_payer_arg<'a, 'b>() -> Arg<'a, 'b> {
+fn fee_payer_arg<'a>() -> Arg<'a> {
     solana_clap_utils::fee_payer::fee_payer_arg().required(true)
 }
 
-fn funding_keypair_arg<'a, 'b>() -> Arg<'a, 'b> {
+fn funding_keypair_arg<'a>() -> Arg<'a> {
     Arg::with_name("funding_keypair")
         .required(true)
         .takes_value(true)
@@ -26,7 +26,7 @@ fn funding_keypair_arg<'a, 'b>() -> Arg<'a, 'b> {
         .help("Keypair to fund accounts")
 }
 
-fn base_pubkey_arg<'a, 'b>() -> Arg<'a, 'b> {
+fn base_pubkey_arg<'a>() -> Arg<'a> {
     Arg::with_name("base_pubkey")
         .required(true)
         .takes_value(true)
@@ -35,7 +35,7 @@ fn base_pubkey_arg<'a, 'b>() -> Arg<'a, 'b> {
         .help("Public key which stake account addresses are derived from")
 }
 
-fn custodian_arg<'a, 'b>() -> Arg<'a, 'b> {
+fn custodian_arg<'a>() -> Arg<'a> {
     Arg::with_name("custodian")
         .required(true)
         .takes_value(true)
@@ -44,7 +44,7 @@ fn custodian_arg<'a, 'b>() -> Arg<'a, 'b> {
         .help("Authority to modify lockups")
 }
 
-fn new_custodian_arg<'a, 'b>() -> Arg<'a, 'b> {
+fn new_custodian_arg<'a>() -> Arg<'a> {
     Arg::with_name("new_custodian")
         .takes_value(true)
         .value_name("PUBKEY")
@@ -52,7 +52,7 @@ fn new_custodian_arg<'a, 'b>() -> Arg<'a, 'b> {
         .help("New authority to modify lockups")
 }
 
-fn new_base_keypair_arg<'a, 'b>() -> Arg<'a, 'b> {
+fn new_base_keypair_arg<'a>() -> Arg<'a> {
     Arg::with_name("new_base_keypair")
         .required(true)
         .takes_value(true)
@@ -61,7 +61,7 @@ fn new_base_keypair_arg<'a, 'b>() -> Arg<'a, 'b> {
         .help("New keypair which stake account addresses are derived from")
 }
 
-fn stake_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
+fn stake_authority_arg<'a>() -> Arg<'a> {
     Arg::with_name("stake_authority")
         .long("stake-authority")
         .required(true)
@@ -71,7 +71,7 @@ fn stake_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
         .help("Stake authority")
 }
 
-fn withdraw_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
+fn withdraw_authority_arg<'a>() -> Arg<'a> {
     Arg::with_name("withdraw_authority")
         .long("withdraw-authority")
         .required(true)
@@ -81,7 +81,7 @@ fn withdraw_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
         .help("Withdraw authority")
 }
 
-fn new_stake_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
+fn new_stake_authority_arg<'a>() -> Arg<'a> {
     Arg::with_name("new_stake_authority")
         .long("new-stake-authority")
         .required(true)
@@ -91,7 +91,7 @@ fn new_stake_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
         .help("New stake authority")
 }
 
-fn new_withdraw_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
+fn new_withdraw_authority_arg<'a>() -> Arg<'a> {
     Arg::with_name("new_withdraw_authority")
         .long("new-withdraw-authority")
         .required(true)
@@ -101,7 +101,7 @@ fn new_withdraw_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
         .help("New withdraw authority")
 }
 
-fn lockup_epoch_arg<'a, 'b>() -> Arg<'a, 'b> {
+fn lockup_epoch_arg<'a>() -> Arg<'a> {
     Arg::with_name("lockup_epoch")
         .long("lockup-epoch")
         .takes_value(true)
@@ -109,7 +109,7 @@ fn lockup_epoch_arg<'a, 'b>() -> Arg<'a, 'b> {
         .help("The epoch height at which each account will be available for withdrawl")
 }
 
-fn lockup_date_arg<'a, 'b>() -> Arg<'a, 'b> {
+fn lockup_date_arg<'a>() -> Arg<'a> {
     Arg::with_name("lockup_date")
         .long("lockup-date")
         .value_name("RFC3339 DATETIME")
@@ -118,7 +118,7 @@ fn lockup_date_arg<'a, 'b>() -> Arg<'a, 'b> {
         .help("The date and time at which each account will be available for withdrawl")
 }
 
-fn num_accounts_arg<'a, 'b>() -> Arg<'a, 'b> {
+fn num_accounts_arg<'a>() -> Arg<'a> {
     Arg::with_name("num_accounts")
         .long("num-accounts")
         .required(true)
@@ -277,7 +277,7 @@ where
         .get_matches_from(args)
 }
 
-fn parse_new_args(matches: &ArgMatches<'_>) -> NewArgs<String, String> {
+fn parse_new_args(matches: &ArgMatches) -> NewArgs<String, String> {
     NewArgs {
         fee_payer: value_t_or_exit!(matches, "fee_payer", String),
         funding_keypair: value_t_or_exit!(matches, "funding_keypair", String),
@@ -289,20 +289,20 @@ fn parse_new_args(matches: &ArgMatches<'_>) -> NewArgs<String, String> {
     }
 }
 
-fn parse_count_args(matches: &ArgMatches<'_>) -> CountArgs<String> {
+fn parse_count_args(matches: &ArgMatches) -> CountArgs<String> {
     CountArgs {
         base_pubkey: value_t_or_exit!(matches, "base_pubkey", String),
     }
 }
 
-fn parse_query_args(matches: &ArgMatches<'_>) -> QueryArgs<String> {
+fn parse_query_args(matches: &ArgMatches) -> QueryArgs<String> {
     QueryArgs {
         base_pubkey: value_t_or_exit!(matches, "base_pubkey", String),
         num_accounts: value_t_or_exit!(matches, "num_accounts", usize),
     }
 }
 
-fn parse_authorize_args(matches: &ArgMatches<'_>) -> AuthorizeArgs<String, String> {
+fn parse_authorize_args(matches: &ArgMatches) -> AuthorizeArgs<String, String> {
     AuthorizeArgs {
         fee_payer: value_t_or_exit!(matches, "fee_payer", String),
         base_pubkey: value_t_or_exit!(matches, "base_pubkey", String),
@@ -314,7 +314,7 @@ fn parse_authorize_args(matches: &ArgMatches<'_>) -> AuthorizeArgs<String, Strin
     }
 }
 
-fn parse_set_lockup_args(matches: &ArgMatches<'_>) -> SetLockupArgs<String, String> {
+fn parse_set_lockup_args(matches: &ArgMatches) -> SetLockupArgs<String, String> {
     SetLockupArgs {
         fee_payer: value_t_or_exit!(matches, "fee_payer", String),
         base_pubkey: value_t_or_exit!(matches, "base_pubkey", String),
@@ -328,7 +328,7 @@ fn parse_set_lockup_args(matches: &ArgMatches<'_>) -> SetLockupArgs<String, Stri
     }
 }
 
-fn parse_rebase_args(matches: &ArgMatches<'_>) -> RebaseArgs<String, String> {
+fn parse_rebase_args(matches: &ArgMatches) -> RebaseArgs<String, String> {
     RebaseArgs {
         fee_payer: value_t_or_exit!(matches, "fee_payer", String),
         base_pubkey: value_t_or_exit!(matches, "base_pubkey", String),
@@ -338,7 +338,7 @@ fn parse_rebase_args(matches: &ArgMatches<'_>) -> RebaseArgs<String, String> {
     }
 }
 
-fn parse_move_args(matches: &ArgMatches<'_>) -> MoveArgs<String, String> {
+fn parse_move_args(matches: &ArgMatches) -> MoveArgs<String, String> {
     MoveArgs {
         rebase_args: parse_rebase_args(matches),
         authorize_args: parse_authorize_args(matches),

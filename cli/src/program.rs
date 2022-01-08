@@ -108,7 +108,7 @@ pub trait ProgramSubCommands {
     fn program_subcommands(self) -> Self;
 }
 
-impl ProgramSubCommands for App<'_, '_> {
+impl ProgramSubCommands for App<'_> {
     fn program_subcommands(self) -> Self {
         self.subcommand(
             SubCommand::with_name("program")
@@ -412,7 +412,7 @@ impl ProgramSubCommands for App<'_, '_> {
 }
 
 pub fn parse_program_subcommand(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {

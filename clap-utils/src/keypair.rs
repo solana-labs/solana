@@ -241,7 +241,7 @@ impl DefaultSigner {
     pub fn generate_unique_signers(
         &self,
         bulk_signers: Vec<Option<Box<dyn Signer>>>,
-        matches: &ArgMatches<'_>,
+        matches: &ArgMatches,
         wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
     ) -> Result<CliSignerInfo, Box<dyn error::Error>> {
         let mut unique_signers = vec![];

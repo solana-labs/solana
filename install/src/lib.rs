@@ -38,10 +38,7 @@ pub fn is_explicit_release(string: String) -> Result<(), String> {
     is_semver(&string).or_else(|_| is_release_channel(&string))
 }
 
-pub fn explicit_release_of(
-    matches: &ArgMatches<'_>,
-    name: &str,
-) -> Option<config::ExplicitRelease> {
+pub fn explicit_release_of(matches: &ArgMatches, name: &str) -> Option<config::ExplicitRelease> {
     matches
         .value_of(name)
         .map(ToString::to_string)
@@ -58,7 +55,7 @@ pub fn explicit_release_of(
         })
 }
 
-fn handle_init(matches: &ArgMatches<'_>, config_file: &str) -> Result<(), String> {
+fn handle_init(matches: &ArgMatches, config_file: &str) -> Result<(), String> {
     let json_rpc_url = matches.value_of("json_rpc_url").unwrap();
     let update_manifest_pubkey = pubkey_of(matches, "update_manifest_pubkey");
     let data_dir = matches.value_of("data_dir").unwrap();

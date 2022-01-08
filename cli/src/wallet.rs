@@ -47,7 +47,7 @@ pub trait WalletSubCommands {
     fn wallet_subcommands(self) -> Self;
 }
 
-impl WalletSubCommands for App<'_, '_> {
+impl WalletSubCommands for App<'_> {
     fn wallet_subcommands(self) -> Self {
         self.subcommand(
             SubCommand::with_name("account")
@@ -272,7 +272,7 @@ impl WalletSubCommands for App<'_, '_> {
     }
 }
 
-fn resolve_derived_address_program_id(matches: &ArgMatches<'_>, arg_name: &str) -> Option<Pubkey> {
+fn resolve_derived_address_program_id(matches: &ArgMatches, arg_name: &str) -> Option<Pubkey> {
     matches.value_of(arg_name).and_then(|v| match v {
         "NONCE" => Some(system_program::id()),
         "STAKE" => Some(stake::program::id()),
@@ -282,7 +282,7 @@ fn resolve_derived_address_program_id(matches: &ArgMatches<'_>, arg_name: &str) 
 }
 
 pub fn parse_account(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let account_pubkey = pubkey_of_signer(matches, "account_pubkey", wallet_manager)?.unwrap();
@@ -299,7 +299,7 @@ pub fn parse_account(
 }
 
 pub fn parse_airdrop(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -317,7 +317,7 @@ pub fn parse_airdrop(
 }
 
 pub fn parse_balance(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -336,7 +336,7 @@ pub fn parse_balance(
     })
 }
 
-pub fn parse_decode_transaction(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+pub fn parse_decode_transaction(matches: &ArgMatches) -> Result<CliCommandInfo, CliError> {
     let blob = value_t_or_exit!(matches, "transaction", String);
     let encoding = match matches.value_of("encoding").unwrap() {
         "base58" => UiTransactionEncoding::Base58,
@@ -358,7 +358,7 @@ pub fn parse_decode_transaction(matches: &ArgMatches<'_>) -> Result<CliCommandIn
 }
 
 pub fn parse_create_address_with_seed(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -384,7 +384,7 @@ pub fn parse_create_address_with_seed(
 }
 
 pub fn parse_transfer(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {

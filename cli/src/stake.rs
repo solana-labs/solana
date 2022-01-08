@@ -69,7 +69,7 @@ pub const CUSTODIAN_ARG: ArgConstant<'static> = ArgConstant {
     help: "Authority to override account lockup",
 };
 
-fn stake_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
+fn stake_authority_arg<'a>() -> Arg<'a> {
     Arg::with_name(STAKE_AUTHORITY_ARG.name)
         .long(STAKE_AUTHORITY_ARG.long)
         .takes_value(true)
@@ -78,7 +78,7 @@ fn stake_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
         .help(STAKE_AUTHORITY_ARG.help)
 }
 
-fn withdraw_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
+fn withdraw_authority_arg<'a>() -> Arg<'a> {
     Arg::with_name(WITHDRAW_AUTHORITY_ARG.name)
         .long(WITHDRAW_AUTHORITY_ARG.long)
         .takes_value(true)
@@ -87,7 +87,7 @@ fn withdraw_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
         .help(WITHDRAW_AUTHORITY_ARG.help)
 }
 
-fn custodian_arg<'a, 'b>() -> Arg<'a, 'b> {
+fn custodian_arg<'a>() -> Arg<'a> {
     Arg::with_name(CUSTODIAN_ARG.name)
         .long(CUSTODIAN_ARG.long)
         .takes_value(true)
@@ -114,7 +114,7 @@ pub trait StakeSubCommands {
     fn stake_subcommands(self) -> Self;
 }
 
-impl StakeSubCommands for App<'_, '_> {
+impl StakeSubCommands for App<'_> {
     fn stake_subcommands(self) -> Self {
         self.subcommand(
             SubCommand::with_name("create-stake-account")
@@ -652,7 +652,7 @@ impl StakeSubCommands for App<'_, '_> {
 }
 
 pub fn parse_create_stake_account(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
     checked: bool,
@@ -726,7 +726,7 @@ pub fn parse_create_stake_account(
 }
 
 pub fn parse_stake_delegate_stake(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -772,7 +772,7 @@ pub fn parse_stake_delegate_stake(
 }
 
 pub fn parse_stake_authorize(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
     checked: bool,
@@ -894,7 +894,7 @@ pub fn parse_stake_authorize(
 }
 
 pub fn parse_split_stake(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -943,7 +943,7 @@ pub fn parse_split_stake(
 }
 
 pub fn parse_merge_stake(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -988,7 +988,7 @@ pub fn parse_merge_stake(
 }
 
 pub fn parse_stake_deactivate_stake(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -1031,7 +1031,7 @@ pub fn parse_stake_deactivate_stake(
 }
 
 pub fn parse_stake_withdraw_stake(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -1084,7 +1084,7 @@ pub fn parse_stake_withdraw_stake(
 }
 
 pub fn parse_stake_set_lockup(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
     checked: bool,
@@ -1151,7 +1151,7 @@ pub fn parse_stake_set_lockup(
 }
 
 pub fn parse_show_stake_account(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
@@ -1172,7 +1172,7 @@ pub fn parse_show_stake_account(
     })
 }
 
-pub fn parse_show_stake_history(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+pub fn parse_show_stake_history(matches: &ArgMatches) -> Result<CliCommandInfo, CliError> {
     let use_lamports_unit = matches.is_present("lamports");
     let limit_results = value_of(matches, "limit").unwrap();
     Ok(CliCommandInfo {

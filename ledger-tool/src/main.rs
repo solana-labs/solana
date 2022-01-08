@@ -687,7 +687,7 @@ fn open_blockstore(
 }
 
 // This function is duplicated in validator/src/main.rs...
-fn hardforks_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Slot>> {
+fn hardforks_of(matches: &ArgMatches, name: &str) -> Option<Vec<Slot>> {
     if matches.is_present(name) {
         Some(values_t_or_exit!(matches, name, Slot))
     } else {
@@ -815,7 +815,7 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
     Ok(())
 }
 
-fn open_genesis_config_by(ledger_path: &Path, matches: &ArgMatches<'_>) -> GenesisConfig {
+fn open_genesis_config_by(ledger_path: &Path, matches: &ArgMatches) -> GenesisConfig {
     let max_genesis_archive_unpacked_size =
         value_t_or_exit!(matches, "max_genesis_archive_unpacked_size", u64);
     open_genesis_config(ledger_path, max_genesis_archive_unpacked_size)

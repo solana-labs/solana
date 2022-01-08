@@ -7,7 +7,7 @@ use {
     },
 };
 
-pub fn parse_ledger_path(matches: &ArgMatches<'_>, name: &str) -> PathBuf {
+pub fn parse_ledger_path(matches: &ArgMatches, name: &str) -> PathBuf {
     PathBuf::from(value_t!(matches, name, String).unwrap_or_else(|_err| {
         eprintln!(
             "Error: Missing --ledger <DIR> argument.\n\n{}",

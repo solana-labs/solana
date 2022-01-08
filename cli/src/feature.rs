@@ -348,7 +348,7 @@ pub trait FeatureSubCommands {
     fn feature_subcommands(self) -> Self;
 }
 
-impl FeatureSubCommands for App<'_, '_> {
+impl FeatureSubCommands for App<'_> {
     fn feature_subcommands(self) -> Self {
         self.subcommand(
             SubCommand::with_name("feature")
@@ -401,7 +401,7 @@ fn known_feature(feature: &Pubkey) -> Result<(), CliError> {
 }
 
 pub fn parse_feature_subcommand(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {

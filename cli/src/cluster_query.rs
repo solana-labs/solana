@@ -81,7 +81,7 @@ pub trait ClusterQuerySubCommands {
     fn cluster_query_subcommands(self) -> Self;
 }
 
-impl ClusterQuerySubCommands for App<'_, '_> {
+impl ClusterQuerySubCommands for App<'_> {
     fn cluster_query_subcommands(self) -> Self {
         self.subcommand(
             SubCommand::with_name("block")
@@ -477,7 +477,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
 }
 
 pub fn parse_catchup(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let node_pubkey = pubkey_of_signer(matches, "node_pubkey", wallet_manager)?;
@@ -511,7 +511,7 @@ pub fn parse_catchup(
 }
 
 pub fn parse_cluster_ping(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
@@ -538,7 +538,7 @@ pub fn parse_cluster_ping(
     })
 }
 
-pub fn parse_get_block(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+pub fn parse_get_block(matches: &ArgMatches) -> Result<CliCommandInfo, CliError> {
     let slot = value_of(matches, "slot");
     Ok(CliCommandInfo {
         command: CliCommand::GetBlock { slot },
@@ -546,7 +546,7 @@ pub fn parse_get_block(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliEr
     })
 }
 
-pub fn parse_get_block_time(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+pub fn parse_get_block_time(matches: &ArgMatches) -> Result<CliCommandInfo, CliError> {
     let slot = value_of(matches, "slot");
     Ok(CliCommandInfo {
         command: CliCommand::GetBlockTime { slot },
@@ -554,35 +554,35 @@ pub fn parse_get_block_time(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, 
     })
 }
 
-pub fn parse_get_epoch(_matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+pub fn parse_get_epoch(_matches: &ArgMatches) -> Result<CliCommandInfo, CliError> {
     Ok(CliCommandInfo {
         command: CliCommand::GetEpoch,
         signers: vec![],
     })
 }
 
-pub fn parse_get_epoch_info(_matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+pub fn parse_get_epoch_info(_matches: &ArgMatches) -> Result<CliCommandInfo, CliError> {
     Ok(CliCommandInfo {
         command: CliCommand::GetEpochInfo,
         signers: vec![],
     })
 }
 
-pub fn parse_get_slot(_matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+pub fn parse_get_slot(_matches: &ArgMatches) -> Result<CliCommandInfo, CliError> {
     Ok(CliCommandInfo {
         command: CliCommand::GetSlot,
         signers: vec![],
     })
 }
 
-pub fn parse_get_block_height(_matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+pub fn parse_get_block_height(_matches: &ArgMatches) -> Result<CliCommandInfo, CliError> {
     Ok(CliCommandInfo {
         command: CliCommand::GetBlockHeight,
         signers: vec![],
     })
 }
 
-pub fn parse_largest_accounts(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+pub fn parse_largest_accounts(matches: &ArgMatches) -> Result<CliCommandInfo, CliError> {
     let filter = if matches.is_present("circulating") {
         Some(RpcLargestAccountsFilter::Circulating)
     } else if matches.is_present("non_circulating") {
@@ -596,7 +596,7 @@ pub fn parse_largest_accounts(matches: &ArgMatches<'_>) -> Result<CliCommandInfo
     })
 }
 
-pub fn parse_supply(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+pub fn parse_supply(matches: &ArgMatches) -> Result<CliCommandInfo, CliError> {
     let print_accounts = matches.is_present("print_accounts");
     Ok(CliCommandInfo {
         command: CliCommand::Supply { print_accounts },
@@ -604,14 +604,14 @@ pub fn parse_supply(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError
     })
 }
 
-pub fn parse_total_supply(_matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+pub fn parse_total_supply(_matches: &ArgMatches) -> Result<CliCommandInfo, CliError> {
     Ok(CliCommandInfo {
         command: CliCommand::TotalSupply,
         signers: vec![],
     })
 }
 
-pub fn parse_get_transaction_count(_matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+pub fn parse_get_transaction_count(_matches: &ArgMatches) -> Result<CliCommandInfo, CliError> {
     Ok(CliCommandInfo {
         command: CliCommand::GetTransactionCount,
         signers: vec![],
@@ -619,7 +619,7 @@ pub fn parse_get_transaction_count(_matches: &ArgMatches<'_>) -> Result<CliComma
 }
 
 pub fn parse_show_stakes(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let use_lamports_unit = matches.is_present("lamports");
@@ -635,7 +635,7 @@ pub fn parse_show_stakes(
     })
 }
 
-pub fn parse_show_validators(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+pub fn parse_show_validators(matches: &ArgMatches) -> Result<CliCommandInfo, CliError> {
     let use_lamports_unit = matches.is_present("lamports");
     let number_validators = matches.is_present("number");
     let reverse_sort = matches.is_present("reverse");
@@ -669,7 +669,7 @@ pub fn parse_show_validators(matches: &ArgMatches<'_>) -> Result<CliCommandInfo,
 }
 
 pub fn parse_transaction_history(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let address = pubkey_of_signer(matches, "address", wallet_manager)?.unwrap();
@@ -987,7 +987,7 @@ pub fn process_first_available_block(rpc_client: &RpcClient) -> ProcessResult {
     Ok(format!("{}", first_available_block))
 }
 
-pub fn parse_leader_schedule(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+pub fn parse_leader_schedule(matches: &ArgMatches) -> Result<CliCommandInfo, CliError> {
     let epoch = value_of(matches, "epoch");
     Ok(CliCommandInfo {
         command: CliCommand::LeaderSchedule { epoch },
@@ -1131,7 +1131,7 @@ pub fn process_get_block_height(rpc_client: &RpcClient, _config: &CliConfig) -> 
     Ok(block_height.to_string())
 }
 
-pub fn parse_show_block_production(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+pub fn parse_show_block_production(matches: &ArgMatches) -> Result<CliCommandInfo, CliError> {
     let epoch = value_t!(matches, "epoch", Epoch).ok();
     let slot_limit = value_t!(matches, "slot_limit", u64).ok();
 
@@ -1531,7 +1531,7 @@ pub fn process_ping(
 }
 
 pub fn parse_logs(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let address = pubkey_of_signer(matches, "address", wallet_manager)?;
