@@ -110,6 +110,7 @@ use {
         pubkey::Pubkey,
         recent_blockhashes_account,
         sanitize::Sanitize,
+        saturating_add_assign,
         signature::{Keypair, Signature},
         slot_hashes::SlotHashes,
         slot_history::SlotHistory,
@@ -292,6 +293,52 @@ impl AbiExample for Builtin {
     }
 }
 
+mod executor_cache {
+    use super::*;
+
+    #[derive(Debug, Default)]
+    pub struct Stats {
+        pub hits: u64,
+        pub misses: u64,
+        pub evictions: HashMap<Pubkey, u64>,
+    }
+
+    impl Stats {
+        pub fn submit(&self, slot: Slot) {
+            let evictions: u64 = self.evictions.values().sum();
+            datapoint_info!(
+                "bank-executor-cache-stats",
+                ("slot", slot, i64),
+                ("hits", self.hits, i64),
+                ("misses", self.misses, i64),
+                ("evictions", evictions, i64),
+            );
+            debug!(
+                "Executor Cache Stats -- Hits: {}, Misses: {}, Evictions: {}",
+                self.hits, self.misses, evictions
+            );
+            if log_enabled!(log::Level::Trace) && !self.evictions.is_empty() {
+                let mut evictions = self.evictions.iter().collect::<Vec<_>>();
+                evictions.sort_by_key(|e| e.1);
+                let evictions = evictions
+                    .into_iter()
+                    .rev()
+                    .map(|(program_id, evictions)| {
+                        format!("  {:<44}  {}", program_id.to_string(), evictions)
+                    })
+                    .collect::<Vec<_>>();
+                let evictions = evictions.join("\n");
+                trace!(
+                    "Eviction Details:\n  {:<44}  {}\n{}",
+                    "Program",
+                    "Count",
+                    evictions
+                );
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Builtins {
     /// Builtin programs that are always available
@@ -314,6 +361,7 @@ struct CachedExecutors {
     max: usize,
     current_epoch: Epoch,
     executors: HashMap<Pubkey, CachedExecutorsEntry>,
+    stats: executor_cache::Stats,
 }
 impl Default for CachedExecutors {
     fn default() -> Self {
@@ -321,6 +369,7 @@ impl Default for CachedExecutors {
             max: MAX_CACHED_EXECUTORS,
             current_epoch: Epoch::default(),
             executors: HashMap::default(),
+            stats: executor_cache::Stats::default(),
         }
     }
 }
@@ -349,6 +398,7 @@ impl Clone for CachedExecutors {
             max: self.max,
             current_epoch: self.current_epoch,
             executors: executors.collect(),
+            stats: executor_cache::Stats::default(),
         }
     }
 }
@@ -372,6 +422,7 @@ impl CachedExecutors {
             max: self.max,
             current_epoch: epoch,
             executors: executors.collect(),
+            stats: executor_cache::Stats::default(),
         })
     }
 
@@ -380,6 +431,7 @@ impl CachedExecutors {
             max,
             current_epoch,
             executors: HashMap::new(),
+            stats: executor_cache::Stats::default(),
         }
     }
 
@@ -392,9 +444,11 @@ impl CachedExecutors {
 
     fn put(&mut self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {
         let entry = if let Some(mut entry) = self.executors.remove(pubkey) {
+            saturating_add_assign!(self.stats.hits, 1);
             entry.executor = executor;
             entry
         } else {
+            saturating_add_assign!(self.stats.misses, 1);
             if self.executors.len() >= self.max {
                 let mut least = u64::MAX;
                 let default_key = Pubkey::default();
@@ -409,6 +463,11 @@ impl CachedExecutors {
                 }
                 let least_key = *least_key;
                 let _ = self.executors.remove(&least_key);
+                self.stats
+                    .evictions
+                    .entry(least_key)
+                    .and_modify(|c| saturating_add_assign!(*c, 1))
+                    .or_insert(1);
             }
             CachedExecutorsEntry {
                 prev_epoch_count: 0,
@@ -1380,6 +1439,13 @@ impl Bank {
             ("parent_slot_height", parent.slot(), i64),
             ("time_us", time.as_us(), i64),
         );
+
+        parent
+            .cached_executors
+            .read()
+            .unwrap()
+            .stats
+            .submit(parent.slot());
 
         new
     }
