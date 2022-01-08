@@ -103,6 +103,12 @@ pub trait WritableAccount: ReadableAccount {
         );
         Ok(())
     }
+    fn saturating_add_lamports(&mut self, lamports: u64) {
+        self.set_lamports(self.lamports().saturating_add(lamports))
+    }
+    fn saturating_sub_lamports(&mut self, lamports: u64) {
+        self.set_lamports(self.lamports().saturating_sub(lamports))
+    }
     fn data_mut(&mut self) -> &mut Vec<u8>;
     fn data_as_mut_slice(&mut self) -> &mut [u8];
     fn set_owner(&mut self, owner: Pubkey);
@@ -798,6 +804,28 @@ pub mod tests {
         let key = Pubkey::new_unique();
         let (_account1, mut account2) = make_two_accounts(&key);
         account2.checked_sub_lamports(u64::MAX).unwrap();
+    }
+
+    #[test]
+    fn test_account_saturating_add_lamports() {
+        let key = Pubkey::new_unique();
+        let (mut account, _) = make_two_accounts(&key);
+
+        let remaining = 22;
+        account.set_lamports(u64::MAX - remaining);
+        account.saturating_add_lamports(remaining * 2);
+        assert_eq!(account.lamports(), u64::MAX);
+    }
+
+    #[test]
+    fn test_account_saturating_sub_lamports() {
+        let key = Pubkey::new_unique();
+        let (mut account, _) = make_two_accounts(&key);
+
+        let remaining = 33;
+        account.set_lamports(remaining);
+        account.saturating_sub_lamports(remaining * 2);
+        assert_eq!(account.lamports(), 0);
     }
 
     #[test]

@@ -2128,7 +2128,7 @@ pub fn process_calculate_rent(
         timing::years_as_slots(1.0, &seconds_per_tick, clock::DEFAULT_TICKS_PER_SLOT);
     let slots_per_epoch = epoch_schedule.slots_per_epoch as f64;
     let years_per_epoch = slots_per_epoch / slots_per_year;
-    let (lamports_per_epoch, _) = rent.due(0, data_length, years_per_epoch);
+    let lamports_per_epoch = rent.due(0, data_length, years_per_epoch).lamports();
     let cli_rent_calculation = CliRentCalculation {
         lamports_per_byte_year: rent.lamports_per_byte_year,
         lamports_per_epoch,
