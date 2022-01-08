@@ -4552,6 +4552,7 @@ dependencies = [
  "log 0.4.14",
  "rand 0.7.3",
  "solana-measure",
+ "solana-metrics",
  "solana-program-runtime",
  "solana-runtime",
  "solana-sdk",
