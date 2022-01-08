@@ -102,7 +102,7 @@ fn main() {
         .about(crate_description!())
         .version(solana_version::version!())
         .arg(
-            Arg::with_name("user")
+            Arg::new("user")
                 .long("user")
                 .value_name("user name")
                 .takes_value(true)

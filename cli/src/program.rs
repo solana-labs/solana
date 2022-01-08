@@ -118,14 +118,14 @@ impl ProgramSubCommands for App<'_> {
                     SubCommand::with_name("deploy")
                         .about("Deploy a program")
                         .arg(
-                            Arg::with_name("program_location")
+                            Arg::new("program_location")
                                 .index(1)
                                 .value_name("PROGRAM_FILEPATH")
                                 .takes_value(true)
                                 .help("/path/to/program.so"),
                         )
                         .arg(
-                            Arg::with_name("buffer")
+                            Arg::new("buffer")
                                 .long("buffer")
                                 .value_name("BUFFER_SIGNER")
                                 .takes_value(true)
@@ -134,7 +134,7 @@ impl ProgramSubCommands for App<'_> {
                                       [default: random address]")
                         )
                         .arg(
-                            Arg::with_name("upgrade_authority")
+                            Arg::new("upgrade_authority")
                                 .long("upgrade-authority")
                                 .value_name("UPGRADE_AUTHORITY_SIGNER")
                                 .takes_value(true)
@@ -142,19 +142,19 @@ impl ProgramSubCommands for App<'_> {
                                 .help("Upgrade authority [default: the default configured keypair]")
                         )
                         .arg(
-                            pubkey!(Arg::with_name("program_id")
+                            pubkey!(Arg::new("program_id")
                                 .long("program-id")
                                 .value_name("PROGRAM_ID"),
                                 "Executable program's address, must be a keypair for initial deploys, can be a pubkey for upgrades \
                                 [default: address of keypair at /path/to/program-keypair.json if present, otherwise a random address]"),
                         )
                         .arg(
-                            Arg::with_name("final")
+                            Arg::new("final")
                                 .long("final")
                                 .help("The program will not be upgradeable")
                         )
                         .arg(
-                            Arg::with_name("max_len")
+                            Arg::new("max_len")
                                 .long("max-len")
                                 .value_name("max_len")
                                 .takes_value(true)
@@ -163,7 +163,7 @@ impl ProgramSubCommands for App<'_> {
                                       [default: twice the length of the original deployed program]")
                         )
                         .arg(
-                            Arg::with_name("allow_excessive_balance")
+                            Arg::new("allow_excessive_balance")
                                 .long("allow-excessive-deploy-account-balance")
                                 .takes_value(false)
                                 .help("Use the designated program id even if the account already holds a large balance of SOL")
@@ -173,7 +173,7 @@ impl ProgramSubCommands for App<'_> {
                     SubCommand::with_name("write-buffer")
                         .about("Writes a program into a buffer account")
                         .arg(
-                            Arg::with_name("program_location")
+                            Arg::new("program_location")
                                 .index(1)
                                 .value_name("PROGRAM_FILEPATH")
                                 .takes_value(true)
@@ -181,7 +181,7 @@ impl ProgramSubCommands for App<'_> {
                                 .help("/path/to/program.so"),
                         )
                         .arg(
-                            Arg::with_name("buffer")
+                            Arg::new("buffer")
                                 .long("buffer")
                                 .value_name("BUFFER_SIGNER")
                                 .takes_value(true)
@@ -189,7 +189,7 @@ impl ProgramSubCommands for App<'_> {
                                 .help("Buffer account to write data into [default: random address]")
                         )
                         .arg(
-                            Arg::with_name("buffer_authority")
+                            Arg::new("buffer_authority")
                                 .long("buffer-authority")
                                 .value_name("BUFFER_AUTHORITY_SIGNER")
                                 .takes_value(true)
@@ -197,7 +197,7 @@ impl ProgramSubCommands for App<'_> {
                                 .help("Buffer authority [default: the default configured keypair]")
                         )
                         .arg(
-                            Arg::with_name("max_len")
+                            Arg::new("max_len")
                                 .long("max-len")
                                 .value_name("max_len")
                                 .takes_value(true)
@@ -210,7 +210,7 @@ impl ProgramSubCommands for App<'_> {
                     SubCommand::with_name("set-buffer-authority")
                         .about("Set a new buffer authority")
                         .arg(
-                            Arg::with_name("buffer")
+                            Arg::new("buffer")
                                 .index(1)
                                 .value_name("BUFFER_PUBKEY")
                                 .takes_value(true)
@@ -218,7 +218,7 @@ impl ProgramSubCommands for App<'_> {
                                 .help("Public key of the buffer")
                         )
                         .arg(
-                            Arg::with_name("buffer_authority")
+                            Arg::new("buffer_authority")
                                 .long("buffer-authority")
                                 .value_name("BUFFER_AUTHORITY_SIGNER")
                                 .takes_value(true)
@@ -226,7 +226,7 @@ impl ProgramSubCommands for App<'_> {
                                 .help("Buffer authority [default: the default configured keypair]")
                         )
                         .arg(
-                            pubkey!(Arg::with_name("new_buffer_authority")
+                            pubkey!(Arg::new("new_buffer_authority")
                                 .long("new-buffer-authority")
                                 .value_name("NEW_BUFFER_AUTHORITY")
                                 .required(true),
@@ -237,7 +237,7 @@ impl ProgramSubCommands for App<'_> {
                     SubCommand::with_name("set-upgrade-authority")
                         .about("Set a new program authority")
                         .arg(
-                            Arg::with_name("program_id")
+                            Arg::new("program_id")
                                 .index(1)
                                 .value_name("PROGRAM_ADDRESS")
                                 .takes_value(true)
@@ -245,7 +245,7 @@ impl ProgramSubCommands for App<'_> {
                                 .help("Address of the program to upgrade")
                         )
                         .arg(
-                            Arg::with_name("upgrade_authority")
+                            Arg::new("upgrade_authority")
                                 .long("upgrade-authority")
                                 .value_name("UPGRADE_AUTHORITY_SIGNER")
                                 .takes_value(true)
@@ -253,14 +253,14 @@ impl ProgramSubCommands for App<'_> {
                                 .help("Upgrade authority [default: the default configured keypair]")
                         )
                         .arg(
-                            pubkey!(Arg::with_name("new_upgrade_authority")
+                            pubkey!(Arg::new("new_upgrade_authority")
                                 .long("new-upgrade-authority")
                                 .required_unless("final")
                                 .value_name("NEW_UPGRADE_AUTHORITY"),
                                 "Address of the new upgrade authority"),
                         )
                         .arg(
-                            Arg::with_name("final")
+                            Arg::new("final")
                                 .long("final")
                                 .conflicts_with("new_upgrade_authority")
                                 .help("The program will not be upgradeable")
@@ -270,14 +270,14 @@ impl ProgramSubCommands for App<'_> {
                     SubCommand::with_name("show")
                         .about("Display information about a buffer or program")
                         .arg(
-                            Arg::with_name("account")
+                            Arg::new("account")
                                 .index(1)
                                 .value_name("ACCOUNT_ADDRESS")
                                 .takes_value(true)
                                 .help("Address of the buffer or program to show")
                         )
                         .arg(
-                            Arg::with_name("programs")
+                            Arg::new("programs")
                                 .long("programs")
                                 .conflicts_with("account")
                                 .conflicts_with("buffers")
@@ -285,7 +285,7 @@ impl ProgramSubCommands for App<'_> {
                                 .help("Show every upgradeable program that matches the authority")
                         )
                         .arg(
-                            Arg::with_name("buffers")
+                            Arg::new("buffers")
                                 .long("buffers")
                                 .conflicts_with("account")
                                 .conflicts_with("programs")
@@ -293,21 +293,21 @@ impl ProgramSubCommands for App<'_> {
                                 .help("Show every upgradeable buffer that matches the authority")
                         )
                         .arg(
-                            Arg::with_name("all")
+                            Arg::new("all")
                                 .long("all")
                                 .conflicts_with("account")
                                 .conflicts_with("buffer_authority")
                                 .help("Show accounts for all authorities")
                         )
                         .arg(
-                            pubkey!(Arg::with_name("buffer_authority")
+                            pubkey!(Arg::new("buffer_authority")
                                 .long("buffer-authority")
                                 .value_name("AUTHORITY")
                                 .conflicts_with("all"),
                                 "Authority [default: the default configured keypair]"),
                         )
                         .arg(
-                            Arg::with_name("lamports")
+                            Arg::new("lamports")
                                 .long("lamports")
                                 .takes_value(false)
                                 .help("Display balance in lamports instead of SOL"),
@@ -317,7 +317,7 @@ impl ProgramSubCommands for App<'_> {
                     SubCommand::with_name("dump")
                         .about("Write the program data to a file")
                         .arg(
-                            Arg::with_name("account")
+                            Arg::new("account")
                                 .index(1)
                                 .value_name("ACCOUNT_ADDRESS")
                                 .takes_value(true)
@@ -325,7 +325,7 @@ impl ProgramSubCommands for App<'_> {
                                 .help("Address of the buffer or program")
                         )
                         .arg(
-                            Arg::with_name("output_location")
+                            Arg::new("output_location")
                                 .index(2)
                                 .value_name("OUTPUT_FILEPATH")
                                 .takes_value(true)
@@ -337,21 +337,21 @@ impl ProgramSubCommands for App<'_> {
                     SubCommand::with_name("close")
                         .about("Close a program or buffer account and withdraw all lamports")
                         .arg(
-                            Arg::with_name("account")
+                            Arg::new("account")
                                 .index(1)
                                 .value_name("ACCOUNT_ADDRESS")
                                 .takes_value(true)
                                 .help("Address of the program or buffer account to close"),
                         )
                         .arg(
-                            Arg::with_name("buffers")
+                            Arg::new("buffers")
                                 .long("buffers")
                                 .conflicts_with("account")
                                 .required_unless("account")
                                 .help("Close all buffer accounts that match the authority")
                         )
                         .arg(
-                            Arg::with_name("authority")
+                            Arg::new("authority")
                                 .long("authority")
                                 .alias("buffer-authority")
                                 .value_name("AUTHORITY_SIGNER")
@@ -361,13 +361,13 @@ impl ProgramSubCommands for App<'_> {
                         )
 
                         .arg(
-                            pubkey!(Arg::with_name("recipient_account")
+                            pubkey!(Arg::new("recipient_account")
                                 .long("recipient")
                                 .value_name("RECIPIENT_ADDRESS"),
                                 "Address of the account to deposit the closed account's lamports [default: the default configured keypair]"),
                         )
                         .arg(
-                            Arg::with_name("lamports")
+                            Arg::new("lamports")
                                 .long("lamports")
                                 .takes_value(false)
                                 .help("Display balance in lamports instead of SOL"),
@@ -379,7 +379,7 @@ impl ProgramSubCommands for App<'_> {
                 .about("Deploy a program")
                 .setting(AppSettings::Hidden)
                 .arg(
-                    Arg::with_name("program_location")
+                    Arg::new("program_location")
                         .index(1)
                         .value_name("PROGRAM_FILEPATH")
                         .takes_value(true)
@@ -387,7 +387,7 @@ impl ProgramSubCommands for App<'_> {
                         .help("/path/to/program.o"),
                 )
                 .arg(
-                    Arg::with_name("address_signer")
+                    Arg::new("address_signer")
                         .index(2)
                         .value_name("PROGRAM_ADDRESS_SIGNER")
                         .takes_value(true)
@@ -395,14 +395,14 @@ impl ProgramSubCommands for App<'_> {
                         .help("The signer for the desired address of the program [default: new random address]")
                 )
                 .arg(
-                    Arg::with_name("use_deprecated_loader")
+                    Arg::new("use_deprecated_loader")
                         .long("use-deprecated-loader")
                         .takes_value(false)
                         .hidden(true) // Don't document this argument to discourage its use
                         .help("Use the deprecated BPF loader")
                 )
                 .arg(
-                    Arg::with_name("allow_excessive_balance")
+                    Arg::new("allow_excessive_balance")
                         .long("allow-excessive-deploy-account-balance")
                         .takes_value(false)
                         .help("Use the designated program id, even if the account already holds a large balance of SOL")

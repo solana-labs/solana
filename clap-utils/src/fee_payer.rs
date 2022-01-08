@@ -12,7 +12,7 @@ pub const FEE_PAYER_ARG: ArgConstant<'static> = ArgConstant {
 };
 
 pub fn fee_payer_arg<'a>() -> Arg<'a> {
-    Arg::with_name(FEE_PAYER_ARG.name)
+    Arg::new(FEE_PAYER_ARG.name)
         .long(FEE_PAYER_ARG.long)
         .takes_value(true)
         .value_name("KEYPAIR")

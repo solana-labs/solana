@@ -481,35 +481,35 @@ fn main() {
         .about(crate_description!())
         .version(solana_version::version!())
         .arg(
-            Arg::with_name("entrypoint")
+            Arg::new("entrypoint")
                 .long("entrypoint")
                 .takes_value(true)
                 .value_name("HOST:PORT")
                 .help("RPC entrypoint address. Usually <ip>:8899"),
         )
         .arg(
-            Arg::with_name("faucet_addr")
+            Arg::new("faucet_addr")
                 .long("faucet")
                 .takes_value(true)
                 .value_name("HOST:PORT")
                 .help("Faucet entrypoint address. Usually <ip>:9900"),
         )
         .arg(
-            Arg::with_name("space")
+            Arg::new("space")
                 .long("space")
                 .takes_value(true)
                 .value_name("BYTES")
                 .help("Size of accounts to create"),
         )
         .arg(
-            Arg::with_name("lamports")
+            Arg::new("lamports")
                 .long("lamports")
                 .takes_value(true)
                 .value_name("LAMPORTS")
                 .help("How many lamports to fund each account"),
         )
         .arg(
-            Arg::with_name("identity")
+            Arg::new("identity")
                 .long("identity")
                 .takes_value(true)
                 .multiple(true)
@@ -517,14 +517,14 @@ fn main() {
                 .help("keypair file"),
         )
         .arg(
-            Arg::with_name("batch_size")
+            Arg::new("batch_size")
                 .long("batch-size")
                 .takes_value(true)
                 .value_name("BYTES")
                 .help("Number of transactions to send per batch"),
         )
         .arg(
-            Arg::with_name("close_nth_batch")
+            Arg::new("close_nth_batch")
                 .long("close-frequency")
                 .takes_value(true)
                 .value_name("BYTES")
@@ -537,32 +537,32 @@ fn main() {
                 ),
         )
         .arg(
-            Arg::with_name("num_instructions")
+            Arg::new("num_instructions")
                 .long("num-instructions")
                 .takes_value(true)
                 .value_name("NUM")
                 .help("Number of accounts to create on each transaction"),
         )
         .arg(
-            Arg::with_name("iterations")
+            Arg::new("iterations")
                 .long("iterations")
                 .takes_value(true)
                 .value_name("NUM")
                 .help("Number of iterations to make. 0 = unlimited iterations."),
         )
         .arg(
-            Arg::with_name("check_gossip")
+            Arg::new("check_gossip")
                 .long("check-gossip")
                 .help("Just use entrypoint address directly"),
         )
         .arg(
-            Arg::with_name("mint")
+            Arg::new("mint")
                 .long("mint")
                 .takes_value(true)
                 .help("Mint address to initialize account"),
         )
         .arg(
-            Arg::with_name("reclaim_accounts")
+            Arg::new("reclaim_accounts")
                 .long("reclaim-accounts")
                 .takes_value(false)
                 .help("Reclaim accounts after session ends; incompatible with --iterations 0"),

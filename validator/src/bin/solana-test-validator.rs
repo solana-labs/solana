@@ -65,7 +65,7 @@ fn main() {
         .about("Test Validator")
         .version(solana_version::version!())
         .arg({
-            let arg = Arg::with_name("config_file")
+            let arg = Arg::new("config_file")
                 .short("C")
                 .long("config")
                 .value_name("PATH")
@@ -78,7 +78,7 @@ fn main() {
             }
         })
         .arg(
-            Arg::with_name("json_rpc_url")
+            Arg::new("json_rpc_url")
                 .short("u")
                 .long("url")
                 .value_name("URL_OR_MONIKER")
@@ -90,7 +90,7 @@ fn main() {
                 ),
         )
         .arg(
-            Arg::with_name("mint_address")
+            Arg::new("mint_address")
                 .long("mint")
                 .value_name("PUBKEY")
                 .validator(is_pubkey)
@@ -102,7 +102,7 @@ fn main() {
                 ),
         )
         .arg(
-            Arg::with_name("ledger_path")
+            Arg::new("ledger_path")
                 .short("l")
                 .long("ledger")
                 .value_name("DIR")
@@ -112,7 +112,7 @@ fn main() {
                 .help("Use DIR as ledger location"),
         )
         .arg(
-            Arg::with_name("reset")
+            Arg::new("reset")
                 .short("r")
                 .long("reset")
                 .takes_value(false)
@@ -122,7 +122,7 @@ fn main() {
                 ),
         )
         .arg(
-            Arg::with_name("quiet")
+            Arg::new("quiet")
                 .short("q")
                 .long("quiet")
                 .takes_value(false)
@@ -130,14 +130,14 @@ fn main() {
                 .help("Quiet mode: suppress normal output"),
         )
         .arg(
-            Arg::with_name("log")
+            Arg::new("log")
                 .long("log")
                 .takes_value(false)
                 .conflicts_with("quiet")
                 .help("Log mode: stream the validator log"),
         )
         .arg(
-            Arg::with_name("faucet_port")
+            Arg::new("faucet_port")
                 .long("faucet-port")
                 .value_name("PORT")
                 .takes_value(true)
@@ -146,7 +146,7 @@ fn main() {
                 .help("Enable the faucet on this port"),
         )
         .arg(
-            Arg::with_name("rpc_port")
+            Arg::new("rpc_port")
                 .long("rpc-port")
                 .value_name("PORT")
                 .takes_value(true)
@@ -155,7 +155,7 @@ fn main() {
                 .help("Enable JSON RPC on this port, and the next port for the RPC websocket"),
         )
         .arg(
-            Arg::with_name("bpf_program")
+            Arg::new("bpf_program")
                 .long("bpf-program")
                 .value_name("ADDRESS_OR_PATH BPF_PROGRAM.SO")
                 .takes_value(true)
@@ -168,7 +168,7 @@ fn main() {
                 ),
         )
         .arg(
-            Arg::with_name("account")
+            Arg::new("account")
                 .long("account")
                 .value_name("ADDRESS FILENAME.JSON")
                 .takes_value(true)
@@ -181,13 +181,13 @@ fn main() {
                 ),
         )
         .arg(
-            Arg::with_name("no_bpf_jit")
+            Arg::new("no_bpf_jit")
                 .long("no-bpf-jit")
                 .takes_value(false)
                 .help("Disable the just-in-time compiler and instead use the interpreter for BPF. Windows always disables JIT."),
         )
         .arg(
-            Arg::with_name("slots_per_epoch")
+            Arg::new("slots_per_epoch")
                 .long("slots-per-epoch")
                 .value_name("SLOTS")
                 .validator(|value| {
@@ -209,14 +209,14 @@ fn main() {
                 ),
         )
         .arg(
-            Arg::with_name("gossip_port")
+            Arg::new("gossip_port")
                 .long("gossip-port")
                 .value_name("PORT")
                 .takes_value(true)
                 .help("Gossip port number for the validator"),
         )
         .arg(
-            Arg::with_name("gossip_host")
+            Arg::new("gossip_host")
                 .long("gossip-host")
                 .value_name("HOST")
                 .takes_value(true)
@@ -227,7 +227,7 @@ fn main() {
                 ),
         )
         .arg(
-            Arg::with_name("dynamic_port_range")
+            Arg::new("dynamic_port_range")
                 .long("dynamic-port-range")
                 .value_name("MIN_PORT-MAX_PORT")
                 .takes_value(true)
@@ -238,7 +238,7 @@ fn main() {
                 ),
         )
         .arg(
-            Arg::with_name("bind_address")
+            Arg::new("bind_address")
                 .long("bind-address")
                 .value_name("HOST")
                 .takes_value(true)
@@ -247,7 +247,7 @@ fn main() {
                 .help("IP address to bind the validator ports [default: 0.0.0.0]"),
         )
         .arg(
-            Arg::with_name("clone_account")
+            Arg::new("clone_account")
                 .long("clone")
                 .short("c")
                 .value_name("ADDRESS")
@@ -262,7 +262,7 @@ fn main() {
                 ),
         )
         .arg(
-            Arg::with_name("warp_slot")
+            Arg::new("warp_slot")
                 .required(false)
                 .long("warp-slot")
                 .short("w")
@@ -278,7 +278,7 @@ fn main() {
                 ),
         )
         .arg(
-            Arg::with_name("limit_ledger_size")
+            Arg::new("limit_ledger_size")
                 .long("limit-ledger-size")
                 .value_name("SHRED_COUNT")
                 .takes_value(true)
@@ -286,7 +286,7 @@ fn main() {
                 .help("Keep this amount of shreds in root slots."),
         )
         .arg(
-            Arg::with_name("faucet_sol")
+            Arg::new("faucet_sol")
                 .long("faucet-sol")
                 .takes_value(true)
                 .value_name("SOL")
@@ -297,7 +297,7 @@ fn main() {
                 ),
         )
         .arg(
-            Arg::with_name("accountsdb_plugin_config")
+            Arg::new("accountsdb_plugin_config")
                 .long("accountsdb-plugin-config")
                 .value_name("FILE")
                 .takes_value(true)
@@ -306,7 +306,7 @@ fn main() {
                 .help("Specify the configuration file for the AccountsDb plugin."),
         )
         .arg(
-            Arg::with_name("no_accounts_db_caching")
+            Arg::new("no_accounts_db_caching")
                 .long("no-accounts-db-caching")
                 .help("Disables accounts caching"),
         )

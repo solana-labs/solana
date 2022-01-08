@@ -533,12 +533,12 @@ pub fn main() {
         .setting(AppSettings::VersionlessSubcommands)
         .setting(AppSettings::InferSubcommands)
         .arg(
-            Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
+            Arg::new(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
                 .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
                 .help(SKIP_SEED_PHRASE_VALIDATION_ARG.help),
         )
         .arg(
-            Arg::with_name("identity")
+            Arg::new("identity")
                 .short("i")
                 .long("identity")
                 .value_name("KEYPAIR")
@@ -547,7 +547,7 @@ pub fn main() {
                 .help("Validator identity keypair"),
         )
         .arg(
-            Arg::with_name("authorized_voter_keypairs")
+            Arg::new("authorized_voter_keypairs")
                 .long("authorized-voter")
                 .value_name("KEYPAIR")
                 .takes_value(true)
@@ -559,7 +559,7 @@ pub fn main() {
                        [default: the --identity keypair]"),
         )
         .arg(
-            Arg::with_name("vote_account")
+            Arg::new("vote_account")
                 .long("vote-account")
                 .value_name("ADDRESS")
                 .takes_value(true)
@@ -571,7 +571,7 @@ pub fn main() {
                        --identity keypair or with the --authorized-voter argument")
         )
         .arg(
-            Arg::with_name("init_complete_file")
+            Arg::new("init_complete_file")
                 .long("init-complete-file")
                 .value_name("FILE")
                 .takes_value(true)
@@ -579,7 +579,7 @@ pub fn main() {
                        once validator initialization is complete"),
         )
         .arg(
-            Arg::with_name("ledger_path")
+            Arg::new("ledger_path")
                 .short("l")
                 .long("ledger")
                 .value_name("DIR")
@@ -589,7 +589,7 @@ pub fn main() {
                 .help("Use DIR as ledger location"),
         )
         .arg(
-            Arg::with_name("entrypoint")
+            Arg::new("entrypoint")
                 .short("n")
                 .long("entrypoint")
                 .value_name("HOST:PORT")
@@ -599,26 +599,26 @@ pub fn main() {
                 .help("Rendezvous with the cluster at this gossip entrypoint"),
         )
         .arg(
-            Arg::with_name("no_snapshot_fetch")
+            Arg::new("no_snapshot_fetch")
                 .long("no-snapshot-fetch")
                 .takes_value(false)
                 .help("Do not attempt to fetch a snapshot from the cluster, \
                       start from a local snapshot if present"),
         )
         .arg(
-            Arg::with_name("no_genesis_fetch")
+            Arg::new("no_genesis_fetch")
                 .long("no-genesis-fetch")
                 .takes_value(false)
                 .help("Do not fetch genesis from the cluster"),
         )
         .arg(
-            Arg::with_name("no_voting")
+            Arg::new("no_voting")
                 .long("no-voting")
                 .takes_value(false)
                 .help("Launch validator without voting"),
         )
         .arg(
-            Arg::with_name("no_check_vote_account")
+            Arg::new("no_check_vote_account")
                 .long("no-check-vote-account")
                 .takes_value(false)
                 .conflicts_with("no_voting")
@@ -626,7 +626,7 @@ pub fn main() {
                 .help("Skip the RPC vote account sanity check")
         )
         .arg(
-            Arg::with_name("restricted_repair_only_mode")
+            Arg::new("restricted_repair_only_mode")
                 .long("restricted-repair-only-mode")
                 .takes_value(false)
                 .help("Do not publish the Gossip, TPU, TVU or Repair Service ports causing \
@@ -637,7 +637,7 @@ pub fn main() {
                       "),
         )
         .arg(
-            Arg::with_name("dev_halt_at_slot")
+            Arg::new("dev_halt_at_slot")
                 .long("dev-halt-at-slot")
                 .value_name("SLOT")
                 .validator(is_slot)
@@ -645,7 +645,7 @@ pub fn main() {
                 .help("Halt the validator when it reaches the given slot"),
         )
         .arg(
-            Arg::with_name("rpc_port")
+            Arg::new("rpc_port")
                 .long("rpc-port")
                 .value_name("PORT")
                 .takes_value(true)
@@ -653,31 +653,31 @@ pub fn main() {
                 .help("Enable JSON RPC on this port, and the next port for the RPC websocket"),
         )
         .arg(
-            Arg::with_name("minimal_rpc_api")
+            Arg::new("minimal_rpc_api")
                 .long("--minimal-rpc-api")
                 .takes_value(false)
                 .help("Only expose the RPC methods required to serve snapshots to other nodes"),
         )
         .arg(
-            Arg::with_name("obsolete_v1_7_rpc_api")
+            Arg::new("obsolete_v1_7_rpc_api")
                 .long("--enable-rpc-obsolete_v1_7")
                 .takes_value(false)
                 .help("Enable the obsolete RPC methods removed in v1.7"),
         )
         .arg(
-            Arg::with_name("private_rpc")
+            Arg::new("private_rpc")
                 .long("--private-rpc")
                 .takes_value(false)
                 .help("Do not publish the RPC port for use by others")
         )
         .arg(
-            Arg::with_name("no_port_check")
+            Arg::new("no_port_check")
                 .long("--no-port-check")
                 .takes_value(false)
                 .help("Do not perform TCP/UDP reachable port checks at start-up")
         )
         .arg(
-            Arg::with_name("enable_rpc_transaction_history")
+            Arg::new("enable_rpc_transaction_history")
                 .long("enable-rpc-transaction-history")
                 .takes_value(false)
                 .help("Enable historical transaction info over JSON RPC, \
@@ -685,7 +685,7 @@ pub fn main() {
                        This will cause an increase in disk usage and IOPS"),
         )
         .arg(
-            Arg::with_name("enable_rpc_bigtable_ledger_storage")
+            Arg::new("enable_rpc_bigtable_ledger_storage")
                 .long("enable-rpc-bigtable-ledger-storage")
                 .requires("enable_rpc_transaction_history")
                 .takes_value(false)
@@ -693,14 +693,14 @@ pub fn main() {
                        as a fallback to local ledger data"),
         )
         .arg(
-            Arg::with_name("enable_bigtable_ledger_upload")
+            Arg::new("enable_bigtable_ledger_upload")
                 .long("enable-bigtable-ledger-upload")
                 .requires("enable_rpc_transaction_history")
                 .takes_value(false)
                 .help("Upload new confirmed blocks into a BigTable instance"),
         )
         .arg(
-            Arg::with_name("enable_cpi_and_log_storage")
+            Arg::new("enable_cpi_and_log_storage")
                 .long("enable-cpi-and-log-storage")
                 .requires("enable_rpc_transaction_history")
                 .takes_value(false)
@@ -708,7 +708,7 @@ pub fn main() {
                         historical transaction info stored"),
         )
         .arg(
-            Arg::with_name("rpc_max_multiple_accounts")
+            Arg::new("rpc_max_multiple_accounts")
                 .long("rpc-max-multiple-accounts")
                 .value_name("MAX ACCOUNTS")
                 .takes_value(true)
@@ -717,7 +717,7 @@ pub fn main() {
                        the getMultipleAccounts JSON RPC method")
         )
         .arg(
-            Arg::with_name("health_check_slot_distance")
+            Arg::new("health_check_slot_distance")
                 .long("health-check-slot-distance")
                 .value_name("SLOT_DISTANCE")
                 .takes_value(true)
@@ -729,7 +729,7 @@ pub fn main() {
                        report itself to be healthy")
         )
         .arg(
-            Arg::with_name("rpc_faucet_addr")
+            Arg::new("rpc_faucet_addr")
                 .long("rpc-faucet-address")
                 .value_name("HOST:PORT")
                 .takes_value(true)
@@ -737,7 +737,7 @@ pub fn main() {
                 .help("Enable the JSON RPC 'requestAirdrop' API with this faucet address."),
         )
         .arg(
-            Arg::with_name("account_paths")
+            Arg::new("account_paths")
                 .long("accounts")
                 .value_name("PATHS")
                 .takes_value(true)
@@ -745,7 +745,7 @@ pub fn main() {
                 .help("Comma separated persistent accounts location"),
         )
         .arg(
-            Arg::with_name("account_shrink_path")
+            Arg::new("account_shrink_path")
                 .long("account-shrink-path")
                 .value_name("PATH")
                 .takes_value(true)
@@ -753,21 +753,21 @@ pub fn main() {
                 .help("Path to accounts shrink path which can hold a compacted account set."),
         )
         .arg(
-            Arg::with_name("snapshots")
+            Arg::new("snapshots")
                 .long("snapshots")
                 .value_name("DIR")
                 .takes_value(true)
                 .help("Use DIR as snapshot location [default: --ledger value]"),
         )
         .arg(
-            Arg::with_name("tower")
+            Arg::new("tower")
                 .long("tower")
                 .value_name("DIR")
                 .takes_value(true)
                 .help("Use DIR as file tower storage location [default: --ledger value]"),
         )
         .arg(
-            Arg::with_name("tower_storage")
+            Arg::new("tower_storage")
                 .long("tower-storage")
                 .possible_values(&["file", "etcd"])
                 .default_value("file")
@@ -775,7 +775,7 @@ pub fn main() {
                 .help("Where to store the tower"),
         )
         .arg(
-            Arg::with_name("etcd_endpoint")
+            Arg::new("etcd_endpoint")
                 .long("etcd-endpoint")
                 .required_if("tower_storage", "etcd")
                 .value_name("HOST:PORT")
@@ -785,7 +785,7 @@ pub fn main() {
                 .help("etcd gRPC endpoint to connect with")
         )
         .arg(
-            Arg::with_name("etcd_domain_name")
+            Arg::new("etcd_domain_name")
                 .long("etcd-domain-name")
                 .required_if("tower_storage", "etcd")
                 .value_name("DOMAIN")
@@ -794,7 +794,7 @@ pub fn main() {
                 .help("domain name against which to verify the etcd server’s TLS certificate")
         )
         .arg(
-            Arg::with_name("etcd_cacert_file")
+            Arg::new("etcd_cacert_file")
                 .long("etcd-cacert-file")
                 .required_if("tower_storage", "etcd")
                 .value_name("FILE")
@@ -802,7 +802,7 @@ pub fn main() {
                 .help("verify the TLS certificate of the etcd endpoint using this CA bundle")
         )
         .arg(
-            Arg::with_name("etcd_key_file")
+            Arg::new("etcd_key_file")
                 .long("etcd-key-file")
                 .required_if("tower_storage", "etcd")
                 .value_name("FILE")
@@ -810,7 +810,7 @@ pub fn main() {
                 .help("TLS key file to use when establishing a connection to the etcd endpoint")
         )
         .arg(
-            Arg::with_name("etcd_cert_file")
+            Arg::new("etcd_cert_file")
                 .long("etcd-cert-file")
                 .required_if("tower_storage", "etcd")
                 .value_name("FILE")
@@ -818,14 +818,14 @@ pub fn main() {
                 .help("TLS certificate to use when establishing a connection to the etcd endpoint")
         )
         .arg(
-            Arg::with_name("gossip_port")
+            Arg::new("gossip_port")
                 .long("gossip-port")
                 .value_name("PORT")
                 .takes_value(true)
                 .help("Gossip port number for the validator"),
         )
         .arg(
-            Arg::with_name("gossip_host")
+            Arg::new("gossip_host")
                 .long("gossip-host")
                 .value_name("HOST")
                 .takes_value(true)
@@ -834,7 +834,7 @@ pub fn main() {
                        [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
         )
         .arg(
-            Arg::with_name("public_rpc_addr")
+            Arg::new("public_rpc_addr")
                 .long("public-rpc-address")
                 .value_name("HOST:PORT")
                 .takes_value(true)
@@ -845,7 +845,7 @@ pub fn main() {
                       [default: use --rpc-bind-address / --rpc-port]"),
         )
         .arg(
-            Arg::with_name("dynamic_port_range")
+            Arg::new("dynamic_port_range")
                 .long("dynamic-port-range")
                 .value_name("MIN_PORT-MAX_PORT")
                 .takes_value(true)
@@ -854,7 +854,7 @@ pub fn main() {
                 .help("Range to use for dynamically assigned ports"),
         )
         .arg(
-            Arg::with_name("maximum_local_snapshot_age")
+            Arg::new("maximum_local_snapshot_age")
                 .long("maximum-local-snapshot-age")
                 .value_name("NUMBER_OF_SLOTS")
                 .takes_value(true)
@@ -864,7 +864,7 @@ pub fn main() {
                        download from other validators"),
         )
         .arg(
-            Arg::with_name("incremental_snapshots")
+            Arg::new("incremental_snapshots")
                 .long("incremental-snapshots")
                 .takes_value(false)
                 .long_help("Enable incremental snapshots by setting this flag. \
@@ -873,7 +873,7 @@ pub fn main() {
                    interval, use --full-snapshot-interval-slots.")
          )
         .arg(
-            Arg::with_name("incremental_snapshot_interval_slots")
+            Arg::new("incremental_snapshot_interval_slots")
                 .long("incremental-snapshot-interval-slots")
                 .alias("snapshot-interval-slots")
                 .value_name("NUMBER")
@@ -883,7 +883,7 @@ pub fn main() {
                       0 to disable snapshots"),
         )
         .arg(
-            Arg::with_name("full_snapshot_interval_slots")
+            Arg::new("full_snapshot_interval_slots")
                 .long("full-snapshot-interval-slots")
                 .value_name("NUMBER")
                 .takes_value(true)
@@ -891,7 +891,7 @@ pub fn main() {
                 .help("Number of slots between generating full snapshots")
         )
         .arg(
-            Arg::with_name("maximum_full_snapshots_to_retain")
+            Arg::new("maximum_full_snapshots_to_retain")
                 .long("maximum-full-snapshots-to-retain")
                 .alias("maximum-snapshots-to-retain")
                 .value_name("NUMBER")
@@ -900,7 +900,7 @@ pub fn main() {
                 .help("The maximum number of full snapshot archives to hold on to when purging older snapshots.")
         )
         .arg(
-            Arg::with_name("maximum_incremental_snapshots_to_retain")
+            Arg::new("maximum_incremental_snapshots_to_retain")
                 .long("maximum-incremental-snapshots-to-retain")
                 .value_name("NUMBER")
                 .takes_value(true)
@@ -908,7 +908,7 @@ pub fn main() {
                 .help("The maximum number of incremental snapshot archives to hold on to when purging older snapshots.")
         )
         .arg(
-            Arg::with_name("snapshot_packager_niceness_adj")
+            Arg::new("snapshot_packager_niceness_adj")
                 .long("snapshot-packager-niceness-adjustment")
                 .value_name("ADJUSTMENT")
                 .takes_value(true)
@@ -918,7 +918,7 @@ pub fn main() {
                       increases priority, positive value decreases priority.")
         )
         .arg(
-            Arg::with_name("minimal_snapshot_download_speed")
+            Arg::new("minimal_snapshot_download_speed")
                 .long("minimal-snapshot-download-speed")
                 .value_name("MINIMAL_SNAPSHOT_DOWNLOAD_SPEED")
                 .takes_value(true)
@@ -928,7 +928,7 @@ pub fn main() {
                       retry the download against a different rpc node."),
         )
         .arg(
-            Arg::with_name("maximum_snapshot_download_abort")
+            Arg::new("maximum_snapshot_download_abort")
                 .long("maximum-snapshot-download-abort")
                 .value_name("MAXIMUM_SNAPSHOT_DOWNLOAD_ABORT")
                 .takes_value(true)
@@ -937,7 +937,7 @@ pub fn main() {
                       slow snapshot download."),
         )
         .arg(
-            Arg::with_name("contact_debug_interval")
+            Arg::new("contact_debug_interval")
                 .long("contact-debug-interval")
                 .value_name("CONTACT_DEBUG_INTERVAL")
                 .takes_value(true)
@@ -945,23 +945,23 @@ pub fn main() {
                 .help("Milliseconds between printing contact debug from gossip."),
         )
         .arg(
-            Arg::with_name("no_poh_speed_test")
+            Arg::new("no_poh_speed_test")
                 .long("no-poh-speed-test")
                 .help("Skip the check for PoH speed."),
         )
         .arg(
-            Arg::with_name("no_os_network_limits_test")
+            Arg::new("no_os_network_limits_test")
                 .hidden(true)
                 .long("no-os-network-limits-test")
                 .help("Skip checks for OS network limits.")
         )
         .arg(
-            Arg::with_name("no_os_network_stats_reporting")
+            Arg::new("no_os_network_stats_reporting")
                 .long("no-os-network-stats-reporting")
                 .help("Disable reporting of OS network statistics.")
         )
         .arg(
-            Arg::with_name("accounts-hash-interval-slots")
+            Arg::new("accounts-hash-interval-slots")
                 .long("accounts-hash-interval-slots")
                 .value_name("NUMBER")
                 .takes_value(true)
@@ -977,7 +977,7 @@ pub fn main() {
                 }),
         )
         .arg(
-            Arg::with_name("snapshot_version")
+            Arg::new("snapshot_version")
                 .long("snapshot-version")
                 .value_name("SNAPSHOT_VERSION")
                 .validator(is_parsable::<SnapshotVersion>)
@@ -986,7 +986,7 @@ pub fn main() {
                 .help("Output snapshot version"),
         )
         .arg(
-            Arg::with_name("limit_ledger_size")
+            Arg::new("limit_ledger_size")
                 .long("limit-ledger-size")
                 .value_name("SHRED_COUNT")
                 .takes_value(true)
@@ -996,25 +996,25 @@ pub fn main() {
                 .help("Keep this amount of shreds in root slots."),
         )
         .arg(
-            Arg::with_name("skip_poh_verify")
+            Arg::new("skip_poh_verify")
                 .long("skip-poh-verify")
                 .takes_value(false)
                 .help("Skip ledger verification at validator bootup"),
         )
         .arg(
-            Arg::with_name("cuda")
+            Arg::new("cuda")
                 .long("cuda")
                 .takes_value(false)
                 .help("Use CUDA"),
         )
         .arg(
-            clap::Arg::with_name("require_tower")
+            clap::Arg::new("require_tower")
                 .long("require-tower")
                 .takes_value(false)
                 .help("Refuse to start if saved tower state is not found"),
         )
         .arg(
-            Arg::with_name("expected_genesis_hash")
+            Arg::new("expected_genesis_hash")
                 .long("expected-genesis-hash")
                 .value_name("HASH")
                 .takes_value(true)
@@ -1022,7 +1022,7 @@ pub fn main() {
                 .help("Require the genesis have this hash"),
         )
         .arg(
-            Arg::with_name("expected_bank_hash")
+            Arg::new("expected_bank_hash")
                 .long("expected-bank-hash")
                 .value_name("HASH")
                 .takes_value(true)
@@ -1030,7 +1030,7 @@ pub fn main() {
                 .help("When wait-for-supermajority <x>, require the bank at <x> to have this hash"),
         )
         .arg(
-            Arg::with_name("expected_shred_version")
+            Arg::new("expected_shred_version")
                 .long("expected-shred-version")
                 .value_name("VERSION")
                 .takes_value(true)
@@ -1038,7 +1038,7 @@ pub fn main() {
                 .help("Require the shred version be this value"),
         )
         .arg(
-            Arg::with_name("logfile")
+            Arg::new("logfile")
                 .short("o")
                 .long("log")
                 .value_name("FILE")
@@ -1048,7 +1048,7 @@ pub fn main() {
                        to re-open the log file"),
         )
         .arg(
-            Arg::with_name("wait_for_supermajority")
+            Arg::new("wait_for_supermajority")
                 .long("wait-for-supermajority")
                 .requires("expected_bank_hash")
                 .value_name("SLOT")
@@ -1057,7 +1057,7 @@ pub fn main() {
                        supermajority of stake is visible on gossip before starting PoH"),
         )
         .arg(
-            Arg::with_name("no_wait_for_vote_to_start_leader")
+            Arg::new("no_wait_for_vote_to_start_leader")
                 .hidden(true)
                 .long("no-wait-for-vote-to-start-leader")
                 .help("If the validator starts up with no ledger, it will wait to start block
@@ -1065,7 +1065,7 @@ pub fn main() {
                       double signing. Turn off to risk double signing a block."),
         )
         .arg(
-            Arg::with_name("hard_forks")
+            Arg::new("hard_forks")
                 .long("hard-fork")
                 .value_name("SLOT")
                 .validator(is_slot)
@@ -1074,7 +1074,7 @@ pub fn main() {
                 .help("Add a hard fork at this slot"),
         )
         .arg(
-            Arg::with_name("known_validators")
+            Arg::new("known_validators")
                 .alias("trusted-validator")
                 .long("known-validator")
                 .validator(is_pubkey)
@@ -1085,7 +1085,7 @@ pub fn main() {
                        May be specified multiple times. If unspecified any snapshot hash will be accepted"),
         )
         .arg(
-            Arg::with_name("debug_key")
+            Arg::new("debug_key")
                 .long("debug-key")
                 .validator(is_pubkey)
                 .value_name("ADDRESS")
@@ -1094,14 +1094,14 @@ pub fn main() {
                 .help("Log when transactions are processed which reference a given key."),
         )
         .arg(
-            Arg::with_name("only_known_rpc")
+            Arg::new("only_known_rpc")
                 .alias("no-untrusted-rpc")
                 .long("only-known-rpc")
                 .takes_value(false)
                 .help("Use the RPC service of known validators only")
         )
         .arg(
-            Arg::with_name("repair_validators")
+            Arg::new("repair_validators")
                 .long("repair-validator")
                 .validator(is_pubkey)
                 .value_name("VALIDATOR IDENTITY")
@@ -1111,7 +1111,7 @@ pub fn main() {
                        request from validators outside this set [default: all validators]")
         )
         .arg(
-            Arg::with_name("gossip_validators")
+            Arg::new("gossip_validators")
                 .long("gossip-validator")
                 .validator(is_pubkey)
                 .value_name("VALIDATOR IDENTITY")
@@ -1122,20 +1122,20 @@ pub fn main() {
                       [default: all validators]")
         )
         .arg(
-            Arg::with_name("no_rocksdb_compaction")
+            Arg::new("no_rocksdb_compaction")
                 .long("no-rocksdb-compaction")
                 .takes_value(false)
                 .help("Disable manual compaction of the ledger database (this is ignored).")
         )
         .arg(
-            Arg::with_name("rocksdb_compaction_interval")
+            Arg::new("rocksdb_compaction_interval")
                 .long("rocksdb-compaction-interval-slots")
                 .value_name("ROCKSDB_COMPACTION_INTERVAL_SLOTS")
                 .takes_value(true)
                 .help("Number of slots between compacting ledger"),
         )
         .arg(
-            Arg::with_name("tpu_coalesce_ms")
+            Arg::new("tpu_coalesce_ms")
                 .long("tpu-coalesce-ms")
                 .value_name("MILLISECS")
                 .takes_value(true)
@@ -1143,14 +1143,14 @@ pub fn main() {
                 .help("Milliseconds to wait in the TPU receiver for packet coalescing."),
         )
         .arg(
-            Arg::with_name("rocksdb_max_compaction_jitter")
+            Arg::new("rocksdb_max_compaction_jitter")
                 .long("rocksdb-max-compaction-jitter-slots")
                 .value_name("ROCKSDB_MAX_COMPACTION_JITTER_SLOTS")
                 .takes_value(true)
                 .help("Introduce jitter into the compaction to offset compaction operation"),
         )
         .arg(
-            Arg::with_name("bind_address")
+            Arg::new("bind_address")
                 .long("bind-address")
                 .value_name("HOST")
                 .takes_value(true)
@@ -1159,7 +1159,7 @@ pub fn main() {
                 .help("IP address to bind the validator ports"),
         )
         .arg(
-            Arg::with_name("rpc_bind_address")
+            Arg::new("rpc_bind_address")
                 .long("rpc-bind-address")
                 .value_name("HOST")
                 .takes_value(true)
@@ -1167,7 +1167,7 @@ pub fn main() {
                 .help("IP address to bind the RPC port [default: 127.0.0.1 if --private-rpc is present, otherwise use --bind-address]"),
         )
         .arg(
-            Arg::with_name("rpc_threads")
+            Arg::new("rpc_threads")
                 .long("rpc-threads")
                 .value_name("NUMBER")
                 .validator(is_parsable::<usize>)
@@ -1176,7 +1176,7 @@ pub fn main() {
                 .help("Number of threads to use for servicing RPC requests"),
         )
         .arg(
-            Arg::with_name("rpc_niceness_adj")
+            Arg::new("rpc_niceness_adj")
                 .long("rpc-niceness-adjustment")
                 .value_name("ADJUSTMENT")
                 .takes_value(true)
@@ -1186,7 +1186,7 @@ pub fn main() {
                       increases priority, positive value decreases priority.")
         )
         .arg(
-            Arg::with_name("rpc_bigtable_timeout")
+            Arg::new("rpc_bigtable_timeout")
                 .long("rpc-bigtable-timeout")
                 .value_name("SECONDS")
                 .validator(is_parsable::<u64>)
@@ -1195,7 +1195,7 @@ pub fn main() {
                 .help("Number of seconds before timing out RPC requests backed by BigTable"),
         )
         .arg(
-            Arg::with_name("rpc_pubsub_worker_threads")
+            Arg::new("rpc_pubsub_worker_threads")
                 .long("rpc-pubsub-worker-threads")
                 .takes_value(true)
                 .value_name("NUMBER")
@@ -1204,19 +1204,19 @@ pub fn main() {
                 .help("PubSub worker threads"),
         )
         .arg(
-            Arg::with_name("rpc_pubsub_enable_block_subscription")
+            Arg::new("rpc_pubsub_enable_block_subscription")
                 .long("rpc-pubsub-enable-block-subscription")
                 .takes_value(false)
                 .help("Enable the unstable RPC PubSub `blockSubscribe` subscription"),
         )
         .arg(
-            Arg::with_name("rpc_pubsub_enable_vote_subscription")
+            Arg::new("rpc_pubsub_enable_vote_subscription")
                 .long("rpc-pubsub-enable-vote-subscription")
                 .takes_value(false)
                 .help("Enable the unstable RPC PubSub `voteSubscribe` subscription"),
         )
         .arg(
-            Arg::with_name("rpc_pubsub_max_connections")
+            Arg::new("rpc_pubsub_max_connections")
                 .long("rpc-pubsub-max-connections")
                 .value_name("NUMBER")
                 .takes_value(true)
@@ -1227,7 +1227,7 @@ pub fn main() {
                        be made until an old connection is dropped. (Obsolete)"),
         )
         .arg(
-            Arg::with_name("rpc_pubsub_max_fragment_size")
+            Arg::new("rpc_pubsub_max_fragment_size")
                 .long("rpc-pubsub-max-fragment-size")
                 .value_name("BYTES")
                 .takes_value(true)
@@ -1237,7 +1237,7 @@ pub fn main() {
                        than this will be rejected. (Obsolete)"),
         )
         .arg(
-            Arg::with_name("rpc_pubsub_max_in_buffer_capacity")
+            Arg::new("rpc_pubsub_max_in_buffer_capacity")
                 .long("rpc-pubsub-max-in-buffer-capacity")
                 .value_name("BYTES")
                 .takes_value(true)
@@ -1247,7 +1247,7 @@ pub fn main() {
                       (Obsolete)"),
         )
         .arg(
-            Arg::with_name("rpc_pubsub_max_out_buffer_capacity")
+            Arg::new("rpc_pubsub_max_out_buffer_capacity")
                 .long("rpc-pubsub-max-out-buffer-capacity")
                 .value_name("BYTES")
                 .takes_value(true)
@@ -1257,7 +1257,7 @@ pub fn main() {
                        (Obsolete)"),
         )
         .arg(
-            Arg::with_name("rpc_pubsub_max_active_subscriptions")
+            Arg::new("rpc_pubsub_max_active_subscriptions")
                 .long("rpc-pubsub-max-active-subscriptions")
                 .takes_value(true)
                 .value_name("NUMBER")
@@ -1267,7 +1267,7 @@ pub fn main() {
                        across all connections."),
         )
         .arg(
-            Arg::with_name("rpc_pubsub_queue_capacity_items")
+            Arg::new("rpc_pubsub_queue_capacity_items")
                 .long("rpc-pubsub-queue-capacity-items")
                 .takes_value(true)
                 .value_name("NUMBER")
@@ -1277,7 +1277,7 @@ pub fn main() {
                        across all connections."),
         )
         .arg(
-            Arg::with_name("rpc_pubsub_queue_capacity_bytes")
+            Arg::new("rpc_pubsub_queue_capacity_bytes")
                 .long("rpc-pubsub-queue-capacity-bytes")
                 .takes_value(true)
                 .value_name("BYTES")
@@ -1287,7 +1287,7 @@ pub fn main() {
                        across all connections."),
         )
         .arg(
-            Arg::with_name("rpc_pubsub_notification_threads")
+            Arg::new("rpc_pubsub_notification_threads")
                 .long("rpc-pubsub-notification-threads")
                 .takes_value(true)
                 .value_name("NUM_THREADS")
@@ -1296,7 +1296,7 @@ pub fn main() {
                        for generating notifications."),
         )
         .arg(
-            Arg::with_name("rpc_send_transaction_retry_ms")
+            Arg::new("rpc_send_transaction_retry_ms")
                 .long("rpc-send-retry-ms")
                 .value_name("MILLISECS")
                 .takes_value(true)
@@ -1305,7 +1305,7 @@ pub fn main() {
                 .help("The rate at which transactions sent via rpc service are retried."),
         )
         .arg(
-            Arg::with_name("rpc_send_transaction_leader_forward_count")
+            Arg::new("rpc_send_transaction_leader_forward_count")
                 .long("rpc-send-leader-count")
                 .value_name("NUMBER")
                 .takes_value(true)
@@ -1314,7 +1314,7 @@ pub fn main() {
                 .help("The number of upcoming leaders to which to forward transactions sent via rpc service."),
         )
         .arg(
-            Arg::with_name("rpc_send_transaction_default_max_retries")
+            Arg::new("rpc_send_transaction_default_max_retries")
                 .long("rpc-send-default-max-retries")
                 .value_name("NUMBER")
                 .takes_value(true)
@@ -1322,7 +1322,7 @@ pub fn main() {
                 .help("The maximum number of transaction broadcast retries when unspecified by the request, otherwise retried until expiration."),
         )
         .arg(
-            Arg::with_name("rpc_send_transaction_service_max_retries")
+            Arg::new("rpc_send_transaction_service_max_retries")
                 .long("rpc-send-service-max-retries")
                 .value_name("NUMBER")
                 .takes_value(true)
@@ -1331,21 +1331,21 @@ pub fn main() {
                 .help("The maximum number of transaction broadcast retries, regardless of requested value."),
         )
         .arg(
-            Arg::with_name("rpc_scan_and_fix_roots")
+            Arg::new("rpc_scan_and_fix_roots")
                 .long("rpc-scan-and-fix-roots")
                 .takes_value(false)
                 .requires("enable_rpc_transaction_history")
                 .help("Verifies blockstore roots on boot and fixes any gaps"),
         )
         .arg(
-            Arg::with_name("enable_accountsdb_repl")
+            Arg::new("enable_accountsdb_repl")
                 .long("enable-accountsdb-repl")
                 .takes_value(false)
                 .hidden(true)
                 .help("Enable AccountsDb Replication"),
         )
         .arg(
-            Arg::with_name("accountsdb_repl_bind_address")
+            Arg::new("accountsdb_repl_bind_address")
                 .long("accountsdb-repl-bind-address")
                 .value_name("HOST")
                 .takes_value(true)
@@ -1354,7 +1354,7 @@ pub fn main() {
                 .help("IP address to bind the AccountsDb Replication port [default: use --bind-address]"),
         )
         .arg(
-            Arg::with_name("accountsdb_repl_port")
+            Arg::new("accountsdb_repl_port")
                 .long("accountsdb-repl-port")
                 .value_name("PORT")
                 .takes_value(true)
@@ -1363,7 +1363,7 @@ pub fn main() {
                 .help("Enable AccountsDb Replication Service on this port"),
         )
         .arg(
-            Arg::with_name("accountsdb_repl_threads")
+            Arg::new("accountsdb_repl_threads")
                 .long("accountsdb-repl-threads")
                 .value_name("NUMBER")
                 .validator(is_parsable::<usize>)
@@ -1373,7 +1373,7 @@ pub fn main() {
                 .help("Number of threads to use for servicing AccountsDb Replication requests"),
         )
         .arg(
-            Arg::with_name("accountsdb_plugin_config")
+            Arg::new("accountsdb_plugin_config")
                 .long("accountsdb-plugin-config")
                 .value_name("FILE")
                 .takes_value(true)
@@ -1382,7 +1382,7 @@ pub fn main() {
                 .help("Specify the configuration file for the AccountsDb plugin."),
         )
         .arg(
-            Arg::with_name("halt_on_known_validators_accounts_hash_mismatch")
+            Arg::new("halt_on_known_validators_accounts_hash_mismatch")
                 .alias("halt-on-trusted-validators-accounts-hash-mismatch")
                 .long("halt-on-known-validators-accounts-hash-mismatch")
                 .requires("known_validators")
@@ -1390,7 +1390,7 @@ pub fn main() {
                 .help("Abort the validator if a bank hash mismatch is detected within known validator set"),
         )
         .arg(
-            Arg::with_name("snapshot_archive_format")
+            Arg::new("snapshot_archive_format")
                 .long("snapshot-archive-format")
                 .alias("snapshot-compression") // Legacy name used by Solana v1.5.x and older
                 .possible_values(&["bz2", "gzip", "zstd", "tar", "none"])
@@ -1400,7 +1400,7 @@ pub fn main() {
                 .help("Snapshot archive format to use."),
         )
         .arg(
-            Arg::with_name("max_genesis_archive_unpacked_size")
+            Arg::new("max_genesis_archive_unpacked_size")
                 .long("max-genesis-archive-unpacked-size")
                 .value_name("NUMBER")
                 .takes_value(true)
@@ -1410,7 +1410,7 @@ pub fn main() {
                 ),
         )
         .arg(
-            Arg::with_name("wal_recovery_mode")
+            Arg::new("wal_recovery_mode")
                 .long("wal-recovery-mode")
                 .value_name("MODE")
                 .takes_value(true)
@@ -1424,21 +1424,21 @@ pub fn main() {
                 ),
         )
         .arg(
-            Arg::with_name("no_bpf_jit")
+            Arg::new("no_bpf_jit")
                 .long("no-bpf-jit")
                 .takes_value(false)
                 .help("Disable the just-in-time compiler and instead use the interpreter for BPF"),
         )
         .arg(
             // legacy nop argument
-            Arg::with_name("bpf_jit")
+            Arg::new("bpf_jit")
                 .long("bpf-jit")
                 .hidden(true)
                 .takes_value(false)
                 .conflicts_with("no_bpf_jit")
         )
         .arg(
-            Arg::with_name("poh_pinned_cpu_core")
+            Arg::new("poh_pinned_cpu_core")
                 .hidden(true)
                 .long("experimental-poh-pinned-cpu-core")
                 .takes_value(true)
@@ -1454,7 +1454,7 @@ pub fn main() {
                 .help("EXPERIMENTAL: Specify which CPU core PoH is pinned to"),
         )
         .arg(
-            Arg::with_name("poh_hashes_per_batch")
+            Arg::new("poh_hashes_per_batch")
                 .hidden(true)
                 .long("poh-hashes-per-batch")
                 .takes_value(true)
@@ -1462,7 +1462,7 @@ pub fn main() {
                 .help("Specify hashes per batch in PoH service"),
         )
         .arg(
-            Arg::with_name("account_indexes")
+            Arg::new("account_indexes")
                 .long("account-index")
                 .takes_value(true)
                 .multiple(true)
@@ -1471,7 +1471,7 @@ pub fn main() {
                 .help("Enable an accounts index, indexed by the selected account field"),
         )
         .arg(
-            Arg::with_name("account_index_exclude_key")
+            Arg::new("account_index_exclude_key")
                 .long(EXCLUDE_KEY)
                 .takes_value(true)
                 .validator(is_pubkey)
@@ -1480,7 +1480,7 @@ pub fn main() {
                 .help("When account indexes are enabled, exclude this key from the index."),
         )
         .arg(
-            Arg::with_name("account_index_include_key")
+            Arg::new("account_index_include_key")
                 .long(INCLUDE_KEY)
                 .takes_value(true)
                 .validator(is_pubkey)
@@ -1490,18 +1490,18 @@ pub fn main() {
                 .help("When account indexes are enabled, only include specific keys in the index. This overrides --account-index-exclude-key."),
         )
         .arg(
-            Arg::with_name("no_accounts_db_caching")
+            Arg::new("no_accounts_db_caching")
                 .long("no-accounts-db-caching")
                 .help("Disables accounts caching"),
         )
         .arg(
-            Arg::with_name("accounts_db_skip_shrink")
+            Arg::new("accounts_db_skip_shrink")
                 .long("accounts-db-skip-shrink")
                 .help("Enables faster starting of validators by skipping shrink. \
                       This option is for use during testing."),
         )
         .arg(
-            Arg::with_name("accounts_db_cache_limit_mb")
+            Arg::new("accounts_db_cache_limit_mb")
                 .long("accounts-db-cache-limit-mb")
                 .value_name("MEGABYTES")
                 .validator(is_parsable::<u64>)
@@ -1509,7 +1509,7 @@ pub fn main() {
                 .help("How large the write cache for account data can become. If this is exceeded, the cache is flushed more aggressively."),
         )
         .arg(
-            Arg::with_name("accounts_index_scan_results_limit_mb")
+            Arg::new("accounts_index_scan_results_limit_mb")
                 .long("accounts-index-scan-results-limit-mb")
                 .value_name("MEGABYTES")
                 .validator(is_parsable::<usize>)
@@ -1517,7 +1517,7 @@ pub fn main() {
                 .help("How large accumulated results from an accounts index scan can become. If this is exceeded, the scan aborts."),
         )
         .arg(
-            Arg::with_name("accounts_index_memory_limit_mb")
+            Arg::new("accounts_index_memory_limit_mb")
                 .long("accounts-index-memory-limit-mb")
                 .value_name("MEGABYTES")
                 .validator(is_parsable::<usize>)
@@ -1525,7 +1525,7 @@ pub fn main() {
                 .help("How much memory the accounts index can consume. If this is exceeded, some account index entries will be stored on disk. If missing, the entire index is stored in memory."),
         )
         .arg(
-            Arg::with_name("accounts_index_bins")
+            Arg::new("accounts_index_bins")
                 .long("accounts-index-bins")
                 .value_name("BINS")
                 .validator(is_pow2)
@@ -1533,7 +1533,7 @@ pub fn main() {
                 .help("Number of bins to divide the accounts index into"),
         )
         .arg(
-            Arg::with_name("accounts_hash_num_passes")
+            Arg::new("accounts_hash_num_passes")
                 .long("accounts-hash-num-passes")
                 .value_name("PASSES")
                 .validator(is_pow2)
@@ -1541,7 +1541,7 @@ pub fn main() {
                 .help("Number of passes to calculate the hash of all accounts"),
         )
         .arg(
-            Arg::with_name("accounts_index_path")
+            Arg::new("accounts_index_path")
                 .long("accounts-index-path")
                 .value_name("PATH")
                 .takes_value(true)
@@ -1550,26 +1550,26 @@ pub fn main() {
                        May be specified multiple times. \
                        [default: [ledger]/accounts_index]"),
          )
-         .arg(Arg::with_name("accounts_filler_count")
+         .arg(Arg::new("accounts_filler_count")
             .long("accounts-filler-count")
             .value_name("COUNT")
             .validator(is_parsable::<usize>)
             .takes_value(true)
             .help("How many accounts to add to stress the system. Accounts are ignored in operations related to correctness."))
          .arg(
-            Arg::with_name("accounts_db_test_hash_calculation")
+            Arg::new("accounts_db_test_hash_calculation")
                 .long("accounts-db-test-hash-calculation")
                 .help("Enables testing of hash calculation using stores in \
                       AccountsHashVerifier. This has a computational cost."),
         )
         .arg(
-            Arg::with_name("accounts_db_index_hashing")
+            Arg::new("accounts_db_index_hashing")
                 .long("accounts-db-index-hashing")
                 .help("Enables the use of the index in hash calculation in \
                        AccountsHashVerifier/Accounts Background Service."),
         )
         .arg(
-            Arg::with_name("no_accounts_db_index_hashing")
+            Arg::new("no_accounts_db_index_hashing")
                 .long("no-accounts-db-index-hashing")
                 .help("This is obsolete. See --accounts-db-index-hashing. \
                        Disables the use of the index in hash calculation in \
@@ -1577,13 +1577,13 @@ pub fn main() {
         )
         .arg(
             // legacy nop argument
-            Arg::with_name("accounts_db_caching_enabled")
+            Arg::new("accounts_db_caching_enabled")
                 .long("accounts-db-caching-enabled")
                 .conflicts_with("no_accounts_db_caching")
                 .hidden(true)
         )
         .arg(
-            Arg::with_name("accounts_shrink_optimize_total_space")
+            Arg::new("accounts_shrink_optimize_total_space")
                 .long("accounts-shrink-optimize-total-space")
                 .takes_value(true)
                 .value_name("BOOLEAN")
@@ -1594,7 +1594,7 @@ pub fn main() {
                        it will skip all other less sparse accounts."),
         )
         .arg(
-            Arg::with_name("accounts_shrink_ratio")
+            Arg::new("accounts_shrink_ratio")
                 .long("accounts-shrink-ratio")
                 .takes_value(true)
                 .value_name("RATIO")
@@ -1606,14 +1606,14 @@ pub fn main() {
                        inclusive."),
         )
         .arg(
-            Arg::with_name("no_duplicate_instance_check")
+            Arg::new("no_duplicate_instance_check")
                 .long("no-duplicate-instance-check")
                 .takes_value(false)
                 .help("Disables duplicate instance check")
                 .hidden(true),
         )
         .arg(
-            Arg::with_name("allow_private_addr")
+            Arg::new("allow_private_addr")
                 .long("allow-private-addr")
                 .takes_value(false)
                 .help("Allow contacting private ip addresses")
@@ -1624,21 +1624,21 @@ pub fn main() {
             SubCommand::with_name("exit")
             .about("Send an exit request to the validator")
             .arg(
-                Arg::with_name("force")
+                Arg::new("force")
                     .short("f")
                     .long("force")
                     .takes_value(false)
                     .help("Request the validator exit immediately instead of waiting for a restart window")
             )
             .arg(
-                Arg::with_name("monitor")
+                Arg::new("monitor")
                     .short("m")
                     .long("monitor")
                     .takes_value(false)
                     .help("Monitor the validator after sending the exit request")
             )
             .arg(
-                Arg::with_name("min_idle_time")
+                Arg::new("min_idle_time")
                     .takes_value(true)
                     .long("min-idle-time")
                     .validator(is_parsable::<usize>)
@@ -1647,7 +1647,7 @@ pub fn main() {
                     .help("Minimum time that the validator should not be leader before restarting")
             )
             .arg(
-                Arg::with_name("max_delinquent_stake")
+                Arg::new("max_delinquent_stake")
                     .long("max-delinquent-stake")
                     .takes_value(true)
                     .validator(is_valid_percentage)
@@ -1665,7 +1665,7 @@ pub fn main() {
                 SubCommand::with_name("add")
                 .about("Add an authorized voter")
                 .arg(
-                    Arg::with_name("authorized_voter_keypair")
+                    Arg::new("authorized_voter_keypair")
                         .index(1)
                         .value_name("KEYPAIR")
                         .takes_value(true)
@@ -1686,7 +1686,7 @@ pub fn main() {
             SubCommand::with_name("contact-info")
             .about("Display the validator's contact info")
             .arg(
-                Arg::with_name("output")
+                Arg::new("output")
                     .long("output")
                     .takes_value(true)
                     .value_name("MODE")
@@ -1710,7 +1710,7 @@ pub fn main() {
             SubCommand::with_name("set-identity")
             .about("Set the validator identity")
             .arg(
-                Arg::with_name("identity")
+                Arg::new("identity")
                     .index(1)
                     .value_name("KEYPAIR")
                     .takes_value(true)
@@ -1724,7 +1724,7 @@ pub fn main() {
             SubCommand::with_name("set-log-filter")
             .about("Adjust the validator log filter")
             .arg(
-                Arg::with_name("filter")
+                Arg::new("filter")
                     .takes_value(true)
                     .index(1)
                     .help("New filter using the same format as the RUST_LOG environment variable")
@@ -1735,7 +1735,7 @@ pub fn main() {
             SubCommand::with_name("wait-for-restart-window")
             .about("Monitor the validator for a good time to restart")
             .arg(
-                Arg::with_name("min_idle_time")
+                Arg::new("min_idle_time")
                     .takes_value(true)
                     .index(1)
                     .validator(is_parsable::<usize>)
@@ -1744,7 +1744,7 @@ pub fn main() {
                     .help("Minimum time that the validator should not be leader before restarting")
             )
             .arg(
-                Arg::with_name("identity")
+                Arg::new("identity")
                     .long("identity")
                     .value_name("ADDRESS")
                     .takes_value(true)
@@ -1752,7 +1752,7 @@ pub fn main() {
                     .help("Validator identity to monitor [default: your validator]")
             )
             .arg(
-                Arg::with_name("max_delinquent_stake")
+                Arg::new("max_delinquent_stake")
                     .long("max-delinquent-stake")
                     .takes_value(true)
                     .validator(is_valid_percentage)

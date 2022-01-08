@@ -19,7 +19,7 @@ pub const NONCE_AUTHORITY_ARG: ArgConstant<'static> = ArgConstant {
 };
 
 fn nonce_arg<'a>() -> Arg<'a> {
-    Arg::with_name(NONCE_ARG.name)
+    Arg::new(NONCE_ARG.name)
         .long(NONCE_ARG.long)
         .takes_value(true)
         .value_name("PUBKEY")
@@ -29,7 +29,7 @@ fn nonce_arg<'a>() -> Arg<'a> {
 }
 
 pub fn nonce_authority_arg<'a>() -> Arg<'a> {
-    Arg::with_name(NONCE_AUTHORITY_ARG.name)
+    Arg::new(NONCE_AUTHORITY_ARG.name)
         .long(NONCE_AUTHORITY_ARG.long)
         .takes_value(true)
         .value_name("KEYPAIR")

@@ -848,59 +848,59 @@ fn main() {
     const DEFAULT_MAX_SLOTS_ROOT_REPAIR: &str = "2000";
     solana_logger::setup_with_default("solana=info");
 
-    let starting_slot_arg = Arg::with_name("starting_slot")
+    let starting_slot_arg = Arg::new("starting_slot")
         .long("starting-slot")
         .value_name("NUM")
         .takes_value(true)
         .default_value("0")
         .help("Start at this slot");
-    let ending_slot_arg = Arg::with_name("ending_slot")
+    let ending_slot_arg = Arg::new("ending_slot")
         .long("ending-slot")
         .value_name("SLOT")
         .takes_value(true)
         .help("The last slot to iterate to");
-    let no_snapshot_arg = Arg::with_name("no_snapshot")
+    let no_snapshot_arg = Arg::new("no_snapshot")
         .long("no-snapshot")
         .takes_value(false)
         .help("Do not start from a local snapshot if present");
-    let no_bpf_jit_arg = Arg::with_name("no_bpf_jit")
+    let no_bpf_jit_arg = Arg::new("no_bpf_jit")
         .long("no-bpf-jit")
         .takes_value(false)
         .help("Disable the just-in-time compiler and instead use the interpreter for BP");
-    let no_accounts_db_caching_arg = Arg::with_name("no_accounts_db_caching")
+    let no_accounts_db_caching_arg = Arg::new("no_accounts_db_caching")
         .long("no-accounts-db-caching")
         .takes_value(false)
         .help("Disables accounts-db caching");
-    let accounts_index_bins = Arg::with_name("accounts_index_bins")
+    let accounts_index_bins = Arg::new("accounts_index_bins")
         .long("accounts-index-bins")
         .value_name("BINS")
         .validator(is_pow2)
         .takes_value(true)
         .help("Number of bins to divide the accounts index into");
-    let accounts_index_limit = Arg::with_name("accounts_index_memory_limit_mb")
+    let accounts_index_limit = Arg::new("accounts_index_memory_limit_mb")
         .long("accounts-index-memory-limit-mb")
         .value_name("MEGABYTES")
         .validator(is_parsable::<usize>)
         .takes_value(true)
         .help("How much memory the accounts index can consume. If this is exceeded, some account index entries will be stored on disk. If missing, the entire index is stored in memory.");
-    let accountsdb_skip_shrink = Arg::with_name("accounts_db_skip_shrink")
+    let accountsdb_skip_shrink = Arg::new("accounts_db_skip_shrink")
         .long("accounts-db-skip-shrink")
         .help(
             "Enables faster starting of ledger-tool by skipping shrink. \
                       This option is for use during testing.",
         );
-    let accounts_filler_count = Arg::with_name("accounts_filler_count")
+    let accounts_filler_count = Arg::new("accounts_filler_count")
         .long("accounts-filler-count")
         .value_name("COUNT")
         .validator(is_parsable::<usize>)
         .takes_value(true)
         .help("How many accounts to add to stress the system. Accounts are ignored in operations related to correctness.");
-    let account_paths_arg = Arg::with_name("account_paths")
+    let account_paths_arg = Arg::new("account_paths")
         .long("accounts")
         .value_name("PATHS")
         .takes_value(true)
         .help("Comma separated persistent accounts location");
-    let accounts_index_path_arg = Arg::with_name("accounts_index_path")
+    let accounts_index_path_arg = Arg::new("accounts_index_path")
         .long("accounts-index-path")
         .value_name("PATH")
         .takes_value(true)
@@ -910,44 +910,44 @@ fn main() {
              May be specified multiple times. \
              [default: [ledger]/accounts_index]",
         );
-    let accounts_db_test_hash_calculation_arg = Arg::with_name("accounts_db_test_hash_calculation")
+    let accounts_db_test_hash_calculation_arg = Arg::new("accounts_db_test_hash_calculation")
         .long("accounts-db-test-hash-calculation")
         .help("Enable hash calculation test");
-    let halt_at_slot_arg = Arg::with_name("halt_at_slot")
+    let halt_at_slot_arg = Arg::new("halt_at_slot")
         .long("halt-at-slot")
         .value_name("SLOT")
         .validator(is_slot)
         .takes_value(true)
         .help("Halt processing at the given slot");
-    let verify_index_arg = Arg::with_name("verify_accounts_index")
+    let verify_index_arg = Arg::new("verify_accounts_index")
         .long("verify-accounts-index")
         .takes_value(false)
         .help("For debugging and tests on accounts index.");
-    let limit_load_slot_count_from_snapshot_arg = Arg::with_name("limit_load_slot_count_from_snapshot")
+    let limit_load_slot_count_from_snapshot_arg = Arg::new("limit_load_slot_count_from_snapshot")
         .long("limit-load-slot-count-from-snapshot")
         .value_name("SLOT")
         .validator(is_slot)
         .takes_value(true)
         .help("For debugging and profiling with large snapshots, artificially limit how many slots are loaded from a snapshot.");
-    let hard_forks_arg = Arg::with_name("hard_forks")
+    let hard_forks_arg = Arg::new("hard_forks")
         .long("hard-fork")
         .value_name("SLOT")
         .validator(is_slot)
         .multiple(true)
         .takes_value(true)
         .help("Add a hard fork at this slot");
-    let allow_dead_slots_arg = Arg::with_name("allow_dead_slots")
+    let allow_dead_slots_arg = Arg::new("allow_dead_slots")
         .long("allow-dead-slots")
         .takes_value(false)
         .help("Output dead slots as well");
     let default_genesis_archive_unpacked_size = MAX_GENESIS_ARCHIVE_UNPACKED_SIZE.to_string();
-    let max_genesis_archive_unpacked_size_arg = Arg::with_name("max_genesis_archive_unpacked_size")
+    let max_genesis_archive_unpacked_size_arg = Arg::new("max_genesis_archive_unpacked_size")
         .long("max-genesis-archive-unpacked-size")
         .value_name("NUMBER")
         .takes_value(true)
         .default_value(&default_genesis_archive_unpacked_size)
         .help("maximum total uncompressed size of unpacked genesis archive");
-    let hashes_per_tick = Arg::with_name("hashes_per_tick")
+    let hashes_per_tick = Arg::new("hashes_per_tick")
         .long("hashes-per-tick")
         .value_name("NUM_HASHES|\"sleep\"")
         .takes_value(true)
@@ -956,7 +956,7 @@ fn main() {
              If \"sleep\", for development \
              sleep for the target tick duration instead of hashing",
         );
-    let snapshot_version_arg = Arg::with_name("snapshot_version")
+    let snapshot_version_arg = Arg::new("snapshot_version")
         .long("snapshot-version")
         .value_name("SNAPSHOT_VERSION")
         .validator(is_parsable::<SnapshotVersion>)
@@ -966,7 +966,7 @@ fn main() {
 
     let default_max_full_snapshot_archives_to_retain =
         &DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();
-    let maximum_full_snapshot_archives_to_retain = Arg::with_name(
+    let maximum_full_snapshot_archives_to_retain = Arg::new(
         "maximum_full_snapshots_to_retain",
     )
     .long("maximum-full-snapshots-to-retain")
@@ -980,7 +980,7 @@ fn main() {
 
     let default_max_incremental_snapshot_archives_to_retain =
         &DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();
-    let maximum_incremental_snapshot_archives_to_retain = Arg::with_name(
+    let maximum_incremental_snapshot_archives_to_retain = Arg::new(
         "maximum_incremental_snapshots_to_retain",
     )
     .long("maximum-incremental-snapshots-to-retain")
@@ -1004,7 +1004,7 @@ fn main() {
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .setting(AppSettings::VersionlessSubcommands)
         .arg(
-            Arg::with_name("ledger_path")
+            Arg::new("ledger_path")
                 .short("l")
                 .long("ledger")
                 .value_name("DIR")
@@ -1014,7 +1014,7 @@ fn main() {
                 .help("Use DIR as ledger location"),
         )
         .arg(
-            Arg::with_name("wal_recovery_mode")
+            Arg::new("wal_recovery_mode")
                 .long("wal-recovery-mode")
                 .value_name("MODE")
                 .takes_value(true)
@@ -1029,7 +1029,7 @@ fn main() {
                 ),
         )
         .arg(
-            Arg::with_name("snapshot_archive_path")
+            Arg::new("snapshot_archive_path")
                 .long("snapshot-archive-path")
                 .value_name("DIR")
                 .takes_value(true)
@@ -1037,7 +1037,7 @@ fn main() {
                 .help("Use DIR for ledger location"),
         )
         .arg(
-            Arg::with_name("output_format")
+            Arg::new("output_format")
                 .long("output")
                 .value_name("FORMAT")
                 .global(true)
@@ -1047,7 +1047,7 @@ fn main() {
                        currently only available for bigtable subcommands"),
         )
         .arg(
-            Arg::with_name("verbose")
+            Arg::new("verbose")
                 .short("v")
                 .long("verbose")
                 .global(true)
@@ -1063,7 +1063,7 @@ fn main() {
             .arg(&allow_dead_slots_arg)
             .arg(&ending_slot_arg)
             .arg(
-                Arg::with_name("num_slots")
+                Arg::new("num_slots")
                     .long("num-slots")
                     .value_name("SLOT")
                     .validator(is_slot)
@@ -1071,7 +1071,7 @@ fn main() {
                     .help("Number of slots to print"),
             )
             .arg(
-                Arg::with_name("only_rooted")
+                Arg::new("only_rooted")
                     .long("only-rooted")
                     .takes_value(false)
                     .help("Only print root slots"),
@@ -1083,7 +1083,7 @@ fn main() {
             .arg(&starting_slot_arg)
             .arg(&ending_slot_arg)
             .arg(
-                Arg::with_name("target_db")
+                Arg::new("target_db")
                     .long("target-db")
                     .value_name("PATH")
                     .takes_value(true)
@@ -1094,7 +1094,7 @@ fn main() {
             SubCommand::with_name("slot")
             .about("Print the contents of one or more slots")
             .arg(
-                Arg::with_name("slots")
+                Arg::new("slots")
                     .index(1)
                     .value_name("SLOTS")
                     .validator(is_slot)
@@ -1119,7 +1119,7 @@ fn main() {
             SubCommand::with_name("set-dead-slot")
             .about("Mark one or more slots dead")
             .arg(
-                Arg::with_name("slots")
+                Arg::new("slots")
                     .index(1)
                     .value_name("SLOTS")
                     .validator(is_slot)
@@ -1133,7 +1133,7 @@ fn main() {
             SubCommand::with_name("remove-dead-slot")
             .about("Remove the dead flag for a slot")
             .arg(
-                Arg::with_name("slots")
+                Arg::new("slots")
                     .index(1)
                     .value_name("SLOTS")
                     .validator(is_slot)
@@ -1155,7 +1155,7 @@ fn main() {
             .arg(&starting_slot_arg)
             .arg(&ending_slot_arg)
             .arg(
-                Arg::with_name("log_path")
+                Arg::new("log_path")
                     .long("log-path")
                     .value_name("PATH")
                     .takes_value(true)
@@ -1173,7 +1173,7 @@ fn main() {
             .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(&hashes_per_tick)
             .arg(
-                Arg::with_name("cluster_type")
+                Arg::new("cluster_type")
                     .long("cluster-type")
                     .possible_values(&ClusterType::STRINGS)
                     .takes_value(true)
@@ -1182,7 +1182,7 @@ fn main() {
                     ),
             )
             .arg(
-                Arg::with_name("output_directory")
+                Arg::new("output_directory")
                     .index(1)
                     .value_name("DIR")
                     .takes_value(true)
@@ -1211,7 +1211,7 @@ fn main() {
             .about("Print lowest and highest non-empty slots. \
                     Note that there may be empty slots within the bounds")
             .arg(
-                Arg::with_name("all")
+                Arg::new("all")
                     .long("all")
                     .takes_value(false)
                     .required(false)
@@ -1243,13 +1243,13 @@ fn main() {
             .arg(&allow_dead_slots_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(
-                Arg::with_name("skip_poh_verify")
+                Arg::new("skip_poh_verify")
                     .long("skip-poh-verify")
                     .takes_value(false)
                     .help("Skip ledger PoH verification"),
             )
             .arg(
-                Arg::with_name("print_accounts_stats")
+                Arg::new("print_accounts_stats")
                     .long("print-accounts-stats")
                     .takes_value(false)
                     .help("After verifying the ledger, print some information about the account stores"),
@@ -1263,12 +1263,12 @@ fn main() {
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(
-                Arg::with_name("include_all_votes")
+                Arg::new("include_all_votes")
                     .long("include-all-votes")
                     .help("Include all votes in the graph"),
             )
             .arg(
-                Arg::with_name("graph_filename")
+                Arg::new("graph_filename")
                     .index(1)
                     .value_name("FILENAME")
                     .takes_value(true)
@@ -1285,7 +1285,7 @@ fn main() {
             .arg(&maximum_full_snapshot_archives_to_retain)
             .arg(&maximum_incremental_snapshot_archives_to_retain)
             .arg(
-                Arg::with_name("snapshot_slot")
+                Arg::new("snapshot_slot")
                     .index(1)
                     .value_name("SLOT")
                     .validator(|value| {
@@ -1304,14 +1304,14 @@ fn main() {
                     .help("Slot at which to create the snapshot; accepts keyword ROOT for the highest root"),
             )
             .arg(
-                Arg::with_name("output_directory")
+                Arg::new("output_directory")
                     .index(2)
                     .value_name("DIR")
                     .takes_value(true)
                     .help("Output directory for the snapshot [default: --ledger directory]"),
             )
             .arg(
-                Arg::with_name("warp_slot")
+                Arg::new("warp_slot")
                     .required(false)
                     .long("warp-slot")
                     .takes_value(true)
@@ -1321,7 +1321,7 @@ fn main() {
                            which could be a slot in a galaxy far far away"),
             )
             .arg(
-                Arg::with_name("faucet_lamports")
+                Arg::new("faucet_lamports")
                     .short("t")
                     .long("faucet-lamports")
                     .value_name("LAMPORTS")
@@ -1330,7 +1330,7 @@ fn main() {
                     .help("Number of lamports to assign to the faucet"),
             )
             .arg(
-                Arg::with_name("faucet_pubkey")
+                Arg::new("faucet_pubkey")
                     .short("m")
                     .long("faucet-pubkey")
                     .value_name("PUBKEY")
@@ -1340,7 +1340,7 @@ fn main() {
                     .help("Path to file containing the faucet's pubkey"),
             )
             .arg(
-                Arg::with_name("bootstrap_validator")
+                Arg::new("bootstrap_validator")
                     .short("b")
                     .long("bootstrap-validator")
                     .value_name("IDENTITY_PUBKEY VOTE_PUBKEY STAKE_PUBKEY")
@@ -1351,7 +1351,7 @@ fn main() {
                     .help("The bootstrap validator's identity, vote and stake pubkeys"),
             )
             .arg(
-                Arg::with_name("bootstrap_stake_authorized_pubkey")
+                Arg::new("bootstrap_stake_authorized_pubkey")
                     .long("bootstrap-stake-authorized-pubkey")
                     .value_name("BOOTSTRAP STAKE AUTHORIZED PUBKEY")
                     .takes_value(true)
@@ -1362,7 +1362,7 @@ fn main() {
                     ),
             )
             .arg(
-                Arg::with_name("bootstrap_validator_lamports")
+                Arg::new("bootstrap_validator_lamports")
                     .long("bootstrap-validator-lamports")
                     .value_name("LAMPORTS")
                     .takes_value(true)
@@ -1370,7 +1370,7 @@ fn main() {
                     .help("Number of lamports to assign to the bootstrap validator"),
             )
             .arg(
-                Arg::with_name("bootstrap_validator_stake_lamports")
+                Arg::new("bootstrap_validator_stake_lamports")
                     .long("bootstrap-validator-stake-lamports")
                     .value_name("LAMPORTS")
                     .takes_value(true)
@@ -1378,7 +1378,7 @@ fn main() {
                     .help("Number of lamports to assign to the bootstrap validator's stake account"),
             )
             .arg(
-                Arg::with_name("rent_burn_percentage")
+                Arg::new("rent_burn_percentage")
                     .long("rent-burn-percentage")
                     .value_name("NUMBER")
                     .takes_value(true)
@@ -1387,7 +1387,7 @@ fn main() {
             )
             .arg(&hashes_per_tick)
             .arg(
-                Arg::with_name("accounts_to_remove")
+                Arg::new("accounts_to_remove")
                     .required(false)
                     .long("remove-account")
                     .takes_value(true)
@@ -1397,7 +1397,7 @@ fn main() {
                     .help("List of accounts to remove while creating the snapshot"),
             )
             .arg(
-                Arg::with_name("vote_accounts_to_destake")
+                Arg::new("vote_accounts_to_destake")
                     .required(false)
                     .long("destake-vote-account")
                     .takes_value(true)
@@ -1407,14 +1407,14 @@ fn main() {
                     .help("List of validator vote accounts to destake")
             )
             .arg(
-                Arg::with_name("remove_stake_accounts")
+                Arg::new("remove_stake_accounts")
                     .required(false)
                     .long("remove-stake-accounts")
                     .takes_value(false)
                     .help("Remove all existing stake accounts from the new snapshot")
             )
             .arg(
-                Arg::with_name("incremental")
+                Arg::new("incremental")
                     .long("incremental")
                     .takes_value(false)
                     .help("Create an incremental snapshot instead of a full snapshot. This requires \
@@ -1430,19 +1430,19 @@ fn main() {
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
             .arg(
-                Arg::with_name("include_sysvars")
+                Arg::new("include_sysvars")
                     .long("include-sysvars")
                     .takes_value(false)
                     .help("Include sysvars too"),
             )
             .arg(
-                Arg::with_name("no_account_contents")
+                Arg::new("no_account_contents")
                     .long("no-account-contents")
                     .takes_value(false)
                     .help("Do not print contents of each account, which is very slow with lots of accounts."),
             )
             .arg(
-                Arg::with_name("no_account_data")
+                Arg::new("no_account_data")
                     .long("no-account-data")
                     .takes_value(false)
                     .help("Do not print account data when printing account contents."),
@@ -1457,7 +1457,7 @@ fn main() {
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(
-                Arg::with_name("warp_epoch")
+                Arg::new("warp_epoch")
                     .required(false)
                     .long("warp-epoch")
                     .takes_value(true)
@@ -1466,7 +1466,7 @@ fn main() {
                            which could be an epoch in a galaxy far far away"),
             )
             .arg(
-                Arg::with_name("inflation")
+                Arg::new("inflation")
                     .required(false)
                     .long("inflation")
                     .takes_value(true)
@@ -1474,7 +1474,7 @@ fn main() {
                     .help("Overwrite inflation when warping"),
             )
             .arg(
-                Arg::with_name("recalculate_capitalization")
+                Arg::new("recalculate_capitalization")
                     .required(false)
                     .long("recalculate-capitalization")
                     .takes_value(false)
@@ -1482,7 +1482,7 @@ fn main() {
                           bank's out-of-sync capitalization"),
             )
             .arg(
-                Arg::with_name("csv_filename")
+                Arg::new("csv_filename")
                     .long("csv-filename")
                     .value_name("FILENAME")
                     .takes_value(true)
@@ -1492,7 +1492,7 @@ fn main() {
             SubCommand::with_name("purge")
             .about("Delete a range of slots from the ledger")
             .arg(
-                Arg::with_name("start_slot")
+                Arg::new("start_slot")
                     .index(1)
                     .value_name("SLOT")
                     .takes_value(true)
@@ -1500,14 +1500,14 @@ fn main() {
                     .help("Start slot to purge from (inclusive)"),
             )
             .arg(
-                Arg::with_name("end_slot")
+                Arg::new("end_slot")
                     .index(2)
                     .value_name("SLOT")
                     .help("Ending slot to stop purging (inclusive) \
                            [default: the highest slot in the ledger]"),
             )
             .arg(
-                Arg::with_name("batch_size")
+                Arg::new("batch_size")
                     .long("batch-size")
                     .value_name("NUM")
                     .takes_value(true)
@@ -1515,14 +1515,14 @@ fn main() {
                     .help("Removes at most BATCH_SIZE slots while purging in loop"),
             )
             .arg(
-                Arg::with_name("no_compaction")
+                Arg::new("no_compaction")
                     .long("no-compaction")
                     .required(false)
                     .takes_value(false)
                     .help("Skip ledger compaction after purge")
             )
             .arg(
-                Arg::with_name("dead_slots_only")
+                Arg::new("dead_slots_only")
                     .long("dead-slots-only")
                     .required(false)
                     .takes_value(false)
@@ -1534,21 +1534,21 @@ fn main() {
             .about("Output up to last <num-roots> root hashes and their \
                     heights starting at the given block height")
             .arg(
-                Arg::with_name("max_height")
+                Arg::new("max_height")
                     .long("max-height")
                     .value_name("NUM")
                     .takes_value(true)
                     .help("Maximum block height")
             )
             .arg(
-                Arg::with_name("start_root")
+                Arg::new("start_root")
                     .long("start-root")
                     .value_name("NUM")
                     .takes_value(true)
                     .help("First root to start searching from")
             )
             .arg(
-                Arg::with_name("slot_list")
+                Arg::new("slot_list")
                     .long("slot-list")
                     .value_name("FILENAME")
                     .required(false)
@@ -1557,7 +1557,7 @@ fn main() {
                            rollback slot heights and hashes will be written to the file")
             )
             .arg(
-                Arg::with_name("num_roots")
+                Arg::new("num_roots")
                     .long("num-roots")
                     .value_name("NUM")
                     .takes_value(true)
@@ -1571,21 +1571,21 @@ fn main() {
                 .about("Traverses the AncestorIterator backward from a last known root \
                         to restore missing roots to the Root column")
                 .arg(
-                    Arg::with_name("start_root")
+                    Arg::new("start_root")
                         .long("before")
                         .value_name("NUM")
                         .takes_value(true)
                         .help("First good root after the range to repair")
                 )
                 .arg(
-                    Arg::with_name("end_root")
+                    Arg::new("end_root")
                         .long("until")
                         .value_name("NUM")
                         .takes_value(true)
                         .help("Last slot to check for root repair")
                 )
                 .arg(
-                    Arg::with_name("max_slots")
+                    Arg::new("max_slots")
                         .long("repair-limit")
                         .value_name("NUM")
                         .takes_value(true)
@@ -1604,7 +1604,7 @@ fn main() {
             .about("runs cost_model over the block at the given slots, \
                    computes how expensive a block was based on cost_model")
             .arg(
-                Arg::with_name("slots")
+                Arg::new("slots")
                     .index(1)
                     .value_name("SLOTS")
                     .validator(is_slot)

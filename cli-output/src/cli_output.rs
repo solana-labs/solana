@@ -2682,7 +2682,7 @@ mod tests {
     #[test]
     fn test_output_format_from_matches() {
         let app = App::new("test").arg(
-            Arg::with_name("output_format")
+            Arg::new("output_format")
                 .long("output")
                 .value_name("FORMAT")
                 .global(true)

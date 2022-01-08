@@ -69,7 +69,7 @@ const NO_OUTFILE_ARG: ArgConstant<'static> = ArgConstant {
 };
 
 fn word_count_arg<'a>() -> Arg<'a> {
-    Arg::with_name(WORD_COUNT_ARG.name)
+    Arg::new(WORD_COUNT_ARG.name)
         .long(WORD_COUNT_ARG.long)
         .possible_values(&["12", "15", "18", "21", "24"])
         .default_value("12")
@@ -79,7 +79,7 @@ fn word_count_arg<'a>() -> Arg<'a> {
 }
 
 fn language_arg<'a>() -> Arg<'a> {
-    Arg::with_name(LANGUAGE_ARG.name)
+    Arg::new(LANGUAGE_ARG.name)
         .long(LANGUAGE_ARG.long)
         .possible_values(&[
             "english",
@@ -98,14 +98,14 @@ fn language_arg<'a>() -> Arg<'a> {
 }
 
 fn no_passphrase_arg<'a>() -> Arg<'a> {
-    Arg::with_name(NO_PASSPHRASE_ARG.name)
+    Arg::new(NO_PASSPHRASE_ARG.name)
         .long(NO_PASSPHRASE_ARG.long)
         .alias("no-passphrase")
         .help(NO_PASSPHRASE_ARG.help)
 }
 
 fn no_outfile_arg<'a>() -> Arg<'a> {
-    Arg::with_name(NO_OUTFILE_ARG.name)
+    Arg::new(NO_OUTFILE_ARG.name)
         .long(NO_OUTFILE_ARG.long)
         .conflicts_with_all(&["outfile", "silent"])
         .help(NO_OUTFILE_ARG.help)
@@ -336,7 +336,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .version(solana_version::version!())
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .arg({
-            let arg = Arg::with_name("config_file")
+            let arg = Arg::new("config_file")
                 .short("C")
                 .long("config")
                 .value_name("FILEPATH")
@@ -353,7 +353,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             SubCommand::with_name("verify")
                 .about("Verify a keypair can sign and verify a message.")
                 .arg(
-                    Arg::with_name("pubkey")
+                    Arg::new("pubkey")
                         .index(1)
                         .value_name("PUBKEY")
                         .takes_value(true)
@@ -361,7 +361,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Public key"),
                 )
                 .arg(
-                    Arg::with_name("keypair")
+                    Arg::new("keypair")
                         .index(2)
                         .value_name("KEYPAIR")
                         .takes_value(true)
@@ -373,7 +373,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .about("Generate new keypair file from a random seed phrase and optional BIP39 passphrase")
                 .setting(AppSettings::DisableVersion)
                 .arg(
-                    Arg::with_name("outfile")
+                    Arg::new("outfile")
                         .short("o")
                         .long("outfile")
                         .value_name("FILEPATH")
@@ -381,13 +381,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Path to generated file"),
                 )
                 .arg(
-                    Arg::with_name("force")
+                    Arg::new("force")
                         .short("f")
                         .long("force")
                         .help("Overwrite the output file if it exists"),
                 )
                 .arg(
-                    Arg::with_name("silent")
+                    Arg::new("silent")
                         .short("s")
                         .long("silent")
                         .help("Do not display seed phrase. Useful when piping output to other programs that prompt for user input, like gpg"),
@@ -400,12 +400,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .about("Grind for vanity keypairs")
                 .setting(AppSettings::DisableVersion)
                 .arg(
-                    Arg::with_name("ignore_case")
+                    Arg::new("ignore_case")
                         .long("ignore-case")
                         .help("Performs case insensitive matches"),
                 )
                 .arg(
-                    Arg::with_name("starts_with")
+                    Arg::new("starts_with")
                         .long("starts-with")
                         .value_name("PREFIX:COUNT")
                         .number_of_values(1)
@@ -415,7 +415,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Saves specified number of keypairs whos public key starts with the indicated prefix\nExample: --starts-with sol:4\nPREFIX type is Base58\nCOUNT type is u64"),
                 )
                 .arg(
-                    Arg::with_name("ends_with")
+                    Arg::new("ends_with")
                         .long("ends-with")
                         .value_name("SUFFIX:COUNT")
                         .number_of_values(1)
@@ -425,7 +425,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Saves specified number of keypairs whos public key ends with the indicated suffix\nExample: --ends-with ana:4\nSUFFIX type is Base58\nCOUNT type is u64"),
                 )
                 .arg(
-                    Arg::with_name("starts_and_ends_with")
+                    Arg::new("starts_and_ends_with")
                         .long("starts-and-ends-with")
                         .value_name("PREFIX:SUFFIX:COUNT")
                         .number_of_values(1)
@@ -435,7 +435,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Saves specified number of keypairs whos public key starts and ends with the indicated perfix and suffix\nExample: --starts-and-ends-with sol:ana:4\nPREFIX and SUFFIX type is Base58\nCOUNT type is u64"),
                 )
                 .arg(
-                    Arg::with_name("num_threads")
+                    Arg::new("num_threads")
                         .long("num-threads")
                         .value_name("NUMBER")
                         .takes_value(true)
@@ -444,7 +444,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Specify the number of grind threads"),
                 )
                 .arg(
-                    Arg::with_name("use_mnemonic")
+                    Arg::new("use_mnemonic")
                         .long("use-mnemonic")
                         .help("Generate using a mnemonic key phrase.  Expect a significant slowdown in this mode"),
                 )
@@ -461,19 +461,19 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .about("Display the pubkey from a keypair file")
                 .setting(AppSettings::DisableVersion)
                 .arg(
-                    Arg::with_name("keypair")
+                    Arg::new("keypair")
                         .index(1)
                         .value_name("KEYPAIR")
                         .takes_value(true)
                         .help("Filepath or URL to a keypair"),
                 )
                 .arg(
-                    Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
+                    Arg::new(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
                         .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
                         .help(SKIP_SEED_PHRASE_VALIDATION_ARG.help),
                 )
                 .arg(
-                    Arg::with_name("outfile")
+                    Arg::new("outfile")
                         .short("o")
                         .long("outfile")
                         .value_name("FILEPATH")
@@ -481,7 +481,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Path to generated file"),
                 )
                 .arg(
-                    Arg::with_name("force")
+                    Arg::new("force")
                         .short("f")
                         .long("force")
                         .help("Overwrite the output file if it exists"),
@@ -492,7 +492,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .about("Recover keypair from seed phrase and optional BIP39 passphrase")
                 .setting(AppSettings::DisableVersion)
                 .arg(
-                    Arg::with_name("prompt_signer")
+                    Arg::new("prompt_signer")
                         .index(1)
                         .value_name("KEYPAIR")
                         .takes_value(true)
@@ -500,7 +500,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("`prompt:` URI scheme or `ASK` keyword"),
                 )
                 .arg(
-                    Arg::with_name("outfile")
+                    Arg::new("outfile")
                         .short("o")
                         .long("outfile")
                         .value_name("FILEPATH")
@@ -508,13 +508,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Path to generated file"),
                 )
                 .arg(
-                    Arg::with_name("force")
+                    Arg::new("force")
                         .short("f")
                         .long("force")
                         .help("Overwrite the output file if it exists"),
                 )
                 .arg(
-                    Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
+                    Arg::new(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
                         .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
                         .help(SKIP_SEED_PHRASE_VALIDATION_ARG.help),
                 ),

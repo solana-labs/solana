@@ -10,14 +10,14 @@ fn main() {
         .about(crate_description!())
         .version(solana_version::version!())
         .arg(
-            Arg::with_name("file")
+            Arg::new("file")
                 .long("file")
                 .takes_value(true)
                 .value_name("<PATH>")
                 .help("store to open"),
         )
         .arg(
-            Arg::with_name("len")
+            Arg::new("len")
                 .long("len")
                 .takes_value(true)
                 .value_name("LEN")

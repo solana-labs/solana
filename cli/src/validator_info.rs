@@ -143,7 +143,7 @@ impl ValidatorInfoSubCommands for App<'_> {
                     SubCommand::with_name("publish")
                         .about("Publish Validator info on Solana")
                         .arg(
-                            Arg::with_name("info_pubkey")
+                            Arg::new("info_pubkey")
                                 .short("p")
                                 .long("info-pubkey")
                                 .value_name("PUBKEY")
@@ -152,7 +152,7 @@ impl ValidatorInfoSubCommands for App<'_> {
                                 .help("The pubkey of the Validator info account to update"),
                         )
                         .arg(
-                            Arg::with_name("name")
+                            Arg::new("name")
                                 .index(1)
                                 .value_name("NAME")
                                 .takes_value(true)
@@ -161,7 +161,7 @@ impl ValidatorInfoSubCommands for App<'_> {
                                 .help("Validator name"),
                         )
                         .arg(
-                            Arg::with_name("website")
+                            Arg::new("website")
                                 .short("w")
                                 .long("website")
                                 .value_name("URL")
@@ -170,7 +170,7 @@ impl ValidatorInfoSubCommands for App<'_> {
                                 .help("Validator website url"),
                         )
                         .arg(
-                            Arg::with_name("keybase_username")
+                            Arg::new("keybase_username")
                                 .short("n")
                                 .long("keybase")
                                 .value_name("USERNAME")
@@ -179,7 +179,7 @@ impl ValidatorInfoSubCommands for App<'_> {
                                 .help("Validator Keybase username"),
                         )
                         .arg(
-                            Arg::with_name("details")
+                            Arg::new("details")
                                 .short("d")
                                 .long("details")
                                 .value_name("DETAILS")
@@ -188,7 +188,7 @@ impl ValidatorInfoSubCommands for App<'_> {
                                 .help("Validator description")
                         )
                         .arg(
-                            Arg::with_name("force")
+                            Arg::new("force")
                                 .long("force")
                                 .takes_value(false)
                                 .hidden(true) // Don't document this argument to discourage its use
@@ -199,7 +199,7 @@ impl ValidatorInfoSubCommands for App<'_> {
                     SubCommand::with_name("get")
                         .about("Get and parse Solana Validator info")
                         .arg(
-                            Arg::with_name("info_pubkey")
+                            Arg::new("info_pubkey")
                                 .index(1)
                                 .value_name("PUBKEY")
                                 .takes_value(true)

@@ -287,7 +287,7 @@ impl BigTableSubCommand for App<'_> {
                     SubCommand::with_name("upload")
                         .about("Upload the ledger to BigTable")
                         .arg(
-                            Arg::with_name("starting_slot")
+                            Arg::new("starting_slot")
                                 .long("starting-slot")
                                 .validator(is_slot)
                                 .value_name("START_SLOT")
@@ -298,7 +298,7 @@ impl BigTableSubCommand for App<'_> {
                                 ),
                         )
                         .arg(
-                            Arg::with_name("ending_slot")
+                            Arg::new("ending_slot")
                                 .long("ending-slot")
                                 .validator(is_slot)
                                 .value_name("END_SLOT")
@@ -307,13 +307,13 @@ impl BigTableSubCommand for App<'_> {
                                 .help("Stop uploading at this slot [default: last available slot]"),
                         )
                         .arg(
-                            Arg::with_name("allow_missing_metadata")
+                            Arg::new("allow_missing_metadata")
                                 .long("allow-missing-metadata")
                                 .takes_value(false)
                                 .help("Don't panic if transaction metadata is missing"),
                         )
                         .arg(
-                            Arg::with_name("force_reupload")
+                            Arg::new("force_reupload")
                                 .long("force")
                                 .takes_value(false)
                                 .help(
@@ -327,7 +327,7 @@ impl BigTableSubCommand for App<'_> {
                     SubCommand::with_name("delete-slots")
                         .about("Delete ledger information from BigTable")
                         .arg(
-                                Arg::with_name("slots")
+                                Arg::new("slots")
                                     .index(1)
                                     .value_name("SLOTS")
                                     .takes_value(true)
@@ -336,7 +336,7 @@ impl BigTableSubCommand for App<'_> {
                                     .help("Slots to delete"),
                                 )
                             .arg(
-                                Arg::with_name("force")
+                                Arg::new("force")
                                     .long("force")
                                     .takes_value(false)
                                     .help(
@@ -353,7 +353,7 @@ impl BigTableSubCommand for App<'_> {
                     SubCommand::with_name("blocks")
                         .about("Get a list of slots with confirmed blocks for the given range")
                         .arg(
-                            Arg::with_name("starting_slot")
+                            Arg::new("starting_slot")
                                 .long("starting-slot")
                                 .validator(is_slot)
                                 .value_name("SLOT")
@@ -364,7 +364,7 @@ impl BigTableSubCommand for App<'_> {
                                 .help("Start listing at this slot"),
                         )
                         .arg(
-                            Arg::with_name("limit")
+                            Arg::new("limit")
                                 .long("limit")
                                 .validator(is_slot)
                                 .value_name("LIMIT")
@@ -380,7 +380,7 @@ impl BigTableSubCommand for App<'_> {
                         .about("Find the missing confirmed blocks of an owned bigtable for a given range \
                                 by comparing to a reference bigtable")
                         .arg(
-                            Arg::with_name("starting_slot")
+                            Arg::new("starting_slot")
                                 .validator(is_slot)
                                 .value_name("SLOT")
                                 .takes_value(true)
@@ -390,7 +390,7 @@ impl BigTableSubCommand for App<'_> {
                                 .help("Start listing at this slot"),
                         )
                         .arg(
-                            Arg::with_name("limit")
+                            Arg::new("limit")
                                 .validator(is_slot)
                                 .value_name("LIMIT")
                                 .takes_value(true)
@@ -399,7 +399,7 @@ impl BigTableSubCommand for App<'_> {
                                 .default_value("1000")
                                 .help("Maximum number of slots to check"),
                         ).arg(
-                            Arg::with_name("reference_credential")
+                            Arg::new("reference_credential")
                                 .long("reference-credential")
                                 .short("c")
                                 .value_name("REFERENCE_CREDENTIAL_FILEPATH")
@@ -412,7 +412,7 @@ impl BigTableSubCommand for App<'_> {
                     SubCommand::with_name("block")
                         .about("Get a confirmed block")
                         .arg(
-                            Arg::with_name("slot")
+                            Arg::new("slot")
                                 .long("slot")
                                 .validator(is_slot)
                                 .value_name("SLOT")
@@ -425,7 +425,7 @@ impl BigTableSubCommand for App<'_> {
                     SubCommand::with_name("confirm")
                         .about("Confirm transaction by signature")
                         .arg(
-                            Arg::with_name("signature")
+                            Arg::new("signature")
                                 .long("signature")
                                 .value_name("TRANSACTION_SIGNATURE")
                                 .takes_value(true)
@@ -441,7 +441,7 @@ impl BigTableSubCommand for App<'_> {
                              from newest to oldest",
                         )
                         .arg(
-                            Arg::with_name("address")
+                            Arg::new("address")
                                 .index(1)
                                 .value_name("ADDRESS")
                                 .required(true)
@@ -449,7 +449,7 @@ impl BigTableSubCommand for App<'_> {
                                 .help("Account address"),
                         )
                         .arg(
-                            Arg::with_name("limit")
+                            Arg::new("limit")
                                 .long("limit")
                                 .takes_value(true)
                                 .value_name("LIMIT")
@@ -459,7 +459,7 @@ impl BigTableSubCommand for App<'_> {
                                 .help("Maximum number of transaction signatures to return"),
                         )
                         .arg(
-                            Arg::with_name("query_chunk_size")
+                            Arg::new("query_chunk_size")
                                 .long("query-chunk-size")
                                 .takes_value(true)
                                 .value_name("AMOUNT")
@@ -472,21 +472,21 @@ impl BigTableSubCommand for App<'_> {
                                 ),
                         )
                         .arg(
-                            Arg::with_name("before")
+                            Arg::new("before")
                                 .long("before")
                                 .value_name("TRANSACTION_SIGNATURE")
                                 .takes_value(true)
                                 .help("Start with the first signature older than this one"),
                         )
                         .arg(
-                            Arg::with_name("until")
+                            Arg::new("until")
                                 .long("until")
                                 .value_name("TRANSACTION_SIGNATURE")
                                 .takes_value(true)
                                 .help("End with the last signature newer than this one"),
                         )
                         .arg(
-                            Arg::with_name("show_transactions")
+                            Arg::new("show_transactions")
                                 .long("show-transactions")
                                 .takes_value(false)
                                 .help("Display the full transactions"),

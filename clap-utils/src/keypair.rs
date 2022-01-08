@@ -140,7 +140,7 @@ impl DefaultSigner {
     ///
     /// let clap_app = App::new("my-program")
     ///     // The argument we'll parse as a signer "path"
-    ///     .arg(Arg::with_name("keypair")
+    ///     .arg(Arg::new("keypair")
     ///         .required(true)
     ///         .help("The default signer"))
     ///     .offline_args();
@@ -211,10 +211,10 @@ impl DefaultSigner {
     ///
     /// let clap_app = App::new("my-program")
     ///     // The argument we'll parse as a signer "path"
-    ///     .arg(Arg::with_name("keypair")
+    ///     .arg(Arg::new("keypair")
     ///         .required(true)
     ///         .help("The default signer"))
-    ///     .arg(Arg::with_name("payer")
+    ///     .arg(Arg::new("payer")
     ///         .long("payer")
     ///         .help("The account paying for the transaction"))
     ///     .offline_args();
@@ -285,7 +285,7 @@ impl DefaultSigner {
     ///
     /// let clap_app = App::new("my-program")
     ///     // The argument we'll parse as a signer "path"
-    ///     .arg(Arg::with_name("keypair")
+    ///     .arg(Arg::new("keypair")
     ///         .required(true)
     ///         .help("The default signer"))
     ///     .offline_args();
@@ -332,7 +332,7 @@ impl DefaultSigner {
     ///
     /// let clap_app = App::new("my-program")
     ///     // The argument we'll parse as a signer "path"
-    ///     .arg(Arg::with_name("keypair")
+    ///     .arg(Arg::new("keypair")
     ///         .required(true)
     ///         .help("The default signer"))
     ///     .offline_args();
@@ -666,7 +666,7 @@ pub struct SignerFromPathConfig {
 ///
 /// let clap_app = App::new("my-program")
 ///     // The argument we'll parse as a signer "path"
-///     .arg(Arg::with_name("keypair")
+///     .arg(Arg::new("keypair")
 ///         .required(true)
 ///         .help("The default signer"))
 ///     .offline_args();
@@ -726,7 +726,7 @@ pub fn signer_from_path(
 ///
 /// let clap_app = App::new("my-program")
 ///     // The argument we'll parse as a signer "path"
-///     .arg(Arg::with_name("keypair")
+///     .arg(Arg::new("keypair")
 ///         .required(true)
 ///         .help("The default signer"))
 ///     .offline_args();
@@ -841,7 +841,7 @@ pub fn signer_from_path_with_config(
 ///
 /// let clap_app = App::new("my-program")
 ///     // The argument we'll parse as a signer "path"
-///     .arg(Arg::with_name("keypair")
+///     .arg(Arg::new("keypair")
 ///         .required(true)
 ///         .help("The default signer"));
 ///
@@ -980,7 +980,7 @@ pub fn prompt_passphrase(prompt: &str) -> Result<String, Box<dyn error::Error>> 
 ///
 /// let clap_app = App::new("my-program")
 ///     // The argument we'll parse as a signer "path"
-///     .arg(Arg::with_name("keypair")
+///     .arg(Arg::new("keypair")
 ///         .required(true)
 ///         .help("The default signer"));
 ///
@@ -1304,7 +1304,7 @@ mod tests {
 
         let clap_app = App::new("my-program")
             .arg(
-                Arg::with_name("keypair")
+                Arg::new("keypair")
                     .required(true)
                     .help("The signing keypair"),
             )

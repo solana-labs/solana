@@ -58,7 +58,7 @@ fn get_config() -> Config {
 
         export TWILIO_CONFIG='ACCOUNT=<account>,TOKEN=<securityToken>,TO=<receivingNumber>,FROM=<sendingNumber>'")
         .arg({
-            let arg = Arg::with_name("config_file")
+            let arg = Arg::new("config_file")
                 .short("C")
                 .long("config")
                 .value_name("PATH")
@@ -72,7 +72,7 @@ fn get_config() -> Config {
             }
         })
         .arg(
-            Arg::with_name("json_rpc_url")
+            Arg::new("json_rpc_url")
                 .long("url")
                 .value_name("URL")
                 .takes_value(true)
@@ -80,7 +80,7 @@ fn get_config() -> Config {
                 .help("JSON RPC URL for the cluster"),
         )
         .arg(
-            Arg::with_name("interval")
+            Arg::new("interval")
                 .long("interval")
                 .value_name("SECONDS")
                 .takes_value(true)
@@ -88,7 +88,7 @@ fn get_config() -> Config {
                 .help("Wait interval seconds between checking the cluster"),
         )
         .arg(
-            Arg::with_name("unhealthy_threshold")
+            Arg::new("unhealthy_threshold")
                 .long("unhealthy-threshold")
                 .value_name("COUNT")
                 .takes_value(true)
@@ -96,7 +96,7 @@ fn get_config() -> Config {
                 .help("How many consecutive failures must occur to trigger a notification")
         )
         .arg(
-            Arg::with_name("validator_identities")
+            Arg::new("validator_identities")
                 .long("validator-identity")
                 .value_name("VALIDATOR IDENTITY PUBKEY")
                 .takes_value(true)
@@ -105,7 +105,7 @@ fn get_config() -> Config {
                 .help("Validator identities to monitor for delinquency")
         )
         .arg(
-            Arg::with_name("minimum_validator_identity_balance")
+            Arg::new("minimum_validator_identity_balance")
                 .long("minimum-validator-identity-balance")
                 .value_name("SOL")
                 .takes_value(true)
@@ -115,18 +115,18 @@ fn get_config() -> Config {
         )
         .arg(
             // Deprecated parameter, now always enabled
-            Arg::with_name("no_duplicate_notifications")
+            Arg::new("no_duplicate_notifications")
                 .long("no-duplicate-notifications")
                 .hidden(true)
         )
         .arg(
-            Arg::with_name("monitor_active_stake")
+            Arg::new("monitor_active_stake")
                 .long("monitor-active-stake")
                 .takes_value(false)
                 .help("Alert when the current stake for the cluster drops below 80%"),
         )
         .arg(
-            Arg::with_name("ignore_http_bad_gateway")
+            Arg::new("ignore_http_bad_gateway")
                 .long("ignore-http-bad-gateway")
                 .takes_value(false)
                 .help("Ignore HTTP 502 Bad Gateway errors from the JSON RPC URL. \

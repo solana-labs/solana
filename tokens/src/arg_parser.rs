@@ -27,7 +27,7 @@ where
         .about(crate_description!())
         .version(solana_version::version!())
         .arg(
-            Arg::with_name("config_file")
+            Arg::new("config_file")
                 .long("config")
                 .takes_value(true)
                 .value_name("FILEPATH")
@@ -35,7 +35,7 @@ where
                 .help("Config file"),
         )
         .arg(
-            Arg::with_name("url")
+            Arg::new("url")
                 .long("url")
                 .global(true)
                 .takes_value(true)
@@ -46,7 +46,7 @@ where
             SubCommand::with_name("distribute-tokens")
                 .about("Distribute SOL")
                 .arg(
-                    Arg::with_name("db_path")
+                    Arg::new("db_path")
                         .long("db-path")
                         .required(true)
                         .takes_value(true)
@@ -58,7 +58,7 @@ where
                         ),
                 )
                 .arg(
-                    Arg::with_name("input_csv")
+                    Arg::new("input_csv")
                         .long("input-csv")
                         .required(true)
                         .takes_value(true)
@@ -66,7 +66,7 @@ where
                         .help("Input CSV file"),
                 )
                 .arg(
-                    Arg::with_name("transfer_amount")
+                    Arg::new("transfer_amount")
                         .long("transfer-amount")
                         .takes_value(true)
                         .value_name("AMOUNT")
@@ -74,12 +74,12 @@ where
                         .help("The amount to send to each recipient, in SOL"),
                 )
                 .arg(
-                    Arg::with_name("dry_run")
+                    Arg::new("dry_run")
                         .long("dry-run")
                         .help("Do not execute any transfers"),
                 )
                 .arg(
-                    Arg::with_name("output_path")
+                    Arg::new("output_path")
                         .long("output-path")
                         .short("o")
                         .value_name("FILE")
@@ -87,7 +87,7 @@ where
                         .help("Write the transaction log to this file"),
                 )
                 .arg(
-                    Arg::with_name("sender_keypair")
+                    Arg::new("sender_keypair")
                         .long("from")
                         .required(true)
                         .takes_value(true)
@@ -96,7 +96,7 @@ where
                         .help("Keypair to fund accounts"),
                 )
                 .arg(
-                    Arg::with_name("fee_payer")
+                    Arg::new("fee_payer")
                         .long("fee-payer")
                         .required(true)
                         .takes_value(true)
@@ -109,7 +109,7 @@ where
             SubCommand::with_name("create-stake")
                 .about("Create stake accounts")
                 .arg(
-                    Arg::with_name("db_path")
+                    Arg::new("db_path")
                         .long("db-path")
                         .required(true)
                         .takes_value(true)
@@ -121,7 +121,7 @@ where
                         ),
                 )
                 .arg(
-                    Arg::with_name("input_csv")
+                    Arg::new("input_csv")
                         .long("input-csv")
                         .required(true)
                         .takes_value(true)
@@ -129,12 +129,12 @@ where
                         .help("Allocations CSV file"),
                 )
                 .arg(
-                    Arg::with_name("dry_run")
+                    Arg::new("dry_run")
                         .long("dry-run")
                         .help("Do not execute any transfers"),
                 )
                 .arg(
-                    Arg::with_name("output_path")
+                    Arg::new("output_path")
                         .long("output-path")
                         .short("o")
                         .value_name("FILE")
@@ -142,7 +142,7 @@ where
                         .help("Write the transaction log to this file"),
                 )
                 .arg(
-                    Arg::with_name("sender_keypair")
+                    Arg::new("sender_keypair")
                         .long("from")
                         .required(true)
                         .takes_value(true)
@@ -151,7 +151,7 @@ where
                         .help("Keypair to fund accounts"),
                 )
                 .arg(
-                    Arg::with_name("unlocked_sol")
+                    Arg::new("unlocked_sol")
                         .default_value("1.0")
                         .long("unlocked-sol")
                         .takes_value(true)
@@ -159,7 +159,7 @@ where
                         .help("Amount of SOL to put in system account to pay for fees"),
                 )
                 .arg(
-                    Arg::with_name("lockup_authority")
+                    Arg::new("lockup_authority")
                         .long("lockup-authority")
                         .takes_value(true)
                         .value_name("PUBKEY")
@@ -167,7 +167,7 @@ where
                         .help("Lockup Authority Address"),
                 )
                 .arg(
-                    Arg::with_name("fee_payer")
+                    Arg::new("fee_payer")
                         .long("fee-payer")
                         .required(true)
                         .takes_value(true)
@@ -180,7 +180,7 @@ where
             SubCommand::with_name("distribute-stake")
                 .about("Split to stake accounts")
                 .arg(
-                    Arg::with_name("db_path")
+                    Arg::new("db_path")
                         .long("db-path")
                         .required(true)
                         .takes_value(true)
@@ -192,7 +192,7 @@ where
                         ),
                 )
                 .arg(
-                    Arg::with_name("input_csv")
+                    Arg::new("input_csv")
                         .long("input-csv")
                         .required(true)
                         .takes_value(true)
@@ -200,12 +200,12 @@ where
                         .help("Allocations CSV file"),
                 )
                 .arg(
-                    Arg::with_name("dry_run")
+                    Arg::new("dry_run")
                         .long("dry-run")
                         .help("Do not execute any transfers"),
                 )
                 .arg(
-                    Arg::with_name("output_path")
+                    Arg::new("output_path")
                         .long("output-path")
                         .short("o")
                         .value_name("FILE")
@@ -213,7 +213,7 @@ where
                         .help("Write the transaction log to this file"),
                 )
                 .arg(
-                    Arg::with_name("sender_keypair")
+                    Arg::new("sender_keypair")
                         .long("from")
                         .required(true)
                         .takes_value(true)
@@ -222,7 +222,7 @@ where
                         .help("Keypair to fund accounts"),
                 )
                 .arg(
-                    Arg::with_name("stake_account_address")
+                    Arg::new("stake_account_address")
                         .required(true)
                         .long("stake-account-address")
                         .takes_value(true)
@@ -231,7 +231,7 @@ where
                         .help("Stake Account Address"),
                 )
                 .arg(
-                    Arg::with_name("unlocked_sol")
+                    Arg::new("unlocked_sol")
                         .default_value("1.0")
                         .long("unlocked-sol")
                         .takes_value(true)
@@ -239,7 +239,7 @@ where
                         .help("Amount of SOL to put in system account to pay for fees"),
                 )
                 .arg(
-                    Arg::with_name("stake_authority")
+                    Arg::new("stake_authority")
                         .long("stake-authority")
                         .required(true)
                         .takes_value(true)
@@ -248,7 +248,7 @@ where
                         .help("Stake Authority Keypair"),
                 )
                 .arg(
-                    Arg::with_name("withdraw_authority")
+                    Arg::new("withdraw_authority")
                         .long("withdraw-authority")
                         .required(true)
                         .takes_value(true)
@@ -257,7 +257,7 @@ where
                         .help("Withdraw Authority Keypair"),
                 )
                 .arg(
-                    Arg::with_name("lockup_authority")
+                    Arg::new("lockup_authority")
                         .long("lockup-authority")
                         .takes_value(true)
                         .value_name("KEYPAIR")
@@ -265,7 +265,7 @@ where
                         .help("Lockup Authority Keypair"),
                 )
                 .arg(
-                    Arg::with_name("fee_payer")
+                    Arg::new("fee_payer")
                         .long("fee-payer")
                         .required(true)
                         .takes_value(true)
@@ -278,7 +278,7 @@ where
             SubCommand::with_name("distribute-spl-tokens")
                 .about("Distribute SPL tokens")
                 .arg(
-                    Arg::with_name("db_path")
+                    Arg::new("db_path")
                         .long("db-path")
                         .required(true)
                         .takes_value(true)
@@ -290,7 +290,7 @@ where
                         ),
                 )
                 .arg(
-                    Arg::with_name("input_csv")
+                    Arg::new("input_csv")
                         .long("input-csv")
                         .required(true)
                         .takes_value(true)
@@ -298,12 +298,12 @@ where
                         .help("Allocations CSV file"),
                 )
                 .arg(
-                    Arg::with_name("dry_run")
+                    Arg::new("dry_run")
                         .long("dry-run")
                         .help("Do not execute any transfers"),
                 )
                 .arg(
-                    Arg::with_name("transfer_amount")
+                    Arg::new("transfer_amount")
                         .long("transfer-amount")
                         .takes_value(true)
                         .value_name("AMOUNT")
@@ -311,7 +311,7 @@ where
                         .help("The amount of SPL tokens to send to each recipient"),
                 )
                 .arg(
-                    Arg::with_name("output_path")
+                    Arg::new("output_path")
                         .long("output-path")
                         .short("o")
                         .value_name("FILE")
@@ -319,7 +319,7 @@ where
                         .help("Write the transaction log to this file"),
                 )
                 .arg(
-                    Arg::with_name("token_account_address")
+                    Arg::new("token_account_address")
                         .long("from")
                         .required(true)
                         .takes_value(true)
@@ -328,7 +328,7 @@ where
                         .help("SPL token account to send from"),
                 )
                 .arg(
-                    Arg::with_name("token_owner")
+                    Arg::new("token_owner")
                         .long("owner")
                         .required(true)
                         .takes_value(true)
@@ -337,7 +337,7 @@ where
                         .help("SPL token account owner"),
                 )
                 .arg(
-                    Arg::with_name("fee_payer")
+                    Arg::new("fee_payer")
                         .long("fee-payer")
                         .required(true)
                         .takes_value(true)
@@ -350,7 +350,7 @@ where
             SubCommand::with_name("balances")
                 .about("Balance of each account")
                 .arg(
-                    Arg::with_name("input_csv")
+                    Arg::new("input_csv")
                         .long("input-csv")
                         .required(true)
                         .takes_value(true)
@@ -362,7 +362,7 @@ where
             SubCommand::with_name("spl-token-balances")
                 .about("Balance of SPL token associated accounts")
                 .arg(
-                    Arg::with_name("input_csv")
+                    Arg::new("input_csv")
                         .long("input-csv")
                         .required(true)
                         .takes_value(true)
@@ -370,7 +370,7 @@ where
                         .help("Allocations CSV file"),
                 )
                 .arg(
-                    Arg::with_name("mint_address")
+                    Arg::new("mint_address")
                         .long("mint")
                         .required(true)
                         .takes_value(true)
@@ -383,7 +383,7 @@ where
             SubCommand::with_name("transaction-log")
                 .about("Print the database to a CSV file")
                 .arg(
-                    Arg::with_name("db_path")
+                    Arg::new("db_path")
                         .long("db-path")
                         .required(true)
                         .takes_value(true)
@@ -391,7 +391,7 @@ where
                         .help("Location of database to query"),
                 )
                 .arg(
-                    Arg::with_name("output_path")
+                    Arg::new("output_path")
                         .long("output-path")
                         .required(true)
                         .takes_value(true)

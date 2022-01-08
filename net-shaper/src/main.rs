@@ -494,7 +494,7 @@ fn main() {
             SubCommand::with_name("shape")
                 .about("Shape the network using config file")
                 .arg(
-                    Arg::with_name("file")
+                    Arg::new("file")
                         .short("f")
                         .long("file")
                         .value_name("config file")
@@ -503,7 +503,7 @@ fn main() {
                         .help("Location of the network config file"),
                 )
                 .arg(
-                    Arg::with_name("size")
+                    Arg::new("size")
                         .short("s")
                         .long("size")
                         .value_name("network size")
@@ -512,7 +512,7 @@ fn main() {
                         .help("Number of nodes in the network"),
                 )
                 .arg(
-                    Arg::with_name("iface")
+                    Arg::new("iface")
                         .short("i")
                         .long("iface")
                         .value_name("network interface name")
@@ -521,7 +521,7 @@ fn main() {
                         .help("Name of network interface"),
                 )
                 .arg(
-                    Arg::with_name("position")
+                    Arg::new("position")
                         .short("p")
                         .long("position")
                         .value_name("position of node")
@@ -534,7 +534,7 @@ fn main() {
             SubCommand::with_name("cleanup")
                 .about("Remove the network filters using config file")
                 .arg(
-                    Arg::with_name("file")
+                    Arg::new("file")
                         .short("f")
                         .long("file")
                         .value_name("config file")
@@ -543,7 +543,7 @@ fn main() {
                         .help("Location of the network config file"),
                 )
                 .arg(
-                    Arg::with_name("size")
+                    Arg::new("size")
                         .short("s")
                         .long("size")
                         .value_name("network size")
@@ -552,7 +552,7 @@ fn main() {
                         .help("Number of nodes in the network"),
                 )
                 .arg(
-                    Arg::with_name("iface")
+                    Arg::new("iface")
                         .short("i")
                         .long("iface")
                         .value_name("network interface name")
@@ -561,7 +561,7 @@ fn main() {
                         .help("Name of network interface"),
                 )
                 .arg(
-                    Arg::with_name("position")
+                    Arg::new("position")
                         .short("p")
                         .long("position")
                         .value_name("position of node")
@@ -574,14 +574,14 @@ fn main() {
             SubCommand::with_name("configure")
                 .about("Generate a config file")
                 .arg(
-                    Arg::with_name("random")
+                    Arg::new("random")
                         .short("r")
                         .long("random")
                         .required(false)
                         .help("Generate a random config file"),
                 )
                 .arg(
-                    Arg::with_name("max-partitions")
+                    Arg::new("max-partitions")
                         .short("p")
                         .long("max-partitions")
                         .value_name("count")
@@ -590,7 +590,7 @@ fn main() {
                         .help("Maximum number of partitions. Used only with random configuration generation"),
                 )
                 .arg(
-                    Arg::with_name("max-drop")
+                    Arg::new("max-drop")
                         .short("d")
                         .long("max-drop")
                         .value_name("percentage")
@@ -599,7 +599,7 @@ fn main() {
                         .help("Maximum amount of packet drop. Used only with random configuration generation"),
                 )
                 .arg(
-                    Arg::with_name("max-delay")
+                    Arg::new("max-delay")
                         .short("y")
                         .long("max-delay")
                         .value_name("ms")

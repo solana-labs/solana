@@ -206,13 +206,13 @@ mod tests {
     fn app<'ab, 'v>() -> App<'ab, 'v> {
         App::new("test")
             .arg(
-                Arg::with_name("multiple")
+                Arg::new("multiple")
                     .long("multiple")
                     .takes_value(true)
                     .multiple(true),
             )
-            .arg(Arg::with_name("single").takes_value(true).long("single"))
-            .arg(Arg::with_name("unit").takes_value(true).long("unit"))
+            .arg(Arg::new("single").takes_value(true).long("single"))
+            .arg(Arg::new("unit").takes_value(true).long("unit"))
     }
 
     fn tmp_file_path(name: &str, pubkey: &Pubkey) -> String {

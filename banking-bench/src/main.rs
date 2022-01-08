@@ -112,39 +112,39 @@ fn main() {
         .about(crate_description!())
         .version(solana_version::version!())
         .arg(
-            Arg::with_name("num_chunks")
+            Arg::new("num_chunks")
                 .long("num-chunks")
                 .takes_value(true)
                 .value_name("SIZE")
                 .help("Number of transaction chunks."),
         )
         .arg(
-            Arg::with_name("packets_per_chunk")
+            Arg::new("packets_per_chunk")
                 .long("packets-per-chunk")
                 .takes_value(true)
                 .value_name("SIZE")
                 .help("Packets per chunk"),
         )
         .arg(
-            Arg::with_name("skip_sanity")
+            Arg::new("skip_sanity")
                 .long("skip-sanity")
                 .takes_value(false)
                 .help("Skip transaction sanity execution"),
         )
         .arg(
-            Arg::with_name("same_payer")
+            Arg::new("same_payer")
                 .long("same-payer")
                 .takes_value(false)
                 .help("Use the same payer for transfers"),
         )
         .arg(
-            Arg::with_name("iterations")
+            Arg::new("iterations")
                 .long("iterations")
                 .takes_value(true)
                 .help("Number of iterations"),
         )
         .arg(
-            Arg::with_name("num_threads")
+            Arg::new("num_threads")
                 .long("num-threads")
                 .takes_value(true)
                 .help("Number of iterations"),

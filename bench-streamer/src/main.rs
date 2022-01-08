@@ -61,7 +61,7 @@ fn main() -> Result<()> {
         .about(crate_description!())
         .version(solana_version::version!())
         .arg(
-            Arg::with_name("num-recv-sockets")
+            Arg::new("num-recv-sockets")
                 .long("num-recv-sockets")
                 .value_name("NUM")
                 .takes_value(true)

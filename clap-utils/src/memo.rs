@@ -7,7 +7,7 @@ pub const MEMO_ARG: ArgConstant<'static> = ArgConstant {
 };
 
 pub fn memo_arg<'a>() -> Arg<'a> {
-    Arg::with_name(MEMO_ARG.name)
+    Arg::new(MEMO_ARG.name)
         .long(MEMO_ARG.long)
         .takes_value(true)
         .value_name("MEMO")

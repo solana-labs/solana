@@ -418,35 +418,35 @@ fn main() {
         .about(crate_description!())
         .version(solana_version::version!())
         .arg(
-            Arg::with_name("entrypoint")
+            Arg::new("entrypoint")
                 .long("entrypoint")
                 .takes_value(true)
                 .value_name("HOST:PORT")
                 .help("RPC entrypoint address. Usually <ip>:8899"),
         )
         .arg(
-            Arg::with_name("faucet_addr")
+            Arg::new("faucet_addr")
                 .long("faucet")
                 .takes_value(true)
                 .value_name("HOST:PORT")
                 .help("Faucet entrypoint address. Usually <ip>:9900"),
         )
         .arg(
-            Arg::with_name("space")
+            Arg::new("space")
                 .long("space")
                 .takes_value(true)
                 .value_name("BYTES")
                 .help("Size of accounts to create"),
         )
         .arg(
-            Arg::with_name("lamports")
+            Arg::new("lamports")
                 .long("lamports")
                 .takes_value(true)
                 .value_name("LAMPORTS")
                 .help("How many lamports to fund each account"),
         )
         .arg(
-            Arg::with_name("payer")
+            Arg::new("payer")
                 .long("payer")
                 .takes_value(true)
                 .multiple(true)
@@ -454,7 +454,7 @@ fn main() {
                 .help("One or more payer keypairs to fund account creation."),
         )
         .arg(
-            Arg::with_name("account")
+            Arg::new("account")
                 .long("account")
                 .takes_value(true)
                 .multiple(true)
@@ -462,59 +462,59 @@ fn main() {
                 .help("One or more keypairs to create accounts owned by the program and which the program will write to."),
         )
         .arg(
-            Arg::with_name("account_groups")
+            Arg::new("account_groups")
             .long("account_groups")
             .takes_value(true)
             .value_name("NUM")
             .help("Number of groups of accounts to split the accounts into")
         )
         .arg(
-            Arg::with_name("batch_size")
+            Arg::new("batch_size")
                 .long("batch-size")
                 .takes_value(true)
                 .value_name("NUM")
                 .help("Number of transactions to send per batch"),
         )
         .arg(
-            Arg::with_name("num_instructions")
+            Arg::new("num_instructions")
                 .long("num-instructions")
                 .takes_value(true)
                 .value_name("NUM")
                 .help("Number of accounts to create on each transaction"),
         )
         .arg(
-            Arg::with_name("num_program_iterations")
+            Arg::new("num_program_iterations")
                 .long("num-program-iterations")
                 .takes_value(true)
                 .value_name("NUM")
                 .help("Number of iterations in the smart contract"),
         )
         .arg(
-            Arg::with_name("iterations")
+            Arg::new("iterations")
                 .long("iterations")
                 .takes_value(true)
                 .value_name("NUM")
                 .help("Number of iterations to make"),
         )
         .arg(
-            Arg::with_name("batch_sleep_ms")
+            Arg::new("batch_sleep_ms")
                 .long("batch-sleep-ms")
                 .takes_value(true)
                 .value_name("NUM")
                 .help("Sleep for this long the num outstanding transctions is greater than the batch size."),
         )
         .arg(
-            Arg::with_name("check_gossip")
+            Arg::new("check_gossip")
                 .long("check-gossip")
                 .help("Just use entrypoint address directly"),
         )
         .arg(
-            Arg::with_name("just_calculate_fees")
+            Arg::new("just_calculate_fees")
                 .long("just-calculate-fees")
                 .help("Just print the necessary fees and exit"),
         )
         .arg(
-            Arg::with_name("program_id")
+            Arg::new("program_id")
                 .long("program-id")
                 .takes_value(true)
                 .required(true)

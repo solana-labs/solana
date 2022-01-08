@@ -25,7 +25,7 @@ async fn main() {
         .about(crate_description!())
         .version(solana_version::version!())
         .arg(
-            Arg::with_name("keypair")
+            Arg::new("keypair")
                 .short("k")
                 .long("keypair")
                 .value_name("PATH")
@@ -35,14 +35,14 @@ async fn main() {
                 .help("File from which to read the faucet's keypair"),
         )
         .arg(
-            Arg::with_name("slice")
+            Arg::new("slice")
                 .long("slice")
                 .value_name("SECS")
                 .takes_value(true)
                 .help("Time slice over which to limit requests to faucet"),
         )
         .arg(
-            Arg::with_name("per_time_cap")
+            Arg::new("per_time_cap")
                 .long("per-time-cap")
                 .alias("cap")
                 .value_name("NUM")
@@ -50,14 +50,14 @@ async fn main() {
                 .help("Request limit for time slice, in SOL"),
         )
         .arg(
-            Arg::with_name("per_request_cap")
+            Arg::new("per_request_cap")
                 .long("per-request-cap")
                 .value_name("NUM")
                 .takes_value(true)
                 .help("Request limit for a single request, in SOL"),
         )
         .arg(
-            Arg::with_name("allowed_ip")
+            Arg::new("allowed_ip")
                 .long("allow-ip")
                 .value_name("IP_ADDRESS")
                 .takes_value(true)

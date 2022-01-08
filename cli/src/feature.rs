@@ -358,7 +358,7 @@ impl FeatureSubCommands for App<'_> {
                     SubCommand::with_name("status")
                         .about("Query runtime feature status")
                         .arg(
-                            Arg::with_name("features")
+                            Arg::new("features")
                                 .value_name("ADDRESS")
                                 .validator(is_valid_pubkey)
                                 .index(1)
@@ -370,7 +370,7 @@ impl FeatureSubCommands for App<'_> {
                     SubCommand::with_name("activate")
                         .about("Activate a runtime feature")
                         .arg(
-                            Arg::with_name("feature")
+                            Arg::new("feature")
                                 .value_name("FEATURE_KEYPAIR")
                                 .validator(is_valid_signer)
                                 .index(1)
@@ -378,7 +378,7 @@ impl FeatureSubCommands for App<'_> {
                                 .help("The signer for the feature to activate"),
                         )
                         .arg(
-                            Arg::with_name("force")
+                            Arg::new("force")
                                 .long("yolo")
                                 .hidden(true)
                                 .multiple(true)

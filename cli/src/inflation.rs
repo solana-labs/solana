@@ -34,7 +34,7 @@ impl InflationSubCommands for App<'_> {
                     SubCommand::with_name("rewards")
                         .about("Show inflation rewards for a set of addresses")
                         .arg(pubkey!(
-                            Arg::with_name("addresses")
+                            Arg::new("addresses")
                                 .value_name("ADDRESS")
                                 .index(1)
                                 .multiple(true)
@@ -42,7 +42,7 @@ impl InflationSubCommands for App<'_> {
                             "Address of account to query for rewards. "
                         ))
                         .arg(
-                            Arg::with_name("rewards_epoch")
+                            Arg::new("rewards_epoch")
                                 .long("rewards-epoch")
                                 .takes_value(true)
                                 .value_name("EPOCH")

@@ -45,12 +45,12 @@ pub fn main() {
         .setting(AppSettings::VersionlessSubcommands)
         .setting(AppSettings::InferSubcommands)
         .arg(
-            Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
+            Arg::new(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
                 .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
                 .help(SKIP_SEED_PHRASE_VALIDATION_ARG.help),
         )
         .arg(
-            Arg::with_name("ledger_path")
+            Arg::new("ledger_path")
                 .short("l")
                 .long("ledger")
                 .value_name("DIR")
@@ -60,14 +60,14 @@ pub fn main() {
                 .help("Use DIR as ledger location"),
         )
         .arg(
-            Arg::with_name("snapshots")
+            Arg::new("snapshots")
                 .long("snapshots")
                 .value_name("DIR")
                 .takes_value(true)
                 .help("Use DIR as snapshot location [default: --ledger value]"),
         )
         .arg(
-            Arg::with_name("peer_address")
+            Arg::new("peer_address")
                 .long("peer-address")
                 .value_name("IP")
                 .takes_value(true)
@@ -75,7 +75,7 @@ pub fn main() {
                 .help("The the address for the peer validator/replica to download from"),
         )
         .arg(
-            Arg::with_name("peer_rpc_port")
+            Arg::new("peer_rpc_port")
                 .long("peer-rpc-port")
                 .value_name("PORT")
                 .takes_value(true)
@@ -83,7 +83,7 @@ pub fn main() {
                 .help("The the PORT for the peer validator/replica from which to download the snapshots"),
         )
         .arg(
-            Arg::with_name("peer_accountsdb_repl_port")
+            Arg::new("peer_accountsdb_repl_port")
                 .long("peer-accountsdb-repl-port")
                 .value_name("PORT")
                 .takes_value(true)
@@ -91,7 +91,7 @@ pub fn main() {
                 .help("The the PORT for the peer validator/replica serving the AccountsDb replication"),
         )
         .arg(
-            Arg::with_name("peer_pubkey")
+            Arg::new("peer_pubkey")
                 .long("peer-pubkey")
                 .validator(is_pubkey)
                 .value_name("The peer validator/replica IDENTITY")
@@ -100,7 +100,7 @@ pub fn main() {
                 .help("The pubkey for the target validator."),
         )
         .arg(
-            Arg::with_name("account_paths")
+            Arg::new("account_paths")
                 .long("accounts")
                 .value_name("PATHS")
                 .takes_value(true)
@@ -108,7 +108,7 @@ pub fn main() {
                 .help("Comma separated persistent accounts location"),
         )
         .arg(
-            Arg::with_name("identity")
+            Arg::new("identity")
                 .short("i")
                 .long("identity")
                 .value_name("KEYPAIR")
@@ -117,7 +117,7 @@ pub fn main() {
                 .help("Replica identity keypair"),
         )
         .arg(
-            Arg::with_name("entrypoint")
+            Arg::new("entrypoint")
                 .short("n")
                 .long("entrypoint")
                 .value_name("HOST:PORT")
@@ -127,7 +127,7 @@ pub fn main() {
                 .help("Rendezvous with the cluster at this gossip entrypoint"),
         )
         .arg(
-            Arg::with_name("bind_address")
+            Arg::new("bind_address")
                 .long("bind-address")
                 .value_name("HOST")
                 .takes_value(true)
@@ -136,7 +136,7 @@ pub fn main() {
                 .help("IP address to bind the replica ports"),
         )
         .arg(
-            Arg::with_name("rpc_bind_address")
+            Arg::new("rpc_bind_address")
                 .long("rpc-bind-address")
                 .value_name("HOST")
                 .takes_value(true)
@@ -144,7 +144,7 @@ pub fn main() {
                 .help("IP address to bind the Json RPC port [default: use --bind-address]"),
         )
         .arg(
-            Arg::with_name("rpc_port")
+            Arg::new("rpc_port")
                 .long("rpc-port")
                 .value_name("PORT")
                 .takes_value(true)
@@ -152,7 +152,7 @@ pub fn main() {
                 .help("Enable JSON RPC on this port, and the next port for the RPC websocket"),
         )
         .arg(
-            Arg::with_name("dynamic_port_range")
+            Arg::new("dynamic_port_range")
                 .long("dynamic-port-range")
                 .value_name("MIN_PORT-MAX_PORT")
                 .takes_value(true)
@@ -161,7 +161,7 @@ pub fn main() {
                 .help("Range to use for dynamically assigned ports"),
         )
         .arg(
-            Arg::with_name("expected_shred_version")
+            Arg::new("expected_shred_version")
                 .long("expected-shred-version")
                 .value_name("VERSION")
                 .takes_value(true)
@@ -169,7 +169,7 @@ pub fn main() {
                 .help("Require the shred version be this value"),
         )
         .arg(
-            Arg::with_name("logfile")
+            Arg::new("logfile")
                 .short("o")
                 .long("log")
                 .value_name("FILE")
@@ -181,7 +181,7 @@ pub fn main() {
                 ),
         )
         .arg(
-            Arg::with_name("allow_private_addr")
+            Arg::new("allow_private_addr")
                 .long("allow-private-addr")
                 .takes_value(false)
                 .help("Allow contacting private ip addresses")

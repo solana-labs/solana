@@ -148,7 +148,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .about(crate_description!())
         .version(solana_version::version!())
         .arg(
-            Arg::with_name("creation_time")
+            Arg::new("creation_time")
                 .long("creation-time")
                 .value_name("RFC3339 DATE TIME")
                 .validator(is_rfc3339_datetime)
@@ -156,7 +156,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("Time when the bootstrap validator will start the cluster [default: current system time]"),
         )
         .arg(
-            Arg::with_name("bootstrap_validator")
+            Arg::new("bootstrap_validator")
                 .short("b")
                 .long("bootstrap-validator")
                 .value_name("IDENTITY_PUBKEY VOTE_PUBKEY STAKE_PUBKEY")
@@ -168,7 +168,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("The bootstrap validator's identity, vote and stake pubkeys"),
         )
         .arg(
-            Arg::with_name("ledger_path")
+            Arg::new("ledger_path")
                 .short("l")
                 .long("ledger")
                 .value_name("DIR")
@@ -177,7 +177,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("Use directory as persistent ledger location"),
         )
         .arg(
-            Arg::with_name("faucet_lamports")
+            Arg::new("faucet_lamports")
                 .short("t")
                 .long("faucet-lamports")
                 .value_name("LAMPORTS")
@@ -185,7 +185,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("Number of lamports to assign to the faucet"),
         )
         .arg(
-            Arg::with_name("faucet_pubkey")
+            Arg::new("faucet_pubkey")
                 .short("m")
                 .long("faucet-pubkey")
                 .value_name("PUBKEY")
@@ -196,7 +196,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("Path to file containing the faucet's pubkey"),
         )
         .arg(
-            Arg::with_name("bootstrap_stake_authorized_pubkey")
+            Arg::new("bootstrap_stake_authorized_pubkey")
                 .long("bootstrap-stake-authorized-pubkey")
                 .value_name("BOOTSTRAP STAKE AUTHORIZED PUBKEY")
                 .takes_value(true)
@@ -207,7 +207,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
         )
         .arg(
-            Arg::with_name("bootstrap_validator_lamports")
+            Arg::new("bootstrap_validator_lamports")
                 .long("bootstrap-validator-lamports")
                 .value_name("LAMPORTS")
                 .takes_value(true)
@@ -215,7 +215,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("Number of lamports to assign to the bootstrap validator"),
         )
         .arg(
-            Arg::with_name("bootstrap_validator_stake_lamports")
+            Arg::new("bootstrap_validator_stake_lamports")
                 .long("bootstrap-validator-stake-lamports")
                 .value_name("LAMPORTS")
                 .takes_value(true)
@@ -223,7 +223,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("Number of lamports to assign to the bootstrap validator's stake account"),
         )
         .arg(
-            Arg::with_name("target_lamports_per_signature")
+            Arg::new("target_lamports_per_signature")
                 .long("target-lamports-per-signature")
                 .value_name("LAMPORTS")
                 .takes_value(true)
@@ -234,7 +234,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
         )
         .arg(
-            Arg::with_name("lamports_per_byte_year")
+            Arg::new("lamports_per_byte_year")
                 .long("lamports-per-byte-year")
                 .value_name("LAMPORTS")
                 .takes_value(true)
@@ -245,7 +245,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
         )
         .arg(
-            Arg::with_name("rent_exemption_threshold")
+            Arg::new("rent_exemption_threshold")
                 .long("rent-exemption-threshold")
                 .value_name("NUMBER")
                 .takes_value(true)
@@ -256,7 +256,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
         )
         .arg(
-            Arg::with_name("rent_burn_percentage")
+            Arg::new("rent_burn_percentage")
                 .long("rent-burn-percentage")
                 .value_name("NUMBER")
                 .takes_value(true)
@@ -265,7 +265,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .validator(is_valid_percentage),
         )
         .arg(
-            Arg::with_name("fee_burn_percentage")
+            Arg::new("fee_burn_percentage")
                 .long("fee-burn-percentage")
                 .value_name("NUMBER")
                 .takes_value(true)
@@ -274,7 +274,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .validator(is_valid_percentage),
         )
         .arg(
-            Arg::with_name("vote_commission_percentage")
+            Arg::new("vote_commission_percentage")
                 .long("vote-commission-percentage")
                 .value_name("NUMBER")
                 .takes_value(true)
@@ -283,7 +283,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .validator(is_valid_percentage),
         )
         .arg(
-            Arg::with_name("target_signatures_per_slot")
+            Arg::new("target_signatures_per_slot")
                 .long("target-signatures-per-slot")
                 .value_name("NUMBER")
                 .takes_value(true)
@@ -296,14 +296,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
         )
         .arg(
-            Arg::with_name("target_tick_duration")
+            Arg::new("target_tick_duration")
                 .long("target-tick-duration")
                 .value_name("MILLIS")
                 .takes_value(true)
                 .help("The target tick rate of the cluster in milliseconds"),
         )
         .arg(
-            Arg::with_name("hashes_per_tick")
+            Arg::new("hashes_per_tick")
                 .long("hashes-per-tick")
                 .value_name("NUM_HASHES|\"auto\"|\"sleep\"")
                 .takes_value(true)
@@ -316,7 +316,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
         )
         .arg(
-            Arg::with_name("ticks_per_slot")
+            Arg::new("ticks_per_slot")
                 .long("ticks-per-slot")
                 .value_name("TICKS")
                 .takes_value(true)
@@ -324,7 +324,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("The number of ticks in a slot"),
         )
         .arg(
-            Arg::with_name("slots_per_epoch")
+            Arg::new("slots_per_epoch")
                 .long("slots-per-epoch")
                 .value_name("SLOTS")
                 .validator(is_slot)
@@ -332,7 +332,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("The number of slots in an epoch"),
         )
         .arg(
-            Arg::with_name("enable_warmup_epochs")
+            Arg::new("enable_warmup_epochs")
                 .long("enable-warmup-epochs")
                 .help(
                     "When enabled epochs start short and will grow. \
@@ -340,7 +340,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
         )
         .arg(
-            Arg::with_name("primordial_accounts_file")
+            Arg::new("primordial_accounts_file")
                 .long("primordial-accounts-file")
                 .value_name("FILENAME")
                 .takes_value(true)
@@ -348,7 +348,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("The location of pubkey for primordial accounts and balance"),
         )
         .arg(
-            Arg::with_name("cluster_type")
+            Arg::new("cluster_type")
                 .long("cluster-type")
                 .possible_values(&ClusterType::STRINGS)
                 .takes_value(true)
@@ -358,7 +358,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
         )
         .arg(
-            Arg::with_name("max_genesis_archive_unpacked_size")
+            Arg::new("max_genesis_archive_unpacked_size")
                 .long("max-genesis-archive-unpacked-size")
                 .value_name("NUMBER")
                 .takes_value(true)
@@ -368,7 +368,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
         )
         .arg(
-            Arg::with_name("bpf_program")
+            Arg::new("bpf_program")
                 .long("bpf-program")
                 .value_name("ADDRESS BPF_PROGRAM.SO")
                 .takes_value(true)
@@ -377,7 +377,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("Install a BPF program at the given address"),
         )
         .arg(
-            Arg::with_name("inflation")
+            Arg::new("inflation")
                 .required(false)
                 .long("inflation")
                 .takes_value(true)

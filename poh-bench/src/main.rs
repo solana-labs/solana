@@ -17,47 +17,47 @@ fn main() {
         .about(crate_description!())
         .version(solana_version::version!())
         .arg(
-            Arg::with_name("max_num_entries")
+            Arg::new("max_num_entries")
                 .long("max-num-entries")
                 .takes_value(true)
                 .value_name("SIZE")
                 .help("Number of entries."),
         )
         .arg(
-            Arg::with_name("start_num_entries")
+            Arg::new("start_num_entries")
                 .long("start-num-entries")
                 .takes_value(true)
                 .value_name("SIZE")
                 .help("Packets per chunk"),
         )
         .arg(
-            Arg::with_name("hashes_per_tick")
+            Arg::new("hashes_per_tick")
                 .long("hashes-per-tick")
                 .takes_value(true)
                 .value_name("SIZE")
                 .help("hashes per tick"),
         )
         .arg(
-            Arg::with_name("num_transactions_per_entry")
+            Arg::new("num_transactions_per_entry")
                 .long("num-transactions-per-entry")
                 .takes_value(true)
                 .value_name("NUM")
                 .help("Skip transaction sanity execution"),
         )
         .arg(
-            Arg::with_name("iterations")
+            Arg::new("iterations")
                 .long("iterations")
                 .takes_value(true)
                 .help("Number of iterations"),
         )
         .arg(
-            Arg::with_name("num_threads")
+            Arg::new("num_threads")
                 .long("num-threads")
                 .takes_value(true)
                 .help("Number of threads"),
         )
         .arg(
-            Arg::with_name("cuda")
+            Arg::new("cuda")
                 .long("cuda")
                 .takes_value(false)
                 .help("Use cuda"),

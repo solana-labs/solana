@@ -153,14 +153,14 @@ fn main() {
         .about(crate_description!())
         .version(solana_version::version!())
         .arg(
-            Arg::with_name("entrypoint")
+            Arg::new("entrypoint")
                 .long("entrypoint")
                 .takes_value(true)
                 .value_name("HOST:PORT")
                 .help("Gossip entrypoint address. Usually <ip>:8001"),
         )
         .arg(
-            Arg::with_name("mode")
+            Arg::new("mode")
                 .long("mode")
                 .takes_value(true)
                 .value_name("MODE")
@@ -177,14 +177,14 @@ fn main() {
                 .help("Interface to DoS"),
         )
         .arg(
-            Arg::with_name("data_size")
+            Arg::new("data_size")
                 .long("data-size")
                 .takes_value(true)
                 .value_name("BYTES")
                 .help("Size of packet to DoS with"),
         )
         .arg(
-            Arg::with_name("data_type")
+            Arg::new("data_type")
                 .long("data-type")
                 .takes_value(true)
                 .value_name("TYPE")
@@ -200,19 +200,19 @@ fn main() {
                 .help("Type of data to send"),
         )
         .arg(
-            Arg::with_name("data_input")
+            Arg::new("data_input")
                 .long("data-input")
                 .takes_value(true)
                 .value_name("TYPE")
                 .help("Data to send"),
         )
         .arg(
-            Arg::with_name("skip_gossip")
+            Arg::new("skip_gossip")
                 .long("skip-gossip")
                 .help("Just use entrypoint address directly"),
         )
         .arg(
-            Arg::with_name("allow_private_addr")
+            Arg::new("allow_private_addr")
                 .long("allow-private-addr")
                 .takes_value(false)
                 .help("Allow contacting private ip addresses")

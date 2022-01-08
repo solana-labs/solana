@@ -21,7 +21,7 @@ use {
 };
 
 fn parse_matches() -> ArgMatches<'static> {
-    let shred_version_arg = Arg::with_name("shred_version")
+    let shred_version_arg = Arg::new("shred_version")
         .long("shred-version")
         .value_name("VERSION")
         .takes_value(true)
@@ -33,7 +33,7 @@ fn parse_matches() -> ArgMatches<'static> {
         .version(solana_version::version!())
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .arg(
-            Arg::with_name("allow_private_addr")
+            Arg::new("allow_private_addr")
                 .long("allow-private-addr")
                 .takes_value(false)
                 .help("Allow contacting private ip addresses")
@@ -43,7 +43,7 @@ fn parse_matches() -> ArgMatches<'static> {
             SubCommand::with_name("rpc-url")
                 .about("Get an RPC URL for the cluster")
                 .arg(
-                    Arg::with_name("entrypoint")
+                    Arg::new("entrypoint")
                         .short("n")
                         .long("entrypoint")
                         .value_name("HOST:PORT")
@@ -53,20 +53,20 @@ fn parse_matches() -> ArgMatches<'static> {
                         .help("Rendezvous with the cluster at this entry point"),
                 )
                 .arg(
-                    Arg::with_name("all")
+                    Arg::new("all")
                         .long("all")
                         .takes_value(false)
                         .help("Return all RPC URLs"),
                 )
                 .arg(
-                    Arg::with_name("any")
+                    Arg::new("any")
                         .long("any")
                         .takes_value(false)
                         .conflicts_with("all")
                         .help("Return any RPC URL"),
                 )
                 .arg(
-                    Arg::with_name("timeout")
+                    Arg::new("timeout")
                         .long("timeout")
                         .value_name("SECONDS")
                         .takes_value(true)
@@ -81,7 +81,7 @@ fn parse_matches() -> ArgMatches<'static> {
                 .about("Monitor the gossip entrypoint")
                 .setting(AppSettings::DisableVersion)
                 .arg(
-                    Arg::with_name("entrypoint")
+                    Arg::new("entrypoint")
                         .short("n")
                         .long("entrypoint")
                         .value_name("HOST:PORT")
@@ -90,7 +90,7 @@ fn parse_matches() -> ArgMatches<'static> {
                         .help("Rendezvous with the cluster at this entrypoint"),
                 )
                 .arg(
-                    clap::Arg::with_name("gossip_port")
+                    clap::Arg::new("gossip_port")
                         .long("gossip-port")
                         .value_name("PORT")
                         .takes_value(true)
@@ -98,7 +98,7 @@ fn parse_matches() -> ArgMatches<'static> {
                         .help("Gossip port number for the node"),
                 )
                 .arg(
-                    clap::Arg::with_name("gossip_host")
+                    clap::Arg::new("gossip_host")
                         .long("gossip-host")
                         .value_name("HOST")
                         .takes_value(true)
@@ -107,7 +107,7 @@ fn parse_matches() -> ArgMatches<'static> {
                                [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
                 )
                 .arg(
-                    Arg::with_name("identity")
+                    Arg::new("identity")
                         .short("i")
                         .long("identity")
                         .value_name("PATH")
@@ -116,7 +116,7 @@ fn parse_matches() -> ArgMatches<'static> {
                         .help("Identity keypair [default: ephemeral keypair]"),
                 )
                 .arg(
-                    Arg::with_name("num_nodes")
+                    Arg::new("num_nodes")
                         .short("N")
                         .long("num-nodes")
                         .value_name("NUM")
@@ -125,7 +125,7 @@ fn parse_matches() -> ArgMatches<'static> {
                         .help("Wait for at least NUM nodes to be visible"),
                 )
                 .arg(
-                    Arg::with_name("num_nodes_exactly")
+                    Arg::new("num_nodes_exactly")
                         .short("E")
                         .long("num-nodes-exactly")
                         .value_name("NUM")
@@ -133,7 +133,7 @@ fn parse_matches() -> ArgMatches<'static> {
                         .help("Wait for exactly NUM nodes to be visible"),
                 )
                 .arg(
-                    Arg::with_name("node_pubkey")
+                    Arg::new("node_pubkey")
                         .short("p")
                         .long("pubkey")
                         .value_name("PUBKEY")
@@ -143,7 +143,7 @@ fn parse_matches() -> ArgMatches<'static> {
                 )
                 .arg(&shred_version_arg)
                 .arg(
-                    Arg::with_name("timeout")
+                    Arg::new("timeout")
                         .long("timeout")
                         .value_name("SECONDS")
                         .takes_value(true)

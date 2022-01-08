@@ -87,7 +87,7 @@ impl ClusterQuerySubCommands for App<'_> {
             SubCommand::with_name("block")
                 .about("Get a confirmed block")
                 .arg(
-                    Arg::with_name("slot")
+                    Arg::new("slot")
                         .long("slot")
                         .validator(is_slot)
                         .value_name("SLOT")
@@ -99,14 +99,14 @@ impl ClusterQuerySubCommands for App<'_> {
             SubCommand::with_name("catchup")
                 .about("Wait for a validator to catch up to the cluster")
                 .arg(
-                    pubkey!(Arg::with_name("node_pubkey")
+                    pubkey!(Arg::new("node_pubkey")
                         .index(1)
                         .value_name("OUR_VALIDATOR_PUBKEY")
                         .required(false),
                         "Identity pubkey of the validator"),
                 )
                 .arg(
-                    Arg::with_name("node_json_rpc_url")
+                    Arg::new("node_json_rpc_url")
                         .index(2)
                         .value_name("OUR_URL")
                         .takes_value(true)
@@ -114,13 +114,13 @@ impl ClusterQuerySubCommands for App<'_> {
                         .help("JSON RPC URL for validator, which is useful for validators with a private RPC service")
                 )
                 .arg(
-                    Arg::with_name("follow")
+                    Arg::new("follow")
                         .long("follow")
                         .takes_value(false)
                         .help("Continue reporting progress even after the validator has caught up"),
                 )
                 .arg(
-                    Arg::with_name("our_localhost")
+                    Arg::new("our_localhost")
                         .long("our-localhost")
                         .takes_value(false)
                         .value_name("PORT")
@@ -129,7 +129,7 @@ impl ClusterQuerySubCommands for App<'_> {
                         .help("Guess Identity pubkey and validator rpc node assuming local (possibly private) validator"),
                 )
                 .arg(
-                    Arg::with_name("log")
+                    Arg::new("log")
                         .long("log")
                         .takes_value(false)
                         .help("Don't update the progress inplace; instead show updates with its own new lines"),
@@ -148,7 +148,7 @@ impl ClusterQuerySubCommands for App<'_> {
             SubCommand::with_name("fees")
             .about("Display current cluster fees (Deprecated in v1.8.0)")
             .arg(
-                Arg::with_name("blockhash")
+                Arg::new("blockhash")
                     .long("blockhash")
                     .takes_value(true)
                     .value_name("BLOCKHASH")
@@ -164,7 +164,7 @@ impl ClusterQuerySubCommands for App<'_> {
             .about("Get estimated production time of a block")
             .alias("get-block-time")
             .arg(
-                Arg::with_name("slot")
+                Arg::new("slot")
                     .index(1)
                     .takes_value(true)
                     .value_name("SLOT")
@@ -174,7 +174,7 @@ impl ClusterQuerySubCommands for App<'_> {
         .subcommand(SubCommand::with_name("leader-schedule")
             .about("Display leader schedule")
             .arg(
-                Arg::with_name("epoch")
+                Arg::new("epoch")
                     .long("epoch")
                     .takes_value(true)
                     .value_name("EPOCH")
@@ -205,13 +205,13 @@ impl ClusterQuerySubCommands for App<'_> {
         .subcommand(
             SubCommand::with_name("largest-accounts").about("Get addresses of largest cluster accounts")
             .arg(
-                Arg::with_name("circulating")
+                Arg::new("circulating")
                     .long("circulating")
                     .takes_value(false)
                     .help("Filter address list to only circulating accounts")
             )
             .arg(
-                Arg::with_name("non_circulating")
+                Arg::new("non_circulating")
                     .long("non-circulating")
                     .takes_value(false)
                     .conflicts_with("circulating")
@@ -221,7 +221,7 @@ impl ClusterQuerySubCommands for App<'_> {
         .subcommand(
             SubCommand::with_name("supply").about("Get information about the cluster supply of SOL")
             .arg(
-                Arg::with_name("print_accounts")
+                Arg::new("print_accounts")
                     .long("print-accounts")
                     .takes_value(false)
                     .help("Print list of non-circualting account addresses")
@@ -239,7 +239,7 @@ impl ClusterQuerySubCommands for App<'_> {
             SubCommand::with_name("ping")
                 .about("Submit transactions sequentially")
                 .arg(
-                    Arg::with_name("interval")
+                    Arg::new("interval")
                         .short("i")
                         .long("interval")
                         .value_name("SECONDS")
@@ -248,7 +248,7 @@ impl ClusterQuerySubCommands for App<'_> {
                         .help("Wait interval seconds between submitting the next transaction"),
                 )
                 .arg(
-                    Arg::with_name("count")
+                    Arg::new("count")
                         .short("c")
                         .long("count")
                         .value_name("NUMBER")
@@ -256,14 +256,14 @@ impl ClusterQuerySubCommands for App<'_> {
                         .help("Stop after submitting count transactions"),
                 )
                 .arg(
-                    Arg::with_name("print_timestamp")
+                    Arg::new("print_timestamp")
                         .short("D")
                         .long("print-timestamp")
                         .takes_value(false)
                         .help("Print timestamp (unix time + microseconds as in gettimeofday) before each line"),
                 )
                 .arg(
-                    Arg::with_name("lamports")
+                    Arg::new("lamports")
                         .long("lamports")
                         .value_name("NUMBER")
                         .takes_value(true)
@@ -272,7 +272,7 @@ impl ClusterQuerySubCommands for App<'_> {
                         .help("Number of lamports to transfer for each transaction"),
                 )
                 .arg(
-                    Arg::with_name("timeout")
+                    Arg::new("timeout")
                         .short("t")
                         .long("timeout")
                         .value_name("SECONDS")
@@ -290,7 +290,7 @@ impl ClusterQuerySubCommands for App<'_> {
             SubCommand::with_name("logs")
                 .about("Stream transaction logs")
                 .arg(
-                    pubkey!(Arg::with_name("address")
+                    pubkey!(Arg::new("address")
                         .index(1)
                         .value_name("ADDRESS"),
                         "Account address to monitor \
@@ -298,7 +298,7 @@ impl ClusterQuerySubCommands for App<'_> {
                         ")
                 )
                 .arg(
-                    Arg::with_name("include_votes")
+                    Arg::new("include_votes")
                         .long("include-votes")
                         .takes_value(false)
                         .conflicts_with("address")
@@ -310,13 +310,13 @@ impl ClusterQuerySubCommands for App<'_> {
                 .about("Show information about block production")
                 .alias("show-block-production")
                 .arg(
-                    Arg::with_name("epoch")
+                    Arg::new("epoch")
                         .long("epoch")
                         .takes_value(true)
                         .help("Epoch to show block production for [default: current epoch]"),
                 )
                 .arg(
-                    Arg::with_name("slot_limit")
+                    Arg::new("slot_limit")
                         .long("slot-limit")
                         .takes_value(true)
                         .help("Limit results to this many slots from the end of the epoch [default: full epoch]"),
@@ -331,14 +331,14 @@ impl ClusterQuerySubCommands for App<'_> {
             SubCommand::with_name("stakes")
                 .about("Show stake account information")
                 .arg(
-                    pubkey!(Arg::with_name("vote_account_pubkeys")
+                    pubkey!(Arg::new("vote_account_pubkeys")
                         .index(1)
                         .value_name("VOTE_ACCOUNT_PUBKEYS")
                         .multiple(true),
                         "Only show stake accounts delegated to the provided vote accounts. "),
                 )
                 .arg(
-                    Arg::with_name("lamports")
+                    Arg::new("lamports")
                         .long("lamports")
                         .takes_value(false)
                         .help("Display balance in lamports instead of SOL"),
@@ -349,27 +349,27 @@ impl ClusterQuerySubCommands for App<'_> {
                 .about("Show summary information about the current validators")
                 .alias("show-validators")
                 .arg(
-                    Arg::with_name("lamports")
+                    Arg::new("lamports")
                         .long("lamports")
                         .takes_value(false)
                         .help("Display balance in lamports instead of SOL"),
                 )
                 .arg(
-                    Arg::with_name("number")
+                    Arg::new("number")
                         .long("number")
                         .short("n")
                         .takes_value(false)
                         .help("Number the validators"),
                 )
                 .arg(
-                    Arg::with_name("reverse")
+                    Arg::new("reverse")
                         .long("reverse")
                         .short("r")
                         .takes_value(false)
                         .help("Reverse order while sorting"),
                 )
                 .arg(
-                    Arg::with_name("sort")
+                    Arg::new("sort")
                         .long("sort")
                         .takes_value(true)
                         .possible_values(&[
@@ -387,13 +387,13 @@ impl ClusterQuerySubCommands for App<'_> {
                         .help("Sort order (does not affect JSON output)"),
                 )
                 .arg(
-                    Arg::with_name("keep_unstaked_delinquents")
+                    Arg::new("keep_unstaked_delinquents")
                         .long("keep-unstaked-delinquents")
                         .takes_value(false)
                         .help("Don't discard unstaked, delinquent validators")
                 )
                 .arg(
-                    Arg::with_name("delinquent_slot_distance")
+                    Arg::new("delinquent_slot_distance")
                         .long("delinquent-slot-distance")
                         .takes_value(true)
                         .value_name("SLOT_DISTANCE")
@@ -411,14 +411,14 @@ impl ClusterQuerySubCommands for App<'_> {
                 .about("Show historical transactions affecting the given address \
                         from newest to oldest")
                 .arg(
-                    pubkey!(Arg::with_name("address")
+                    pubkey!(Arg::new("address")
                         .index(1)
                         .value_name("ADDRESS")
                         .required(true),
                         "Account address"),
                 )
                 .arg(
-                    Arg::with_name("limit")
+                    Arg::new("limit")
                         .long("limit")
                         .takes_value(true)
                         .value_name("LIMIT")
@@ -427,14 +427,14 @@ impl ClusterQuerySubCommands for App<'_> {
                         .help("Maximum number of transaction signatures to return"),
                 )
                 .arg(
-                    Arg::with_name("before")
+                    Arg::new("before")
                         .long("before")
                         .value_name("TRANSACTION_SIGNATURE")
                         .takes_value(true)
                         .help("Start with the first signature older than this one"),
                 )
                 .arg(
-                    Arg::with_name("show_transactions")
+                    Arg::new("show_transactions")
                         .long("show-transactions")
                         .takes_value(false)
                         .help("Display the full transactions"),
@@ -444,7 +444,7 @@ impl ClusterQuerySubCommands for App<'_> {
             SubCommand::with_name("wait-for-max-stake")
                 .about("Wait for the max stake of any one node to drop below a percentage of total.")
                 .arg(
-                    Arg::with_name("max_percent")
+                    Arg::new("max_percent")
                         .long("max-percent")
                         .value_name("PERCENT")
                         .takes_value(true)
@@ -455,7 +455,7 @@ impl ClusterQuerySubCommands for App<'_> {
             SubCommand::with_name("rent")
                 .about("Calculate per-epoch and rent-exempt-minimum values for a given account data field length.")
                 .arg(
-                    Arg::with_name("data_length")
+                    Arg::new("data_length")
                         .index(1)
                         .value_name("DATA_LENGTH_OR_MONIKER")
                         .required(true)
@@ -467,7 +467,7 @@ impl ClusterQuerySubCommands for App<'_> {
                         .help("Length of data field in the account to calculate rent for, or moniker: [nonce, stake, system, vote]"),
                 )
                 .arg(
-                    Arg::with_name("lamports")
+                    Arg::new("lamports")
                         .long("lamports")
                         .takes_value(false)
                         .help("Display rent in lamports instead of SOL"),

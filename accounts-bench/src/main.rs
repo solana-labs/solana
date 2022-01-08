@@ -22,28 +22,28 @@ fn main() {
         .about(crate_description!())
         .version(solana_version::version!())
         .arg(
-            Arg::with_name("num_slots")
+            Arg::new("num_slots")
                 .long("num_slots")
                 .takes_value(true)
                 .value_name("SLOTS")
                 .help("Number of slots to store to."),
         )
         .arg(
-            Arg::with_name("num_accounts")
+            Arg::new("num_accounts")
                 .long("num_accounts")
                 .takes_value(true)
                 .value_name("NUM_ACCOUNTS")
                 .help("Total number of accounts"),
         )
         .arg(
-            Arg::with_name("iterations")
+            Arg::new("iterations")
                 .long("iterations")
                 .takes_value(true)
                 .value_name("ITERATIONS")
                 .help("Number of bench iterations"),
         )
         .arg(
-            Arg::with_name("clean")
+            Arg::new("clean")
                 .long("clean")
                 .takes_value(false)
                 .help("Run clean"),

@@ -28,7 +28,7 @@ pub const DUMP_TRANSACTION_MESSAGE: ArgConstant<'static> = ArgConstant {
 };
 
 pub fn blockhash_arg<'a>() -> Arg<'a> {
-    Arg::with_name(BLOCKHASH_ARG.name)
+    Arg::new(BLOCKHASH_ARG.name)
         .long(BLOCKHASH_ARG.long)
         .takes_value(true)
         .value_name("BLOCKHASH")
@@ -37,7 +37,7 @@ pub fn blockhash_arg<'a>() -> Arg<'a> {
 }
 
 pub fn sign_only_arg<'a>() -> Arg<'a> {
-    Arg::with_name(SIGN_ONLY_ARG.name)
+    Arg::new(SIGN_ONLY_ARG.name)
         .long(SIGN_ONLY_ARG.long)
         .takes_value(false)
         .requires(BLOCKHASH_ARG.name)
@@ -45,7 +45,7 @@ pub fn sign_only_arg<'a>() -> Arg<'a> {
 }
 
 fn signer_arg<'a>() -> Arg<'a> {
-    Arg::with_name(SIGNER_ARG.name)
+    Arg::new(SIGNER_ARG.name)
         .long(SIGNER_ARG.long)
         .takes_value(true)
         .value_name("PUBKEY=SIGNATURE")
@@ -56,7 +56,7 @@ fn signer_arg<'a>() -> Arg<'a> {
 }
 
 pub fn dump_transaction_message<'a>() -> Arg<'a> {
-    Arg::with_name(DUMP_TRANSACTION_MESSAGE.name)
+    Arg::new(DUMP_TRANSACTION_MESSAGE.name)
         .long(DUMP_TRANSACTION_MESSAGE.long)
         .takes_value(false)
         .requires(SIGN_ONLY_ARG.name)

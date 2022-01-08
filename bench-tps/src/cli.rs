@@ -63,7 +63,7 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
     App::new(crate_name!()).about(crate_description!())
         .version(version)
         .arg(
-            Arg::with_name("entrypoint")
+            Arg::new("entrypoint")
                 .short("n")
                 .long("entrypoint")
                 .value_name("HOST:PORT")
@@ -71,7 +71,7 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                 .help("Rendezvous with the cluster at this entry point; defaults to 127.0.0.1:8001"),
         )
         .arg(
-            Arg::with_name("faucet")
+            Arg::new("faucet")
                 .short("d")
                 .long("faucet")
                 .value_name("HOST:PORT")
@@ -79,7 +79,7 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                 .help("Location of the faucet; defaults to entrypoint:FAUCET_PORT"),
         )
         .arg(
-            Arg::with_name("identity")
+            Arg::new("identity")
                 .short("i")
                 .long("identity")
                 .value_name("PATH")
@@ -87,7 +87,7 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                 .help("File containing a client identity (keypair)"),
         )
         .arg(
-            Arg::with_name("num-nodes")
+            Arg::new("num-nodes")
                 .short("N")
                 .long("num-nodes")
                 .value_name("NUM")
@@ -95,7 +95,7 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                 .help("Wait for NUM nodes to converge"),
         )
         .arg(
-            Arg::with_name("threads")
+            Arg::new("threads")
                 .short("t")
                 .long("threads")
                 .value_name("NUM")
@@ -103,24 +103,24 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                 .help("Number of threads"),
         )
         .arg(
-            Arg::with_name("duration")
+            Arg::new("duration")
                 .long("duration")
                 .value_name("SECS")
                 .takes_value(true)
                 .help("Seconds to run benchmark, then exit; default is forever"),
         )
         .arg(
-            Arg::with_name("sustained")
+            Arg::new("sustained")
                 .long("sustained")
                 .help("Use sustained performance mode vs. peak mode. This overlaps the tx generation with transfers."),
         )
         .arg(
-            Arg::with_name("no-multi-client")
+            Arg::new("no-multi-client")
                 .long("no-multi-client")
                 .help("Disable multi-client support, only transact with the entrypoint."),
         )
         .arg(
-            Arg::with_name("target_node")
+            Arg::new("target_node")
                 .long("target-node")
                 .requires("no-multi-client")
                 .takes_value(true)
@@ -128,21 +128,21 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                 .help("Specify an exact node to send transactions to."),
         )
         .arg(
-            Arg::with_name("tx_count")
+            Arg::new("tx_count")
                 .long("tx_count")
                 .value_name("NUM")
                 .takes_value(true)
                 .help("Number of transactions to send per batch")
         )
         .arg(
-            Arg::with_name("keypair_multiplier")
+            Arg::new("keypair_multiplier")
                 .long("keypair-multiplier")
                 .value_name("NUM")
                 .takes_value(true)
                 .help("Multiply by transaction count to determine number of keypairs to create")
         )
         .arg(
-            Arg::with_name("thread-batch-sleep-ms")
+            Arg::new("thread-batch-sleep-ms")
                 .short("z")
                 .long("thread-batch-sleep-ms")
                 .value_name("NUM")
@@ -150,21 +150,21 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                 .help("Per-thread-per-iteration sleep in ms"),
         )
         .arg(
-            Arg::with_name("write-client-keys")
+            Arg::new("write-client-keys")
                 .long("write-client-keys")
                 .value_name("FILENAME")
                 .takes_value(true)
                 .help("Generate client keys and stakes and write the list to YAML file"),
         )
         .arg(
-            Arg::with_name("read-client-keys")
+            Arg::new("read-client-keys")
                 .long("read-client-keys")
                 .value_name("FILENAME")
                 .takes_value(true)
                 .help("Read client keys and stakes from the YAML file"),
         )
         .arg(
-            Arg::with_name("target_lamports_per_signature")
+            Arg::new("target_lamports_per_signature")
                 .long("target-lamports-per-signature")
                 .value_name("LAMPORTS")
                 .takes_value(true)
@@ -174,7 +174,7 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                 ),
         )
         .arg(
-            Arg::with_name("num_lamports_per_account")
+            Arg::new("num_lamports_per_account")
                 .long("num-lamports-per-account")
                 .value_name("LAMPORTS")
                 .takes_value(true)
@@ -183,7 +183,7 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                 ),
         )
         .arg(
-            Arg::with_name("target_slots_per_epoch")
+            Arg::new("target_slots_per_epoch")
                 .long("target-slots-per-epoch")
                 .value_name("SLOTS")
                 .takes_value(true)

@@ -18,7 +18,7 @@ fn fee_payer_arg<'a>() -> Arg<'a> {
 }
 
 fn funding_keypair_arg<'a>() -> Arg<'a> {
-    Arg::with_name("funding_keypair")
+    Arg::new("funding_keypair")
         .required(true)
         .takes_value(true)
         .value_name("FUNDING_KEYPAIR")
@@ -27,7 +27,7 @@ fn funding_keypair_arg<'a>() -> Arg<'a> {
 }
 
 fn base_pubkey_arg<'a>() -> Arg<'a> {
-    Arg::with_name("base_pubkey")
+    Arg::new("base_pubkey")
         .required(true)
         .takes_value(true)
         .value_name("BASE_PUBKEY")
@@ -36,7 +36,7 @@ fn base_pubkey_arg<'a>() -> Arg<'a> {
 }
 
 fn custodian_arg<'a>() -> Arg<'a> {
-    Arg::with_name("custodian")
+    Arg::new("custodian")
         .required(true)
         .takes_value(true)
         .value_name("KEYPAIR")
@@ -45,7 +45,7 @@ fn custodian_arg<'a>() -> Arg<'a> {
 }
 
 fn new_custodian_arg<'a>() -> Arg<'a> {
-    Arg::with_name("new_custodian")
+    Arg::new("new_custodian")
         .takes_value(true)
         .value_name("PUBKEY")
         .validator(is_valid_pubkey)
@@ -53,7 +53,7 @@ fn new_custodian_arg<'a>() -> Arg<'a> {
 }
 
 fn new_base_keypair_arg<'a>() -> Arg<'a> {
-    Arg::with_name("new_base_keypair")
+    Arg::new("new_base_keypair")
         .required(true)
         .takes_value(true)
         .value_name("NEW_BASE_KEYPAIR")
@@ -62,7 +62,7 @@ fn new_base_keypair_arg<'a>() -> Arg<'a> {
 }
 
 fn stake_authority_arg<'a>() -> Arg<'a> {
-    Arg::with_name("stake_authority")
+    Arg::new("stake_authority")
         .long("stake-authority")
         .required(true)
         .takes_value(true)
@@ -72,7 +72,7 @@ fn stake_authority_arg<'a>() -> Arg<'a> {
 }
 
 fn withdraw_authority_arg<'a>() -> Arg<'a> {
-    Arg::with_name("withdraw_authority")
+    Arg::new("withdraw_authority")
         .long("withdraw-authority")
         .required(true)
         .takes_value(true)
@@ -82,7 +82,7 @@ fn withdraw_authority_arg<'a>() -> Arg<'a> {
 }
 
 fn new_stake_authority_arg<'a>() -> Arg<'a> {
-    Arg::with_name("new_stake_authority")
+    Arg::new("new_stake_authority")
         .long("new-stake-authority")
         .required(true)
         .takes_value(true)
@@ -92,7 +92,7 @@ fn new_stake_authority_arg<'a>() -> Arg<'a> {
 }
 
 fn new_withdraw_authority_arg<'a>() -> Arg<'a> {
-    Arg::with_name("new_withdraw_authority")
+    Arg::new("new_withdraw_authority")
         .long("new-withdraw-authority")
         .required(true)
         .takes_value(true)
@@ -102,7 +102,7 @@ fn new_withdraw_authority_arg<'a>() -> Arg<'a> {
 }
 
 fn lockup_epoch_arg<'a>() -> Arg<'a> {
-    Arg::with_name("lockup_epoch")
+    Arg::new("lockup_epoch")
         .long("lockup-epoch")
         .takes_value(true)
         .value_name("NUMBER")
@@ -110,7 +110,7 @@ fn lockup_epoch_arg<'a>() -> Arg<'a> {
 }
 
 fn lockup_date_arg<'a>() -> Arg<'a> {
-    Arg::with_name("lockup_date")
+    Arg::new("lockup_date")
         .long("lockup-date")
         .value_name("RFC3339 DATETIME")
         .validator(is_rfc3339_datetime)
@@ -119,7 +119,7 @@ fn lockup_date_arg<'a>() -> Arg<'a> {
 }
 
 fn num_accounts_arg<'a>() -> Arg<'a> {
-    Arg::with_name("num_accounts")
+    Arg::new("num_accounts")
         .long("num-accounts")
         .required(true)
         .takes_value(true)
@@ -137,7 +137,7 @@ where
         .about("about")
         .version("version")
         .arg(
-            Arg::with_name("config_file")
+            Arg::new("config_file")
                 .long("config")
                 .takes_value(true)
                 .value_name("FILEPATH")
@@ -145,7 +145,7 @@ where
                 .help("Config file"),
         )
         .arg(
-            Arg::with_name("url")
+            Arg::new("url")
                 .long("url")
                 .global(true)
                 .takes_value(true)
@@ -158,7 +158,7 @@ where
                 .arg(fee_payer_arg())
                 .arg(funding_keypair_arg().index(1))
                 .arg(
-                    Arg::with_name("base_keypair")
+                    Arg::new("base_keypair")
                         .required(true)
                         .index(2)
                         .takes_value(true)
@@ -167,7 +167,7 @@ where
                         .help("Keypair which stake account addresses are derived from"),
                 )
                 .arg(
-                    Arg::with_name("amount")
+                    Arg::new("amount")
                         .required(true)
                         .index(3)
                         .takes_value(true)
@@ -176,7 +176,7 @@ where
                         .help("Amount to move into the new stake accounts, in SOL"),
                 )
                 .arg(
-                    Arg::with_name("stake_authority")
+                    Arg::new("stake_authority")
                         .long("stake-authority")
                         .required(true)
                         .takes_value(true)
@@ -185,7 +185,7 @@ where
                         .help("Stake authority"),
                 )
                 .arg(
-                    Arg::with_name("withdraw_authority")
+                    Arg::new("withdraw_authority")
                         .long("withdraw-authority")
                         .required(true)
                         .takes_value(true)
@@ -194,7 +194,7 @@ where
                         .help("Withdraw authority"),
                 )
                 .arg(
-                    Arg::with_name("index")
+                    Arg::new("index")
                         .long("index")
                         .takes_value(true)
                         .default_value("0")
@@ -241,12 +241,12 @@ where
                 .arg(new_custodian_arg())
                 .arg(num_accounts_arg())
                 .arg(
-                    Arg::with_name("no_wait")
+                    Arg::new("no_wait")
                         .long("no-wait")
                         .help("Send transactions without waiting for confirmation"),
                 )
                 .arg(
-                    Arg::with_name("unlock_years")
+                    Arg::new("unlock_years")
                         .long("unlock-years")
                         .takes_value(true)
                         .value_name("NUMBER")
