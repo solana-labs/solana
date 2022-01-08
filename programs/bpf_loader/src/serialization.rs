@@ -9,8 +9,63 @@ use {
         system_instruction::MAX_PERMITTED_DATA_LENGTH,
         transaction_context::{InstructionContext, TransactionContext},
     },
-    std::{io::prelude::*, mem::size_of},
+    std::{collections::hash_map::Entry, collections::HashMap, io::prelude::*, mem::size_of},
 };
+
+struct DuplicateInstructionAccounts<'a> {
+    instruction_context: &'a InstructionContext,
+    /// Used to translate between position of duplicate and index in instruction.
+    index_offset: usize,
+    /// Maps an instruction account's index_in_transaction to its position.
+    map: HashMap<usize, usize>,
+}
+
+impl<'a> DuplicateInstructionAccounts<'a> {
+    fn new(instruction_context: &'a InstructionContext) -> Result<Self, InstructionError> {
+        // We create the HashMap with capacity to avoid reallocations. If there
+        // are duplicate instruction accounts, the map's capacity will not be
+        // used up. Neglect this as elements are small and the number of
+        // accounts is bounded.
+        let mut map: HashMap<usize, usize> =
+            HashMap::with_capacity(instruction_context.get_number_of_instruction_accounts());
+
+        // Instruction accounts start after program accounts.
+        let index_offset = instruction_context.get_number_of_program_accounts();
+        for index_in_instruction in index_offset..instruction_context.get_number_of_accounts() {
+            let index_in_transaction =
+                instruction_context.get_index_in_transaction(index_in_instruction)?;
+            match map.entry(index_in_transaction) {
+                Entry::Vacant(x) => {
+                    x.insert(index_in_instruction - index_offset);
+                }
+                Entry::Occupied(_) => {
+                    // It is a duplicate since we have already seen an account
+                    // with identical index_in_transaction.
+                }
+            }
+        }
+
+        Ok(Self {
+            instruction_context,
+            index_offset,
+            map,
+        })
+    }
+
+    fn get(&self, index_in_instruction: usize) -> Result<Option<&usize>, InstructionError> {
+        let index_in_transaction = self
+            .instruction_context
+            .get_index_in_transaction(index_in_instruction)?;
+        Ok(self.map.get(&index_in_transaction).and_then(|position| {
+            if position + self.index_offset == index_in_instruction {
+                // The map entry corresponds to this account, hence not a duplicate.
+                return None;
+            } else {
+                return Some(position);
+            }
+        }))
+    }
+}
 
 /// Look for a duplicate account and return its position if found
 pub fn is_duplicate(
@@ -356,6 +411,7 @@ mod tests {
             bpf_loader,
             entrypoint::deserialize,
             instruction::AccountMeta,
+            transaction_context::InstructionAccount,
         },
         std::{
             cell::RefCell,
@@ -363,6 +419,114 @@ mod tests {
             slice::{from_raw_parts, from_raw_parts_mut},
         },
     };
+
+    /// Creates a `TransactionContext` with one program account and the specified
+    /// number of instruction accounts. `n_duplicate_instruction_accounts` of
+    /// these accounts will be duplicates.
+    ///
+    /// Let `x_i` be an instruction account, then `mock_transaction_context(5,
+    /// 2)` returns a `TransactionContext` with accounts `[program_account, x_1,
+    /// x_2, x_3, x_1, x_2]`.
+    fn mock_transaction_context(
+        n_instruction_accounts: usize,
+        n_duplicate_instruction_accounts: usize,
+    ) -> TransactionContext {
+        assert!(n_duplicate_instruction_accounts < n_instruction_accounts);
+
+        let n_unique_instruction_accounts =
+            n_instruction_accounts - n_duplicate_instruction_accounts;
+        let n_program_accounts = 1usize;
+        let n_accounts = n_program_accounts + n_instruction_accounts;
+
+        let program_id = solana_sdk::pubkey::new_rand();
+        let mut transaction_accounts = Vec::with_capacity(n_accounts);
+        transaction_accounts.push((
+            program_id,
+            AccountSharedData::from(Account {
+                lamports: 0,
+                data: vec![],
+                owner: bpf_loader::id(),
+                executable: true,
+                rent_epoch: 0,
+            }),
+        ));
+
+        for i in 0..n_unique_instruction_accounts {
+            transaction_accounts.push((
+                solana_sdk::pubkey::new_rand(),
+                AccountSharedData::from(Account {
+                    lamports: i as u64,
+                    data: if i % 2 == 0 {
+                        vec![]
+                    } else {
+                        vec![11u8; i * 1000]
+                    },
+                    owner: bpf_loader::id(),
+                    executable: i % 2 == 0,
+                    rent_epoch: (i as u64) * 10,
+                }),
+            ))
+        }
+
+        let instruction_accounts = (n_program_accounts
+            ..n_program_accounts + n_unique_instruction_accounts)
+            // generate duplicates by appending repeated index_in_transaction values
+            .chain(n_program_accounts..n_program_accounts + n_duplicate_instruction_accounts)
+            .enumerate()
+            .map(
+                |(index_in_instruction, index_in_transaction)| InstructionAccount {
+                    index_in_caller: n_program_accounts.saturating_add(index_in_instruction),
+                    index_in_transaction,
+                    is_signer: false,
+                    is_writable: index_in_instruction >= n_instruction_accounts / 2,
+                },
+            )
+            .collect::<Vec<_>>();
+
+        let mut transaction_context = TransactionContext::new(transaction_accounts, 1);
+        let instruction_data = vec![1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+        let program_accounts: Vec<usize> = (0..n_program_accounts).collect();
+        transaction_context
+            .push(
+                program_accounts.as_slice(),
+                &instruction_accounts,
+                &instruction_data,
+            )
+            .unwrap();
+        transaction_context
+    }
+
+    #[test]
+    fn test_duplicate_instruction_accounts_new() {
+        let transaction_context = mock_transaction_context(5, 2);
+        let instruction_context = transaction_context
+            .get_current_instruction_context()
+            .unwrap();
+        let duplicates = DuplicateInstructionAccounts::new(instruction_context).unwrap();
+        assert_eq!(1, duplicates.index_offset);
+        assert_eq!(
+            HashMap::from([(1usize, 0usize), (2, 1), (3, 2),]),
+            duplicates.map,
+        );
+    }
+
+    #[test]
+    fn test_duplicate_instruction_accounts_get() {
+        let transaction_context = mock_transaction_context(5, 2);
+        let instruction_context = transaction_context
+            .get_current_instruction_context()
+            .unwrap();
+        let duplicates = DuplicateInstructionAccounts::new(instruction_context).unwrap();
+        assert_eq!(duplicates.get(1), Ok(None));
+        assert_eq!(duplicates.get(2), Ok(None));
+        assert_eq!(duplicates.get(3), Ok(None));
+        assert_eq!(duplicates.get(4), Ok(Some(&0usize)));
+        assert_eq!(duplicates.get(5), Ok(Some(&1usize)));
+        assert_eq!(
+            duplicates.get(6),
+            Err(InstructionError::NotEnoughAccountKeys)
+        );
+    }
 
     #[test]
     fn test_serialize_parameters() {
