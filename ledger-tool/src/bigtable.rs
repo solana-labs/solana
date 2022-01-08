@@ -5,6 +5,7 @@ use {
         value_t, value_t_or_exit, values_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand,
     },
     log::info,
+    serde::Serialize,
     serde_json::json,
     solana_clap_utils::{
         input_parsers::pubkey_of,
@@ -15,8 +16,15 @@ use {
         OutputFormat,
     },
     solana_ledger::{blockstore::Blockstore, blockstore_db::AccessType},
-    solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
+    solana_sdk::{
+        clock::{Slot, UnixTimestamp},
+        message::Message,
+        program_utils::limited_deserialize,
+        pubkey::Pubkey,
+        signature::Signature,
+    },
     solana_transaction_status::{ConfirmedBlock, Encodable, UiTransactionEncoding},
+    solana_vote_program::vote_instruction::VoteInstruction,
     std::{
         collections::HashSet,
         path::Path,
@@ -272,6 +280,55 @@ pub async fn transaction_history(
     Ok(())
 }
 
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct VoteTxInfo {
+    slot: Slot,
+    signature: String,
+    success: bool,
+    validator_identity: String,
+    target_slots: Vec<Slot>,
+    bank_hash: String,
+    timestamp: Option<UnixTimestamp>,
+}
+
+pub async fn vote_history() -> Result<(), Box<dyn std::error::Error>> {
+    let bigtable = solana_storage_bigtable::LedgerStorage::new(true, None, None).await?;
+
+    let slot_number: Slot = 115260739;
+    let block = bigtable.get_confirmed_block(slot_number).await?;
+    for tx in block.transactions {
+        if let Some(first_ins) = tx.transaction.message.instructions.get(0) {
+            // TODO Do we need to check accounts list bounds here? In case bigtable data is corrupted
+            let program_id = first_ins.program_id(&tx.transaction.message.account_keys);
+
+            if program_id == &solana_vote_program::id() {
+                // TODO Don't panic
+                let vote_instruction = limited_deserialize::<VoteInstruction>(&first_ins.data).expect("invalid vote ins");
+
+                if let VoteInstruction::Vote(vote) = vote_instruction {
+                    let vote_info = VoteTxInfo {
+                        slot: slot_number,
+                        signature: tx.transaction.signatures.first().expect("????").to_string(),
+                        // TODO Don't panic
+                        success: tx.meta.expect("ayooo 🤨").status.is_ok(),
+                        // TODO Don't panic
+                        validator_identity: tx.transaction.message.account_keys[first_ins.accounts[3] as usize].to_string(),
+                        target_slots: vote.slots.clone(),
+                        bank_hash: vote.hash.to_string(),
+                        timestamp: vote.timestamp,
+                    };
+                    let vote_tx_json = serde_json::to_string_pretty(&vote_info).expect("failed to serialize vote tx");
+                    println!("{}", vote_tx_json);
+                }
+            }
+        }
+        break; // TODO looping stuff
+    }
+
+    Ok(())
+}
+
 pub trait BigTableSubCommand {
     fn bigtable_subcommand(self) -> Self;
 }
@@ -435,6 +492,9 @@ impl BigTableSubCommand for App<'_, '_> {
                         ),
                 )
                 .subcommand(
+                    SubCommand::with_name("vote-history")
+                )
+                .subcommand(
                     SubCommand::with_name("transaction-history")
                         .about(
                             "Show historical transactions affecting the given address \
@@ -580,6 +640,9 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
                 show_transactions,
                 query_chunk_size,
             ))
+        }
+        ("vote-history", Some(_)) => {
+            runtime.block_on(vote_history())
         }
         _ => unreachable!(),
     };
