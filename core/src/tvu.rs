@@ -49,6 +49,9 @@ use {
         snapshot_package::{
             AccountsPackageReceiver, AccountsPackageSender, PendingSnapshotPackage,
         },
+        transaction_cost_metrics_sender::{
+            TransactionCostMetricsSender, TransactionCostMetricsService,
+        },
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair},
@@ -72,6 +75,7 @@ pub struct Tvu {
     cost_update_service: CostUpdateService,
     voting_service: VotingService,
     drop_bank_service: DropBankService,
+    transaction_cost_metrics_service: TransactionCostMetricsService,
 }
 
 pub struct TvuSockets {
@@ -97,6 +101,7 @@ pub struct TvuConfig {
     pub rocksdb_max_compaction_jitter: Option<u64>,
     pub wait_for_vote_to_start_leader: bool,
     pub accounts_shrink_ratio: AccountShrinkThreshold,
+    pub enable_transaction_cost_metrics_reporting: bool,
 }
 
 impl Tvu {
@@ -309,6 +314,20 @@ impl Tvu {
         );
 
         let (drop_bank_sender, drop_bank_receiver) = unbounded();
+
+        let (tx_cost_metrics_sender, tx_cost_metrics_receiver) = unbounded();
+        let transaction_cost_metrics_sender =
+            if tvu_config.enable_transaction_cost_metrics_reporting {
+                Some(TransactionCostMetricsSender::new(
+                    cost_model.clone(),
+                    tx_cost_metrics_sender,
+                ))
+            } else {
+                None
+            };
+        let transaction_cost_metrics_service =
+            TransactionCostMetricsService::new(tx_cost_metrics_receiver);
+
         let drop_bank_service = DropBankService::new(drop_bank_receiver);
 
         let replay_stage = ReplayStage::new(
@@ -332,6 +351,7 @@ impl Tvu {
             voting_sender,
             drop_bank_sender,
             block_metadata_notifier,
+            transaction_cost_metrics_sender,
         );
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
@@ -366,6 +386,7 @@ impl Tvu {
             cost_update_service,
             voting_service,
             drop_bank_service,
+            transaction_cost_metrics_service,
         }
     }
 
@@ -382,6 +403,7 @@ impl Tvu {
         self.cost_update_service.join()?;
         self.voting_service.join()?;
         self.drop_bank_service.join()?;
+        self.transaction_cost_metrics_service.join()?;
         Ok(())
     }
 }
