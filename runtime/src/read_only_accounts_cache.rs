@@ -1,238 +1,130 @@
 //! ReadOnlyAccountsCache used to store accounts, such as executable accounts,
 //! which can be large, loaded many times, and rarely change.
-//use mapref::entry::{Entry, OccupiedEntry, VacantEntry};
 use {
     dashmap::{mapref::entry::Entry, DashMap},
+    index_list::{Index, IndexList},
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::Slot,
         pubkey::Pubkey,
     },
-    std::{
-        sync::{
-            atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
-            Arc, RwLock,
-        },
-        thread::{sleep, Builder, JoinHandle},
-        time::{Duration, Instant},
+    std::sync::{
+        atomic::{AtomicU64, AtomicUsize, Ordering},
+        Mutex,
     },
 };
 
+const CACHE_OVERHEAD_SIZE: usize =
+    std::mem::size_of::<ReadOnlyAccountCacheEntry>() + 2 * std::mem::size_of::<ReadOnlyCacheKey>();
+
 type ReadOnlyCacheKey = (Pubkey, Slot);
-type LruEntry = (Instant, ReadOnlyCacheKey);
 
 #[derive(Debug)]
-pub struct ReadOnlyAccountCacheEntry {
-    pub account: AccountSharedData,
-    pub last_used: Arc<RwLock<Instant>>,
+struct ReadOnlyAccountCacheEntry {
+    account: AccountSharedData,
+    index: Index, // Index of the entry in the eviction queue.
 }
 
 #[derive(Debug)]
 pub struct ReadOnlyAccountsCache {
-    cache: Arc<DashMap<ReadOnlyCacheKey, ReadOnlyAccountCacheEntry>>,
+    cache: DashMap<ReadOnlyCacheKey, ReadOnlyAccountCacheEntry>,
+    // Eviction queue: When an item is first entered into the cache, it is
+    // added to the end of the queue. Also each time an entry is looked up from
+    // the cache it is moved to the end of queue. As a result, items in the
+    // queue are always sorted in the order that they have been accessed. When
+    // doing LRU eviction, cache entries are evicted from the front of the
+    // eviction queue.
+    queue: Mutex<IndexList<ReadOnlyCacheKey>>,
     max_data_size: usize,
-    data_size: Arc<AtomicUsize>,
+    data_size: AtomicUsize,
     hits: AtomicU64,
     misses: AtomicU64,
-    per_account_size: usize,
-    stop: Arc<AtomicBool>,
-    background: Option<JoinHandle<()>>,
-}
-
-impl Drop for ReadOnlyAccountsCache {
-    fn drop(&mut self) {
-        self.stop.store(true, Ordering::Relaxed);
-        if let Some(background) = self.background.take() {
-            background.join().unwrap();
-        }
-    }
 }
 
 impl ReadOnlyAccountsCache {
-    pub fn new(max_data_size: usize) -> Self {
-        let mut result = Self::new_test(max_data_size);
-
-        let bg = Self {
-            max_data_size,
-            cache: result.cache.clone(),
-            data_size: result.data_size.clone(),
-            hits: AtomicU64::new(0),
-            misses: AtomicU64::new(0),
-            per_account_size: Self::per_account_size(),
-            stop: result.stop.clone(),
-            background: None,
-        };
-
-        result.background = Some(
-            Builder::new()
-                .name("solana-readonly-accounts-cache".to_string())
-                .spawn(move || {
-                    bg.bg_purge_lru_items(false);
-                })
-                .unwrap(),
-        );
-
-        result
-    }
-
-    fn new_test(max_data_size: usize) -> Self {
+    pub(crate) fn new(max_data_size: usize) -> Self {
         Self {
             max_data_size,
-            cache: Arc::new(DashMap::default()),
-            data_size: Arc::new(AtomicUsize::new(0)),
-            hits: AtomicU64::new(0),
-            misses: AtomicU64::new(0),
-            per_account_size: Self::per_account_size(),
-            stop: Arc::new(AtomicBool::new(false)),
-            background: None,
+            cache: DashMap::default(),
+            queue: Mutex::<IndexList<ReadOnlyCacheKey>>::default(),
+            data_size: AtomicUsize::default(),
+            hits: AtomicU64::default(),
+            misses: AtomicU64::default(),
         }
     }
 
-    fn per_account_size() -> usize {
-        // size_of(arc(x)) does not return the size of x, so we have to add the size of RwLock...
-        std::mem::size_of::<ReadOnlyAccountCacheEntry>() + std::mem::size_of::<RwLock<Instant>>()
-    }
-
-    pub fn load(&self, pubkey: &Pubkey, slot: Slot) -> Option<AccountSharedData> {
-        self.cache
-            .get(&(*pubkey, slot))
-            .map(|account_ref| {
-                self.hits.fetch_add(1, Ordering::Relaxed);
-                let value = account_ref.value();
-                // remember last use
-                let now = Instant::now();
-                *value.last_used.write().unwrap() = now;
-                value.account.clone()
-            })
-            .or_else(|| {
+    pub(crate) fn load(&self, pubkey: Pubkey, slot: Slot) -> Option<AccountSharedData> {
+        let key = (pubkey, slot);
+        let mut entry = match self.cache.get_mut(&key) {
+            None => {
                 self.misses.fetch_add(1, Ordering::Relaxed);
-                None
-            })
+                return None;
+            }
+            Some(entry) => entry,
+        };
+        self.hits.fetch_add(1, Ordering::Relaxed);
+        // Move the entry to the end of the eviction queue.
+        {
+            let mut queue = self.queue.lock().unwrap();
+            queue.remove(entry.index);
+            entry.index = queue.insert_last(key);
+        }
+        Some(entry.account.clone())
     }
 
     fn account_size(&self, account: &AccountSharedData) -> usize {
-        account.data().len() + self.per_account_size
+        CACHE_OVERHEAD_SIZE + account.data().len()
     }
 
-    pub fn store(&self, pubkey: &Pubkey, slot: Slot, account: &AccountSharedData) {
-        let len = self.account_size(account);
-        let previous_len = if let Some(previous) = self.cache.insert(
-            (*pubkey, slot),
-            ReadOnlyAccountCacheEntry {
-                account: account.clone(),
-                last_used: Arc::new(RwLock::new(Instant::now())),
-            },
-        ) {
-            self.account_size(&previous.account)
-        } else {
-            0
-        };
-
-        match len.cmp(&previous_len) {
-            std::cmp::Ordering::Greater => {
-                self.data_size
-                    .fetch_add(len - previous_len, Ordering::Relaxed);
+    pub(crate) fn store(&self, pubkey: Pubkey, slot: Slot, account: AccountSharedData) {
+        let key = (pubkey, slot);
+        let account_size = self.account_size(&account);
+        self.data_size.fetch_add(account_size, Ordering::Relaxed);
+        match self.cache.entry(key) {
+            Entry::Vacant(entry) => {
+                // Insert the entry at the end of the eviction queue.
+                let mut queue = self.queue.lock().unwrap();
+                let index = queue.insert_last(key);
+                entry.insert(ReadOnlyAccountCacheEntry { account, index });
             }
-            std::cmp::Ordering::Less => {
-                self.data_size
-                    .fetch_sub(previous_len - len, Ordering::Relaxed);
-            }
-            std::cmp::Ordering::Equal => {
-                // no change in size
+            Entry::Occupied(mut entry) => {
+                let entry = entry.get_mut();
+                let account_size = self.account_size(&entry.account);
+                self.data_size.fetch_sub(account_size, Ordering::Relaxed);
+                entry.account = account;
+                // Move the entry to the end of the eviction queue.
+                let mut queue = self.queue.lock().unwrap();
+                queue.remove(entry.index);
+                entry.index = queue.insert_last(key);
             }
         };
-    }
-
-    pub fn remove(&self, pubkey: &Pubkey, slot: Slot) {
-        if let Some((_, value)) = self.cache.remove(&(*pubkey, slot)) {
-            self.data_size
-                .fetch_sub(self.account_size(&value.account), Ordering::Relaxed);
+        // Evict entries from the front of the eviction queue.
+        while self.data_size.load(Ordering::Relaxed) > self.max_data_size {
+            let (pubkey, slot) = match self.queue.lock().unwrap().get_first() {
+                None => break,
+                Some(key) => *key,
+            };
+            self.remove(pubkey, slot);
         }
     }
 
-    fn purge_lru_list(&self, lru: &[LruEntry], lru_index: &mut usize) -> bool {
-        let mut freed_bytes = 0;
-        let start = *lru_index;
-        let mut done = false;
-        let current_size = self.data_size.load(Ordering::Relaxed);
-        for (timestamp, key) in lru.iter().skip(start) {
-            if current_size.saturating_sub(freed_bytes) <= self.max_data_size {
-                done = true;
-                break;
-            }
-            *lru_index += 1;
-            match self.cache.entry(*key) {
-                Entry::Vacant(_entry) => (),
-                Entry::Occupied(entry) => {
-                    if *timestamp == *entry.get().last_used.read().unwrap() {
-                        let size = self.account_size(&entry.get().account);
-                        freed_bytes += size;
-                        entry.remove();
-                    }
-                }
-            }
-        }
-        if freed_bytes > 0 {
-            // if this overflows, we'll have a really big data size, so we'll clean everything, scan all, and reset the size. Not ideal, but not terrible.
-            self.data_size.fetch_sub(freed_bytes, Ordering::Relaxed);
-        }
-        done
+    pub(crate) fn remove(&self, pubkey: Pubkey, slot: Slot) -> Option<AccountSharedData> {
+        let (_, entry) = self.cache.remove(&(pubkey, slot))?;
+        self.queue.lock().unwrap().remove(entry.index);
+        let account_size = self.account_size(&entry.account);
+        self.data_size.fetch_sub(account_size, Ordering::Relaxed);
+        Some(entry.account)
     }
 
-    fn calculate_lru_list(&self, lru: &mut Vec<LruEntry>) -> usize {
-        lru.clear();
-        lru.reserve(self.cache.len());
-        let mut new_size = 0;
-        for item in self.cache.iter() {
-            let value = item.value();
-            let item_len = self.account_size(&value.account);
-            new_size += item_len;
-            lru.push((*value.last_used.read().unwrap(), *item.key()));
-        }
-        new_size
-    }
-
-    fn bg_purge_lru_items(&self, once: bool) {
-        let mut lru = Vec::new();
-        let mut lru_index = 0;
-        let mut stop = false;
-        loop {
-            if !once {
-                sleep(Duration::from_millis(200));
-            } else {
-                if stop {
-                    break;
-                }
-                stop = true;
-            }
-
-            if self.stop.load(Ordering::Relaxed) {
-                break;
-            }
-
-            // purge from the lru list we last made
-            if self.purge_lru_list(&lru, &mut lru_index) {
-                continue;
-            }
-
-            // we didn't get enough, so calculate a new list and keep purging
-            let new_size = self.calculate_lru_list(&mut lru);
-            lru_index = 0;
-            self.data_size.store(new_size, Ordering::Relaxed);
-            lru.sort();
-            self.purge_lru_list(&lru, &mut lru_index);
-        }
-    }
-
-    pub fn cache_len(&self) -> usize {
+    pub(crate) fn cache_len(&self) -> usize {
         self.cache.len()
     }
 
-    pub fn data_size(&self) -> usize {
+    pub(crate) fn data_size(&self) -> usize {
         self.data_size.load(Ordering::Relaxed)
     }
 
-    pub fn get_and_reset_stats(&self) -> (u64, u64) {
+    pub(crate) fn get_and_reset_stats(&self) -> (u64, u64) {
         let hits = self.hits.swap(0, Ordering::Relaxed);
         let misses = self.misses.swap(0, Ordering::Relaxed);
         (hits, misses)
@@ -244,6 +136,7 @@ pub mod tests {
     use {
         super::*,
         solana_sdk::account::{accounts_equal, Account, WritableAccount},
+        std::sync::Arc,
     };
     #[test]
     fn test_accountsdb_sizeof() {
@@ -253,26 +146,17 @@ pub mod tests {
     }
 
     #[test]
-    fn test_read_only_accounts_cache_drop() {
-        solana_logger::setup();
-        let cache = ReadOnlyAccountsCache::new_test(100);
-        let stop = cache.stop.clone();
-        drop(cache);
-        assert!(stop.load(Ordering::Relaxed));
-    }
-
-    #[test]
     fn test_read_only_accounts_cache() {
         solana_logger::setup();
-        let per_account_size = ReadOnlyAccountsCache::per_account_size();
+        let per_account_size = CACHE_OVERHEAD_SIZE;
         let data_size = 100;
         let max = data_size + per_account_size;
-        let cache = ReadOnlyAccountsCache::new_test(max);
+        let cache = ReadOnlyAccountsCache::new(max);
         let slot = 0;
-        assert!(cache.load(&Pubkey::default(), slot).is_none());
+        assert!(cache.load(Pubkey::default(), slot).is_none());
         assert_eq!(0, cache.cache_len());
         assert_eq!(0, cache.data_size());
-        cache.remove(&Pubkey::default(), slot); // assert no panic
+        cache.remove(Pubkey::default(), slot); // assert no panic
         let key1 = Pubkey::new_unique();
         let key2 = Pubkey::new_unique();
         let key3 = Pubkey::new_unique();
@@ -284,46 +168,44 @@ pub mod tests {
         account2.checked_add_lamports(1).unwrap(); // so they compare differently
         let mut account3 = account1.clone();
         account3.checked_add_lamports(4).unwrap(); // so they compare differently
-        cache.store(&key1, slot, &account1);
+        cache.store(key1, slot, account1.clone());
         assert_eq!(100 + per_account_size, cache.data_size());
-        assert!(accounts_equal(&cache.load(&key1, slot).unwrap(), &account1));
+        assert!(accounts_equal(&cache.load(key1, slot).unwrap(), &account1));
         assert_eq!(1, cache.cache_len());
-        cache.store(&key2, slot, &account2);
-        cache.bg_purge_lru_items(true);
+        cache.store(key2, slot, account2.clone());
         assert_eq!(100 + per_account_size, cache.data_size());
-        assert!(accounts_equal(&cache.load(&key2, slot).unwrap(), &account2));
+        assert!(accounts_equal(&cache.load(key2, slot).unwrap(), &account2));
         assert_eq!(1, cache.cache_len());
-        cache.store(&key2, slot, &account1); // overwrite key2 with account1
+        cache.store(key2, slot, account1.clone()); // overwrite key2 with account1
         assert_eq!(100 + per_account_size, cache.data_size());
-        assert!(accounts_equal(&cache.load(&key2, slot).unwrap(), &account1));
+        assert!(accounts_equal(&cache.load(key2, slot).unwrap(), &account1));
         assert_eq!(1, cache.cache_len());
-        cache.remove(&key2, slot);
+        cache.remove(key2, slot);
         assert_eq!(0, cache.data_size());
         assert_eq!(0, cache.cache_len());
 
         // can store 2 items, 3rd item kicks oldest item out
         let max = (data_size + per_account_size) * 2;
-        let cache = ReadOnlyAccountsCache::new_test(max);
-        cache.store(&key1, slot, &account1);
+        let cache = ReadOnlyAccountsCache::new(max);
+        cache.store(key1, slot, account1.clone());
         assert_eq!(100 + per_account_size, cache.data_size());
-        assert!(accounts_equal(&cache.load(&key1, slot).unwrap(), &account1));
+        assert!(accounts_equal(&cache.load(key1, slot).unwrap(), &account1));
         assert_eq!(1, cache.cache_len());
-        cache.store(&key2, slot, &account2);
+        cache.store(key2, slot, account2.clone());
         assert_eq!(max, cache.data_size());
-        assert!(accounts_equal(&cache.load(&key1, slot).unwrap(), &account1));
-        assert!(accounts_equal(&cache.load(&key2, slot).unwrap(), &account2));
+        assert!(accounts_equal(&cache.load(key1, slot).unwrap(), &account1));
+        assert!(accounts_equal(&cache.load(key2, slot).unwrap(), &account2));
         assert_eq!(2, cache.cache_len());
-        cache.store(&key2, slot, &account1); // overwrite key2 with account1
+        cache.store(key2, slot, account1.clone()); // overwrite key2 with account1
         assert_eq!(max, cache.data_size());
-        assert!(accounts_equal(&cache.load(&key1, slot).unwrap(), &account1));
-        assert!(accounts_equal(&cache.load(&key2, slot).unwrap(), &account1));
+        assert!(accounts_equal(&cache.load(key1, slot).unwrap(), &account1));
+        assert!(accounts_equal(&cache.load(key2, slot).unwrap(), &account1));
         assert_eq!(2, cache.cache_len());
-        cache.store(&key3, slot, &account3);
-        cache.bg_purge_lru_items(true);
+        cache.store(key3, slot, account3.clone());
         assert_eq!(max, cache.data_size());
-        assert!(cache.load(&key1, slot).is_none()); // was lru purged
-        assert!(accounts_equal(&cache.load(&key2, slot).unwrap(), &account1));
-        assert!(accounts_equal(&cache.load(&key3, slot).unwrap(), &account3));
+        assert!(cache.load(key1, slot).is_none()); // was lru purged
+        assert!(accounts_equal(&cache.load(key2, slot).unwrap(), &account1));
+        assert!(accounts_equal(&cache.load(key3, slot).unwrap(), &account3));
         assert_eq!(2, cache.cache_len());
     }
 }
