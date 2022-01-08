@@ -99,11 +99,9 @@ impl RentCollector {
         }
 
         let rent_due = self.get_rent_due(account);
-        if let RentDue::Paying(rent_amount) = rent_due {
-            if rent_amount == 0 {
-                // maybe collect rent later, leave account alone
-                return 0;
-            }
+        if let RentDue::Paying(0) = rent_due {
+            // maybe collect rent later, leave account alone
+            return 0;
         }
 
         let epoch_increment = match rent_due {
