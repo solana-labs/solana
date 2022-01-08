@@ -64,16 +64,13 @@ impl Rent {
     }
 
     /// rent due on account's data_len with balance
-    pub fn due(&self, balance: u64, data_len: usize, years_elapsed: f64) -> (u64, bool) {
+    pub fn due(&self, balance: u64, data_len: usize, years_elapsed: f64) -> RentDue {
         if self.is_exempt(balance, data_len) {
-            (0, true)
+            RentDue::Exempt
         } else {
-            (
-                ((self.lamports_per_byte_year * (data_len as u64 + ACCOUNT_STORAGE_OVERHEAD))
-                    as f64
-                    * years_elapsed) as u64,
-                false,
-            )
+            let actual_data_len = data_len as u64 + ACCOUNT_STORAGE_OVERHEAD;
+            let lamports_per_year = self.lamports_per_byte_year * actual_data_len;
+            RentDue::Paying((lamports_per_year as f64 * years_elapsed) as u64)
         }
     }
 
@@ -96,6 +93,33 @@ impl Rent {
     }
 }
 
+/// Enumerate return values from `Rent::due()`
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum RentDue {
+    /// Used to indicate the account is rent exempt
+    Exempt,
+    /// The account owes rent, and the amount is the field
+    Paying(u64),
+}
+
+impl RentDue {
+    /// Return the lamports due for rent
+    pub fn lamports(&self) -> u64 {
+        match self {
+            RentDue::Exempt => 0,
+            RentDue::Paying(x) => *x,
+        }
+    }
+
+    /// Return 'true' if rent exempt
+    pub fn is_exempt(&self) -> bool {
+        match self {
+            RentDue::Exempt => true,
+            RentDue::Paying(_) => false,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -106,11 +130,10 @@ mod tests {
 
         assert_eq!(
             default_rent.due(0, 2, 1.2),
-            (
+            RentDue::Paying(
                 (((2 + ACCOUNT_STORAGE_OVERHEAD) * DEFAULT_LAMPORTS_PER_BYTE_YEAR) as f64 * 1.2)
-                    as u64,
-                DEFAULT_LAMPORTS_PER_BYTE_YEAR == 0
-            )
+                    as u64
+            ),
         );
         assert_eq!(
             default_rent.due(
@@ -119,7 +142,7 @@ mod tests {
                 2,
                 1.2
             ),
-            (0, true)
+            RentDue::Exempt,
         );
 
         let custom_rent = Rent {
@@ -130,10 +153,9 @@ mod tests {
 
         assert_eq!(
             custom_rent.due(0, 2, 1.2),
-            (
+            RentDue::Paying(
                 (((2 + ACCOUNT_STORAGE_OVERHEAD) * custom_rent.lamports_per_byte_year) as f64 * 1.2)
                     as u64,
-                false
             )
         );
 
@@ -144,43 +166,21 @@ mod tests {
                 2,
                 1.2
             ),
-            (0, true)
+            RentDue::Exempt
         );
     }
 
-    #[ignore]
     #[test]
-    #[should_panic]
-    fn show_rent_model() {
-        use crate::{clock::*, sysvar::Sysvar};
+    fn test_rent_due_lamports() {
+        assert_eq!(RentDue::Exempt.lamports(), 0);
 
-        const SECONDS_PER_YEAR: f64 = 365.242_199 * 24.0 * 60.0 * 60.0;
-        const SLOTS_PER_YEAR: f64 = SECONDS_PER_YEAR / DEFAULT_S_PER_SLOT;
+        let amount = 123;
+        assert_eq!(RentDue::Paying(amount).lamports(), amount);
+    }
 
-        let rent = Rent::default();
-        panic!(
-            "\n\n\
-             ==================================================\n\
-             empty account, no data:\n\
-             \t{} lamports per epoch, {} lamports to be rent_exempt\n\n\
-             stake_history, which is {}kB of data:\n\
-             \t{} lamports per epoch, {} lamports to be rent_exempt\n\
-             ==================================================\n\n",
-            rent.due(
-                0,
-                0,
-                (1.0 / SLOTS_PER_YEAR) * DEFAULT_SLOTS_PER_EPOCH as f64,
-            )
-            .0,
-            rent.minimum_balance(0),
-            crate::sysvar::stake_history::StakeHistory::size_of() / 1024,
-            rent.due(
-                0,
-                crate::sysvar::stake_history::StakeHistory::size_of(),
-                (1.0 / SLOTS_PER_YEAR) * DEFAULT_SLOTS_PER_EPOCH as f64,
-            )
-            .0,
-            rent.minimum_balance(crate::sysvar::stake_history::StakeHistory::size_of()),
-        );
+    #[test]
+    fn test_rent_due_is_exempt() {
+        assert!(RentDue::Exempt.is_exempt());
+        assert!(!RentDue::Paying(0).is_exempt());
     }
 }
