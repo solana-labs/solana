@@ -249,24 +249,32 @@ mod executor_cache {
 
     #[derive(Debug, Default)]
     pub struct Stats {
-        pub hits: u64,
-        pub misses: u64,
+        pub hits: AtomicU64,
+        pub misses: AtomicU64,
         pub evictions: HashMap<Pubkey, u64>,
+        pub insertions: AtomicU64,
+        pub replacements: AtomicU64,
     }
 
     impl Stats {
         pub fn submit(&self, slot: Slot) {
+            let hits = self.hits.load(Relaxed);
+            let misses = self.misses.load(Relaxed);
+            let insertions = self.insertions.load(Relaxed);
+            let replacements = self.replacements.load(Relaxed);
             let evictions: u64 = self.evictions.values().sum();
             datapoint_info!(
                 "bank-executor-cache-stats",
                 ("slot", slot, i64),
-                ("hits", self.hits, i64),
-                ("misses", self.misses, i64),
+                ("hits", hits, i64),
+                ("misses", misses, i64),
                 ("evictions", evictions, i64),
+                ("insertions", insertions, i64),
+                ("replacements", replacements, i64),
             );
             debug!(
-                "Executor Cache Stats -- Hits: {}, Misses: {}, Evictions: {}",
-                self.hits, self.misses, evictions
+                "Executor Cache Stats -- Hits: {}, Misses: {}, Evictions: {}, Insertions: {}, Replacements: {}",
+                hits, misses, evictions, insertions, replacements,
             );
             if log_enabled!(log::Level::Trace) && !self.evictions.is_empty() {
                 let mut evictions = self.evictions.iter().collect::<Vec<_>>();
@@ -378,10 +386,14 @@ impl CachedExecutors {
     }
 
     fn get(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
-        self.executors.get(pubkey).map(|entry| {
+        if let Some(entry) = self.executors.get(pubkey) {
+            self.stats.hits.fetch_add(1, Relaxed);
             entry.epoch_count.fetch_add(1, Relaxed);
-            entry.executor.clone()
-        })
+            Some(entry.executor.clone())
+        } else {
+            self.stats.misses.fetch_add(1, Relaxed);
+            None
+        }
     }
 
     fn put(&mut self, executors: &[(&Pubkey, Arc<dyn Executor>)]) {
@@ -389,12 +401,12 @@ impl CachedExecutors {
             .iter()
             .filter_map(|(key, executor)| {
                 if let Some(mut entry) = self.executors.remove(key) {
-                    saturating_add_assign!(self.stats.hits, 1);
+                    self.stats.replacements.fetch_add(1, Relaxed);
                     entry.executor = executor.clone();
                     let _ = self.executors.insert(**key, entry);
                     None
                 } else {
-                    saturating_add_assign!(self.stats.misses, 1);
+                    self.stats.insertions.fetch_add(1, Relaxed);
                     Some((*key, executor))
                 }
             })
