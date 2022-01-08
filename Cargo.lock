@@ -4419,6 +4419,7 @@ dependencies = [
  "rustversion",
  "sha3",
  "solana-measure",
+ "solana-metrics",
  "solana-runtime",
  "solana-sdk",
  "solana_rbpf",
