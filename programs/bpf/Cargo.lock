@@ -2661,6 +2661,7 @@ dependencies = [
  "libsecp256k1 0.6.0",
  "log",
  "solana-measure",
+ "solana-metrics",
  "solana-program-runtime",
  "solana-sdk",
  "solana-zk-token-sdk",
