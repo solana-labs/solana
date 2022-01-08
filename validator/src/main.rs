@@ -1621,7 +1621,7 @@ pub fn main() {
         )
         .arg(
             Arg::with_name("enable_transaction_cost_metrics_reporting")
-                .long("enable_transaction_cost_metrics_reporting")
+                .long("enable-transaction-cost-metrics-reporting")
                 .help("Enable validator to send each replayed transaction's cost metrics, \
                        Caution should be taken as this will generate large data points.")
                 .hidden(true),
