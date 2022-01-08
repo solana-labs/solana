@@ -281,20 +281,39 @@ pub async fn transaction_history(
 pub async fn scan_transactions(
     starting_slot: Slot,
     limit: usize,
+    program_ids_list: Vec<Pubkey>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let program_ids = if program_ids_list.is_empty() {
+        None
+    } else {
+        Some(program_ids_list.into_iter().collect::<HashSet<_>>())
+    };
+
     let bigtable = solana_storage_bigtable::LedgerStorage::new(true, None, None).await?;
     bigtable.stream_confirmed_blocks(starting_slot, limit)
         .await?
         // TODO use try_flat_map
         .try_for_each(|x| {
-            async move {
+            async {
                 let stdout = std::io::stdout();
                 let mut stdout = stdout.lock();
                 x.transactions.into_iter()
+                    .filter(|tx| {
+                        if let Some(program_ids) = &program_ids {
+                            for ins in &tx.transaction.message.instructions {
+                                if program_ids.contains(ins.program_id(&tx.transaction.message.account_keys)) {
+                                    return true;
+                                }
+                            }
+                            return false;
+                        }
+                        true
+                    })
                     .map(|tx| tx.encode(UiTransactionEncoding::JsonParsed))
                     .for_each(|tx| {
+                        // TODO Exit gracefully instead of panicking
                         serde_json::to_writer(&mut stdout, &tx).expect("failed to write tx");
-                        stdout.write_all(b"\n");
+                        stdout.write_all(b"\n").unwrap();
                     });
                 Ok(())
             }
@@ -491,6 +510,13 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .default_value("1000")
                                 .help("Maximum number of slots to check"),
                         )
+                        .arg(
+                            Arg::with_name("program_id")
+                                .long("program-id")
+                                .takes_value(true)
+                                .multiple(true)
+                                .help("program_id addresses to filter for"),
+                        )
                 )
                 .subcommand(
                     SubCommand::with_name("transaction-history")
@@ -642,10 +668,12 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
         ("scan-transactions", Some(arg_matches)) => {
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
             let limit = value_t_or_exit!(arg_matches, "limit", usize);
+            let program_ids = values_t_or_exit!(arg_matches, "program_id", Pubkey);
 
             runtime.block_on(scan_transactions(
                 starting_slot,
                 limit,
+                program_ids,
             ))
         }
         _ => unreachable!(),
