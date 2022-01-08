@@ -259,9 +259,12 @@ export class Transaction {
 
     // Sort. Prioritizing first by signer, then by writable
     accountMetas.sort(function (x, y) {
+      const pubkeySorting = x.pubkey
+        .toBase58()
+        .localeCompare(y.pubkey.toBase58());
       const checkSigner = x.isSigner === y.isSigner ? 0 : x.isSigner ? -1 : 1;
       const checkWritable =
-        x.isWritable === y.isWritable ? 0 : x.isWritable ? -1 : 1;
+        x.isWritable === y.isWritable ? pubkeySorting : x.isWritable ? -1 : 1;
       return checkSigner || checkWritable;
     });
 

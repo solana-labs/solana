@@ -5,7 +5,7 @@ import {expect} from 'chai';
 
 import {Keypair} from '../src/keypair';
 import {PublicKey} from '../src/publickey';
-import {Transaction} from '../src/transaction';
+import {Transaction, TransactionInstruction} from '../src/transaction';
 import {StakeProgram} from '../src/stake-program';
 import {SystemProgram} from '../src/system-program';
 import {Message} from '../src/message';
@@ -504,5 +504,87 @@ describe('Transaction', () => {
     const signature = nacl.sign.detached(tx_bytes, from.secretKey);
     tx.addSignature(from.publicKey, toBuffer(signature));
     expect(tx.verifySignatures()).to.be.true;
+  });
+
+  it('can serialize, deserialize, and reserialize with a partial signer', () => {
+    const signer = Keypair.generate();
+    const acc0Writable = Keypair.generate();
+    const acc1Writable = Keypair.generate();
+    const acc2Writable = Keypair.generate();
+    const t0 = new Transaction({
+      recentBlockhash: 'HZaTsZuhN1aaz9WuuimCFMyH7wJ5xiyMUHFCnZSMyguH',
+      feePayer: signer.publicKey,
+    });
+    t0.add(
+      new TransactionInstruction({
+        keys: [
+          {
+            pubkey: signer.publicKey,
+            isWritable: true,
+            isSigner: true,
+          },
+          {
+            pubkey: acc0Writable.publicKey,
+            isWritable: true,
+            isSigner: false,
+          },
+        ],
+        programId: Keypair.generate().publicKey,
+      }),
+    );
+    t0.add(
+      new TransactionInstruction({
+        keys: [
+          {
+            pubkey: acc1Writable.publicKey,
+            isWritable: false,
+            isSigner: false,
+          },
+        ],
+        programId: Keypair.generate().publicKey,
+      }),
+    );
+    t0.add(
+      new TransactionInstruction({
+        keys: [
+          {
+            pubkey: acc2Writable.publicKey,
+            isWritable: true,
+            isSigner: false,
+          },
+        ],
+        programId: Keypair.generate().publicKey,
+      }),
+    );
+    t0.add(
+      new TransactionInstruction({
+        keys: [
+          {
+            pubkey: signer.publicKey,
+            isWritable: true,
+            isSigner: true,
+          },
+          {
+            pubkey: acc0Writable.publicKey,
+            isWritable: false,
+            isSigner: false,
+          },
+          {
+            pubkey: acc2Writable.publicKey,
+            isWritable: false,
+            isSigner: false,
+          },
+          {
+            pubkey: acc1Writable.publicKey,
+            isWritable: true,
+            isSigner: false,
+          },
+        ],
+        programId: Keypair.generate().publicKey,
+      }),
+    );
+    t0.partialSign(signer);
+    const t1 = Transaction.from(t0.serialize());
+    t1.serialize();
   });
 });
