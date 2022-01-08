@@ -47,7 +47,7 @@ impl Rent {
         let burned_portion = (rent_collected * u64::from(self.burn_percent)) / 100;
         (burned_portion, rent_collected - burned_portion)
     }
-    /// minimum balance due for a given size Account::data.len()
+    /// minimum balance due for rent-exemption of a given size Account::data.len()
     ///
     /// Note: a stripped-down version of this calculation is used in
     /// calculate_split_rent_exempt_reserve in the stake program. When this function is updated, --
