@@ -15,6 +15,7 @@ byteorder = "1.4.3"
 log = "0.4.14"
 libsecp256k1 = "0.6.0"
 solana-measure = { path = "../../measure", version = "=1.9.4" }
+solana-metrics = { path = "../../metrics", version = "=1.9.4" }
 solana-program-runtime = { path = "../../program-runtime", version = "=1.9.4" }
 solana-sdk = { path = "../../sdk", version = "=1.9.4" }
 solana_rbpf = "=0.2.21"
