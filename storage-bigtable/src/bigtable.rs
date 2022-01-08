@@ -7,8 +7,16 @@ use {
         root_ca_certificate,
     },
     backoff::{future::retry, ExponentialBackoff},
+    futures::{
+        stream::{Stream, TryStream, TryStreamExt},
+        task::{Context, Poll},
+    },
     log::*,
-    std::time::{Duration, Instant},
+    std::{
+        collections::VecDeque,
+        pin::Pin,
+        time::Duration,
+    },
     thiserror::Error,
     tonic::{
         codegen::InterceptedService, metadata::MetadataValue, transport::ClientTlsConfig, Request,
@@ -280,85 +288,29 @@ pub struct BigTable<F: FnMut(Request<()>) -> InterceptedRequestResult> {
 }
 
 impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
+    fn stream_read_rows_response(
+        &self,
+        rrr: tonic::codec::Streaming<ReadRowsResponse>,
+    ) -> impl TryStream<Ok=(RowKey, RowData), Error=Error> {
+        ReadRowStream::new(rrr)
+    }
+
     async fn decode_read_rows_response(
         &self,
-        mut rrr: tonic::codec::Streaming<ReadRowsResponse>,
+        rrr: tonic::codec::Streaming<ReadRowsResponse>,
     ) -> Result<Vec<(RowKey, RowData)>> {
-        let mut rows: Vec<(RowKey, RowData)> = vec![];
-
-        let mut row_key = None;
-        let mut row_data = vec![];
-
-        let mut cell_name = None;
-        let mut cell_timestamp = 0;
-        let mut cell_value = vec![];
-        let mut cell_version_ok = true;
-        let started = Instant::now();
-
-        while let Some(res) = rrr.message().await? {
-            if let Some(timeout) = self.timeout {
-                if Instant::now().duration_since(started) > timeout {
-                    return Err(Error::Timeout);
-                }
+        let collect_future = self.
+            stream_read_rows_response(rrr).
+            try_collect();
+        if let Some(timeout) = self.timeout {
+            if let Ok(res) = tokio::time::timeout(timeout, collect_future).await {
+                res
+            } else {
+                Err(Error::Timeout)
             }
-            for (i, mut chunk) in res.chunks.into_iter().enumerate() {
-                // The comments for `read_rows_response::CellChunk` provide essential details for
-                // understanding how the below decoding works...
-                trace!("chunk {}: {:?}", i, chunk);
-
-                // Starting a new row?
-                if !chunk.row_key.is_empty() {
-                    row_key = String::from_utf8(chunk.row_key).ok(); // Require UTF-8 for row keys
-                }
-
-                // Starting a new cell?
-                if let Some(qualifier) = chunk.qualifier {
-                    if let Some(cell_name) = cell_name {
-                        row_data.push((cell_name, cell_value));
-                        cell_value = vec![];
-                    }
-                    cell_name = String::from_utf8(qualifier).ok(); // Require UTF-8 for cell names
-                    cell_timestamp = chunk.timestamp_micros;
-                    cell_version_ok = true;
-                } else {
-                    // Continuing the existing cell.  Check if this is the start of another version of the cell
-                    if chunk.timestamp_micros != 0 {
-                        if chunk.timestamp_micros < cell_timestamp {
-                            cell_version_ok = false; // ignore older versions of the cell
-                        } else {
-                            // newer version of the cell, remove the older cell
-                            cell_version_ok = true;
-                            cell_value = vec![];
-                            cell_timestamp = chunk.timestamp_micros;
-                        }
-                    }
-                }
-                if cell_version_ok {
-                    cell_value.append(&mut chunk.value);
-                }
-
-                // End of a row?
-                if chunk.row_status.is_some() {
-                    if let Some(read_rows_response::cell_chunk::RowStatus::CommitRow(_)) =
-                        chunk.row_status
-                    {
-                        if let Some(cell_name) = cell_name {
-                            row_data.push((cell_name, cell_value));
-                        }
-
-                        if let Some(row_key) = row_key {
-                            rows.push((row_key, row_data))
-                        }
-                    }
-
-                    row_key = None;
-                    row_data = vec![];
-                    cell_value = vec![];
-                    cell_name = None;
-                }
-            }
+        } else {
+            collect_future.await
         }
-        Ok(rows)
     }
 
     async fn refresh_access_token(&self) {
@@ -540,6 +492,43 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
             .next()
             .map(|r| r.1)
             .ok_or(Error::RowNotFound)
+    }
+
+    /// Stream latest data from `table` asynchronously.
+    pub async fn stream_row_data(
+        &mut self,
+        table_name: &str,
+        start_at: Option<RowKey>,
+        end_at: Option<RowKey>,
+        rows_limit: i64,
+    ) -> Result<impl TryStream<Ok=(RowKey, RowData), Error=Error>> {
+        self.refresh_access_token().await;
+
+        let response = self
+            .client
+            .read_rows(ReadRowsRequest {
+                table_name: format!("{}{}", self.table_prefix, table_name),
+                rows_limit,
+                rows: Some(RowSet {
+                    row_keys: vec![],
+                    row_ranges: vec![RowRange {
+                        start_key: start_at.map(|row_key| {
+                            row_range::StartKey::StartKeyClosed(row_key.into_bytes())
+                        }),
+                        end_key: end_at
+                            .map(|row_key| row_range::EndKey::EndKeyClosed(row_key.into_bytes())),
+                    }],
+                }),
+                filter: Some(RowFilter {
+                    // Only return the latest version of each cell
+                    filter: Some(row_filter::Filter::CellsPerColumnLimitFilter(1)),
+                }),
+                ..ReadRowsRequest::default()
+            })
+            .await?
+            .into_inner();
+
+        Ok(self.stream_read_rows_response(response))
     }
 
     /// Delete one or more `table` rows
@@ -782,6 +771,123 @@ where
         warn!("Failed to deserialize {}/{}: {}", table, key, err);
         Error::ObjectCorrupt(format!("{}/{}", table, key))
     })
+}
+
+struct ReadRowStream  {
+    source: tonic::codec::Streaming<ReadRowsResponse>,
+
+    rows: VecDeque<(RowKey, RowData)>,
+
+    row_key: Option<RowKey>,
+    row_data: RowData,
+
+    cell_name: Option<CellName>,
+    cell_timestamp: i64,
+    cell_value: Vec<u8>,
+    cell_version_ok: bool,
+}
+
+impl ReadRowStream {
+    fn new(source: tonic::codec::Streaming<ReadRowsResponse>) -> Self {
+        Self {
+            source,
+            rows: VecDeque::new(),
+            row_key: None,
+            row_data: vec![],
+            cell_name: None,
+            cell_timestamp: 0,
+            cell_value: vec![],
+            cell_version_ok: true,
+        }
+    }
+
+    fn read_rows_response(&mut self, res: ReadRowsResponse) {
+        for (i, mut chunk) in res.chunks.into_iter().enumerate() {
+            // The comments for `read_rows_response::CellChunk` provide essential details for
+            // understanding how the below decoding works...
+            trace!("chunk {}: {:?}", i, chunk);
+
+            // Starting a new row?
+            if !chunk.row_key.is_empty() {
+                self.row_key = String::from_utf8(chunk.row_key).ok(); // Require UTF-8 for row keys
+            }
+
+            // Starting a new cell?
+            if let Some(qualifier) = chunk.qualifier {
+                if let Some(cell_name) = self.cell_name.take() {
+                    self.row_data.push((cell_name, std::mem::take(&mut self.cell_value)));
+                    self.cell_value = vec![];
+                }
+                self.cell_name = String::from_utf8(qualifier).ok(); // Require UTF-8 for cell names
+                self.cell_timestamp = chunk.timestamp_micros;
+                self.cell_version_ok = true;
+            } else {
+                // Continuing the existing cell.  Check if this is the start of another version of the cell
+                if chunk.timestamp_micros != 0 {
+                    if chunk.timestamp_micros < self.cell_timestamp {
+                        self.cell_version_ok = false; // ignore older versions of the cell
+                    } else {
+                        // newer version of the cell, remove the older cell
+                        self.cell_version_ok = true;
+                        self.cell_value = vec![];
+                        self.cell_timestamp = chunk.timestamp_micros;
+                    }
+                }
+            }
+            if self.cell_version_ok {
+                self.cell_value.append(&mut chunk.value);
+            }
+
+            // End of a row?
+            if chunk.row_status.is_some() {
+                if let Some(read_rows_response::cell_chunk::RowStatus::CommitRow(_)) =
+                    chunk.row_status
+                {
+                    if let Some(cell_name) = self.cell_name.take() {
+                        self.row_data.push((cell_name, std::mem::take(&mut self.cell_value)));
+                    }
+
+                    if let Some(row_key) = self.row_key.take() {
+                        self.rows.push_back((row_key, std::mem::take(&mut self.row_data)))
+                    }
+                }
+
+                self.row_key = None;
+                self.row_data = vec![];
+                self.cell_value = vec![];
+                self.cell_name = None;
+            }
+        }
+    }
+}
+
+impl Stream for ReadRowStream {
+    type Item=Result<(RowKey, RowData)>;
+
+    fn poll_next(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>
+    ) -> Poll<Option<Self::Item>> {
+        // Fill buffer with new chunks if required.
+        if self.rows.is_empty() {
+            match Pin::new(&mut self.source).poll_next(cx) {
+                Poll::Ready(Some(Ok(chunks))) =>
+                    self.read_rows_response(chunks),
+                Poll::Ready(Some(Err(e))) =>
+                    return Poll::Ready(Some(Err(e.into()))),
+                Poll::Ready(None) =>
+                    return Poll::Ready(None),
+                Poll::Pending =>
+                    return Poll::Pending,
+            }
+        }
+        // Return next row in buffer.
+        if let Some(row) = self.rows.pop_front() {
+            Poll::Ready(Some(Ok(row)))
+        } else {
+            Poll::Pending
+        }
+    }
 }
 
 #[cfg(test)]

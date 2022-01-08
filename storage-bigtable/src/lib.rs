@@ -1,5 +1,7 @@
 #![allow(clippy::integer_arithmetic)]
+
 use {
+    futures::stream::{TryStream, TryStreamExt},
     log::*,
     serde::{Deserialize, Serialize},
     solana_metrics::inc_new_counter_debug,
@@ -373,7 +375,7 @@ impl LedgerStorage {
     /// start_slot: slot to start the search from (inclusive)
     /// limit: stop after this many slots have been found; if limit==0, all records in the table
     /// after start_slot will be read
-    pub async fn get_confirmed_blocks(&self, start_slot: Slot, limit: usize) -> Result<Vec<Slot>> {
+    pub async fn get_confirmed_block_slots(&self, start_slot: Slot, limit: usize) -> Result<Vec<Slot>> {
         debug!(
             "LedgerStorage::get_confirmed_blocks request received: {:?} {:?}",
             start_slot, limit
@@ -415,6 +417,40 @@ impl LedgerStorage {
                 bigtable::Error::ObjectCorrupt(format!("blocks/{}", slot_to_blocks_key(slot)))
             })?,
         })
+    }
+
+    /// Stream the confirmed blocks starting at the desired slot.
+    ///
+    /// start_slot: slot to start the search from (inclusive)
+    /// limit: stop after this many slots have been found; if limit==0, all records in the table
+    /// after start_slot will be read
+    pub async fn stream_confirmed_blocks(&self, start_slot: Slot, limit: usize) -> Result<impl TryStream<Ok=ConfirmedBlock, Error=Error>> {
+        let mut bigtable = self.connection.client();
+        let stream = bigtable.stream_row_data(
+            "blocks",
+            Some(slot_to_blocks_key(start_slot)),
+            None,
+            limit as i64,
+        ).await?;
+        Ok(stream
+            .map_err(move |err| match err {
+                bigtable::Error::RowNotFound => Error::BlockNotFound(start_slot),
+                _ => err.into(),
+            })
+            .and_then(|(row_key, row_data)| {
+                async move {
+                    let data = bigtable::deserialize_protobuf_or_bincode_cell_data::<StoredConfirmedBlock, generated::ConfirmedBlock>(&row_data, "blocks", row_key.clone())?;
+                    return match data {
+                        bigtable::CellData::Bincode(block) => Ok(block.into()),
+                        bigtable::CellData::Protobuf(block) => {
+                            match ConfirmedBlock::try_from(block) {
+                                Ok(x) => Ok(x),
+                                Err(_err) => Err(Error::BigTableError(bigtable::Error::ObjectCorrupt(format!("blocks/{}", row_key))))
+                            }
+                        },
+                    }
+                }
+            }))
     }
 
     pub async fn get_signature_status(&self, signature: &Signature) -> Result<TransactionStatus> {

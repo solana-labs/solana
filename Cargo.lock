@@ -5168,6 +5168,7 @@ dependencies = [
  "clap 2.33.3",
  "csv",
  "dashmap",
+ "futures 0.3.19",
  "histogram",
  "itertools 0.10.3",
  "log 0.4.14",
@@ -5859,6 +5860,7 @@ dependencies = [
  "bzip2",
  "enum-iterator",
  "flate2",
+ "futures 0.3.19",
  "goauth",
  "log 0.4.14",
  "openssl",
@@ -5872,6 +5874,7 @@ dependencies = [
  "solana-storage-proto",
  "solana-transaction-status",
  "thiserror",
+ "tokio",
  "tonic",
  "zstd",
 ]

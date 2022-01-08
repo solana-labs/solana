@@ -1092,7 +1092,7 @@ impl JsonRpcRequestProcessor {
             // into unfinalized confirmed blocks due to MAX_GET_CONFIRMED_BLOCKS_RANGE
             if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                 return bigtable_ledger_storage
-                    .get_confirmed_blocks(start_slot, (end_slot - start_slot) as usize + 1) // increment limit by 1 to ensure returned range is inclusive of both start_slot and end_slot
+                    .get_confirmed_block_slots(start_slot, (end_slot - start_slot) as usize + 1) // increment limit by 1 to ensure returned range is inclusive of both start_slot and end_slot
                     .await
                     .map(|mut bigtable_blocks| {
                         bigtable_blocks.retain(|&slot| slot <= end_slot);
@@ -1157,7 +1157,7 @@ impl JsonRpcRequestProcessor {
             // confirmed blocks due to MAX_GET_CONFIRMED_BLOCKS_RANGE
             if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                 return Ok(bigtable_ledger_storage
-                    .get_confirmed_blocks(start_slot, limit)
+                    .get_confirmed_block_slots(start_slot, limit)
                     .await
                     .unwrap_or_default());
             }

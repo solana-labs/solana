@@ -14,6 +14,7 @@ bs58 = "0.4.0"
 clap = "2.33.1"
 csv = "1.1.6"
 dashmap = "5.0.0"
+futures = "0.3"
 histogram = "*"
 itertools = "0.10.3"
 log = { version = "0.4.14" }

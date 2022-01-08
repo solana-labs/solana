@@ -4,8 +4,8 @@ use {
     clap::{
         value_t, value_t_or_exit, values_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand,
     },
+    futures::stream::TryStreamExt,
     log::info,
-    serde::Serialize,
     serde_json::json,
     solana_clap_utils::{
         input_parsers::pubkey_of,
@@ -17,16 +17,14 @@ use {
     },
     solana_ledger::{blockstore::Blockstore, blockstore_db::AccessType},
     solana_sdk::{
-        clock::{Slot, UnixTimestamp},
-        message::Message,
-        program_utils::limited_deserialize,
+        clock::Slot,
         pubkey::Pubkey,
         signature::Signature,
     },
     solana_transaction_status::{ConfirmedBlock, Encodable, UiTransactionEncoding},
-    solana_vote_program::vote_instruction::VoteInstruction,
     std::{
         collections::HashSet,
+        io::Write,
         path::Path,
         process::exit,
         result::Result,
@@ -96,7 +94,7 @@ async fn blocks(starting_slot: Slot, limit: usize) -> Result<(), Box<dyn std::er
         .await
         .map_err(|err| format!("Failed to connect to storage: {:?}", err))?;
 
-    let slots = bigtable.get_confirmed_blocks(starting_slot, limit).await?;
+    let slots = bigtable.get_confirmed_block_slots(starting_slot, limit).await?;
     println!("{:?}", slots);
     println!("{} blocks found", slots.len());
 
@@ -114,7 +112,7 @@ async fn compare_blocks(
         .await
         .map_err(|err| format!("failed to connect to owned bigtable: {:?}", err))?;
     let owned_bigtable_slots = owned_bigtable
-        .get_confirmed_blocks(starting_slot, limit)
+        .get_confirmed_block_slots(starting_slot, limit)
         .await?;
     info!(
         "owned bigtable {} blocks found ",
@@ -126,7 +124,7 @@ async fn compare_blocks(
             .map_err(|err| format!("failed to connect to reference bigtable: {:?}", err))?;
 
     let reference_bigtable_slots = reference_bigtable
-        .get_confirmed_blocks(starting_slot, limit)
+        .get_confirmed_block_slots(starting_slot, limit)
         .await?;
     info!(
         "reference bigtable {} blocks found ",
@@ -280,52 +278,28 @@ pub async fn transaction_history(
     Ok(())
 }
 
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct VoteTxInfo {
-    slot: Slot,
-    signature: String,
-    success: bool,
-    validator_identity: String,
-    target_slots: Vec<Slot>,
-    bank_hash: String,
-    timestamp: Option<UnixTimestamp>,
-}
-
-pub async fn vote_history() -> Result<(), Box<dyn std::error::Error>> {
+pub async fn scan_transactions(
+    starting_slot: Slot,
+    limit: usize,
+) -> Result<(), Box<dyn std::error::Error>> {
     let bigtable = solana_storage_bigtable::LedgerStorage::new(true, None, None).await?;
-
-    let slot_number: Slot = 115260739;
-    let block = bigtable.get_confirmed_block(slot_number).await?;
-    for tx in block.transactions {
-        if let Some(first_ins) = tx.transaction.message.instructions.get(0) {
-            // TODO Do we need to check accounts list bounds here? In case bigtable data is corrupted
-            let program_id = first_ins.program_id(&tx.transaction.message.account_keys);
-
-            if program_id == &solana_vote_program::id() {
-                // TODO Don't panic
-                let vote_instruction = limited_deserialize::<VoteInstruction>(&first_ins.data).expect("invalid vote ins");
-
-                if let VoteInstruction::Vote(vote) = vote_instruction {
-                    let vote_info = VoteTxInfo {
-                        slot: slot_number,
-                        signature: tx.transaction.signatures.first().expect("????").to_string(),
-                        // TODO Don't panic
-                        success: tx.meta.expect("ayooo 🤨").status.is_ok(),
-                        // TODO Don't panic
-                        validator_identity: tx.transaction.message.account_keys[first_ins.accounts[3] as usize].to_string(),
-                        target_slots: vote.slots.clone(),
-                        bank_hash: vote.hash.to_string(),
-                        timestamp: vote.timestamp,
-                    };
-                    let vote_tx_json = serde_json::to_string_pretty(&vote_info).expect("failed to serialize vote tx");
-                    println!("{}", vote_tx_json);
-                }
+    bigtable.stream_confirmed_blocks(starting_slot, limit)
+        .await?
+        // TODO use try_flat_map
+        .try_for_each(|x| {
+            async move {
+                let stdout = std::io::stdout();
+                let mut stdout = stdout.lock();
+                x.transactions.into_iter()
+                    .map(|tx| tx.encode(UiTransactionEncoding::JsonParsed))
+                    .for_each(|tx| {
+                        serde_json::to_writer(&mut stdout, &tx).expect("failed to write tx");
+                        stdout.write_all(b"\n");
+                    });
+                Ok(())
             }
-        }
-        break; // TODO looping stuff
-    }
-
+        })
+        .await?;
     Ok(())
 }
 
@@ -492,7 +466,31 @@ impl BigTableSubCommand for App<'_, '_> {
                         ),
                 )
                 .subcommand(
-                    SubCommand::with_name("vote-history")
+                    SubCommand::with_name("scan-transactions")
+                        .about(
+                            "Scan historical transactions  from newest to oldest \
+                             with given filters",
+                        )
+                        .arg(
+                            Arg::with_name("starting_slot")
+                                .validator(is_slot)
+                                .value_name("SLOT")
+                                .takes_value(true)
+                                .index(1)
+                                .required(true)
+                                .default_value("0")
+                                .help("Start listing at this slot"),
+                        )
+                        .arg(
+                            Arg::with_name("limit")
+                                .validator(is_slot)
+                                .value_name("LIMIT")
+                                .takes_value(true)
+                                .index(2)
+                                .required(true)
+                                .default_value("1000")
+                                .help("Maximum number of slots to check"),
+                        )
                 )
                 .subcommand(
                     SubCommand::with_name("transaction-history")
@@ -641,8 +639,14 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
                 query_chunk_size,
             ))
         }
-        ("vote-history", Some(_)) => {
-            runtime.block_on(vote_history())
+        ("scan-transactions", Some(arg_matches)) => {
+            let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
+            let limit = value_t_or_exit!(arg_matches, "limit", usize);
+
+            runtime.block_on(scan_transactions(
+                starting_slot,
+                limit,
+            ))
         }
         _ => unreachable!(),
     };
