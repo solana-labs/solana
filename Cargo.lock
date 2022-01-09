@@ -5710,6 +5710,7 @@ dependencies = [
  "flate2",
  "fnv",
  "index_list",
+ "indexmap",
  "itertools 0.10.3",
  "lazy_static",
  "libsecp256k1 0.6.0",

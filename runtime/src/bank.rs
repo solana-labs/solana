@@ -3359,7 +3359,7 @@ impl Bank {
             .iter()
             .filter_map(|(key, executor)| {
                 if executor.is_dirty(allow_updates) {
-                    Some((key, executor.get()))
+                    Some((*key, executor.get().clone()))
                 } else {
                     None
                 }
@@ -3369,7 +3369,7 @@ impl Bank {
         if !dirty_executors.is_empty() {
             let mut cache = self.cached_executors.write().unwrap();
             let cache = Arc::make_mut(&mut cache);
-            cache.put(&dirty_executors);
+            cache.put(dirty_executors);
         }
     }
 

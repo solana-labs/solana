@@ -1,6 +1,7 @@
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
 use {
+    indexmap::{map::Entry, IndexMap},
     log::*,
     rand::Rng,
     solana_program_runtime::invoke_context::Executor,
@@ -11,7 +12,7 @@ use {
     },
     std::{
         collections::HashMap,
-        ops::Div,
+        iter::repeat_with,
         sync::{
             atomic::{AtomicU64, Ordering::Relaxed},
             Arc,
@@ -21,13 +22,15 @@ use {
 
 // 10 MB assuming programs are around 100k
 pub(crate) const MAX_CACHED_EXECUTORS: usize = 100;
+// The LFU entry in a random sample of below size is evicted from the cache.
+const RANDOM_SAMPLE_SIZE: usize = 2;
 
 /// LFU Cache of executors with single-epoch memory of usage counts
 #[derive(Debug)]
 pub(crate) struct CachedExecutors {
     max: usize,
     current_epoch: Epoch,
-    executors: HashMap<Pubkey, CachedExecutorsEntry>,
+    executors: IndexMap<Pubkey, CachedExecutorsEntry>,
     stats: CachedExecutorsStats,
 }
 
@@ -52,7 +55,7 @@ impl Default for CachedExecutors {
         Self {
             max: MAX_CACHED_EXECUTORS,
             current_epoch: Epoch::default(),
-            executors: HashMap::default(),
+            executors: IndexMap::default(),
             stats: CachedExecutorsStats::default(),
         }
     }
@@ -114,7 +117,7 @@ impl CachedExecutors {
         Self {
             max,
             current_epoch,
-            executors: HashMap::new(),
+            executors: IndexMap::default(),
             stats: CachedExecutorsStats::default(),
         }
     }
@@ -130,59 +133,34 @@ impl CachedExecutors {
         }
     }
 
-    pub(crate) fn put(&mut self, executors: &[(&Pubkey, Arc<dyn Executor>)]) {
-        let mut new_executors: Vec<_> = executors
-            .iter()
-            .filter_map(|(key, executor)| {
-                if let Some(mut entry) = self.executors.remove(key) {
-                    self.stats.replacements.fetch_add(1, Relaxed);
-                    entry.executor = executor.clone();
-                    let _ = self.executors.insert(**key, entry);
-                    None
-                } else {
+    pub(crate) fn put(&mut self, executors: Vec<(Pubkey, Arc<dyn Executor>)>) {
+        for (key, executor) in executors {
+            match self.executors.entry(key) {
+                Entry::Vacant(entry) => {
                     self.stats.insertions.fetch_add(1, Relaxed);
-                    Some((*key, executor))
+                    entry.insert(CachedExecutorsEntry {
+                        prev_epoch_count: u64::default(),
+                        epoch_count: AtomicU64::default(),
+                        executor,
+                    });
                 }
-            })
-            .collect();
-
-        if !new_executors.is_empty() {
-            let mut counts = self
-                .executors
-                .iter()
-                .map(|(key, entry)| {
-                    let count = entry.prev_epoch_count + entry.epoch_count.load(Relaxed);
-                    (key, count)
-                })
-                .collect::<Vec<_>>();
-            counts.sort_unstable_by_key(|(_, count)| *count);
-
-            let primer_counts = Self::get_primer_counts(counts.as_slice(), new_executors.len());
-
-            if self.executors.len() >= self.max {
-                let mut least_keys = counts
-                    .iter()
-                    .take(new_executors.len())
-                    .map(|least| *least.0)
-                    .collect::<Vec<_>>();
-                for least_key in least_keys.drain(..) {
-                    let _ = self.executors.remove(&least_key);
-                    self.stats
-                        .evictions
-                        .entry(least_key)
-                        .and_modify(|c| saturating_add_assign!(*c, 1))
-                        .or_insert(1);
+                Entry::Occupied(mut entry) => {
+                    self.stats.replacements.fetch_add(1, Relaxed);
+                    entry.get_mut().executor = executor;
                 }
             }
-
-            for ((key, executor), primer_count) in new_executors.drain(..).zip(primer_counts) {
-                let entry = CachedExecutorsEntry {
-                    prev_epoch_count: 0,
-                    epoch_count: AtomicU64::new(primer_count),
-                    executor: executor.clone(),
-                };
-                let _ = self.executors.insert(*key, entry);
-            }
+        }
+        let mut rng = rand::thread_rng();
+        // Evict the key with the lowest hits in a random sample of entries.
+        while self.executors.len() > self.max {
+            let size = self.executors.len();
+            let index = repeat_with(|| rng.gen_range(0, size))
+                .take(RANDOM_SAMPLE_SIZE)
+                .min_by_key(|&index| self.executors[index].num_hits())
+                .unwrap();
+            let (key, _) = self.executors.swap_remove_index(index).unwrap();
+            let count = self.stats.evictions.entry(key).or_default();
+            saturating_add_assign!(*count, 1)
         }
     }
 
@@ -190,43 +168,16 @@ impl CachedExecutors {
         self.executors.remove(pubkey);
     }
 
-    fn get_primer_count_upper_bound_inclusive(counts: &[(&Pubkey, u64)]) -> u64 {
-        const PRIMER_COUNT_TARGET_PERCENTILE: u64 = 85;
-        #[allow(clippy::assertions_on_constants)]
-        {
-            assert!(PRIMER_COUNT_TARGET_PERCENTILE <= 100);
-        }
-        // Executor use-frequencies are assumed to fit a Pareto distribution.  Choose an
-        // upper-bound for our primer count as the actual count at the target rank to avoid
-        // an upward bias
-
-        let target_index = u64::try_from(counts.len().saturating_sub(1))
-            .ok()
-            .and_then(|counts| {
-                let index = counts
-                    .saturating_mul(PRIMER_COUNT_TARGET_PERCENTILE)
-                    .div(100); // switch to u64::saturating_div once stable
-                usize::try_from(index).ok()
-            })
-            .unwrap_or(0);
-
-        counts
-            .get(target_index)
-            .map(|(_, count)| *count)
-            .unwrap_or(0)
-    }
-
-    fn get_primer_counts(counts: &[(&Pubkey, u64)], num_counts: usize) -> Vec<u64> {
-        let max_primer_count = Self::get_primer_count_upper_bound_inclusive(counts);
-        let mut rng = rand::thread_rng();
-
-        (0..num_counts)
-            .map(|_| rng.gen_range(0, max_primer_count.saturating_add(1)))
-            .collect::<Vec<_>>()
-    }
-
     pub(crate) fn submit_stats(&self, slot: Slot) {
         self.stats.submit(slot);
+    }
+}
+
+impl CachedExecutorsEntry {
+    fn num_hits(&self) -> u64 {
+        self.epoch_count
+            .load(Relaxed)
+            .saturating_add(self.prev_epoch_count)
     }
 }
 
@@ -301,9 +252,9 @@ mod tests {
         let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
         let mut cache = CachedExecutors::new(3, 0);
 
-        cache.put(&[(&key1, executor.clone())]);
-        cache.put(&[(&key2, executor.clone())]);
-        cache.put(&[(&key3, executor.clone())]);
+        cache.put(vec![(key1, executor.clone())]);
+        cache.put(vec![(key2, executor.clone())]);
+        cache.put(vec![(key3, executor.clone())]);
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key2).is_some());
         assert!(cache.get(&key3).is_some());
@@ -311,26 +262,21 @@ mod tests {
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key2).is_some());
-        cache.put(&[(&key4, executor.clone())]);
-        assert!(cache.get(&key4).is_some());
-        let num_retained = [&key1, &key2, &key3]
+        cache.put(vec![(key4, executor.clone())]);
+        let num_retained = [&key1, &key2, &key3, &key4]
             .iter()
             .map(|key| cache.get(key))
             .flatten()
             .count();
-        assert_eq!(num_retained, 2);
+        assert_eq!(num_retained, 3);
 
-        assert!(cache.get(&key4).is_some());
-        assert!(cache.get(&key4).is_some());
-        assert!(cache.get(&key4).is_some());
-        cache.put(&[(&key3, executor.clone())]);
-        assert!(cache.get(&key3).is_some());
-        let num_retained = [&key1, &key2, &key4]
+        cache.put(vec![(key3, executor.clone())]);
+        let num_retained = [&key1, &key2, &key3, &key4]
             .iter()
             .map(|key| cache.get(key))
             .flatten()
             .count();
-        assert_eq!(num_retained, 2);
+        assert_eq!(num_retained, 3);
     }
 
     #[test]
@@ -343,9 +289,9 @@ mod tests {
         let mut cache = CachedExecutors::new(3, 0);
         assert!(cache.current_epoch == 0);
 
-        cache.put(&[(&key1, executor.clone())]);
-        cache.put(&[(&key2, executor.clone())]);
-        cache.put(&[(&key3, executor.clone())]);
+        cache.put(vec![(key1, executor.clone())]);
+        cache.put(vec![(key2, executor.clone())]);
+        cache.put(vec![(key3, executor.clone())]);
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key1).is_some());
@@ -356,80 +302,33 @@ mod tests {
         assert!(cache.get(&key2).is_some());
         assert!(cache.get(&key2).is_some());
         assert!(cache.get(&key3).is_some());
-        Arc::make_mut(&mut cache).put(&[(&key4, executor.clone())]);
+        Arc::make_mut(&mut cache).put(vec![(key4, executor.clone())]);
 
-        assert!(cache.get(&key4).is_some());
-        let num_retained = [&key1, &key2, &key3]
+        let num_retained = [&key1, &key2, &key3, &key4]
             .iter()
             .map(|key| cache.get(key))
             .flatten()
             .count();
-        assert_eq!(num_retained, 2);
+        assert_eq!(num_retained, 3);
 
-        Arc::make_mut(&mut cache).put(&[(&key1, executor.clone())]);
-        Arc::make_mut(&mut cache).put(&[(&key3, executor.clone())]);
-        assert!(cache.get(&key1).is_some());
-        assert!(cache.get(&key3).is_some());
-        let num_retained = [&key2, &key4]
+        Arc::make_mut(&mut cache).put(vec![(key1, executor.clone())]);
+        Arc::make_mut(&mut cache).put(vec![(key3, executor.clone())]);
+        let num_retained = [&key1, &key2, &key3, &key4]
             .iter()
             .map(|key| cache.get(key))
             .flatten()
             .count();
-        assert_eq!(num_retained, 1);
+        assert_eq!(num_retained, 3);
 
         cache = cache.clone_with_epoch(2);
         assert!(cache.current_epoch == 2);
 
-        Arc::make_mut(&mut cache).put(&[(&key3, executor.clone())]);
-        assert!(cache.get(&key3).is_some());
-    }
-
-    #[test]
-    fn test_cached_executors_evicts_smallest() {
-        let key1 = solana_sdk::pubkey::new_rand();
-        let key2 = solana_sdk::pubkey::new_rand();
-        let key3 = solana_sdk::pubkey::new_rand();
-        let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
-        let mut cache = CachedExecutors::new(2, 0);
-
-        cache.put(&[(&key1, executor.clone())]);
-        for _ in 0..5 {
-            let _ = cache.get(&key1);
-        }
-        cache.put(&[(&key2, executor.clone())]);
-        // make key1's use-count for sure greater than key2's
-        let _ = cache.get(&key1);
-
-        let mut entries = cache
-            .executors
+        Arc::make_mut(&mut cache).put(vec![(key3, executor.clone())]);
+        let num_retained = [&key1, &key2, &key3, &key4]
             .iter()
-            .map(|(k, v)| (*k, v.epoch_count.load(Relaxed)))
-            .collect::<Vec<_>>();
-        entries.sort_by_key(|(_, v)| *v);
-        assert!(entries[0].1 < entries[1].1);
-
-        cache.put(&[(&key3, executor.clone())]);
-        assert!(cache.get(&entries[0].0).is_none());
-        assert!(cache.get(&entries[1].0).is_some());
-    }
-
-    #[test]
-    fn test_executor_cache_get_primer_count_upper_bound_inclusive() {
-        let pubkey = Pubkey::default();
-        let v = [];
-        assert_eq!(
-            CachedExecutors::get_primer_count_upper_bound_inclusive(&v),
-            0
-        );
-        let v = [(&pubkey, 1)];
-        assert_eq!(
-            CachedExecutors::get_primer_count_upper_bound_inclusive(&v),
-            1
-        );
-        let v = (0u64..10).map(|i| (&pubkey, i)).collect::<Vec<_>>();
-        assert_eq!(
-            CachedExecutors::get_primer_count_upper_bound_inclusive(v.as_slice()),
-            7
-        );
+            .map(|key| cache.get(key))
+            .flatten()
+            .count();
+        assert_eq!(num_retained, 3);
     }
 }
