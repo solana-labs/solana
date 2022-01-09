@@ -45,7 +45,7 @@ use solana_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     loader_instruction,
-    message::{Message, SanitizedMessage},
+    message::{v0::LoadedAddresses, Message, SanitizedMessage},
     pubkey::Pubkey,
     signature::{keypair_from_seed, Keypair, Signer},
     system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
@@ -421,6 +421,7 @@ fn execute_transactions(
                         inner_instructions,
                         log_messages,
                         rewards: None,
+                        loaded_addresses: LoadedAddresses::default(),
                     };
 
                     Ok(ConfirmedTransactionWithStatusMeta {

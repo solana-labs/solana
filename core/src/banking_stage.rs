@@ -1477,7 +1477,8 @@ mod tests {
         super::*,
         crossbeam_channel::{unbounded, Receiver},
         itertools::Itertools,
-        solana_entry::entry::{next_entry, Entry, EntrySlice},
+        solana_address_lookup_table_program::state::{AddressLookupTable, LookupTableMeta},
+        solana_entry::entry::{next_entry, next_versioned_entry, Entry, EntrySlice},
         solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
         solana_ledger::{
             blockstore::{entries_to_test_shreds, Blockstore},
@@ -1493,8 +1494,10 @@ mod tests {
         solana_rpc::transaction_status_service::TransactionStatusService,
         solana_runtime::bank::TransactionExecutionDetails,
         solana_sdk::{
+            account::AccountSharedData,
             hash::Hash,
             instruction::InstructionError,
+            message::{v0, MessageHeader, VersionedMessage},
             poh_config::PohConfig,
             signature::{Keypair, Signer},
             system_instruction::SystemError,
@@ -1502,9 +1505,10 @@ mod tests {
             transaction::{Transaction, TransactionError},
         },
         solana_streamer::{recvmmsg::recv_mmsg, socket::SocketAddrSpace},
-        solana_transaction_status::TransactionWithStatusMeta,
+        solana_transaction_status::{TransactionStatusMeta, VersionedTransactionWithStatusMeta},
         solana_vote_program::vote_transaction,
         std::{
+            borrow::Cow,
             net::SocketAddr,
             path::Path,
             sync::atomic::{AtomicBool, Ordering},
@@ -2525,7 +2529,7 @@ mod tests {
             let confirmed_block = blockstore.get_rooted_block(bank.slot(), false).unwrap();
             assert_eq!(confirmed_block.transactions.len(), 3);
 
-            for TransactionWithStatusMeta { transaction, meta } in
+            for VersionedTransactionWithStatusMeta { transaction, meta } in
                 confirmed_block.transactions.into_iter()
             {
                 if transaction.signatures[0] == success_signature {
@@ -2545,6 +2549,165 @@ mod tests {
                 }
             }
 
+            poh_recorder
+                .lock()
+                .unwrap()
+                .is_exited
+                .store(true, Ordering::Relaxed);
+            let _ = poh_simulator.join();
+        }
+        Blockstore::destroy(&ledger_path).unwrap();
+    }
+
+    fn generate_new_address_lookup_table(
+        authority: Option<Pubkey>,
+        num_addresses: usize,
+    ) -> AddressLookupTable<'static> {
+        let mut addresses = Vec::with_capacity(num_addresses);
+        addresses.resize_with(num_addresses, Pubkey::new_unique);
+        AddressLookupTable {
+            meta: LookupTableMeta {
+                authority,
+                ..LookupTableMeta::default()
+            },
+            addresses: Cow::Owned(addresses),
+        }
+    }
+
+    fn store_address_lookup_table(
+        bank: &Bank,
+        account_address: Pubkey,
+        address_lookup_table: AddressLookupTable<'static>,
+    ) -> AccountSharedData {
+        let mut data = Vec::new();
+        address_lookup_table.serialize_for_tests(&mut data).unwrap();
+
+        let mut account =
+            AccountSharedData::new(1, data.len(), &solana_address_lookup_table_program::id());
+        account.set_data(data);
+        bank.store_account(&account_address, &account);
+
+        account
+    }
+
+    #[test]
+    fn test_write_persist_loaded_addresses() {
+        solana_logger::setup();
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_slow_genesis_config(10_000);
+        let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
+        let keypair = Keypair::new();
+
+        let address_table_key = Pubkey::new_unique();
+        let address_table_state = generate_new_address_lookup_table(None, 2);
+        store_address_lookup_table(&bank, address_table_key, address_table_state);
+
+        let bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::new_unique(), 1));
+        let message = VersionedMessage::V0(v0::Message {
+            header: MessageHeader {
+                num_required_signatures: 1,
+                num_readonly_signed_accounts: 0,
+                num_readonly_unsigned_accounts: 0,
+            },
+            recent_blockhash: genesis_config.hash(),
+            account_keys: vec![keypair.pubkey()],
+            address_table_lookups: vec![MessageAddressTableLookup {
+                account_key: address_table_key,
+                writable_indexes: vec![0],
+                readonly_indexes: vec![1],
+            }],
+            instructions: vec![],
+        });
+
+        let tx = VersionedTransaction::try_new(message, &[&keypair]).unwrap();
+        let message_hash = tx.message.hash();
+        let sanitized_tx =
+            SanitizedTransaction::try_create(tx.clone(), message_hash, Some(false), |lookups| {
+                Ok(bank.load_lookup_table_addresses(lookups).unwrap())
+            })
+            .unwrap();
+
+        let entry = next_versioned_entry(&genesis_config.hash(), 1, vec![tx]);
+        let entries = vec![entry];
+
+        // todo: check if sig fees are needed
+        bank.transfer(1, &mint_keypair, &keypair.pubkey()).unwrap();
+
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&ledger_path)
+                .expect("Expected to be able to open database ledger");
+            let blockstore = Arc::new(blockstore);
+            let (poh_recorder, _entry_receiver, record_receiver) = PohRecorder::new(
+                bank.tick_height(),
+                bank.last_blockhash(),
+                bank.clone(),
+                Some((4, 4)),
+                bank.ticks_per_slot(),
+                &Pubkey::new_unique(),
+                &blockstore,
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                &Arc::new(PohConfig::default()),
+                Arc::new(AtomicBool::default()),
+            );
+            let recorder = poh_recorder.recorder();
+            let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+
+            let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
+
+            poh_recorder.lock().unwrap().set_bank(&bank);
+
+            let shreds = entries_to_test_shreds(&entries, bank.slot(), 0, true, 0);
+            blockstore.insert_shreds(shreds, None, false).unwrap();
+            blockstore.set_roots(std::iter::once(&bank.slot())).unwrap();
+
+            let (transaction_status_sender, transaction_status_receiver) = unbounded();
+            let transaction_status_service = TransactionStatusService::new(
+                transaction_status_receiver,
+                Arc::new(AtomicU64::default()),
+                true,
+                None,
+                blockstore.clone(),
+                &Arc::new(AtomicBool::new(false)),
+            );
+
+            let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
+
+            let _ = BankingStage::process_and_record_transactions(
+                &bank,
+                &[sanitized_tx.clone()],
+                &recorder,
+                0,
+                Some(TransactionStatusSender {
+                    sender: transaction_status_sender,
+                    enable_cpi_and_log_storage: false,
+                }),
+                &gossip_vote_sender,
+                &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+            );
+
+            transaction_status_service.join().unwrap();
+
+            let mut confirmed_block = blockstore.get_rooted_block(bank.slot(), false).unwrap();
+            assert_eq!(confirmed_block.transactions.len(), 1);
+
+            let recorded_meta = confirmed_block.transactions.pop().unwrap().meta;
+            assert_eq!(
+                recorded_meta,
+                Some(TransactionStatusMeta {
+                    status: Ok(()),
+                    pre_balances: vec![1, 0, 0],
+                    post_balances: vec![1, 0, 0],
+                    pre_token_balances: Some(vec![]),
+                    post_token_balances: Some(vec![]),
+                    rewards: Some(vec![]),
+                    loaded_addresses: sanitized_tx.get_loaded_addresses(),
+                    ..TransactionStatusMeta::default()
+                })
+            );
             poh_recorder
                 .lock()
                 .unwrap()

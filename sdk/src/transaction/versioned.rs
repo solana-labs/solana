@@ -9,6 +9,8 @@ use {
         sanitize::{Sanitize, SanitizeError},
         short_vec,
         signature::Signature,
+        signer::SignerError,
+        signers::Signers,
         transaction::{Result, Transaction, TransactionError},
     },
     serde::Serialize,
@@ -57,6 +59,40 @@ impl From<Transaction> for VersionedTransaction {
 }
 
 impl VersionedTransaction {
+    /// Signs a versioned message and if successful, returns a signed
+    /// transaction.
+    pub fn try_new<T: Signers>(
+        message: VersionedMessage,
+        keypairs: &T,
+    ) -> std::result::Result<Self, SignerError> {
+        let static_account_keys = message.static_account_keys();
+        if static_account_keys.len() < message.header().num_required_signatures as usize {
+            return Err(SignerError::InvalidInput("invalid message".to_string()));
+        }
+
+        let signer_keys = keypairs.pubkeys();
+        let expected_signer_keys =
+            &static_account_keys[0..message.header().num_required_signatures as usize];
+
+        match signer_keys.len().cmp(&expected_signer_keys.len()) {
+            Ordering::Greater => Err(SignerError::TooManySigners),
+            Ordering::Less => Err(SignerError::NotEnoughSigners),
+            Ordering::Equal => Ok(()),
+        }?;
+
+        if signer_keys != expected_signer_keys {
+            return Err(SignerError::KeypairPubkeyMismatch);
+        }
+
+        let message_data = message.serialize();
+        let signatures = keypairs.try_sign_message(&message_data)?;
+
+        Ok(Self {
+            signatures,
+            message,
+        })
+    }
+
     /// Returns a legacy transaction if the transaction message is legacy.
     pub fn into_legacy_transaction(self) -> Option<Transaction> {
         match self.message {

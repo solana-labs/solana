@@ -77,9 +77,10 @@ use {
     solana_storage_bigtable::Error as StorageError,
     solana_streamer::socket::SocketAddrSpace,
     solana_transaction_status::{
-        ConfirmedBlock, ConfirmedTransactionStatusWithSignature, Encodable,
+        ConfirmedTransactionStatusWithSignature, Encodable,
         EncodedConfirmedTransactionWithStatusMeta, Reward, RewardType,
         TransactionConfirmationStatus, TransactionStatus, UiConfirmedBlock, UiTransactionEncoding,
+        VersionedConfirmedBlock,
     },
     solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY},
     spl_token::{
@@ -1002,48 +1003,62 @@ impl JsonRpcRequestProcessor {
                 self.check_status_is_complete(slot)?;
                 let result = self.blockstore.get_rooted_block(slot, true);
                 self.check_blockstore_root(&result, slot)?;
-                let configure_block = |confirmed_block: ConfirmedBlock| {
+                let configure_block = |versioned_block: VersionedConfirmedBlock| {
+                    let confirmed_block = versioned_block
+                        .into_legacy_block()
+                        .ok_or(RpcCustomError::UnsupportedTransactionVersion)?;
                     let mut confirmed_block =
                         confirmed_block.configure(encoding, transaction_details, show_rewards);
                     if slot == 0 {
                         confirmed_block.block_time = Some(self.genesis_creation_time());
                         confirmed_block.block_height = Some(0);
                     }
-                    confirmed_block
+                    Ok(confirmed_block)
                 };
                 if result.is_err() {
                     if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                         let bigtable_result =
                             bigtable_ledger_storage.get_confirmed_block(slot).await;
                         self.check_bigtable_result(&bigtable_result)?;
-                        return Ok(bigtable_result.ok().map(configure_block));
+                        return bigtable_result.ok().map(configure_block).transpose();
                     }
                 }
                 self.check_slot_cleaned_up(&result, slot)?;
-                return Ok(result.ok().map(configure_block));
+                return result.ok().map(configure_block).transpose();
             } else if commitment.is_confirmed() {
                 // Check if block is confirmed
                 let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
                 if confirmed_bank.status_cache_ancestors().contains(&slot) {
                     self.check_status_is_complete(slot)?;
                     let result = self.blockstore.get_complete_block(slot, true);
-                    return Ok(result.ok().map(|mut confirmed_block| {
-                        if confirmed_block.block_time.is_none()
-                            || confirmed_block.block_height.is_none()
-                        {
-                            let r_bank_forks = self.bank_forks.read().unwrap();
-                            let bank = r_bank_forks.get(slot).cloned();
-                            if let Some(bank) = bank {
-                                if confirmed_block.block_time.is_none() {
-                                    confirmed_block.block_time = Some(bank.clock().unix_timestamp);
-                                }
-                                if confirmed_block.block_height.is_none() {
-                                    confirmed_block.block_height = Some(bank.block_height());
+                    return result
+                        .ok()
+                        .map(|versioned_block| {
+                            let mut confirmed_block = versioned_block
+                                .into_legacy_block()
+                                .ok_or(RpcCustomError::UnsupportedTransactionVersion)?;
+                            if confirmed_block.block_time.is_none()
+                                || confirmed_block.block_height.is_none()
+                            {
+                                let r_bank_forks = self.bank_forks.read().unwrap();
+                                let bank = r_bank_forks.get(slot).cloned();
+                                if let Some(bank) = bank {
+                                    if confirmed_block.block_time.is_none() {
+                                        confirmed_block.block_time =
+                                            Some(bank.clock().unix_timestamp);
+                                    }
+                                    if confirmed_block.block_height.is_none() {
+                                        confirmed_block.block_height = Some(bank.block_height());
+                                    }
                                 }
                             }
-                        }
-                        confirmed_block.configure(encoding, transaction_details, show_rewards)
-                    }));
+                            Ok(confirmed_block.configure(
+                                encoding,
+                                transaction_details,
+                                show_rewards,
+                            ))
+                        })
+                        .transpose();
                 }
             }
         } else {
@@ -1368,15 +1383,20 @@ impl JsonRpcRequestProcessor {
 
         if self.config.enable_rpc_transaction_history {
             let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
-            let transaction = if commitment.is_confirmed() {
+            let versioned_confirmed_tx = if commitment.is_confirmed() {
                 let highest_confirmed_slot = confirmed_bank.slot();
                 self.blockstore
                     .get_complete_transaction(signature, highest_confirmed_slot)
             } else {
                 self.blockstore.get_rooted_transaction(signature)
             };
-            match transaction.unwrap_or(None) {
-                Some(mut confirmed_transaction) => {
+
+            match versioned_confirmed_tx.unwrap_or(None) {
+                Some(versioned_confirmed_tx) => {
+                    let mut confirmed_transaction = versioned_confirmed_tx
+                        .into_legacy_confirmed_transaction()
+                        .ok_or(RpcCustomError::UnsupportedTransactionVersion)?;
+
                     if commitment.is_confirmed()
                         && confirmed_bank // should be redundant
                             .status_cache_ancestors()
@@ -1402,11 +1422,18 @@ impl JsonRpcRequestProcessor {
                 }
                 None => {
                     if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
-                        return Ok(bigtable_ledger_storage
+                        return bigtable_ledger_storage
                             .get_confirmed_transaction(&signature)
                             .await
                             .unwrap_or(None)
-                            .map(|confirmed| confirmed.encode(encoding)));
+                            .map(|versioned_confirmed_tx| {
+                                let confirmed_tx = versioned_confirmed_tx
+                                    .into_legacy_confirmed_transaction()
+                                    .ok_or(RpcCustomError::UnsupportedTransactionVersion)?;
+
+                                Ok(confirmed_tx.encode(encoding))
+                            })
+                            .transpose();
                     }
                 }
             }

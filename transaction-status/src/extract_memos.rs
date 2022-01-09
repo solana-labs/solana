@@ -1,5 +1,5 @@
 use {
-    crate::parse_instruction::parse_memo_data,
+    crate::{parse_instruction::parse_memo_data, VersionedTransactionWithStatusMeta},
     solana_sdk::{
         instruction::CompiledInstruction,
         message::{Message, SanitizedMessage},
@@ -52,6 +52,15 @@ impl ExtractMemos for Message {
 impl ExtractMemos for SanitizedMessage {
     fn extract_memos(&self) -> Vec<String> {
         extract_memos_inner(self.account_keys_iter(), self.instructions())
+    }
+}
+
+impl ExtractMemos for VersionedTransactionWithStatusMeta {
+    fn extract_memos(&self) -> Vec<String> {
+        extract_memos_inner(
+            self.account_keys_iter(),
+            self.transaction.message.instructions(),
+        )
     }
 }
 

@@ -3003,7 +3003,7 @@ pub mod tests {
             transaction::TransactionError,
         },
         solana_streamer::socket::SocketAddrSpace,
-        solana_transaction_status::TransactionWithStatusMeta,
+        solana_transaction_status::VersionedTransactionWithStatusMeta,
         solana_vote_program::{
             vote_state::{VoteState, VoteStateVersions},
             vote_transaction,
@@ -3860,7 +3860,7 @@ pub mod tests {
             let confirmed_block = blockstore.get_rooted_block(slot, false).unwrap();
             assert_eq!(confirmed_block.transactions.len(), 3);
 
-            for TransactionWithStatusMeta { transaction, meta } in
+            for VersionedTransactionWithStatusMeta { transaction, meta } in
                 confirmed_block.transactions.into_iter()
             {
                 if transaction.signatures[0] == signatures[0] {

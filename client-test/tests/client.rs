@@ -275,8 +275,9 @@ fn test_block_subscription() {
     let maybe_actual = receiver.recv_timeout(Duration::from_millis(400));
     match maybe_actual {
         Ok(actual) => {
-            let complete_block = blockstore.get_complete_block(slot, false).unwrap();
-            let block = complete_block.clone().configure(
+            let versioned_block = blockstore.get_complete_block(slot, false).unwrap();
+            let legacy_block = versioned_block.into_legacy_block().unwrap();
+            let block = legacy_block.clone().configure(
                 UiTransactionEncoding::Json,
                 TransactionDetails::Signatures,
                 false,
@@ -286,7 +287,7 @@ fn test_block_subscription() {
                 block: Some(block),
                 err: None,
             };
-            let block = complete_block.configure(
+            let block = legacy_block.configure(
                 UiTransactionEncoding::Json,
                 TransactionDetails::Signatures,
                 false,
