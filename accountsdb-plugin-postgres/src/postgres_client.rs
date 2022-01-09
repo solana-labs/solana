@@ -209,7 +209,7 @@ pub trait PostgresClient {
 }
 
 impl SimplePostgresClient {
-    fn connect_to_db(
+    pub fn connect_to_db(
         config: &AccountsDbPluginPostgresConfig,
     ) -> Result<Client, AccountsDbPluginError> {
         let port = config.port.unwrap_or(DEFAULT_POSTGRES_PORT);

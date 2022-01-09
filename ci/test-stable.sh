@@ -30,8 +30,11 @@ echo "Executing $testName"
 case $testName in
 test-stable)
   # start PostgreSQL database
-  /etc/init.d/postgresql start
-  PGPASSWORD=solana psql -U solana -p 5432 -h localhost -w -d solana -f accountsdb-plugin-postgres/scripts/create_schema.sql
+  if command -v psql &> /dev/null
+  then
+    sudo /etc/init.d/postgresql start
+    PGPASSWORD=solana psql -U solana -p 5432 -h localhost -w -d solana -f accountsdb-plugin-postgres/scripts/create_schema.sql
+  fi
   _ "$cargo" stable test --jobs "$NPROC" --all --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
   ;;
 test-stable-bpf)

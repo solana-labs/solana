@@ -19,6 +19,10 @@ use {
     libloading::Library,
     log::*,
     serial_test::serial,
+    solana_accountsdb_plugin_postgres::{
+        accountsdb_plugin_postgres::AccountsDbPluginPostgresConfig,
+        postgres_client::SimplePostgresClient,
+    },
     solana_core::validator::ValidatorConfig,
     solana_local_cluster::{
         cluster::Cluster,
@@ -36,6 +40,7 @@ use {
     solana_streamer::socket::SocketAddrSpace,
     std::{
         fs::File,
+        io::Read,
         io::Write,
         path::{Path, PathBuf},
         thread::sleep,
@@ -185,7 +190,6 @@ fn setup_snapshot_validator_config(
 }
 
 fn test_local_cluster_start_and_exit_with_config(socket_addr_space: SocketAddrSpace) {
-    solana_logger::setup();
     const NUM_NODES: usize = 1;
     let mut config = ClusterConfig {
         validator_configs: make_identical_validator_configs(&ValidatorConfig::default(), NUM_NODES),
@@ -203,15 +207,19 @@ fn test_local_cluster_start_and_exit_with_config(socket_addr_space: SocketAddrSp
 #[test]
 #[serial]
 fn test_postgres_plugin() {
+    solana_logger::setup_with_default(RUST_LOG_FILTER);
+
     unsafe {
         let lib = Library::new("libsolana_accountsdb_plugin_postgres.so");
         if lib.is_err() {
-            info!("Failed to load the dynamic library libsolana_accountsdb_plugin_postgres.so");
+            info!(
+                "Failed to load the dynamic library libsolana_accountsdb_plugin_postgres.so {:?}",
+                lib
+            );
             return;
         }
     }
 
-    solana_logger::setup_with_default(RUST_LOG_FILTER);
     let socket_addr_space = SocketAddrSpace::new(true);
     test_local_cluster_start_and_exit_with_config(socket_addr_space);
 
@@ -221,6 +229,24 @@ fn test_postgres_plugin() {
 
     let leader_snapshot_test_config =
         setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
+
+    let mut file = File::open(
+        &leader_snapshot_test_config
+            .validator_config
+            .accountsdb_plugin_config_files
+            .as_ref()
+            .unwrap()[0],
+    )
+    .unwrap();
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).unwrap();
+    let plugin_config: AccountsDbPluginPostgresConfig = serde_json::from_str(&contents).unwrap();
+
+    let result = SimplePostgresClient::connect_to_db(&plugin_config);
+    if result.is_err() {
+        info!("Failed to connecto the PostgreSQL database. Please setup the database to run the integration tests. {:?}", result.err());
+        return;
+    }
 
     let stake = 10_000;
     let mut config = ClusterConfig {
