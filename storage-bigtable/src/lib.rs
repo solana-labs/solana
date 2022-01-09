@@ -424,7 +424,7 @@ impl LedgerStorage {
     /// start_slot: slot to start the search from (inclusive)
     /// limit: stop after this many slots have been found; if limit==0, all records in the table
     /// after start_slot will be read
-    pub async fn stream_confirmed_blocks(&self, start_slot: Slot, limit: usize) -> Result<impl TryStream<Ok=ConfirmedBlock, Error=Error>> {
+    pub async fn stream_confirmed_blocks(&self, start_slot: Slot, limit: usize) -> Result<impl TryStream<Ok=(Slot, ConfirmedBlock), Error=Error>> {
         let mut bigtable = self.connection.client();
         let stream = bigtable.stream_row_data(
             "blocks",
@@ -437,19 +437,19 @@ impl LedgerStorage {
                 bigtable::Error::RowNotFound => Error::BlockNotFound(start_slot),
                 _ => err.into(),
             })
-            .and_then(|(row_key, row_data)| {
-                async move {
-                    let data = bigtable::deserialize_protobuf_or_bincode_cell_data::<StoredConfirmedBlock, generated::ConfirmedBlock>(&row_data, "blocks", row_key.clone())?;
-                    return match data {
-                        bigtable::CellData::Bincode(block) => Ok(block.into()),
-                        bigtable::CellData::Protobuf(block) => {
-                            match ConfirmedBlock::try_from(block) {
-                                Ok(x) => Ok(x),
-                                Err(_err) => Err(Error::BigTableError(bigtable::Error::ObjectCorrupt(format!("blocks/{}", row_key))))
-                            }
-                        },
-                    }
-                }
+            .and_then(|(row_key, row_data)| async move {
+                let data = bigtable::deserialize_protobuf_or_bincode_cell_data::<StoredConfirmedBlock, generated::ConfirmedBlock>(&row_data, "blocks", row_key.clone())?;
+                let block = match data {
+                    bigtable::CellData::Bincode(block) => Ok(block.into()),
+                    bigtable::CellData::Protobuf(block) => {
+                        match ConfirmedBlock::try_from(block) {
+                            Ok(x) => Ok(x),
+                            Err(_err) => Err(Error::BigTableError(bigtable::Error::ObjectCorrupt(format!("blocks/{}", row_key))))
+                        }
+                    },
+                }?;
+                let slot = key_to_slot(&row_key).expect("invalid slot");
+                Ok((slot, block))
             }))
     }
 

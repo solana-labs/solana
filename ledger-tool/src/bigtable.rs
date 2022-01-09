@@ -21,7 +21,12 @@ use {
         pubkey::Pubkey,
         signature::Signature,
     },
-    solana_transaction_status::{ConfirmedBlock, Encodable, UiTransactionEncoding},
+    solana_transaction_status::{
+        ConfirmedBlock,
+        ConfirmedTransactionWithStatusMeta,
+        Encodable,
+        UiTransactionEncoding,
+    },
     std::{
         collections::HashSet,
         io::Write,
@@ -293,11 +298,12 @@ pub async fn scan_transactions(
     bigtable.stream_confirmed_blocks(starting_slot, limit)
         .await?
         // TODO use try_flat_map
-        .try_for_each(|x| {
-            async {
+        .try_for_each(|(slot, block)| {
+            let program_ids = &program_ids;
+            async move {
                 let stdout = std::io::stdout();
                 let mut stdout = stdout.lock();
-                x.transactions.into_iter()
+                block.transactions.into_iter()
                     .filter(|tx| {
                         if let Some(program_ids) = &program_ids {
                             for ins in &tx.transaction.message.instructions {
@@ -309,7 +315,14 @@ pub async fn scan_transactions(
                         }
                         true
                     })
-                    .map(|tx| tx.encode(UiTransactionEncoding::JsonParsed))
+                    .map(|tx| {
+                        let confirmed = ConfirmedTransactionWithStatusMeta {
+                            slot,
+                            transaction: tx,
+                            block_time: block.block_time,
+                        };
+                        confirmed.encode(UiTransactionEncoding::JsonParsed)
+                    })
                     .for_each(|tx| {
                         // TODO Exit gracefully instead of panicking
                         serde_json::to_writer(&mut stdout, &tx).expect("failed to write tx");
