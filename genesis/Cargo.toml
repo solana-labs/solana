@@ -25,7 +25,7 @@ solana-sdk = { path = "../sdk", version = "=1.10.0" }
 solana-stake-program = { path = "../programs/stake", version = "=1.10.0" }
 solana-version = { path = "../version", version = "=1.10.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.10.0" }
-tempfile = "3.2.0"
+tempfile = "3.3.0"
 
 [[bin]]
 name = "solana-genesis"

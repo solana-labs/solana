@@ -16,7 +16,7 @@ memmap2 = "0.5.0"
 log = { version = "0.4.11" }
 solana-measure = { path = "../measure", version = "=1.10.0" }
 rand = "0.7.0"
-tempfile = "3.2.0"
+tempfile = "3.3.0"
 
 [dev-dependencies]
 fs_extra = "1.2.0"

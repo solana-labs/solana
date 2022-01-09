@@ -54,7 +54,7 @@ solana-send-transaction-service = { path = "../send-transaction-service", versio
 solana-streamer = { path = "../streamer", version = "=1.10.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.10.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.10.0" }
-tempfile = "3.2.0"
+tempfile = "3.3.0"
 thiserror = "1.0"
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.10.0" }
 sys-info = "0.9.1"
