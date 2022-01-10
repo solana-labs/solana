@@ -36,13 +36,13 @@ function Button() {
     return `btn d-block btn-${variant}`;
   };
 
-  const spinnerClasses = "spinner-grow spinner-grow-sm mr-2";
+  const spinnerClasses = "spinner-grow spinner-grow-sm me-2";
 
   switch (status) {
     case ClusterStatus.Connected:
       return (
         <span className={btnClasses("primary")}>
-          <span className="fe fe-check-circle mr-2"></span>
+          <span className="fe fe-check-circle me-2"></span>
           {statusName}
         </span>
       );
@@ -62,7 +62,7 @@ function Button() {
     case ClusterStatus.Failure:
       return (
         <span className={btnClasses("danger")}>
-          <span className="fe fe-alert-circle mr-2"></span>
+          <span className="fe fe-alert-circle me-2"></span>
           {statusName}
         </span>
       );

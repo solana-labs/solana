@@ -1,9 +1,9 @@
 [package]
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-edition = "2018"
+edition = "2021"
 name = "solana-cli-config"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.9.0"
+version = "1.10.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -12,10 +12,13 @@ documentation = "https://docs.rs/solana-cli-config"
 [dependencies]
 dirs-next = "2.0.0"
 lazy_static = "1.4.0"
-serde = "1.0.130"
+serde = "1.0.133"
 serde_derive = "1.0.103"
-serde_yaml = "0.8.21"
+serde_yaml = "0.8.23"
 url = "2.2.2"
+
+[dev-dependencies]
+anyhow = "1.0.52"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

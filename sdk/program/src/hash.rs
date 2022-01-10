@@ -1,14 +1,18 @@
 //! The `hash` module provides functions for creating SHA-256 hashes.
 
-use crate::sanitize::Sanitize;
-use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
-use sha2::{Digest, Sha256};
-use std::{convert::TryFrom, fmt, mem, str::FromStr};
-use thiserror::Error;
+use {
+    crate::{sanitize::Sanitize, wasm_bindgen},
+    borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
+    sha2::{Digest, Sha256},
+    std::{convert::TryFrom, fmt, mem, str::FromStr},
+    thiserror::Error,
+};
 
 pub const HASH_BYTES: usize = 32;
 /// Maximum string length of a base58 encoded hash
 const MAX_BASE58_LEN: usize = 44;
+
+#[wasm_bindgen]
 #[derive(
     Serialize,
     Deserialize,
@@ -106,11 +110,11 @@ impl Hash {
 
     /// unique Hash for tests and benchmarks.
     pub fn new_unique() -> Self {
-        use std::sync::atomic::{AtomicU64, Ordering};
+        use crate::atomic_u64::AtomicU64;
         static I: AtomicU64 = AtomicU64::new(1);
 
         let mut b = [0u8; HASH_BYTES];
-        let i = I.fetch_add(1, Ordering::Relaxed);
+        let i = I.fetch_add(1);
         b[0..8].copy_from_slice(&i.to_le_bytes());
         Self::new(&b)
     }

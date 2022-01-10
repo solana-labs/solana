@@ -3,40 +3,45 @@
 
 extern crate test;
 
-use crossbeam_channel::unbounded;
-use log::*;
-use rand::{thread_rng, Rng};
-use rayon::prelude::*;
-use solana_core::banking_stage::{BankingStage, BankingStageStats};
-use solana_entry::entry::{next_hash, Entry};
-use solana_gossip::cluster_info::ClusterInfo;
-use solana_gossip::cluster_info::Node;
-use solana_ledger::blockstore_processor::process_entries_for_tests;
-use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
-use solana_perf::packet::to_packets_chunked;
-use solana_perf::test_tx::test_tx;
-use solana_poh::poh_recorder::{create_test_recorder, WorkingBankEntry};
-use solana_runtime::bank::Bank;
-use solana_runtime::cost_model::CostModel;
-use solana_sdk::genesis_config::GenesisConfig;
-use solana_sdk::hash::Hash;
-use solana_sdk::message::Message;
-use solana_sdk::pubkey;
-use solana_sdk::signature::Keypair;
-use solana_sdk::signature::Signature;
-use solana_sdk::signature::Signer;
-use solana_sdk::system_instruction;
-use solana_sdk::system_transaction;
-use solana_sdk::timing::{duration_as_us, timestamp};
-use solana_sdk::transaction::{Transaction, VersionedTransaction};
-use solana_streamer::socket::SocketAddrSpace;
-use std::collections::VecDeque;
-use std::sync::atomic::Ordering;
-use std::sync::mpsc::Receiver;
-use std::sync::{Arc, RwLock};
-use std::time::{Duration, Instant};
-use test::Bencher;
+use {
+    crossbeam_channel::unbounded,
+    log::*,
+    rand::{thread_rng, Rng},
+    rayon::prelude::*,
+    solana_core::{
+        banking_stage::{BankingStage, BankingStageStats},
+        packet_deduper::PacketDeduper,
+        qos_service::QosService,
+    },
+    solana_entry::entry::{next_hash, Entry},
+    solana_gossip::cluster_info::{ClusterInfo, Node},
+    solana_ledger::{
+        blockstore::Blockstore,
+        blockstore_processor::process_entries_for_tests,
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        get_tmp_ledger_path,
+    },
+    solana_perf::{packet::to_packet_batches, test_tx::test_tx},
+    solana_poh::poh_recorder::{create_test_recorder, WorkingBankEntry},
+    solana_runtime::{bank::Bank, cost_model::CostModel},
+    solana_sdk::{
+        genesis_config::GenesisConfig,
+        hash::Hash,
+        message::Message,
+        pubkey,
+        signature::{Keypair, Signature, Signer},
+        system_instruction, system_transaction,
+        timing::{duration_as_us, timestamp},
+        transaction::{Transaction, VersionedTransaction},
+    },
+    solana_streamer::socket::SocketAddrSpace,
+    std::{
+        collections::VecDeque,
+        sync::{atomic::Ordering, mpsc::Receiver, Arc, RwLock},
+        time::{Duration, Instant},
+    },
+    test::Bencher,
+};
 
 fn check_txs(receiver: &Arc<Receiver<WorkingBankEntry>>, ref_tx_count: usize) {
     let mut total = 0;
@@ -73,11 +78,11 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
         let tx = test_tx();
         let len = 4096;
         let chunk_size = 1024;
-        let batches = to_packets_chunked(&vec![tx; len], chunk_size);
-        let mut packets = VecDeque::new();
+        let batches = to_packet_batches(&vec![tx; len], chunk_size);
+        let mut packet_batches = VecDeque::new();
         for batch in batches {
             let batch_len = batch.packets.len();
-            packets.push_back((batch, vec![0usize; batch_len], false));
+            packet_batches.push_back((batch, vec![0usize; batch_len], false));
         }
         let (s, _r) = unbounded();
         // This tests the performance of buffering packets.
@@ -87,13 +92,13 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 &my_pubkey,
                 std::u128::MAX,
                 &poh_recorder,
-                &mut packets,
+                &mut packet_batches,
                 None,
                 &s,
                 None::<Box<dyn Fn()>>,
                 &BankingStageStats::default(),
                 &recorder,
-                &Arc::new(RwLock::new(CostModel::default())),
+                &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
             );
         });
 
@@ -202,7 +207,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
         assert!(r.is_ok(), "sanity parallel execution");
     }
     bank.clear_signatures();
-    let verified: Vec<_> = to_packets_chunked(&transactions, PACKETS_PER_BATCH);
+    let verified: Vec<_> = to_packet_batches(&transactions, PACKETS_PER_BATCH);
     let ledger_path = get_tmp_ledger_path!();
     {
         let blockstore = Arc::new(
@@ -217,6 +222,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
         );
         let cluster_info = Arc::new(cluster_info);
         let (s, _r) = unbounded();
+        let packet_deduper = PacketDeduper::default();
         let _banking_stage = BankingStage::new(
             &cluster_info,
             &poh_recorder,
@@ -226,6 +232,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             None,
             s,
             Arc::new(RwLock::new(CostModel::default())),
+            packet_deduper.clone(),
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 
@@ -260,6 +267,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             // in this chunk, but since we rotate between CHUNKS then
             // we should clear them by the time we come around again to re-use that chunk.
             bank.clear_signatures();
+            packet_deduper.reset();
             trace!(
                 "time: {} checked: {} sent: {}",
                 duration_as_us(&now.elapsed()),

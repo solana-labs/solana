@@ -11,14 +11,17 @@ use solana_bpf_loader_program::{
     ThisInstructionMeter,
 };
 use solana_measure::measure::Measure;
-use solana_rbpf::vm::{Config, Executable, InstructionMeter, SyscallRegistry};
+use solana_program_runtime::invoke_context::with_mock_invoke_context;
+use solana_rbpf::{
+    elf::Executable,
+    vm::{Config, InstructionMeter, SyscallRegistry},
+};
 use solana_runtime::{
     bank::Bank,
     bank_client::BankClient,
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
     loader_utils::load_program,
 };
-use solana_program_runtime::invoke_context::{with_mock_invoke_context, InvokeContext};
 use solana_sdk::{
     bpf_loader,
     client::SyncClient,
@@ -74,7 +77,7 @@ fn bench_program_create_executable(bencher: &mut Bencher) {
     let elf = load_elf("bench_alu").unwrap();
 
     bencher.iter(|| {
-        let _ = <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
+        let _ = Executable::<BpfError, ThisInstructionMeter>::from_elf(
             &elf,
             None,
             Config::default(),
@@ -96,24 +99,21 @@ fn bench_program_alu(bencher: &mut Bencher) {
     let elf = load_elf("bench_alu").unwrap();
     let loader_id = bpf_loader::id();
     with_mock_invoke_context(loader_id, 10000001, |invoke_context| {
-        let mut executable = <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
+        invoke_context
+            .get_compute_meter()
+            .borrow_mut()
+            .mock_set_remaining(std::i64::MAX as u64);
+        let mut executable = Executable::<BpfError, ThisInstructionMeter>::from_elf(
             &elf,
             None,
             Config::default(),
             register_syscalls(invoke_context).unwrap(),
         )
         .unwrap();
-        executable.jit_compile().unwrap();
+        Executable::<BpfError, ThisInstructionMeter>::jit_compile(&mut executable).unwrap();
         let compute_meter = invoke_context.get_compute_meter();
         let mut instruction_meter = ThisInstructionMeter { compute_meter };
-        let mut vm = create_vm(
-            &loader_id,
-            executable.as_ref(),
-            &mut inner_iter,
-            invoke_context,
-            &[],
-        )
-        .unwrap();
+        let mut vm = create_vm(&executable, &mut inner_iter, invoke_context, &[]).unwrap();
 
         println!("Interpreted:");
         assert_eq!(
@@ -203,24 +203,22 @@ fn bench_create_vm(bencher: &mut Bencher) {
     let loader_id = bpf_loader::id();
     with_mock_invoke_context(loader_id, 10000001, |invoke_context| {
         const BUDGET: u64 = 200_000;
-        let compute_meter = invoke_context.get_compute_meter();
-        {
-            let mut compute_meter = compute_meter.borrow_mut();
-            let to_consume = compute_meter.get_remaining() - BUDGET;
-            compute_meter.consume(to_consume).unwrap();
-        }
+        invoke_context
+            .get_compute_meter()
+            .borrow_mut()
+            .mock_set_remaining(BUDGET);
 
         // Serialize account data
-        let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
         let (mut serialized, account_lengths) = serialize_parameters(
-            &keyed_accounts[0].unsigned_key(),
-            &keyed_accounts[1].unsigned_key(),
-            &keyed_accounts[2..],
-            &[],
+            invoke_context.transaction_context,
+            invoke_context
+                .transaction_context
+                .get_current_instruction_context()
+                .unwrap(),
         )
         .unwrap();
 
-        let executable = <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
+        let executable = Executable::<BpfError, ThisInstructionMeter>::from_elf(
             &elf,
             None,
             Config::default(),
@@ -230,8 +228,7 @@ fn bench_create_vm(bencher: &mut Bencher) {
 
         bencher.iter(|| {
             let _ = create_vm(
-                &loader_id,
-                executable.as_ref(),
+                &executable,
                 serialized.as_slice_mut(),
                 invoke_context,
                 &account_lengths,
@@ -247,34 +244,32 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     let loader_id = bpf_loader::id();
     with_mock_invoke_context(loader_id, 10000001, |invoke_context| {
         const BUDGET: u64 = 200_000;
-        let compute_meter = invoke_context.get_compute_meter();
-        {
-            let mut compute_meter = compute_meter.borrow_mut();
-            let to_consume = compute_meter.get_remaining() - BUDGET;
-            compute_meter.consume(to_consume).unwrap();
-        }
+        invoke_context
+            .get_compute_meter()
+            .borrow_mut()
+            .mock_set_remaining(BUDGET);
 
         // Serialize account data
-        let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
         let (mut serialized, account_lengths) = serialize_parameters(
-            &keyed_accounts[0].unsigned_key(),
-            &keyed_accounts[1].unsigned_key(),
-            &keyed_accounts[2..],
-            &[],
+            invoke_context.transaction_context,
+            invoke_context
+                .transaction_context
+                .get_current_instruction_context()
+                .unwrap(),
         )
         .unwrap();
 
-        let executable = <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
+        let executable = Executable::<BpfError, ThisInstructionMeter>::from_elf(
             &elf,
             None,
             Config::default(),
             register_syscalls(invoke_context).unwrap(),
         )
         .unwrap();
+        let compute_meter = invoke_context.get_compute_meter();
         let mut instruction_meter = ThisInstructionMeter { compute_meter };
         let mut vm = create_vm(
-            &loader_id,
-            executable.as_ref(),
+            &executable,
             serialized.as_slice_mut(),
             invoke_context,
             &account_lengths,

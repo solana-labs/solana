@@ -1,9 +1,11 @@
-use crate::clock::Slot;
-use bincode::Result;
-use serde::Serialize;
-use std::{
-    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
-    {fmt, io},
+use {
+    bincode::Result,
+    bitflags::bitflags,
+    serde::Serialize,
+    std::{
+        fmt, io,
+        net::{IpAddr, Ipv4Addr, SocketAddr},
+    },
 };
 
 /// Maximum over-the-wire size of a Transaction
@@ -12,20 +14,24 @@ use std::{
 ///   8 bytes is the size of the fragment header
 pub const PACKET_DATA_SIZE: usize = 1280 - 40 - 8;
 
-#[derive(Clone, Default, Debug, PartialEq)]
+bitflags! {
+    #[repr(C)]
+    pub struct PacketFlags: u8 {
+        const DISCARD        = 0b00000001;
+        const FORWARDED      = 0b00000010;
+        const REPAIR         = 0b00000100;
+        const SIMPLE_VOTE_TX = 0b00001000;
+        const TRACER_TX      = 0b00010000;
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 #[repr(C)]
 pub struct Meta {
     pub size: usize,
-    pub forward: bool,
-    pub repair: bool,
-    pub discard: bool,
-    pub addr: [u16; 8],
+    pub addr: IpAddr,
     pub port: u16,
-    pub v6: bool,
-    pub seed: [u8; 32],
-    pub slot: Slot,
-    pub is_tracer_tx: bool,
-    pub is_simple_vote_tx: bool,
+    pub flags: PacketFlags,
 }
 
 #[derive(Clone)]
@@ -93,40 +99,52 @@ impl PartialEq for Packet {
 
 impl Meta {
     pub fn addr(&self) -> SocketAddr {
-        if !self.v6 {
-            let addr = [
-                self.addr[0] as u8,
-                self.addr[1] as u8,
-                self.addr[2] as u8,
-                self.addr[3] as u8,
-            ];
-            let ipv4: Ipv4Addr = From::<[u8; 4]>::from(addr);
-            SocketAddr::new(IpAddr::V4(ipv4), self.port)
-        } else {
-            let ipv6: Ipv6Addr = From::<[u16; 8]>::from(self.addr);
-            SocketAddr::new(IpAddr::V6(ipv6), self.port)
-        }
+        SocketAddr::new(self.addr, self.port)
     }
 
-    pub fn set_addr(&mut self, a: &SocketAddr) {
-        match *a {
-            SocketAddr::V4(v4) => {
-                let ip = v4.ip().octets();
-                self.addr[0] = u16::from(ip[0]);
-                self.addr[1] = u16::from(ip[1]);
-                self.addr[2] = u16::from(ip[2]);
-                self.addr[3] = u16::from(ip[3]);
-                self.addr[4] = 0;
-                self.addr[5] = 0;
-                self.addr[6] = 0;
-                self.addr[7] = 0;
-                self.v6 = false;
-            }
-            SocketAddr::V6(v6) => {
-                self.addr = v6.ip().segments();
-                self.v6 = true;
-            }
+    pub fn set_addr(&mut self, socket_addr: &SocketAddr) {
+        self.addr = socket_addr.ip();
+        self.port = socket_addr.port();
+    }
+
+    #[inline]
+    pub fn discard(&self) -> bool {
+        self.flags.contains(PacketFlags::DISCARD)
+    }
+
+    #[inline]
+    pub fn set_discard(&mut self, discard: bool) {
+        self.flags.set(PacketFlags::DISCARD, discard);
+    }
+
+    #[inline]
+    pub fn forwarded(&self) -> bool {
+        self.flags.contains(PacketFlags::FORWARDED)
+    }
+
+    #[inline]
+    pub fn repair(&self) -> bool {
+        self.flags.contains(PacketFlags::REPAIR)
+    }
+
+    #[inline]
+    pub fn is_simple_vote_tx(&self) -> bool {
+        self.flags.contains(PacketFlags::SIMPLE_VOTE_TX)
+    }
+
+    #[inline]
+    pub fn is_tracer_tx(&self) -> bool {
+        self.flags.contains(PacketFlags::TRACER_TX)
+    }
+}
+
+impl Default for Meta {
+    fn default() -> Self {
+        Self {
+            size: 0,
+            addr: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+            port: 0,
+            flags: PacketFlags::empty(),
         }
-        self.port = a.port();
     }
 }

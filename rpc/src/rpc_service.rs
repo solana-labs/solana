@@ -40,8 +40,11 @@ use {
         collections::HashSet,
         net::SocketAddr,
         path::{Path, PathBuf},
-        sync::atomic::{AtomicBool, AtomicU64, Ordering},
-        sync::{mpsc::channel, Arc, Mutex, RwLock},
+        sync::{
+            atomic::{AtomicBool, AtomicU64, Ordering},
+            mpsc::channel,
+            Arc, Mutex, RwLock,
+        },
         thread::{self, Builder, JoinHandle},
     },
     tokio_util::codec::{BytesCodec, FramedRead},
@@ -345,6 +348,7 @@ impl JsonRpcService {
                     .block_on(solana_storage_bigtable::LedgerStorage::new(
                         !config.enable_bigtable_ledger_upload,
                         config.rpc_bigtable_timeout,
+                        None,
                     ))
                     .map(|bigtable_ledger_storage| {
                         info!("BigTable ledger storage initialized");
@@ -356,6 +360,7 @@ impl JsonRpcService {
                                 bigtable_ledger_storage.clone(),
                                 blockstore.clone(),
                                 block_commitment_cache.clone(),
+                                current_transaction_status_slot.clone(),
                                 exit_bigtable_ledger_upload_service.clone(),
                             )))
                         } else {

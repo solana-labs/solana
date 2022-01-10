@@ -1,5 +1,4 @@
-use super::*;
-use std::time::Instant;
+use {super::*, std::time::Instant};
 
 #[derive(Default)]
 pub struct PurgeStats {
@@ -336,8 +335,8 @@ impl Blockstore {
                 if let Some(&signature) = transaction.signatures.get(0) {
                     batch.delete::<cf::TransactionStatus>((0, signature, slot))?;
                     batch.delete::<cf::TransactionStatus>((1, signature, slot))?;
-                    // TODO: support purging mapped addresses from versioned transactions
-                    for pubkey in transaction.message.unmapped_keys() {
+                    // TODO: support purging dynamically loaded addresses from versioned transactions
+                    for pubkey in transaction.message.into_static_account_keys() {
                         batch.delete::<cf::AddressSignatures>((0, pubkey, slot, signature))?;
                         batch.delete::<cf::AddressSignatures>((1, pubkey, slot, signature))?;
                     }
@@ -392,16 +391,18 @@ impl Blockstore {
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
-    use crate::{
-        blockstore::tests::make_slot_entries_with_transactions, get_tmp_ledger_path_auto_delete,
-    };
-    use bincode::serialize;
-    use solana_entry::entry::next_entry_mut;
-    use solana_sdk::{
-        hash::{hash, Hash},
-        message::Message,
-        transaction::Transaction,
+    use {
+        super::*,
+        crate::{
+            blockstore::tests::make_slot_entries_with_transactions, get_tmp_ledger_path_auto_delete,
+        },
+        bincode::serialize,
+        solana_entry::entry::next_entry_mut,
+        solana_sdk::{
+            hash::{hash, Hash},
+            message::Message,
+            transaction::Transaction,
+        },
     };
 
     // check that all columns are either empty or start at `min_slot`
@@ -776,7 +777,7 @@ pub mod tests {
 
         for x in 0..index0_max_slot + 1 {
             let entries = make_slot_entries_with_transactions(1);
-            let shreds = entries_to_test_shreds(entries.clone(), x, x.saturating_sub(1), true, 0);
+            let shreds = entries_to_test_shreds(&entries, x, x.saturating_sub(1), true, 0);
             blockstore.insert_shreds(shreds, None, false).unwrap();
             let signature = entries
                 .iter()
@@ -812,7 +813,7 @@ pub mod tests {
 
         for x in index0_max_slot + 1..index1_max_slot + 1 {
             let entries = make_slot_entries_with_transactions(1);
-            let shreds = entries_to_test_shreds(entries.clone(), x, x.saturating_sub(1), true, 0);
+            let shreds = entries_to_test_shreds(&entries, x, x.saturating_sub(1), true, 0);
             blockstore.insert_shreds(shreds, None, false).unwrap();
             let signature: Signature = entries
                 .iter()
@@ -1212,7 +1213,7 @@ pub mod tests {
             let mut tick = create_ticks(1, 0, hash(&serialize(&x).unwrap()));
             entries.append(&mut tick);
         }
-        let shreds = entries_to_test_shreds(entries, slot, slot - 1, true, 0);
+        let shreds = entries_to_test_shreds(&entries, slot, slot - 1, true, 0);
         blockstore.insert_shreds(shreds, None, false).unwrap();
 
         let mut write_batch = blockstore.db.batch().unwrap();

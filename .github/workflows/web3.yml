@@ -19,6 +19,33 @@ jobs:
     steps:
       - run: echo "Done"
 
+  web3-commit-lint:
+    runs-on: ubuntu-latest
+    # Set to true in order to avoid cancelling other workflow jobs.
+    # Mergify will still require web3-commit-lint for automerge
+    continue-on-error: true
+
+    defaults:
+      run:
+        working-directory: web3.js
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          # maybe needed for base sha below
+          fetch-depth: 0
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '16'
+          cache: 'npm'
+          cache-dependency-path: web3.js/package-lock.json
+      - run: npm ci
+      - name: commit-lint
+        if: ${{ github.event_name == 'pull_request' }}
+        run: bash commitlint.sh
+        env:
+          COMMIT_RANGE: ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}
+
   check-web3:
     runs-on: ubuntu-latest
 
@@ -33,9 +60,6 @@ jobs:
     name: Node ${{ matrix.node }}
     steps:
       - uses: actions/checkout@v2
-        with:
-          # maybe needed for base sha below
-          fetch-depth: 0
       - uses: actions/setup-node@v2
         with:
           node-version: ${{ matrix.node }}
@@ -43,11 +67,6 @@ jobs:
           cache-dependency-path: web3.js/package-lock.json
       - run: npm i -g npm@7
       - run: npm ci
-      - name: commit-lint
-        if: ${{ github.event_name == 'pull_request' }}
-        run: bash commitlint.sh
-        env:
-          COMMIT_RANGE: ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}
       - run: npm run lint
       - run: |
           npm run build
@@ -63,4 +82,3 @@ jobs:
           PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           solana --version
       - run: npm run test:live-with-test-validator
-      - run: npm run test:browser-with-test-validator

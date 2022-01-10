@@ -67,7 +67,7 @@ export function MessageBanner() {
       <div className="container">
         <div className="d-flex flex-column align-items-center justify-content-center text-center py-3">
           <h3 className="mb-0 line-height-md">
-            <span className="fe fe-alert-circle mr-2"></span>
+            <span className="fe fe-alert-circle me-2"></span>
             {message}
           </h3>
           {timeframe}

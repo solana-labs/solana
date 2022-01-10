@@ -3,6 +3,22 @@
 // Extended from Bootstrap
 //
 
+html {
+  height: 100%;
+}
+
+body {
+  min-height: 100%;
+}
+
+
+// Lists
+
+ul, ol {
+  padding-left: 2.5rem;
+}
+
+
 //
 // Remove the cancel buttons in Chrome and Safari on macOS.
 //

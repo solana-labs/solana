@@ -1,25 +1,27 @@
-use solana_gossip::cluster_info::{
-    ClusterInfo, MAX_INCREMENTAL_SNAPSHOT_HASHES, MAX_SNAPSHOT_HASHES,
-};
-use solana_perf::thread::renice_this_thread;
-use solana_runtime::{
-    snapshot_archive_info::SnapshotArchiveInfoGetter,
-    snapshot_config::SnapshotConfig,
-    snapshot_hash::{
-        FullSnapshotHash, FullSnapshotHashes, IncrementalSnapshotHash, IncrementalSnapshotHashes,
-        StartingSnapshotHashes,
+use {
+    solana_gossip::cluster_info::{
+        ClusterInfo, MAX_INCREMENTAL_SNAPSHOT_HASHES, MAX_SNAPSHOT_HASHES,
     },
-    snapshot_package::{PendingSnapshotPackage, SnapshotType},
-    snapshot_utils,
-};
-use solana_sdk::{clock::Slot, hash::Hash};
-use std::{
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
+    solana_perf::thread::renice_this_thread,
+    solana_runtime::{
+        snapshot_archive_info::SnapshotArchiveInfoGetter,
+        snapshot_config::SnapshotConfig,
+        snapshot_hash::{
+            FullSnapshotHash, FullSnapshotHashes, IncrementalSnapshotHash,
+            IncrementalSnapshotHashes, StartingSnapshotHashes,
+        },
+        snapshot_package::{PendingSnapshotPackage, SnapshotType},
+        snapshot_utils,
     },
-    thread::{self, Builder, JoinHandle},
-    time::Duration,
+    solana_sdk::{clock::Slot, hash::Hash},
+    std::{
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
+        thread::{self, Builder, JoinHandle},
+        time::Duration,
+    },
 };
 
 pub struct SnapshotPackagerService {
@@ -208,22 +210,26 @@ impl SnapshotGossipManager {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use bincode::serialize_into;
-    use solana_runtime::{
-        accounts_db::AccountStorageEntry,
-        bank::BankSlotDelta,
-        snapshot_archive_info::SnapshotArchiveInfo,
-        snapshot_package::{SnapshotPackage, SnapshotType},
-        snapshot_utils::{self, ArchiveFormat, SnapshotVersion, SNAPSHOT_STATUS_CACHE_FILE_NAME},
+    use {
+        super::*,
+        bincode::serialize_into,
+        solana_runtime::{
+            accounts_db::AccountStorageEntry,
+            bank::BankSlotDelta,
+            snapshot_archive_info::SnapshotArchiveInfo,
+            snapshot_package::{SnapshotPackage, SnapshotType},
+            snapshot_utils::{
+                self, ArchiveFormat, SnapshotVersion, SNAPSHOT_STATUS_CACHE_FILE_NAME,
+            },
+        },
+        solana_sdk::hash::Hash,
+        std::{
+            fs::{self, remove_dir_all, OpenOptions},
+            io::Write,
+            path::{Path, PathBuf},
+        },
+        tempfile::TempDir,
     };
-    use solana_sdk::hash::Hash;
-    use std::{
-        fs::{self, remove_dir_all, OpenOptions},
-        io::Write,
-        path::{Path, PathBuf},
-    };
-    use tempfile::TempDir;
 
     // Create temporary placeholder directory for all test files
     fn make_tmp_dir_path() -> PathBuf {

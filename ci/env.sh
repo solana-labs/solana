@@ -23,6 +23,9 @@ if [[ -n $CI ]]; then
   elif [[ -n $BUILDKITE ]]; then
     export CI_BRANCH=$BUILDKITE_BRANCH
     export CI_BUILD_ID=$BUILDKITE_BUILD_ID
+    if [[ $BUILDKITE_COMMIT = HEAD ]]; then
+      BUILDKITE_COMMIT="$(git rev-parse HEAD)"
+    fi
     export CI_COMMIT=$BUILDKITE_COMMIT
     export CI_JOB_ID=$BUILDKITE_JOB_ID
     # The standard BUILDKITE_PULL_REQUEST environment variable is always "false" due
@@ -35,7 +38,18 @@ if [[ -n $CI ]]; then
       export CI_BASE_BRANCH=$BUILDKITE_BRANCH
       export CI_PULL_REQUEST=
     fi
-    export CI_OS_NAME=linux
+
+    case "$(uname -s)" in
+    Linux)
+      export CI_OS_NAME=linux
+      ;;
+    Darwin)
+      export CI_OS_NAME=osx
+      ;;
+    *)
+      ;;
+    esac
+
     if [[ -n $BUILDKITE_TRIGGERED_FROM_BUILD_PIPELINE_SLUG ]]; then
       # The solana-secondary pipeline should use the slug of the pipeline that
       # triggered it

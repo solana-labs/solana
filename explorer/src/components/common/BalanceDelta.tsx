@@ -17,17 +17,17 @@ export function BalanceDelta({
 
   if (delta.gt(0)) {
     return (
-      <span className="badge badge-soft-success">
+      <span className="badge bg-success-soft">
         +{isSol ? sols : delta.toString()}
       </span>
     );
   } else if (delta.lt(0)) {
     return (
-      <span className="badge badge-soft-warning">
+      <span className="badge bg-warning-soft">
         {isSol ? <>-{sols}</> : delta.toString()}
       </span>
     );
   }
 
-  return <span className="badge badge-soft-secondary">0</span>;
+  return <span className="badge bg-secondary-soft">0</span>;
 }

@@ -149,13 +149,17 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::packet::Packet;
-    use crate::recvmmsg::recv_mmsg;
-    use crate::sendmmsg::{batch_send, multi_target_send, SendPktsError};
-    use solana_sdk::packet::PACKET_DATA_SIZE;
-    use std::{
-        io::ErrorKind,
-        net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket},
+    use {
+        crate::{
+            packet::Packet,
+            recvmmsg::recv_mmsg,
+            sendmmsg::{batch_send, multi_target_send, SendPktsError},
+        },
+        solana_sdk::packet::PACKET_DATA_SIZE,
+        std::{
+            io::ErrorKind,
+            net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket},
+        },
     };
 
     #[test]
@@ -171,7 +175,7 @@ mod tests {
         assert_eq!(sent, Some(()));
 
         let mut packets = vec![Packet::default(); 32];
-        let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
+        let recv = recv_mmsg(&reader, &mut packets[..]).unwrap();
         assert_eq!(32, recv);
     }
 
@@ -202,11 +206,11 @@ mod tests {
         assert_eq!(sent, Some(()));
 
         let mut packets = vec![Packet::default(); 32];
-        let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
+        let recv = recv_mmsg(&reader, &mut packets[..]).unwrap();
         assert_eq!(16, recv);
 
         let mut packets = vec![Packet::default(); 32];
-        let recv = recv_mmsg(&reader2, &mut packets[..]).unwrap().1;
+        let recv = recv_mmsg(&reader2, &mut packets[..]).unwrap();
         assert_eq!(16, recv);
     }
 
@@ -237,19 +241,19 @@ mod tests {
         assert_eq!(sent, Some(()));
 
         let mut packets = vec![Packet::default(); 32];
-        let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
+        let recv = recv_mmsg(&reader, &mut packets[..]).unwrap();
         assert_eq!(1, recv);
 
         let mut packets = vec![Packet::default(); 32];
-        let recv = recv_mmsg(&reader2, &mut packets[..]).unwrap().1;
+        let recv = recv_mmsg(&reader2, &mut packets[..]).unwrap();
         assert_eq!(1, recv);
 
         let mut packets = vec![Packet::default(); 32];
-        let recv = recv_mmsg(&reader3, &mut packets[..]).unwrap().1;
+        let recv = recv_mmsg(&reader3, &mut packets[..]).unwrap();
         assert_eq!(1, recv);
 
         let mut packets = vec![Packet::default(); 32];
-        let recv = recv_mmsg(&reader4, &mut packets[..]).unwrap().1;
+        let recv = recv_mmsg(&reader4, &mut packets[..]).unwrap();
         assert_eq!(1, recv);
     }
 

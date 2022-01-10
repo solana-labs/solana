@@ -73,7 +73,7 @@ function AccountInfo({
   if (!info?.data)
     return (
       <span className="text-muted">
-        <span className="spinner-grow spinner-grow-sm mr-2"></span>
+        <span className="spinner-grow spinner-grow-sm me-2"></span>
         Loading
       </span>
     );

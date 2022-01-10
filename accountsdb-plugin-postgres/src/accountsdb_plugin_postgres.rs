@@ -3,13 +3,15 @@ use {
     crate::{
         accounts_selector::AccountsSelector,
         postgres_client::{ParallelPostgresClient, PostgresClientBuilder},
+        transaction_selector::TransactionSelector,
     },
     bs58,
     log::*,
     serde_derive::{Deserialize, Serialize},
     serde_json,
     solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
-        AccountsDbPlugin, AccountsDbPluginError, ReplicaAccountInfoVersions, Result, SlotStatus,
+        AccountsDbPlugin, AccountsDbPluginError, ReplicaAccountInfoVersions,
+        ReplicaBlockInfoVersions, ReplicaTransactionInfoVersions, Result, SlotStatus,
     },
     solana_measure::measure::Measure,
     solana_metrics::*,
@@ -21,6 +23,7 @@ use {
 pub struct AccountsDbPluginPostgres {
     client: Option<ParallelPostgresClient>,
     accounts_selector: Option<AccountsSelector>,
+    transaction_selector: Option<TransactionSelector>,
 }
 
 impl std::fmt::Debug for AccountsDbPluginPostgres {
@@ -38,6 +41,8 @@ pub struct AccountsDbPluginPostgresConfig {
     pub threads: Option<usize>,
     pub batch_size: Option<usize>,
     pub panic_on_db_errors: Option<bool>,
+    /// Indicates if to store historical data for accounts
+    pub store_account_historical_data: Option<bool>,
 }
 
 #[derive(Error, Debug)]
@@ -71,7 +76,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
     /// Accounts either satisyfing the accounts condition or owners condition will be selected.
     /// When only owners is specified,
     /// all accounts belonging to the owners will be streamed.
-    /// The accounts field support wildcard to select all accounts:
+    /// The accounts field supports wildcard to select all accounts:
     /// "accounts_selector" : {
     ///     "accounts" : \["*"\],
     /// }
@@ -82,12 +87,28 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
     /// Please refer to https://docs.rs/postgres/0.19.2/postgres/config/struct.Config.html for the connection configuration.
     /// When `connection_str` is set, the values in "host", "user" and "port" are ignored. If `connection_str` is not given,
     /// `host` and `user` must be given.
+    /// "store_account_historical_data", optional, set it to 'true', to store historical account data to account_audit
+    /// table.
     /// * "threads" optional, specifies the number of worker threads for the plugin. A thread
     /// maintains a PostgreSQL connection to the server. The default is '10'.
     /// * "batch_size" optional, specifies the batch size of bulk insert when the AccountsDb is created
     /// from restoring a snapshot. The default is '10'.
     /// * "panic_on_db_errors", optional, contols if to panic when there are errors replicating data to the
     /// PostgreSQL database. The default is 'false'.
+    /// * "transaction_selector", optional, controls if and what transaction to store. If this field is missing
+    /// None of the transction is stored.
+    /// "transaction_selector" : {
+    ///     "mentions" : \["pubkey-1", "pubkey-2", ..., "pubkey-n"\],
+    /// }
+    /// The `mentions` field support wildcard to select all transaction or all 'vote' transactions:
+    /// For example, to select all transactions:
+    /// "transaction_selector" : {
+    ///     "mentions" : \["*"\],
+    /// }
+    /// To select all vote transactions:
+    /// "transaction_selector" : {
+    ///     "mentions" : \["all_votes"\],
+    /// }
     /// # Examples
     ///
     /// {
@@ -113,6 +134,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
 
         let result: serde_json::Value = serde_json::from_str(&contents).unwrap();
         self.accounts_selector = Some(Self::create_accounts_selector_from_config(&result));
+        self.transaction_selector = Some(Self::create_transaction_selector_from_config(&result));
 
         let result: serde_json::Result<AccountsDbPluginPostgresConfig> =
             serde_json::from_str(&contents);
@@ -276,11 +298,83 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
         Ok(())
     }
 
+    fn notify_transaction(
+        &mut self,
+        transaction_info: ReplicaTransactionInfoVersions,
+        slot: u64,
+    ) -> Result<()> {
+        match &mut self.client {
+            None => {
+                return Err(AccountsDbPluginError::Custom(Box::new(
+                    AccountsDbPluginPostgresError::DataStoreConnectionError {
+                        msg: "There is no connection to the PostgreSQL database.".to_string(),
+                    },
+                )));
+            }
+            Some(client) => match transaction_info {
+                ReplicaTransactionInfoVersions::V0_0_1(transaction_info) => {
+                    if let Some(transaction_selector) = &self.transaction_selector {
+                        if !transaction_selector.is_transaction_selected(
+                            transaction_info.is_vote,
+                            transaction_info.transaction.message().account_keys_iter(),
+                        ) {
+                            return Ok(());
+                        }
+                    } else {
+                        return Ok(());
+                    }
+
+                    let result = client.log_transaction_info(transaction_info, slot);
+
+                    if let Err(err) = result {
+                        return Err(AccountsDbPluginError::SlotStatusUpdateError{
+                                msg: format!("Failed to persist the transaction info to the PostgreSQL database. Error: {:?}", err)
+                            });
+                    }
+                }
+            },
+        }
+
+        Ok(())
+    }
+
+    fn notify_block_metadata(&mut self, block_info: ReplicaBlockInfoVersions) -> Result<()> {
+        match &mut self.client {
+            None => {
+                return Err(AccountsDbPluginError::Custom(Box::new(
+                    AccountsDbPluginPostgresError::DataStoreConnectionError {
+                        msg: "There is no connection to the PostgreSQL database.".to_string(),
+                    },
+                )));
+            }
+            Some(client) => match block_info {
+                ReplicaBlockInfoVersions::V0_0_1(block_info) => {
+                    let result = client.update_block_metadata(block_info);
+
+                    if let Err(err) = result {
+                        return Err(AccountsDbPluginError::SlotStatusUpdateError{
+                                msg: format!("Failed to persist the update of block metadata to the PostgreSQL database. Error: {:?}", err)
+                            });
+                    }
+                }
+            },
+        }
+
+        Ok(())
+    }
+
     /// Check if the plugin is interested in account data
     /// Default is true -- if the plugin is not interested in
     /// account data, please return false.
-    fn to_notify_account_data(&self) -> bool {
+    fn account_data_notifications_enabled(&self) -> bool {
         self.accounts_selector
+            .as_ref()
+            .map_or_else(|| false, |selector| selector.is_enabled())
+    }
+
+    /// Check if the plugin is interested in transaction data
+    fn transaction_notifications_enabled(&self) -> bool {
+        self.transaction_selector
             .as_ref()
             .map_or_else(|| false, |selector| selector.is_enabled())
     }
@@ -313,11 +407,29 @@ impl AccountsDbPluginPostgres {
         }
     }
 
-    pub fn new() -> Self {
-        AccountsDbPluginPostgres {
-            client: None,
-            accounts_selector: None,
+    fn create_transaction_selector_from_config(config: &serde_json::Value) -> TransactionSelector {
+        let transaction_selector = &config["transaction_selector"];
+
+        if transaction_selector.is_null() {
+            TransactionSelector::default()
+        } else {
+            let accounts = &transaction_selector["mentions"];
+            let accounts: Vec<String> = if accounts.is_array() {
+                accounts
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|val| val.as_str().unwrap().to_string())
+                    .collect()
+            } else {
+                Vec::default()
+            };
+            TransactionSelector::new(&accounts)
         }
+    }
+
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 

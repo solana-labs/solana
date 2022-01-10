@@ -46,7 +46,10 @@ members = [
     "poh",
     "poh-bench",
     "program-test",
+    "programs/address-lookup-table",
+    "programs/address-lookup-table-tests",
     "programs/bpf_loader",
+    "programs/bpf_loader/gen-syscall-list",
     "programs/compute-budget",
     "programs/config",
     "programs/stake",
@@ -77,16 +80,10 @@ members = [
     "test-validator",
     "rpc-test",
     "client-test",
+    "zk-token-sdk",
+    "programs/zk-token-proof",
 ]
 
 exclude = [
     "programs/bpf",
 ]
-
-# TODO: Remove once the "simd-accel" feature from the reed-solomon-erasure
-# dependency is supported on Apple M1. v2 of the feature resolver is needed to
-# specify arch-specific features.
-resolver = "2"
-
-[profile.dev]
-split-debuginfo = "unpacked"

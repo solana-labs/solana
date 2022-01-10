@@ -4,36 +4,40 @@
 //!
 //! <https://docs.solana.com/implemented-proposals/persistent-account-storage>
 
-use log::*;
-use memmap2::MmapMut;
-use serde::{Deserialize, Serialize};
-use solana_sdk::{
-    account::{Account, AccountSharedData, ReadableAccount},
-    clock::{Epoch, Slot},
-    hash::Hash,
-    pubkey::Pubkey,
-};
-use std::{
-    borrow::Borrow,
-    fs::{remove_file, OpenOptions},
-    io,
-    io::{Seek, SeekFrom, Write},
-    mem,
-    path::{Path, PathBuf},
-    sync::atomic::{AtomicUsize, Ordering},
-    sync::Mutex,
+use {
+    log::*,
+    memmap2::MmapMut,
+    serde::{Deserialize, Serialize},
+    solana_sdk::{
+        account::{Account, AccountSharedData, ReadableAccount},
+        clock::{Epoch, Slot},
+        hash::Hash,
+        pubkey::Pubkey,
+    },
+    std::{
+        borrow::Borrow,
+        convert::TryFrom,
+        fs::{remove_file, OpenOptions},
+        io::{self, Seek, SeekFrom, Write},
+        mem,
+        path::{Path, PathBuf},
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Mutex,
+        },
+    },
 };
 
 // Data placement should be aligned at the next boundary. Without alignment accessing the memory may
 // crash on some architectures.
-const ALIGN_BOUNDARY_OFFSET: usize = mem::size_of::<u64>();
+pub const ALIGN_BOUNDARY_OFFSET: usize = mem::size_of::<u64>();
 macro_rules! u64_align {
     ($addr: expr) => {
         ($addr + (ALIGN_BOUNDARY_OFFSET - 1)) & !(ALIGN_BOUNDARY_OFFSET - 1)
     };
 }
 
-const MAXIMUM_APPEND_VEC_FILE_SIZE: usize = 16 * 1024 * 1024 * 1024; // 16 GiB
+pub const MAXIMUM_APPEND_VEC_FILE_SIZE: u64 = 16 * 1024 * 1024 * 1024; // 16 GiB
 
 pub type StoredMetaWriteVersion = u64;
 
@@ -256,7 +260,10 @@ impl AppendVec {
                 std::io::ErrorKind::Other,
                 format!("too small file size {} for AppendVec", file_size),
             ))
-        } else if file_size > MAXIMUM_APPEND_VEC_FILE_SIZE {
+        } else if usize::try_from(MAXIMUM_APPEND_VEC_FILE_SIZE)
+            .map(|max| file_size > max)
+            .unwrap_or(true)
+        {
             Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 format!("too large file size {} for AppendVec", file_size),
@@ -294,7 +301,7 @@ impl AppendVec {
         self.file_size
     }
 
-    pub fn file_name(slot: Slot, id: usize) -> String {
+    pub fn file_name(slot: Slot, id: impl std::fmt::Display) -> String {
         format!("{}.{}", slot, id)
     }
 
@@ -529,13 +536,12 @@ impl AppendVec {
 }
 
 pub mod test_utils {
-    use super::StoredMeta;
-    use rand::distributions::Alphanumeric;
-    use rand::{thread_rng, Rng};
-    use solana_sdk::account::AccountSharedData;
-    use solana_sdk::pubkey::Pubkey;
-    use std::fs::create_dir_all;
-    use std::path::PathBuf;
+    use {
+        super::StoredMeta,
+        rand::{distributions::Alphanumeric, thread_rng, Rng},
+        solana_sdk::{account::AccountSharedData, pubkey::Pubkey},
+        std::{fs::create_dir_all, path::PathBuf},
+    };
 
     pub struct TempFile {
         pub path: PathBuf,
@@ -578,12 +584,13 @@ pub mod test_utils {
 
 #[cfg(test)]
 pub mod tests {
-    use super::test_utils::*;
-    use super::*;
-    use assert_matches::assert_matches;
-    use rand::{thread_rng, Rng};
-    use solana_sdk::{account::WritableAccount, timing::duration_as_ms};
-    use std::time::Instant;
+    use {
+        super::{test_utils::*, *},
+        assert_matches::assert_matches,
+        rand::{thread_rng, Rng},
+        solana_sdk::{account::WritableAccount, timing::duration_as_ms},
+        std::time::Instant,
+    };
 
     impl AppendVec {
         fn append_account_test(&self, data: &(StoredMeta, AccountSharedData)) -> Option<usize> {
@@ -895,7 +902,6 @@ pub mod tests {
             // assert_eq! thinks *executable_bool is equal to false but the if condition thinks it's not, contradictorily.
             assert!(!*executable_bool);
             const FALSE: bool = false; // keep clippy happy
-            #[allow(clippy::if_then_panic)]
             if *executable_bool == FALSE {
                 panic!("This didn't occur if this test passed.");
             }

@@ -1,6 +1,8 @@
-use solana_core::validator::ValidatorConfig;
-use solana_sdk::exit::Exit;
-use std::sync::{Arc, RwLock};
+use {
+    solana_core::validator::ValidatorConfig,
+    solana_sdk::exit::Exit,
+    std::sync::{Arc, RwLock},
+};
 
 pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
     ValidatorConfig {
@@ -30,7 +32,6 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         halt_on_known_validators_accounts_hash_mismatch: config
             .halt_on_known_validators_accounts_hash_mismatch,
         accounts_hash_fault_injection_slots: config.accounts_hash_fault_injection_slots,
-        frozen_accounts: config.frozen_accounts.clone(),
         no_rocksdb_compaction: config.no_rocksdb_compaction,
         rocksdb_compaction_interval: config.rocksdb_compaction_interval,
         rocksdb_max_compaction_jitter: config.rocksdb_max_compaction_jitter,
@@ -60,7 +61,6 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         no_wait_for_vote_to_start_leader: config.no_wait_for_vote_to_start_leader,
         accounts_shrink_ratio: config.accounts_shrink_ratio,
         accounts_db_config: config.accounts_db_config.clone(),
-        disable_epoch_boundary_optimization: config.disable_epoch_boundary_optimization,
     }
 }
 

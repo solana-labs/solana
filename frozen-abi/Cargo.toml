@@ -1,28 +1,30 @@
 [package]
 name = "solana-frozen-abi"
-version = "1.9.0"
+version = "1.10.0"
 description = "Solana Frozen ABI"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-frozen-abi"
 license = "Apache-2.0"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 bs58 = "0.4.0"
 bv = { version = "0.11.1", features = ["serde"] }
 log = "0.4.14"
-serde = "1.0.130"
+serde = "1.0.133"
 serde_derive = "1.0.103"
-sha2 = "0.9.8"
-solana-frozen-abi-macro = { path = "macro", version = "=1.9.0" }
+sha2 = "0.10.1"
+solana-frozen-abi-macro = { path = "macro", version = "=1.10.0" }
 thiserror = "1.0"
 
 [target.'cfg(not(target_arch = "bpf"))'.dependencies]
-solana-logger = { path = "../logger", version = "=1.9.0" }
-generic-array = { version = "0.14.4", default-features = false, features = ["serde", "more_lengths"]}
+generic-array = { version = "0.14.5", default-features = false, features = ["serde", "more_lengths"]}
 memmap2 = "0.5.0"
+
+[target.'cfg(not(target_arch = "bpf"))'.dev-dependencies]
+solana-logger = { path = "../logger", version = "=1.10.0" }
 
 [build-dependencies]
 rustc_version = "0.4"

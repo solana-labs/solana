@@ -1,0 +1,89 @@
+//
+// dropzone.scss
+// Dropzone plugin overrides
+//
+
+.dropzone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.dz-message {
+  padding: 5rem 1rem;
+  background-color: $input-bg;
+  border: $input-border-width dashed $input-border-color;
+  border-radius: $border-radius;
+  text-align: center;
+  color: $text-muted;
+  transition: $transition-base;
+  order: -1;
+  cursor: pointer;
+  z-index: 999;
+
+  &:hover {
+    border-color: $text-muted;
+    color: $body-color;
+  }
+}
+
+.dz-button {
+  background: none;
+  border: 0;
+  font-size: inherit;
+  color: inherit;
+}
+
+.dz-drag-hover .dz-message {
+  border-color: $primary;
+  color: $primary;
+}
+
+.dropzone-multiple .dz-message {
+  padding-top: 2rem;
+  padding-bottom: 2rem;
+}
+
+.dropzone-single.dz-max-files-reached .dz-message {
+  background-color: fade-out($black, .1);
+  color: white;
+  opacity: 0;
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
+.dz-preview-single {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: $border-radius;
+}
+
+.dz-preview-cover {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: $border-radius;
+}
+
+.dz-preview-img {
+  object-fit: cover;
+  width: 100%;
+  height: 100%;
+  border-radius: $border-radius;
+}
+
+.dz-preview-multiple .list-group-item:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+[data-dz-size] strong {
+  font-weight: $font-weight-normal;
+}

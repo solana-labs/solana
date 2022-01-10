@@ -16,8 +16,7 @@ use {
         client_error::{ClientError, ClientErrorKind, Result as ClientResult},
         http_sender::HttpSender,
         mock_sender::{MockSender, Mocks},
-        rpc_config::RpcAccountInfoConfig,
-        rpc_config::*,
+        rpc_config::{RpcAccountInfoConfig, *},
         rpc_request::{RpcError, RpcRequest, RpcResponseErrorData, TokenAccountsFilter},
         rpc_response::*,
         rpc_sender::*,
@@ -44,8 +43,8 @@ use {
         transaction::{self, uses_durable_nonce, Transaction},
     },
     solana_transaction_status::{
-        EncodedConfirmedBlock, EncodedConfirmedTransaction, TransactionStatus, UiConfirmedBlock,
-        UiTransactionEncoding,
+        EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus,
+        UiConfirmedBlock, UiTransactionEncoding,
     },
     solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY,
     std::{
@@ -1330,7 +1329,7 @@ impl RpcClient {
     /// # Ok::<(), ClientError>(())
     /// ```
     pub fn get_highest_snapshot_slot(&self) -> ClientResult<RpcSnapshotSlotInfo> {
-        if self.get_node_version()? < semver::Version::new(1, 8, 0) {
+        if self.get_node_version()? < semver::Version::new(1, 9, 0) {
             #[allow(deprecated)]
             self.get_snapshot_slot().map(|full| RpcSnapshotSlotInfo {
                 full,
@@ -2944,7 +2943,7 @@ impl RpcClient {
         &self,
         signature: &Signature,
         encoding: UiTransactionEncoding,
-    ) -> ClientResult<EncodedConfirmedTransaction> {
+    ) -> ClientResult<EncodedConfirmedTransactionWithStatusMeta> {
         self.send(
             self.maybe_map_request(RpcRequest::GetTransaction)?,
             json!([signature.to_string(), encoding]),
@@ -3007,7 +3006,7 @@ impl RpcClient {
         &self,
         signature: &Signature,
         config: RpcTransactionConfig,
-    ) -> ClientResult<EncodedConfirmedTransaction> {
+    ) -> ClientResult<EncodedConfirmedTransactionWithStatusMeta> {
         self.send(
             self.maybe_map_request(RpcRequest::GetTransaction)?,
             json!([signature.to_string(), config]),
@@ -3023,7 +3022,7 @@ impl RpcClient {
         &self,
         signature: &Signature,
         encoding: UiTransactionEncoding,
-    ) -> ClientResult<EncodedConfirmedTransaction> {
+    ) -> ClientResult<EncodedConfirmedTransactionWithStatusMeta> {
         self.send(
             RpcRequest::GetConfirmedTransaction,
             json!([signature.to_string(), encoding]),
@@ -3039,7 +3038,7 @@ impl RpcClient {
         &self,
         signature: &Signature,
         config: RpcConfirmedTransactionConfig,
-    ) -> ClientResult<EncodedConfirmedTransaction> {
+    ) -> ClientResult<EncodedConfirmedTransactionWithStatusMeta> {
         self.send(
             RpcRequest::GetConfirmedTransaction,
             json!([signature.to_string(), config]),
@@ -4748,7 +4747,7 @@ impl RpcClient {
         commitment: CommitmentConfig,
     ) -> ClientResult<(Hash, u64)> {
         let (blockhash, last_valid_block_height) =
-            if self.get_node_version()? < semver::Version::new(1, 8, 0) {
+            if self.get_node_version()? < semver::Version::new(1, 9, 0) {
                 let Fees {
                     blockhash,
                     last_valid_block_height,
@@ -4782,7 +4781,7 @@ impl RpcClient {
         blockhash: &Hash,
         commitment: CommitmentConfig,
     ) -> ClientResult<bool> {
-        let result = if self.get_node_version()? < semver::Version::new(1, 8, 0) {
+        let result = if self.get_node_version()? < semver::Version::new(1, 9, 0) {
             self.get_fee_calculator_for_blockhash_with_commitment(blockhash, commitment)?
                 .value
                 .is_some()
@@ -4937,19 +4936,21 @@ pub fn create_rpc_client_mocks() -> crate::mock_sender::Mocks {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{client_error::ClientErrorKind, mock_sender::PUBKEY};
-    use assert_matches::assert_matches;
-    use jsonrpc_core::{futures::prelude::*, Error, IoHandler, Params};
-    use jsonrpc_http_server::{AccessControlAllowOrigin, DomainsValidation, ServerBuilder};
-    use serde_json::Number;
-    use solana_sdk::{
-        instruction::InstructionError,
-        signature::{Keypair, Signer},
-        system_transaction,
-        transaction::TransactionError,
+    use {
+        super::*,
+        crate::{client_error::ClientErrorKind, mock_sender::PUBKEY},
+        assert_matches::assert_matches,
+        jsonrpc_core::{futures::prelude::*, Error, IoHandler, Params},
+        jsonrpc_http_server::{AccessControlAllowOrigin, DomainsValidation, ServerBuilder},
+        serde_json::Number,
+        solana_sdk::{
+            instruction::InstructionError,
+            signature::{Keypair, Signer},
+            system_transaction,
+            transaction::TransactionError,
+        },
+        std::{io, sync::mpsc::channel, thread},
     };
-    use std::{io, sync::mpsc::channel, thread};
 
     #[test]
     fn test_send() {

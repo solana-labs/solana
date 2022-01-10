@@ -13,7 +13,7 @@ pub fn parse_accounts(message: &Message) -> Vec<ParsedAccount> {
     for (i, account_key) in message.account_keys.iter().enumerate() {
         accounts.push(ParsedAccount {
             pubkey: account_key.to_string(),
-            writable: message.is_writable(i, /*demote_program_write_locks=*/ true),
+            writable: message.is_writable(i),
             signer: message.is_signer(i),
         });
     }

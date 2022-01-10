@@ -74,23 +74,21 @@ export function clusterUrl(cluster: Cluster, customUrl: string): string {
 }
 
 export const DEFAULT_CLUSTER = Cluster.MainnetBeta;
+const DEFAULT_CUSTOM_URL = "http://localhost:8899";
 
+type Action = State;
 interface State {
   cluster: Cluster;
   customUrl: string;
-  firstAvailableBlock?: number;
-  epochSchedule?: EpochSchedule;
-  epochInfo?: EpochInfo;
+  clusterInfo?: ClusterInfo;
   status: ClusterStatus;
 }
 
-interface Action {
-  status: ClusterStatus;
-  cluster: Cluster;
-  customUrl: string;
-  firstAvailableBlock?: number;
-  epochSchedule?: EpochSchedule;
-  epochInfo?: EpochInfo;
+interface ClusterInfo {
+  firstAvailableBlock: number;
+  epochSchedule: EpochSchedule;
+  epochInfo: EpochInfo;
+  genesisHash: string;
 }
 
 type Dispatch = (action: Action) => void;
@@ -138,7 +136,7 @@ type ClusterProviderProps = { children: React.ReactNode };
 export function ClusterProvider({ children }: ClusterProviderProps) {
   const [state, dispatch] = React.useReducer(clusterReducer, {
     cluster: DEFAULT_CLUSTER,
-    customUrl: "",
+    customUrl: DEFAULT_CUSTOM_URL,
     status: ClusterStatus.Connecting,
   });
   const [showModal, setShowModal] = React.useState(false);
@@ -147,9 +145,8 @@ export function ClusterProvider({ children }: ClusterProviderProps) {
   const enableCustomUrl =
     localStorageIsAvailable() &&
     localStorage.getItem("enableCustomUrl") !== null;
-  const customUrl = enableCustomUrl
-    ? query.get("customUrl") || ""
-    : state.customUrl;
+  const customUrl =
+    (enableCustomUrl && query.get("customUrl")) || state.customUrl;
   const history = useHistory();
   const location = useLocation();
 
@@ -163,15 +160,6 @@ export function ClusterProvider({ children }: ClusterProviderProps) {
 
   // Reconnect to cluster when params change
   React.useEffect(() => {
-    if (cluster === Cluster.Custom) {
-      // Remove cluster param if custom url has not been set
-      if (customUrl.length === 0) {
-        query.delete("cluster");
-        history.push({ ...location, search: query.toString() });
-        return;
-      }
-    }
-
     updateCluster(dispatch, cluster, customUrl);
   }, [cluster, customUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -198,17 +186,28 @@ async function updateCluster(
   });
 
   try {
+    // validate url
+    new URL(customUrl);
+
     const connection = new Connection(clusterUrl(cluster, customUrl));
-    const firstAvailableBlock = await connection.getFirstAvailableBlock();
-    const epochSchedule = await connection.getEpochSchedule();
-    const epochInfo = await connection.getEpochInfo();
+    const [firstAvailableBlock, epochSchedule, epochInfo, genesisHash] =
+      await Promise.all([
+        connection.getFirstAvailableBlock(),
+        connection.getEpochSchedule(),
+        connection.getEpochInfo(),
+        connection.getGenesisHash(),
+      ]);
+
     dispatch({
       status: ClusterStatus.Connected,
       cluster,
       customUrl,
-      firstAvailableBlock,
-      epochSchedule,
-      epochInfo,
+      clusterInfo: {
+        firstAvailableBlock,
+        genesisHash,
+        epochSchedule,
+        epochInfo,
+      },
     });
   } catch (error) {
     if (cluster !== Cluster.Custom) {

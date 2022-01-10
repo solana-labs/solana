@@ -1,10 +1,17 @@
-use crate::{
-    clock::{Epoch, INITIAL_RENT_EPOCH},
-    lamports::LamportsError,
-    pubkey::Pubkey,
+use {
+    crate::{
+        clock::{Epoch, INITIAL_RENT_EPOCH},
+        lamports::LamportsError,
+        pubkey::Pubkey,
+    },
+    solana_program::{account_info::AccountInfo, debug_account_data::*, sysvar::Sysvar},
+    std::{
+        cell::{Ref, RefCell},
+        fmt,
+        rc::Rc,
+        sync::Arc,
+    },
 };
-use solana_program::{account_info::AccountInfo, sysvar::Sysvar};
-use std::{cell::Ref, cell::RefCell, cmp, fmt, rc::Rc, sync::Arc};
 
 /// An Account with data that is stored on chain
 #[repr(C)]
@@ -96,6 +103,13 @@ pub trait WritableAccount: ReadableAccount {
         );
         Ok(())
     }
+    fn saturating_add_lamports(&mut self, lamports: u64) {
+        self.set_lamports(self.lamports().saturating_add(lamports))
+    }
+    fn saturating_sub_lamports(&mut self, lamports: u64) {
+        self.set_lamports(self.lamports().saturating_sub(lamports))
+    }
+    fn data_mut(&mut self) -> &mut Vec<u8>;
     fn data_as_mut_slice(&mut self) -> &mut [u8];
     fn set_owner(&mut self, owner: Pubkey);
     fn copy_into_owner_from_slice(&mut self, source: &[u8]);
@@ -149,6 +163,9 @@ impl WritableAccount for Account {
     fn set_lamports(&mut self, lamports: u64) {
         self.lamports = lamports;
     }
+    fn data_mut(&mut self) -> &mut Vec<u8> {
+        &mut self.data
+    }
     fn data_as_mut_slice(&mut self) -> &mut [u8] {
         &mut self.data
     }
@@ -185,9 +202,11 @@ impl WritableAccount for AccountSharedData {
     fn set_lamports(&mut self, lamports: u64) {
         self.lamports = lamports;
     }
+    fn data_mut(&mut self) -> &mut Vec<u8> {
+        Arc::make_mut(&mut self.data)
+    }
     fn data_as_mut_slice(&mut self) -> &mut [u8] {
-        let data = Arc::make_mut(&mut self.data);
-        &mut data[..]
+        &mut self.data_mut()[..]
     }
     fn set_owner(&mut self, owner: Pubkey) {
         self.owner = owner;
@@ -273,22 +292,16 @@ impl ReadableAccount for Ref<'_, Account> {
 }
 
 fn debug_fmt<T: ReadableAccount>(item: &T, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    let data_len = cmp::min(64, item.data().len());
-    let data_str = if data_len > 0 {
-        format!(" data: {}", hex::encode(item.data()[..data_len].to_vec()))
-    } else {
-        "".to_string()
-    };
-    write!(
-        f,
-        "Account {{ lamports: {} data.len: {} owner: {} executable: {} rent_epoch: {}{} }}",
-        item.lamports(),
-        item.data().len(),
-        item.owner(),
-        item.executable(),
-        item.rent_epoch(),
-        data_str,
-    )
+    let mut f = f.debug_struct("Account");
+
+    f.field("lamports", &item.lamports())
+        .field("data.len", &item.data().len())
+        .field("owner", &item.owner())
+        .field("executable", &item.executable())
+        .field("rent_epoch", &item.rent_epoch());
+    debug_account_data(item.data(), &mut f);
+
+    f.finish()
 }
 
 impl fmt::Debug for Account {
@@ -791,6 +804,28 @@ pub mod tests {
         let key = Pubkey::new_unique();
         let (_account1, mut account2) = make_two_accounts(&key);
         account2.checked_sub_lamports(u64::MAX).unwrap();
+    }
+
+    #[test]
+    fn test_account_saturating_add_lamports() {
+        let key = Pubkey::new_unique();
+        let (mut account, _) = make_two_accounts(&key);
+
+        let remaining = 22;
+        account.set_lamports(u64::MAX - remaining);
+        account.saturating_add_lamports(remaining * 2);
+        assert_eq!(account.lamports(), u64::MAX);
+    }
+
+    #[test]
+    fn test_account_saturating_sub_lamports() {
+        let key = Pubkey::new_unique();
+        let (mut account, _) = make_two_accounts(&key);
+
+        let remaining = 33;
+        account.set_lamports(remaining);
+        account.saturating_sub_lamports(remaining * 2);
+        assert_eq!(account.lamports(), 0);
     }
 
     #[test]

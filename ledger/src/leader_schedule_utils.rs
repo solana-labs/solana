@@ -1,10 +1,11 @@
-use std::collections::HashMap;
-
-use crate::leader_schedule::LeaderSchedule;
-use solana_runtime::bank::Bank;
-use solana_sdk::{
-    clock::{Epoch, Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
-    pubkey::Pubkey,
+use {
+    crate::leader_schedule::LeaderSchedule,
+    solana_runtime::bank::Bank,
+    solana_sdk::{
+        clock::{Epoch, Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
+        pubkey::Pubkey,
+    },
+    std::collections::HashMap,
 };
 
 /// Return the leader schedule for the given epoch.
@@ -60,6 +61,10 @@ pub fn num_ticks_left_in_slot(bank: &Bank, tick_height: u64) -> u64 {
     bank.ticks_per_slot() - tick_height % bank.ticks_per_slot()
 }
 
+pub fn first_of_consecutive_leader_slots(slot: Slot) -> Slot {
+    (slot / NUM_CONSECUTIVE_LEADER_SLOTS) * NUM_CONSECUTIVE_LEADER_SLOTS
+}
+
 fn sort_stakes(stakes: &mut Vec<(Pubkey, u64)>) {
     // Sort first by stake. If stakes are the same, sort by pubkey to ensure a
     // deterministic result.
@@ -78,9 +83,11 @@ fn sort_stakes(stakes: &mut Vec<(Pubkey, u64)>) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_runtime::genesis_utils::{
-        bootstrap_validator_stake_lamports, create_genesis_config_with_leader,
+    use {
+        super::*,
+        solana_runtime::genesis_utils::{
+            bootstrap_validator_stake_lamports, create_genesis_config_with_leader,
+        },
     };
 
     #[test]

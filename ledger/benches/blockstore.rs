@@ -3,22 +3,24 @@
 extern crate solana_ledger;
 extern crate test;
 
-use rand::Rng;
-use solana_entry::entry::{create_ticks, Entry};
-use solana_ledger::{
-    blockstore::{entries_to_test_shreds, Blockstore},
-    get_tmp_ledger_path,
+use {
+    rand::Rng,
+    solana_entry::entry::{create_ticks, Entry},
+    solana_ledger::{
+        blockstore::{entries_to_test_shreds, Blockstore},
+        get_tmp_ledger_path,
+    },
+    solana_sdk::{clock::Slot, hash::Hash},
+    std::path::Path,
+    test::Bencher,
 };
-use solana_sdk::{clock::Slot, hash::Hash};
-use std::path::Path;
-use test::Bencher;
 
 // Given some shreds and a ledger at ledger_path, benchmark writing the shreds to the ledger
 fn bench_write_shreds(bench: &mut Bencher, entries: Vec<Entry>, ledger_path: &Path) {
     let blockstore =
         Blockstore::open(ledger_path).expect("Expected to be able to open database ledger");
     bench.iter(move || {
-        let shreds = entries_to_test_shreds(entries.clone(), 0, 0, true, 0);
+        let shreds = entries_to_test_shreds(&entries, 0, 0, true, 0);
         blockstore.insert_shreds(shreds, None, false).unwrap();
     });
 
@@ -40,7 +42,7 @@ fn setup_read_bench(
     );
 
     // Convert the entries to shreds, write the shreds to the ledger
-    let shreds = entries_to_test_shreds(entries, slot, slot.saturating_sub(1), true, 0);
+    let shreds = entries_to_test_shreds(&entries, slot, slot.saturating_sub(1), true, 0);
     blockstore
         .insert_shreds(shreds, None, false)
         .expect("Expectd successful insertion of shreds into ledger");
@@ -133,7 +135,7 @@ fn bench_insert_data_shred_small(bench: &mut Bencher) {
     let num_entries = 32 * 1024;
     let entries = create_ticks(num_entries, 0, Hash::default());
     bench.iter(move || {
-        let shreds = entries_to_test_shreds(entries.clone(), 0, 0, true, 0);
+        let shreds = entries_to_test_shreds(&entries, 0, 0, true, 0);
         blockstore.insert_shreds(shreds, None, false).unwrap();
     });
     Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
@@ -148,7 +150,7 @@ fn bench_insert_data_shred_big(bench: &mut Bencher) {
     let num_entries = 32 * 1024;
     let entries = create_ticks(num_entries, 0, Hash::default());
     bench.iter(move || {
-        let shreds = entries_to_test_shreds(entries.clone(), 0, 0, true, 0);
+        let shreds = entries_to_test_shreds(&entries, 0, 0, true, 0);
         blockstore.insert_shreds(shreds, None, false).unwrap();
     });
     Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");

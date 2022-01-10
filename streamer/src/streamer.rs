@@ -1,22 +1,31 @@
 //! The `streamer` module defines a set of services for efficiently pulling data from UDP sockets.
 //!
 
-use crate::{
-    packet::{self, send_to, Packets, PacketsRecycler, PACKETS_PER_BATCH},
-    recvmmsg::NUM_RCVMMSGS,
-    socket::SocketAddrSpace,
+use {
+    crate::{
+        packet::{self, send_to, PacketBatch, PacketBatchRecycler, PACKETS_PER_BATCH},
+        recvmmsg::NUM_RCVMMSGS,
+        socket::SocketAddrSpace,
+    },
+    histogram::Histogram,
+    solana_sdk::{packet::Packet, timing::timestamp},
+    std::{
+        cmp::Reverse,
+        collections::HashMap,
+        net::{IpAddr, UdpSocket},
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            mpsc::{Receiver, RecvTimeoutError, SendError, Sender},
+            Arc,
+        },
+        thread::{Builder, JoinHandle},
+        time::{Duration, Instant},
+    },
+    thiserror::Error,
 };
-use solana_sdk::timing::timestamp;
-use std::net::UdpSocket;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, RecvTimeoutError, SendError, Sender};
-use std::sync::Arc;
-use std::thread::{Builder, JoinHandle};
-use std::time::{Duration, Instant};
-use thiserror::Error;
 
-pub type PacketReceiver = Receiver<Packets>;
-pub type PacketSender = Sender<Packets>;
+pub type PacketBatchReceiver = Receiver<PacketBatch>;
+pub type PacketBatchSender = Sender<PacketBatch>;
 
 #[derive(Error, Debug)]
 pub enum StreamerError {
@@ -27,7 +36,7 @@ pub enum StreamerError {
     RecvTimeout(#[from] RecvTimeoutError),
 
     #[error("send packets error")]
-    Send(#[from] SendError<Packets>),
+    Send(#[from] SendError<PacketBatch>),
 }
 
 pub type Result<T> = std::result::Result<T, StreamerError>;
@@ -35,8 +44,8 @@ pub type Result<T> = std::result::Result<T, StreamerError>;
 fn recv_loop(
     sock: &UdpSocket,
     exit: Arc<AtomicBool>,
-    channel: &PacketSender,
-    recycler: &PacketsRecycler,
+    channel: &PacketBatchSender,
+    recycler: &PacketBatchRecycler,
     name: &'static str,
     coalesce_ms: u64,
     use_pinned_memory: bool,
@@ -46,10 +55,10 @@ fn recv_loop(
     let mut now = Instant::now();
     let mut num_max_received = 0; // Number of times maximum packets were received
     loop {
-        let mut msgs = if use_pinned_memory {
-            Packets::new_with_recycler(recycler.clone(), PACKETS_PER_BATCH, name)
+        let mut packet_batch = if use_pinned_memory {
+            PacketBatch::new_with_recycler(recycler.clone(), PACKETS_PER_BATCH, name)
         } else {
-            Packets::with_capacity(PACKETS_PER_BATCH)
+            PacketBatch::with_capacity(PACKETS_PER_BATCH)
         };
         loop {
             // Check for exit signal, even if socket is busy
@@ -57,14 +66,14 @@ fn recv_loop(
             if exit.load(Ordering::Relaxed) {
                 return Ok(());
             }
-            if let Ok(len) = packet::recv_from(&mut msgs, sock, coalesce_ms) {
+            if let Ok(len) = packet::recv_from(&mut packet_batch, sock, coalesce_ms) {
                 if len == NUM_RCVMMSGS {
                     num_max_received += 1;
                 }
                 recv_count += len;
                 call_count += 1;
                 if len > 0 {
-                    channel.send(msgs)?;
+                    channel.send(packet_batch)?;
                 }
                 break;
             }
@@ -88,8 +97,8 @@ fn recv_loop(
 pub fn receiver(
     sock: Arc<UdpSocket>,
     exit: &Arc<AtomicBool>,
-    packet_sender: PacketSender,
-    recycler: PacketsRecycler,
+    packet_sender: PacketBatchSender,
+    recycler: PacketBatchRecycler,
     name: &'static str,
     coalesce_ms: u64,
     use_pinned_memory: bool,
@@ -113,39 +122,159 @@ pub fn receiver(
         .unwrap()
 }
 
+#[derive(Debug, Default)]
+struct SendStats {
+    bytes: u64,
+    count: u64,
+}
+
+#[derive(Default)]
+struct StreamerSendStats {
+    host_map: HashMap<IpAddr, SendStats>,
+    since: Option<Instant>,
+}
+
+impl StreamerSendStats {
+    fn report_stats(
+        name: &'static str,
+        host_map: HashMap<IpAddr, SendStats>,
+        sample_duration: Option<Duration>,
+    ) {
+        const MAX_REPORT_ENTRIES: usize = 5;
+        let sample_ms = sample_duration.map(|d| d.as_millis()).unwrap_or_default();
+        let mut hist = Histogram::default();
+        let mut byte_sum = 0;
+        let mut pkt_count = 0;
+        host_map.iter().for_each(|(_addr, host_stats)| {
+            hist.increment(host_stats.bytes).unwrap();
+            byte_sum += host_stats.bytes;
+            pkt_count += host_stats.count;
+        });
+
+        datapoint_info!(
+            name,
+            ("streamer-send-sample_duration_ms", sample_ms, i64),
+            ("streamer-send-host_count", host_map.len(), i64),
+            ("streamer-send-bytes_total", byte_sum, i64),
+            ("streamer-send-pkt_count_total", pkt_count, i64),
+            (
+                "streamer-send-host_bytes_min",
+                hist.minimum().unwrap_or_default(),
+                i64
+            ),
+            (
+                "streamer-send-host_bytes_max",
+                hist.maximum().unwrap_or_default(),
+                i64
+            ),
+            (
+                "streamer-send-host_bytes_mean",
+                hist.mean().unwrap_or_default(),
+                i64
+            ),
+            (
+                "streamer-send-host_bytes_90pct",
+                hist.percentile(90.0).unwrap_or_default(),
+                i64
+            ),
+            (
+                "streamer-send-host_bytes_50pct",
+                hist.percentile(50.0).unwrap_or_default(),
+                i64
+            ),
+            (
+                "streamer-send-host_bytes_10pct",
+                hist.percentile(10.0).unwrap_or_default(),
+                i64
+            ),
+        );
+
+        let num_entries = host_map.len();
+        let mut entries: Vec<_> = host_map.into_iter().collect();
+        if entries.len() > MAX_REPORT_ENTRIES {
+            entries.select_nth_unstable_by_key(MAX_REPORT_ENTRIES, |(_addr, stats)| {
+                Reverse(stats.bytes)
+            });
+            entries.truncate(MAX_REPORT_ENTRIES);
+        }
+        info!(
+            "streamer send {} hosts: count:{} {:?}",
+            name, num_entries, entries,
+        );
+    }
+
+    fn maybe_submit(&mut self, name: &'static str, sender: &Sender<Box<dyn FnOnce() + Send>>) {
+        const SUBMIT_CADENCE: Duration = Duration::from_secs(10);
+        const MAP_SIZE_REPORTING_THRESHOLD: usize = 1_000;
+        let elapsed = self.since.as_ref().map(Instant::elapsed);
+        if elapsed.map(|e| e < SUBMIT_CADENCE).unwrap_or_default()
+            && self.host_map.len() < MAP_SIZE_REPORTING_THRESHOLD
+        {
+            return;
+        }
+
+        let host_map = std::mem::take(&mut self.host_map);
+        let _ = sender.send(Box::new(move || {
+            Self::report_stats(name, host_map, elapsed);
+        }));
+
+        *self = Self {
+            since: Some(Instant::now()),
+            ..Self::default()
+        };
+    }
+
+    fn record(&mut self, pkt: &Packet) {
+        let ent = self.host_map.entry(pkt.meta.addr).or_default();
+        ent.count += 1;
+        ent.bytes += pkt.data.len() as u64;
+    }
+}
+
 fn recv_send(
     sock: &UdpSocket,
-    r: &PacketReceiver,
+    r: &PacketBatchReceiver,
     socket_addr_space: &SocketAddrSpace,
+    stats: &mut Option<StreamerSendStats>,
 ) -> Result<()> {
     let timer = Duration::new(1, 0);
-    let msgs = r.recv_timeout(timer)?;
-    send_to(&msgs, sock, socket_addr_space)?;
+    let packet_batch = r.recv_timeout(timer)?;
+    if let Some(stats) = stats {
+        packet_batch.packets.iter().for_each(|p| stats.record(p));
+    }
+    send_to(&packet_batch, sock, socket_addr_space)?;
     Ok(())
 }
 
-pub fn recv_batch(recvr: &PacketReceiver) -> Result<(Vec<Packets>, usize, Duration)> {
+pub fn recv_packet_batches(
+    recvr: &PacketBatchReceiver,
+) -> Result<(Vec<PacketBatch>, usize, Duration)> {
     let timer = Duration::new(1, 0);
-    let msgs = recvr.recv_timeout(timer)?;
+    let packet_batch = recvr.recv_timeout(timer)?;
     let recv_start = Instant::now();
-    trace!("got msgs");
-    let mut len = msgs.packets.len();
-    let mut batch = vec![msgs];
-    while let Ok(more) = recvr.try_recv() {
-        trace!("got more msgs");
-        len += more.packets.len();
-        batch.push(more);
+    trace!("got packets");
+    let mut num_packets = packet_batch.packets.len();
+    let mut packet_batches = vec![packet_batch];
+    while let Ok(packet_batch) = recvr.try_recv() {
+        trace!("got more packets");
+        num_packets += packet_batch.packets.len();
+        packet_batches.push(packet_batch);
     }
     let recv_duration = recv_start.elapsed();
-    trace!("batch len {}", batch.len());
-    Ok((batch, len, recv_duration))
+    trace!(
+        "packet batches len: {}, num packets: {}",
+        packet_batches.len(),
+        num_packets
+    );
+    Ok((packet_batches, num_packets, recv_duration))
 }
 
 pub fn responder(
     name: &'static str,
     sock: Arc<UdpSocket>,
-    r: PacketReceiver,
+    r: PacketBatchReceiver,
     socket_addr_space: SocketAddrSpace,
+    stats_reporter_sender: Option<Sender<Box<dyn FnOnce() + Send>>>,
 ) -> JoinHandle<()> {
     Builder::new()
         .name(format!("solana-responder-{}", name))
@@ -153,8 +282,14 @@ pub fn responder(
             let mut errors = 0;
             let mut last_error = None;
             let mut last_print = 0;
+            let mut stats = None;
+
+            if stats_reporter_sender.is_some() {
+                stats = Some(StreamerSendStats::default());
+            }
+
             loop {
-                if let Err(e) = recv_send(&sock, &r, &socket_addr_space) {
+                if let Err(e) = recv_send(&sock, &r, &socket_addr_space, &mut stats) {
                     match e {
                         StreamerError::RecvTimeout(RecvTimeoutError::Disconnected) => break,
                         StreamerError::RecvTimeout(RecvTimeoutError::Timeout) => (),
@@ -171,6 +306,11 @@ pub fn responder(
                     last_print = now;
                     errors = 0;
                 }
+                if let Some(ref stats_reporter_sender) = stats_reporter_sender {
+                    if let Some(ref mut stats) = stats {
+                        stats.maybe_submit(name, stats_reporter_sender);
+                    }
+                }
             }
         })
         .unwrap()
@@ -178,28 +318,36 @@ pub fn responder(
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::packet::{Packet, Packets, PACKET_DATA_SIZE};
-    use crate::streamer::{receiver, responder};
-    use solana_perf::recycler::Recycler;
-    use std::io;
-    use std::io::Write;
-    use std::net::UdpSocket;
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::mpsc::channel;
-    use std::sync::Arc;
-    use std::time::Duration;
+    use {
+        super::*,
+        crate::{
+            packet::{Packet, PacketBatch, PACKET_DATA_SIZE},
+            streamer::{receiver, responder},
+        },
+        solana_perf::recycler::Recycler,
+        std::{
+            io,
+            io::Write,
+            net::UdpSocket,
+            sync::{
+                atomic::{AtomicBool, Ordering},
+                mpsc::channel,
+                Arc,
+            },
+            time::Duration,
+        },
+    };
 
-    fn get_msgs(r: PacketReceiver, num: &mut usize) {
+    fn get_packet_batches(r: PacketBatchReceiver, num_packets: &mut usize) {
         for _ in 0..10 {
-            let m = r.recv_timeout(Duration::new(1, 0));
-            if m.is_err() {
+            let packet_batch_res = r.recv_timeout(Duration::new(1, 0));
+            if packet_batch_res.is_err() {
                 continue;
             }
 
-            *num -= m.unwrap().packets.len();
+            *num_packets -= packet_batch_res.unwrap().packets.len();
 
-            if *num == 0 {
+            if *num_packets == 0 {
                 break;
             }
         }
@@ -208,7 +356,7 @@ mod test {
     #[test]
     fn streamer_debug() {
         write!(io::sink(), "{:?}", Packet::default()).unwrap();
-        write!(io::sink(), "{:?}", Packets::default()).unwrap();
+        write!(io::sink(), "{:?}", PacketBatch::default()).unwrap();
     }
     #[test]
     fn streamer_send_test() {
@@ -235,24 +383,25 @@ mod test {
                 Arc::new(send),
                 r_responder,
                 SocketAddrSpace::Unspecified,
+                None,
             );
-            let mut msgs = Packets::default();
+            let mut packet_batch = PacketBatch::default();
             for i in 0..5 {
-                let mut b = Packet::default();
+                let mut p = Packet::default();
                 {
-                    b.data[0] = i as u8;
-                    b.meta.size = PACKET_DATA_SIZE;
-                    b.meta.set_addr(&addr);
+                    p.data[0] = i as u8;
+                    p.meta.size = PACKET_DATA_SIZE;
+                    p.meta.set_addr(&addr);
                 }
-                msgs.packets.push(b);
+                packet_batch.packets.push(p);
             }
-            s_responder.send(msgs).expect("send");
+            s_responder.send(packet_batch).expect("send");
             t_responder
         };
 
-        let mut num = 5;
-        get_msgs(r_reader, &mut num);
-        assert_eq!(num, 0);
+        let mut packets_remaining = 5;
+        get_packet_batches(r_reader, &mut packets_remaining);
+        assert_eq!(packets_remaining, 0);
         exit.store(true, Ordering::Relaxed);
         t_receiver.join().expect("join");
         t_responder.join().expect("join");

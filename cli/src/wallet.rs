@@ -1,45 +1,47 @@
-use crate::{
-    cli::{
-        log_instruction_custom_error, request_and_confirm_airdrop, CliCommand, CliCommandInfo,
-        CliConfig, CliError, ProcessResult,
+use {
+    crate::{
+        cli::{
+            log_instruction_custom_error, request_and_confirm_airdrop, CliCommand, CliCommandInfo,
+            CliConfig, CliError, ProcessResult,
+        },
+        memo::WithMemo,
+        nonce::check_nonce_account,
+        spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
     },
-    memo::WithMemo,
-    nonce::check_nonce_account,
-    spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
+    clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand},
+    solana_account_decoder::{UiAccount, UiAccountEncoding},
+    solana_clap_utils::{
+        fee_payer::*,
+        input_parsers::*,
+        input_validators::*,
+        keypair::{DefaultSigner, SignerIndex},
+        memo::*,
+        nonce::*,
+        offline::*,
+    },
+    solana_cli_output::{
+        display::build_balance_message, return_signers_with_config, CliAccount,
+        CliSignatureVerificationStatus, CliTransaction, CliTransactionConfirmation, OutputFormat,
+        ReturnSignersConfig,
+    },
+    solana_client::{
+        blockhash_query::BlockhashQuery, nonce_utils, rpc_client::RpcClient,
+        rpc_config::RpcTransactionConfig, rpc_response::RpcKeyedAccount,
+    },
+    solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_sdk::{
+        commitment_config::CommitmentConfig,
+        message::Message,
+        pubkey::Pubkey,
+        signature::Signature,
+        stake,
+        system_instruction::{self, SystemError},
+        system_program,
+        transaction::Transaction,
+    },
+    solana_transaction_status::{Encodable, EncodedTransaction, UiTransactionEncoding},
+    std::{fmt::Write as FmtWrite, fs::File, io::Write, sync::Arc},
 };
-use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
-use solana_account_decoder::{UiAccount, UiAccountEncoding};
-use solana_clap_utils::{
-    fee_payer::*,
-    input_parsers::*,
-    input_validators::*,
-    keypair::{DefaultSigner, SignerIndex},
-    memo::*,
-    nonce::*,
-    offline::*,
-};
-use solana_cli_output::{
-    display::build_balance_message, return_signers_with_config, CliAccount,
-    CliSignatureVerificationStatus, CliTransaction, CliTransactionConfirmation, OutputFormat,
-    ReturnSignersConfig,
-};
-use solana_client::{
-    blockhash_query::BlockhashQuery, nonce_utils, rpc_client::RpcClient,
-    rpc_config::RpcTransactionConfig, rpc_response::RpcKeyedAccount,
-};
-use solana_remote_wallet::remote_wallet::RemoteWalletManager;
-use solana_sdk::{
-    commitment_config::CommitmentConfig,
-    message::Message,
-    pubkey::Pubkey,
-    signature::Signature,
-    stake,
-    system_instruction::{self, SystemError},
-    system_program,
-    transaction::Transaction,
-};
-use solana_transaction_status::{EncodedTransaction, UiTransactionEncoding};
-use std::{fmt::Write as FmtWrite, fs::File, io::Write, sync::Arc};
 
 pub trait WalletSubCommands {
     fn wallet_subcommands(self) -> Self;
@@ -460,18 +462,27 @@ pub fn process_show_account(
 
     let mut account_string = config.output_format.formatted_string(&cli_account);
 
-    if config.output_format == OutputFormat::Display
-        || config.output_format == OutputFormat::DisplayVerbose
-    {
-        if let Some(output_file) = output_file {
-            let mut f = File::create(output_file)?;
-            f.write_all(&data)?;
-            writeln!(&mut account_string)?;
-            writeln!(&mut account_string, "Wrote account data to {}", output_file)?;
-        } else if !data.is_empty() {
-            use pretty_hex::*;
-            writeln!(&mut account_string, "{:?}", data.hex_dump())?;
+    match config.output_format {
+        OutputFormat::Json | OutputFormat::JsonCompact => {
+            if let Some(output_file) = output_file {
+                let mut f = File::create(output_file)?;
+                f.write_all(account_string.as_bytes())?;
+                writeln!(&mut account_string)?;
+                writeln!(&mut account_string, "Wrote account to {}", output_file)?;
+            }
         }
+        OutputFormat::Display | OutputFormat::DisplayVerbose => {
+            if let Some(output_file) = output_file {
+                let mut f = File::create(output_file)?;
+                f.write_all(&data)?;
+                writeln!(&mut account_string)?;
+                writeln!(&mut account_string, "Wrote account data to {}", output_file)?;
+            } else if !data.is_empty() {
+                use pretty_hex::*;
+                writeln!(&mut account_string, "{:?}", data.hex_dump())?;
+            }
+        }
+        OutputFormat::DisplayQuiet => (),
     }
 
     Ok(account_string)
@@ -553,10 +564,8 @@ pub fn process_confirm(
                                 .transaction
                                 .decode()
                                 .expect("Successful decode");
-                            let json_transaction = EncodedTransaction::encode(
-                                decoded_transaction.clone(),
-                                UiTransactionEncoding::Json,
-                            );
+                            let json_transaction =
+                                decoded_transaction.encode(UiTransactionEncoding::Json);
 
                             transaction = Some(CliTransaction {
                                 transaction: json_transaction,
@@ -598,7 +607,7 @@ pub fn process_decode_transaction(config: &CliConfig, transaction: &Transaction)
     let sigverify_status = CliSignatureVerificationStatus::verify_transaction(transaction);
     let decode_transaction = CliTransaction {
         decoded_transaction: transaction.clone(),
-        transaction: EncodedTransaction::encode(transaction.clone(), UiTransactionEncoding::Json),
+        transaction: transaction.encode(UiTransactionEncoding::Json),
         meta: None,
         block_time: None,
         slot: None,

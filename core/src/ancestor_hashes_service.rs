@@ -1,38 +1,40 @@
-use crate::{
-    cluster_slots::ClusterSlots,
-    duplicate_repair_status::{DeadSlotAncestorRequestStatus, DuplicateAncestorDecision},
-    outstanding_requests::OutstandingRequests,
-    repair_response::{self},
-    repair_service::{DuplicateSlotsResetSender, RepairInfo, RepairStatsGroup},
-    replay_stage::DUPLICATE_THRESHOLD,
-    result::{Error, Result},
-    serve_repair::{AncestorHashesRepairType, ServeRepair},
-};
-use crossbeam_channel::{unbounded, Receiver, Sender};
-use dashmap::{mapref::entry::Entry::Occupied, DashMap};
-use solana_ledger::{blockstore::Blockstore, shred::SIZE_OF_NONCE};
-use solana_measure::measure::Measure;
-use solana_perf::{
-    packet::{limited_deserialize, Packet, Packets},
-    recycler::Recycler,
-};
-use solana_runtime::bank::Bank;
-use solana_sdk::{
-    clock::{Slot, SLOT_MS},
-    pubkey::Pubkey,
-    timing::timestamp,
-};
-use solana_streamer::streamer::{self, PacketReceiver};
-use std::{
-    collections::HashSet,
-    net::UdpSocket,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        mpsc::channel,
-        {Arc, RwLock},
+use {
+    crate::{
+        cluster_slots::ClusterSlots,
+        duplicate_repair_status::{DeadSlotAncestorRequestStatus, DuplicateAncestorDecision},
+        outstanding_requests::OutstandingRequests,
+        repair_response::{self},
+        repair_service::{DuplicateSlotsResetSender, RepairInfo, RepairStatsGroup},
+        replay_stage::DUPLICATE_THRESHOLD,
+        result::{Error, Result},
+        serve_repair::{AncestorHashesRepairType, ServeRepair},
     },
-    thread::{self, sleep, Builder, JoinHandle},
-    time::{Duration, Instant},
+    crossbeam_channel::{unbounded, Receiver, Sender},
+    dashmap::{mapref::entry::Entry::Occupied, DashMap},
+    solana_ledger::{blockstore::Blockstore, shred::SIZE_OF_NONCE},
+    solana_measure::measure::Measure,
+    solana_perf::{
+        packet::{limited_deserialize, Packet, PacketBatch},
+        recycler::Recycler,
+    },
+    solana_runtime::bank::Bank,
+    solana_sdk::{
+        clock::{Slot, SLOT_MS},
+        pubkey::Pubkey,
+        timing::timestamp,
+    },
+    solana_streamer::streamer::{self, PacketBatchReceiver},
+    std::{
+        collections::HashSet,
+        net::UdpSocket,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            mpsc::channel,
+            Arc, RwLock,
+        },
+        thread::{self, sleep, Builder, JoinHandle},
+        time::{Duration, Instant},
+    },
 };
 
 #[derive(Debug, PartialEq)]
@@ -195,7 +197,7 @@ impl AncestorHashesService {
     /// Listen for responses to our ancestors hashes repair requests
     fn run_responses_listener(
         ancestor_hashes_request_statuses: Arc<DashMap<Slot, DeadSlotAncestorRequestStatus>>,
-        response_receiver: PacketReceiver,
+        response_receiver: PacketBatchReceiver,
         blockstore: Arc<Blockstore>,
         outstanding_requests: Arc<RwLock<OutstandingAncestorHashesRepairs>>,
         exit: Arc<AtomicBool>,
@@ -238,7 +240,7 @@ impl AncestorHashesService {
     /// Process messages from the network
     fn process_new_packets_from_channel(
         ancestor_hashes_request_statuses: &DashMap<Slot, DeadSlotAncestorRequestStatus>,
-        response_receiver: &PacketReceiver,
+        response_receiver: &PacketBatchReceiver,
         blockstore: &Blockstore,
         outstanding_requests: &RwLock<OutstandingAncestorHashesRepairs>,
         stats: &mut AncestorHashesResponsesStats,
@@ -247,17 +249,17 @@ impl AncestorHashesService {
         retryable_slots_sender: &RetryableSlotsSender,
     ) -> Result<()> {
         let timeout = Duration::new(1, 0);
-        let mut responses = vec![response_receiver.recv_timeout(timeout)?];
-        let mut total_packets = responses[0].packets.len();
+        let mut packet_batches = vec![response_receiver.recv_timeout(timeout)?];
+        let mut total_packets = packet_batches[0].packets.len();
 
         let mut dropped_packets = 0;
-        while let Ok(more) = response_receiver.try_recv() {
-            total_packets += more.packets.len();
+        while let Ok(batch) = response_receiver.try_recv() {
+            total_packets += batch.packets.len();
             if total_packets < *max_packets {
                 // Drop the rest in the channel in case of DOS
-                responses.push(more);
+                packet_batches.push(batch);
             } else {
-                dropped_packets += more.packets.len();
+                dropped_packets += batch.packets.len();
             }
         }
 
@@ -265,10 +267,10 @@ impl AncestorHashesService {
         stats.total_packets += total_packets;
 
         let mut time = Measure::start("ancestor_hashes::handle_packets");
-        for response in responses {
-            Self::process_single_packets(
+        for packet_batch in packet_batches {
+            Self::process_packet_batch(
                 ancestor_hashes_request_statuses,
-                response,
+                packet_batch,
                 stats,
                 outstanding_requests,
                 blockstore,
@@ -287,16 +289,16 @@ impl AncestorHashesService {
         Ok(())
     }
 
-    fn process_single_packets(
+    fn process_packet_batch(
         ancestor_hashes_request_statuses: &DashMap<Slot, DeadSlotAncestorRequestStatus>,
-        packets: Packets,
+        packet_batch: PacketBatch,
         stats: &mut AncestorHashesResponsesStats,
         outstanding_requests: &RwLock<OutstandingAncestorHashesRepairs>,
         blockstore: &Blockstore,
         duplicate_slots_reset_sender: &DuplicateSlotsResetSender,
         retryable_slots_sender: &RetryableSlotsSender,
     ) {
-        packets.packets.iter().for_each(|packet| {
+        packet_batch.packets.iter().for_each(|packet| {
             let decision = Self::verify_and_process_ancestor_response(
                 packet,
                 ancestor_hashes_request_statuses,
@@ -326,7 +328,7 @@ impl AncestorHashesService {
         blockstore: &Blockstore,
     ) -> Option<(Slot, DuplicateAncestorDecision)> {
         let from_addr = packet.meta.addr();
-        limited_deserialize(&packet.data[..packet.meta.size - SIZE_OF_NONCE])
+        limited_deserialize(&packet.data[..packet.meta.size.saturating_sub(SIZE_OF_NONCE)])
             .ok()
             .and_then(|ancestor_hashes_response| {
                 // Verify the response
@@ -681,27 +683,29 @@ impl AncestorHashesService {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::{
-        cluster_slot_state_verifier::DuplicateSlotsToRepair,
-        repair_service::DuplicateSlotsResetReceiver,
-        replay_stage::{
-            tests::{replay_blockstore_components, ReplayBlockstoreComponents},
-            ReplayStage,
+    use {
+        super::*,
+        crate::{
+            cluster_slot_state_verifier::DuplicateSlotsToRepair,
+            repair_service::DuplicateSlotsResetReceiver,
+            replay_stage::{
+                tests::{replay_blockstore_components, ReplayBlockstoreComponents},
+                ReplayStage,
+            },
+            serve_repair::MAX_ANCESTOR_RESPONSES,
+            vote_simulator::VoteSimulator,
         },
-        serve_repair::MAX_ANCESTOR_RESPONSES,
-        vote_simulator::VoteSimulator,
+        solana_gossip::{
+            cluster_info::{ClusterInfo, Node},
+            contact_info::ContactInfo,
+        },
+        solana_ledger::{blockstore::make_many_slot_entries, get_tmp_ledger_path},
+        solana_runtime::{accounts_background_service::AbsRequestSender, bank_forks::BankForks},
+        solana_sdk::{hash::Hash, signature::Keypair},
+        solana_streamer::socket::SocketAddrSpace,
+        std::{collections::HashMap, sync::mpsc::channel},
+        trees::tr,
     };
-    use solana_gossip::{
-        cluster_info::{ClusterInfo, Node},
-        contact_info::ContactInfo,
-    };
-    use solana_ledger::{blockstore::make_many_slot_entries, get_tmp_ledger_path};
-    use solana_runtime::{accounts_background_service::AbsRequestSender, bank_forks::BankForks};
-    use solana_sdk::{hash::Hash, signature::Keypair};
-    use solana_streamer::socket::SocketAddrSpace;
-    use std::{collections::HashMap, sync::mpsc::channel};
-    use trees::tr;
 
     #[test]
     pub fn test_ancestor_hashes_service_process_replay_updates() {
@@ -867,7 +871,7 @@ mod test {
         t_listen: JoinHandle<()>,
         exit: Arc<AtomicBool>,
         responder_info: ContactInfo,
-        response_receiver: PacketReceiver,
+        response_receiver: PacketBatchReceiver,
         correct_bank_hashes: HashMap<Slot, Hash>,
     }
 
@@ -1028,15 +1032,6 @@ mod test {
             &HashMap::new(),
             is_frozen,
         );
-
-        /*{
-            let w_bank_forks = bank_forks.write().unwrap();
-            assert!(w_bank_forks.get(dead_slot).is_none());
-            let parent = w_bank_forks.get(dead_slot - 1).unwrap().clone();
-            let dead_bank = Bank::new_from_parent(&parent, &Pubkey::default(), dead_slot);
-            bank_forks.insert(dead_bank);
-
-        }*/
 
         // Create slots [slot, slot + num_ancestors) with 5 shreds apiece
         let (shreds, _) = make_many_slot_entries(dead_slot, dead_slot, 5);
@@ -1363,6 +1358,34 @@ mod test {
         assert!(dead_slot_pool.is_empty());
         assert!(repairable_dead_slot_pool.is_empty());
         assert!(ancestor_hashes_request_statuses.is_empty());
+    }
+
+    #[test]
+    fn test_verify_and_process_ancestor_responses_invalid_packet() {
+        let bank0 = Bank::default_for_tests();
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
+
+        let ManageAncestorHashesState {
+            ancestor_hashes_request_statuses,
+            outstanding_requests,
+            ..
+        } = ManageAncestorHashesState::new(bank_forks);
+
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&ledger_path).unwrap();
+
+        // Create invalid packet with fewer bytes than the size of the nonce
+        let mut packet = Packet::default();
+        packet.meta.size = 0;
+
+        assert!(AncestorHashesService::verify_and_process_ancestor_response(
+            &packet,
+            &ancestor_hashes_request_statuses,
+            &mut AncestorHashesResponsesStats::default(),
+            &outstanding_requests,
+            &blockstore,
+        )
+        .is_none());
     }
 
     #[test]

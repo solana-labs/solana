@@ -1,14 +1,18 @@
-use crate::accounts_index::{AccountsIndexConfig, IndexValue};
-use crate::bucket_map_holder::BucketMapHolder;
-use crate::in_mem_accounts_index::InMemAccountsIndex;
-use crate::waitable_condvar::WaitableCondvar;
-use std::fmt::Debug;
-use std::{
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
+use {
+    crate::{
+        accounts_index::{AccountsIndexConfig, IndexValue},
+        bucket_map_holder::BucketMapHolder,
+        in_mem_accounts_index::InMemAccountsIndex,
+        waitable_condvar::WaitableCondvar,
     },
-    thread::{Builder, JoinHandle},
+    std::{
+        fmt::Debug,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, Mutex,
+        },
+        thread::{Builder, JoinHandle},
+    },
 };
 
 /// Manages the lifetime of the background processing threads.
@@ -98,9 +102,16 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
         }
         self.storage.set_startup(value);
         if !value {
+            // transitioning from startup to !startup (ie. steady state)
             // shutdown the bg threads
             *self.startup_worker_threads.lock().unwrap() = None;
+            // maybe shrink hashmaps
+            self.shrink_to_fit();
         }
+    }
+
+    fn shrink_to_fit(&self) {
+        self.in_mem.iter().for_each(|mem| mem.shrink_to_fit())
     }
 
     fn num_threads() -> usize {

@@ -226,6 +226,19 @@ EOF
     annotate --style info \
       "downstream-projects skipped as no relevant files were modified"
   fi
+
+  # Wasm support
+  if affects \
+             ^ci/test-wasm.sh \
+             ^ci/test-stable.sh \
+             ^sdk/ \
+      ; then
+    command_step wasm ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-wasm.sh" 20
+  else
+    annotate --style info \
+      "wasm skipped as no relevant files were modified"
+  fi
+
   # Benches...
   if affects \
              .rs$ \
@@ -243,7 +256,15 @@ EOF
 
   command_step "local-cluster" \
     ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster.sh" \
-    45
+    40
+
+  command_step "local-cluster-flakey" \
+    ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster-flakey.sh" \
+    10
+
+  command_step "local-cluster-slow" \
+    ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster-slow.sh" \
+    30
 }
 
 pull_or_push_steps() {

@@ -1,5 +1,8 @@
 #![allow(clippy::integer_arithmetic)]
 
+mod postgres_client_block_metadata;
+mod postgres_client_transaction;
+
 /// A concurrent implementation for writing accounts into the PostgreSQL in parallel.
 use {
     crate::accountsdb_plugin_postgres::{
@@ -9,8 +12,10 @@ use {
     crossbeam_channel::{bounded, Receiver, RecvTimeoutError, Sender},
     log::*,
     postgres::{Client, NoTls, Statement},
+    postgres_client_block_metadata::DbBlockInfo,
+    postgres_client_transaction::LogTransactionRequest,
     solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
-        AccountsDbPluginError, ReplicaAccountInfo, SlotStatus,
+        AccountsDbPluginError, ReplicaAccountInfo, ReplicaBlockInfo, SlotStatus,
     },
     solana_measure::measure::Measure,
     solana_metrics::*,
@@ -23,7 +28,7 @@ use {
         thread::{self, sleep, Builder, JoinHandle},
         time::Duration,
     },
-    tokio_postgres::types::ToSql,
+    tokio_postgres::types,
 };
 
 /// The maximum asynchronous requests allowed in the channel to avoid excessive
@@ -34,6 +39,7 @@ const DEFAULT_THREADS_COUNT: usize = 100;
 const DEFAULT_ACCOUNTS_INSERT_BATCH_SIZE: usize = 10;
 const ACCOUNT_COLUMN_COUNT: usize = 9;
 const DEFAULT_PANIC_ON_DB_ERROR: bool = false;
+const DEFAULT_STORE_ACCOUNT_HISTORICAL_DATA: bool = false;
 
 struct PostgresSqlClientWrapper {
     client: Client,
@@ -41,6 +47,9 @@ struct PostgresSqlClientWrapper {
     bulk_account_insert_stmt: Statement,
     update_slot_with_parent_stmt: Statement,
     update_slot_without_parent_stmt: Statement,
+    update_transaction_log_stmt: Statement,
+    update_block_metadata_stmt: Statement,
+    insert_account_audit_stmt: Option<Statement>,
 }
 
 pub struct SimplePostgresClient {
@@ -187,6 +196,16 @@ pub trait PostgresClient {
     ) -> Result<(), AccountsDbPluginError>;
 
     fn notify_end_of_startup(&mut self) -> Result<(), AccountsDbPluginError>;
+
+    fn log_transaction(
+        &mut self,
+        transaction_log_info: LogTransactionRequest,
+    ) -> Result<(), AccountsDbPluginError>;
+
+    fn update_block_metadata(
+        &mut self,
+        block_info: UpdateBlockMetadataRequest,
+    ) -> Result<(), AccountsDbPluginError>;
 }
 
 impl SimplePostgresClient {
@@ -307,6 +326,28 @@ impl SimplePostgresClient {
         }
     }
 
+    fn build_account_audit_insert_statement(
+        client: &mut Client,
+        config: &AccountsDbPluginPostgresConfig,
+    ) -> Result<Statement, AccountsDbPluginError> {
+        let stmt = "INSERT INTO account_audit (pubkey, slot, owner, lamports, executable, rent_epoch, data, write_version, updated_on) \
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)";
+
+        let stmt = client.prepare(stmt);
+
+        match stmt {
+            Err(err) => {
+                return Err(AccountsDbPluginError::Custom(Box::new(AccountsDbPluginPostgresError::DataSchemaError {
+                    msg: format!(
+                        "Error in preparing for the account_audit update PostgreSQL database: {} host: {:?} user: {:?} config: {:?}",
+                        err, config.host, config.user, config
+                    ),
+                })));
+            }
+            Ok(stmt) => Ok(stmt),
+        }
+    }
+
     fn build_slot_upsert_statement_with_parent(
         client: &mut Client,
         config: &AccountsDbPluginPostgresConfig,
@@ -353,8 +394,8 @@ impl SimplePostgresClient {
         }
     }
 
-    /// Internal function for updating or inserting a single account
-    fn upsert_account_internal(
+    /// Internal function for inserting an account into account_audit table.
+    fn insert_account_audit(
         account: &DbAccountInfo,
         statement: &Statement,
         client: &mut Client,
@@ -362,7 +403,43 @@ impl SimplePostgresClient {
         let lamports = account.lamports() as i64;
         let rent_epoch = account.rent_epoch() as i64;
         let updated_on = Utc::now().naive_utc();
-        let result = client.query(
+        let result = client.execute(
+            statement,
+            &[
+                &account.pubkey(),
+                &account.slot,
+                &account.owner(),
+                &lamports,
+                &account.executable(),
+                &rent_epoch,
+                &account.data(),
+                &account.write_version(),
+                &updated_on,
+            ],
+        );
+
+        if let Err(err) = result {
+            let msg = format!(
+                "Failed to persist the insert of account_audit to the PostgreSQL database. Error: {:?}",
+                err
+            );
+            error!("{}", msg);
+            return Err(AccountsDbPluginError::AccountsUpdateError { msg });
+        }
+        Ok(())
+    }
+
+    /// Internal function for updating or inserting a single account
+    fn upsert_account_internal(
+        account: &DbAccountInfo,
+        statement: &Statement,
+        client: &mut Client,
+        insert_account_audit_stmt: &Option<Statement>,
+    ) -> Result<(), AccountsDbPluginError> {
+        let lamports = account.lamports() as i64;
+        let rent_epoch = account.rent_epoch() as i64;
+        let updated_on = Utc::now().naive_utc();
+        let result = client.execute(
             statement,
             &[
                 &account.pubkey(),
@@ -384,6 +461,11 @@ impl SimplePostgresClient {
             );
             error!("{}", msg);
             return Err(AccountsDbPluginError::AccountsUpdateError { msg });
+        } else if result.unwrap() == 0 && insert_account_audit_stmt.is_some() {
+            // If no records modified (inserted or updated), it is because the account is updated
+            // at an older slot, insert the record directly into the account_audit table.
+            let statement = insert_account_audit_stmt.as_ref().unwrap();
+            Self::insert_account_audit(account, statement, client)?;
         }
 
         Ok(())
@@ -392,9 +474,10 @@ impl SimplePostgresClient {
     /// Update or insert a single account
     fn upsert_account(&mut self, account: &DbAccountInfo) -> Result<(), AccountsDbPluginError> {
         let client = self.client.get_mut().unwrap();
+        let insert_account_audit_stmt = &client.insert_account_audit_stmt;
         let statement = &client.update_account_stmt;
         let client = &mut client.client;
-        Self::upsert_account_internal(account, statement, client)
+        Self::upsert_account_internal(account, statement, client, insert_account_audit_stmt)
     }
 
     /// Insert accounts in batch to reduce network overhead
@@ -407,7 +490,7 @@ impl SimplePostgresClient {
         if self.pending_account_updates.len() == self.batch_size {
             let mut measure = Measure::start("accountsdb-plugin-postgres-prepare-values");
 
-            let mut values: Vec<&(dyn ToSql + Sync)> =
+            let mut values: Vec<&(dyn types::ToSql + Sync)> =
                 Vec::with_capacity(self.batch_size * ACCOUNT_COLUMN_COUNT);
             let updated_on = Utc::now().naive_utc();
             for j in 0..self.batch_size {
@@ -470,11 +553,12 @@ impl SimplePostgresClient {
         }
 
         let client = self.client.get_mut().unwrap();
+        let insert_account_audit_stmt = &client.insert_account_audit_stmt;
         let statement = &client.update_account_stmt;
         let client = &mut client.client;
 
         for account in self.pending_account_updates.drain(..) {
-            Self::upsert_account_internal(&account, statement, client)?;
+            Self::upsert_account_internal(&account, statement, client, insert_account_audit_stmt)?;
         }
 
         Ok(())
@@ -491,10 +575,26 @@ impl SimplePostgresClient {
             Self::build_slot_upsert_statement_with_parent(&mut client, config)?;
         let update_slot_without_parent_stmt =
             Self::build_slot_upsert_statement_without_parent(&mut client, config)?;
+        let update_transaction_log_stmt =
+            Self::build_transaction_info_upsert_statement(&mut client, config)?;
+        let update_block_metadata_stmt =
+            Self::build_block_metadata_upsert_statement(&mut client, config)?;
 
         let batch_size = config
             .batch_size
             .unwrap_or(DEFAULT_ACCOUNTS_INSERT_BATCH_SIZE);
+
+        let store_account_historical_data = config
+            .store_account_historical_data
+            .unwrap_or(DEFAULT_STORE_ACCOUNT_HISTORICAL_DATA);
+
+        let insert_account_audit_stmt = if store_account_historical_data {
+            let stmt = Self::build_account_audit_insert_statement(&mut client, config)?;
+            Some(stmt)
+        } else {
+            None
+        };
+
         info!("Created SimplePostgresClient.");
         Ok(Self {
             batch_size,
@@ -505,6 +605,9 @@ impl SimplePostgresClient {
                 bulk_account_insert_stmt,
                 update_slot_with_parent_stmt,
                 update_slot_without_parent_stmt,
+                update_transaction_log_stmt,
+                update_block_metadata_stmt,
+                insert_account_audit_stmt,
             }),
         })
     }
@@ -573,6 +676,20 @@ impl PostgresClient for SimplePostgresClient {
     fn notify_end_of_startup(&mut self) -> Result<(), AccountsDbPluginError> {
         self.flush_buffered_writes()
     }
+
+    fn log_transaction(
+        &mut self,
+        transaction_log_info: LogTransactionRequest,
+    ) -> Result<(), AccountsDbPluginError> {
+        self.log_transaction_impl(transaction_log_info)
+    }
+
+    fn update_block_metadata(
+        &mut self,
+        block_info: UpdateBlockMetadataRequest,
+    ) -> Result<(), AccountsDbPluginError> {
+        self.update_block_metadata_impl(block_info)
+    }
 }
 
 struct UpdateAccountRequest {
@@ -586,9 +703,16 @@ struct UpdateSlotRequest {
     slot_status: SlotStatus,
 }
 
+pub struct UpdateBlockMetadataRequest {
+    pub block_info: DbBlockInfo,
+}
+
+#[warn(clippy::large_enum_variant)]
 enum DbWorkItem {
-    UpdateAccount(UpdateAccountRequest),
-    UpdateSlot(UpdateSlotRequest),
+    UpdateAccount(Box<UpdateAccountRequest>),
+    UpdateSlot(Box<UpdateSlotRequest>),
+    LogTransaction(Box<LogTransactionRequest>),
+    UpdateBlockMetadata(Box<UpdateBlockMetadataRequest>),
 }
 
 impl PostgresClientWorker {
@@ -644,6 +768,22 @@ impl PostgresClientWorker {
                             request.slot_status,
                         ) {
                             error!("Failed to update slot: ({})", err);
+                            if panic_on_db_errors {
+                                abort();
+                            }
+                        }
+                    }
+                    DbWorkItem::LogTransaction(transaction_log_info) => {
+                        if let Err(err) = self.client.log_transaction(*transaction_log_info) {
+                            error!("Failed to update transaction: ({})", err);
+                            if panic_on_db_errors {
+                                abort();
+                            }
+                        }
+                    }
+                    DbWorkItem::UpdateBlockMetadata(block_info) => {
+                        if let Err(err) = self.client.update_block_metadata(*block_info) {
+                            error!("Failed to update block metadata: ({})", err);
                             if panic_on_db_errors {
                                 abort();
                             }
@@ -782,10 +922,10 @@ impl ParallelPostgresClient {
             );
         }
         let mut measure = Measure::start("accountsdb-plugin-posgres-create-work-item");
-        let wrk_item = DbWorkItem::UpdateAccount(UpdateAccountRequest {
+        let wrk_item = DbWorkItem::UpdateAccount(Box::new(UpdateAccountRequest {
             account: DbAccountInfo::new(account, slot),
             is_startup,
-        });
+        }));
 
         measure.stop();
 
@@ -825,13 +965,35 @@ impl ParallelPostgresClient {
         parent: Option<u64>,
         status: SlotStatus,
     ) -> Result<(), AccountsDbPluginError> {
-        if let Err(err) = self.sender.send(DbWorkItem::UpdateSlot(UpdateSlotRequest {
-            slot,
-            parent,
-            slot_status: status,
-        })) {
+        if let Err(err) = self
+            .sender
+            .send(DbWorkItem::UpdateSlot(Box::new(UpdateSlotRequest {
+                slot,
+                parent,
+                slot_status: status,
+            })))
+        {
             return Err(AccountsDbPluginError::SlotStatusUpdateError {
                 msg: format!("Failed to update the slot {:?}, error: {:?}", slot, err),
+            });
+        }
+        Ok(())
+    }
+
+    pub fn update_block_metadata(
+        &mut self,
+        block_info: &ReplicaBlockInfo,
+    ) -> Result<(), AccountsDbPluginError> {
+        if let Err(err) = self.sender.send(DbWorkItem::UpdateBlockMetadata(Box::new(
+            UpdateBlockMetadataRequest {
+                block_info: DbBlockInfo::from(block_info),
+            },
+        ))) {
+            return Err(AccountsDbPluginError::SlotStatusUpdateError {
+                msg: format!(
+                    "Failed to update the block metadata at slot {:?}, error: {:?}",
+                    block_info.slot, err
+                ),
             });
         }
         Ok(())

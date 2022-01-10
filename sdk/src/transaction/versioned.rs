@@ -12,6 +12,7 @@ use {
         transaction::{Result, Transaction, TransactionError},
     },
     serde::Serialize,
+    std::cmp::Ordering,
 };
 
 // NOTE: Serialization-related changes must be paired with the direct read at sigverify.
@@ -29,15 +30,16 @@ impl Sanitize for VersionedTransaction {
     fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
         self.message.sanitize()?;
 
-        // Once the "verify_tx_signatures_len" feature is enabled, this may be
-        // updated to an equality check.
-        if usize::from(self.message.header().num_required_signatures) > self.signatures.len() {
-            return Err(SanitizeError::IndexOutOfBounds);
-        }
+        let num_required_signatures = usize::from(self.message.header().num_required_signatures);
+        match num_required_signatures.cmp(&self.signatures.len()) {
+            Ordering::Greater => Err(SanitizeError::IndexOutOfBounds),
+            Ordering::Less => Err(SanitizeError::InvalidValue),
+            Ordering::Equal => Ok(()),
+        }?;
 
-        // Signatures are verified before message keys are mapped so all signers
-        // must correspond to unmapped keys.
-        if self.signatures.len() > self.message.unmapped_keys_len() {
+        // Signatures are verified before message keys are loaded so all signers
+        // must correspond to static account keys.
+        if self.signatures.len() > self.message.static_account_keys_len() {
             return Err(SanitizeError::IndexOutOfBounds);
         }
 
@@ -69,16 +71,28 @@ impl VersionedTransaction {
     /// Verify the transaction and hash its message
     pub fn verify_and_hash_message(&self) -> Result<Hash> {
         let message_bytes = self.message.serialize();
-        if self
-            .signatures
+        if !self
+            ._verify_with_results(&message_bytes)
             .iter()
-            .zip(self.message.unmapped_keys_iter())
-            .map(|(signature, pubkey)| signature.verify(pubkey.as_ref(), &message_bytes))
-            .any(|verified| !verified)
+            .all(|verify_result| *verify_result)
         {
             Err(TransactionError::SignatureFailure)
         } else {
             Ok(VersionedMessage::hash_raw_message(&message_bytes))
         }
+    }
+
+    /// Verify the transaction and return a list of verification results
+    pub fn verify_with_results(&self) -> Vec<bool> {
+        let message_bytes = self.message.serialize();
+        self._verify_with_results(&message_bytes)
+    }
+
+    fn _verify_with_results(&self, message_bytes: &[u8]) -> Vec<bool> {
+        self.signatures
+            .iter()
+            .zip(self.message.static_account_keys_iter())
+            .map(|(signature, pubkey)| signature.verify(pubkey.as_ref(), message_bytes))
+            .collect()
     }
 }

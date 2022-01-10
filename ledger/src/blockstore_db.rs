@@ -1,38 +1,38 @@
-use crate::blockstore_meta;
-use bincode::{deserialize, serialize};
-use byteorder::{BigEndian, ByteOrder};
-use log::*;
-use prost::Message;
 pub use rocksdb::Direction as IteratorDirection;
-use rocksdb::{
-    self,
-    compaction_filter::CompactionFilter,
-    compaction_filter_factory::{CompactionFilterContext, CompactionFilterFactory},
-    ColumnFamily, ColumnFamilyDescriptor, CompactionDecision, DBIterator, DBRawIterator,
-    DBRecoveryMode, IteratorMode as RocksIteratorMode, Options, WriteBatch as RWriteBatch, DB,
-};
-
-use serde::de::DeserializeOwned;
-use serde::Serialize;
-use solana_runtime::hardened_unpack::UnpackError;
-use solana_sdk::{
-    clock::{Slot, UnixTimestamp},
-    pubkey::Pubkey,
-    signature::Signature,
-};
-use solana_storage_proto::convert::generated;
-use std::{
-    collections::{HashMap, HashSet},
-    ffi::{CStr, CString},
-    fs,
-    marker::PhantomData,
-    path::Path,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
+use {
+    crate::blockstore_meta,
+    bincode::{deserialize, serialize},
+    byteorder::{BigEndian, ByteOrder},
+    log::*,
+    prost::Message,
+    rocksdb::{
+        self,
+        compaction_filter::CompactionFilter,
+        compaction_filter_factory::{CompactionFilterContext, CompactionFilterFactory},
+        ColumnFamily, ColumnFamilyDescriptor, CompactionDecision, DBIterator, DBRawIterator,
+        DBRecoveryMode, IteratorMode as RocksIteratorMode, Options, WriteBatch as RWriteBatch, DB,
     },
+    serde::{de::DeserializeOwned, Serialize},
+    solana_runtime::hardened_unpack::UnpackError,
+    solana_sdk::{
+        clock::{Slot, UnixTimestamp},
+        pubkey::Pubkey,
+        signature::Signature,
+    },
+    solana_storage_proto::convert::generated,
+    std::{
+        collections::{HashMap, HashSet},
+        ffi::{CStr, CString},
+        fs,
+        marker::PhantomData,
+        path::Path,
+        sync::{
+            atomic::{AtomicU64, Ordering},
+            Arc,
+        },
+    },
+    thiserror::Error,
 };
-use thiserror::Error;
 
 const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
 
@@ -167,7 +167,7 @@ pub mod columns {
     pub struct AddressSignatures;
 
     #[derive(Debug)]
-    // The transaction memos column
+    /// The transaction memos column
     pub struct TransactionMemos;
 
     #[derive(Debug)]
@@ -191,8 +191,15 @@ pub mod columns {
     pub struct BlockHeight;
 
     #[derive(Debug)]
-    // The program costs column
+    /// The program costs column
     pub struct ProgramCosts;
+
+    // When adding a new column ...
+    // - Add struct below and implement `Column` and `ColumnName` traits
+    // - Add descriptor in Rocks::open() and name in Rocks::columns()
+    // - Account for column in both `run_purge_with_stats()` and
+    //   `compact_storage()` in ledger/src/blockstore/blockstore_purge.rs !!
+    // - Account for column in `analyze_storage()` in ledger-tool/src/main.rs
 }
 
 pub enum AccessType {
@@ -270,12 +277,10 @@ impl OldestSlot {
 struct Rocks(rocksdb::DB, ActualAccessType, OldestSlot);
 
 impl Rocks {
-    fn open(
-        path: &Path,
-        access_type: AccessType,
-        recovery_mode: Option<BlockstoreRecoveryMode>,
-    ) -> Result<Rocks> {
+    fn open(path: &Path, options: BlockstoreOptions) -> Result<Rocks> {
         use columns::*;
+        let access_type = options.access_type;
+        let recovery_mode = options.recovery_mode;
 
         fs::create_dir_all(&path)?;
 
@@ -290,121 +295,42 @@ impl Rocks {
 
         let oldest_slot = OldestSlot::default();
 
-        // Column family names
-        let meta_cf_descriptor = ColumnFamilyDescriptor::new(
-            SlotMeta::NAME,
-            get_cf_options::<SlotMeta>(&access_type, &oldest_slot),
-        );
-        let dead_slots_cf_descriptor = ColumnFamilyDescriptor::new(
-            DeadSlots::NAME,
-            get_cf_options::<DeadSlots>(&access_type, &oldest_slot),
-        );
-        let duplicate_slots_cf_descriptor = ColumnFamilyDescriptor::new(
-            DuplicateSlots::NAME,
-            get_cf_options::<DuplicateSlots>(&access_type, &oldest_slot),
-        );
-        let erasure_meta_cf_descriptor = ColumnFamilyDescriptor::new(
-            ErasureMeta::NAME,
-            get_cf_options::<ErasureMeta>(&access_type, &oldest_slot),
-        );
-        let orphans_cf_descriptor = ColumnFamilyDescriptor::new(
-            Orphans::NAME,
-            get_cf_options::<Orphans>(&access_type, &oldest_slot),
-        );
-        let bank_hash_cf_descriptor = ColumnFamilyDescriptor::new(
-            BankHash::NAME,
-            get_cf_options::<BankHash>(&access_type, &oldest_slot),
-        );
-        let root_cf_descriptor = ColumnFamilyDescriptor::new(
-            Root::NAME,
-            get_cf_options::<Root>(&access_type, &oldest_slot),
-        );
-        let index_cf_descriptor = ColumnFamilyDescriptor::new(
-            Index::NAME,
-            get_cf_options::<Index>(&access_type, &oldest_slot),
-        );
-        let shred_data_cf_descriptor = ColumnFamilyDescriptor::new(
-            ShredData::NAME,
-            get_cf_options::<ShredData>(&access_type, &oldest_slot),
-        );
-        let shred_code_cf_descriptor = ColumnFamilyDescriptor::new(
-            ShredCode::NAME,
-            get_cf_options::<ShredCode>(&access_type, &oldest_slot),
-        );
-        let transaction_status_cf_descriptor = ColumnFamilyDescriptor::new(
-            TransactionStatus::NAME,
-            get_cf_options::<TransactionStatus>(&access_type, &oldest_slot),
-        );
-        let address_signatures_cf_descriptor = ColumnFamilyDescriptor::new(
-            AddressSignatures::NAME,
-            get_cf_options::<AddressSignatures>(&access_type, &oldest_slot),
-        );
-        let transaction_memos_cf_descriptor = ColumnFamilyDescriptor::new(
-            TransactionMemos::NAME,
-            get_cf_options::<TransactionMemos>(&access_type, &oldest_slot),
-        );
-        let transaction_status_index_cf_descriptor = ColumnFamilyDescriptor::new(
-            TransactionStatusIndex::NAME,
-            get_cf_options::<TransactionStatusIndex>(&access_type, &oldest_slot),
-        );
-        let rewards_cf_descriptor = ColumnFamilyDescriptor::new(
-            Rewards::NAME,
-            get_cf_options::<Rewards>(&access_type, &oldest_slot),
-        );
-        let blocktime_cf_descriptor = ColumnFamilyDescriptor::new(
-            Blocktime::NAME,
-            get_cf_options::<Blocktime>(&access_type, &oldest_slot),
-        );
-        let perf_samples_cf_descriptor = ColumnFamilyDescriptor::new(
-            PerfSamples::NAME,
-            get_cf_options::<PerfSamples>(&access_type, &oldest_slot),
-        );
-        let block_height_cf_descriptor = ColumnFamilyDescriptor::new(
-            BlockHeight::NAME,
-            get_cf_options::<BlockHeight>(&access_type, &oldest_slot),
-        );
-        let program_costs_cf_descriptor = ColumnFamilyDescriptor::new(
-            ProgramCosts::NAME,
-            get_cf_options::<ProgramCosts>(&access_type, &oldest_slot),
-        );
-        // Don't forget to add to both run_purge_with_stats() and
-        // compact_storage() in ledger/src/blockstore/blockstore_purge.rs!!
-
+        // Get column family descriptors and names
         let cfs = vec![
-            (SlotMeta::NAME, meta_cf_descriptor),
-            (DeadSlots::NAME, dead_slots_cf_descriptor),
-            (DuplicateSlots::NAME, duplicate_slots_cf_descriptor),
-            (ErasureMeta::NAME, erasure_meta_cf_descriptor),
-            (Orphans::NAME, orphans_cf_descriptor),
-            (BankHash::NAME, bank_hash_cf_descriptor),
-            (Root::NAME, root_cf_descriptor),
-            (Index::NAME, index_cf_descriptor),
-            (ShredData::NAME, shred_data_cf_descriptor),
-            (ShredCode::NAME, shred_code_cf_descriptor),
-            (TransactionStatus::NAME, transaction_status_cf_descriptor),
-            (AddressSignatures::NAME, address_signatures_cf_descriptor),
-            (TransactionMemos::NAME, transaction_memos_cf_descriptor),
-            (
-                TransactionStatusIndex::NAME,
-                transaction_status_index_cf_descriptor,
-            ),
-            (Rewards::NAME, rewards_cf_descriptor),
-            (Blocktime::NAME, blocktime_cf_descriptor),
-            (PerfSamples::NAME, perf_samples_cf_descriptor),
-            (BlockHeight::NAME, block_height_cf_descriptor),
-            (ProgramCosts::NAME, program_costs_cf_descriptor),
+            new_cf_descriptor::<SlotMeta>(&access_type, &oldest_slot),
+            new_cf_descriptor::<DeadSlots>(&access_type, &oldest_slot),
+            new_cf_descriptor::<DuplicateSlots>(&access_type, &oldest_slot),
+            new_cf_descriptor::<ErasureMeta>(&access_type, &oldest_slot),
+            new_cf_descriptor::<Orphans>(&access_type, &oldest_slot),
+            new_cf_descriptor::<BankHash>(&access_type, &oldest_slot),
+            new_cf_descriptor::<Root>(&access_type, &oldest_slot),
+            new_cf_descriptor::<Index>(&access_type, &oldest_slot),
+            new_cf_descriptor::<ShredData>(&access_type, &oldest_slot),
+            new_cf_descriptor::<ShredCode>(&access_type, &oldest_slot),
+            new_cf_descriptor::<TransactionStatus>(&access_type, &oldest_slot),
+            new_cf_descriptor::<AddressSignatures>(&access_type, &oldest_slot),
+            new_cf_descriptor::<TransactionMemos>(&access_type, &oldest_slot),
+            new_cf_descriptor::<TransactionStatusIndex>(&access_type, &oldest_slot),
+            new_cf_descriptor::<Rewards>(&access_type, &oldest_slot),
+            new_cf_descriptor::<Blocktime>(&access_type, &oldest_slot),
+            new_cf_descriptor::<PerfSamples>(&access_type, &oldest_slot),
+            new_cf_descriptor::<BlockHeight>(&access_type, &oldest_slot),
+            new_cf_descriptor::<ProgramCosts>(&access_type, &oldest_slot),
         ];
-        let cf_names: Vec<_> = cfs.iter().map(|c| c.0).collect();
+        let cf_names = Self::columns();
+        // The names and descriptors don't have to be in the same
+        // order, but there should be the same number of each.
+        assert_eq!(cfs.len(), cf_names.len());
 
         // Open the database
         let db = match access_type {
             AccessType::PrimaryOnly | AccessType::PrimaryOnlyForMaintenance => Rocks(
-                DB::open_cf_descriptors(&db_options, path, cfs.into_iter().map(|c| c.1))?,
+                DB::open_cf_descriptors(&db_options, path, cfs)?,
                 ActualAccessType::Primary,
                 oldest_slot,
             ),
             AccessType::TryPrimaryThenSecondary => {
-                match DB::open_cf_descriptors(&db_options, path, cfs.into_iter().map(|c| c.1)) {
+                match DB::open_cf_descriptors(&db_options, path, cfs) {
                     Ok(db) => Rocks(db, ActualAccessType::Primary, oldest_slot),
                     Err(err) => {
                         let secondary_path = path.join("solana-secondary");
@@ -490,7 +416,7 @@ impl Rocks {
         Ok(db)
     }
 
-    fn columns(&self) -> Vec<&'static str> {
+    fn columns() -> Vec<&'static str> {
         use columns::*;
 
         vec![
@@ -1016,13 +942,26 @@ pub struct WriteBatch<'a> {
     map: HashMap<&'static str, &'a ColumnFamily>,
 }
 
+pub struct BlockstoreOptions {
+    pub access_type: AccessType,
+    pub recovery_mode: Option<BlockstoreRecoveryMode>,
+    pub enforce_ulimit_nofile: bool,
+}
+
+impl Default for BlockstoreOptions {
+    /// The default options are the values used by [`Blockstore::open`].
+    fn default() -> Self {
+        Self {
+            access_type: AccessType::PrimaryOnly,
+            recovery_mode: None,
+            enforce_ulimit_nofile: true,
+        }
+    }
+}
+
 impl Database {
-    pub fn open(
-        path: &Path,
-        access_type: AccessType,
-        recovery_mode: Option<BlockstoreRecoveryMode>,
-    ) -> Result<Self> {
-        let backend = Arc::new(Rocks::open(path, access_type, recovery_mode)?);
+    pub fn open(path: &Path, options: BlockstoreOptions) -> Result<Self> {
+        let backend = Arc::new(Rocks::open(path, options)?);
 
         Ok(Database {
             backend,
@@ -1086,9 +1025,7 @@ impl Database {
 
     pub fn batch(&self) -> Result<WriteBatch> {
         let write_batch = self.backend.batch();
-        let map = self
-            .backend
-            .columns()
+        let map = Rocks::columns()
             .into_iter()
             .map(|desc| (desc, self.backend.cf_handle(desc)))
             .collect();
@@ -1356,6 +1293,13 @@ impl<C: Column + ColumnName> CompactionFilterFactory for PurgedSlotFilterFactory
     }
 }
 
+fn new_cf_descriptor<C: 'static + Column + ColumnName>(
+    access_type: &AccessType,
+    oldest_slot: &OldestSlot,
+) -> ColumnFamilyDescriptor {
+    ColumnFamilyDescriptor::new(C::NAME, get_cf_options::<C>(access_type, oldest_slot))
+}
+
 fn get_cf_options<C: 'static + Column + ColumnName>(
     access_type: &AccessType,
     oldest_slot: &OldestSlot,
@@ -1431,8 +1375,7 @@ fn excludes_from_compaction(cf_name: &str) -> bool {
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
-    use crate::blockstore_db::columns::ShredData;
+    use {super::*, crate::blockstore_db::columns::ShredData};
 
     #[test]
     fn test_compaction_filter() {

@@ -21,7 +21,7 @@ export function SearchBar() {
   const history = useHistory();
   const location = useLocation();
   const { tokenRegistry } = useTokenRegistry();
-  const { cluster, epochInfo } = useCluster();
+  const { cluster, clusterInfo } = useCluster();
 
   const onChange = (
     { pathname }: ValueType<any, false>,
@@ -48,7 +48,7 @@ export function SearchBar() {
               search,
               cluster,
               tokenRegistry,
-              epochInfo?.epoch
+              clusterInfo?.epochInfo.epoch
             )}
             noOptionsMessage={() => "No Results"}
             placeholder="Search for blocks, accounts, transactions, programs, and tokens"

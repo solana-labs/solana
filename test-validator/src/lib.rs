@@ -1,6 +1,7 @@
 #![allow(clippy::integer_arithmetic)]
 use {
     log::*,
+    solana_cli_output::CliAccount,
     solana_client::rpc_client::RpcClient,
     solana_core::{
         tower_storage::TowerStorage,
@@ -36,14 +37,22 @@ use {
     solana_streamer::socket::SocketAddrSpace,
     std::{
         collections::HashMap,
-        fs::remove_dir_all,
+        fs::{remove_dir_all, File},
+        io::Read,
         net::{IpAddr, Ipv4Addr, SocketAddr},
         path::{Path, PathBuf},
+        str::FromStr,
         sync::{Arc, RwLock},
         thread::sleep,
         time::Duration,
     },
 };
+
+#[derive(Clone)]
+pub struct AccountInfo<'a> {
+    pub address: Pubkey,
+    pub filename: &'a str,
+}
 
 #[derive(Clone)]
 pub struct ProgramInfo {
@@ -93,6 +102,9 @@ pub struct TestValidatorGenesis {
     pub start_progress: Arc<RwLock<ValidatorStartProgress>>,
     pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
     pub max_ledger_shreds: Option<u64>,
+    pub max_genesis_archive_unpacked_size: Option<u64>,
+    pub accountsdb_plugin_config_files: Option<Vec<PathBuf>>,
+    pub accounts_db_caching_enabled: bool,
 }
 
 impl TestValidatorGenesis {
@@ -198,6 +210,41 @@ impl TestValidatorGenesis {
                 solana_core::validator::abort();
             });
             self.add_account(address, AccountSharedData::from(account));
+        }
+        self
+    }
+
+    pub fn add_accounts_from_json_files(&mut self, accounts: &[AccountInfo]) -> &mut Self {
+        for account in accounts {
+            let account_path =
+                solana_program_test::find_file(account.filename).unwrap_or_else(|| {
+                    error!("Unable to locate {}", account.filename);
+                    solana_core::validator::abort();
+                });
+            let mut file = File::open(&account_path).unwrap();
+            let mut account_info_raw = String::new();
+            file.read_to_string(&mut account_info_raw).unwrap();
+
+            let result: serde_json::Result<CliAccount> = serde_json::from_str(&account_info_raw);
+            let account_info = match result {
+                Err(err) => {
+                    error!(
+                        "Unable to deserialize {}: {}",
+                        account_path.to_str().unwrap(),
+                        err
+                    );
+                    solana_core::validator::abort();
+                }
+                Ok(deserialized) => deserialized,
+            };
+            let address = Pubkey::from_str(account_info.keyed_account.pubkey.as_str()).unwrap();
+            let account = account_info
+                .keyed_account
+                .account
+                .decode::<AccountSharedData>()
+                .unwrap();
+
+            self.add_account(address, account);
         }
         self
     }
@@ -428,7 +475,9 @@ impl TestValidator {
                 let _ = create_new_ledger(
                     ledger_path,
                     &genesis_config,
-                    MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+                    config
+                        .max_genesis_archive_unpacked_size
+                        .unwrap_or(MAX_GENESIS_ARCHIVE_UNPACKED_SIZE),
                     solana_ledger::blockstore_db::AccessType::PrimaryOnly,
                 )
                 .map_err(|err| {
@@ -507,6 +556,8 @@ impl TestValidator {
         }
 
         let mut validator_config = ValidatorConfig {
+            accountsdb_plugin_config_files: config.accountsdb_plugin_config_files.clone(),
+            accounts_db_caching_enabled: config.accounts_db_caching_enabled,
             rpc_addrs: Some((
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
                 SocketAddr::new(

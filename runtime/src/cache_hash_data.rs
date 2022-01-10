@@ -1,19 +1,20 @@
 //! Cached data for hashing accounts
-use crate::accounts_hash::CalculateHashIntermediate;
-use crate::cache_hash_data_stats::CacheHashDataStats;
-use crate::pubkey_bins::PubkeyBinCalculator24;
-use log::*;
-use memmap2::MmapMut;
-use solana_measure::measure::Measure;
-use std::collections::HashSet;
-use std::fs::{self};
-use std::fs::{remove_file, OpenOptions};
-use std::io::Seek;
-use std::io::SeekFrom;
-use std::io::Write;
-use std::path::Path;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use {
+    crate::{
+        accounts_hash::CalculateHashIntermediate, cache_hash_data_stats::CacheHashDataStats,
+        pubkey_bins::PubkeyBinCalculator24,
+    },
+    log::*,
+    memmap2::MmapMut,
+    solana_measure::measure::Measure,
+    std::{
+        collections::HashSet,
+        fs::{self, remove_file, OpenOptions},
+        io::{Seek, SeekFrom, Write},
+        path::{Path, PathBuf},
+        sync::{Arc, Mutex},
+    },
+};
 
 pub type EntryType = CalculateHashIntermediate;
 pub type SavedType = Vec<Vec<EntryType>>;
@@ -302,8 +303,7 @@ impl CacheHashData {
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
-    use rand::Rng;
+    use {super::*, rand::Rng};
 
     #[test]
     fn test_read_write() {

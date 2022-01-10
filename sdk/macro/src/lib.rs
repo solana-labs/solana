@@ -4,17 +4,19 @@
 
 extern crate proc_macro;
 
-use proc_macro::TokenStream;
-use proc_macro2::{Delimiter, Span, TokenTree};
-use quote::{quote, ToTokens};
-use std::convert::TryFrom;
-use syn::{
-    bracketed,
-    parse::{Parse, ParseStream, Result},
-    parse_macro_input,
-    punctuated::Punctuated,
-    token::Bracket,
-    Expr, Ident, LitByte, LitStr, Path, Token,
+use {
+    proc_macro::TokenStream,
+    proc_macro2::{Delimiter, Span, TokenTree},
+    quote::{quote, ToTokens},
+    std::convert::TryFrom,
+    syn::{
+        bracketed,
+        parse::{Parse, ParseStream, Result},
+        parse_macro_input,
+        punctuated::Punctuated,
+        token::Bracket,
+        Expr, Ident, LitByte, LitStr, Path, Token,
+    },
 };
 
 fn parse_id(
@@ -370,4 +372,32 @@ impl ToTokens for Pubkeys {
 pub fn pubkeys(input: TokenStream) -> TokenStream {
     let pubkeys = parse_macro_input!(input as Pubkeys);
     TokenStream::from(quote! {#pubkeys})
+}
+
+// The normal `wasm_bindgen` macro generates a .bss section which causes the resulting
+// BPF program to fail to load, so for now this stub should be used when building for BPF
+#[proc_macro_attribute]
+pub fn wasm_bindgen_stub(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    match parse_macro_input!(item as syn::Item) {
+        syn::Item::Struct(mut item_struct) => {
+            if let syn::Fields::Named(fields) = &mut item_struct.fields {
+                // Strip out any `#[wasm_bindgen]` added to struct fields. This is custom
+                // syntax supplied by the normal `wasm_bindgen` macro.
+                for field in fields.named.iter_mut() {
+                    field.attrs.retain(|attr| {
+                        !attr
+                            .path
+                            .segments
+                            .iter()
+                            .any(|segment| segment.ident == "wasm_bindgen")
+                    });
+                }
+            }
+            quote! { #item_struct }
+        }
+        item => {
+            quote!(#item)
+        }
+    }
+    .into()
 }

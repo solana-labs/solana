@@ -319,7 +319,7 @@ function OverviewCard({
         <TableCardBody>
           <tr>
             <td>Serialized Size</td>
-            <td className="text-lg-right">
+            <td className="text-lg-end">
               <div className="d-flex align-items-end flex-column">
                 {size} bytes
                 <span
@@ -334,7 +334,7 @@ function OverviewCard({
           </tr>
           <tr>
             <td>Fees</td>
-            <td className="text-lg-right">
+            <td className="text-lg-end">
               <div className="d-flex align-items-end flex-column">
                 <SolBalance lamports={fee} />
                 <span className="text-muted">
@@ -348,12 +348,12 @@ function OverviewCard({
               <div className="d-flex align-items-start flex-column">
                 Fee payer
                 <span className="mt-1">
-                  <span className="badge badge-soft-info mr-2">Signer</span>
-                  <span className="badge badge-soft-danger mr-2">Writable</span>
+                  <span className="badge bg-info-soft me-2">Signer</span>
+                  <span className="badge bg-danger-soft me-2">Writable</span>
                 </span>
               </div>
             </td>
-            <td className="text-right">
+            <td className="text-end">
               {message.accountKeys.length === 0 ? (
                 "No Fee Payer"
               ) : (

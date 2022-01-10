@@ -1,18 +1,19 @@
 //! The `signature` module provides functionality for public, and private keys.
 #![cfg(feature = "full")]
 
-use crate::pubkey::Pubkey;
-use generic_array::{typenum::U64, GenericArray};
-use std::{
-    borrow::{Borrow, Cow},
-    convert::TryInto,
-    fmt, mem,
-    str::FromStr,
-};
-use thiserror::Error;
-
 // legacy module paths
 pub use crate::signer::{keypair::*, null_signer::*, presigner::*, *};
+use {
+    crate::pubkey::Pubkey,
+    generic_array::{typenum::U64, GenericArray},
+    std::{
+        borrow::{Borrow, Cow},
+        convert::TryInto,
+        fmt, mem,
+        str::FromStr,
+    },
+    thiserror::Error,
+};
 
 /// Number of bytes in a signature
 pub const SIGNATURE_BYTES: usize = 64;
@@ -30,6 +31,11 @@ impl crate::sanitize::Sanitize for Signature {}
 impl Signature {
     pub fn new(signature_slice: &[u8]) -> Self {
         Self(GenericArray::clone_from_slice(signature_slice))
+    }
+
+    pub fn new_unique() -> Self {
+        let random_bytes: Vec<u8> = (0..64).map(|_| rand::random::<u8>()).collect();
+        Self::new(&random_bytes)
     }
 
     pub(self) fn verify_verbose(

@@ -1,12 +1,14 @@
 #![allow(clippy::integer_arithmetic)]
-use clap::{crate_description, crate_name, value_t, App, Arg};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use solana_entry::entry::{self, create_ticks, init_poh, EntrySlice, VerifyRecyclers};
 #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
 use solana_entry::entry::{create_ticks, init_poh, EntrySlice, VerifyRecyclers};
-use solana_measure::measure::Measure;
-use solana_perf::perf_libs;
-use solana_sdk::hash::hash;
+use {
+    clap::{crate_description, crate_name, value_t, App, Arg},
+    solana_measure::measure::Measure,
+    solana_perf::perf_libs,
+    solana_sdk::hash::hash,
+};
 
 fn main() {
     solana_logger::setup();

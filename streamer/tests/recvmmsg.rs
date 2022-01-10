@@ -1,10 +1,12 @@
 #![cfg(target_os = "linux")]
 
-use solana_streamer::packet::Packet;
-use solana_streamer::packet::PACKET_DATA_SIZE;
-use solana_streamer::recvmmsg::*;
-use std::net::UdpSocket;
-use std::time::Instant;
+use {
+    solana_streamer::{
+        packet::{Meta, Packet, PACKET_DATA_SIZE},
+        recvmmsg::*,
+    },
+    std::{net::UdpSocket, time::Instant},
+};
 
 #[test]
 pub fn test_recv_mmsg_batch_size() {
@@ -23,7 +25,7 @@ pub fn test_recv_mmsg_batch_size() {
         }
         let mut packets = vec![Packet::default(); TEST_BATCH_SIZE];
         let now = Instant::now();
-        let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
+        let recv = recv_mmsg(&reader, &mut packets[..]).unwrap();
         elapsed_in_max_batch += now.elapsed().as_nanos();
         assert_eq!(TEST_BATCH_SIZE, recv);
     });
@@ -38,10 +40,13 @@ pub fn test_recv_mmsg_batch_size() {
         let mut recv = 0;
         let now = Instant::now();
         while let Ok(num) = recv_mmsg(&reader, &mut packets[..]) {
-            recv += num.1;
+            recv += num;
             if recv >= TEST_BATCH_SIZE {
                 break;
             }
+            packets
+                .iter_mut()
+                .for_each(|pkt| pkt.meta = Meta::default());
         }
         elapsed_in_small_batch += now.elapsed().as_nanos();
         assert_eq!(TEST_BATCH_SIZE, recv);

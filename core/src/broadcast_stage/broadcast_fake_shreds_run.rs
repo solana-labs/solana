@@ -1,14 +1,16 @@
-use super::*;
-use solana_entry::entry::Entry;
-use solana_ledger::shred::Shredder;
-use solana_sdk::hash::Hash;
-use solana_sdk::signature::Keypair;
+use {
+    super::*,
+    solana_entry::entry::Entry,
+    solana_ledger::shred::Shredder,
+    solana_sdk::{hash::Hash, signature::Keypair},
+};
 
 #[derive(Clone)]
 pub(super) struct BroadcastFakeShredsRun {
     last_blockhash: Hash,
     partition: usize,
     shred_version: u16,
+    next_code_index: u32,
 }
 
 impl BroadcastFakeShredsRun {
@@ -17,6 +19,7 @@ impl BroadcastFakeShredsRun {
             last_blockhash: Hash::default(),
             partition,
             shred_version,
+            next_code_index: 0,
         }
     }
 }
@@ -51,11 +54,12 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         )
         .expect("Expected to create a new shredder");
 
-        let (data_shreds, coding_shreds, _) = shredder.entries_to_shreds(
+        let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
             keypair,
             &receive_results.entries,
             last_tick_height == bank.max_tick_height(),
             next_shred_index,
+            self.next_code_index,
         );
 
         // If the last blockhash is default, a new block is being created
@@ -68,12 +72,22 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             .map(|_| Entry::new(&self.last_blockhash, 0, vec![]))
             .collect();
 
-        let (fake_data_shreds, fake_coding_shreds, _) = shredder.entries_to_shreds(
+        let (fake_data_shreds, fake_coding_shreds) = shredder.entries_to_shreds(
             keypair,
             &fake_entries,
             last_tick_height == bank.max_tick_height(),
             next_shred_index,
+            self.next_code_index,
         );
+
+        if let Some(index) = coding_shreds
+            .iter()
+            .chain(&fake_coding_shreds)
+            .map(Shred::index)
+            .max()
+        {
+            self.next_code_index = index + 1;
+        }
 
         // If it's the last tick, reset the last block hash to default
         // this will cause next run to grab last bank's blockhash
@@ -139,10 +153,12 @@ impl BroadcastRun for BroadcastFakeShredsRun {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_gossip::contact_info::ContactInfo;
-    use solana_streamer::socket::SocketAddrSpace;
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use {
+        super::*,
+        solana_gossip::contact_info::ContactInfo,
+        solana_streamer::socket::SocketAddrSpace,
+        std::net::{IpAddr, Ipv4Addr, SocketAddr},
+    };
 
     #[test]
     fn test_tvu_peers_ordering() {

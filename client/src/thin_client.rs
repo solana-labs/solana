@@ -667,8 +667,7 @@ pub fn create_client_with_timeout(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use rayon::prelude::*;
+    use {super::*, rayon::prelude::*};
 
     #[test]
     fn test_client_optimizer() {

@@ -1,4 +1,4 @@
-import * as nacl from 'tweetnacl';
+import nacl from 'tweetnacl';
 import type {SignKeyPair as KeyPair} from 'tweetnacl';
 import type {Buffer} from 'buffer';
 

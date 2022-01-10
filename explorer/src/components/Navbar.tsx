@@ -24,11 +24,11 @@ export function Navbar() {
         </button>
 
         <div
-          className={`collapse navbar-collapse ml-auto mr-4 ${
+          className={`collapse navbar-collapse ms-auto me-4 ${
             collapse ? "show" : ""
           }`}
         >
-          <ul className="navbar-nav mr-auto">
+          <ul className="navbar-nav me-auto">
             <li className="nav-item">
               <NavLink className="nav-link" to={clusterPath("/")} exact>
                 Cluster Stats

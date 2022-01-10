@@ -105,7 +105,7 @@ pub(crate) struct ComputedBankState {
 #[frozen_abi(digest = "GMs1FxKteU7K4ZFRofMBqNhBpM4xkPVxfYod6R8DQmpT")]
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, AbiExample)]
 pub struct Tower {
-    pub(crate) node_pubkey: Pubkey,
+    pub node_pubkey: Pubkey,
     threshold_depth: usize,
     threshold_size: f64,
     vote_state: VoteState,
@@ -367,22 +367,16 @@ impl Tower {
     ) -> Vote {
         let vote = Vote::new(vec![slot], hash);
         local_vote_state.process_vote_unchecked(&vote);
-        let slots = if let Some(last_voted_slot_in_bank) = last_voted_slot_in_bank {
+        let slots = if let Some(last_voted_slot) = last_voted_slot_in_bank {
             local_vote_state
                 .votes
                 .iter()
                 .map(|v| v.slot)
-                .skip_while(|s| *s <= last_voted_slot_in_bank)
+                .skip_while(|s| *s <= last_voted_slot)
                 .collect()
         } else {
             local_vote_state.votes.iter().map(|v| v.slot).collect()
         };
-        trace!(
-            "new vote with {:?} {:?} {:?}",
-            last_voted_slot_in_bank,
-            slots,
-            local_vote_state.votes
-        );
         Vote::new(slots, hash)
     }
 
@@ -415,7 +409,8 @@ impl Tower {
             last_voted_slot_in_bank,
         );
 
-        new_vote.timestamp = self.maybe_timestamp(self.last_vote.last_voted_slot().unwrap_or(0));
+        new_vote.timestamp =
+            self.maybe_timestamp(self.last_vote.slots.last().copied().unwrap_or_default());
         self.last_vote = new_vote;
 
         let new_root = self.root();
@@ -437,12 +432,19 @@ impl Tower {
         self.record_bank_vote_and_update_lockouts(slot, hash, self.last_voted_slot())
     }
 
+    /// Used for tests
+    pub fn increase_lockout(&mut self, confirmation_count_increase: u32) {
+        for vote in self.vote_state.votes.iter_mut() {
+            vote.confirmation_count += confirmation_count_increase;
+        }
+    }
+
     pub fn last_voted_slot(&self) -> Option<Slot> {
-        self.last_vote.last_voted_slot()
+        self.last_vote.slots.last().copied()
     }
 
     pub fn last_voted_slot_hash(&self) -> Option<(Slot, Hash)> {
-        self.last_vote.last_voted_slot_hash()
+        Some((*self.last_vote.slots.last()?, self.last_vote.hash))
     }
 
     pub fn stray_restored_slot(&self) -> Option<Slot> {
@@ -1124,10 +1126,10 @@ impl Tower {
             );
 
             assert_eq!(
-                self.last_vote.last_voted_slot().unwrap(),
-                *self.voted_slots().last().unwrap()
+                self.last_vote.slots.last().unwrap(),
+                self.voted_slots().last().unwrap()
             );
-            self.stray_restored_slot = Some(self.last_vote.last_voted_slot().unwrap());
+            self.stray_restored_slot = Some(*self.last_vote.slots.last().unwrap());
         }
 
         Ok(())

@@ -1,15 +1,11 @@
 //! BucketMap is a mostly contention free concurrent map backed by MmapMut
 
-use crate::bucket_api::BucketApi;
-use crate::bucket_stats::BucketMapStats;
-use crate::{MaxSearch, RefCount};
-use solana_sdk::pubkey::Pubkey;
-use std::convert::TryInto;
-use std::fmt::Debug;
-use std::fs;
-use std::path::PathBuf;
-use std::sync::Arc;
-use tempfile::TempDir;
+use {
+    crate::{bucket_api::BucketApi, bucket_stats::BucketMapStats, MaxSearch, RefCount},
+    solana_sdk::pubkey::Pubkey,
+    std::{convert::TryInto, fmt::Debug, fs, path::PathBuf, sync::Arc},
+    tempfile::TempDir,
+};
 
 #[derive(Debug, Default, Clone)]
 pub struct BucketMapConfig {
@@ -83,21 +79,14 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
         });
         let drives = Arc::new(drives);
 
-        let mut per_bucket_count = Vec::with_capacity(config.max_buckets);
-        per_bucket_count.resize_with(config.max_buckets, Arc::default);
-        let stats = Arc::new(BucketMapStats {
-            per_bucket_count,
-            ..BucketMapStats::default()
-        });
-        let buckets = stats
-            .per_bucket_count
-            .iter()
-            .map(|per_bucket_count| {
+        let stats = Arc::default();
+        let buckets = (0..config.max_buckets)
+            .into_iter()
+            .map(|_| {
                 Arc::new(BucketApi::new(
                     Arc::clone(&drives),
                     max_search,
                     Arc::clone(&stats),
-                    Arc::clone(per_bucket_count),
                 ))
             })
             .collect();
@@ -148,7 +137,7 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
     /// Update Pubkey `key`'s value with function `updatefn`
     pub fn update<F>(&self, key: &Pubkey, updatefn: F)
     where
-        F: Fn(Option<(&[T], RefCount)>) -> Option<(Vec<T>, RefCount)>,
+        F: FnMut(Option<(&[T], RefCount)>) -> Option<(Vec<T>, RefCount)>,
     {
         self.get_bucket(key).update(key, updatefn)
     }
@@ -194,11 +183,11 @@ fn read_be_u64(input: &[u8]) -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use rand::thread_rng;
-    use rand::Rng;
-    use std::collections::HashMap;
-    use std::sync::RwLock;
+    use {
+        super::*,
+        rand::{thread_rng, Rng},
+        std::{collections::HashMap, sync::RwLock},
+    };
 
     #[test]
     fn bucket_map_test_insert() {

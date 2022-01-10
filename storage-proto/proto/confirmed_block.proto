@@ -41,7 +41,9 @@ message TransactionStatusMeta {
     repeated uint64 pre_balances = 3;
     repeated uint64 post_balances = 4;
     repeated InnerInstructions inner_instructions = 5;
+    bool inner_instructions_none = 10;
     repeated string log_messages = 6;
+    bool log_messages_none = 11;
     repeated TokenBalance pre_token_balances = 7;
     repeated TokenBalance post_token_balances = 8;
     repeated Reward rewards = 9;

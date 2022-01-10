@@ -1,0 +1,84 @@
+// 
+// form-check.scss
+// Extended from Bootstrap
+//
+
+//
+// Bootstrap Overrides ===================================
+//
+
+//
+// Check
+//
+
+.form-check {
+  margin-bottom: 0;
+}
+
+.form-check + .form-check {
+  margin-top: $form-check-margin-bottom;
+}
+
+// Input
+
+.form-check-input {
+  width: $form-check-size;
+  height: $form-check-size;
+  margin-top: calc((#{$line-height-base} * 1em - 1rem) / 2);
+  cursor: $form-check-label-cursor;
+}
+
+.form-check-input:focus:not(:checked) {
+  background-color: $form-check-input-focus-bg;
+}
+
+.form-check:not(.form-switch):not(.form-check-circle) .form-check-input:checked {
+  background-size: $form-check-input-checked-bg-size;
+}
+
+
+//
+// Switch
+//
+
+.form-switch {
+  min-height: $form-switch-min-height;
+}
+
+.form-switch > .form-check-input {
+  height: $form-switch-min-height;
+  margin-top: 0; // Form switch input height is always equal to the height of the switch
+}
+
+.form-switch > .form-check-label {
+  margin-top: calc((#{$form-switch-min-height} - #{$line-height-base} * 1em) / 2);
+}
+
+
+
+//
+// Theme ===================================
+//
+
+// Circle
+
+.form-check-circle {
+  padding-left: $form-check-circle-padding-start;
+}
+
+.form-check-circle > .form-check-input {
+  width: $form-check-circle-indicator-size;
+  height: $form-check-circle-indicator-size;
+  margin-left: -$form-check-circle-padding-start;
+  border-radius: $form-check-circle-indicator-border-radius;
+  background-image: escape-svg($form-check-circle-indicator-icon-checked);
+  background-size: $form-check-circle-indicator-bg-size;
+}
+
+.form-check-circle > .form-check-input:checked {
+  background-image: escape-svg($form-check-circle-indicator-icon-checked);
+}
+
+.form-check-circle > .form-check-label {
+  margin-top: calc((#{$form-check-circle-indicator-size} - 1em) / 2);
+}

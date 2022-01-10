@@ -17,9 +17,11 @@ use {
         io::{Read, Write},
         path::Path,
     },
+    wasm_bindgen::prelude::*,
 };
 
 /// A vanilla Ed25519 key pair
+#[wasm_bindgen]
 #[derive(Debug)]
 pub struct Keypair(ed25519_dalek::Keypair);
 

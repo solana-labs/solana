@@ -2,7 +2,11 @@ use {
     crate::{
         hash::Hash,
         instruction::{CompiledInstruction, Instruction},
-        message::{MappedAddresses, MappedMessage, Message, MessageHeader},
+        message::{
+            legacy::Message as LegacyMessage,
+            v0::{self, LoadedAddresses},
+            MessageHeader,
+        },
         pubkey::Pubkey,
         sanitize::{Sanitize, SanitizeError},
         serialize_utils::{append_slice, append_u16, append_u8},
@@ -17,9 +21,9 @@ use {
 #[derive(Debug, Clone)]
 pub enum SanitizedMessage {
     /// Sanitized legacy message
-    Legacy(Message),
-    /// Sanitized version #0 message with mapped addresses
-    V0(MappedMessage),
+    Legacy(LegacyMessage),
+    /// Sanitized version #0 message with dynamically loaded addresses
+    V0(v0::LoadedMessage),
 }
 
 #[derive(PartialEq, Debug, Error, Eq, Clone)]
@@ -30,8 +34,6 @@ pub enum SanitizeMessageError {
     ValueOutOfBounds,
     #[error("invalid value")]
     InvalidValue,
-    #[error("duplicate account key")]
-    DuplicateAccountKey,
 }
 
 impl From<SanitizeError> for SanitizeMessageError {
@@ -44,17 +46,11 @@ impl From<SanitizeError> for SanitizeMessageError {
     }
 }
 
-impl TryFrom<Message> for SanitizedMessage {
+impl TryFrom<LegacyMessage> for SanitizedMessage {
     type Error = SanitizeMessageError;
-    fn try_from(message: Message) -> Result<Self, Self::Error> {
+    fn try_from(message: LegacyMessage) -> Result<Self, Self::Error> {
         message.sanitize()?;
-
-        let sanitized_msg = Self::Legacy(message);
-        if sanitized_msg.has_duplicates() {
-            return Err(SanitizeMessageError::DuplicateAccountKey);
-        }
-
-        Ok(sanitized_msg)
+        Ok(Self::Legacy(message))
     }
 }
 
@@ -80,12 +76,12 @@ impl SanitizedMessage {
     pub fn header(&self) -> &MessageHeader {
         match self {
             Self::Legacy(message) => &message.header,
-            Self::V0(mapped_msg) => &mapped_msg.message.header,
+            Self::V0(message) => &message.header,
         }
     }
 
     /// Returns a legacy message if this sanitized message wraps one
-    pub fn legacy_message(&self) -> Option<&Message> {
+    pub fn legacy_message(&self) -> Option<&LegacyMessage> {
         if let Self::Legacy(message) = &self {
             Some(message)
         } else {
@@ -103,7 +99,7 @@ impl SanitizedMessage {
     pub fn recent_blockhash(&self) -> &Hash {
         match self {
             Self::Legacy(message) => &message.recent_blockhash,
-            Self::V0(mapped_msg) => &mapped_msg.message.recent_blockhash,
+            Self::V0(message) => &message.recent_blockhash,
         }
     }
 
@@ -112,7 +108,7 @@ impl SanitizedMessage {
     pub fn instructions(&self) -> &[CompiledInstruction] {
         match self {
             Self::Legacy(message) => &message.instructions,
-            Self::V0(mapped_msg) => &mapped_msg.message.instructions,
+            Self::V0(message) => &message.instructions,
         }
     }
 
@@ -123,7 +119,7 @@ impl SanitizedMessage {
     ) -> impl Iterator<Item = (&Pubkey, &CompiledInstruction)> {
         match self {
             Self::Legacy(message) => message.instructions.iter(),
-            Self::V0(mapped_msg) => mapped_msg.message.instructions.iter(),
+            Self::V0(message) => message.instructions.iter(),
         }
         .map(move |ix| {
             (
@@ -134,19 +130,19 @@ impl SanitizedMessage {
         })
     }
 
-    /// Iterator of all account keys referenced in this message, included mapped keys.
+    /// Iterator of all account keys referenced in this message, including dynamically loaded keys.
     pub fn account_keys_iter(&self) -> Box<dyn Iterator<Item = &Pubkey> + '_> {
         match self {
             Self::Legacy(message) => Box::new(message.account_keys.iter()),
-            Self::V0(mapped_msg) => Box::new(mapped_msg.account_keys_iter()),
+            Self::V0(message) => Box::new(message.account_keys_iter()),
         }
     }
 
-    /// Length of all account keys referenced in this message, included mapped keys.
+    /// Length of all account keys referenced in this message, including dynamically loaded keys.
     pub fn account_keys_len(&self) -> usize {
         match self {
             Self::Legacy(message) => message.account_keys.len(),
-            Self::V0(mapped_msg) => mapped_msg.account_keys_len(),
+            Self::V0(message) => message.account_keys_len(),
         }
     }
 
@@ -187,10 +183,10 @@ impl SanitizedMessage {
 
     /// Returns true if the account at the specified index is writable by the
     /// instructions in this message.
-    pub fn is_writable(&self, index: usize, demote_program_write_locks: bool) -> bool {
+    pub fn is_writable(&self, index: usize) -> bool {
         match self {
-            Self::Legacy(message) => message.is_writable(index, demote_program_write_locks),
-            Self::V0(message) => message.is_writable(index, demote_program_write_locks),
+            Self::Legacy(message) => message.is_writable(index),
+            Self::V0(message) => message.is_writable(index),
         }
     }
 
@@ -214,7 +210,7 @@ impl SanitizedMessage {
     //   67..69 - data len - u16
     //   69..data_len - data
     #[allow(clippy::integer_arithmetic)]
-    pub fn serialize_instructions(&self, demote_program_write_locks: bool) -> Vec<u8> {
+    pub fn serialize_instructions(&self) -> Vec<u8> {
         // 64 bytes is a reasonable guess, calculating exactly is slower in benchmarks
         let mut data = Vec::with_capacity(self.instructions().len() * (32 * 2));
         append_u16(&mut data, self.instructions().len() as u16);
@@ -229,7 +225,7 @@ impl SanitizedMessage {
             for account_index in &instruction.accounts {
                 let account_index = *account_index as usize;
                 let is_signer = self.is_signer(account_index);
-                let is_writable = self.is_writable(account_index, demote_program_write_locks);
+                let is_writable = self.is_writable(account_index);
                 let mut account_meta = InstructionsSysvarAccountMeta::NONE;
                 if is_signer {
                     account_meta |= InstructionsSysvarAccountMeta::IS_SIGNER;
@@ -251,21 +247,21 @@ impl SanitizedMessage {
         data
     }
 
-    /// Return the mapped addresses for this message if it has any.
-    fn mapped_addresses(&self) -> Option<&MappedAddresses> {
+    /// Return the resolved addresses for this message if it has any.
+    fn loaded_lookup_table_addresses(&self) -> Option<&LoadedAddresses> {
         match &self {
-            SanitizedMessage::V0(message) => Some(&message.mapped_addresses),
+            SanitizedMessage::V0(message) => Some(&message.loaded_addresses),
             _ => None,
         }
     }
 
     /// Return the number of readonly accounts loaded by this message.
     pub fn num_readonly_accounts(&self) -> usize {
-        let mapped_readonly_addresses = self
-            .mapped_addresses()
+        let loaded_readonly_addresses = self
+            .loaded_lookup_table_addresses()
             .map(|keys| keys.readonly.len())
             .unwrap_or_default();
-        mapped_readonly_addresses
+        loaded_readonly_addresses
             .saturating_add(usize::from(self.header().num_readonly_signed_accounts))
             .saturating_add(usize::from(self.header().num_readonly_unsigned_accounts))
     }
@@ -300,32 +296,19 @@ impl SanitizedMessage {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{
-        instruction::{AccountMeta, Instruction},
-        message::v0,
+    use {
+        super::*,
+        crate::{
+            instruction::{AccountMeta, Instruction},
+            message::v0,
+        },
     };
 
     #[test]
     fn test_try_from_message() {
-        let dupe_key = Pubkey::new_unique();
-        let legacy_message_with_dupes = Message {
-            header: MessageHeader {
-                num_required_signatures: 1,
-                ..MessageHeader::default()
-            },
-            account_keys: vec![dupe_key, dupe_key],
-            ..Message::default()
-        };
-
-        assert_eq!(
-            SanitizedMessage::try_from(legacy_message_with_dupes).err(),
-            Some(SanitizeMessageError::DuplicateAccountKey),
-        );
-
-        let legacy_message_with_no_signers = Message {
+        let legacy_message_with_no_signers = LegacyMessage {
             account_keys: vec![Pubkey::new_unique()],
-            ..Message::default()
+            ..LegacyMessage::default()
         };
 
         assert_eq!(
@@ -344,7 +327,7 @@ mod tests {
             CompiledInstruction::new(2, &(), vec![0, 1]),
         ];
 
-        let message = SanitizedMessage::try_from(Message::new_with_compiled_instructions(
+        let message = SanitizedMessage::try_from(LegacyMessage::new_with_compiled_instructions(
             1,
             0,
             2,
@@ -368,20 +351,20 @@ mod tests {
         let key4 = Pubkey::new_unique();
         let key5 = Pubkey::new_unique();
 
-        let legacy_message = SanitizedMessage::try_from(Message {
+        let legacy_message = SanitizedMessage::try_from(LegacyMessage {
             header: MessageHeader {
                 num_required_signatures: 2,
                 num_readonly_signed_accounts: 1,
                 num_readonly_unsigned_accounts: 1,
             },
             account_keys: vec![key0, key1, key2, key3],
-            ..Message::default()
+            ..LegacyMessage::default()
         })
         .unwrap();
 
         assert_eq!(legacy_message.num_readonly_accounts(), 2);
 
-        let mapped_message = SanitizedMessage::V0(MappedMessage {
+        let v0_message = SanitizedMessage::V0(v0::LoadedMessage {
             message: v0::Message {
                 header: MessageHeader {
                     num_required_signatures: 2,
@@ -391,13 +374,13 @@ mod tests {
                 account_keys: vec![key0, key1, key2, key3],
                 ..v0::Message::default()
             },
-            mapped_addresses: MappedAddresses {
+            loaded_addresses: LoadedAddresses {
                 writable: vec![key4],
                 readonly: vec![key5],
             },
         });
 
-        assert_eq!(mapped_message.num_readonly_accounts(), 3);
+        assert_eq!(v0_message.num_readonly_accounts(), 3);
     }
 
     #[test]
@@ -424,10 +407,9 @@ mod tests {
             ),
         ];
 
-        let demote_program_write_locks = true;
-        let message = Message::new(&instructions, Some(&id1));
+        let message = LegacyMessage::new(&instructions, Some(&id1));
         let sanitized_message = SanitizedMessage::try_from(message.clone()).unwrap();
-        let serialized = sanitized_message.serialize_instructions(demote_program_write_locks);
+        let serialized = sanitized_message.serialize_instructions();
 
         // assert that SanitizedMessage::serialize_instructions has the same behavior as the
         // deprecated Message::serialize_instructions method
@@ -436,7 +418,7 @@ mod tests {
         // assert that Message::deserialize_instruction is compatible with SanitizedMessage::serialize_instructions
         for (i, instruction) in instructions.iter().enumerate() {
             assert_eq!(
-                Message::deserialize_instruction(i, &serialized).unwrap(),
+                LegacyMessage::deserialize_instruction(i, &serialized).unwrap(),
                 *instruction
             );
         }
@@ -479,18 +461,18 @@ mod tests {
             data: vec![],
         };
 
-        let legacy_message = SanitizedMessage::try_from(Message {
+        let legacy_message = SanitizedMessage::try_from(LegacyMessage {
             header: MessageHeader {
                 num_required_signatures: 1,
                 num_readonly_signed_accounts: 0,
                 num_readonly_unsigned_accounts: 0,
             },
             account_keys: vec![key0, key1, key2, program_id],
-            ..Message::default()
+            ..LegacyMessage::default()
         })
         .unwrap();
 
-        let mapped_message = SanitizedMessage::V0(MappedMessage {
+        let v0_message = SanitizedMessage::V0(v0::LoadedMessage {
             message: v0::Message {
                 header: MessageHeader {
                     num_required_signatures: 1,
@@ -500,13 +482,13 @@ mod tests {
                 account_keys: vec![key0, key1],
                 ..v0::Message::default()
             },
-            mapped_addresses: MappedAddresses {
+            loaded_addresses: LoadedAddresses {
                 writable: vec![key2],
                 readonly: vec![program_id],
             },
         });
 
-        for message in vec![legacy_message, mapped_message] {
+        for message in vec![legacy_message, v0_message] {
             assert_eq!(
                 message.try_compile_instruction(&valid_instruction),
                 Some(CompiledInstruction {

@@ -183,17 +183,19 @@ impl Default for BlockhashQuery {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{
-        blockhash_query,
-        rpc_request::RpcRequest,
-        rpc_response::{Response, RpcFeeCalculator, RpcFees, RpcResponseContext},
+    use {
+        super::*,
+        crate::{
+            blockhash_query,
+            rpc_request::RpcRequest,
+            rpc_response::{Response, RpcFeeCalculator, RpcFees, RpcResponseContext},
+        },
+        clap::App,
+        serde_json::{self, json},
+        solana_account_decoder::{UiAccount, UiAccountEncoding},
+        solana_sdk::{account::Account, hash::hash, nonce, system_program},
+        std::collections::HashMap,
     };
-    use clap::App;
-    use serde_json::{self, json};
-    use solana_account_decoder::{UiAccount, UiAccountEncoding};
-    use solana_sdk::{account::Account, hash::hash, nonce, system_program};
-    use std::collections::HashMap;
 
     #[test]
     fn test_blockhash_query_new_ok() {

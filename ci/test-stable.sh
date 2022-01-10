@@ -65,6 +65,9 @@ test-stable-bpf)
     fi
   done
 
+  # bpf-tools version
+  "$cargo_build_bpf" -V
+
   # BPF program instruction count assertion
   bpf_target_path=programs/bpf/target
   _ "$cargo" stable test \
@@ -100,7 +103,30 @@ test-stable-perf)
   ;;
 test-local-cluster)
   _ "$cargo" stable build --release --bins ${V:+--verbose}
-  _ "$cargo" stable test --release --package solana-local-cluster ${V:+--verbose} -- --nocapture --test-threads=1
+  _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster ${V:+--verbose} -- --nocapture --test-threads=1
+  exit 0
+  ;;
+test-local-cluster-flakey)
+  _ "$cargo" stable build --release --bins ${V:+--verbose}
+  _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_flakey ${V:+--verbose} -- --nocapture --test-threads=1
+  exit 0
+  ;;
+test-local-cluster-slow)
+  _ "$cargo" stable build --release --bins ${V:+--verbose}
+  _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_slow ${V:+--verbose} -- --nocapture --test-threads=1
+  exit 0
+  ;;
+test-wasm)
+  _ node --version
+  _ npm --version
+  for dir in sdk/{program,}; do
+    if [[ -r "$dir"/package.json ]]; then
+      pushd "$dir"
+      _ npm install
+      _ npm test
+      popd
+    fi
+  done
   exit 0
   ;;
 *)

@@ -1,21 +1,22 @@
 #![allow(clippy::integer_arithmetic)]
 //! A library for generating a message from a sequence of instructions
 
-use crate::sanitize::{Sanitize, SanitizeError};
-use crate::serialize_utils::{
-    append_slice, append_u16, append_u8, read_pubkey, read_slice, read_u16, read_u8,
+use {
+    crate::{
+        bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
+        hash::Hash,
+        instruction::{AccountMeta, CompiledInstruction, Instruction},
+        message::MessageHeader,
+        pubkey::Pubkey,
+        sanitize::{Sanitize, SanitizeError},
+        serialize_utils::{
+            append_slice, append_u16, append_u8, read_pubkey, read_slice, read_u16, read_u8,
+        },
+        short_vec, system_instruction, system_program, sysvar, wasm_bindgen,
+    },
+    lazy_static::lazy_static,
+    std::{collections::BTreeSet, convert::TryFrom, str::FromStr},
 };
-use crate::{
-    bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
-    hash::Hash,
-    instruction::{AccountMeta, CompiledInstruction, Instruction},
-    message::MessageHeader,
-    pubkey::Pubkey,
-    short_vec, system_instruction, system_program, sysvar,
-};
-use itertools::Itertools;
-use lazy_static::lazy_static;
-use std::{convert::TryFrom, str::FromStr};
 
 lazy_static! {
     // Copied keys over since direct references create cyclical dependency.
@@ -157,24 +158,28 @@ fn get_keys(instructions: &[Instruction], payer: Option<&Pubkey>) -> Instruction
 
 /// Return program ids referenced by all instructions.  No duplicates and order is preserved.
 fn get_program_ids(instructions: &[Instruction]) -> Vec<Pubkey> {
+    let mut set = BTreeSet::new();
     instructions
         .iter()
         .map(|ix| ix.program_id)
-        .unique()
+        .filter(|&program_id| set.insert(program_id))
         .collect()
 }
 
 // NOTE: Serialization-related changes must be paired with the custom serialization
 // for versioned messages in the `RemainingLegacyMessage` struct.
+#[wasm_bindgen]
 #[frozen_abi(digest = "2KnLEqfLcTBQqitE22Pp8JYkaqVVbAkGbCfdeHoyxcAU")]
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct Message {
     /// The message header, identifying signed and read-only `account_keys`
     /// NOTE: Serialization-related changes must be paired with the direct read at sigverify.
+    #[wasm_bindgen(skip)]
     pub header: MessageHeader,
 
     /// All the account keys used by this transaction
+    #[wasm_bindgen(skip)]
     #[serde(with = "short_vec")]
     pub account_keys: Vec<Pubkey>,
 
@@ -183,6 +188,7 @@ pub struct Message {
 
     /// Programs that will be executed in sequence and committed in one atomic transaction if all
     /// succeed.
+    #[wasm_bindgen(skip)]
     #[serde(with = "short_vec")]
     pub instructions: Vec<CompiledInstruction>,
 }
@@ -361,10 +367,9 @@ impl Message {
         self.program_position(i).is_some()
     }
 
-    pub fn is_writable(&self, i: usize, demote_program_write_locks: bool) -> bool {
-        let demote_program_id = demote_program_write_locks
-            && self.is_key_called_as_program(i)
-            && !self.is_upgradeable_loader_present();
+    pub fn is_writable(&self, i: usize) -> bool {
+        let demote_program_id =
+            self.is_key_called_as_program(i) && !self.is_upgradeable_loader_present();
         (i < (self.header.num_required_signatures - self.header.num_readonly_signed_accounts)
             as usize
             || (i >= self.header.num_required_signatures as usize
@@ -386,7 +391,7 @@ impl Message {
         let mut writable_keys = vec![];
         let mut readonly_keys = vec![];
         for (i, key) in self.account_keys.iter().enumerate() {
-            if self.is_writable(i, /*demote_program_write_locks=*/ true) {
+            if self.is_writable(i) {
                 writable_keys.push(key);
             } else {
                 readonly_keys.push(key);
@@ -424,8 +429,7 @@ impl Message {
             for account_index in &instruction.accounts {
                 let account_index = *account_index as usize;
                 let is_signer = self.is_signer(account_index);
-                let is_writable =
-                    self.is_writable(account_index, /*demote_program_write_locks=*/ true);
+                let is_writable = self.is_writable(account_index);
                 let mut meta_byte = 0;
                 if is_signer {
                     meta_byte |= 1 << Self::IS_SIGNER_BIT;
@@ -526,9 +530,11 @@ impl Message {
 #[cfg(test)]
 mod tests {
     #![allow(deprecated)]
-    use super::*;
-    use crate::{hash, instruction::AccountMeta, message::MESSAGE_HEADER_LENGTH};
-    use std::collections::HashSet;
+    use {
+        super::*,
+        crate::{hash, instruction::AccountMeta, message::MESSAGE_HEADER_LENGTH},
+        std::collections::HashSet,
+    };
 
     #[test]
     fn test_message_unique_program_ids() {
@@ -886,13 +892,12 @@ mod tests {
             recent_blockhash: Hash::default(),
             instructions: vec![],
         };
-        let demote_program_write_locks = true;
-        assert!(message.is_writable(0, demote_program_write_locks));
-        assert!(!message.is_writable(1, demote_program_write_locks));
-        assert!(!message.is_writable(2, demote_program_write_locks));
-        assert!(message.is_writable(3, demote_program_write_locks));
-        assert!(message.is_writable(4, demote_program_write_locks));
-        assert!(!message.is_writable(5, demote_program_write_locks));
+        assert!(message.is_writable(0));
+        assert!(!message.is_writable(1));
+        assert!(!message.is_writable(2));
+        assert!(message.is_writable(3));
+        assert!(message.is_writable(4));
+        assert!(!message.is_writable(5));
     }
 
     #[test]

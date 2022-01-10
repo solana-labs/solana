@@ -18,9 +18,11 @@
 /// export TWILIO_CONFIG='ACCOUNT=<account>,TOKEN=<securityToken>,TO=<receivingNumber>,FROM=<sendingNumber>'
 /// ```
 use log::*;
-use reqwest::{blocking::Client, StatusCode};
-use serde_json::json;
-use std::{env, str::FromStr, thread::sleep, time::Duration};
+use {
+    reqwest::{blocking::Client, StatusCode},
+    serde_json::json,
+    std::{env, str::FromStr, thread::sleep, time::Duration},
+};
 
 struct TelegramWebHook {
     bot_token: String,

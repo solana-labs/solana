@@ -1,9 +1,9 @@
-//
+// 
 // badge.scss
 // Extended from Bootstrap
 //
 
-//
+// 
 // Bootstrap Overrides =====================================
 //
 
@@ -16,13 +16,31 @@
   top: -2px;
 }
 
+// Pills
+
+.badge.rounded-pill {
+  padding-right: $border-radius-pill-padding-x;
+  padding-left: $border-radius-pill-padding-x;
+}
+
+// Text color
 //
-// Dashkit =====================================
+// Replacing the default white text color
+
+@each $color, $value in $theme-colors {
+  .badge.bg-#{$color} {
+    color: color-contrast($value);
+  }
+}
+
+
+// 
+// Theme =====================================
 //
 
 // Creates the "soft" badge variant
 @each $color, $value in $theme-colors {
-  .badge-soft-#{$color} {
-    @include badge-variant-soft(theme-color-level($color, $badge-soft-bg-level), $value);
+  .badge.bg-#{$color}-soft {
+    @include badge-variant-soft(shift-color($value, $bg-soft-scale), $value);
   }
 }

@@ -1,28 +1,30 @@
 //! Native loader
-use crate::invoke_context::InvokeContext;
 #[cfg(unix)]
 use libloading::os::unix::*;
 #[cfg(windows)]
 use libloading::os::windows::*;
-use log::*;
-use num_derive::{FromPrimitive, ToPrimitive};
-use serde::Serialize;
-use solana_sdk::{
-    account::ReadableAccount,
-    decode_error::DecodeError,
-    instruction::InstructionError,
-    keyed_account::{keyed_account_at_index, KeyedAccount},
-    native_loader,
-    pubkey::Pubkey,
+use {
+    crate::invoke_context::InvokeContext,
+    log::*,
+    num_derive::{FromPrimitive, ToPrimitive},
+    serde::Serialize,
+    solana_sdk::{
+        account::ReadableAccount,
+        decode_error::DecodeError,
+        instruction::InstructionError,
+        keyed_account::{keyed_account_at_index, KeyedAccount},
+        native_loader,
+        pubkey::Pubkey,
+    },
+    std::{
+        collections::HashMap,
+        env,
+        path::{Path, PathBuf},
+        str,
+        sync::RwLock,
+    },
+    thiserror::Error,
 };
-use std::{
-    collections::HashMap,
-    env,
-    path::{Path, PathBuf},
-    str,
-    sync::RwLock,
-};
-use thiserror::Error;
 
 /// Prototype of a native loader entry point
 ///
@@ -33,7 +35,7 @@ use thiserror::Error;
 pub type LoaderEntrypoint = unsafe extern "C" fn(
     program_id: &Pubkey,
     instruction_data: &[u8],
-    invoke_context: &dyn InvokeContext,
+    invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError>;
 
 // Prototype of a native program entry point
@@ -123,7 +125,11 @@ impl NativeLoader {
     fn library_open(path: &Path) -> Result<Library, libloading::Error> {
         unsafe {
             // Linux tls bug can cause crash on dlclose(), workaround by never unloading
-            Library::open(Some(path), libc::RTLD_NODELETE | libc::RTLD_NOW)
+            #[cfg(target_os = "android")]
+            let flags = libc::RTLD_NOW;
+            #[cfg(not(target_os = "android"))]
+            let flags = libc::RTLD_NODELETE | libc::RTLD_NOW;
+            Library::open(Some(path), flags)
         }
     }
 
@@ -161,10 +167,10 @@ impl NativeLoader {
         &self,
         first_instruction_account: usize,
         instruction_data: &[u8],
-        invoke_context: &mut dyn InvokeContext,
+        invoke_context: &mut InvokeContext,
     ) -> Result<(), InstructionError> {
         let (program_id, name_vec) = {
-            let program_id = invoke_context.get_caller()?;
+            let program_id = invoke_context.transaction_context.get_program_key()?;
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let program = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             if native_loader::id() != *program_id {

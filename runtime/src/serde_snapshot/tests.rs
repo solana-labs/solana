@@ -89,6 +89,7 @@ where
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
     )
+    .map(|(accounts_db, _)| accounts_db)
 }
 
 #[cfg(test)]
@@ -241,7 +242,6 @@ fn test_bank_serialize_style(serde_style: SerdeStyle) {
         &dbank_paths,
         unpacked_append_vec_map,
         &genesis_config,
-        &[],
         None,
         None,
         AccountSecondaryIndexes::default(),
@@ -313,7 +313,7 @@ mod test_bank_serialize {
 
     // This some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "A9KFf8kLJczP3AMbFXRrqzmruoqMjooTPzdvEwZZ4EP7")]
+    #[frozen_abi(digest = "EuYcD3JCEWRnQaFHW1CAy2bBqLkakc88iLJtZH6kYeVF")]
     #[derive(Serialize, AbiExample)]
     pub struct BankAbiTestWrapperFuture {
         #[serde(serialize_with = "wrapper_future")]

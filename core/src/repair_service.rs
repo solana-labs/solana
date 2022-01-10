@@ -1,38 +1,40 @@
 //! The `repair_service` module implements the tools necessary to generate a thread which
 //! regularly finds missing shreds in the ledger and sends repair requests for those shreds
-use crate::{
-    ancestor_hashes_service::{AncestorHashesReplayUpdateReceiver, AncestorHashesService},
-    cluster_info_vote_listener::VerifiedVoteReceiver,
-    cluster_slots::ClusterSlots,
-    duplicate_repair_status::DuplicateSlotRepairStatus,
-    outstanding_requests::OutstandingRequests,
-    repair_weight::RepairWeight,
-    result::Result,
-    serve_repair::{ServeRepair, ShredRepairType, REPAIR_PEERS_CACHE_CAPACITY},
-};
-use crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
-use lru::LruCache;
-use solana_gossip::cluster_info::ClusterInfo;
-use solana_ledger::{
-    blockstore::{Blockstore, SlotMeta},
-    shred::Nonce,
-};
-use solana_measure::measure::Measure;
-use solana_runtime::{bank_forks::BankForks, contains::Contains};
-use solana_sdk::{
-    clock::Slot, epoch_schedule::EpochSchedule, hash::Hash, pubkey::Pubkey, timing::timestamp,
-};
-use solana_streamer::sendmmsg::{batch_send, SendPktsError};
-use std::{
-    collections::{HashMap, HashSet},
-    iter::Iterator,
-    net::SocketAddr,
-    net::UdpSocket,
-    sync::atomic::{AtomicBool, Ordering},
-    sync::{Arc, RwLock},
-    thread::sleep,
-    thread::{self, Builder, JoinHandle},
-    time::{Duration, Instant},
+use {
+    crate::{
+        ancestor_hashes_service::{AncestorHashesReplayUpdateReceiver, AncestorHashesService},
+        cluster_info_vote_listener::VerifiedVoteReceiver,
+        cluster_slots::ClusterSlots,
+        duplicate_repair_status::DuplicateSlotRepairStatus,
+        outstanding_requests::OutstandingRequests,
+        repair_weight::RepairWeight,
+        result::Result,
+        serve_repair::{ServeRepair, ShredRepairType, REPAIR_PEERS_CACHE_CAPACITY},
+    },
+    crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender},
+    lru::LruCache,
+    solana_gossip::cluster_info::ClusterInfo,
+    solana_ledger::{
+        blockstore::{Blockstore, SlotMeta},
+        shred::Nonce,
+    },
+    solana_measure::measure::Measure,
+    solana_runtime::{bank_forks::BankForks, contains::Contains},
+    solana_sdk::{
+        clock::Slot, epoch_schedule::EpochSchedule, hash::Hash, pubkey::Pubkey, timing::timestamp,
+    },
+    solana_streamer::sendmmsg::{batch_send, SendPktsError},
+    std::{
+        collections::{HashMap, HashSet},
+        iter::Iterator,
+        net::{SocketAddr, UdpSocket},
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
+        thread::{self, sleep, Builder, JoinHandle},
+        time::{Duration, Instant},
+    },
 };
 
 pub type DuplicateSlotsResetSender = CrossbeamSender<Vec<(Slot, Hash)>>;
@@ -95,6 +97,8 @@ pub struct RepairTiming {
     pub add_votes_elapsed: u64,
     pub get_best_orphans_elapsed: u64,
     pub get_best_shreds_elapsed: u64,
+    pub get_unknown_last_index_elapsed: u64,
+    pub get_closest_completion_elapsed: u64,
     pub send_repairs_elapsed: u64,
     pub build_repairs_batch_elapsed: u64,
     pub batch_send_repairs_elapsed: u64,
@@ -118,11 +122,50 @@ impl RepairTiming {
     }
 }
 
+#[derive(Default, Debug)]
+pub struct BestRepairsStats {
+    pub call_count: u64,
+    pub num_orphan_slots: u64,
+    pub num_orphan_repairs: u64,
+    pub num_best_shreds_slots: u64,
+    pub num_best_shreds_repairs: u64,
+    pub num_unknown_last_index_slots: u64,
+    pub num_unknown_last_index_repairs: u64,
+    pub num_closest_completion_slots: u64,
+    pub num_closest_completion_repairs: u64,
+}
+
+impl BestRepairsStats {
+    pub fn update(
+        &mut self,
+        num_orphan_slots: u64,
+        num_orphan_repairs: u64,
+        num_best_shreds_slots: u64,
+        num_best_shreds_repairs: u64,
+        num_unknown_last_index_slots: u64,
+        num_unknown_last_index_repairs: u64,
+        num_closest_completion_slots: u64,
+        num_closest_completion_repairs: u64,
+    ) {
+        self.call_count += 1;
+        self.num_orphan_slots += num_orphan_slots;
+        self.num_orphan_repairs += num_orphan_repairs;
+        self.num_best_shreds_slots += num_best_shreds_slots;
+        self.num_best_shreds_repairs += num_best_shreds_repairs;
+        self.num_unknown_last_index_slots += num_unknown_last_index_slots;
+        self.num_unknown_last_index_repairs += num_unknown_last_index_repairs;
+        self.num_closest_completion_slots += num_closest_completion_slots;
+        self.num_closest_completion_repairs += num_closest_completion_repairs;
+    }
+}
+
 pub const MAX_REPAIR_LENGTH: usize = 512;
 pub const MAX_REPAIR_PER_DUPLICATE: usize = 20;
 pub const MAX_DUPLICATE_WAIT_MS: usize = 10_000;
 pub const REPAIR_MS: u64 = 100;
 pub const MAX_ORPHANS: usize = 5;
+pub const MAX_UNKNOWN_LAST_INDEX_REPAIRS: usize = 10;
+pub const MAX_CLOSEST_COMPLETION_REPAIRS: usize = 100;
 
 #[derive(Clone)]
 pub struct RepairInfo {
@@ -158,6 +201,7 @@ impl RepairService {
         blockstore: Arc<Blockstore>,
         exit: Arc<AtomicBool>,
         repair_socket: Arc<UdpSocket>,
+        ancestor_hashes_socket: Arc<UdpSocket>,
         repair_info: RepairInfo,
         verified_vote_receiver: VerifiedVoteReceiver,
         outstanding_requests: Arc<RwLock<OutstandingShredRepairs>>,
@@ -182,11 +226,10 @@ impl RepairService {
                 .unwrap()
         };
 
-        let ancestor_hashes_request_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").unwrap());
         let ancestor_hashes_service = AncestorHashesService::new(
             exit,
             blockstore,
-            ancestor_hashes_request_socket,
+            ancestor_hashes_socket,
             repair_info,
             ancestor_hashes_replay_update_receiver,
         );
@@ -210,6 +253,7 @@ impl RepairService {
         let id = repair_info.cluster_info.id();
         let mut repair_stats = RepairStats::default();
         let mut repair_timing = RepairTiming::default();
+        let mut best_repairs_stats = BestRepairsStats::default();
         let mut last_stats = Instant::now();
         let duplicate_slot_repair_statuses: HashMap<Slot, DuplicateSlotRepairStatus> =
             HashMap::new();
@@ -257,15 +301,20 @@ impl RepairService {
                 );
                 add_votes_elapsed.stop();
 
-                repair_weight.get_best_weighted_repairs(
+                let repairs = repair_weight.get_best_weighted_repairs(
                     blockstore,
                     root_bank.epoch_stakes_map(),
                     root_bank.epoch_schedule(),
                     MAX_ORPHANS,
                     MAX_REPAIR_LENGTH,
+                    MAX_UNKNOWN_LAST_INDEX_REPAIRS,
+                    MAX_CLOSEST_COMPLETION_REPAIRS,
                     &duplicate_slot_repair_statuses,
                     Some(&mut repair_timing),
-                )
+                    Some(&mut best_repairs_stats),
+                );
+
+                repairs
             };
 
             let mut build_repairs_batch_elapsed = Measure::start("build_repairs_batch_elapsed");
@@ -363,6 +412,16 @@ impl RepairService {
                         i64
                     ),
                     (
+                        "get-unknown-last-index-elapsed",
+                        repair_timing.get_unknown_last_index_elapsed,
+                        i64
+                    ),
+                    (
+                        "get-closest-completion-elapsed",
+                        repair_timing.get_closest_completion_elapsed,
+                        i64
+                    ),
+                    (
                         "send-repairs-elapsed",
                         repair_timing.send_repairs_elapsed,
                         i64
@@ -378,8 +437,45 @@ impl RepairService {
                         i64
                     ),
                 );
+                datapoint_info!(
+                    "serve_repair-best-repairs",
+                    ("call-count", best_repairs_stats.call_count, i64),
+                    ("orphan-slots", best_repairs_stats.num_orphan_slots, i64),
+                    ("orphan-repairs", best_repairs_stats.num_orphan_repairs, i64),
+                    (
+                        "best-shreds-slots",
+                        best_repairs_stats.num_best_shreds_slots,
+                        i64
+                    ),
+                    (
+                        "best-shreds-repairs",
+                        best_repairs_stats.num_best_shreds_repairs,
+                        i64
+                    ),
+                    (
+                        "unknown-last-index-slots",
+                        best_repairs_stats.num_unknown_last_index_slots,
+                        i64
+                    ),
+                    (
+                        "unknown-last-index-repairs",
+                        best_repairs_stats.num_unknown_last_index_repairs,
+                        i64
+                    ),
+                    (
+                        "closest-completion-slots",
+                        best_repairs_stats.num_closest_completion_slots,
+                        i64
+                    ),
+                    (
+                        "closest-completion-repairs",
+                        best_repairs_stats.num_closest_completion_repairs,
+                        i64
+                    ),
+                );
                 repair_stats = RepairStats::default();
                 repair_timing = RepairTiming::default();
+                best_repairs_stats = BestRepairsStats::default();
                 last_stats = Instant::now();
             }
             sleep(Duration::from_millis(REPAIR_MS));
@@ -474,7 +570,7 @@ impl RepairService {
         }
     }
 
-    #[allow(dead_code)]
+    #[cfg_attr(not(test), allow(dead_code))]
     fn generate_duplicate_repairs_for_slot(
         blockstore: &Blockstore,
         slot: Slot,
@@ -499,7 +595,7 @@ impl RepairService {
         }
     }
 
-    #[allow(dead_code)]
+    #[cfg_attr(not(test), allow(dead_code))]
     fn generate_and_send_duplicate_repairs(
         duplicate_slot_repair_statuses: &mut HashMap<Slot, DuplicateSlotRepairStatus>,
         cluster_slots: &ClusterSlots,
@@ -550,7 +646,7 @@ impl RepairService {
         })
     }
 
-    #[allow(dead_code)]
+    #[cfg_attr(not(test), allow(dead_code))]
     fn serialize_and_send_request(
         repair_type: &ShredRepairType,
         repair_socket: &UdpSocket,
@@ -566,7 +662,7 @@ impl RepairService {
         Ok(())
     }
 
-    #[allow(dead_code)]
+    #[cfg_attr(not(test), allow(dead_code))]
     fn update_duplicate_slot_repair_addr(
         slot: Slot,
         status: &mut DuplicateSlotRepairStatus,
@@ -621,16 +717,20 @@ impl RepairService {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use solana_gossip::{cluster_info::Node, contact_info::ContactInfo};
-    use solana_ledger::blockstore::{
-        make_chaining_slot_entries, make_many_slot_entries, make_slot_entries,
+    use {
+        super::*,
+        solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
+        solana_ledger::{
+            blockstore::{
+                make_chaining_slot_entries, make_many_slot_entries, make_slot_entries, Blockstore,
+            },
+            get_tmp_ledger_path,
+            shred::max_ticks_per_n_shreds,
+        },
+        solana_sdk::signature::Keypair,
+        solana_streamer::socket::SocketAddrSpace,
+        std::collections::HashSet,
     };
-    use solana_ledger::shred::max_ticks_per_n_shreds;
-    use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
-    use solana_sdk::signature::Keypair;
-    use solana_streamer::socket::SocketAddrSpace;
-    use std::collections::HashSet;
 
     fn new_test_cluster_info(contact_info: ContactInfo) -> ClusterInfo {
         ClusterInfo::new(
@@ -659,7 +759,10 @@ mod test {
                     &EpochSchedule::default(),
                     MAX_ORPHANS,
                     MAX_REPAIR_LENGTH,
+                    MAX_UNKNOWN_LAST_INDEX_REPAIRS,
+                    MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
+                    None,
                     None,
                 ),
                 vec![
@@ -693,8 +796,11 @@ mod test {
                     &EpochSchedule::default(),
                     MAX_ORPHANS,
                     MAX_REPAIR_LENGTH,
+                    MAX_UNKNOWN_LAST_INDEX_REPAIRS,
+                    MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
-                    None
+                    None,
+                    None,
                 ),
                 vec![ShredRepairType::HighestShred(0, 0)]
             );
@@ -748,8 +854,11 @@ mod test {
                     &EpochSchedule::default(),
                     MAX_ORPHANS,
                     MAX_REPAIR_LENGTH,
+                    MAX_UNKNOWN_LAST_INDEX_REPAIRS,
+                    MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
-                    None
+                    None,
+                    None,
                 ),
                 expected
             );
@@ -761,8 +870,11 @@ mod test {
                     &EpochSchedule::default(),
                     MAX_ORPHANS,
                     expected.len() - 2,
+                    MAX_UNKNOWN_LAST_INDEX_REPAIRS,
+                    MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
-                    None
+                    None,
+                    None,
                 )[..],
                 expected[0..expected.len() - 2]
             );
@@ -799,8 +911,11 @@ mod test {
                     &EpochSchedule::default(),
                     MAX_ORPHANS,
                     MAX_REPAIR_LENGTH,
+                    MAX_UNKNOWN_LAST_INDEX_REPAIRS,
+                    MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
-                    None
+                    None,
+                    None,
                 ),
                 expected
             );

@@ -2,12 +2,28 @@
 //!
 //! this account carries the Bank's most recent bank hashes for some N parents
 //!
-use crate::hash::Hash;
-use std::{iter::FromIterator, ops::Deref};
+use {
+    crate::hash::Hash,
+    std::{iter::FromIterator, ops::Deref},
+};
+
+pub use crate::clock::Slot;
 
 pub const MAX_ENTRIES: usize = 512; // about 2.5 minutes to get your vote in
 
-pub use crate::clock::Slot;
+// This is to allow tests with custom slot hash expiry to avoid having to generate
+// 512 blocks for such tests.
+static mut NUM_ENTRIES: usize = MAX_ENTRIES;
+
+pub fn get_entries() -> usize {
+    unsafe { NUM_ENTRIES }
+}
+
+pub fn set_entries_for_tests_only(_entries: usize) {
+    unsafe {
+        NUM_ENTRIES = _entries;
+    }
+}
 
 pub type SlotHash = (Slot, Hash);
 
@@ -21,7 +37,10 @@ impl SlotHashes {
             Ok(index) => (self.0)[index] = (slot, hash),
             Err(index) => (self.0).insert(index, (slot, hash)),
         }
-        (self.0).truncate(MAX_ENTRIES);
+        (self.0).truncate(get_entries());
+    }
+    pub fn position(&self, slot: &Slot) -> Option<usize> {
+        self.binary_search_by(|(probe, _)| slot.cmp(probe)).ok()
     }
     #[allow(clippy::trivially_copy_pass_by_ref)]
     pub fn get(&self, slot: &Slot) -> Option<&Hash> {
@@ -33,6 +52,9 @@ impl SlotHashes {
         let mut slot_hashes = slot_hashes.to_vec();
         slot_hashes.sort_by(|(a, _), (b, _)| b.cmp(a));
         Self(slot_hashes)
+    }
+    pub fn slot_hashes(&self) -> &[SlotHash] {
+        &self.0
     }
 }
 
@@ -51,8 +73,7 @@ impl Deref for SlotHashes {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::hash::hash;
+    use {super::*, crate::hash::hash};
 
     #[test]
     fn test() {

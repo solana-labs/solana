@@ -3,7 +3,7 @@ import { Buffer } from "buffer";
 import { Copyable } from "./Copyable";
 
 export function HexData({ raw }: { raw: Buffer }) {
-  if (!raw) {
+  if (!raw || raw.length === 0) {
     return <span>No data</span>;
   }
 
@@ -40,7 +40,7 @@ export function HexData({ raw }: { raw: Buffer }) {
   function Content() {
     return (
       <Copyable text={hexString}>
-        <pre className="d-inline-block text-left mb-0">{divs}</pre>
+        <pre className="d-inline-block text-start mb-0">{divs}</pre>
       </Copyable>
     );
   }

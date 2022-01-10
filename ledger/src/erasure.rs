@@ -53,18 +53,18 @@ pub struct ErasureConfig {
 }
 
 impl ErasureConfig {
-    pub fn new(num_data: usize, num_coding: usize) -> ErasureConfig {
+    pub(crate) fn new(num_data: usize, num_coding: usize) -> ErasureConfig {
         ErasureConfig {
             num_data,
             num_coding,
         }
     }
 
-    pub fn num_data(self) -> usize {
+    pub(crate) fn num_data(self) -> usize {
         self.num_data
     }
 
-    pub fn num_coding(self) -> usize {
+    pub(crate) fn num_coding(self) -> usize {
         self.num_coding
     }
 }
@@ -109,9 +109,7 @@ impl Session {
 
 #[cfg(test)]
 pub mod test {
-    use super::*;
-    use log::*;
-    use solana_sdk::clock::Slot;
+    use {super::*, log::*, solana_sdk::clock::Slot};
 
     /// Specifies the contents of a 16-data-shred and 4-coding-shred erasure set
     /// Exists to be passed to `generate_blockstore_with_coding`

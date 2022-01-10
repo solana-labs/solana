@@ -1,9 +1,11 @@
 #![cfg(feature = "full")]
-
 use {
     crate::{
         hash::Hash,
-        message::{v0, MappedAddresses, MappedMessage, SanitizedMessage, VersionedMessage},
+        message::{
+            v0::{self, LoadedAddresses, MessageAddressTableLookup},
+            SanitizedMessage, VersionedMessage,
+        },
         nonce::NONCED_TX_MARKER_IX_INDEX,
         precompiles::verify_if_precompile,
         program_utils::limited_deserialize,
@@ -16,6 +18,11 @@ use {
     solana_program::{system_instruction::SystemInstruction, system_program},
     std::sync::Arc,
 };
+
+/// Maximum number of accounts that a transaction may lock.
+/// 64 was chosen because it is roughly twice the previous
+/// number of account keys that could fit in a legacy tx.
+pub const MAX_TX_ACCOUNT_LOCKS: usize = 64;
 
 /// Sanitized transaction and the hash of its message
 #[derive(Debug, Clone)]
@@ -37,28 +44,24 @@ pub struct TransactionAccountLocks<'a> {
 
 impl SanitizedTransaction {
     /// Create a sanitized transaction from an unsanitized transaction.
-    /// If the input transaction uses address maps, attempt to map the
-    /// transaction keys to full addresses.
+    /// If the input transaction uses address tables, attempt to lookup
+    /// the address for each table index.
     pub fn try_create(
         tx: VersionedTransaction,
         message_hash: Hash,
         is_simple_vote_tx: Option<bool>,
-        address_mapper: impl Fn(&v0::Message) -> Result<MappedAddresses>,
+        address_loader: impl Fn(&[MessageAddressTableLookup]) -> Result<LoadedAddresses>,
     ) -> Result<Self> {
         tx.sanitize()?;
 
         let signatures = tx.signatures;
         let message = match tx.message {
             VersionedMessage::Legacy(message) => SanitizedMessage::Legacy(message),
-            VersionedMessage::V0(message) => SanitizedMessage::V0(MappedMessage {
-                mapped_addresses: address_mapper(&message)?,
+            VersionedMessage::V0(message) => SanitizedMessage::V0(v0::LoadedMessage {
+                loaded_addresses: address_loader(&message.address_table_lookups)?,
                 message,
             }),
         };
-
-        if message.has_duplicates() {
-            return Err(TransactionError::AccountLoadedTwice);
-        }
 
         let is_simple_vote_tx = is_simple_vote_tx.unwrap_or_else(|| {
             let mut ix_iter = message.program_instructions_iter();
@@ -73,20 +76,20 @@ impl SanitizedTransaction {
         })
     }
 
-    /// Create a sanitized transaction from a legacy transaction. Used for tests only.
-    pub fn from_transaction_for_tests(tx: Transaction) -> Self {
-        tx.sanitize().unwrap();
+    pub fn try_from_legacy_transaction(tx: Transaction) -> Result<Self> {
+        tx.sanitize()?;
 
-        if tx.message.has_duplicates() {
-            Result::<Self>::Err(TransactionError::AccountLoadedTwice).unwrap();
-        }
-
-        Self {
+        Ok(Self {
             message_hash: tx.message.hash(),
             message: SanitizedMessage::Legacy(tx.message),
             is_simple_vote_tx: false,
             signatures: tx.signatures,
-        }
+        })
+    }
+
+    /// Create a sanitized transaction from a legacy transaction. Used for tests only.
+    pub fn from_transaction_for_tests(tx: Transaction) -> Self {
+        Self::try_from_legacy_transaction(tx).unwrap()
     }
 
     /// Return the first signature for this transaction.
@@ -125,9 +128,9 @@ impl SanitizedTransaction {
     pub fn to_versioned_transaction(&self) -> VersionedTransaction {
         let signatures = self.signatures.clone();
         match &self.message {
-            SanitizedMessage::V0(mapped_msg) => VersionedTransaction {
+            SanitizedMessage::V0(sanitized_msg) => VersionedTransaction {
                 signatures,
-                message: VersionedMessage::V0(mapped_msg.message.clone()),
+                message: VersionedMessage::V0(sanitized_msg.message.clone()),
             },
             SanitizedMessage::Legacy(message) => VersionedTransaction {
                 signatures,
@@ -136,8 +139,24 @@ impl SanitizedTransaction {
         }
     }
 
+    /// Validate and return the account keys locked by this transaction
+    pub fn get_account_locks(
+        &self,
+        feature_set: &feature_set::FeatureSet,
+    ) -> Result<TransactionAccountLocks> {
+        if self.message.has_duplicates() {
+            Err(TransactionError::AccountLoadedTwice)
+        } else if feature_set.is_active(&feature_set::max_tx_account_locks::id())
+            && self.message.account_keys_len() > MAX_TX_ACCOUNT_LOCKS
+        {
+            Err(TransactionError::TooManyAccountLocks)
+        } else {
+            Ok(self.get_account_locks_unchecked())
+        }
+    }
+
     /// Return the list of accounts that must be locked during processing this transaction.
-    pub fn get_account_locks(&self, demote_program_write_locks: bool) -> TransactionAccountLocks {
+    pub fn get_account_locks_unchecked(&self) -> TransactionAccountLocks {
         let message = &self.message;
         let num_readonly_accounts = message.num_readonly_accounts();
         let num_writable_accounts = message
@@ -150,7 +169,7 @@ impl SanitizedTransaction {
         };
 
         for (i, key) in message.account_keys_iter().enumerate() {
-            if message.is_writable(i, demote_program_write_locks) {
+            if message.is_writable(i) {
                 account_locks.writable.push(key);
             } else {
                 account_locks.readonly.push(key);
@@ -180,7 +199,7 @@ impl SanitizedTransaction {
             .and_then(|ix| {
                 ix.accounts.get(0).and_then(|idx| {
                     let idx = *idx as usize;
-                    if nonce_must_be_writable && !self.message.is_writable(idx, true) {
+                    if nonce_must_be_writable && !self.message.is_writable(idx) {
                         None
                     } else {
                         self.message.get_account_key(idx)
@@ -193,13 +212,8 @@ impl SanitizedTransaction {
     fn message_data(&self) -> Vec<u8> {
         match &self.message {
             SanitizedMessage::Legacy(message) => message.serialize(),
-            SanitizedMessage::V0(mapped_msg) => mapped_msg.message.serialize(),
+            SanitizedMessage::V0(message) => message.serialize(),
         }
-    }
-
-    /// Verify the length of signatures matches the value in the message header
-    pub fn verify_signatures_len(&self) -> bool {
-        self.signatures.len() == self.message.header().num_required_signatures as usize
     }
 
     /// Verify the transaction signatures

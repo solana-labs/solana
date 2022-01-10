@@ -33,7 +33,7 @@ use {
         sync::{
             atomic::{AtomicBool, Ordering},
             mpsc::{channel, Receiver, SendError, Sender, SyncSender},
-            {Arc, Mutex},
+            Arc, Mutex,
         },
         time::{Duration, Instant},
     },

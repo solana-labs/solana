@@ -1,26 +1,27 @@
 [package]
 name = "solana-streamer"
-version = "1.9.0"
+version = "1.10.0"
 description = "Solana Streamer"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-streamer"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
-itertools = "0.10.1"
+histogram = "0.6.9"
+itertools = "0.10.3"
 log = "0.4.14"
-solana-metrics = { path = "../metrics", version = "=1.9.0" }
-solana-sdk = { path = "../sdk", version = "=1.9.0" }
+solana-metrics = { path = "../metrics", version = "=1.10.0" }
+solana-sdk = { path = "../sdk", version = "=1.10.0" }
 thiserror = "1.0"
-solana-logger = { path = "../logger", version = "=1.9.0" }
-libc = "0.2.107"
-nix = "0.23.0"
-solana-perf = { path = "../perf", version = "=1.9.0" }
+libc = "0.2.112"
+nix = "0.23.1"
+solana-perf = { path = "../perf", version = "=1.10.0" }
 
 [dev-dependencies]
+solana-logger = { path = "../logger", version = "=1.10.0" }
 
 [lib]
 crate-type = ["lib"]

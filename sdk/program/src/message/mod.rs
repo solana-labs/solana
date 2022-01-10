@@ -5,25 +5,20 @@ pub mod legacy;
 #[cfg(not(target_arch = "bpf"))]
 #[path = ""]
 mod non_bpf_modules {
-    mod mapped;
     mod sanitized;
-    pub mod v0;
     mod versions;
 
-    pub use mapped::*;
-    pub use sanitized::*;
-    pub use versions::*;
+    pub use {sanitized::*, versions::*};
 }
 
 pub use legacy::Message;
-
 #[cfg(not(target_arch = "bpf"))]
 pub use non_bpf_modules::*;
 
 /// The length of a message header in bytes
 pub const MESSAGE_HEADER_LENGTH: usize = 3;
 
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, AbiExample)]
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, Copy, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct MessageHeader {
     /// The number of signatures required for this message to be considered valid. The

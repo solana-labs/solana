@@ -13,11 +13,8 @@ crate::declare_sysvar_id!("Sysvar1nstructions1111111111111111111111111", Instruc
 
 // Construct the account data for the Instruction sSysvar
 #[cfg(not(target_arch = "bpf"))]
-pub fn construct_instructions_data(
-    message: &crate::message::SanitizedMessage,
-    demote_program_write_locks: bool,
-) -> Vec<u8> {
-    let mut data = message.serialize_instructions(demote_program_write_locks);
+pub fn construct_instructions_data(message: &crate::message::SanitizedMessage) -> Vec<u8> {
+    let mut data = message.serialize_instructions();
     // add room for current instruction index.
     data.resize(data.len() + 2, 0);
 
@@ -118,9 +115,11 @@ pub fn get_instruction_relative(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{instruction::AccountMeta, message::Message, pubkey::Pubkey};
-    use std::convert::TryFrom;
+    use {
+        super::*,
+        crate::{instruction::AccountMeta, message::Message, pubkey::Pubkey},
+        std::convert::TryFrom,
+    };
 
     #[test]
     fn test_load_store_instruction() {
@@ -152,7 +151,7 @@ mod tests {
 
         let key = id();
         let mut lamports = 0;
-        let mut data = construct_instructions_data(&sanitized_message, true);
+        let mut data = construct_instructions_data(&sanitized_message);
         let owner = crate::sysvar::id();
         let mut account_info = AccountInfo::new(
             &key,
@@ -206,7 +205,7 @@ mod tests {
 
         let key = id();
         let mut lamports = 0;
-        let mut data = construct_instructions_data(&sanitized_message, true);
+        let mut data = construct_instructions_data(&sanitized_message);
         store_current_index(&mut data, 1);
         let owner = crate::sysvar::id();
         let mut account_info = AccountInfo::new(
@@ -264,7 +263,7 @@ mod tests {
 
         let key = id();
         let mut lamports = 0;
-        let mut data = construct_instructions_data(&sanitized_message, true);
+        let mut data = construct_instructions_data(&sanitized_message);
         store_current_index(&mut data, 1);
         let owner = crate::sysvar::id();
         let mut account_info = AccountInfo::new(

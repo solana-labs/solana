@@ -1,62 +1,68 @@
 //! The `tvu` module implements the Transaction Validation Unit, a multi-stage transaction
 //! validation pipeline in software.
 
-use crate::{
-    accounts_hash_verifier::AccountsHashVerifier,
-    broadcast_stage::RetransmitSlotsSender,
-    cache_block_meta_service::CacheBlockMetaSender,
-    cluster_info_vote_listener::{
-        GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver,
-        VerifiedVoteReceiver, VoteTracker,
+use {
+    crate::{
+        accounts_hash_verifier::AccountsHashVerifier,
+        broadcast_stage::RetransmitSlotsSender,
+        cache_block_meta_service::CacheBlockMetaSender,
+        cluster_info_vote_listener::{
+            GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver,
+            VerifiedVoteReceiver, VoteTracker,
+        },
+        cluster_slots::ClusterSlots,
+        completed_data_sets_service::CompletedDataSetsSender,
+        consensus::Tower,
+        cost_update_service::CostUpdateService,
+        drop_bank_service::DropBankService,
+        ledger_cleanup_service::LedgerCleanupService,
+        replay_stage::{ReplayStage, ReplayStageConfig},
+        retransmit_stage::RetransmitStage,
+        rewards_recorder_service::RewardsRecorderSender,
+        shred_fetch_stage::ShredFetchStage,
+        sigverify_shreds::ShredSigVerifier,
+        sigverify_stage::SigVerifyStage,
+        tower_storage::TowerStorage,
+        voting_service::VotingService,
     },
-    cluster_slots::ClusterSlots,
-    completed_data_sets_service::CompletedDataSetsSender,
-    consensus::Tower,
-    cost_update_service::CostUpdateService,
-    ledger_cleanup_service::LedgerCleanupService,
-    replay_stage::{ReplayStage, ReplayStageConfig},
-    retransmit_stage::RetransmitStage,
-    rewards_recorder_service::RewardsRecorderSender,
-    shred_fetch_stage::ShredFetchStage,
-    sigverify_shreds::ShredSigVerifier,
-    sigverify_stage::SigVerifyStage,
-    tower_storage::TowerStorage,
-    voting_service::VotingService,
-};
-use crossbeam_channel::unbounded;
-use solana_gossip::cluster_info::ClusterInfo;
-use solana_ledger::{
-    blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
-    leader_schedule_cache::LeaderScheduleCache,
-};
-use solana_poh::poh_recorder::PohRecorder;
-use solana_rpc::{
-    max_slots::MaxSlots, optimistically_confirmed_bank_tracker::BankNotificationSender,
-    rpc_subscriptions::RpcSubscriptions,
-};
-use solana_runtime::{
-    accounts_background_service::{
-        AbsRequestHandler, AbsRequestSender, AccountsBackgroundService, SnapshotRequestHandler,
+    crossbeam_channel::unbounded,
+    solana_accountsdb_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
+    solana_gossip::cluster_info::ClusterInfo,
+    solana_ledger::{
+        blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
+        leader_schedule_cache::LeaderScheduleCache,
     },
-    accounts_db::AccountShrinkThreshold,
-    bank_forks::BankForks,
-    commitment::BlockCommitmentCache,
-    cost_model::CostModel,
-    snapshot_config::SnapshotConfig,
-    snapshot_package::{AccountsPackageReceiver, AccountsPackageSender, PendingSnapshotPackage},
-    vote_sender_types::ReplayVoteSender,
-};
-use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair};
-use std::{
-    boxed::Box,
-    collections::HashSet,
-    net::UdpSocket,
-    sync::{
-        atomic::AtomicBool,
-        mpsc::{channel, Receiver},
-        Arc, Mutex, RwLock,
+    solana_poh::poh_recorder::PohRecorder,
+    solana_rpc::{
+        max_slots::MaxSlots, optimistically_confirmed_bank_tracker::BankNotificationSender,
+        rpc_subscriptions::RpcSubscriptions,
     },
-    thread,
+    solana_runtime::{
+        accounts_background_service::{
+            AbsRequestHandler, AbsRequestSender, AccountsBackgroundService, SnapshotRequestHandler,
+        },
+        accounts_db::AccountShrinkThreshold,
+        bank_forks::BankForks,
+        commitment::BlockCommitmentCache,
+        cost_model::CostModel,
+        snapshot_config::SnapshotConfig,
+        snapshot_package::{
+            AccountsPackageReceiver, AccountsPackageSender, PendingSnapshotPackage,
+        },
+        vote_sender_types::ReplayVoteSender,
+    },
+    solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair},
+    std::{
+        boxed::Box,
+        collections::HashSet,
+        net::UdpSocket,
+        sync::{
+            atomic::AtomicBool,
+            mpsc::{channel, Receiver},
+            Arc, Mutex, RwLock,
+        },
+        thread,
+    },
 };
 
 pub struct Tvu {
@@ -69,13 +75,15 @@ pub struct Tvu {
     accounts_hash_verifier: AccountsHashVerifier,
     cost_update_service: CostUpdateService,
     voting_service: VotingService,
+    drop_bank_service: DropBankService,
 }
 
-pub struct Sockets {
+pub struct TvuSockets {
     pub fetch: Vec<UdpSocket>,
     pub repair: UdpSocket,
     pub retransmit: Vec<UdpSocket>,
     pub forwards: Vec<UdpSocket>,
+    pub ancestor_hashes_requests: UdpSocket,
 }
 
 #[derive(Default)]
@@ -93,7 +101,6 @@ pub struct TvuConfig {
     pub rocksdb_max_compaction_jitter: Option<u64>,
     pub wait_for_vote_to_start_leader: bool,
     pub accounts_shrink_ratio: AccountShrinkThreshold,
-    pub disable_epoch_boundary_optimization: bool,
 }
 
 impl Tvu {
@@ -109,7 +116,7 @@ impl Tvu {
         authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
         bank_forks: &Arc<RwLock<BankForks>>,
         cluster_info: &Arc<ClusterInfo>,
-        sockets: Sockets,
+        sockets: TvuSockets,
         blockstore: Arc<Blockstore>,
         ledger_signal_receiver: Receiver<bool>,
         rpc_subscriptions: &Arc<RpcSubscriptions>,
@@ -137,17 +144,20 @@ impl Tvu {
         cost_model: &Arc<RwLock<CostModel>>,
         accounts_package_channel: (AccountsPackageSender, AccountsPackageReceiver),
         last_full_snapshot_slot: Option<Slot>,
+        block_metadata_notifier: Option<BlockMetadataNotifierLock>,
     ) -> Self {
-        let Sockets {
+        let TvuSockets {
             repair: repair_socket,
             fetch: fetch_sockets,
             retransmit: retransmit_sockets,
             forwards: tvu_forward_sockets,
+            ancestor_hashes_requests: ancestor_hashes_socket,
         } = sockets;
 
         let (fetch_sender, fetch_receiver) = channel();
 
         let repair_socket = Arc::new(repair_socket);
+        let ancestor_hashes_socket = Arc::new(ancestor_hashes_socket);
         let fetch_sockets: Vec<Arc<UdpSocket>> = fetch_sockets.into_iter().map(Arc::new).collect();
         let forward_sockets: Vec<Arc<UdpSocket>> =
             tvu_forward_sockets.into_iter().map(Arc::new).collect();
@@ -182,6 +192,7 @@ impl Tvu {
             cluster_info.clone(),
             Arc::new(retransmit_sockets),
             repair_socket,
+            ancestor_hashes_socket,
             verified_receiver,
             exit.clone(),
             cluster_slots_update_receiver,
@@ -282,7 +293,6 @@ impl Tvu {
             wait_for_vote_to_start_leader: tvu_config.wait_for_vote_to_start_leader,
             ancestor_hashes_replay_update_sender,
             tower_storage: tower_storage.clone(),
-            disable_epoch_boundary_optimization: tvu_config.disable_epoch_boundary_optimization,
         };
 
         let (voting_sender, voting_receiver) = channel();
@@ -301,6 +311,9 @@ impl Tvu {
             cost_model.clone(),
             cost_update_receiver,
         );
+
+        let (drop_bank_sender, drop_bank_receiver) = channel();
+        let drop_bank_service = DropBankService::new(drop_bank_receiver);
 
         let replay_stage = ReplayStage::new(
             replay_stage_config,
@@ -321,6 +334,8 @@ impl Tvu {
             cluster_slots_update_sender,
             cost_update_sender,
             voting_sender,
+            drop_bank_sender,
+            block_metadata_notifier,
         );
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
@@ -354,6 +369,7 @@ impl Tvu {
             accounts_hash_verifier,
             cost_update_service,
             voting_service,
+            drop_bank_service,
         }
     }
 
@@ -369,26 +385,31 @@ impl Tvu {
         self.accounts_hash_verifier.join()?;
         self.cost_update_service.join()?;
         self.voting_service.join()?;
+        self.drop_bank_service.join()?;
         Ok(())
     }
 }
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
-    use serial_test::serial;
-    use solana_gossip::cluster_info::{ClusterInfo, Node};
-    use solana_ledger::{
-        blockstore::BlockstoreSignals,
-        create_new_tmp_ledger,
-        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+    use {
+        super::*,
+        serial_test::serial,
+        solana_gossip::cluster_info::{ClusterInfo, Node},
+        solana_ledger::{
+            blockstore::BlockstoreSignals,
+            blockstore_db::BlockstoreOptions,
+            create_new_tmp_ledger,
+            genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        },
+        solana_poh::poh_recorder::create_test_recorder,
+        solana_rpc::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
+        solana_runtime::bank::Bank,
+        solana_sdk::signature::{Keypair, Signer},
+        solana_streamer::socket::SocketAddrSpace,
+        std::sync::atomic::AtomicU64,
+        std::sync::atomic::Ordering,
     };
-    use solana_poh::poh_recorder::create_test_recorder;
-    use solana_rpc::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank;
-    use solana_runtime::bank::Bank;
-    use solana_sdk::signature::{Keypair, Signer};
-    use solana_streamer::socket::SocketAddrSpace;
-    use std::sync::atomic::Ordering;
 
     #[ignore]
     #[test]
@@ -418,7 +439,7 @@ pub mod tests {
             blockstore,
             ledger_signal_receiver,
             ..
-        } = Blockstore::open_with_signal(&blockstore_path, None, true)
+        } = Blockstore::open_with_signal(&blockstore_path, BlockstoreOptions::default())
             .expect("Expected to successfully open ledger");
         let blockstore = Arc::new(blockstore);
         let bank = bank_forks.working_bank();
@@ -436,23 +457,26 @@ pub mod tests {
         let bank_forks = Arc::new(RwLock::new(bank_forks));
         let tower = Tower::default();
         let accounts_package_channel = channel();
+        let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let tvu = Tvu::new(
             &vote_keypair.pubkey(),
             Arc::new(RwLock::new(vec![Arc::new(vote_keypair)])),
             &bank_forks,
             &cref1,
             {
-                Sockets {
+                TvuSockets {
                     repair: target1.sockets.repair,
                     retransmit: target1.sockets.retransmit_sockets,
                     fetch: target1.sockets.tvu,
                     forwards: target1.sockets.tvu_forwards,
+                    ancestor_hashes_requests: target1.sockets.ancestor_hashes_requests,
                 }
             },
             blockstore,
             ledger_signal_receiver,
             &Arc::new(RpcSubscriptions::new_for_tests(
                 &exit,
+                max_complete_transaction_status_slot,
                 bank_forks.clone(),
                 block_commitment_cache.clone(),
                 OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
@@ -480,6 +504,7 @@ pub mod tests {
             &Arc::new(MaxSlots::default()),
             &Arc::new(RwLock::new(CostModel::default())),
             accounts_package_channel,
+            None,
             None,
         );
         exit.store(true, Ordering::Relaxed);

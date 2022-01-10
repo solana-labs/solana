@@ -1,41 +1,51 @@
 //! The `tpu` module implements the Transaction Processing Unit, a
 //! multi-stage transaction processing pipeline in software.
 
-use crate::{
-    banking_stage::BankingStage,
-    broadcast_stage::{BroadcastStage, BroadcastStageType, RetransmitSlotsReceiver},
-    cluster_info_vote_listener::{
-        ClusterInfoVoteListener, GossipDuplicateConfirmedSlotsSender, GossipVerifiedVoteHashSender,
-        VerifiedVoteSender, VoteTracker,
+use {
+    crate::{
+        banking_stage::BankingStage,
+        broadcast_stage::{BroadcastStage, BroadcastStageType, RetransmitSlotsReceiver},
+        cluster_info_vote_listener::{
+            ClusterInfoVoteListener, GossipDuplicateConfirmedSlotsSender,
+            GossipVerifiedVoteHashSender, VerifiedVoteSender, VoteTracker,
+        },
+        fetch_stage::FetchStage,
+        packet_deduper::PacketDeduper,
+        sigverify::TransactionSigVerifier,
+        sigverify_stage::SigVerifyStage,
     },
-    fetch_stage::FetchStage,
-    sigverify::TransactionSigVerifier,
-    sigverify_stage::SigVerifyStage,
-};
-use crossbeam_channel::unbounded;
-use solana_gossip::cluster_info::ClusterInfo;
-use solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender};
-use solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry};
-use solana_rpc::{
-    optimistically_confirmed_bank_tracker::BankNotificationSender,
-    rpc_subscriptions::RpcSubscriptions,
-};
-use solana_runtime::{
-    bank_forks::BankForks,
-    cost_model::CostModel,
-    vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
-};
-use std::{
-    net::UdpSocket,
-    sync::{
-        atomic::AtomicBool,
-        mpsc::{channel, Receiver},
-        Arc, Mutex, RwLock,
+    crossbeam_channel::unbounded,
+    solana_gossip::cluster_info::ClusterInfo,
+    solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender},
+    solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
+    solana_rpc::{
+        optimistically_confirmed_bank_tracker::BankNotificationSender,
+        rpc_subscriptions::RpcSubscriptions,
     },
-    thread,
+    solana_runtime::{
+        bank_forks::BankForks,
+        cost_model::CostModel,
+        vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
+    },
+    std::{
+        net::UdpSocket,
+        sync::{
+            atomic::AtomicBool,
+            mpsc::{channel, Receiver},
+            Arc, Mutex, RwLock,
+        },
+        thread,
+    },
 };
 
 pub const DEFAULT_TPU_COALESCE_MS: u64 = 5;
+
+pub struct TpuSockets {
+    pub transactions: Vec<UdpSocket>,
+    pub transaction_forwards: Vec<UdpSocket>,
+    pub vote: Vec<UdpSocket>,
+    pub broadcast: Vec<UdpSocket>,
+}
 
 pub struct Tpu {
     fetch_stage: FetchStage,
@@ -53,10 +63,7 @@ impl Tpu {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         entry_receiver: Receiver<WorkingBankEntry>,
         retransmit_slots_receiver: RetransmitSlotsReceiver,
-        transactions_sockets: Vec<UdpSocket>,
-        tpu_forwards_sockets: Vec<UdpSocket>,
-        tpu_vote_sockets: Vec<UdpSocket>,
-        broadcast_sockets: Vec<UdpSocket>,
+        sockets: TpuSockets,
         subscriptions: &Arc<RpcSubscriptions>,
         transaction_status_sender: Option<TransactionStatusSender>,
         blockstore: &Arc<Blockstore>,
@@ -74,6 +81,13 @@ impl Tpu {
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
         cost_model: &Arc<RwLock<CostModel>>,
     ) -> Self {
+        let TpuSockets {
+            transactions: transactions_sockets,
+            transaction_forwards: tpu_forwards_sockets,
+            vote: tpu_vote_sockets,
+            broadcast: broadcast_sockets,
+        } = sockets;
+
         let (packet_sender, packet_receiver) = channel();
         let (vote_packet_sender, vote_packet_receiver) = channel();
         let fetch_stage = FetchStage::new_with_sender(
@@ -107,10 +121,10 @@ impl Tpu {
         let (verified_gossip_vote_packets_sender, verified_gossip_vote_packets_receiver) =
             unbounded();
         let cluster_info_vote_listener = ClusterInfoVoteListener::new(
-            exit,
+            exit.clone(),
             cluster_info.clone(),
             verified_gossip_vote_packets_sender,
-            poh_recorder,
+            poh_recorder.clone(),
             vote_tracker,
             bank_forks.clone(),
             subscriptions.clone(),
@@ -131,6 +145,7 @@ impl Tpu {
             transaction_status_sender,
             replay_vote_sender,
             cost_model.clone(),
+            PacketDeduper::default(),
         );
 
         let broadcast_stage = broadcast_type.new_broadcast_stage(

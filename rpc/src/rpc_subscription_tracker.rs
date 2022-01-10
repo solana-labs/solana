@@ -11,6 +11,7 @@ use {
     solana_sdk::{
         clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Signature,
     },
+    solana_transaction_status::{TransactionDetails, UiTransactionEncoding},
     std::{
         collections::{
             hash_map::{Entry, HashMap},
@@ -44,6 +45,7 @@ impl From<SubscriptionId> for u64 {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SubscriptionParams {
     Account(AccountSubscriptionParams),
+    Block(BlockSubscriptionParams),
     Logs(LogsSubscriptionParams),
     Program(ProgramSubscriptionParams),
     Signature(SignatureSubscriptionParams),
@@ -62,6 +64,7 @@ impl SubscriptionParams {
             SubscriptionParams::Signature(_) => "signatureNotification",
             SubscriptionParams::Slot => "slotNotification",
             SubscriptionParams::SlotsUpdates => "slotsUpdatesNotification",
+            SubscriptionParams::Block(_) => "blockNotification",
             SubscriptionParams::Root => "rootNotification",
             SubscriptionParams::Vote => "voteNotification",
         }
@@ -73,6 +76,7 @@ impl SubscriptionParams {
             SubscriptionParams::Logs(params) => Some(params.commitment),
             SubscriptionParams::Program(params) => Some(params.commitment),
             SubscriptionParams::Signature(params) => Some(params.commitment),
+            SubscriptionParams::Block(params) => Some(params.commitment),
             SubscriptionParams::Slot
             | SubscriptionParams::SlotsUpdates
             | SubscriptionParams::Root
@@ -83,12 +87,13 @@ impl SubscriptionParams {
     fn is_commitment_watcher(&self) -> bool {
         let commitment = match self {
             SubscriptionParams::Account(params) => &params.commitment,
+            SubscriptionParams::Block(params) => &params.commitment,
             SubscriptionParams::Logs(params) => &params.commitment,
             SubscriptionParams::Program(params) => &params.commitment,
             SubscriptionParams::Signature(params) => &params.commitment,
-            SubscriptionParams::Slot
+            SubscriptionParams::Root
+            | SubscriptionParams::Slot
             | SubscriptionParams::SlotsUpdates
-            | SubscriptionParams::Root
             | SubscriptionParams::Vote => return false,
         };
         !commitment.is_confirmed()
@@ -97,12 +102,13 @@ impl SubscriptionParams {
     fn is_gossip_watcher(&self) -> bool {
         let commitment = match self {
             SubscriptionParams::Account(params) => &params.commitment,
+            SubscriptionParams::Block(params) => &params.commitment,
             SubscriptionParams::Logs(params) => &params.commitment,
             SubscriptionParams::Program(params) => &params.commitment,
             SubscriptionParams::Signature(params) => &params.commitment,
-            SubscriptionParams::Slot
+            SubscriptionParams::Root
+            | SubscriptionParams::Slot
             | SubscriptionParams::SlotsUpdates
-            | SubscriptionParams::Root
             | SubscriptionParams::Vote => return false,
         };
         commitment.is_confirmed()
@@ -125,6 +131,21 @@ pub struct AccountSubscriptionParams {
     pub encoding: UiAccountEncoding,
     pub data_slice: Option<UiDataSliceConfig>,
     pub commitment: CommitmentConfig,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BlockSubscriptionParams {
+    pub commitment: CommitmentConfig,
+    pub encoding: UiTransactionEncoding,
+    pub kind: BlockSubscriptionKind,
+    pub transaction_details: TransactionDetails,
+    pub show_rewards: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum BlockSubscriptionKind {
+    All,
+    MentionsAccountOrProgram(Pubkey),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -159,9 +180,10 @@ pub struct SignatureSubscriptionParams {
 
 #[derive(Clone)]
 pub struct SubscriptionControl(Arc<SubscriptionControlInner>);
+pub struct WeakSubscriptionTokenRef(Weak<SubscriptionTokenInner>, SubscriptionId);
 
 struct SubscriptionControlInner {
-    subscriptions: DashMap<SubscriptionParams, Weak<SubscriptionTokenInner>>,
+    subscriptions: DashMap<SubscriptionParams, WeakSubscriptionTokenRef>,
     next_id: AtomicU64,
     max_active_subscriptions: usize,
     sender: crossbeam_channel::Sender<TimestampedNotificationEntry>,
@@ -195,33 +217,44 @@ impl SubscriptionControl {
             self.0.subscriptions.len()
         );
         let count = self.0.subscriptions.len();
-        match self.0.subscriptions.entry(params) {
-            DashEntry::Occupied(entry) => Ok(SubscriptionToken(
-                entry
-                    .get()
-                    .upgrade()
-                    .expect("dead subscription encountered in SubscriptionControl"),
+        let create_token_and_weak_ref = |id, params| {
+            let token = SubscriptionToken(
+                Arc::new(SubscriptionTokenInner {
+                    control: Arc::clone(&self.0),
+                    params,
+                    id,
+                }),
                 self.0.counter.create_token(),
-            )),
+            );
+            let weak_ref = WeakSubscriptionTokenRef(Arc::downgrade(&token.0), token.0.id);
+            (token, weak_ref)
+        };
+
+        match self.0.subscriptions.entry(params) {
+            DashEntry::Occupied(mut entry) => match entry.get().0.upgrade() {
+                Some(token_ref) => Ok(SubscriptionToken(token_ref, self.0.counter.create_token())),
+                // This means the last Arc for this Weak pointer entered the drop just before us,
+                // but could not remove the entry since we are holding the write lock.
+                // See `Drop` implementation for `SubscriptionTokenInner` for further info.
+                None => {
+                    let (token, weak_ref) =
+                        create_token_and_weak_ref(entry.get().1, entry.key().clone());
+                    entry.insert(weak_ref);
+                    Ok(token)
+                }
+            },
             DashEntry::Vacant(entry) => {
                 if count >= self.0.max_active_subscriptions {
                     inc_new_counter_info!("rpc-subscription-refused-limit-reached", 1);
                     return Err(Error::TooManySubscriptions);
                 }
                 let id = SubscriptionId::from(self.0.next_id.fetch_add(1, Ordering::AcqRel));
-                let token = SubscriptionToken(
-                    Arc::new(SubscriptionTokenInner {
-                        control: Arc::clone(&self.0),
-                        params: entry.key().clone(),
-                        id,
-                    }),
-                    self.0.counter.create_token(),
-                );
+                let (token, weak_ref) = create_token_and_weak_ref(id, entry.key().clone());
                 let _ = self
                     .0
                     .sender
                     .send(NotificationEntry::Subscribed(token.0.params.clone(), id).into());
-                entry.insert(Arc::downgrade(&token.0));
+                entry.insert(weak_ref);
                 datapoint_info!(
                     "rpc-subscription",
                     ("total", self.0.subscriptions.len(), i64)
@@ -473,12 +506,15 @@ impl SubscriptionsTracker {
     ) -> &HashMap<Signature, HashMap<SubscriptionId, Arc<SubscriptionInfo>>> {
         &self.by_signature
     }
+
     pub fn commitment_watchers(&self) -> &HashMap<SubscriptionId, Arc<SubscriptionInfo>> {
         &self.commitment_watchers
     }
+
     pub fn gossip_watchers(&self) -> &HashMap<SubscriptionId, Arc<SubscriptionInfo>> {
         &self.gossip_watchers
     }
+
     pub fn node_progress_watchers(&self) -> &HashMap<SubscriptionParams, Arc<SubscriptionInfo>> {
         &self.node_progress_watchers
     }
@@ -505,7 +541,9 @@ impl Drop for SubscriptionTokenInner {
             DashEntry::Vacant(_) => {
                 warn!("Subscriptions inconsistency (missing entry in by_params)");
             }
-            DashEntry::Occupied(entry) => {
+            // Check the strong refs count to ensure no other thread recreated this subscription (not token)
+            // while we were acquiring the lock.
+            DashEntry::Occupied(entry) if entry.get().0.strong_count() == 0 => {
                 let _ = self
                     .control
                     .sender
@@ -516,6 +554,9 @@ impl Drop for SubscriptionTokenInner {
                     ("total", self.control.subscriptions.len(), i64)
                 );
             }
+            // This branch handles the case in which this entry got recreated
+            // while we were waiting for the lock (inside the `DashMap::entry` method).
+            DashEntry::Occupied(_entry) /* if _entry.get().0.strong_count() > 0 */ => (),
         }
     }
 }
@@ -535,11 +576,13 @@ impl SubscriptionToken {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::rpc_pubsub_service::PubSubConfig;
-    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use solana_runtime::bank::Bank;
-    use std::str::FromStr;
+    use {
+        super::*,
+        crate::rpc_pubsub_service::PubSubConfig,
+        solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        solana_runtime::bank::Bank,
+        std::str::FromStr,
+    };
 
     struct ControlWrapper {
         control: SubscriptionControl,

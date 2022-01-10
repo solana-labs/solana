@@ -44,10 +44,10 @@ export function VotesCard({ voteAccount }: { voteAccount: VoteAccount }) {
 const renderAccountRow = (vote: Vote, index: number) => {
   return (
     <tr key={index}>
-      <td className="w-1 text-monospace">
+      <td className="w-1 font-monospace">
         <Slot slot={vote.slot} link />
       </td>
-      <td className="text-monospace">{vote.confirmationCount}</td>
+      <td className="font-monospace">{vote.confirmationCount}</td>
     </tr>
   );
 };

@@ -1,15 +1,16 @@
 #[allow(deprecated)]
-use crate::sysvar::recent_blockhashes;
-use crate::{
-    decode_error::DecodeError,
-    instruction::{AccountMeta, Instruction, InstructionError},
-    nonce,
-    pubkey::Pubkey,
-    system_program,
-    sysvar::rent,
+use {
+    crate::{
+        decode_error::DecodeError,
+        instruction::{AccountMeta, Instruction, InstructionError},
+        nonce,
+        pubkey::Pubkey,
+        system_program,
+        sysvar::{recent_blockhashes, rent},
+    },
+    num_derive::{FromPrimitive, ToPrimitive},
+    thiserror::Error,
 };
-use num_derive::{FromPrimitive, ToPrimitive};
-use thiserror::Error;
 
 #[derive(Error, Debug, Serialize, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum SystemError {
@@ -218,7 +219,7 @@ pub enum SystemInstruction {
     /// account balance above the rent exempt reserve or at zero.
     WithdrawNonceAccount(u64),
 
-    /// Drive state of Uninitalized nonce account to Initialized, setting the nonce value
+    /// Drive state of Uninitialized nonce account to Initialized, setting the nonce value
     ///
     /// # Account references
     ///   0. `[WRITE]` Nonce account
@@ -573,9 +574,11 @@ pub fn authorize_nonce_account(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::instruction::{Instruction, InstructionError};
-    use num_traits::ToPrimitive;
+    use {
+        super::*,
+        crate::instruction::{Instruction, InstructionError},
+        num_traits::ToPrimitive,
+    };
 
     fn get_keys(instruction: &Instruction) -> Vec<Pubkey> {
         instruction.accounts.iter().map(|x| x.pubkey).collect()

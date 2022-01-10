@@ -1,24 +1,29 @@
 //! The `bank_forks` module implements BankForks a DAG of checkpointed Banks
 
-use crate::{
-    accounts_background_service::{AbsRequestSender, SnapshotRequest},
-    bank::Bank,
-    snapshot_config::SnapshotConfig,
-};
-use log::*;
-use solana_measure::measure::Measure;
-use solana_sdk::{clock::Slot, hash::Hash, timing};
-use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
-    ops::Index,
-    sync::Arc,
-    time::Instant,
+use {
+    crate::{
+        accounts_background_service::{AbsRequestSender, SnapshotRequest},
+        bank::Bank,
+        snapshot_config::SnapshotConfig,
+    },
+    log::*,
+    solana_measure::measure::Measure,
+    solana_sdk::{clock::Slot, hash::Hash, timing},
+    std::{
+        collections::{hash_map::Entry, HashMap, HashSet},
+        ops::Index,
+        sync::Arc,
+        time::Instant,
+    },
 };
 
 struct SetRootTimings {
     total_parent_banks: i64,
     total_squash_cache_ms: i64,
     total_squash_accounts_ms: i64,
+    total_squash_accounts_index_ms: i64,
+    total_squash_accounts_cache_ms: i64,
+    total_squash_accounts_store_ms: i64,
     total_snapshot_ms: i64,
     tx_count: i64,
     prune_non_rooted_ms: i64,
@@ -226,6 +231,9 @@ impl BankForks {
         banks.extend(parents.iter());
         let total_parent_banks = banks.len();
         let mut total_squash_accounts_ms = 0;
+        let mut total_squash_accounts_index_ms = 0;
+        let mut total_squash_accounts_cache_ms = 0;
+        let mut total_squash_accounts_store_ms = 0;
         let mut total_squash_cache_ms = 0;
         let mut total_snapshot_ms = 0;
         for bank in banks.iter() {
@@ -236,6 +244,9 @@ impl BankForks {
                 self.last_accounts_hash_slot = bank_slot;
                 let squash_timing = bank.squash();
                 total_squash_accounts_ms += squash_timing.squash_accounts_ms as i64;
+                total_squash_accounts_index_ms += squash_timing.squash_accounts_index_ms as i64;
+                total_squash_accounts_cache_ms += squash_timing.squash_accounts_cache_ms as i64;
+                total_squash_accounts_store_ms += squash_timing.squash_accounts_store_ms as i64;
                 total_squash_cache_ms += squash_timing.squash_cache_ms as i64;
                 is_root_bank_squashed = bank_slot == root;
 
@@ -268,6 +279,9 @@ impl BankForks {
         if !is_root_bank_squashed {
             let squash_timing = root_bank.squash();
             total_squash_accounts_ms += squash_timing.squash_accounts_ms as i64;
+            total_squash_accounts_index_ms += squash_timing.squash_accounts_index_ms as i64;
+            total_squash_accounts_cache_ms += squash_timing.squash_accounts_cache_ms as i64;
+            total_squash_accounts_store_ms += squash_timing.squash_accounts_store_ms as i64;
             total_squash_cache_ms += squash_timing.squash_cache_ms as i64;
         }
         let new_tx_count = root_bank.transaction_count();
@@ -287,6 +301,9 @@ impl BankForks {
                 total_parent_banks: total_parent_banks as i64,
                 total_squash_cache_ms,
                 total_squash_accounts_ms,
+                total_squash_accounts_index_ms,
+                total_squash_accounts_cache_ms,
+                total_squash_accounts_store_ms,
                 total_snapshot_ms,
                 tx_count: (new_tx_count - root_tx_count) as i64,
                 prune_non_rooted_ms: prune_time.as_ms() as i64,
@@ -332,6 +349,21 @@ impl BankForks {
             (
                 "total_squash_accounts_ms",
                 set_root_metrics.total_squash_accounts_ms,
+                i64
+            ),
+            (
+                "total_squash_accounts_index_ms",
+                set_root_metrics.total_squash_accounts_index_ms,
+                i64
+            ),
+            (
+                "total_squash_accounts_cache_ms",
+                set_root_metrics.total_squash_accounts_cache_ms,
+                i64
+            ),
+            (
+                "total_squash_accounts_store_ms",
+                set_root_metrics.total_squash_accounts_store_ms,
                 i64
             ),
             ("total_snapshot_ms", set_root_metrics.total_snapshot_ms, i64),
@@ -462,21 +494,23 @@ impl BankForks {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{
-        bank::tests::update_vote_account_timestamp,
-        genesis_utils::{
-            create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
+    use {
+        super::*,
+        crate::{
+            bank::tests::update_vote_account_timestamp,
+            genesis_utils::{
+                create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
+            },
         },
+        solana_sdk::{
+            clock::UnixTimestamp,
+            hash::Hash,
+            pubkey::Pubkey,
+            signature::{Keypair, Signer},
+            sysvar::epoch_schedule::EpochSchedule,
+        },
+        solana_vote_program::vote_state::BlockTimestamp,
     };
-    use solana_sdk::hash::Hash;
-    use solana_sdk::{
-        clock::UnixTimestamp,
-        pubkey::Pubkey,
-        signature::{Keypair, Signer},
-        sysvar::epoch_schedule::EpochSchedule,
-    };
-    use solana_vote_program::vote_state::BlockTimestamp;
 
     #[test]
     fn test_bank_forks_new() {
@@ -567,8 +601,8 @@ mod tests {
         let leader_keypair = Keypair::new();
         let GenesisConfigInfo {
             mut genesis_config,
-            mint_keypair: _,
             voting_keypair,
+            ..
         } = create_genesis_config_with_leader(10_000, &leader_keypair.pubkey(), 1_000);
         let slots_in_epoch = 32;
         genesis_config.epoch_schedule = EpochSchedule::new(slots_in_epoch);

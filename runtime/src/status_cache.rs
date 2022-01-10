@@ -1,15 +1,16 @@
-use crate::ancestors::Ancestors;
-
-use log::*;
-use rand::{thread_rng, Rng};
-use serde::Serialize;
-use solana_sdk::{
-    clock::{Slot, MAX_RECENT_BLOCKHASHES},
-    hash::Hash,
-};
-use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
-    sync::{Arc, Mutex},
+use {
+    crate::ancestors::Ancestors,
+    log::*,
+    rand::{thread_rng, Rng},
+    serde::Serialize,
+    solana_sdk::{
+        clock::{Slot, MAX_RECENT_BLOCKHASHES},
+        hash::Hash,
+    },
+    std::{
+        collections::{hash_map::Entry, HashMap, HashSet},
+        sync::{Arc, Mutex},
+    },
 };
 
 pub const MAX_CACHE_ENTRIES: usize = MAX_RECENT_BLOCKHASHES;
@@ -294,8 +295,10 @@ impl<T: Serialize + Clone> StatusCache<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_sdk::{hash::hash, signature::Signature};
+    use {
+        super::*,
+        solana_sdk::{hash::hash, signature::Signature},
+    };
 
     type BankStatusCache = StatusCache<()>;
 

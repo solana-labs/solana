@@ -51,56 +51,11 @@ export const isMangoInstruction = (instruction: TransactionInstruction) => {
     .includes(instruction.programId.toBase58());
 };
 
-export const INSTRUCTION_LOOKUP: { [key: number]: string } = {
-  0: "InitMangoGroup",
-  1: "InitMangoAccount",
-  2: "Deposit",
-  3: "Withdraw",
-  4: "AddSpotMarket",
-  5: "AddToBasket",
-  6: "Borrow",
-  7: "CachePrices",
-  8: "CacheRootBanks",
-  9: "PlaceSpotOrder",
-  10: "AddOracle",
-  11: "AddPerpMarket",
-  12: "PlacePerpOrder",
-  13: "CancelPerpOrderByClientId",
-  14: "CancelPerpOrder",
-  15: "ConsumeEvents",
-  16: "CachePerpMarkets",
-  17: "UpdateFunding",
-  18: "SetOracle",
-  19: "SettleFunds",
-  20: "CancelSpotOrder",
-  21: "UpdateRootBank",
-  22: "SettlePnl",
-  23: "SettleBorrow",
-  24: "ForceCancelSpotOrders",
-  25: "ForceCancelPerpOrders",
-  26: "LiquidateTokenAndToken",
-  27: "LiquidateTokenAndPerp",
-  28: "LiquidatePerpMarket",
-  29: "SettleFees",
-  30: "ResolvePerpBankruptcy",
-  31: "ResolveTokenBankruptcy",
-  32: "InitSpotOpenOrders",
-  33: "RedeemMngo",
-  34: "AddMangoAccountInfo",
-  35: "DepositMsrm",
-  36: "WithdrawMsrm",
-  37: "ChangePerpMarketParams",
-};
-
 export const parseMangoInstructionTitle = (
   instruction: TransactionInstruction
 ): string => {
-  const code = instruction.data[0];
-
-  if (!(code in INSTRUCTION_LOOKUP)) {
-    throw new Error(`Unrecognized Mango instruction code: ${code}`);
-  }
-  return INSTRUCTION_LOOKUP[code];
+  let decodedInstruction = MangoInstructionLayout.decode(instruction.data, 0);
+  return Object.keys(decodedInstruction)[0];
 };
 
 export type Deposit = {
@@ -108,7 +63,7 @@ export type Deposit = {
 };
 
 export const decodeDeposit = (ix: TransactionInstruction): Deposit => {
-  const decoded = MangoInstructionLayout.decode(ix.data);
+  const decoded = MangoInstructionLayout.decode(ix.data, 0);
   const deposit: Deposit = {
     quantity: decoded.Deposit.quantity.toNumber(),
   };
@@ -120,7 +75,7 @@ export type AddToBasket = {
 };
 
 export const decodeAddToBasket = (ix: TransactionInstruction): AddToBasket => {
-  const decoded = MangoInstructionLayout.decode(ix.data);
+  const decoded = MangoInstructionLayout.decode(ix.data, 0);
   const addToBasket: AddToBasket = {
     marketIndex: decoded.AddToBasket.marketIndex.toNumber(),
   };
@@ -133,7 +88,7 @@ export type Withdraw = {
 };
 
 export const decodeWithdraw = (ix: TransactionInstruction): Withdraw => {
-  const decoded = MangoInstructionLayout.decode(ix.data);
+  const decoded = MangoInstructionLayout.decode(ix.data, 0);
   const withdraw: Withdraw = {
     quantity: decoded.Withdraw.quantity.toNumber(),
     allowBorrow: decoded.Withdraw.allowBorrow.toString(),
@@ -155,7 +110,7 @@ export type PlaceSpotOrder = {
 export const decodePlaceSpotOrder = (
   ix: TransactionInstruction
 ): PlaceSpotOrder => {
-  const decoded = MangoInstructionLayout.decode(ix.data);
+  const decoded = MangoInstructionLayout.decode(ix.data, 0);
   const placeSpotOrder: PlaceSpotOrder = {
     side: decoded.PlaceSpotOrder.side.toString(),
     limitPrice: decoded.PlaceSpotOrder.limitPrice.toNumber(),
@@ -178,7 +133,7 @@ export type CancelSpotOrder = {
 export const decodeCancelSpotOrder = (
   ix: TransactionInstruction
 ): CancelSpotOrder => {
-  const decoded = MangoInstructionLayout.decode(ix.data);
+  const decoded = MangoInstructionLayout.decode(ix.data, 0);
   const cancelSpotOrder: CancelSpotOrder = {
     orderId: decoded.CancelSpotOrder.orderId.toString(),
     side: decoded.CancelSpotOrder.side.toString(),
@@ -192,17 +147,20 @@ export type PlacePerpOrder = {
   clientOrderId: String;
   side: String;
   orderType: String;
+  reduceOnly: String;
 };
+
 export const decodePlacePerpOrder = (
   ix: TransactionInstruction
 ): PlacePerpOrder => {
-  const decoded = MangoInstructionLayout.decode(ix.data);
+  const decoded = MangoInstructionLayout.decode(ix.data, 0);
   const placePerpOrder: PlacePerpOrder = {
     price: decoded.PlacePerpOrder.price.toNumber(),
     quantity: decoded.PlacePerpOrder.quantity.toNumber(),
     clientOrderId: decoded.PlacePerpOrder.clientOrderId.toString(),
     side: decoded.PlacePerpOrder.side.toString(),
     orderType: decoded.PlacePerpOrder.orderType.toString(),
+    reduceOnly: decoded.PlacePerpOrder.reduceOnly.toString(),
   };
 
   return placePerpOrder;
@@ -216,7 +174,7 @@ export type CancelPerpOrder = {
 export const decodeCancelPerpOrder = (
   ix: TransactionInstruction
 ): CancelPerpOrder => {
-  const decoded = MangoInstructionLayout.decode(ix.data);
+  const decoded = MangoInstructionLayout.decode(ix.data, 0);
   const cancelPerpOrder: CancelPerpOrder = {
     orderId: decoded.CancelPerpOrder.orderId.toString(),
     invalidIdOk: decoded.CancelPerpOrder.invalidIdOk.toString(),
@@ -248,7 +206,7 @@ export type ChangePerpMarketParams = {
 export const decodeChangePerpMarketParams = (
   ix: TransactionInstruction
 ): ChangePerpMarketParams => {
-  const decoded = MangoInstructionLayout.decode(ix.data);
+  const decoded = MangoInstructionLayout.decode(ix.data, 0);
   const changePerpMarketParams: ChangePerpMarketParams = {
     maintLeverageOption: decoded.ChangePerpMarketParams.maintLeverageOption,
     maintLeverage: decoded.ChangePerpMarketParams.maintLeverage.toString(),
@@ -287,7 +245,7 @@ export type AddSpotMarket = {
 export const decodeAddSpotMarket = (
   ix: TransactionInstruction
 ): AddSpotMarket => {
-  const decoded = MangoInstructionLayout.decode(ix.data);
+  const decoded = MangoInstructionLayout.decode(ix.data, 0);
   const addSpotMarket: AddSpotMarket = {
     marketIndex: decoded.AddSpotMarket.marketIndex.toNumber(),
     maintLeverage: decoded.AddSpotMarket.maintLeverage.toNumber(),
@@ -318,7 +276,7 @@ export type AddPerpMarket = {
 export const decodeAddPerpMarket = (
   ix: TransactionInstruction
 ): AddPerpMarket => {
-  const decoded = MangoInstructionLayout.decode(ix.data);
+  const decoded = MangoInstructionLayout.decode(ix.data, 0);
   const addPerpMarket: AddPerpMarket = {
     marketIndex: decoded.AddPerpMarket.marketIndex.toNumber(),
     maintLeverage: decoded.AddPerpMarket.maintLeverage.toNumber(),

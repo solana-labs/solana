@@ -35,7 +35,7 @@ function InstructionCard({
     <div className="card" id={`instruction-index-${index + 1}`} key={index}>
       <div className={`card-header${!expanded ? " border-bottom-none" : ""}`}>
         <h3 className="card-header-title mb-0 d-flex align-items-center">
-          <span className={`badge badge-soft-info mr-2`}>#{index + 1}</span>
+          <span className={`badge bg-info-soft me-2`}>#{index + 1}</span>
           {programName} Instruction
         </h3>
 
@@ -52,7 +52,7 @@ function InstructionCard({
         <TableCardBody>
           <tr>
             <td>Program</td>
-            <td className="text-lg-right">
+            <td className="text-lg-end">
               <AddressWithContext
                 pubkey={message.accountKeys[ix.programIdIndex]}
                 validator={programValidator}
@@ -67,19 +67,17 @@ function InstructionCard({
                     Account #{index + 1}
                     <span className="mt-1">
                       {accountIndex < message.header.numRequiredSignatures && (
-                        <span className="badge badge-soft-info mr-2">
-                          Signer
-                        </span>
+                        <span className="badge bg-info-soft me-2">Signer</span>
                       )}
                       {message.isAccountWritable(accountIndex) && (
-                        <span className="badge badge-soft-danger mr-2">
+                        <span className="badge bg-danger-soft me-2">
                           Writable
                         </span>
                       )}
                     </span>
                   </div>
                 </td>
-                <td className="text-lg-right">
+                <td className="text-lg-end">
                   <AddressWithContext
                     pubkey={message.accountKeys[accountIndex]}
                   />
@@ -91,7 +89,7 @@ function InstructionCard({
             <td>
               Instruction Data <span className="text-muted">(Hex)</span>
             </td>
-            <td className="text-lg-right">
+            <td className="text-lg-end">
               <HexData raw={bs58.decode(ix.data)} />
             </td>
           </tr>

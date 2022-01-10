@@ -1,18 +1,21 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
-use crate::{
-    recvmmsg::{recv_mmsg, NUM_RCVMMSGS},
-    socket::SocketAddrSpace,
+use {
+    crate::{
+        recvmmsg::{recv_mmsg, NUM_RCVMMSGS},
+        socket::SocketAddrSpace,
+    },
+    solana_metrics::inc_new_counter_debug,
+    std::{io::Result, net::UdpSocket, time::Instant},
 };
-pub use solana_perf::packet::{
-    limited_deserialize, to_packets_chunked, Packets, PacketsRecycler, NUM_PACKETS,
-    PACKETS_PER_BATCH,
+pub use {
+    solana_perf::packet::{
+        limited_deserialize, to_packet_batches, PacketBatch, PacketBatchRecycler, NUM_PACKETS,
+        PACKETS_PER_BATCH,
+    },
+    solana_sdk::packet::{Meta, Packet, PACKET_DATA_SIZE},
 };
 
-use solana_metrics::inc_new_counter_debug;
-pub use solana_sdk::packet::{Meta, Packet, PACKET_DATA_SIZE};
-use std::{io::Result, net::UdpSocket, time::Instant};
-
-pub fn recv_from(obj: &mut Packets, socket: &UdpSocket, max_wait_ms: u64) -> Result<usize> {
+pub fn recv_from(batch: &mut PacketBatch, socket: &UdpSocket, max_wait_ms: u64) -> Result<usize> {
     let mut i = 0;
     //DOCUMENTED SIDE-EFFECT
     //Performance out of the IO without poll
@@ -24,11 +27,11 @@ pub fn recv_from(obj: &mut Packets, socket: &UdpSocket, max_wait_ms: u64) -> Res
     trace!("receiving on {}", socket.local_addr().unwrap());
     let start = Instant::now();
     loop {
-        obj.packets.resize(
+        batch.packets.resize(
             std::cmp::min(i + NUM_RCVMMSGS, PACKETS_PER_BATCH),
             Packet::default(),
         );
-        match recv_mmsg(socket, &mut obj.packets[i..]) {
+        match recv_mmsg(socket, &mut batch.packets[i..]) {
             Err(_) if i > 0 => {
                 if start.elapsed().as_millis() as u64 > max_wait_ms {
                     break;
@@ -38,7 +41,7 @@ pub fn recv_from(obj: &mut Packets, socket: &UdpSocket, max_wait_ms: u64) -> Res
                 trace!("recv_from err {:?}", e);
                 return Err(e);
             }
-            Ok((_, npkts)) => {
+            Ok(npkts) => {
                 if i == 0 {
                     socket.set_nonblocking(true)?;
                 }
@@ -52,17 +55,17 @@ pub fn recv_from(obj: &mut Packets, socket: &UdpSocket, max_wait_ms: u64) -> Res
             }
         }
     }
-    obj.packets.truncate(i);
+    batch.packets.truncate(i);
     inc_new_counter_debug!("packets-recv_count", i);
     Ok(i)
 }
 
 pub fn send_to(
-    obj: &Packets,
+    batch: &PacketBatch,
     socket: &UdpSocket,
     socket_addr_space: &SocketAddrSpace,
 ) -> Result<()> {
-    for p in &obj.packets {
+    for p in &batch.packets {
         let addr = p.meta.addr();
         if socket_addr_space.check(&addr) {
             socket.send_to(&p.data[..p.meta.size], &addr)?;
@@ -73,19 +76,23 @@ pub fn send_to(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::io;
-    use std::io::Write;
-    use std::net::{SocketAddr, UdpSocket};
+    use {
+        super::*,
+        std::{
+            io,
+            io::Write,
+            net::{SocketAddr, UdpSocket},
+        },
+    };
 
     #[test]
     fn test_packets_set_addr() {
         // test that the address is actually being updated
         let send_addr: SocketAddr = "127.0.0.1:123".parse().unwrap();
         let packets = vec![Packet::default()];
-        let mut msgs = Packets::new(packets);
-        msgs.set_addr(&send_addr);
-        assert_eq!(msgs.packets[0].meta.addr(), send_addr);
+        let mut packet_batch = PacketBatch::new(packets);
+        packet_batch.set_addr(&send_addr);
+        assert_eq!(packet_batch.packets[0].meta.addr(), send_addr);
     }
 
     #[test]
@@ -95,21 +102,25 @@ mod tests {
         let addr = recv_socket.local_addr().unwrap();
         let send_socket = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let saddr = send_socket.local_addr().unwrap();
-        let mut p = Packets::default();
+        let mut batch = PacketBatch::default();
 
-        p.packets.resize(10, Packet::default());
+        batch.packets.resize(10, Packet::default());
 
-        for m in p.packets.iter_mut() {
+        for m in batch.packets.iter_mut() {
             m.meta.set_addr(&addr);
             m.meta.size = PACKET_DATA_SIZE;
         }
-        send_to(&p, &send_socket, &SocketAddrSpace::Unspecified).unwrap();
+        send_to(&batch, &send_socket, &SocketAddrSpace::Unspecified).unwrap();
 
-        let recvd = recv_from(&mut p, &recv_socket, 1).unwrap();
+        batch
+            .packets
+            .iter_mut()
+            .for_each(|pkt| pkt.meta = Meta::default());
+        let recvd = recv_from(&mut batch, &recv_socket, 1).unwrap();
 
-        assert_eq!(recvd, p.packets.len());
+        assert_eq!(recvd, batch.packets.len());
 
-        for m in &p.packets {
+        for m in &batch.packets {
             assert_eq!(m.meta.size, PACKET_DATA_SIZE);
             assert_eq!(m.meta.addr(), saddr);
         }
@@ -118,7 +129,7 @@ mod tests {
     #[test]
     pub fn debug_trait() {
         write!(io::sink(), "{:?}", Packet::default()).unwrap();
-        write!(io::sink(), "{:?}", Packets::default()).unwrap();
+        write!(io::sink(), "{:?}", PacketBatch::default()).unwrap();
     }
 
     #[test]
@@ -144,25 +155,25 @@ mod tests {
         let recv_socket = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let addr = recv_socket.local_addr().unwrap();
         let send_socket = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let mut p = Packets::default();
-        p.packets.resize(PACKETS_PER_BATCH, Packet::default());
+        let mut batch = PacketBatch::default();
+        batch.packets.resize(PACKETS_PER_BATCH, Packet::default());
 
         // Should only get PACKETS_PER_BATCH packets per iteration even
         // if a lot more were sent, and regardless of packet size
         for _ in 0..2 * PACKETS_PER_BATCH {
-            let mut p = Packets::default();
-            p.packets.resize(1, Packet::default());
-            for m in p.packets.iter_mut() {
+            let mut batch = PacketBatch::default();
+            batch.packets.resize(1, Packet::default());
+            for m in batch.packets.iter_mut() {
                 m.meta.set_addr(&addr);
                 m.meta.size = 1;
             }
-            send_to(&p, &send_socket, &SocketAddrSpace::Unspecified).unwrap();
+            send_to(&batch, &send_socket, &SocketAddrSpace::Unspecified).unwrap();
         }
 
-        let recvd = recv_from(&mut p, &recv_socket, 100).unwrap();
+        let recvd = recv_from(&mut batch, &recv_socket, 100).unwrap();
 
         // Check we only got PACKETS_PER_BATCH packets
         assert_eq!(recvd, PACKETS_PER_BATCH);
-        assert_eq!(p.packets.capacity(), PACKETS_PER_BATCH);
+        assert_eq!(batch.packets.capacity(), PACKETS_PER_BATCH);
     }
 }

@@ -1,5 +1,7 @@
-use crate::blockstore::*;
-use solana_sdk::{clock::Slot, hash::Hash};
+use {
+    crate::blockstore::*,
+    solana_sdk::{clock::Slot, hash::Hash},
+};
 
 pub struct AncestorIterator<'a> {
     current: Option<Slot>,
@@ -9,8 +11,8 @@ pub struct AncestorIterator<'a> {
 impl<'a> AncestorIterator<'a> {
     pub fn new(start_slot: Slot, blockstore: &'a Blockstore) -> Self {
         let current = blockstore.meta(start_slot).unwrap().and_then(|slot_meta| {
-            if slot_meta.is_parent_set() && start_slot != 0 {
-                Some(slot_meta.parent_slot)
+            if start_slot != 0 {
+                slot_meta.parent_slot
             } else {
                 None
             }
@@ -35,13 +37,11 @@ impl<'a> Iterator for AncestorIterator<'a> {
         let current = self.current;
         current.map(|slot| {
             if slot != 0 {
-                self.current = self.blockstore.meta(slot).unwrap().and_then(|slot_meta| {
-                    if slot_meta.is_parent_set() {
-                        Some(slot_meta.parent_slot)
-                    } else {
-                        None
-                    }
-                });
+                self.current = self
+                    .blockstore
+                    .meta(slot)
+                    .unwrap()
+                    .and_then(|slot_meta| slot_meta.parent_slot);
             } else {
                 self.current = None;
             }
@@ -74,10 +74,12 @@ impl<'a> Iterator for AncestorIteratorWithHash<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_sdk::hash::Hash;
-    use std::{collections::HashMap, path::Path};
-    use trees::tr;
+    use {
+        super::*,
+        solana_sdk::hash::Hash,
+        std::{collections::HashMap, path::Path},
+        trees::tr,
+    };
 
     fn setup_forks(ledger_path: &Path) -> Blockstore {
         let blockstore = Blockstore::open(ledger_path).unwrap();

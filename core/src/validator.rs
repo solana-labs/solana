@@ -14,10 +14,11 @@ use {
         serve_repair_service::ServeRepairService,
         sigverify,
         snapshot_packager_service::SnapshotPackagerService,
+        stats_reporter_service::StatsReporterService,
         system_monitor_service::{verify_udp_stats_access, SystemMonitorService},
         tower_storage::TowerStorage,
-        tpu::{Tpu, DEFAULT_TPU_COALESCE_MS},
-        tvu::{Sockets, Tvu, TvuConfig},
+        tpu::{Tpu, TpuSockets, DEFAULT_TPU_COALESCE_MS},
+        tvu::{Tvu, TvuConfig, TvuSockets},
     },
     crossbeam_channel::{bounded, unbounded},
     rand::{thread_rng, Rng},
@@ -35,7 +36,7 @@ use {
     solana_ledger::{
         bank_forks_utils,
         blockstore::{Blockstore, BlockstoreSignals, CompletedSlotsReceiver, PurgeType},
-        blockstore_db::BlockstoreRecoveryMode,
+        blockstore_db::{BlockstoreOptions, BlockstoreRecoveryMode},
         blockstore_processor::{self, TransactionStatusSender},
         leader_schedule::FixedSchedule,
         leader_schedule_cache::LeaderScheduleCache,
@@ -60,6 +61,7 @@ use {
         rpc_pubsub_service::{PubSubConfig, PubSubService},
         rpc_service::JsonRpcService,
         rpc_subscriptions::RpcSubscriptions,
+        transaction_notifier_interface::TransactionNotifierLock,
         transaction_status_service::TransactionStatusService,
     },
     solana_runtime::{
@@ -135,7 +137,6 @@ pub struct ValidatorConfig {
     pub gossip_validators: Option<HashSet<Pubkey>>, // None = gossip with all
     pub halt_on_known_validators_accounts_hash_mismatch: bool,
     pub accounts_hash_fault_injection_slots: u64, // 0 = no fault injection
-    pub frozen_accounts: Vec<Pubkey>,
     pub no_rocksdb_compaction: bool,
     pub rocksdb_compaction_interval: Option<u64>,
     pub rocksdb_max_compaction_jitter: Option<u64>,
@@ -165,7 +166,6 @@ pub struct ValidatorConfig {
     pub validator_exit: Arc<RwLock<Exit>>,
     pub no_wait_for_vote_to_start_leader: bool,
     pub accounts_shrink_ratio: AccountShrinkThreshold,
-    pub disable_epoch_boundary_optimization: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -196,7 +196,6 @@ impl Default for ValidatorConfig {
             gossip_validators: None,
             halt_on_known_validators_accounts_hash_mismatch: false,
             accounts_hash_fault_injection_slots: 0,
-            frozen_accounts: vec![],
             no_rocksdb_compaction: false,
             rocksdb_compaction_interval: None,
             rocksdb_max_compaction_jitter: None,
@@ -226,7 +225,6 @@ impl Default for ValidatorConfig {
             no_wait_for_vote_to_start_leader: true,
             accounts_shrink_ratio: AccountShrinkThreshold::default(),
             accounts_db_config: None,
-            disable_epoch_boundary_optimization: false,
         }
     }
 }
@@ -279,6 +277,7 @@ pub struct Validator {
     cache_block_meta_service: Option<CacheBlockMetaService>,
     system_monitor_service: Option<SystemMonitorService>,
     sample_performance_service: Option<SamplePerformanceService>,
+    stats_reporter_service: StatsReporterService,
     gossip_service: GossipService,
     serve_repair_service: ServeRepairService,
     completed_data_sets_service: CompletedDataSetsService,
@@ -420,10 +419,31 @@ impl Validator {
                 .and_then(|accountsdb_plugin_service| {
                     accountsdb_plugin_service.get_accounts_update_notifier()
                 });
+
+        let transaction_notifier =
+            accountsdb_plugin_service
+                .as_ref()
+                .and_then(|accountsdb_plugin_service| {
+                    accountsdb_plugin_service.get_transaction_notifier()
+                });
+
+        let block_metadata_notifier =
+            accountsdb_plugin_service
+                .as_ref()
+                .and_then(|accountsdb_plugin_service| {
+                    accountsdb_plugin_service.get_block_metadata_notifier()
+                });
+
         info!(
-            "AccountsDb plugin: accounts_update_notifier: {}",
-            accounts_update_notifier.is_some()
+            "AccountsDb plugin: accounts_update_notifier: {} transaction_notifier: {}",
+            accounts_update_notifier.is_some(),
+            transaction_notifier.is_some()
         );
+
+        let system_monitor_service = Some(SystemMonitorService::new(
+            Arc::clone(&exit),
+            !config.no_os_network_stats_reporting,
+        ));
 
         let (
             genesis_config,
@@ -456,6 +476,7 @@ impl Validator {
             config.no_poh_speed_test,
             accounts_package_channel.0.clone(),
             accounts_update_notifier,
+            transaction_notifier,
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;
@@ -466,10 +487,6 @@ impl Validator {
                 abort();
             });
         }
-        let system_monitor_service = Some(SystemMonitorService::new(
-            Arc::clone(&exit),
-            !config.no_os_network_stats_reporting,
-        ));
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let bank = bank_forks.working_bank();
@@ -530,6 +547,8 @@ impl Validator {
 
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new_with_config(
             &exit,
+            max_complete_transaction_status_slot.clone(),
+            blockstore.clone(),
             bank_forks.clone(),
             block_commitment_cache.clone(),
             optimistically_confirmed_bank.clone(),
@@ -687,12 +706,20 @@ impl Validator {
                 Some(node.info.shred_version),
             )),
         };
+
+        let (stats_reporter_sender, stats_reporter_receiver) = channel();
+        // https://github.com/rust-lang/rust/issues/39364#issuecomment-634545136
+        let _stats_reporter_sender = stats_reporter_sender.clone();
+
+        let stats_reporter_service = StatsReporterService::new(stats_reporter_receiver, &exit);
+
         let gossip_service = GossipService::new(
             &cluster_info,
             Some(bank_forks.clone()),
             node.sockets.gossip,
             config.gossip_validators.clone(),
             should_check_duplicate_instance,
+            Some(stats_reporter_sender.clone()),
             &exit,
         );
         let serve_repair = Arc::new(RwLock::new(ServeRepair::new(cluster_info.clone())));
@@ -701,6 +728,7 @@ impl Validator {
             Some(blockstore.clone()),
             node.sockets.serve_repair,
             socket_addr_space,
+            stats_reporter_sender,
             &exit,
         );
 
@@ -794,30 +822,12 @@ impl Validator {
             authorized_voter_keypairs,
             &bank_forks,
             &cluster_info,
-            Sockets {
-                repair: node
-                    .sockets
-                    .repair
-                    .try_clone()
-                    .expect("Failed to clone repair socket"),
-                retransmit: node
-                    .sockets
-                    .retransmit_sockets
-                    .iter()
-                    .map(|s| s.try_clone().expect("Failed to clone retransmit socket"))
-                    .collect(),
-                fetch: node
-                    .sockets
-                    .tvu
-                    .iter()
-                    .map(|s| s.try_clone().expect("Failed to clone TVU Sockets"))
-                    .collect(),
-                forwards: node
-                    .sockets
-                    .tvu_forwards
-                    .iter()
-                    .map(|s| s.try_clone().expect("Failed to clone TVU forwards Sockets"))
-                    .collect(),
+            TvuSockets {
+                repair: node.sockets.repair,
+                retransmit: node.sockets.retransmit_sockets,
+                fetch: node.sockets.tvu,
+                forwards: node.sockets.tvu_forwards,
+                ancestor_hashes_requests: node.sockets.ancestor_hashes_requests,
             },
             blockstore.clone(),
             ledger_signal_receiver,
@@ -856,12 +866,12 @@ impl Validator {
                 rocksdb_max_compaction_jitter: config.rocksdb_compaction_interval,
                 wait_for_vote_to_start_leader,
                 accounts_shrink_ratio: config.accounts_shrink_ratio,
-                disable_epoch_boundary_optimization: config.disable_epoch_boundary_optimization,
             },
             &max_slots,
             &cost_model,
             accounts_package_channel,
             last_full_snapshot_slot,
+            block_metadata_notifier,
         );
 
         let tpu = Tpu::new(
@@ -869,10 +879,12 @@ impl Validator {
             &poh_recorder,
             entry_receiver,
             retransmit_slots_receiver,
-            node.sockets.tpu,
-            node.sockets.tpu_forwards,
-            node.sockets.tpu_vote,
-            node.sockets.broadcast,
+            TpuSockets {
+                transactions: node.sockets.tpu,
+                transaction_forwards: node.sockets.tpu_forwards,
+                vote: node.sockets.tpu_vote,
+                broadcast: node.sockets.broadcast,
+            },
             &rpc_subscriptions,
             transaction_status_sender,
             &blockstore,
@@ -895,6 +907,7 @@ impl Validator {
 
         *start_progress.write().unwrap() = ValidatorStartProgress::Running;
         Self {
+            stats_reporter_service,
             gossip_service,
             serve_repair_service,
             json_rpc_service,
@@ -1019,6 +1032,9 @@ impl Validator {
         self.serve_repair_service
             .join()
             .expect("serve_repair_service");
+        self.stats_reporter_service
+            .join()
+            .expect("stats_reporter_service");
         self.tpu.join().expect("tpu");
         self.tvu.join().expect("tvu");
         self.completed_data_sets_service
@@ -1182,6 +1198,7 @@ fn new_banks_from_ledger(
     no_poh_speed_test: bool,
     accounts_package_sender: AccountsPackageSender,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
+    transaction_notifier: Option<TransactionNotifierLock>,
 ) -> (
     GenesisConfig,
     BankForks,
@@ -1227,8 +1244,11 @@ fn new_banks_from_ledger(
         ..
     } = Blockstore::open_with_signal(
         ledger_path,
-        config.wal_recovery_mode.clone(),
-        enforce_ulimit_nofile,
+        BlockstoreOptions {
+            recovery_mode: config.wal_recovery_mode.clone(),
+            enforce_ulimit_nofile,
+            ..BlockstoreOptions::default()
+        },
     )
     .expect("Failed to open ledger database");
     blockstore.set_no_compaction(config.no_rocksdb_compaction);
@@ -1263,7 +1283,6 @@ fn new_banks_from_ledger(
         poh_verify,
         dev_halt_at_slot: config.dev_halt_at_slot,
         new_hard_forks: config.new_hard_forks.clone(),
-        frozen_accounts: config.frozen_accounts.clone(),
         debug_keys: config.debug_keys.clone(),
         account_indexes: config.account_indexes.clone(),
         accounts_db_caching_enabled: config.accounts_db_caching_enabled,
@@ -1274,12 +1293,17 @@ fn new_banks_from_ledger(
         ..blockstore_processor::ProcessOptions::default()
     };
 
+    let enable_rpc_transaction_history =
+        config.rpc_addrs.is_some() && config.rpc_config.enable_rpc_transaction_history;
+    let is_plugin_transaction_history_required = transaction_notifier.as_ref().is_some();
     let transaction_history_services =
-        if config.rpc_addrs.is_some() && config.rpc_config.enable_rpc_transaction_history {
+        if enable_rpc_transaction_history || is_plugin_transaction_history_required {
             initialize_rpc_transaction_history_services(
                 blockstore.clone(),
                 exit,
+                enable_rpc_transaction_history,
                 config.rpc_config.enable_cpi_and_log_storage,
+                transaction_notifier,
             )
         } else {
             TransactionHistoryServices::default()
@@ -1470,7 +1494,9 @@ fn backup_and_clear_blockstore(ledger_path: &Path, start_slot: Slot, shred_versi
 fn initialize_rpc_transaction_history_services(
     blockstore: Arc<Blockstore>,
     exit: &Arc<AtomicBool>,
+    enable_rpc_transaction_history: bool,
     enable_cpi_and_log_storage: bool,
+    transaction_notifier: Option<TransactionNotifierLock>,
 ) -> TransactionHistoryServices {
     let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(blockstore.max_root()));
     let (transaction_status_sender, transaction_status_receiver) = unbounded();
@@ -1481,6 +1507,8 @@ fn initialize_rpc_transaction_history_services(
     let transaction_status_service = Some(TransactionStatusService::new(
         transaction_status_receiver,
         max_complete_transaction_status_slot.clone(),
+        enable_rpc_transaction_history,
+        transaction_notifier.clone(),
         blockstore.clone(),
         exit,
     ));
@@ -1721,11 +1749,12 @@ pub fn is_snapshot_config_valid(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader};
-    use solana_sdk::genesis_config::create_genesis_config;
-    use solana_sdk::poh_config::PohConfig;
-    use std::fs::remove_dir_all;
+    use {
+        super::*,
+        solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
+        solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
+        std::fs::remove_dir_all,
+    };
 
     #[test]
     fn validator_exit() {
@@ -1770,8 +1799,10 @@ mod tests {
     fn test_backup_and_clear_blockstore() {
         use std::time::Instant;
         solana_logger::setup();
-        use solana_entry::entry;
-        use solana_ledger::{blockstore, get_tmp_ledger_path};
+        use {
+            solana_entry::entry,
+            solana_ledger::{blockstore, get_tmp_ledger_path},
+        };
         let blockstore_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
@@ -1781,7 +1812,7 @@ mod tests {
             info!("creating shreds");
             let mut last_print = Instant::now();
             for i in 1..10 {
-                let shreds = blockstore::entries_to_test_shreds(entries.clone(), i, i - 1, true, 1);
+                let shreds = blockstore::entries_to_test_shreds(&entries, i, i - 1, true, 1);
                 blockstore.insert_shreds(shreds, None, true).unwrap();
                 if last_print.elapsed().as_millis() > 5000 {
                     info!("inserted {}", i);
