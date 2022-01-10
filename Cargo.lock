@@ -5839,6 +5839,7 @@ dependencies = [
 name = "solana-storage-bigtable"
 version = "1.10.0"
 dependencies = [
+ "async-stream",
  "backoff",
  "bincode",
  "bzip2",

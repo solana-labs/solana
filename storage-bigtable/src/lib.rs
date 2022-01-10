@@ -424,15 +424,14 @@ impl LedgerStorage {
     /// start_slot: slot to start the search from (inclusive)
     /// limit: stop after this many slots have been found; if limit==0, all records in the table
     /// after start_slot will be read
-    pub async fn stream_confirmed_blocks(&self, start_slot: Slot, limit: usize) -> Result<impl TryStream<Ok=(Slot, ConfirmedBlock), Error=Error>> {
-        let mut bigtable = self.connection.client();
-        let stream = bigtable.stream_row_data(
-            "blocks",
+    pub async fn stream_confirmed_blocks(self, start_slot: Slot, limit: usize) -> impl TryStream<Ok=(Slot, ConfirmedBlock), Error=Error> {
+        let bigtable = self.connection.client();
+        bigtable.stream_row_data(
+            "blocks".to_owned(),
             Some(slot_to_blocks_key(start_slot)),
             None,
             limit as i64,
-        ).await?;
-        Ok(stream
+        )
             .map_err(move |err| match err {
                 bigtable::Error::RowNotFound => Error::BlockNotFound(start_slot),
                 _ => err.into(),
@@ -450,7 +449,7 @@ impl LedgerStorage {
                 }?;
                 let slot = key_to_slot(&row_key).expect("invalid slot");
                 Ok((slot, block))
-            }))
+            })
     }
 
     pub async fn get_signature_status(&self, signature: &Signature) -> Result<TransactionStatus> {

@@ -6,9 +6,11 @@ use {
         compression::{compress_best, decompress},
         root_ca_certificate,
     },
+    async_stream::try_stream,
     backoff::{future::retry, ExponentialBackoff},
     futures::{
-        stream::{Stream, TryStream, TryStreamExt},
+        pin_mut,
+        stream::{Stream, StreamExt, TryStreamExt},
         task::{Context, Poll},
     },
     log::*,
@@ -291,7 +293,7 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
     fn stream_read_rows_response(
         &self,
         rrr: tonic::codec::Streaming<ReadRowsResponse>,
-    ) -> impl TryStream<Ok=(RowKey, RowData), Error=Error> {
+    ) -> ReadRowStream {
         ReadRowStream::new(rrr)
     }
 
@@ -495,13 +497,55 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
     }
 
     /// Stream latest data from `table` asynchronously.
-    pub async fn stream_row_data(
-        &mut self,
-        table_name: &str,
+    pub fn stream_row_data(
+        mut self,
+        table_name: String,
         start_at: Option<RowKey>,
         end_at: Option<RowKey>,
+        mut rows_limit: i64,
+    ) -> impl Stream<Item=Result<(RowKey, RowData)>> {
+        try_stream! {
+            let mut start_key = start_at.map(|row_key|
+                row_range::StartKey::StartKeyClosed(row_key.into_bytes()));
+            let end_key = end_at.map(|row_key|
+                row_range::EndKey::EndKeyClosed(row_key.into_bytes()));
+            let mut last_row_key: Option<RowKey> = None;
+
+            'outer: loop {
+                if let Some(last_key) = last_row_key.take() {
+                    start_key = Some(row_range::StartKey::StartKeyOpen(last_key.into_bytes()));
+                }
+                let stream: ReadRowStream = self.stream_row_data_at(
+                    &table_name,
+                    start_key.clone(),
+                    end_key.clone(),
+                    rows_limit,
+                ).await?;
+                pin_mut!(stream);
+                while let Some(stream_item) = stream.next().await {
+                    let (row_key, row_data) = match stream_item {
+                        Ok(v) => v,
+                        Err(e) => {
+                            warn!("Error reading row stream item: {}", e);
+                            continue 'outer;
+                        }
+                    };
+                    last_row_key = Some(row_key.clone());
+                    rows_limit -= 1;
+                    yield (row_key, row_data);
+                }
+                break;
+            }
+        }
+    }
+
+    async fn stream_row_data_at(
+        &mut self,
+        table_name: &str,
+        start_key: Option<row_range::StartKey>,
+        end_key: Option<row_range::EndKey>,
         rows_limit: i64,
-    ) -> Result<impl TryStream<Ok=(RowKey, RowData), Error=Error>> {
+    ) -> Result<ReadRowStream> {
         self.refresh_access_token().await;
 
         let response = self
@@ -511,13 +555,7 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
                 rows_limit,
                 rows: Some(RowSet {
                     row_keys: vec![],
-                    row_ranges: vec![RowRange {
-                        start_key: start_at.map(|row_key| {
-                            row_range::StartKey::StartKeyClosed(row_key.into_bytes())
-                        }),
-                        end_key: end_at
-                            .map(|row_key| row_range::EndKey::EndKeyClosed(row_key.into_bytes())),
-                    }],
+                    row_ranges: vec![RowRange {start_key, end_key}],
                 }),
                 filter: Some(RowFilter {
                     // Only return the latest version of each cell
@@ -773,7 +811,7 @@ where
     })
 }
 
-struct ReadRowStream  {
+pub struct ReadRowStream {
     source: tonic::codec::Streaming<ReadRowsResponse>,
 
     rows: VecDeque<(RowKey, RowData)>,
@@ -889,6 +927,65 @@ impl Stream for ReadRowStream {
         }
     }
 }
+
+/*
+struct RetryReadRowStream<F: FnMut(Request<()>) -> InterceptedRequestResult> {
+    bigtable: BigTable<F>,
+    stream: Option<ReadRowStream>,
+}
+
+impl<F: FnMut(Request<()>) -> InterceptedRequestResult> RetryReadRowStream<F> {
+    fn new(bigtable: BigTable<F>) -> Self {
+        Self {
+            bigtable,
+            stream: None,
+        }
+    }
+
+    async fn start_stream(&mut self) {
+        self.refresh_access_token().await;
+
+        let response = self
+            .client
+            .read_rows(ReadRowsRequest {
+                table_name: format!("{}{}", self.table_prefix, table_name),
+                rows_limit,
+                rows: Some(RowSet {
+                    row_keys: vec![],
+                    row_ranges: vec![RowRange {
+                        start_key: start_at.map(|row_key| {
+                            row_range::StartKey::StartKeyClosed(row_key.into_bytes())
+                        }),
+                        end_key: end_at
+                            .map(|row_key| row_range::EndKey::EndKeyClosed(row_key.into_bytes())),
+                    }],
+                }),
+                filter: Some(RowFilter {
+                    // Only return the latest version of each cell
+                    filter: Some(row_filter::Filter::CellsPerColumnLimitFilter(1)),
+                }),
+                ..ReadRowsRequest::default()
+            })
+            .await?
+            .into_inner();
+
+        Ok(self.stream_read_rows_response(response))
+    }
+}
+
+impl<F: FnMut(Request<()>) -> InterceptedRequestResult> Stream for RetryReadRowStream<F> {
+    type Item = ();
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let hint = self.stream.expect("missing stream").size_hint();
+        (hint.0, None)
+    }
+}
+*/
 
 #[cfg(test)]
 mod tests {
