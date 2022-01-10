@@ -4,7 +4,7 @@ extern crate test;
 
 use {
     solana_bpf_loader_program::serialization::{
-        serialize_parameters_aligned, serialize_parameters_unaligned,
+        mock_transaction_context, serialize_parameters_aligned, serialize_parameters_unaligned,
     },
     solana_sdk::{
         account::{Account, AccountSharedData},
@@ -120,6 +120,17 @@ fn bench_serialize_unaligned(bencher: &mut Bencher) {
 }
 
 #[bench]
+fn bench_serialize_unaligned_many(bencher: &mut Bencher) {
+    let transaction_context = mock_transaction_context(64, 16);
+    let instruction_context = transaction_context
+        .get_current_instruction_context()
+        .unwrap();
+    bencher.iter(|| {
+        let _ = serialize_parameters_unaligned(&transaction_context, instruction_context).unwrap();
+    })
+}
+
+#[bench]
 fn bench_serialize_aligned(bencher: &mut Bencher) {
     let transaction_context = create_inputs();
     let instruction_context = transaction_context
@@ -128,4 +139,15 @@ fn bench_serialize_aligned(bencher: &mut Bencher) {
     bencher.iter(|| {
         let _ = serialize_parameters_aligned(&transaction_context, instruction_context).unwrap();
     });
+}
+
+#[bench]
+fn bench_serialize_aligned_many(bencher: &mut Bencher) {
+    let transaction_context = mock_transaction_context(64, 16);
+    let instruction_context = transaction_context
+        .get_current_instruction_context()
+        .unwrap();
+    bencher.iter(|| {
+        let _ = serialize_parameters_aligned(&transaction_context, instruction_context).unwrap();
+    })
 }
