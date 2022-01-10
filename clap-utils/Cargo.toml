@@ -22,7 +22,7 @@ url = "2.2.2"
 chrono = "0.4"
 
 [dev-dependencies]
-tempfile = "3.2.0"
+tempfile = "3.3.0"
 
 [lib]
 name = "solana_clap_utils"
