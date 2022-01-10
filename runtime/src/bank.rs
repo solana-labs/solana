@@ -39,7 +39,7 @@ use {
     crate::{
         accounts::{AccountAddressFilter, Accounts, TransactionLoadResult},
         accounts_db::{
-            AccountShrinkThreshold, AccountsDbConfig, ErrorCounters, SnapshotStorages,
+            AccountShrinkThreshold, AccountsDbConfig, ErrorCounters, Rewrites, SnapshotStorages,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult},
@@ -1044,6 +1044,8 @@ pub struct Bank {
 
     sysvar_cache: RwLock<Vec<(Pubkey, Vec<u8>)>>,
 
+    rewrites: Rewrites,
+
     /// Current size of the accounts data.  Used when processing messages to enforce a limit on its
     /// maximum size.
     accounts_data_len: AtomicU64,
@@ -1133,6 +1135,7 @@ impl Bank {
 
     fn default_with_accounts(accounts: Accounts) -> Self {
         let bank = Self {
+            rewrites: Rewrites::default(),
             rc: BankRc::new(accounts, Slot::default()),
             src: StatusCacheRc::default(),
             blockhash_queue: RwLock::<BlockhashQueue>::default(),
@@ -1373,6 +1376,7 @@ impl Bank {
 
         let bank_id = rc.bank_id_generator.fetch_add(1, Relaxed) + 1;
         let mut new = Bank {
+            rewrites: Rewrites::default(),
             rc,
             src,
             slot,
@@ -1563,6 +1567,7 @@ impl Bank {
             T::default()
         }
         let mut bank = Self {
+            rewrites: Rewrites::default(),
             rc: bank_rc,
             src: new(),
             blockhash_queue: RwLock::new(fields.blockhash_queue),
@@ -4190,8 +4195,12 @@ impl Bank {
             // because of this, we are not doing this:
             //  verify the whole on-chain state (= all accounts)
             //  via the account delta hash slowly once per an epoch.
-            if true { // rent != 0 {
+            if rent != 0 {
                 self.store_account(&pubkey, &account);
+            }
+            else {
+                let hash = crate::accounts_db::AccountsDb::hash_account(self.slot(), &account, &pubkey);
+                self.rewrites.insert(pubkey, hash); // this would have been rewritten, except we're not going to do so
             }
             rent_debits.insert(&pubkey, rent, account.lamports());
         }
@@ -5146,7 +5155,10 @@ impl Bank {
     ///  of the delta of the ledger since the last vote and up to now
     fn hash_internal_state(&self) -> Hash {
         // If there are no accounts, return the hash of the previous state and the latest blockhash
-        let accounts_delta_hash = self.rc.accounts.bank_hash_info_at(self.slot());
+        let accounts_delta_hash = self
+            .rc
+            .accounts
+            .bank_hash_info_at(self.slot(), &self.rewrites);
         let mut signature_count_buf = [0u8; 8];
         LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count() as u64);
 

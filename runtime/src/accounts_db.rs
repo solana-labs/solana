@@ -84,6 +84,8 @@ use {
     tempfile::TempDir,
 };
 
+pub type Rewrites = DashMap<Pubkey, Hash>;
+
 const PAGE_SIZE: u64 = 4 * 1024;
 const MAX_RECYCLE_STORES: usize = 1000;
 const STORE_META_OVERHEAD: usize = 256;
@@ -2444,15 +2446,15 @@ impl AccountsDb {
             reset_accounts,
         );
         /* todo
-        if purge_stats.is_none() {
-            assert!(dead_slots.is_empty());
-        } else if let Some(expected_single_dead_slot) = expected_single_dead_slot {
-            assert!(dead_slots.len() <= 1);
-            if dead_slots.len() == 1 {
-                assert!(dead_slots.contains(&expected_single_dead_slot));
-            }
-        }
-*/
+                if purge_stats.is_none() {
+                    assert!(dead_slots.is_empty());
+                } else if let Some(expected_single_dead_slot) = expected_single_dead_slot {
+                    assert!(dead_slots.len() <= 1);
+                    if dead_slots.len() == 1 {
+                        assert!(dead_slots.contains(&expected_single_dead_slot));
+                    }
+                }
+        */
         if let Some(purge_stats) = purge_stats {
             self.process_dead_slots(&dead_slots, purged_account_slots, purge_stats);
         }
@@ -3082,8 +3084,7 @@ impl AccountsDb {
                         "ancient_append_vec: creating initial ancient append vec: {}",
                         slot
                     );
-                    let (shrunken_store, _time) =
-                        self.get_store_for_shrink(slot, size);
+                    let (shrunken_store, _time) = self.get_store_for_shrink(slot, size);
                     error!(
                         "ancient_append_vec: got initial ancient append vec: {}",
                         slot
@@ -3116,11 +3117,11 @@ impl AccountsDb {
                 });
 
                 if i % 1000 == 0 {
-                error!(
+                    error!(
                     "ancient_append_vec: writing to ancient append vec: slot: {}, # accts: {}, available bytes after: {}",
                     slot, accounts_this_append_vec.len(), available_bytes
                 );
-            }
+                }
 
                 let mut drop_root = slot > writer.0;
                 // write what we can to the current ancient storage
@@ -3137,8 +3138,7 @@ impl AccountsDb {
                     // we need a new ancient append vec
                     assert!(slot > writer.0);
                     // our oldest slot is not an append vec of max size, so we need to start with rewriting that storage to create an ancient append vec for the oldest slot
-                    let (shrunken_store, _time) =
-                        self.get_store_for_shrink(slot, size);
+                    let (shrunken_store, _time) = self.get_store_for_shrink(slot, size);
                     error!("ancient_append_vec: creating ancient append vec because previous one was full: {}, full one: {}", slot, writer.0);
                     current_storage = Some((slot, shrunken_store));
                     let writer = current_storage.as_ref().unwrap();
@@ -3165,8 +3165,9 @@ impl AccountsDb {
         // todo: afterwards, we need to remove the roots sometime
         error!("ancient_append_vec: dropping roots: {:?}", dropped_roots);
         dropped_roots.iter().for_each(|slot| {
-        self.accounts_index
-            .clean_dead_slot(*slot, &mut AccountsIndexRootsStats::default());});
+            self.accounts_index
+                .clean_dead_slot(*slot, &mut AccountsIndexRootsStats::default());
+        });
     }
     /*
         fn write_accounts_to_ancient_append_vec(storage: &Arc<AccountStorageEntry>, )
@@ -5378,8 +5379,14 @@ impl AccountsDb {
         AccountsHash::checked_cast_for_capitalization(balances.map(|b| b as u128).sum::<u128>())
     }
 
-    fn compute_hash_maybe_rewrite(&self, max_slot: Slot, this_slot: &Slot, loaded_account: &LoadedAccount, pubkey: &Pubkey) -> Hash {
-
+    fn compute_hash_maybe_rewrite(
+        &self,
+        _max_slot: Slot,
+        this_slot: &Slot,
+        loaded_account: &LoadedAccount,
+        pubkey: &Pubkey,
+    ) -> Hash {
+        // todo - look at partitions and figure out most recent slot
         loaded_account.compute_hash(*this_slot, pubkey);
         Hash::default()
     }
@@ -5939,7 +5946,10 @@ impl AccountsDb {
                 let source_item =
                     CalculateHashIntermediate::new(loaded_account.loaded_hash(), balance, *pubkey);
 
-                if false && check_hash && !Self::is_filler_account_helper(pubkey, filler_account_suffix) {
+                if false
+                    && check_hash
+                    && !Self::is_filler_account_helper(pubkey, filler_account_suffix)
+                {
                     let computed_hash = loaded_account.compute_hash(slot, pubkey);
                     if computed_hash != source_item.hash {
                         info!(
@@ -6156,7 +6166,7 @@ impl AccountsDb {
         self.uncleaned_pubkeys.insert(slot, dirty_pubkeys);
     }
 
-    pub fn get_accounts_delta_hash(&self, slot: Slot) -> Hash {
+    pub fn get_accounts_delta_hash(&self, slot: Slot, rewrites: &Rewrites) -> Hash {
         let mut scan = Measure::start("scan");
 
         let scan_result: ScanStorageResult<(Pubkey, Hash), DashMapVersionHash> = self
@@ -6199,6 +6209,13 @@ impl AccountsDb {
             // filler accounts must be added to 'dirty_keys' above but cannot be used to calculate hash
             hashes.retain(|(pubkey, _hash)| !self.is_filler_account(pubkey));
         }
+
+        let rewrites = rewrites.clone(); // todo
+        hashes.iter().for_each(|(key, _)| {
+            let key: &Pubkey = key;
+            rewrites.remove(key);
+        });
+        hashes.extend(rewrites.into_iter());
 
         let ret = AccountsHash::accumulate_account_hashes(hashes);
         accumulate.stop();
@@ -6821,7 +6838,13 @@ impl AccountsDb {
         // equivalent to asserting there will be no dead slots, is safe.
         let no_purge_stats = None;
         let mut handle_reclaims_time = Measure::start("handle_reclaims");
-        self.handle_reclaims(&reclaims, None/*Some(slot)*/, no_purge_stats, None, reset_accounts);
+        self.handle_reclaims(
+            &reclaims,
+            None, /*Some(slot)*/
+            no_purge_stats,
+            None,
+            reset_accounts,
+        );
         handle_reclaims_time.stop();
         self.stats
             .store_handle_reclaims
