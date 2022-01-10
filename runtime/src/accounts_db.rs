@@ -3063,8 +3063,8 @@ impl AccountsDb {
             if let Some(storages) = self.storage.0.get(&slot) {
                 let mut dead_storages = Vec::default();
                 let storages = storages.value();
-                let mut read = storages.read().unwrap();
-                let mut all_storages = read.values().cloned().collect::<Vec<_>>();
+                let read = storages.read().unwrap();
+                let all_storages = read.values().cloned().collect::<Vec<_>>();
                 drop(read);
                 let size = MAXIMUM_APPEND_VEC_FILE_SIZE - 2048; // below max?
                 if current_storage.is_none() && all_storages.len() == 1 {
@@ -5378,9 +5378,15 @@ impl AccountsDb {
         AccountsHash::checked_cast_for_capitalization(balances.map(|b| b as u128).sum::<u128>())
     }
 
+    fn compute_hash_maybe_rewrite(&self, max_slot: Slot, this_slot: &Slot, loaded_account: &LoadedAccount, pubkey: &Pubkey) -> Hash {
+
+        loaded_account.compute_hash(*this_slot, pubkey);
+        Hash::default()
+    }
+
     fn calculate_accounts_hash(
         &self,
-        slot: Slot,
+        max_root: Slot,
         ancestors: &Ancestors,
         check_hash: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
@@ -5416,7 +5422,7 @@ impl AccountsDb {
                                 return None;
                             }
                             if let AccountIndexGetResult::Found(lock, index) =
-                                self.accounts_index.get(pubkey, Some(ancestors), Some(slot))
+                                self.accounts_index.get(pubkey, Some(ancestors), Some(max_root))
                             {
                                 let (slot, account_info) = &lock.slot_list()[index];
                                 if !account_info.is_zero_lamport() {
@@ -5439,9 +5445,8 @@ impl AccountsDb {
                                         |loaded_account| {
                                             let loaded_hash = loaded_account.loaded_hash();
                                             let balance = loaded_account.lamports();
-                                            if check_hash && !self.is_filler_account(pubkey) {
-                                                let computed_hash =
-                                                    loaded_account.compute_hash(*slot, pubkey);
+                                            if false && check_hash && !self.is_filler_account(pubkey) { // cannot compute hash if we are not doing rewrites
+                                                let computed_hash = self.compute_hash_maybe_rewrite(max_root, slot, &loaded_account, pubkey);
                                                 if computed_hash != loaded_hash {
                                                     info!("hash mismatch found: computed: {}, loaded: {}, pubkey: {}", computed_hash, loaded_hash, pubkey);
                                                     mismatch_found
