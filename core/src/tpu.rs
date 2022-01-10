@@ -40,6 +40,13 @@ use {
 
 pub const DEFAULT_TPU_COALESCE_MS: u64 = 5;
 
+pub struct TpuSockets {
+    pub transactions: Vec<UdpSocket>,
+    pub transaction_forwards: Vec<UdpSocket>,
+    pub vote: Vec<UdpSocket>,
+    pub broadcast: Vec<UdpSocket>,
+}
+
 pub struct Tpu {
     fetch_stage: FetchStage,
     sigverify_stage: SigVerifyStage,
@@ -56,10 +63,7 @@ impl Tpu {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         entry_receiver: Receiver<WorkingBankEntry>,
         retransmit_slots_receiver: RetransmitSlotsReceiver,
-        transactions_sockets: Vec<UdpSocket>,
-        tpu_forwards_sockets: Vec<UdpSocket>,
-        tpu_vote_sockets: Vec<UdpSocket>,
-        broadcast_sockets: Vec<UdpSocket>,
+        sockets: TpuSockets,
         subscriptions: &Arc<RpcSubscriptions>,
         transaction_status_sender: Option<TransactionStatusSender>,
         blockstore: &Arc<Blockstore>,
@@ -77,6 +81,13 @@ impl Tpu {
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
         cost_model: &Arc<RwLock<CostModel>>,
     ) -> Self {
+        let TpuSockets {
+            transactions: transactions_sockets,
+            transaction_forwards: tpu_forwards_sockets,
+            vote: tpu_vote_sockets,
+            broadcast: broadcast_sockets,
+        } = sockets;
+
         let (packet_sender, packet_receiver) = channel();
         let (vote_packet_sender, vote_packet_receiver) = channel();
         let fetch_stage = FetchStage::new_with_sender(
