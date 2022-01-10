@@ -240,10 +240,14 @@ impl CacheHashData {
     }
 
     pub fn save(&self, file_name: &Path, data: &SavedTypeSlice) -> Result<(), std::io::Error> {
+        // don't save hash calc file since we're not doing rewrites
+        return Ok(());
+        /*
         let mut stats = CacheHashDataStats::default();
         let result = self.save_internal(file_name, data, &mut stats);
         self.stats.lock().unwrap().merge(&stats);
         result
+        */
     }
 
     pub fn save_internal(

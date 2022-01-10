@@ -3032,7 +3032,7 @@ impl AccountsDb {
     fn shrink_ancient_slots(&self) {
         let max_root = self.accounts_index.max_root();
         use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
-        let epoch_width = DEFAULT_SLOTS_PER_EPOCH / 2; // todo
+        let epoch_width = DEFAULT_SLOTS_PER_EPOCH * 9 / 10; // todo - put some 'in-this-epoch' slots into an ancient append vec
         let old_root = max_root.saturating_sub(epoch_width);
 
         let mut m = Measure::start("get slots");
@@ -5898,6 +5898,45 @@ impl AccountsDb {
         (hash, total_lamports)
     }
 
+    fn maybe_rehash_rewrites(loaded_account: &LoadedAccount, pubkey: &Pubkey, slot: Slot, storage:& SortedStorages) -> Hash {
+        use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
+        let partition_from_pubkey = crate::bank::Bank::partition_from_pubkey(pubkey, DEFAULT_SLOTS_PER_EPOCH);
+        let partition_index_from_slot = slot % DEFAULT_SLOTS_PER_EPOCH;
+        let mut use_stored = false;
+        if slot < storage.range().end - DEFAULT_SLOTS_PER_EPOCH {
+            // this slot is ancient and we know we have to recompute
+        }
+        else {
+            // see if we skipped the rent collection IN THIS EPOCH
+            if partition_from_pubkey <= partition_index_from_slot {
+                use_stored = true;
+            }
+        }
+        let mut expected_slot = slot / DEFAULT_SLOTS_PER_EPOCH + partition_from_pubkey;
+        if !use_stored {
+            // now, we have to find the root that is >= that slot
+            use_stored = true;
+            for maybe_root in expected_slot..storage.range().end {
+                if storage.contains(maybe_root) {
+                    // found a root (because we have a storage) that is >= expected_slot.
+                    expected_slot = maybe_root;
+                    use_stored = false;
+                    break;
+                }
+            }
+        }
+
+        if use_stored {
+            // we can use the previously calculated hash
+            return loaded_account.loaded_hash();
+        }
+
+        // recompute based on rent collection/rewrite slot
+        // Rent would have been collected AT 'expected_slot', so hash according to that slot.        
+        // Note that a later storage (and slot) may contain this same pubkey. In that case, that newer hash will make this one irrelevant.
+        loaded_account.compute_hash(expected_slot, pubkey)
+    }
+
     fn scan_snapshot_stores_with_cache(
         cache_hash_data: &CacheHashData,
         storage: &SortedStorages,
@@ -5943,14 +5982,15 @@ impl AccountsDb {
                     raw_lamports
                 };
 
+                let hash = Self::maybe_rehash_rewrites(&loaded_account, pubkey, slot, storage);
+                
                 let source_item =
-                    CalculateHashIntermediate::new(loaded_account.loaded_hash(), balance, *pubkey);
+                    CalculateHashIntermediate::new(hash, balance, *pubkey);
 
-                if false
-                    && check_hash
+                if check_hash
                     && !Self::is_filler_account_helper(pubkey, filler_account_suffix)
                 {
-                    let computed_hash = loaded_account.compute_hash(slot, pubkey);
+                    let computed_hash = Self::maybe_rehash_rewrites(&loaded_account, pubkey, slot, storage);
                     if computed_hash != source_item.hash {
                         info!(
                             "hash mismatch found: computed: {}, loaded: {}, pubkey: {}",

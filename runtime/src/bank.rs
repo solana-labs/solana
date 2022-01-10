@@ -4216,6 +4216,29 @@ impl Bank {
         account_count
     }
 
+    /// This is the inverse of pubkey_range_from_partition.
+    /// return the partition index given the pubkey and the partition_count
+    pub fn partition_from_pubkey(pubkey: &Pubkey, partition_count: PartitionsPerCycle) -> PartitionIndex {
+        type Prefix = u64;
+        const PREFIX_SIZE: usize = mem::size_of::<Prefix>();
+        const PREFIX_MAX: Prefix = Prefix::max_value();
+
+        if partition_count == 1 {
+            return 0;
+        }
+
+        // not-overflowing way of `(Prefix::max_value() + 1) / partition_count`
+        let partition_width = (PREFIX_MAX - partition_count + 1) / partition_count + 1;
+
+        let prefix = u64::from_be_bytes(pubkey.as_ref()[0..PREFIX_SIZE].try_into().unwrap());
+        if prefix == PREFIX_MAX {
+            return partition_count - 1;
+        }
+
+        let partition = (prefix / partition_width).saturating_sub(1);
+        partition
+    }
+
     // Mostly, the pair (start_index & end_index) is equivalent to this range:
     // start_index..=end_index. But it has some exceptional cases, including
     // this important and valid one:
@@ -4280,9 +4303,15 @@ impl Bank {
             start_pubkey.iter().map(|x| format!("{:02x}", x)).join(""),
             end_pubkey.iter().map(|x| format!("{:02x}", x)).join(""),
         );
+        let start_pubkey = Pubkey::new_from_array(start_pubkey);
+        let end_pubkey = Pubkey::new_from_array(end_pubkey);
+        #[cfg(test)]
+        assert!((start_index..=end_index).contains(&Self::partition_from_pubkey(&start_pubkey, partition_count)), "{}, {}, found: {}, {}, {}", start_index, end_index, Self::partition_from_pubkey(&start_pubkey, partition_count), start_pubkey, partition_count);
+        #[cfg(test)]
+        assert!((start_index..=end_index).contains(&Self::partition_from_pubkey(&start_pubkey, partition_count)), "{}, {}, found: {}, {}, {}", start_index, end_index, Self::partition_from_pubkey(&end_pubkey, partition_count), start_pubkey, partition_count);
         // should be an inclusive range (a closed interval) like this:
         // [0xgg00-0xhhff], [0xii00-0xjjff], ... (where 0xii00 == 0xhhff + 1)
-        Pubkey::new_from_array(start_pubkey)..=Pubkey::new_from_array(end_pubkey)
+        start_pubkey..=end_pubkey
     }
 
     pub fn get_partitions(
