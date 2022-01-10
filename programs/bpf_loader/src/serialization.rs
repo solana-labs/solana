@@ -143,10 +143,11 @@ pub fn serialize_parameters_unaligned(
 ) -> Result<AlignedMemory, InstructionError> {
     // Calculate size in order to alloc once
     let mut size = size_of::<u64>();
+    let duplicate_instruction_accounts = DuplicateInstructionAccounts::new(instruction_context)?;
     for index_in_instruction in instruction_context.get_number_of_program_accounts()
         ..instruction_context.get_number_of_accounts()
     {
-        let duplicate = is_duplicate(instruction_context, index_in_instruction);
+        let duplicate = duplicate_instruction_accounts.get(index_in_instruction)?;
         size += 1; // dup
         if duplicate.is_none() {
             let data_len = instruction_context
@@ -174,9 +175,9 @@ pub fn serialize_parameters_unaligned(
     for index_in_instruction in instruction_context.get_number_of_program_accounts()
         ..instruction_context.get_number_of_accounts()
     {
-        let duplicate = is_duplicate(instruction_context, index_in_instruction);
+        let duplicate = duplicate_instruction_accounts.get(index_in_instruction)?;
         if let Some(position) = duplicate {
-            v.write_u8(position as u8)
+            v.write_u8(*position as u8)
                 .map_err(|_| InstructionError::InvalidArgument)?;
         } else {
             let borrowed_account = instruction_context
@@ -224,11 +225,12 @@ pub fn deserialize_parameters_unaligned(
     account_lengths: &[usize],
 ) -> Result<(), InstructionError> {
     let mut start = size_of::<u64>(); // number of accounts
+    let duplicate_instruction_accounts = DuplicateInstructionAccounts::new(instruction_context)?;
     for (index_in_instruction, pre_len) in (instruction_context.get_number_of_program_accounts()
         ..instruction_context.get_number_of_accounts())
         .zip(account_lengths.iter())
     {
-        let duplicate = is_duplicate(instruction_context, index_in_instruction);
+        let duplicate = duplicate_instruction_accounts.get(index_in_instruction)?;
         start += 1; // is_dup
         if duplicate.is_none() {
             let mut borrowed_account = instruction_context
@@ -255,10 +257,11 @@ pub fn serialize_parameters_aligned(
 ) -> Result<AlignedMemory, InstructionError> {
     // Calculate size in order to alloc once
     let mut size = size_of::<u64>();
+    let duplicate_instruction_accounts = DuplicateInstructionAccounts::new(instruction_context)?;
     for index_in_instruction in instruction_context.get_number_of_program_accounts()
         ..instruction_context.get_number_of_accounts()
     {
-        let duplicate = is_duplicate(instruction_context, index_in_instruction);
+        let duplicate = duplicate_instruction_accounts.get(index_in_instruction)?;
         size += 1; // dup
         if duplicate.is_some() {
             size += 7; // padding to 64-bit aligned
@@ -292,9 +295,9 @@ pub fn serialize_parameters_aligned(
     for index_in_instruction in instruction_context.get_number_of_program_accounts()
         ..instruction_context.get_number_of_accounts()
     {
-        let duplicate = is_duplicate(instruction_context, index_in_instruction);
+        let duplicate = duplicate_instruction_accounts.get(index_in_instruction)?;
         if let Some(position) = duplicate {
-            v.write_u8(position as u8)
+            v.write_u8(*position as u8)
                 .map_err(|_| InstructionError::InvalidArgument)?;
             v.write_all(&[0u8, 0, 0, 0, 0, 0, 0])
                 .map_err(|_| InstructionError::InvalidArgument)?; // 7 bytes of padding to make 64-bit aligned
@@ -353,11 +356,12 @@ pub fn deserialize_parameters_aligned(
     do_support_realloc: bool,
 ) -> Result<(), InstructionError> {
     let mut start = size_of::<u64>(); // number of accounts
+    let duplicate_instruction_accounts = DuplicateInstructionAccounts::new(instruction_context)?;
     for (index_in_instruction, pre_len) in (instruction_context.get_number_of_program_accounts()
         ..instruction_context.get_number_of_accounts())
         .zip(account_lengths.iter())
     {
-        let duplicate = is_duplicate(instruction_context, index_in_instruction);
+        let duplicate = duplicate_instruction_accounts.get(index_in_instruction)?;
         start += size_of::<u8>(); // position
         if duplicate.is_some() {
             start += 7; // padding to 64-bit aligned
@@ -503,7 +507,7 @@ mod tests {
             .get_current_instruction_context()
             .unwrap();
         let duplicates = DuplicateInstructionAccounts::new(instruction_context).unwrap();
-        assert_eq!(1, duplicates.index_offset);
+        assert_eq!(1, duplicates.index_offset); // there's one program account
         assert_eq!(
             HashMap::from([(1usize, 0usize), (2, 1), (3, 2),]),
             duplicates.map,
