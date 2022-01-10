@@ -528,6 +528,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .long("program-id")
                                 .takes_value(true)
                                 .multiple(true)
+                                .required(false)
                                 .help("program_id addresses to filter for"),
                         )
                 )

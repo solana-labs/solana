@@ -424,7 +424,7 @@ impl LedgerStorage {
     /// start_slot: slot to start the search from (inclusive)
     /// limit: stop after this many slots have been found; if limit==0, all records in the table
     /// after start_slot will be read
-    pub async fn stream_confirmed_blocks(self, start_slot: Slot, limit: usize) -> impl TryStream<Ok=(Slot, ConfirmedBlock), Error=Error> {
+    pub fn stream_confirmed_blocks(self, start_slot: Slot, limit: usize) -> impl TryStream<Ok=(Slot, ConfirmedBlock), Error=Error> {
         let bigtable = self.connection.client();
         bigtable.stream_row_data(
             "blocks".to_owned(),
