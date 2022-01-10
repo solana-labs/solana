@@ -512,8 +512,8 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
             let mut last_row_key: Option<RowKey> = None;
 
             'outer: loop {
-                if let Some(last_key) = last_row_key.take() {
-                    start_key = Some(row_range::StartKey::StartKeyOpen(last_key.into_bytes()));
+                if let Some(ref last_key) = last_row_key {
+                    start_key = Some(row_range::StartKey::StartKeyOpen(last_key.clone().into_bytes()));
                 }
                 let stream: ReadRowStream = self.stream_row_data_at(
                     &table_name,
@@ -531,10 +531,15 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
                         }
                     };
                     last_row_key = Some(row_key.clone());
-                    rows_limit -= 1;
                     yield (row_key, row_data);
+                    if rows_limit > 0 {
+                        rows_limit -= 1;
+                        if rows_limit == 0 {
+                            break 'outer;
+                        }
+                    }
                 }
-                break;
+                break 'outer;
             }
         }
     }

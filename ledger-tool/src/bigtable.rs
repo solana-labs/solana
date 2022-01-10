@@ -296,8 +296,6 @@ pub async fn scan_transactions(
 
     let bigtable = solana_storage_bigtable::LedgerStorage::new(true, None, None).await?;
     bigtable.stream_confirmed_blocks(starting_slot, limit)
-        .await?
-        // TODO use try_flat_map
         .try_for_each(|(slot, block)| {
             let program_ids = &program_ids;
             async move {
