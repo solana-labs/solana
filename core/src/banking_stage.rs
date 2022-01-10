@@ -406,33 +406,28 @@ impl BankingStage {
                 MAX_BYTES_BUDGET,
             )
         });
-<<<<<<< HEAD
+
+        let mut forwarded_packet_count: usize = 0;
+        let mut forward_result = Ok(());
         for p in packets {
-            if data_budget.take(p.meta.size) {
-                socket.send_to(&p.data[..p.meta.size], &tpu_forwards)?;
-=======
-
-        let packet_vec: Vec<_> = packets
-            .iter()
-            .filter_map(|p| {
-                if !p.meta.forwarded && data_budget.take(p.meta.size) {
-                    Some((&p.data[..p.meta.size], tpu_forwards))
-                } else {
-                    None
+            if !p.meta.forwarded && data_budget.take(p.meta.size) {
+                match socket.send_to(&p.data[..p.meta.size], &tpu_forwards) {
+                    Ok(_) => {
+                        forwarded_packet_count = forwarded_packet_count.saturating_add(1);
+                    }
+                    Err(err) => {
+                        forward_result = Err(err);
+                        break;
+                    }
                 }
-            })
-            .collect();
-
-        if !packet_vec.is_empty() {
-            inc_new_counter_info!("banking_stage-forwarded_packets", packet_vec.len());
-            if let Err(SendPktsError::IoError(ioerr, _num_failed)) = batch_send(socket, &packet_vec)
-            {
-                return Err(ioerr);
->>>>>>> b1d9a2e60e (Don't forward packets received from TPU forwards port (#22078))
             }
         }
 
-        Ok(())
+        if forwarded_packet_count > 0 {
+            inc_new_counter_info!("banking_stage-forwarded_packets", forwarded_packet_count);
+        }
+
+        forward_result
     }
 
     // Returns whether the given `PacketBatch` has any more remaining unprocessed
@@ -3094,7 +3089,7 @@ mod tests {
             validator_pubkey,
             ..
         } = &genesis_config_info;
-        let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(genesis_config));
+        let bank = Arc::new(Bank::new_no_wallclock_throttle(genesis_config));
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Arc::new(
