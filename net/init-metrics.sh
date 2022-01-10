@@ -13,15 +13,12 @@ usage() {
   fi
   cat <<EOF
 usage: $0 [-e] [-d] [-c database_name] [username]
-
 Creates a testnet dev metrics database
-
   username        InfluxDB user with access to create a new database
   -c              Manually specify a database to create, rather than read from config file
   -d              Delete the database instead of creating it
   -e              Assume database already exists and SOLANA_METRICS_CONFIG is
                   defined in the environment already
-
 EOF
   exit $exitcode
 }
@@ -29,7 +26,7 @@ EOF
 useEnv=false
 delete=false
 createWithoutConfig=false
-host="https://metrics.solana.com:8086"
+host="https://internal-metrics.solana.com:8086"
 while getopts "hdec:" opt; do
   case $opt in
   h|\?)
