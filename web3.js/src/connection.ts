@@ -3013,6 +3013,9 @@ export class Connection {
     if ('error' in res) {
       throw new Error('failed to get slot: ' + res.error.message);
     }
+    if (res.value === null) {
+      throw new Error('invalid blockhash');
+    }
     return res.result;
   }
 
