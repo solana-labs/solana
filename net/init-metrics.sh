@@ -82,7 +82,7 @@ else
   query "GRANT READ ON \"$netBasename\" TO \"ro\""
   query "GRANT WRITE ON \"$netBasename\" TO \"scratch_writer\""
 
-  SOLANA_METRICS_CONFIG="host=$host,db=$netBasename,u=scratch_writer,p=topsecret"
+  SOLANA_METRICS_CONFIG="host=$host,db=$netBasename,u=${username},p=${password}"
 fi
 
 echo "export SOLANA_METRICS_CONFIG=\"$SOLANA_METRICS_CONFIG\"" >> "$configFile"
