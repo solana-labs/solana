@@ -5939,7 +5939,7 @@ impl AccountsDb {
                 let source_item =
                     CalculateHashIntermediate::new(loaded_account.loaded_hash(), balance, *pubkey);
 
-                if check_hash && !Self::is_filler_account_helper(pubkey, filler_account_suffix) {
+                if false && check_hash && !Self::is_filler_account_helper(pubkey, filler_account_suffix) {
                     let computed_hash = loaded_account.compute_hash(slot, pubkey);
                     if computed_hash != source_item.hash {
                         info!(
