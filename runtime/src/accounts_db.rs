@@ -3163,13 +3163,13 @@ impl AccountsDb {
             }
         }
         if !dropped_roots.is_empty() {
-        // todo: afterwards, we need to remove the roots sometime
-        error!("ancient_append_vec: dropping roots: {:?}", dropped_roots);
-        dropped_roots.iter().for_each(|slot| {
-            self.accounts_index
-                .clean_dead_slot(*slot, &mut AccountsIndexRootsStats::default());
-        });
-    }
+            // todo: afterwards, we need to remove the roots sometime
+            error!("ancient_append_vec: dropping roots: {:?}", dropped_roots);
+            dropped_roots.iter().for_each(|slot| {
+                self.accounts_index
+                    .clean_dead_slot(*slot, &mut AccountsIndexRootsStats::default());
+            });
+        }
     }
     /*
         fn write_accounts_to_ancient_append_vec(storage: &Arc<AccountStorageEntry>, )
@@ -5821,6 +5821,7 @@ impl AccountsDb {
                     None
                 },
                 self.num_hash_scan_passes,
+                slots_per_epoch,
             )
         } else {
             self.calculate_accounts_hash(slot, ancestors, check_hash)
@@ -5900,21 +5901,26 @@ impl AccountsDb {
         (hash, total_lamports)
     }
 
-    fn maybe_rehash_rewrites(loaded_account: &LoadedAccount, pubkey: &Pubkey, slot: Slot, storage:& SortedStorages) -> Hash {
-        use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
-        let partition_from_pubkey = crate::bank::Bank::partition_from_pubkey(pubkey, DEFAULT_SLOTS_PER_EPOCH);
-        let partition_index_from_slot = slot % DEFAULT_SLOTS_PER_EPOCH;
+    fn maybe_rehash_rewrites(
+        loaded_account: &LoadedAccount,
+        pubkey: &Pubkey,
+        slot: Slot,
+        storage: &SortedStorages,
+        slots_per_epoch: Option<Slot>,
+    ) -> Hash {
+        let partition_from_pubkey =
+            crate::bank::Bank::partition_from_pubkey(pubkey, slots_per_epoch);
+        let partition_index_from_slot = slot % slots_per_epoch;
         let mut use_stored = false;
-        if slot < storage.range().end - DEFAULT_SLOTS_PER_EPOCH {
+        if slot < storage.range().end - slots_per_epoch {
             // this slot is ancient and we know we have to recompute
-        }
-        else {
+        } else {
             // see if we skipped the rent collection IN THIS EPOCH
             if partition_from_pubkey <= partition_index_from_slot {
                 use_stored = true;
             }
         }
-        let mut expected_slot = slot / DEFAULT_SLOTS_PER_EPOCH + partition_from_pubkey;
+        let mut expected_slot = slot / slots_per_epoch + partition_from_pubkey;
         if !use_stored {
             // now, we have to find the root that is >= that slot
             use_stored = true;
@@ -5934,7 +5940,7 @@ impl AccountsDb {
         }
 
         // recompute based on rent collection/rewrite slot
-        // Rent would have been collected AT 'expected_slot', so hash according to that slot.        
+        // Rent would have been collected AT 'expected_slot', so hash according to that slot.
         // Note that a later storage (and slot) may contain this same pubkey. In that case, that newer hash will make this one irrelevant.
         loaded_account.compute_hash(expected_slot, pubkey)
     }
@@ -5952,6 +5958,7 @@ impl AccountsDb {
             &AccountInfoAccountsIndex,
         )>,
         filler_account_suffix: Option<&Pubkey>,
+        slots_per_epoch: Option<Slot>,
     ) -> Result<Vec<BinnedHashData>, BankHashVerificationError> {
         let bin_calculator = PubkeyBinCalculator24::new(bins);
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
@@ -5984,15 +5991,24 @@ impl AccountsDb {
                     raw_lamports
                 };
 
-                let hash = Self::maybe_rehash_rewrites(&loaded_account, pubkey, slot, storage);
-                
-                let source_item =
-                    CalculateHashIntermediate::new(hash, balance, *pubkey);
+                let hash = Self::maybe_rehash_rewrites(
+                    &loaded_account,
+                    pubkey,
+                    slot,
+                    storage,
+                    slots_per_epoch,
+                );
 
-                if check_hash
-                    && !Self::is_filler_account_helper(pubkey, filler_account_suffix)
-                {
-                    let computed_hash = Self::maybe_rehash_rewrites(&loaded_account, pubkey, slot, storage);
+                let source_item = CalculateHashIntermediate::new(hash, balance, *pubkey);
+
+                if check_hash && !Self::is_filler_account_helper(pubkey, filler_account_suffix) {
+                    let computed_hash = Self::maybe_rehash_rewrites(
+                        &loaded_account,
+                        pubkey,
+                        slot,
+                        storage,
+                        slots_per_epoch,
+                    );
                     if computed_hash != source_item.hash {
                         info!(
                             "hash mismatch found: computed: {}, loaded: {}, pubkey: {}",
@@ -6066,6 +6082,7 @@ impl AccountsDb {
         )>,
         filler_account_suffix: Option<&Pubkey>,
         num_hash_scan_passes: Option<usize>,
+        slots_per_epoch: Option<Slot>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         let (num_hash_scan_passes, bins_per_pass) = Self::bins_per_pass(num_hash_scan_passes);
         let mut scan_and_hash = move || {
@@ -6212,7 +6229,7 @@ impl AccountsDb {
         self.get_accounts_delta_hash_new(slot, &Rewrites::default())
     }
     pub fn get_accounts_delta_hash_new(&self, slot: Slot, rewrites: &Rewrites) -> Hash {
-            let mut scan = Measure::start("scan");
+        let mut scan = Measure::start("scan");
 
         let scan_result: ScanStorageResult<(Pubkey, Hash), DashMapVersionHash> = self
             .scan_account_storage(
