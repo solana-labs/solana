@@ -545,6 +545,15 @@ impl<'a> BorrowedAccount<'a> {
         self.account.data()
     }
 
+    /// Returns a writable slice of the account data (transaction wide)
+    pub fn get_data_mut(&mut self) -> Result<&mut [u8], InstructionError> {
+        if self.is_writable() {
+            Ok(self.account.data_as_mut_slice())
+        } else {
+            Err(InstructionError::Immutable)
+        }
+    }
+
     /// Overwrites the account data and size (transaction wide)
     pub fn set_data(&mut self, data: &[u8]) -> Result<(), InstructionError> {
         if data.len() == self.account.data().len() {
