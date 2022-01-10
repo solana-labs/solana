@@ -18,7 +18,7 @@ cd solana
 The demo code is sometimes broken between releases as we add new low-level features, so if this is your first time running the demo, you'll improve your odds of success if you check out the [latest release](https://github.com/solana-labs/solana/releases) before proceeding:
 
 ```bash
-TAG=$(git describe --tags $(git rev-list --tags --max-count=1))
+$TAG=$(git describe --tags $(git rev-list --tags --max-count=1))
 git checkout $TAG
 ```
 
