@@ -245,7 +245,7 @@ EOF
     cat >> "$output_file" <<"EOF"
   - command: "scripts/build-downstream-anchor-projects.sh"
     name: "downstream-anchor-projects"
-    timeout_in_minutes: 30
+    timeout_in_minutes: 10
 EOF
   else
     annotate --style info \
