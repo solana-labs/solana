@@ -3162,12 +3162,14 @@ impl AccountsDb {
                 }
             }
         }
+        if !dropped_roots.is_empty() {
         // todo: afterwards, we need to remove the roots sometime
         error!("ancient_append_vec: dropping roots: {:?}", dropped_roots);
         dropped_roots.iter().for_each(|slot| {
             self.accounts_index
                 .clean_dead_slot(*slot, &mut AccountsIndexRootsStats::default());
         });
+    }
     }
     /*
         fn write_accounts_to_ancient_append_vec(storage: &Arc<AccountStorageEntry>, )
