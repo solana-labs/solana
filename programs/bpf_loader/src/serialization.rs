@@ -2,12 +2,13 @@ use {
     byteorder::{ByteOrder, LittleEndian, WriteBytesExt},
     solana_rbpf::{aligned_memory::AlignedMemory, ebpf::HOST_ALIGN},
     solana_sdk::{
-        bpf_loader_deprecated,
+        account::{Account, AccountSharedData},
+        bpf_loader, bpf_loader_deprecated,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE},
         instruction::InstructionError,
         pubkey::Pubkey,
         system_instruction::MAX_PERMITTED_DATA_LENGTH,
-        transaction_context::{InstructionContext, TransactionContext},
+        transaction_context::{InstructionAccount, InstructionContext, TransactionContext},
     },
     std::{collections::hash_map::Entry, collections::HashMap, io::prelude::*, mem::size_of},
 };
@@ -409,6 +410,84 @@ pub fn deserialize_parameters_aligned(
     Ok(())
 }
 
+/// To be used only in tests or benchmarks.
+///
+/// Creates a `TransactionContext` with one program account and the specified
+/// number of instruction accounts. `n_duplicate_instruction_accounts` of
+/// these accounts will be duplicates.
+///
+/// Let `x_i` be an instruction account, then `mock_transaction_context(5,
+/// 2)` returns a `TransactionContext` with accounts `[program_account, x_1,
+/// x_2, x_3, x_1, x_2]`.
+#[allow(dead_code)]
+pub fn mock_transaction_context(
+    n_instruction_accounts: usize,
+    n_duplicate_instruction_accounts: usize,
+) -> TransactionContext {
+    assert!(n_duplicate_instruction_accounts < n_instruction_accounts);
+
+    let n_unique_instruction_accounts = n_instruction_accounts - n_duplicate_instruction_accounts;
+    let n_program_accounts = 1usize;
+    let n_accounts = n_program_accounts + n_instruction_accounts;
+
+    let program_id = solana_sdk::pubkey::new_rand();
+    let mut transaction_accounts = Vec::with_capacity(n_accounts);
+    transaction_accounts.push((
+        program_id,
+        AccountSharedData::from(Account {
+            lamports: 0,
+            data: vec![],
+            owner: bpf_loader::id(),
+            executable: true,
+            rent_epoch: 0,
+        }),
+    ));
+
+    for i in 0..n_unique_instruction_accounts {
+        transaction_accounts.push((
+            solana_sdk::pubkey::new_rand(),
+            AccountSharedData::from(Account {
+                lamports: i as u64,
+                data: if i % 2 == 0 {
+                    vec![]
+                } else {
+                    vec![11u8; i * 1000]
+                },
+                owner: bpf_loader::id(),
+                executable: i % 2 == 0,
+                rent_epoch: (i as u64) * 10,
+            }),
+        ))
+    }
+
+    let instruction_accounts = (n_program_accounts
+        ..n_program_accounts + n_unique_instruction_accounts)
+        // generate duplicates by appending repeated index_in_transaction values
+        .chain(n_program_accounts..n_program_accounts + n_duplicate_instruction_accounts)
+        .enumerate()
+        .map(
+            |(index_in_instruction, index_in_transaction)| InstructionAccount {
+                index_in_caller: n_program_accounts.saturating_add(index_in_instruction),
+                index_in_transaction,
+                is_signer: false,
+                is_writable: index_in_instruction >= n_instruction_accounts / 2,
+            },
+        )
+        .collect::<Vec<_>>();
+
+    let mut transaction_context = TransactionContext::new(transaction_accounts, 1);
+    let instruction_data = vec![1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+    let program_accounts: Vec<usize> = (0..n_program_accounts).collect();
+    transaction_context
+        .push(
+            program_accounts.as_slice(),
+            &instruction_accounts,
+            &instruction_data,
+        )
+        .unwrap();
+    transaction_context
+}
+
 #[cfg(test)]
 mod tests {
     use {
@@ -420,7 +499,6 @@ mod tests {
             bpf_loader,
             entrypoint::deserialize,
             instruction::AccountMeta,
-            transaction_context::InstructionAccount,
         },
         std::{
             cell::RefCell,
@@ -428,82 +506,6 @@ mod tests {
             slice::{from_raw_parts, from_raw_parts_mut},
         },
     };
-
-    /// Creates a `TransactionContext` with one program account and the specified
-    /// number of instruction accounts. `n_duplicate_instruction_accounts` of
-    /// these accounts will be duplicates.
-    ///
-    /// Let `x_i` be an instruction account, then `mock_transaction_context(5,
-    /// 2)` returns a `TransactionContext` with accounts `[program_account, x_1,
-    /// x_2, x_3, x_1, x_2]`.
-    fn mock_transaction_context(
-        n_instruction_accounts: usize,
-        n_duplicate_instruction_accounts: usize,
-    ) -> TransactionContext {
-        assert!(n_duplicate_instruction_accounts < n_instruction_accounts);
-
-        let n_unique_instruction_accounts =
-            n_instruction_accounts - n_duplicate_instruction_accounts;
-        let n_program_accounts = 1usize;
-        let n_accounts = n_program_accounts + n_instruction_accounts;
-
-        let program_id = solana_sdk::pubkey::new_rand();
-        let mut transaction_accounts = Vec::with_capacity(n_accounts);
-        transaction_accounts.push((
-            program_id,
-            AccountSharedData::from(Account {
-                lamports: 0,
-                data: vec![],
-                owner: bpf_loader::id(),
-                executable: true,
-                rent_epoch: 0,
-            }),
-        ));
-
-        for i in 0..n_unique_instruction_accounts {
-            transaction_accounts.push((
-                solana_sdk::pubkey::new_rand(),
-                AccountSharedData::from(Account {
-                    lamports: i as u64,
-                    data: if i % 2 == 0 {
-                        vec![]
-                    } else {
-                        vec![11u8; i * 1000]
-                    },
-                    owner: bpf_loader::id(),
-                    executable: i % 2 == 0,
-                    rent_epoch: (i as u64) * 10,
-                }),
-            ))
-        }
-
-        let instruction_accounts = (n_program_accounts
-            ..n_program_accounts + n_unique_instruction_accounts)
-            // generate duplicates by appending repeated index_in_transaction values
-            .chain(n_program_accounts..n_program_accounts + n_duplicate_instruction_accounts)
-            .enumerate()
-            .map(
-                |(index_in_instruction, index_in_transaction)| InstructionAccount {
-                    index_in_caller: n_program_accounts.saturating_add(index_in_instruction),
-                    index_in_transaction,
-                    is_signer: false,
-                    is_writable: index_in_instruction >= n_instruction_accounts / 2,
-                },
-            )
-            .collect::<Vec<_>>();
-
-        let mut transaction_context = TransactionContext::new(transaction_accounts, 1);
-        let instruction_data = vec![1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
-        let program_accounts: Vec<usize> = (0..n_program_accounts).collect();
-        transaction_context
-            .push(
-                program_accounts.as_slice(),
-                &instruction_accounts,
-                &instruction_data,
-            )
-            .unwrap();
-        transaction_context
-    }
 
     #[test]
     fn test_duplicate_instruction_accounts_new() {
