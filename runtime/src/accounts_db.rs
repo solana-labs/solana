@@ -5908,6 +5908,12 @@ impl AccountsDb {
         storage: &SortedStorages,
         slots_per_epoch: Option<Slot>,
     ) -> Hash {
+        use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
+        if slots_per_epoch.is_none() {
+            return loaded_account.loaded_hash();
+        }
+
+        let slots_per_epoch = slots_per_epoch.unwrap_or(DEFAULT_SLOTS_PER_EPOCH);
         let partition_from_pubkey =
             crate::bank::Bank::partition_from_pubkey(pubkey, slots_per_epoch);
         let partition_index_from_slot = slot % slots_per_epoch;
@@ -6106,6 +6112,7 @@ impl AccountsDb {
                     check_hash,
                     accounts_cache_and_ancestors,
                     filler_account_suffix,
+                    None,
                 )?;
 
                 let hash = AccountsHash {
@@ -7888,6 +7895,7 @@ pub mod tests {
                 check_hash,
                 None,
                 None,
+                None,
             )
         }
     }
@@ -8244,6 +8252,7 @@ pub mod tests {
             None,
             None,
             None,
+            None,
         )
         .unwrap();
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
@@ -8266,6 +8275,7 @@ pub mod tests {
             None,
             HashStats::default(),
             false,
+            None,
             None,
             None,
             None,
