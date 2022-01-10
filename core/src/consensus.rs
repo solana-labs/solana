@@ -1689,7 +1689,7 @@ pub mod test {
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair,
-            voting_keypair: _,
+            ..
         } = create_genesis_config_with_vote_accounts(
             1_000_000_000,
             &validator_keypairs,
