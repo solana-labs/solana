@@ -3077,6 +3077,14 @@ impl AccountsDb {
                         error!("ancient_append_vec: reusing existing ancient append vec: {}, capacity: {}", slot, capacity);
                         current_storage = Some((slot, Arc::clone(first_storage)));
                     }
+                    else {
+                        error!("ancient_append_vec: NOT reusing existing ancient append vec: {}, capacity: {}, size: {}, short: {}", slot, capacity, size, size.saturating_sub(capacity));
+                    }
+                }
+                else if current_storage.is_none() && all_storages.len() > 1 {
+                    let first_storage = all_storages.first().unwrap();
+                    let capacity = first_storage.accounts.capacity();
+                    error!("ancient_append_vec: we have {} storages: NOT reusing existing ancient append vec: {}, capacity: {}, size: {}, short: {}", all_storages.len(), slot, capacity, size, size.saturating_sub(capacity));
                 }
                 if current_storage.is_none() {
                     // our oldest slot is not an append vec of max size, so we need to start with rewriting that storage to create an ancient append vec for the oldest slot
@@ -3123,6 +3131,7 @@ impl AccountsDb {
                 );
                 }
 
+                let mut ids = vec![writer.1.append_vec_id()];
                 let mut drop_root = slot > writer.0;
                 // write what we can to the current ancient storage
                 let _store_accounts_timing = self.store_accounts_frozen(
@@ -3142,6 +3151,7 @@ impl AccountsDb {
                     error!("ancient_append_vec: creating ancient append vec because previous one was full: {}, full one: {}", slot, writer.0);
                     current_storage = Some((slot, shrunken_store));
                     let writer = current_storage.as_ref().unwrap();
+                    ids.push(writer.1.append_vec_id());
 
                     // write the rest to the next ancient storage
                     let _store_accounts_timing = self.store_accounts_frozen(
@@ -3152,6 +3162,22 @@ impl AccountsDb {
                         None,
                     );
                 }
+
+                // Purge old, overwritten storage entries
+                let mut start = Measure::start("write_storage_elapsed");
+                if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
+                    slot_stores.write().unwrap().retain(|_key, store| {
+                        if store.count() == 0 || !ids.contains(&store.append_vec_id()) {
+                            self.dirty_stores
+                                .insert((slot, store.append_vec_id()), store.clone());
+                            dead_storages.push(store.clone());
+                            false
+                        } else {
+                            true
+                        }
+                    });
+                }
+                start.stop();
 
                 dead_storages.extend(all_storages.iter().map(Arc::clone));
 
