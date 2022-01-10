@@ -1623,13 +1623,13 @@ dependencies = [
 
 [[package]]
 name = "merlin"
-version = "2.0.1"
+version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e261cf0f8b3c42ded9f7d2bb59dea03aa52bc8a1cbc7482f9fc3fd1229d3b42"
+checksum = "58c38e2799fc0978b65dfff8023ec7843e2330bb462f19198840b34b6582397d"
 dependencies = [
  "byteorder 1.4.3",
  "keccak",
- "rand_core 0.5.1",
+ "rand_core 0.6.3",
  "zeroize",
 ]
 
