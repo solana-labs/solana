@@ -12,6 +12,8 @@ use {
     std::{collections::hash_map::Entry, collections::HashMap, io::prelude::*, mem::size_of},
 };
 
+/// Holds information about duplicate instruction accounts. It can be used as a
+/// cache to avoid calculating duplicates repeatedly.
 struct DuplicateInstructionAccounts<'a> {
     instruction_context: &'a InstructionContext,
     /// Used to translate between position of duplicate and index in instruction.
@@ -67,7 +69,10 @@ impl<'a> DuplicateInstructionAccounts<'a> {
     }
 }
 
-/// Look for a duplicate account and return its position if found
+/// Look for a duplicate account and return its position if found.
+///
+/// When calling this function for _all_ instruction accounts in a transaction,
+/// consider using `DuplicateInstructionAccounts` instead.
 pub fn is_duplicate(
     instruction_context: &InstructionContext,
     index_in_instruction: usize,
