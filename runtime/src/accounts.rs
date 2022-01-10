@@ -963,7 +963,7 @@ impl Accounts {
     }
 
     pub fn bank_hash_info_at(&self, slot: Slot, rewrites: &Rewrites) -> BankHashInfo {
-        let delta_hash = self.accounts_db.get_accounts_delta_hash(slot, rewrites);
+        let delta_hash = self.accounts_db.get_accounts_delta_hash_new(slot, rewrites);
         let bank_hashes = self.accounts_db.bank_hashes.read().unwrap();
         let mut hash_info = bank_hashes
             .get(&slot)
@@ -2137,7 +2137,7 @@ mod tests {
             false,
             AccountShrinkThreshold::default(),
         );
-        accounts.bank_hash_at(1);
+        accounts.bank_hash_at(1, &Rewrites::default());
     }
 
     #[test]

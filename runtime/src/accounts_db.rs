@@ -6206,8 +6206,11 @@ impl AccountsDb {
         self.uncleaned_pubkeys.insert(slot, dirty_pubkeys);
     }
 
-    pub fn get_accounts_delta_hash(&self, slot: Slot, rewrites: &Rewrites) -> Hash {
-        let mut scan = Measure::start("scan");
+    pub fn get_accounts_delta_hash(&self, slot: Slot) -> Hash {
+        self.get_accounts_delta_hash_new(slot, &Rewrites::default())
+    }
+    pub fn get_accounts_delta_hash_new(&self, slot: Slot, rewrites: &Rewrites) -> Hash {
+            let mut scan = Measure::start("scan");
 
         let scan_result: ScanStorageResult<(Pubkey, Hash), DashMapVersionHash> = self
             .scan_account_storage(
