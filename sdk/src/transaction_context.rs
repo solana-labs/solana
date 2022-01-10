@@ -180,8 +180,12 @@ impl TransactionContext {
     }
 
     /// Set the return data of the current InstructionContext
-    pub fn set_return_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError> {
-        self.return_data = (*self.get_program_key()?, data);
+    pub fn set_return_data(
+        &mut self,
+        program_id: Pubkey,
+        data: Vec<u8>,
+    ) -> Result<(), InstructionError> {
+        self.return_data = (program_id, data);
         Ok(())
     }
 }

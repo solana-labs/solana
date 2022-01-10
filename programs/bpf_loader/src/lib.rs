@@ -1099,7 +1099,8 @@ impl Executor for BpfExecutor {
                 trace!("BPF Program Instruction Trace:\n{}", trace_string);
             }
             drop(vm);
-            let (_returned_from_program_id, return_data) = &invoke_context.return_data;
+            let (_returned_from_program_id, return_data) =
+                invoke_context.transaction_context.get_return_data();
             if !return_data.is_empty() {
                 stable_log::program_return(&log_collector, &program_id, return_data);
             }
