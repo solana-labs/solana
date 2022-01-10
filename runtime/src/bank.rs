@@ -4543,7 +4543,7 @@ impl Bank {
     }
 
     fn collect_rent_eagerly(&self) {
-        if !self.enable_eager_rent_collection() {
+        if self.lazy_rent_collection.load(Relaxed) {
             return;
         }
 
@@ -4566,14 +4566,6 @@ impl Bank {
     #[cfg(test)]
     fn restore_old_behavior_for_fragile_tests(&self) {
         self.lazy_rent_collection.store(true, Relaxed);
-    }
-
-    fn enable_eager_rent_collection(&self) -> bool {
-        if self.lazy_rent_collection.load(Relaxed) {
-            return false;
-        }
-
-        true
     }
 
     fn rent_collection_partitions(&self) -> Vec<Partition> {
