@@ -6,9 +6,10 @@ use {
     crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError},
     histogram::Histogram,
     itertools::Itertools,
-    retain_mut::RetainMut,
     solana_entry::entry::hash_transactions,
-    solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
+    solana_gossip::{
+        cluster_info::ClusterInfo, contact_info::ContactInfo, weighted_shuffle::WeightedShuffle,
+    },
     solana_ledger::blockstore_processor::TransactionStatusSender,
     solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_info,
@@ -467,8 +468,74 @@ impl BankingStage {
             Self::packet_has_more_unprocessed_transactions(&new_unprocessed_indexes);
         if has_more_unprocessed_transactions {
             *original_unprocessed_indexes = new_unprocessed_indexes
-        };
+        } else {
+            original_unprocessed_indexes.clear();
+        }
         has_more_unprocessed_transactions
+    }
+
+    // Iterates packets in buffered batches, returns all unprocessed packet's stake,
+    // and its location (batch_index plus packet_index within batch)
+    fn get_stakes_and_locators(
+        buffered_packet_batches: &UnprocessedPacketBatches,
+    ) -> (Vec<u64>, Vec<(usize, usize)>) {
+        let mut stakes = Vec::<u64>::new();
+        let mut locators = Vec::<(usize, usize)>::new();
+
+        buffered_packet_batches
+            .iter()
+            .enumerate()
+            .map(|(batch_index, buffered_packet_batch_and_offsets)| {
+                let (packet_batch, original_unprocessed_indexes, _forwarded) =
+                    buffered_packet_batch_and_offsets;
+                original_unprocessed_indexes
+                    .iter()
+                    .map(|tx_index| {
+                        let p = &packet_batch.packets[*tx_index];
+                        stakes.push(p.meta.weight);
+                        locators.push((batch_index, *tx_index));
+                    })
+                    .collect_vec();
+            })
+            .collect_vec();
+        (stakes, locators)
+    }
+
+    fn weighted_shuffle(stakes: &[u64], locators: &[(usize, usize)]) -> Vec<(usize, Vec<usize>)> {
+        let mut rng = rand::thread_rng();
+        let mut shuffled_locators: Vec<(usize, usize)> = WeightedShuffle::new(&mut rng, stakes)
+            .unwrap()
+            .map(|i| locators[i])
+            .collect();
+        // append zero weight packets to the end
+        let zero_staked_packets_locators: Vec<(usize, usize)> = stakes
+            .iter()
+            .enumerate()
+            .filter_map(
+                |(i, stake)| {
+                    if *stake == 0 {
+                        Some(locators[i])
+                    } else {
+                        None
+                    }
+                },
+            )
+            .collect();
+        shuffled_locators.extend(zero_staked_packets_locators);
+
+        // coalesce neighboring same batch locators into one entry
+        shuffled_locators
+            .into_iter()
+            .map(|(batch_index, packet_index)| (batch_index, vec![packet_index]))
+            .coalesce(|mut x, y| {
+                if x.0 == y.0 {
+                    x.1.extend(y.1.iter());
+                    Ok(x)
+                } else {
+                    Err((x, y))
+                }
+            })
+            .collect()
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -490,82 +557,104 @@ impl BankingStage {
         let mut proc_start = Measure::start("consume_buffered_process");
         let mut reached_end_of_slot = None;
 
-        RetainMut::retain_mut(
-            buffered_packet_batches,
-            |buffered_packet_batch_and_offsets| {
-                let (packet_batch, ref mut original_unprocessed_indexes, _forwarded) =
-                    buffered_packet_batch_and_offsets;
-                if let Some((next_leader, bank)) = &reached_end_of_slot {
-                    // We've hit the end of this slot, no need to perform more processing,
-                    // just filter the remaining packets for the invalid (e.g. too old) ones
-                    let new_unprocessed_indexes = Self::filter_unprocessed_packets(
-                        bank,
-                        packet_batch,
-                        original_unprocessed_indexes,
-                        my_pubkey,
-                        *next_leader,
-                        banking_stage_stats,
-                    );
-                    Self::update_buffered_packets_with_new_unprocessed(
-                        original_unprocessed_indexes,
-                        new_unprocessed_indexes,
-                    )
-                } else {
-                    let bank_start = poh_recorder.lock().unwrap().bank_start();
-                    if let Some(BankStart {
-                        working_bank,
-                        bank_creation_time,
-                    }) = bank_start
-                    {
-                        let (processed, verified_txs_len, new_unprocessed_indexes) =
-                            Self::process_packets_transactions(
-                                &working_bank,
-                                &bank_creation_time,
-                                recorder,
-                                packet_batch,
-                                original_unprocessed_indexes.to_owned(),
-                                transaction_status_sender.clone(),
-                                gossip_vote_sender,
-                                banking_stage_stats,
-                                qos_service,
-                            );
-                        if processed < verified_txs_len
-                            || !Bank::should_bank_still_be_processing_txs(
-                                &bank_creation_time,
-                                max_tx_ingestion_ns,
-                            )
+        let (stakes, locators) = Self::get_stakes_and_locators(buffered_packet_batches);
+        let shuffled_packet_locators = Self::weighted_shuffle(&stakes, &locators);
+        shuffled_packet_locators
+            .into_iter()
+            .for_each(|(batch_index, packet_indexes)| {
+                if let Some((packet_batch, ref mut original_unprocessed_indexes, _forwarded)) =
+                    buffered_packet_batches.get_mut(batch_index)
+                {
+                    if let Some((next_leader, bank)) = &reached_end_of_slot {
+                        // We've hit the end of this slot, no need to perform more processing,
+                        // just filter the remaining packets for the invalid (e.g. too old) ones
+                        let new_unprocessed_indexes = Self::filter_unprocessed_packets(
+                            bank,
+                            packet_batch,
+                            original_unprocessed_indexes,
+                            my_pubkey,
+                            *next_leader,
+                            banking_stage_stats,
+                        );
+                        Self::update_buffered_packets_with_new_unprocessed(
+                            original_unprocessed_indexes,
+                            new_unprocessed_indexes,
+                        );
+                    } else {
+                        let bank_start = poh_recorder.lock().unwrap().bank_start();
+                        if let Some(BankStart {
+                            working_bank,
+                            bank_creation_time,
+                        }) = bank_start
                         {
-                            reached_end_of_slot = Some((
-                                poh_recorder.lock().unwrap().next_slot_leader(),
-                                working_bank,
-                            ));
-                        }
-                        new_tx_count += processed;
+                            let (processed, verified_txs_len, mut new_unprocessed_indexes) =
+                                Self::process_packets_transactions(
+                                    &working_bank,
+                                    &bank_creation_time,
+                                    recorder,
+                                    packet_batch,
+                                    packet_indexes.clone(),
+                                    transaction_status_sender.clone(),
+                                    gossip_vote_sender,
+                                    banking_stage_stats,
+                                    qos_service,
+                                );
 
-                        // Out of the buffered packets just retried, collect any still unprocessed
-                        // transactions in this batch for forwarding
-                        rebuffered_packet_count += new_unprocessed_indexes.len();
-                        let has_more_unprocessed_transactions =
+                            // original unprocessed indexes, minor packet index are the new
+                            // unprocessed
+                            let unprocessed_indexes: Vec<_> = original_unprocessed_indexes
+                                .iter()
+                                .filter_map(|index| {
+                                    if !packet_indexes.contains(index) {
+                                        Some(*index)
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect();
+                            new_unprocessed_indexes.extend(unprocessed_indexes);
+
+                            if processed < verified_txs_len
+                                || !Bank::should_bank_still_be_processing_txs(
+                                    &bank_creation_time,
+                                    max_tx_ingestion_ns,
+                                )
+                            {
+                                reached_end_of_slot = Some((
+                                    poh_recorder.lock().unwrap().next_slot_leader(),
+                                    working_bank,
+                                ));
+                            }
+                            new_tx_count += processed;
+
+                            // Out of the buffered packets just retried, collect any still unprocessed
+                            // transactions in this batch for forwarding
+                            rebuffered_packet_count += new_unprocessed_indexes.len();
                             Self::update_buffered_packets_with_new_unprocessed(
                                 original_unprocessed_indexes,
                                 new_unprocessed_indexes,
                             );
-                        if let Some(test_fn) = &test_fn {
-                            test_fn();
+                            if let Some(test_fn) = &test_fn {
+                                test_fn();
+                            }
+                        } else {
+                            rebuffered_packet_count += original_unprocessed_indexes.len();
+                            // `original_unprocessed_indexes` must have remaining packets to process
+                            // if not yet processed.
+                            assert!(Self::packet_has_more_unprocessed_transactions(
+                                original_unprocessed_indexes
+                            ));
                         }
-                        has_more_unprocessed_transactions
-                    } else {
-                        rebuffered_packet_count += original_unprocessed_indexes.len();
-                        // `original_unprocessed_indexes` must have remaining packets to process
-                        // if not yet processed.
-                        assert!(Self::packet_has_more_unprocessed_transactions(
-                            original_unprocessed_indexes
-                        ));
-                        true
                     }
                 }
-            },
-        );
+            });
+
+        // remove those batch has no more unprocessed packets
+        buffered_packet_batches.retain(|buffered_packet_batch_and_offsets| {
+            let (_packet_batch, ref unprocessed_indexes, _forward) =
+                buffered_packet_batch_and_offsets;
+            Self::packet_has_more_unprocessed_transactions(unprocessed_indexes)
+        });
 
         proc_start.stop();
 
@@ -2860,6 +2949,7 @@ mod tests {
 
     #[test]
     fn test_consume_buffered_packets() {
+        solana_logger::setup();
         let ledger_path = get_tmp_ledger_path!();
         {
             let (transactions, bank, poh_recorder, _entry_receiver, poh_simulator) =
@@ -2936,6 +3026,7 @@ mod tests {
 
     #[test]
     fn test_consume_buffered_packets_interrupted() {
+        solana_logger::setup();
         let ledger_path = get_tmp_ledger_path!();
         {
             let (transactions, bank, poh_recorder, _entry_receiver, poh_simulator) =
@@ -3500,5 +3591,67 @@ mod tests {
 
         assert_eq!(expected_units, units);
         assert_eq!(expected_us, us);
+    }
+
+    #[test]
+    fn test_get_stakes_and_locators() {
+        solana_logger::setup();
+
+        fn packet_with_weight(weight: u64) -> Packet {
+            let mut packet = Packet::default();
+            packet.meta.weight = weight;
+            packet
+        }
+
+        let unprocessed_packets: UnprocessedPacketBatches = vec![
+            (
+                PacketBatch::new(vec![
+                    packet_with_weight(0),
+                    packet_with_weight(100),
+                    packet_with_weight(200),
+                ]),
+                vec![0, 1],
+                false,
+            ),
+            (
+                PacketBatch::new(vec![
+                    packet_with_weight(100),
+                    packet_with_weight(200),
+                    packet_with_weight(300),
+                ]),
+                vec![0, 1, 2],
+                false,
+            ),
+            (
+                PacketBatch::new(vec![
+                    packet_with_weight(10),
+                    packet_with_weight(2),
+                    packet_with_weight(0),
+                ]),
+                vec![0, 1, 2],
+                false,
+            ),
+            (
+                PacketBatch::new(vec![
+                    packet_with_weight(500),
+                    packet_with_weight(2),
+                    packet_with_weight(200),
+                ]),
+                vec![0, 1, 2],
+                false,
+            ),
+        ]
+        .into_iter()
+        .collect();
+
+        let (stakes, locators) = BankingStage::get_stakes_and_locators(&unprocessed_packets);
+        debug!("stakes: {:?}, locators: {:?}", stakes, locators);
+        assert_eq!(11, stakes.len());
+        assert_eq!(11, locators.len());
+
+        // weighted shuffle
+        let shuffled_indexes = BankingStage::weighted_shuffle(&stakes, &locators);
+        debug!("shuffled indexes: {:?}", shuffled_indexes);
+        assert!(11 >= shuffled_indexes.len());
     }
 }
