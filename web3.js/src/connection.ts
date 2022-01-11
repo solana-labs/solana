@@ -3004,7 +3004,7 @@ export class Connection {
   async getFeeForMessage(
     message: Message,
     commitment?: Commitment,
-  ): Promise<RpcResponseAndContext<number | null>> {
+  ): Promise<RpcResponseAndContext<number>> {
     const wireMessage = message.serialize().toString('base64');
     const args = this._buildArgs([wireMessage], commitment);
     const unsafeRes = await this._rpcRequest('getFeeForMessage', args);
@@ -3013,7 +3013,7 @@ export class Connection {
     if ('error' in res) {
       throw new Error('failed to get slot: ' + res.error.message);
     }
-    if (res.value === null) {
+    if (res.result === null) {
       throw new Error('invalid blockhash');
     }
     return res.result;
