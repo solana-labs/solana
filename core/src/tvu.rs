@@ -78,7 +78,7 @@ pub struct Tvu {
     drop_bank_service: DropBankService,
 }
 
-pub struct Sockets {
+pub struct TvuSockets {
     pub fetch: Vec<UdpSocket>,
     pub repair: UdpSocket,
     pub retransmit: Vec<UdpSocket>,
@@ -116,7 +116,7 @@ impl Tvu {
         authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
         bank_forks: &Arc<RwLock<BankForks>>,
         cluster_info: &Arc<ClusterInfo>,
-        sockets: Sockets,
+        sockets: TvuSockets,
         blockstore: Arc<Blockstore>,
         ledger_signal_receiver: Receiver<bool>,
         rpc_subscriptions: &Arc<RpcSubscriptions>,
@@ -146,7 +146,7 @@ impl Tvu {
         last_full_snapshot_slot: Option<Slot>,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
     ) -> Self {
-        let Sockets {
+        let TvuSockets {
             repair: repair_socket,
             fetch: fetch_sockets,
             retransmit: retransmit_sockets,
@@ -464,7 +464,7 @@ pub mod tests {
             &bank_forks,
             &cref1,
             {
-                Sockets {
+                TvuSockets {
                     repair: target1.sockets.repair,
                     retransmit: target1.sockets.retransmit_sockets,
                     fetch: target1.sockets.tvu,
