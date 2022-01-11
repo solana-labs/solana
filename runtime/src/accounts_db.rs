@@ -2959,6 +2959,9 @@ impl AccountsDb {
         for (slot, slot_shrink_candidates) in shrink_slots {
             candidates_count += slot_shrink_candidates.len();
             for store in slot_shrink_candidates.values() {
+                if store.accounts.is_ancient() {
+                    continue; // todo - eventually we need to shrink this
+                }
                 total_alive_bytes += Self::page_align(store.alive_bytes() as u64);
                 total_bytes += store.total_bytes();
                 let alive_ratio = Self::page_align(store.alive_bytes() as u64) as f64
@@ -2983,6 +2986,7 @@ impl AccountsDb {
         let mut shrink_slots_next_batch: ShrinkCandidates = HashMap::new();
         for usage in &store_usage {
             let store = &usage.store;
+            assert!(!store.accounts.is_ancient());
             let alive_ratio = (total_alive_bytes as f64) / (total_bytes as f64);
             debug!("alive_ratio: {:?} store_id: {:?}, store_ratio: {:?} requirment: {:?}, total_bytes: {:?} total_alive_bytes: {:?}",
                 alive_ratio, usage.store.append_vec_id(), usage.alive_ratio, shrink_ratio, total_bytes, total_alive_bytes);
@@ -3095,6 +3099,7 @@ impl AccountsDb {
                 if current_storage.is_none() {
                     // our oldest slot is not an append vec of max size, so we need to start with rewriting that storage to create an ancient append vec for the oldest slot
                     let (shrunken_store, _time) = self.get_store_for_shrink(slot, size);
+                    shrunken_store.accounts.set_ancient();
                     error!(
                         "ancient_append_vec: creating initial ancient append vec: {}, size: {}, id: {}",
                         slot,
@@ -3153,6 +3158,7 @@ impl AccountsDb {
                     assert!(slot > writer.0);
                     // our oldest slot is not an append vec of max size, so we need to start with rewriting that storage to create an ancient append vec for the oldest slot
                     let (shrunken_store, _time) = self.get_store_for_shrink(slot, size);
+                    shrunken_store.accounts.set_ancient();
                     error!("ancient_append_vec: creating ancient append vec because previous one was full: {}, full one: {}", slot, writer.0);
                     current_storage = Some((slot, shrunken_store));
                     let writer = current_storage.as_ref().unwrap();

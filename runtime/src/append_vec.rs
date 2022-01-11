@@ -22,7 +22,7 @@ use {
         mem,
         path::{Path, PathBuf},
         sync::{
-            atomic::{AtomicUsize, Ordering},
+            atomic::{AtomicBool, AtomicUsize, Ordering},
             Mutex,
         },
     },
@@ -159,6 +159,8 @@ pub struct AppendVec {
 
     /// True if the file should automatically be deleted when this AppendVec is dropped.
     remove_on_drop: bool,
+
+    ancient_append_vec: AtomicBool,
 }
 
 impl Drop for AppendVec {
@@ -175,6 +177,12 @@ impl Drop for AppendVec {
 }
 
 impl AppendVec {
+    pub fn is_ancient(&self) -> bool {
+        self.ancient_append_vec.load(Ordering::Relaxed)
+    }
+    pub fn set_ancient(&self) {
+        self.ancient_append_vec.store(true, Ordering::Relaxed)
+    }
     pub fn new(file: &Path, create: bool, size: usize) -> Self {
         let initial_len = 0;
         AppendVec::sanitize_len_and_size(initial_len, size).unwrap();
@@ -227,6 +235,7 @@ impl AppendVec {
             current_len: AtomicUsize::new(initial_len),
             file_size: size as u64,
             remove_on_drop: true,
+            ancient_append_vec: AtomicBool::default(),
         }
     }
 
@@ -251,6 +260,7 @@ impl AppendVec {
             current_len: AtomicUsize::new(current_len),
             file_size: 0, // will be filled by set_file()
             remove_on_drop: true,
+            ancient_append_vec: AtomicBool::default(),
         }
     }
 
@@ -287,6 +297,7 @@ impl AppendVec {
         // See UNSAFE usage in `append_ptr`
         let _lock = self.append_lock.lock().unwrap();
         self.current_len.store(0, Ordering::Relaxed);
+        self.ancient_append_vec.store(false, Ordering::Relaxed); // todo ordering
     }
 
     pub fn remaining_bytes(&self) -> u64 {
@@ -335,6 +346,7 @@ impl AppendVec {
             current_len: AtomicUsize::new(current_len),
             file_size,
             remove_on_drop: true,
+            ancient_append_vec: AtomicBool::default(),
         };
 
         let (sanitized, num_accounts) = new.sanitize_layout_and_length();
