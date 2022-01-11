@@ -28,8 +28,7 @@ pub struct FetchStage {
     thread_hdls: Vec<JoinHandle<()>>,
 }
 
-// todo: do we want all of these to use the type P or
-// should some of these always be the standard packets (e.g. the vote sender/receiver)
+
 impl FetchStage {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(

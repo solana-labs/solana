@@ -321,8 +321,6 @@ impl<'a> EntrySigVerificationState {
 pub struct VerifyRecyclers {
     hash_recycler: Recycler<PinnedVec<Hash>>,
     tick_count_recycler: Recycler<PinnedVec<u64>>,
-    // TODO: Revisit - does the below one need to be generic? Don't think so
-    //       because these should be shred packets which aren't variable in size
     packet_recycler: PacketBatchRecycler<Packet>,
     extended_packet_recycler: PacketBatchRecycler<ExtendedPacket>,
     out_recycler: Recycler<PinnedVec<u8>>,

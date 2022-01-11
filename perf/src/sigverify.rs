@@ -360,7 +360,6 @@ fn check_for_simple_vote_transaction<P: PacketInterface>(
     if &packet.get_data()[instruction_program_id_start..instruction_program_id_end]
         == solana_sdk::vote::program::id().as_ref()
     {
-        // TODO: this should be mut
         packet.get_meta_mut().is_simple_vote_tx = true;
     }
     Ok(())
