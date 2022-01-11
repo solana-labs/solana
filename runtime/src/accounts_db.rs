@@ -6416,7 +6416,7 @@ impl AccountsDb {
             alive_bytes += store.alive_bytes();
             total_bytes += store.total_bytes();
             if store.accounts.is_ancient() {
-                error!("ancient_append_vec: not shrinking: {}, stores: {:?}", slot, stores.iter().map(|store| (store.append_vec_id(), store.accounts.is_ancient())).collect::<Vec<_>>());
+                error!("ancient_append_vec: is_shrinking_productive not shrinking: {}, stores: {:?}", slot, stores.iter().map(|store| (store.append_vec_id(), store.accounts.is_ancient())).collect::<Vec<_>>());
                 return false;
             }
         }
@@ -6440,6 +6440,9 @@ impl AccountsDb {
     }
 
     fn is_candidate_for_shrink(&self, store: &Arc<AccountStorageEntry>) -> bool {
+        if store.accounts.is_ancient() {
+            return false;
+        }
         match self.shrink_ratio {
             AccountShrinkThreshold::TotalSpace { shrink_ratio: _ } => {
                 Self::page_align(store.alive_bytes() as u64) < store.total_bytes()
@@ -6489,8 +6492,8 @@ impl AccountsDb {
                         .insert((*slot, store.append_vec_id()), store.clone());
                     dead_slots.insert(*slot);
                 } else if self.caching_enabled
-                    && Self::is_shrinking_productive(*slot, &[store.clone()])
                     && self.is_candidate_for_shrink(&store)
+                    && Self::is_shrinking_productive(*slot, &[store.clone()])
                 {
                     // Checking that this single storage entry is ready for shrinking,
                     // should be a sufficient indication that the slot is ready to be shrunk
