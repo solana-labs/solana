@@ -1,5 +1,3 @@
-#[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
-use solana_frozen_abi::abi_example::IgnoreAsHelper;
 use {
     super::{common::UnusedAccounts, *},
     crate::{ancestors::AncestorsForSerialization, stakes::StakesCache},
@@ -33,7 +31,7 @@ impl SerializableStorage for SerializableAccountStorageEntry {
     }
 }
 
-#[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl solana_frozen_abi::abi_example::IgnoreAsHelper for SerializableAccountStorageEntry {}
 
 impl From<&AccountStorageEntry> for SerializableAccountStorageEntry {
@@ -204,7 +202,7 @@ impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedB
 }
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
-impl<'a> IgnoreAsHelper for SerializableVersionedBank<'a> {}
+impl<'a> solana_frozen_abi::abi_example::IgnoreAsHelper for SerializableVersionedBank<'a> {}
 
 pub(super) struct Context {}
 impl<'a> TypeContext<'a> for Context {

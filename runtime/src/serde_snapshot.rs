@@ -1,5 +1,3 @@
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-use solana_frozen_abi::abi_example::IgnoreAsHelper;
 use {
     crate::{
         accounts::Accounts,
@@ -16,7 +14,7 @@ use {
         epoch_stakes::EpochStakes,
         hardened_unpack::UnpackedAppendVecMap,
         rent_collector::RentCollector,
-        serde_snapshot::future::{AppendVecIdSerialized, SerializableStorage},
+        serde_snapshot::newer::{AppendVecIdSerialized, SerializableStorage},
         stakes::Stakes,
     },
     bincode::{self, config::Options, Error},
@@ -48,7 +46,7 @@ use {
 };
 
 mod common;
-mod future;
+mod newer;
 mod tests;
 mod utils;
 
@@ -56,7 +54,6 @@ mod utils;
 #[cfg(test)]
 pub(crate) use self::tests::reconstruct_accounts_db_via_serialization;
 pub(crate) use crate::accounts_db::{SnapshotStorage, SnapshotStorages};
-use future::Context as TypeContextFuture;
 #[allow(unused_imports)]
 use utils::{serialize_iter_as_map, serialize_iter_as_seq, serialize_iter_as_tuple};
 
@@ -204,15 +201,15 @@ where
     R: Read,
 {
     macro_rules! INTO {
-        ($x:ident) => {{
+        ($style:ident) => {{
             let (full_snapshot_bank_fields, full_snapshot_accounts_db_fields) =
-                $x::deserialize_bank_fields(snapshot_streams.full_snapshot_stream)?;
+                $style::Context::deserialize_bank_fields(snapshot_streams.full_snapshot_stream)?;
             let (incremental_snapshot_bank_fields, incremental_snapshot_accounts_db_fields) =
                 if let Some(ref mut incremental_snapshot_stream) =
                     snapshot_streams.incremental_snapshot_stream
                 {
                     let (bank_fields, accounts_db_fields) =
-                        $x::deserialize_bank_fields(incremental_snapshot_stream)?;
+                        $style::Context::deserialize_bank_fields(incremental_snapshot_stream)?;
                     (Some(bank_fields), Some(accounts_db_fields))
                 } else {
                     (None, None)
@@ -242,7 +239,7 @@ where
         }};
     }
     match serde_style {
-        SerdeStyle::Newer => INTO!(TypeContextFuture),
+        SerdeStyle::Newer => INTO!(newer),
     }
     .map_err(|err| {
         warn!("bankrc_from_stream error: {:?}", err);
@@ -260,10 +257,10 @@ where
     W: Write,
 {
     macro_rules! INTO {
-        ($x:ident) => {
+        ($style:ident) => {
             bincode::serialize_into(
                 stream,
-                &SerializableBankAndStorage::<$x> {
+                &SerializableBankAndStorage::<$style::Context> {
                     bank,
                     snapshot_storages,
                     phantom: std::marker::PhantomData::default(),
@@ -272,7 +269,7 @@ where
         };
     }
     match serde_style {
-        SerdeStyle::Newer => INTO!(TypeContextFuture),
+        SerdeStyle::Newer => INTO!(newer),
     }
     .map_err(|err| {
         warn!("bankrc_to_stream error: {:?}", err);
@@ -312,7 +309,7 @@ impl<'a, C: TypeContext<'a>> Serialize for SerializableAccountsDb<'a, C> {
 }
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
-impl<'a, C> IgnoreAsHelper for SerializableAccountsDb<'a, C> {}
+impl<'a, C> solana_frozen_abi::abi_example::IgnoreAsHelper for SerializableAccountsDb<'a, C> {}
 
 #[allow(clippy::too_many_arguments)]
 fn reconstruct_bank_from_fields<E>(
