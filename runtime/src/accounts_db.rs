@@ -3111,7 +3111,7 @@ impl AccountsDb {
                     current_storage = Some((slot, shrunken_store));
                 }
                 let writer = current_storage.as_ref().unwrap();
-                let (stored_accounts, _num_stores, _original_bytes) =
+                let (stored_accounts, num_stores, original_bytes) =
                     self.get_unique_accounts_from_storages(all_storages.iter());
                 let mut available_bytes = writer.1.accounts.remaining_bytes();
                 let mut hashes_this_append_vec = Vec::default();
@@ -3137,8 +3137,8 @@ impl AccountsDb {
 
                 if i % 1 == 0 {
                     error!(
-                    "ancient_append_vec: writing to ancient append vec: slot: {}, # accts: {}, available bytes after: {}, distance to max: {}, id: {:?}",
-                    slot, accounts_this_append_vec.len(), available_bytes, max_root.saturating_sub(slot), all_storages.first().map(|store| store.append_vec_id())
+                    "ancient_append_vec: writing to ancient append vec: slot: {}, # accts: {}, available bytes after: {}, distance to max: {}, id: {:?}, # stores: {}, # stores {}, original bytes: {}",
+                    slot, accounts_this_append_vec.len(), available_bytes, max_root.saturating_sub(slot), all_storages.iter().map(|store| (store.append_vec_id(), store.accounts.capacity(), store.accounts.is_ancient())), all_storages.len(), num_stores, original_bytes
                 );
                 }
 
@@ -6416,7 +6416,7 @@ impl AccountsDb {
             alive_bytes += store.alive_bytes();
             total_bytes += store.total_bytes();
             if store.accounts.is_ancient() {
-                error!("ancient_append_vec: not shrinking: {}, stores: {:?}", slot, stores.iter().map(|store| store.append_vec_id()));
+                error!("ancient_append_vec: not shrinking: {}, stores: {:?}", slot, stores.iter().map(|store| (store.append_vec_id(), store.accounts.is_ancient())).collect::<Vec<_>>());
                 return false;
             }
         }
