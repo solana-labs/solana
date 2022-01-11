@@ -3016,7 +3016,7 @@ export class Connection {
     if (res.result === null) {
       throw new Error('invalid blockhash');
     }
-    return res.result;
+    return res.result as unknown as RpcResponseAndContext<number>;
   }
 
   /**
