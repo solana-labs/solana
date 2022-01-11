@@ -211,12 +211,12 @@ impl RemoteWalletManager {
 #[allow(unused_variables)]
 pub trait RemoteWallet<T> {
     fn name(&self) -> &str {
-        "remote wallet"
+        "unimplemented"
     }
 
     /// Parse device info and get device base pubkey
     fn read_device(&mut self, dev_info: &T) -> Result<RemoteWalletInfo, RemoteWalletError> {
-        unreachable!();
+        unimplemented!();
     }
 
     /// Get solana pubkey from a RemoteWallet
@@ -225,7 +225,7 @@ pub trait RemoteWallet<T> {
         derivation_path: &DerivationPath,
         confirm_key: bool,
     ) -> Result<Pubkey, RemoteWalletError> {
-        unreachable!();
+        unimplemented!();
     }
 
     /// Sign transaction data with wallet managing pubkey at derivation path m/44'/501'/<account>'/<change>'.
@@ -234,7 +234,7 @@ pub trait RemoteWallet<T> {
         derivation_path: &DerivationPath,
         data: &[u8],
     ) -> Result<Signature, RemoteWalletError> {
-        unreachable!();
+        unimplemented!();
     }
 }
 
