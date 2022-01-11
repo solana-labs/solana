@@ -3055,6 +3055,7 @@ impl AccountsDb {
             .collect::<Vec<_>>();
         m.stop();
         old_slots.sort_unstable();
+        old_slots.truncate(3); // artificially limit to 3 slots
         self.combine_ancient_slots(old_slots, max_root);
     }
 
@@ -3134,10 +3135,10 @@ impl AccountsDb {
                     ));
                 });
 
-                if i % 1000 == 0 {
+                if i % 1 == 0 {
                     error!(
-                    "ancient_append_vec: writing to ancient append vec: slot: {}, # accts: {}, available bytes after: {}, distance to max: {}",
-                    slot, accounts_this_append_vec.len(), available_bytes, max_root.saturating_sub(slot),
+                    "ancient_append_vec: writing to ancient append vec: slot: {}, # accts: {}, available bytes after: {}, distance to max: {}, id: {:?}",
+                    slot, accounts_this_append_vec.len(), available_bytes, max_root.saturating_sub(slot), all_storages.first().map(|store| store.append_vec_id())
                 );
                 }
 
@@ -3185,6 +3186,7 @@ impl AccountsDb {
                             if created_this_slot {
                                 error!("ancient_append_vec: NOT retaining store: {}, slot: {}", store.append_vec_id(), slot);
                             }
+                            store.accounts.reset();
                             false
                         } else {
                             if created_this_slot {
@@ -6413,6 +6415,10 @@ impl AccountsDb {
             stored_count += store.approx_stored_count();
             alive_bytes += store.alive_bytes();
             total_bytes += store.total_bytes();
+            if store.accounts.is_ancient() {
+                error!("ancient_append_vec: not shrinking: {}, stores: {:?}", slot, stores.iter().map(|store| store.append_vec_id()));
+                return false;
+            }
         }
 
         let aligned_bytes = Self::page_align(alive_bytes as u64);
