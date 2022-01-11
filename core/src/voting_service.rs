@@ -1,12 +1,13 @@
 use {
     crate::tower_storage::{SavedTower, TowerStorage},
+    crossbeam_channel::Receiver,
     solana_gossip::cluster_info::ClusterInfo,
     solana_measure::measure::Measure,
     solana_poh::poh_recorder::PohRecorder,
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{clock::Slot, transaction::Transaction},
     std::{
-        sync::{mpsc::Receiver, Arc, Mutex, RwLock},
+        sync::{Arc, Mutex, RwLock},
         thread::{self, Builder, JoinHandle},
     },
 };

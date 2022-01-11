@@ -1,5 +1,6 @@
 use {
     crate::bank::Bank,
+    crossbeam_channel::{unbounded, Receiver, Sender},
     solana_sdk::{
         account::Account,
         client::{AsyncClient, Client, SyncClient},
@@ -19,10 +20,7 @@ use {
     std::{
         convert::TryFrom,
         io,
-        sync::{
-            mpsc::{channel, Receiver, Sender},
-            Arc, Mutex,
-        },
+        sync::{Arc, Mutex},
         thread::{sleep, Builder},
         time::{Duration, Instant},
     },
@@ -340,7 +338,7 @@ impl BankClient {
     }
 
     pub fn new_shared(bank: &Arc<Bank>) -> Self {
-        let (transaction_sender, transaction_receiver) = channel();
+        let (transaction_sender, transaction_receiver) = unbounded();
         let transaction_sender = Mutex::new(transaction_sender);
         let thread_bank = bank.clone();
         let bank = bank.clone();

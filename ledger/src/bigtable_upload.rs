@@ -1,5 +1,6 @@
 use {
     crate::blockstore::Blockstore,
+    crossbeam_channel::bounded,
     log::*,
     solana_measure::measure::Measure,
     solana_sdk::clock::Slot,
@@ -130,7 +131,7 @@ pub async fn upload_confirmed_blocks(
     let (_loader_thread, receiver) = {
         let exit = exit.clone();
 
-        let (sender, receiver) = std::sync::mpsc::sync_channel(BLOCK_READ_AHEAD_DEPTH);
+        let (sender, receiver) = bounded(BLOCK_READ_AHEAD_DEPTH);
         (
             std::thread::spawn(move || {
                 let mut measure = Measure::start("block loader thread");

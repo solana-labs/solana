@@ -18,6 +18,7 @@ use {
         },
     },
     bincode::deserialize,
+    crossbeam_channel::{bounded, Receiver, Sender, TrySendError},
     log::*,
     rayon::{
         iter::{IntoParallelRefIterator, ParallelIterator},
@@ -57,7 +58,6 @@ use {
         rc::Rc,
         sync::{
             atomic::{AtomicBool, Ordering},
-            mpsc::{sync_channel, Receiver, Sender, SyncSender, TrySendError},
             Arc, Mutex, RwLock, RwLockWriteGuard,
         },
         time::Instant,
@@ -92,7 +92,7 @@ pub const MAX_TURBINE_DELAY_IN_TICKS: u64 = MAX_TURBINE_PROPAGATION_IN_MS / MS_P
 // (32K shreds per slot * 4 TX per shred * 2.5 slots per sec)
 pub const MAX_DATA_SHREDS_PER_SLOT: usize = 32_768;
 
-pub type CompletedSlotsSender = SyncSender<Vec<Slot>>;
+pub type CompletedSlotsSender = Sender<Vec<Slot>>;
 pub type CompletedSlotsReceiver = Receiver<Vec<Slot>>;
 type CompletedRanges = Vec<(u32, u32)>;
 
@@ -160,7 +160,7 @@ pub struct Blockstore {
     bank_hash_cf: LedgerColumn<cf::BankHash>,
     last_root: Arc<RwLock<Slot>>,
     insert_shreds_lock: Arc<Mutex<()>>,
-    pub new_shreds_signals: Vec<SyncSender<bool>>,
+    pub new_shreds_signals: Vec<Sender<bool>>,
     pub completed_slots_senders: Vec<CompletedSlotsSender>,
     pub lowest_cleanup_slot: Arc<RwLock<Slot>>,
     no_compaction: bool,
@@ -455,9 +455,9 @@ impl Blockstore {
         options: BlockstoreOptions,
     ) -> Result<BlockstoreSignals> {
         let mut blockstore = Self::open_with_options(ledger_path, options)?;
-        let (ledger_signal_sender, ledger_signal_receiver) = sync_channel(1);
+        let (ledger_signal_sender, ledger_signal_receiver) = bounded(1);
         let (completed_slots_sender, completed_slots_receiver) =
-            sync_channel(MAX_COMPLETED_SLOTS_IN_CHANNEL);
+            bounded(MAX_COMPLETED_SLOTS_IN_CHANNEL);
 
         blockstore.new_shreds_signals = vec![ledger_signal_sender];
         blockstore.completed_slots_senders = vec![completed_slots_sender];
@@ -3377,8 +3377,8 @@ fn is_valid_write_to_slot_0(slot_to_write: u64, parent_slot: Slot, last_root: u6
 }
 
 fn send_signals(
-    new_shreds_signals: &[SyncSender<bool>],
-    completed_slots_senders: &[SyncSender<Vec<u64>>],
+    new_shreds_signals: &[Sender<bool>],
+    completed_slots_senders: &[Sender<Vec<u64>>],
     should_signal: bool,
     newly_completed_slots: Vec<u64>,
 ) {
@@ -3430,7 +3430,7 @@ fn send_signals(
 ///    newly completed.
 fn commit_slot_meta_working_set(
     slot_meta_working_set: &HashMap<u64, SlotMetaWorkingSetEntry>,
-    completed_slots_senders: &[SyncSender<Vec<u64>>],
+    completed_slots_senders: &[Sender<Vec<u64>>],
     write_batch: &mut WriteBatch,
 ) -> Result<(bool, Vec<u64>)> {
     let mut should_signal = false;
@@ -4137,6 +4137,7 @@ pub mod tests {
         },
         assert_matches::assert_matches,
         bincode::serialize,
+        crossbeam_channel::unbounded,
         itertools::Itertools,
         rand::{seq::SliceRandom, thread_rng},
         solana_account_decoder::parse_token::UiTokenAmount,
@@ -4152,7 +4153,7 @@ pub mod tests {
         },
         solana_storage_proto::convert::generated,
         solana_transaction_status::{InnerInstructions, Reward, Rewards, TransactionTokenBalance},
-        std::{sync::mpsc::channel, thread::Builder, time::Duration},
+        std::{thread::Builder, time::Duration},
     };
 
     // used for tests only
@@ -8958,9 +8959,9 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
             let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
-            let (slot_sender, slot_receiver) = channel();
-            let (shred_sender, shred_receiver) = channel::<Vec<Shred>>();
-            let (signal_sender, signal_receiver) = channel();
+            let (slot_sender, slot_receiver) = unbounded();
+            let (shred_sender, shred_receiver) = unbounded::<Vec<Shred>>();
+            let (signal_sender, signal_receiver) = unbounded();
 
             let t_entry_getter = {
                 let blockstore = blockstore.clone();

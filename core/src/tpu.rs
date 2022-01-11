@@ -14,7 +14,7 @@ use {
         sigverify::TransactionSigVerifier,
         sigverify_stage::SigVerifyStage,
     },
-    crossbeam_channel::unbounded,
+    crossbeam_channel::{unbounded, Receiver},
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender},
     solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
@@ -29,11 +29,7 @@ use {
     },
     std::{
         net::UdpSocket,
-        sync::{
-            atomic::AtomicBool,
-            mpsc::{channel, Receiver},
-            Arc, Mutex, RwLock,
-        },
+        sync::{atomic::AtomicBool, Arc, Mutex, RwLock},
         thread,
     },
 };
@@ -88,8 +84,8 @@ impl Tpu {
             broadcast: broadcast_sockets,
         } = sockets;
 
-        let (packet_sender, packet_receiver) = channel();
-        let (vote_packet_sender, vote_packet_receiver) = channel();
+        let (packet_sender, packet_receiver) = unbounded();
+        let (vote_packet_sender, vote_packet_receiver) = unbounded();
         let fetch_stage = FetchStage::new_with_sender(
             transactions_sockets,
             tpu_forwards_sockets,

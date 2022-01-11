@@ -1,5 +1,6 @@
 use {
     crate::tpu_info::TpuInfo,
+    crossbeam_channel::{Receiver, RecvTimeoutError},
     log::*,
     solana_metrics::{datapoint_warn, inc_new_counter_info},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
@@ -7,10 +8,7 @@ use {
     std::{
         collections::HashMap,
         net::{SocketAddr, UdpSocket},
-        sync::{
-            mpsc::{Receiver, RecvTimeoutError},
-            Arc, RwLock,
-        },
+        sync::{Arc, RwLock},
         thread::{self, Builder, JoinHandle},
         time::{Duration, Instant},
     },
@@ -327,11 +325,11 @@ mod test {
     use {
         super::*,
         crate::tpu_info::NullTpuInfo,
+        crossbeam_channel::unbounded,
         solana_sdk::{
             account::AccountSharedData, genesis_config::create_genesis_config, nonce,
             pubkey::Pubkey, signature::Signer, system_program, system_transaction,
         },
-        std::sync::mpsc::channel,
     };
 
     #[test]
@@ -339,7 +337,7 @@ mod test {
         let tpu_address = "127.0.0.1:0".parse().unwrap();
         let bank = Bank::default_for_tests();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let (sender, receiver) = channel();
+        let (sender, receiver) = unbounded();
 
         let send_tranaction_service = SendTransactionService::new::<NullTpuInfo>(
             tpu_address,

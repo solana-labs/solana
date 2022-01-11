@@ -1,5 +1,6 @@
 use {
     bincode::serialize,
+    crossbeam_channel::unbounded,
     jsonrpc_core::futures::StreamExt,
     jsonrpc_core_client::transports::ws,
     log::*,
@@ -29,7 +30,7 @@ use {
     std::{
         collections::HashSet,
         net::UdpSocket,
-        sync::{mpsc::channel, Arc},
+        sync::Arc,
         thread::sleep,
         time::{Duration, Instant},
     },
@@ -167,7 +168,7 @@ fn test_rpc_slot_updates() {
     // Create the pub sub runtime
     let rt = Runtime::new().unwrap();
     let rpc_pubsub_url = test_validator.rpc_pubsub_url();
-    let (update_sender, update_receiver) = channel::<Arc<SlotUpdate>>();
+    let (update_sender, update_receiver) = unbounded::<Arc<SlotUpdate>>();
 
     // Subscribe to slot updates
     rt.spawn(async move {
@@ -257,11 +258,11 @@ fn test_rpc_subscriptions() {
         .collect();
 
     // Track when subscriptions are ready
-    let (ready_sender, ready_receiver) = channel::<()>();
+    let (ready_sender, ready_receiver) = unbounded::<()>();
     // Track account notifications are received
-    let (account_sender, account_receiver) = channel::<RpcResponse<UiAccount>>();
+    let (account_sender, account_receiver) = unbounded::<RpcResponse<UiAccount>>();
     // Track when status notifications are received
-    let (status_sender, status_receiver) = channel::<(String, RpcResponse<RpcSignatureResult>)>();
+    let (status_sender, status_receiver) = unbounded::<(String, RpcResponse<RpcSignatureResult>)>();
 
     // Create the pub sub runtime
     let rt = Runtime::new().unwrap();

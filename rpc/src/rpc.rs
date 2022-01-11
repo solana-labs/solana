@@ -6,6 +6,7 @@ use {
         parsed_token_accounts::*, rpc_health::*,
     },
     bincode::{config::Options, serialize},
+    crossbeam_channel::{unbounded, Receiver, Sender},
     jsonrpc_core::{futures::future, types::error, BoxFuture, Error, Metadata, Result},
     jsonrpc_derive::rpc,
     serde::{Deserialize, Serialize},
@@ -94,7 +95,6 @@ use {
         str::FromStr,
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
-            mpsc::{channel, Receiver, Sender},
             Arc, Mutex, RwLock,
         },
         time::Duration,
@@ -262,7 +262,7 @@ impl JsonRpcRequestProcessor {
         leader_schedule_cache: Arc<LeaderScheduleCache>,
         max_complete_transaction_status_slot: Arc<AtomicU64>,
     ) -> (Self, Receiver<TransactionInfo>) {
-        let (sender, receiver) = channel();
+        let (sender, receiver) = unbounded();
         (
             Self {
                 config,
@@ -301,7 +301,7 @@ impl JsonRpcRequestProcessor {
             socket_addr_space,
         ));
         let tpu_address = cluster_info.my_contact_info().tpu;
-        let (sender, receiver) = channel();
+        let (sender, receiver) = unbounded();
         SendTransactionService::new::<NullTpuInfo>(
             tpu_address,
             &bank_forks,
@@ -4300,8 +4300,8 @@ pub fn create_test_transactions_and_populate_blockstore(
     blockstore.insert_shreds(shreds, None, false).unwrap();
     blockstore.set_roots(std::iter::once(&slot)).unwrap();
 
-    let (transaction_status_sender, transaction_status_receiver) = crossbeam_channel::unbounded();
-    let (replay_vote_sender, _replay_vote_receiver) = crossbeam_channel::unbounded();
+    let (transaction_status_sender, transaction_status_receiver) = unbounded();
+    let (replay_vote_sender, _replay_vote_receiver) = unbounded();
     let transaction_status_service =
         crate::transaction_status_service::TransactionStatusService::new(
             transaction_status_receiver,

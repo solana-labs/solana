@@ -9,10 +9,7 @@ use {
         },
         vote_stake_tracker::VoteStakeTracker,
     },
-    crossbeam_channel::{
-        unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Select,
-        Sender as CrossbeamSender,
-    },
+    crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Select, Sender},
     log::*,
     solana_gossip::{
         cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
@@ -57,16 +54,16 @@ use {
 
 // Map from a vote account to the authorized voter for an epoch
 pub type ThresholdConfirmedSlots = Vec<(Slot, Hash)>;
-pub type VerifiedLabelVotePacketsSender = CrossbeamSender<Vec<VerifiedVoteMetadata>>;
-pub type VerifiedLabelVotePacketsReceiver = CrossbeamReceiver<Vec<VerifiedVoteMetadata>>;
-pub type VerifiedVoteTransactionsSender = CrossbeamSender<Vec<Transaction>>;
-pub type VerifiedVoteTransactionsReceiver = CrossbeamReceiver<Vec<Transaction>>;
-pub type VerifiedVoteSender = CrossbeamSender<(Pubkey, Vec<Slot>)>;
-pub type VerifiedVoteReceiver = CrossbeamReceiver<(Pubkey, Vec<Slot>)>;
-pub type GossipVerifiedVoteHashSender = CrossbeamSender<(Pubkey, Slot, Hash)>;
-pub type GossipVerifiedVoteHashReceiver = CrossbeamReceiver<(Pubkey, Slot, Hash)>;
-pub type GossipDuplicateConfirmedSlotsSender = CrossbeamSender<ThresholdConfirmedSlots>;
-pub type GossipDuplicateConfirmedSlotsReceiver = CrossbeamReceiver<ThresholdConfirmedSlots>;
+pub type VerifiedLabelVotePacketsSender = Sender<Vec<VerifiedVoteMetadata>>;
+pub type VerifiedLabelVotePacketsReceiver = Receiver<Vec<VerifiedVoteMetadata>>;
+pub type VerifiedVoteTransactionsSender = Sender<Vec<Transaction>>;
+pub type VerifiedVoteTransactionsReceiver = Receiver<Vec<Transaction>>;
+pub type VerifiedVoteSender = Sender<(Pubkey, Vec<Slot>)>;
+pub type VerifiedVoteReceiver = Receiver<(Pubkey, Vec<Slot>)>;
+pub type GossipVerifiedVoteHashSender = Sender<(Pubkey, Slot, Hash)>;
+pub type GossipVerifiedVoteHashReceiver = Receiver<(Pubkey, Slot, Hash)>;
+pub type GossipDuplicateConfirmedSlotsSender = Sender<ThresholdConfirmedSlots>;
+pub type GossipDuplicateConfirmedSlotsReceiver = Receiver<ThresholdConfirmedSlots>;
 
 const THRESHOLDS_TO_CHECK: [f64; 2] = [DUPLICATE_THRESHOLD, VOTE_THRESHOLD_SIZE];
 const BANK_SEND_VOTES_LOOP_SLEEP_MS: u128 = 10;
@@ -198,7 +195,7 @@ impl ClusterInfoVoteListener {
     pub fn new(
         exit: Arc<AtomicBool>,
         cluster_info: Arc<ClusterInfo>,
-        verified_packets_sender: CrossbeamSender<Vec<PacketBatch>>,
+        verified_packets_sender: Sender<Vec<PacketBatch>>,
         poh_recorder: Arc<Mutex<PohRecorder>>,
         vote_tracker: Arc<VoteTracker>,
         bank_forks: Arc<RwLock<BankForks>>,
@@ -337,7 +334,7 @@ impl ClusterInfoVoteListener {
         exit: Arc<AtomicBool>,
         verified_vote_label_packets_receiver: VerifiedLabelVotePacketsReceiver,
         poh_recorder: Arc<Mutex<PohRecorder>>,
-        verified_packets_sender: &CrossbeamSender<Vec<PacketBatch>>,
+        verified_packets_sender: &Sender<Vec<PacketBatch>>,
     ) -> Result<()> {
         let mut verified_vote_packets = VerifiedVotePackets::default();
         let mut time_since_lock = Instant::now();
@@ -358,8 +355,8 @@ impl ClusterInfoVoteListener {
                 would_be_leader,
             ) {
                 match e {
-                    Error::CrossbeamRecvTimeout(RecvTimeoutError::Disconnected)
-                    | Error::CrossbeamRecvTimeout(RecvTimeoutError::Timeout) => (),
+                    Error::RecvTimeout(RecvTimeoutError::Disconnected)
+                    | Error::RecvTimeout(RecvTimeoutError::Timeout) => (),
                     _ => {
                         error!("thread {:?} error {:?}", thread::current().name(), e);
                     }
@@ -385,7 +382,7 @@ impl ClusterInfoVoteListener {
     fn check_for_leader_bank_and_send_votes(
         bank_vote_sender_state_option: &mut Option<BankVoteSenderState>,
         current_working_bank: Arc<Bank>,
-        verified_packets_sender: &CrossbeamSender<Vec<PacketBatch>>,
+        verified_packets_sender: &Sender<Vec<PacketBatch>>,
         verified_vote_packets: &VerifiedVotePackets,
     ) -> Result<()> {
         // We will take this lock at most once every `BANK_SEND_VOTES_LOOP_SLEEP_MS`
@@ -489,7 +486,7 @@ impl ClusterInfoVoteListener {
                         .add_new_optimistic_confirmed_slots(confirmed_slots.clone());
                 }
                 Err(e) => match e {
-                    Error::CrossbeamRecvTimeout(RecvTimeoutError::Disconnected) => {
+                    Error::RecvTimeout(RecvTimeoutError::Disconnected) => {
                         return Ok(());
                     }
                     Error::ReadyTimeout => (),

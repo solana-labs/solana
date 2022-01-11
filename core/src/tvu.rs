@@ -25,7 +25,7 @@ use {
         tower_storage::TowerStorage,
         voting_service::VotingService,
     },
-    crossbeam_channel::unbounded,
+    crossbeam_channel::{unbounded, Receiver},
     solana_accountsdb_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
@@ -56,11 +56,7 @@ use {
         boxed::Box,
         collections::HashSet,
         net::UdpSocket,
-        sync::{
-            atomic::AtomicBool,
-            mpsc::{channel, Receiver},
-            Arc, Mutex, RwLock,
-        },
+        sync::{atomic::AtomicBool, Arc, Mutex, RwLock},
         thread,
     },
 };
@@ -154,7 +150,7 @@ impl Tvu {
             ancestor_hashes_requests: ancestor_hashes_socket,
         } = sockets;
 
-        let (fetch_sender, fetch_receiver) = channel();
+        let (fetch_sender, fetch_receiver) = unbounded();
 
         let repair_socket = Arc::new(repair_socket);
         let ancestor_hashes_socket = Arc::new(ancestor_hashes_socket);
@@ -210,7 +206,7 @@ impl Tvu {
             ancestor_hashes_replay_update_receiver,
         );
 
-        let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = channel();
+        let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = unbounded();
 
         let snapshot_interval_slots = {
             if let Some(config) = bank_forks.read().unwrap().snapshot_config() {
@@ -295,7 +291,7 @@ impl Tvu {
             tower_storage: tower_storage.clone(),
         };
 
-        let (voting_sender, voting_receiver) = channel();
+        let (voting_sender, voting_receiver) = unbounded();
         let voting_service = VotingService::new(
             voting_receiver,
             cluster_info.clone(),
@@ -304,7 +300,7 @@ impl Tvu {
             bank_forks.clone(),
         );
 
-        let (cost_update_sender, cost_update_receiver) = channel();
+        let (cost_update_sender, cost_update_receiver) = unbounded();
         let cost_update_service = CostUpdateService::new(
             exit.clone(),
             blockstore.clone(),
@@ -312,7 +308,7 @@ impl Tvu {
             cost_update_receiver,
         );
 
-        let (drop_bank_sender, drop_bank_receiver) = channel();
+        let (drop_bank_sender, drop_bank_receiver) = unbounded();
         let drop_bank_service = DropBankService::new(drop_bank_receiver);
 
         let replay_stage = ReplayStage::new(
@@ -456,7 +452,7 @@ pub mod tests {
         let (_, gossip_confirmed_slots_receiver) = unbounded();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
         let tower = Tower::default();
-        let accounts_package_channel = channel();
+        let accounts_package_channel = unbounded();
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let tvu = Tvu::new(
             &vote_keypair.pubkey(),

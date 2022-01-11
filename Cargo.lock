@@ -4503,6 +4503,7 @@ name = "solana-banks-server"
 version = "1.10.0"
 dependencies = [
  "bincode",
+ "crossbeam-channel",
  "futures 0.3.19",
  "solana-banks-interface",
  "solana-runtime",
@@ -4519,6 +4520,7 @@ name = "solana-bench-streamer"
 version = "1.10.0"
 dependencies = [
  "clap 2.33.3",
+ "crossbeam-channel",
  "solana-net-utils",
  "solana-streamer",
  "solana-version",
@@ -4529,6 +4531,7 @@ name = "solana-bench-tps"
 version = "1.10.0"
 dependencies = [
  "clap 2.33.3",
+ "crossbeam-channel",
  "log 0.4.14",
  "rayon",
  "serde_json",
@@ -4633,6 +4636,7 @@ dependencies = [
  "console",
  "const_format",
  "criterion-stats",
+ "crossbeam-channel",
  "ctrlc",
  "humantime",
  "log 0.4.14",
@@ -4711,6 +4715,7 @@ dependencies = [
  "bincode",
  "bs58 0.4.0",
  "clap 2.33.3",
+ "crossbeam-channel",
  "indicatif",
  "jsonrpc-core",
  "jsonrpc-http-server",
@@ -4885,6 +4890,7 @@ name = "solana-entry"
 version = "1.10.0"
 dependencies = [
  "bincode",
+ "crossbeam-channel",
  "dlopen",
  "dlopen_derive",
  "log 0.4.14",
@@ -4908,6 +4914,7 @@ dependencies = [
  "bincode",
  "byteorder",
  "clap 2.33.3",
+ "crossbeam-channel",
  "log 0.4.14",
  "serde",
  "serde_derive",
@@ -5020,6 +5027,7 @@ dependencies = [
  "bincode",
  "bv",
  "clap 2.33.3",
+ "crossbeam-channel",
  "flate2",
  "indexmap",
  "itertools 0.10.3",
@@ -5066,6 +5074,7 @@ dependencies = [
  "chrono",
  "clap 2.33.3",
  "console",
+ "crossbeam-channel",
  "ctrlc",
  "dirs-next",
  "indicatif",
@@ -5166,6 +5175,7 @@ dependencies = [
  "bs58 0.4.0",
  "bytecount",
  "clap 2.33.3",
+ "crossbeam-channel",
  "csv",
  "dashmap",
  "histogram",
@@ -5289,6 +5299,7 @@ dependencies = [
 name = "solana-metrics"
 version = "1.10.0"
 dependencies = [
+ "crossbeam-channel",
  "env_logger 0.9.0",
  "gethostname",
  "lazy_static",
@@ -5316,6 +5327,7 @@ version = "1.10.0"
 dependencies = [
  "bincode",
  "clap 2.33.3",
+ "crossbeam-channel",
  "log 0.4.14",
  "nix",
  "rand 0.7.3",
@@ -5655,6 +5667,7 @@ version = "1.10.0"
 dependencies = [
  "bincode",
  "bs58 0.4.0",
+ "crossbeam-channel",
  "jsonrpc-core",
  "jsonrpc-core-client",
  "log 0.4.14",
@@ -5806,6 +5819,7 @@ dependencies = [
 name = "solana-send-transaction-service"
 version = "1.10.0"
 dependencies = [
+ "crossbeam-channel",
  "log 0.4.14",
  "solana-logger 1.10.0",
  "solana-metrics",
@@ -5906,6 +5920,7 @@ dependencies = [
 name = "solana-streamer"
 version = "1.10.0"
 dependencies = [
+ "crossbeam-channel",
  "histogram",
  "itertools 0.10.3",
  "libc",
@@ -6053,6 +6068,7 @@ dependencies = [
  "clap 2.33.3",
  "console",
  "core_affinity",
+ "crossbeam-channel",
  "fd-lock",
  "indicatif",
  "jsonrpc-core",

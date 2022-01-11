@@ -4,7 +4,7 @@
 extern crate test;
 
 use {
-    crossbeam_channel::unbounded,
+    crossbeam_channel::{unbounded, Receiver},
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
@@ -37,7 +37,7 @@ use {
     solana_streamer::socket::SocketAddrSpace,
     std::{
         collections::VecDeque,
-        sync::{atomic::Ordering, mpsc::Receiver, Arc, RwLock},
+        sync::{atomic::Ordering, Arc, RwLock},
         time::{Duration, Instant},
     },
     test::Bencher,
