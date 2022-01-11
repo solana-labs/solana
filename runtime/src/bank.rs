@@ -66,6 +66,7 @@ use {
     dashmap::DashMap,
     itertools::Itertools,
     log::*,
+    rand::Rng,
     rayon::{
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
         ThreadPool, ThreadPoolBuilder,
@@ -107,7 +108,10 @@ use {
         inflation::Inflation,
         instruction::CompiledInstruction,
         lamports::LamportsError,
-        message::SanitizedMessage,
+        message::{
+            v0::{LoadedAddresses, MessageAddressTableLookup},
+            SanitizedMessage,
+        },
         native_loader,
         native_token::sol_to_lamports,
         nonce, nonce_account,
@@ -123,7 +127,7 @@ use {
         sysvar::{self, Sysvar, SysvarId},
         timing::years_as_slots,
         transaction::{
-            Result, SanitizedTransaction, Transaction, TransactionError,
+            AddressLookupError, Result, SanitizedTransaction, Transaction, TransactionError,
             TransactionVerificationMode, VersionedTransaction,
         },
         transaction_context::{TransactionAccount, TransactionContext},
@@ -141,7 +145,7 @@ use {
         collections::{HashMap, HashSet},
         convert::{TryFrom, TryInto},
         fmt, mem,
-        ops::RangeInclusive,
+        ops::{Div, RangeInclusive},
         path::PathBuf,
         ptr,
         rc::Rc,
@@ -210,7 +214,7 @@ impl RentDebits {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "6XG6H1FChrDdY39K62KFWj5XfDao4dd24WZgcJkdMu1E")]
+#[frozen_abi(digest = "2r36f5cfgP7ABq7D3kRkRfQZWdggGFUnnhwTrVEWhoTC")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 // Eager rent collection repeats in cyclic manner.
@@ -239,48 +243,58 @@ pub struct SquashTiming {
 
 type EpochCount = u64;
 
-/// Copy-on-write holder of CachedExecutors
-#[derive(AbiExample, Debug, Default)]
-struct CowCachedExecutors {
-    shared: bool,
-    executors: Arc<RwLock<CachedExecutors>>,
-}
-impl Clone for CowCachedExecutors {
-    fn clone(&self) -> Self {
-        Self {
-            shared: true,
-            executors: self.executors.clone(),
-        }
+mod executor_cache {
+    use super::*;
+    use log;
+
+    #[derive(Debug, Default)]
+    pub struct Stats {
+        pub hits: AtomicU64,
+        pub misses: AtomicU64,
+        pub evictions: HashMap<Pubkey, u64>,
+        pub insertions: AtomicU64,
+        pub replacements: AtomicU64,
     }
-}
-impl CowCachedExecutors {
-    fn clone_with_epoch(&self, epoch: u64) -> Self {
-        let executors_raw = self.read().unwrap();
-        if executors_raw.current_epoch() == epoch {
-            self.clone()
-        } else {
-            Self {
-                shared: false,
-                executors: Arc::new(RwLock::new(executors_raw.clone_with_epoch(epoch))),
+
+    impl Stats {
+        pub fn submit(&self, slot: Slot) {
+            let hits = self.hits.load(Relaxed);
+            let misses = self.misses.load(Relaxed);
+            let insertions = self.insertions.load(Relaxed);
+            let replacements = self.replacements.load(Relaxed);
+            let evictions: u64 = self.evictions.values().sum();
+            datapoint_info!(
+                "bank-executor-cache-stats",
+                ("slot", slot, i64),
+                ("hits", hits, i64),
+                ("misses", misses, i64),
+                ("evictions", evictions, i64),
+                ("insertions", insertions, i64),
+                ("replacements", replacements, i64),
+            );
+            debug!(
+                "Executor Cache Stats -- Hits: {}, Misses: {}, Evictions: {}, Insertions: {}, Replacements: {}",
+                hits, misses, evictions, insertions, replacements,
+            );
+            if log_enabled!(log::Level::Trace) && !self.evictions.is_empty() {
+                let mut evictions = self.evictions.iter().collect::<Vec<_>>();
+                evictions.sort_by_key(|e| e.1);
+                let evictions = evictions
+                    .into_iter()
+                    .rev()
+                    .map(|(program_id, evictions)| {
+                        format!("  {:<44}  {}", program_id.to_string(), evictions)
+                    })
+                    .collect::<Vec<_>>();
+                let evictions = evictions.join("\n");
+                trace!(
+                    "Eviction Details:\n  {:<44}  {}\n{}",
+                    "Program",
+                    "Count",
+                    evictions
+                );
             }
         }
-    }
-    fn new(executors: Arc<RwLock<CachedExecutors>>) -> Self {
-        Self {
-            shared: true,
-            executors,
-        }
-    }
-    fn read(&self) -> LockResult<RwLockReadGuard<CachedExecutors>> {
-        self.executors.read()
-    }
-    fn write(&mut self) -> LockResult<RwLockWriteGuard<CachedExecutors>> {
-        if self.shared {
-            self.shared = false;
-            let local_cache = (*self.executors.read().unwrap()).clone();
-            self.executors = Arc::new(RwLock::new(local_cache));
-        }
-        self.executors.write()
     }
 }
 
@@ -296,14 +310,16 @@ struct CachedExecutorsEntry {
 struct CachedExecutors {
     max: usize,
     current_epoch: Epoch,
-    executors: HashMap<Pubkey, CachedExecutorsEntry>,
+    pub(self) executors: HashMap<Pubkey, CachedExecutorsEntry>,
+    stats: executor_cache::Stats,
 }
 impl Default for CachedExecutors {
     fn default() -> Self {
         Self {
             max: MAX_CACHED_EXECUTORS,
-            current_epoch: 0,
-            executors: HashMap::new(),
+            current_epoch: Epoch::default(),
+            executors: HashMap::default(),
+            stats: executor_cache::Stats::default(),
         }
     }
 }
@@ -320,44 +336,44 @@ impl AbiExample for CachedExecutors {
 
 impl Clone for CachedExecutors {
     fn clone(&self) -> Self {
-        self.clone_with_epoch(self.current_epoch)
-    }
-}
-impl CachedExecutors {
-    fn current_epoch(&self) -> Epoch {
-        self.current_epoch
-    }
-
-    fn clone_with_epoch(&self, epoch: Epoch) -> Self {
-        let mut executors = HashMap::new();
-        for (key, entry) in self.executors.iter() {
-            // The total_count = prev_epoch_count + epoch_count will be used for LFU eviction.
-            // If the epoch has changed, we store the prev_epoch_count and reset the epoch_count to 0.
-            if epoch > self.current_epoch {
-                executors.insert(
-                    *key,
-                    CachedExecutorsEntry {
-                        prev_epoch_count: entry.epoch_count.load(Relaxed),
-                        epoch_count: AtomicU64::new(0),
-                        executor: entry.executor.clone(),
-                    },
-                );
-            } else {
-                executors.insert(
-                    *key,
-                    CachedExecutorsEntry {
-                        prev_epoch_count: entry.prev_epoch_count,
-                        epoch_count: AtomicU64::new(entry.epoch_count.load(Relaxed)),
-                        executor: entry.executor.clone(),
-                    },
-                );
-            }
-        }
+        let executors = self.executors.iter().map(|(&key, entry)| {
+            let entry = CachedExecutorsEntry {
+                prev_epoch_count: entry.prev_epoch_count,
+                epoch_count: AtomicU64::new(entry.epoch_count.load(Relaxed)),
+                executor: entry.executor.clone(),
+            };
+            (key, entry)
+        });
         Self {
             max: self.max,
-            current_epoch: epoch,
-            executors,
+            current_epoch: self.current_epoch,
+            executors: executors.collect(),
+            stats: executor_cache::Stats::default(),
         }
+    }
+}
+
+impl CachedExecutors {
+    fn clone_with_epoch(self: &Arc<Self>, epoch: Epoch) -> Arc<Self> {
+        if self.current_epoch == epoch {
+            return self.clone();
+        }
+        let executors = self.executors.iter().map(|(&key, entry)| {
+            // The total_count = prev_epoch_count + epoch_count will be used for LFU eviction.
+            // If the epoch has changed, we store the prev_epoch_count and reset the epoch_count to 0.
+            let entry = CachedExecutorsEntry {
+                prev_epoch_count: entry.epoch_count.load(Relaxed),
+                epoch_count: AtomicU64::default(),
+                executor: entry.executor.clone(),
+            };
+            (key, entry)
+        });
+        Arc::new(Self {
+            max: self.max,
+            current_epoch: epoch,
+            executors: executors.collect(),
+            stats: executor_cache::Stats::default(),
+        })
     }
 
     fn new(max: usize, current_epoch: Epoch) -> Self {
@@ -365,47 +381,114 @@ impl CachedExecutors {
             max,
             current_epoch,
             executors: HashMap::new(),
+            stats: executor_cache::Stats::default(),
         }
     }
 
     fn get(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
-        self.executors.get(pubkey).map(|entry| {
+        if let Some(entry) = self.executors.get(pubkey) {
+            self.stats.hits.fetch_add(1, Relaxed);
             entry.epoch_count.fetch_add(1, Relaxed);
-            entry.executor.clone()
-        })
+            Some(entry.executor.clone())
+        } else {
+            self.stats.misses.fetch_add(1, Relaxed);
+            None
+        }
     }
 
-    fn put(&mut self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {
-        let entry = if let Some(mut entry) = self.executors.remove(pubkey) {
-            entry.executor = executor;
-            entry
-        } else {
-            if self.executors.len() >= self.max {
-                let mut least = u64::MAX;
-                let default_key = Pubkey::default();
-                let mut least_key = &default_key;
-
-                for (key, entry) in self.executors.iter() {
-                    let count = entry.prev_epoch_count + entry.epoch_count.load(Relaxed);
-                    if count < least {
-                        least = count;
-                        least_key = key;
-                    }
+    fn put(&mut self, executors: &[(&Pubkey, Arc<dyn Executor>)]) {
+        let mut new_executors: Vec<_> = executors
+            .iter()
+            .filter_map(|(key, executor)| {
+                if let Some(mut entry) = self.executors.remove(key) {
+                    self.stats.replacements.fetch_add(1, Relaxed);
+                    entry.executor = executor.clone();
+                    let _ = self.executors.insert(**key, entry);
+                    None
+                } else {
+                    self.stats.insertions.fetch_add(1, Relaxed);
+                    Some((*key, executor))
                 }
-                let least_key = *least_key;
-                let _ = self.executors.remove(&least_key);
+            })
+            .collect();
+
+        if !new_executors.is_empty() {
+            let mut counts = self
+                .executors
+                .iter()
+                .map(|(key, entry)| {
+                    let count = entry.prev_epoch_count + entry.epoch_count.load(Relaxed);
+                    (key, count)
+                })
+                .collect::<Vec<_>>();
+            counts.sort_unstable_by_key(|(_, count)| *count);
+
+            let primer_counts = Self::get_primer_counts(counts.as_slice(), new_executors.len());
+
+            if self.executors.len() >= self.max {
+                let mut least_keys = counts
+                    .iter()
+                    .take(new_executors.len())
+                    .map(|least| *least.0)
+                    .collect::<Vec<_>>();
+                for least_key in least_keys.drain(..) {
+                    let _ = self.executors.remove(&least_key);
+                    self.stats
+                        .evictions
+                        .entry(least_key)
+                        .and_modify(|c| saturating_add_assign!(*c, 1))
+                        .or_insert(1);
+                }
             }
-            CachedExecutorsEntry {
-                prev_epoch_count: 0,
-                epoch_count: AtomicU64::new(0),
-                executor,
+
+            for ((key, executor), primer_count) in new_executors.drain(..).zip(primer_counts) {
+                let entry = CachedExecutorsEntry {
+                    prev_epoch_count: 0,
+                    epoch_count: AtomicU64::new(primer_count),
+                    executor: executor.clone(),
+                };
+                let _ = self.executors.insert(*key, entry);
             }
-        };
-        let _ = self.executors.insert(*pubkey, entry);
+        }
     }
 
     fn remove(&mut self, pubkey: &Pubkey) {
         let _ = self.executors.remove(pubkey);
+    }
+
+    fn get_primer_count_upper_bound_inclusive(counts: &[(&Pubkey, u64)]) -> u64 {
+        const PRIMER_COUNT_TARGET_PERCENTILE: u64 = 85;
+        #[allow(clippy::assertions_on_constants)]
+        {
+            assert!(PRIMER_COUNT_TARGET_PERCENTILE <= 100);
+        }
+        // Executor use-frequencies are assumed to fit a Pareto distribution.  Choose an
+        // upper-bound for our primer count as the actual count at the target rank to avoid
+        // an upward bias
+
+        let target_index = u64::try_from(counts.len().saturating_sub(1))
+            .ok()
+            .and_then(|counts| {
+                let index = counts
+                    .saturating_mul(PRIMER_COUNT_TARGET_PERCENTILE)
+                    .div(100); // switch to u64::saturating_div once stable
+                usize::try_from(index).ok()
+            })
+            .unwrap_or(0);
+
+        counts
+            .get(target_index)
+            .map(|(_, count)| *count)
+            .unwrap_or(0)
+    }
+
+    fn get_primer_counts(counts: &[(&Pubkey, u64)], num_counts: usize) -> Vec<u64> {
+        let max_primer_count = Self::get_primer_count_upper_bound_inclusive(counts);
+        let mut rng = rand::thread_rng();
+
+        (0..num_counts)
+            .map(|_| rng.gen_range(0, max_primer_count.saturating_add(1)))
+            .collect::<Vec<_>>()
     }
 }
 
@@ -1078,7 +1161,9 @@ pub struct Bank {
     pub rewards_pool_pubkeys: Arc<HashSet<Pubkey>>,
 
     /// Cached executors
-    cached_executors: RwLock<CowCachedExecutors>,
+    // Inner Arc is meant to implement copy-on-write semantics as opposed to
+    // sharing mutations (hence RwLock<Arc<...>> instead of Arc<RwLock<...>>).
+    cached_executors: RwLock<Arc<CachedExecutors>>,
 
     transaction_debug_keys: Option<Arc<HashSet<Pubkey>>>,
 
@@ -1234,7 +1319,7 @@ impl Bank {
             cluster_type: Option::<ClusterType>::default(),
             lazy_rent_collection: AtomicBool::default(),
             rewards_pool_pubkeys: Arc::<HashSet<Pubkey>>::default(),
-            cached_executors: RwLock::<CowCachedExecutors>::default(),
+            cached_executors: RwLock::<Arc<CachedExecutors>>::default(),
             transaction_debug_keys: Option::<Arc<HashSet<Pubkey>>>::default(),
             transaction_log_collector_config: Arc::<RwLock<TransactionLogCollectorConfig>>::default(
             ),
@@ -1478,9 +1563,10 @@ impl Bank {
             cluster_type: parent.cluster_type,
             lazy_rent_collection: AtomicBool::new(parent.lazy_rent_collection.load(Relaxed)),
             rewards_pool_pubkeys: parent.rewards_pool_pubkeys.clone(),
-            cached_executors: RwLock::new(
-                (*parent.cached_executors.read().unwrap()).clone_with_epoch(epoch),
-            ),
+            cached_executors: {
+                let cached_executors = parent.cached_executors.read().unwrap();
+                RwLock::new(cached_executors.clone_with_epoch(epoch))
+            },
             transaction_debug_keys: parent.transaction_debug_keys.clone(),
             transaction_log_collector_config: parent.transaction_log_collector_config.clone(),
             transaction_log_collector: Arc::new(RwLock::new(TransactionLogCollector::default())),
@@ -1547,6 +1633,13 @@ impl Bank {
             ("parent_slot_height", parent.slot(), i64),
             ("time_us", time.as_us(), i64),
         );
+
+        parent
+            .cached_executors
+            .read()
+            .unwrap()
+            .stats
+            .submit(parent.slot());
 
         new
     }
@@ -1665,9 +1758,10 @@ impl Bank {
             cluster_type: Some(genesis_config.cluster_type),
             lazy_rent_collection: new(),
             rewards_pool_pubkeys: new(),
-            cached_executors: RwLock::new(CowCachedExecutors::new(Arc::new(RwLock::new(
-                CachedExecutors::new(MAX_CACHED_EXECUTORS, fields.epoch),
-            )))),
+            cached_executors: RwLock::new(Arc::new(CachedExecutors::new(
+                MAX_CACHED_EXECUTORS,
+                fields.epoch,
+            ))),
             transaction_debug_keys: debug_keys,
             transaction_log_collector_config: new(),
             transaction_log_collector: new(),
@@ -3487,8 +3581,7 @@ impl Bank {
             num_executors += program_indices_of_instruction.len();
         }
         let mut executors = HashMap::with_capacity(num_executors);
-        let cow_cache = self.cached_executors.read().unwrap();
-        let cache = cow_cache.read().unwrap();
+        let cache = self.cached_executors.read().unwrap();
 
         for key in message.account_keys_iter() {
             if let Some(executor) = cache.get(key) {
@@ -3522,19 +3615,54 @@ impl Bank {
             .collect();
 
         if !dirty_executors.is_empty() {
-            let mut cow_cache = self.cached_executors.write().unwrap();
-            let mut cache = cow_cache.write().unwrap();
-            for (key, executor) in dirty_executors.into_iter() {
-                cache.put(key, executor);
-            }
+            let mut cache = self.cached_executors.write().unwrap();
+            let cache = Arc::make_mut(&mut cache);
+            cache.put(&dirty_executors);
         }
     }
 
     /// Remove an executor from the bank's cache
-    pub fn remove_executor(&self, pubkey: &Pubkey) {
-        let mut cow_cache = self.cached_executors.write().unwrap();
-        let mut cache = cow_cache.write().unwrap();
-        cache.remove(pubkey);
+    fn remove_executor(&self, pubkey: &Pubkey) {
+        let mut cache = self.cached_executors.write().unwrap();
+        Arc::make_mut(&mut cache).remove(pubkey);
+    }
+
+    /// Get the value of a cached sysvar by its id
+    pub fn get_cached_sysvar<T: Sysvar>(&self, id: &Pubkey) -> Option<T> {
+        self.sysvar_cache
+            .read()
+            .unwrap()
+            .iter()
+            .find_map(|(key, data)| {
+                if id == key {
+                    bincode::deserialize(data).ok()
+                } else {
+                    None
+                }
+            })
+    }
+
+    pub fn load_lookup_table_addresses(
+        &self,
+        address_table_lookups: &[MessageAddressTableLookup],
+    ) -> Result<LoadedAddresses> {
+        if !self.versioned_tx_message_enabled() {
+            return Err(TransactionError::UnsupportedVersion);
+        }
+
+        let slot_hashes: SlotHashes = self
+            .get_cached_sysvar(&sysvar::slot_hashes::id())
+            .ok_or(TransactionError::AccountNotFound)?;
+        Ok(address_table_lookups
+            .iter()
+            .map(|address_table_lookup| {
+                self.rc.accounts.load_lookup_table_addresses(
+                    &self.ancestors,
+                    address_table_lookup,
+                    &slot_hashes,
+                )
+            })
+            .collect::<std::result::Result<_, AddressLookupError>>()?)
     }
 
     /// Execute a transaction using the provided loaded accounts and update
@@ -3550,16 +3678,6 @@ impl Bank {
         timings: &mut ExecuteTimings,
         error_counters: &mut ErrorCounters,
     ) -> TransactionExecutionResult {
-        let legacy_message = match tx.message().legacy_message() {
-            Some(message) => message,
-            None => {
-                // TODO: support versioned messages
-                return TransactionExecutionResult::NotExecuted(
-                    TransactionError::UnsupportedVersion,
-                );
-            }
-        };
-
         let mut get_executors_time = Measure::start("get_executors_time");
         let executors = self.get_executors(
             tx.message(),
@@ -3598,7 +3716,7 @@ impl Bank {
         let mut process_message_time = Measure::start("process_message_time");
         let process_result = MessageProcessor::process_message(
             &self.builtin_programs.vec,
-            legacy_message,
+            tx.message(),
             &loaded_transaction.program_indices,
             &mut transaction_context,
             self.rent_collector.rent,
@@ -4227,7 +4345,7 @@ impl Bank {
     }
 
     fn collect_rent_eagerly(&self) {
-        if !self.enable_eager_rent_collection() {
+        if self.lazy_rent_collection.load(Relaxed) {
             return;
         }
 
@@ -4250,14 +4368,6 @@ impl Bank {
     #[cfg(test)]
     fn restore_old_behavior_for_fragile_tests(&self) {
         self.lazy_rent_collection.store(true, Relaxed);
-    }
-
-    fn enable_eager_rent_collection(&self) -> bool {
-        if self.lazy_rent_collection.load(Relaxed) {
-            return false;
-        }
-
-        true
     }
 
     fn rent_collection_partitions(&self) -> Vec<Partition> {
@@ -5348,8 +5458,8 @@ impl Bank {
                 tx.message.hash()
             };
 
-            SanitizedTransaction::try_create(tx, message_hash, None, |_| {
-                Err(TransactionError::UnsupportedVersion)
+            SanitizedTransaction::try_create(tx, message_hash, None, |lookups| {
+                self.load_lookup_table_addresses(lookups)
             })
         }?;
 
@@ -6187,7 +6297,7 @@ impl Bank {
             }
 
             if !rent_collector.should_collect_rent(pubkey, account, false)
-                || rent_collector.get_rent_due(account).1
+                || rent_collector.get_rent_due(account).is_exempt()
             {
                 total_accounts_stats.num_rent_exempt_accounts += 1;
             } else {
@@ -7355,11 +7465,15 @@ pub(crate) mod tests {
                     .get_slots_in_epoch(epoch + 1)
             })
             .sum();
-        let (generic_rent_due_for_system_account, _) = bank.rent_collector.rent.due(
-            bank.get_minimum_balance_for_rent_exemption(0) - 1,
-            0,
-            slots_elapsed as f64 / bank.rent_collector.slots_per_year,
-        );
+        let generic_rent_due_for_system_account = bank
+            .rent_collector
+            .rent
+            .due(
+                bank.get_minimum_balance_for_rent_exemption(0) - 1,
+                0,
+                slots_elapsed as f64 / bank.rent_collector.slots_per_year,
+            )
+            .lamports();
 
         store_accounts_for_rent_test(
             &bank,
@@ -12743,9 +12857,9 @@ pub(crate) mod tests {
         let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
         let mut cache = CachedExecutors::new(3, 0);
 
-        cache.put(&key1, executor.clone());
-        cache.put(&key2, executor.clone());
-        cache.put(&key3, executor.clone());
+        cache.put(&[(&key1, executor.clone())]);
+        cache.put(&[(&key2, executor.clone())]);
+        cache.put(&[(&key3, executor.clone())]);
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key2).is_some());
         assert!(cache.get(&key3).is_some());
@@ -12753,24 +12867,30 @@ pub(crate) mod tests {
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key2).is_some());
-        cache.put(&key4, executor.clone());
-        assert!(cache.get(&key1).is_some());
-        assert!(cache.get(&key2).is_some());
-        assert!(cache.get(&key3).is_none());
+        cache.put(&[(&key4, executor.clone())]);
         assert!(cache.get(&key4).is_some());
+        let num_retained = [&key1, &key2, &key3]
+            .iter()
+            .map(|key| cache.get(key))
+            .flatten()
+            .count();
+        assert_eq!(num_retained, 2);
 
         assert!(cache.get(&key4).is_some());
         assert!(cache.get(&key4).is_some());
         assert!(cache.get(&key4).is_some());
-        cache.put(&key3, executor.clone());
-        assert!(cache.get(&key1).is_some());
-        assert!(cache.get(&key2).is_none());
+        cache.put(&[(&key3, executor.clone())]);
         assert!(cache.get(&key3).is_some());
-        assert!(cache.get(&key4).is_some());
+        let num_retained = [&key1, &key2, &key4]
+            .iter()
+            .map(|key| cache.get(key))
+            .flatten()
+            .count();
+        assert_eq!(num_retained, 2);
     }
 
     #[test]
-    fn test_cached_executors_eviction() {
+    fn test_cached_executor_eviction() {
         let key1 = solana_sdk::pubkey::new_rand();
         let key2 = solana_sdk::pubkey::new_rand();
         let key3 = solana_sdk::pubkey::new_rand();
@@ -12779,34 +12899,74 @@ pub(crate) mod tests {
         let mut cache = CachedExecutors::new(3, 0);
         assert!(cache.current_epoch == 0);
 
-        cache.put(&key1, executor.clone());
-        cache.put(&key2, executor.clone());
-        cache.put(&key3, executor.clone());
+        cache.put(&[(&key1, executor.clone())]);
+        cache.put(&[(&key2, executor.clone())]);
+        cache.put(&[(&key3, executor.clone())]);
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key1).is_some());
 
-        cache = cache.clone_with_epoch(1);
+        let mut cache = Arc::new(cache).clone_with_epoch(1);
         assert!(cache.current_epoch == 1);
 
         assert!(cache.get(&key2).is_some());
         assert!(cache.get(&key2).is_some());
         assert!(cache.get(&key3).is_some());
-        cache.put(&key4, executor.clone());
+        Arc::make_mut(&mut cache).put(&[(&key4, executor.clone())]);
 
         assert!(cache.get(&key4).is_some());
-        assert!(cache.get(&key3).is_none());
+        let num_retained = [&key1, &key2, &key3]
+            .iter()
+            .map(|key| cache.get(key))
+            .flatten()
+            .count();
+        assert_eq!(num_retained, 2);
 
-        cache.put(&key1, executor.clone());
-        cache.put(&key3, executor.clone());
+        Arc::make_mut(&mut cache).put(&[(&key1, executor.clone())]);
+        Arc::make_mut(&mut cache).put(&[(&key3, executor.clone())]);
         assert!(cache.get(&key1).is_some());
-        assert!(cache.get(&key4).is_none());
+        assert!(cache.get(&key3).is_some());
+        let num_retained = [&key2, &key4]
+            .iter()
+            .map(|key| cache.get(key))
+            .flatten()
+            .count();
+        assert_eq!(num_retained, 1);
 
         cache = cache.clone_with_epoch(2);
         assert!(cache.current_epoch == 2);
 
-        cache.put(&key3, executor.clone());
+        Arc::make_mut(&mut cache).put(&[(&key3, executor.clone())]);
         assert!(cache.get(&key3).is_some());
+    }
+
+    #[test]
+    fn test_cached_executors_evicts_smallest() {
+        let key1 = solana_sdk::pubkey::new_rand();
+        let key2 = solana_sdk::pubkey::new_rand();
+        let key3 = solana_sdk::pubkey::new_rand();
+        let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
+        let mut cache = CachedExecutors::new(2, 0);
+
+        cache.put(&[(&key1, executor.clone())]);
+        for _ in 0..5 {
+            let _ = cache.get(&key1);
+        }
+        cache.put(&[(&key2, executor.clone())]);
+        // make key1's use-count for sure greater than key2's
+        let _ = cache.get(&key1);
+
+        let mut entries = cache
+            .executors
+            .iter()
+            .map(|(k, v)| (*k, v.epoch_count.load(Relaxed)))
+            .collect::<Vec<_>>();
+        entries.sort_by_key(|(_, v)| *v);
+        assert!(entries[0].1 < entries[1].1);
+
+        cache.put(&[(&key3, executor.clone())]);
+        assert!(cache.get(&entries[0].0).is_none());
+        assert!(cache.get(&entries[1].0).is_some());
     }
 
     #[test]
@@ -15345,5 +15505,25 @@ pub(crate) mod tests {
                 solana_sdk::instruction::InstructionError::AccountsDataBudgetExceeded,
             ))
         ));
+    }
+
+    #[test]
+    fn test_executor_cache_get_primer_count_upper_bound_inclusive() {
+        let pubkey = Pubkey::default();
+        let v = [];
+        assert_eq!(
+            CachedExecutors::get_primer_count_upper_bound_inclusive(&v),
+            0
+        );
+        let v = [(&pubkey, 1)];
+        assert_eq!(
+            CachedExecutors::get_primer_count_upper_bound_inclusive(&v),
+            1
+        );
+        let v = (0u64..10).map(|i| (&pubkey, i)).collect::<Vec<_>>();
+        assert_eq!(
+            CachedExecutors::get_primer_count_upper_bound_inclusive(v.as_slice()),
+            7
+        );
     }
 }

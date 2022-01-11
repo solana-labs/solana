@@ -12,7 +12,7 @@ use {
         compute_budget::ComputeBudget,
         feature_set::{prevent_calling_precompiles_as_programs, FeatureSet},
         hash::Hash,
-        message::Message,
+        message::SanitizedMessage,
         precompiles::is_precompile,
         pubkey::Pubkey,
         rent::Rent,
@@ -52,7 +52,7 @@ impl MessageProcessor {
     #[allow(clippy::too_many_arguments)]
     pub fn process_message(
         builtin_programs: &[BuiltinProgram],
-        message: &Message,
+        message: &SanitizedMessage,
         program_indices: &[Vec<usize>],
         transaction_context: &mut TransactionContext,
         rent: Rent,
@@ -82,14 +82,12 @@ impl MessageProcessor {
             current_accounts_data_len,
         );
 
-        debug_assert_eq!(program_indices.len(), message.instructions.len());
-        for (instruction_index, (instruction, program_indices)) in message
-            .instructions
-            .iter()
+        debug_assert_eq!(program_indices.len(), message.instructions().len());
+        for (instruction_index, ((program_id, instruction), program_indices)) in message
+            .program_instructions_iter()
             .zip(program_indices.iter())
             .enumerate()
         {
-            let program_id = instruction.program_id(&message.account_keys);
             if invoke_context
                 .feature_set
                 .is_active(&prevent_calling_precompiles_as_programs::id())
@@ -139,7 +137,7 @@ impl MessageProcessor {
             );
             time.stop();
             timings.details.accumulate_program(
-                instruction.program_id(&message.account_keys),
+                program_id,
                 time.as_us(),
                 compute_units_consumed,
                 result.is_err(),
@@ -251,14 +249,14 @@ mod tests {
             AccountMeta::new_readonly(*transaction_context.get_key_of_account_at_index(1), false),
         ];
 
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bincode(
                 mock_system_program_id,
                 &MockSystemInstruction::Correct,
                 account_metas.clone(),
             )],
             Some(transaction_context.get_key_of_account_at_index(0)),
-        );
+        ));
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -292,14 +290,14 @@ mod tests {
             0
         );
 
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bincode(
                 mock_system_program_id,
                 &MockSystemInstruction::TransferLamports { lamports: 50 },
                 account_metas.clone(),
             )],
             Some(transaction_context.get_key_of_account_at_index(0)),
-        );
+        ));
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -325,14 +323,14 @@ mod tests {
             ))
         );
 
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bincode(
                 mock_system_program_id,
                 &MockSystemInstruction::ChangeData { data: 50 },
                 account_metas,
             )],
             Some(transaction_context.get_key_of_account_at_index(0)),
-        );
+        ));
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -451,14 +449,14 @@ mod tests {
         ];
 
         // Try to borrow mut the same account
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bincode(
                 mock_program_id,
                 &MockSystemInstruction::BorrowFail,
                 account_metas.clone(),
             )],
             Some(transaction_context.get_key_of_account_at_index(0)),
-        );
+        ));
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -485,14 +483,14 @@ mod tests {
         );
 
         // Try to borrow mut the same account in a safe way
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bincode(
                 mock_program_id,
                 &MockSystemInstruction::MultiBorrowMut,
                 account_metas.clone(),
             )],
             Some(transaction_context.get_key_of_account_at_index(0)),
-        );
+        ));
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -513,7 +511,7 @@ mod tests {
         assert!(result.is_ok());
 
         // Do work on the same transaction account but at different instruction accounts
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bincode(
                 mock_program_id,
                 &MockSystemInstruction::DoWork {
@@ -523,7 +521,7 @@ mod tests {
                 account_metas,
             )],
             Some(transaction_context.get_key_of_account_at_index(0)),
-        );
+        ));
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -587,7 +585,7 @@ mod tests {
         ];
         let mut transaction_context = TransactionContext::new(accounts, 1);
 
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[
                 new_secp256k1_instruction(
                     &libsecp256k1::SecretKey::random(&mut rand::thread_rng()),
@@ -596,7 +594,7 @@ mod tests {
                 Instruction::new_with_bytes(mock_program_id, &[], vec![]),
             ],
             None,
-        );
+        ));
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,

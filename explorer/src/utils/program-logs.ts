@@ -15,7 +15,7 @@ export type InstructionLogs = {
 };
 
 export function prettyProgramLogs(
-  logs: string[] | null,
+  logs: string[],
   error: TransactionError | null,
   cluster: Cluster
 ): InstructionLogs[] {
@@ -27,10 +27,7 @@ export function prettyProgramLogs(
   };
 
   let prettyError;
-  if (!logs) {
-    if (error) throw new Error(JSON.stringify(error));
-    throw new Error("No logs detected");
-  } else if (error) {
+  if (error) {
     prettyError = getTransactionInstructionError(error);
   }
 

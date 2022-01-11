@@ -48,7 +48,12 @@ Create TYPE "TransactionErrorCode" AS ENUM (
     'WouldExceedMaxBlockCostLimit',
     'UnsupportedVersion',
     'InvalidWritableAccount',
-    'WouldExceedMaxAccountDataCostLimit'
+    'WouldExceedMaxAccountDataCostLimit',
+    'TooManyAccountLocks',
+    'AddressLookupTableNotFound',
+    'InvalidAddressLookupTableOwner',
+    'InvalidAddressLookupTableData',
+    'InvalidAddressLookupTableIndex'
 );
 
 CREATE TYPE "TransactionError" AS (

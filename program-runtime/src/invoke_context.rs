@@ -181,7 +181,6 @@ impl<'a> StackFrame<'a> {
 
 pub struct InvokeContext<'a> {
     pub transaction_context: &'a mut TransactionContext,
-    pub return_data: (Pubkey, Vec<u8>),
     invoke_stack: Vec<StackFrame<'a>>,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
@@ -218,7 +217,6 @@ impl<'a> InvokeContext<'a> {
     ) -> Self {
         Self {
             transaction_context,
-            return_data: (Pubkey::default(), Vec::new()),
             invoke_stack: Vec::with_capacity(compute_budget.max_invoke_depth),
             rent,
             pre_accounts: Vec::new(),
@@ -835,7 +833,8 @@ impl<'a> InvokeContext<'a> {
             .and_then(|_| {
                 let mut process_executable_chain_time =
                     Measure::start("process_executable_chain_time");
-                self.return_data = (program_id, Vec::new());
+                self.transaction_context
+                    .set_return_data(program_id, Vec::new())?;
                 let pre_remaining_units = self.compute_meter.borrow().get_remaining();
                 let execution_result = self.process_executable_chain(instruction_data);
                 let post_remaining_units = self.compute_meter.borrow().get_remaining();

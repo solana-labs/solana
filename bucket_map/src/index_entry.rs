@@ -19,30 +19,38 @@ use {
 pub struct IndexEntry {
     pub key: Pubkey, // can this be smaller if we have reduced the keys into buckets already?
     pub ref_count: RefCount, // can this be smaller? Do we ever need more than 4B refcounts?
-    storage_offset: u64, // smaller? since these are variably sized, this could get tricky. well, actually accountinfo is not variable sized...
+    // storage_offset_mask contains both storage_offset and storage_capacity_when_created_pow2
+    // see _MASK_ constants below
+    storage_offset_mask: u64, // smaller? since these are variably sized, this could get tricky. well, actually accountinfo is not variable sized...
     // if the bucket doubled, the index can be recomputed using create_bucket_capacity_pow2
-    storage_capacity_when_created_pow2: u8, // see data_location
     pub num_slots: Slot, // can this be smaller? epoch size should ~ be the max len. this is the num elements in the slot list
 }
 
+/// how many bits to shift the capacity value in the mask
+const STORAGE_OFFSET_MASK_CAPACITY_SHIFT: u64 = (u64::BITS - u8::BITS) as u64;
+/// mask to use on 'storage_offset_mask' to get the 'storage_offset' portion
+const STORAGE_OFFSET_MASK_STORAGE_OFFSET: u64 = (1 << STORAGE_OFFSET_MASK_CAPACITY_SHIFT) - 1;
 impl IndexEntry {
     pub fn init(&mut self, pubkey: &Pubkey) {
         self.key = *pubkey;
         self.ref_count = 0;
-        self.storage_offset = 0;
-        self.storage_capacity_when_created_pow2 = 0;
+        self.storage_offset_mask = 0;
         self.num_slots = 0;
     }
-
     pub fn set_storage_capacity_when_created_pow2(
         &mut self,
         storage_capacity_when_created_pow2: u8,
     ) {
-        self.storage_capacity_when_created_pow2 = storage_capacity_when_created_pow2;
+        self.storage_offset_mask = self.storage_offset()
+            | ((storage_capacity_when_created_pow2 as u64) << STORAGE_OFFSET_MASK_CAPACITY_SHIFT)
     }
 
     pub fn set_storage_offset(&mut self, storage_offset: u64) {
-        self.storage_offset = storage_offset;
+        let offset_mask = storage_offset & STORAGE_OFFSET_MASK_STORAGE_OFFSET;
+        assert_eq!(storage_offset, offset_mask, "offset too large");
+        self.storage_offset_mask = ((self.storage_capacity_when_created_pow2() as u64)
+            << STORAGE_OFFSET_MASK_CAPACITY_SHIFT)
+            | offset_mask;
     }
 
     pub fn data_bucket_from_num_slots(num_slots: Slot) -> u64 {
@@ -58,10 +66,10 @@ impl IndexEntry {
     }
 
     fn storage_offset(&self) -> u64 {
-        self.storage_offset
+        self.storage_offset_mask & STORAGE_OFFSET_MASK_STORAGE_OFFSET
     }
     fn storage_capacity_when_created_pow2(&self) -> u8 {
-        self.storage_capacity_when_created_pow2
+        (self.storage_offset_mask >> STORAGE_OFFSET_MASK_CAPACITY_SHIFT) as u8
     }
 
     // This function maps the original data location into an index in the current bucket storage.
@@ -101,8 +109,7 @@ mod tests {
             IndexEntry {
                 key,
                 ref_count: 0,
-                storage_offset: 0,
-                storage_capacity_when_created_pow2: 0,
+                storage_offset_mask: 0,
                 num_slots: 0,
             }
         }
