@@ -3,7 +3,7 @@ import {Buffer} from 'buffer';
 import {Token, u64} from '@solana/spl-token';
 import {expect, use} from 'chai';
 import chaiAsPromised from 'chai-as-promised';
-
+import fetch from 'cross-fetch';
 import {
   Account,
   Authorized,
@@ -112,11 +112,11 @@ describe('Connection', () => {
 
     it('should allow middleware to augment request', async () => {
       let connection = new Connection(url, {
-        fetchMiddleware: (url, options, fetch) => {
+        fetchMiddleware: async (url, options) => {
           options.headers = Object.assign(options.headers, {
             Authorization: 'Bearer 123',
           });
-          fetch(url, options);
+          return await fetch(url, options);
         },
       });
 
@@ -136,7 +136,7 @@ describe('Connection', () => {
   it('should attribute middleware fatals to the middleware', async () => {
     let connection = new Connection(url, {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      fetchMiddleware: (_url, _options, _fetch) => {
+      fetchMiddleware: (_url, _options) => {
         throw new Error('This middleware experienced a fatal error');
       },
     });
@@ -151,8 +151,8 @@ describe('Connection', () => {
 
   it('should not attribute fetch errors to the middleware', async () => {
     let connection = new Connection(url, {
-      fetchMiddleware: (url, _options, fetch) => {
-        fetch(url, 'An `Object` was expected here; this is a `TypeError`.');
+      fetchMiddleware: async (url, _options) => {
+        return await fetch(url, 'An `Object` was expected here; this is a `TypeError`.' as RequestInit);
       },
     });
     const error = await expect(connection.getVersion()).to.be.rejected;

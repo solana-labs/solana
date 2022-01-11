@@ -761,27 +761,6 @@ function createRpcClient(
     agentManager = new AgentManager(useHttps);
   }
 
-  let fetchWithMiddleware:
-    | ((url: string, options: any) => Promise<Response>)
-    | undefined;
-
-  if (fetchMiddleware) {
-    fetchWithMiddleware = async (url: string, options: any) => {
-      const modifiedFetchArgs = await new Promise<[string, any]>(
-        (resolve, reject) => {
-          try {
-            fetchMiddleware(url, options, (modifiedUrl, modifiedOptions) =>
-              resolve([modifiedUrl, modifiedOptions]),
-            );
-          } catch (error) {
-            reject(error);
-          }
-        },
-      );
-      return await fetch(...modifiedFetchArgs);
-    };
-  }
-
   const clientBrowser = new RpcClient(async (request, callback) => {
     const agent = agentManager ? agentManager.requestStart() : undefined;
     const options = {
@@ -801,8 +780,8 @@ function createRpcClient(
       let res: Response;
       let waitTime = 500;
       for (;;) {
-        if (fetchWithMiddleware) {
-          res = await fetchWithMiddleware(url, options);
+        if (fetchMiddleware) {
+          res = await fetchMiddleware(url, options);
         } else {
           res = await fetch(url, options);
         }
@@ -1988,9 +1967,8 @@ export type HttpHeaders = {[header: string]: string};
  */
 export type FetchMiddleware = (
   url: string,
-  options: any,
-  fetch: (modifiedUrl: string, modifiedOptions: any) => void,
-) => void;
+  options: any
+) => Promise<Response>;
 
 /**
  * Configuration for instantiating a Connection
