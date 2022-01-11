@@ -5937,6 +5937,7 @@ impl AccountsDb {
         slot: Slot,
         storage: &SortedStorages,
         slots_per_epoch: Option<Slot>,
+        rehash: &AtomicUsize,
     ) -> Hash {
         use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
         if slots_per_epoch.is_none() {
@@ -5975,6 +5976,7 @@ impl AccountsDb {
             return loaded_account.loaded_hash();
         }
 
+        rehash.fetch_add(1, Ordering::Relaxed);
         // recompute based on rent collection/rewrite slot
         // Rent would have been collected AT 'expected_slot', so hash according to that slot.
         // Note that a later storage (and slot) may contain this same pubkey. In that case, that newer hash will make this one irrelevant.
@@ -5995,6 +5997,7 @@ impl AccountsDb {
         )>,
         filler_account_suffix: Option<&Pubkey>,
         slots_per_epoch: Option<Slot>,
+        rehash: &AtomicUsize,
     ) -> Result<Vec<BinnedHashData>, BankHashVerificationError> {
         let bin_calculator = PubkeyBinCalculator24::new(bins);
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
@@ -6033,6 +6036,7 @@ impl AccountsDb {
                     slot,
                     storage,
                     slots_per_epoch,
+                    rehash,
                 );
 
                 let source_item = CalculateHashIntermediate::new(hash, balance, *pubkey);
@@ -6044,6 +6048,7 @@ impl AccountsDb {
                         slot,
                         storage,
                         slots_per_epoch,
+                        &rehash,
                     );
                     if computed_hash != source_item.hash {
                         info!(
@@ -6120,6 +6125,7 @@ impl AccountsDb {
         num_hash_scan_passes: Option<usize>,
         slots_per_epoch: Option<Slot>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
+        let rehash = AtomicUsize::default();
         let (num_hash_scan_passes, bins_per_pass) = Self::bins_per_pass(num_hash_scan_passes);
         let mut scan_and_hash = move || {
             let mut previous_pass = PreviousPass::default();
@@ -6143,6 +6149,7 @@ impl AccountsDb {
                     accounts_cache_and_ancestors,
                     filler_account_suffix,
                     None,
+                    &rehash,
                 )?;
 
                 let hash = AccountsHash {
@@ -6158,14 +6165,17 @@ impl AccountsDb {
                 previous_pass = for_next_pass;
                 final_result = (hash, lamports);
             }
+            stats.rehash = rehash.load(Ordering::Relaxed);
 
             Ok(final_result)
         };
+        let result =
         if let Some(thread_pool) = thread_pool {
             thread_pool.install(scan_and_hash)
         } else {
             scan_and_hash()
-        }
+        };
+        result
     }
 
     /// Only called from startup or test code.
