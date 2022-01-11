@@ -3138,7 +3138,7 @@ impl AccountsDb {
                 if i % 1 == 0 {
                     error!(
                     "ancient_append_vec: writing to ancient append vec: slot: {}, # accts: {}, available bytes after: {}, distance to max: {}, id: {:?}, # stores: {}, # stores {}, original bytes: {}",
-                    slot, accounts_this_append_vec.len(), available_bytes, max_root.saturating_sub(slot), all_storages.iter().map(|store| (store.append_vec_id(), store.accounts.capacity(), store.accounts.is_ancient())), all_storages.len(), num_stores, original_bytes
+                    slot, accounts_this_append_vec.len(), available_bytes, max_root.saturating_sub(slot), all_storages.iter().map(|store| (store.append_vec_id(), store.accounts.capacity(), store.accounts.is_ancient())).collect::<Vec<_>>(), all_storages.len(), num_stores, original_bytes
                 );
                 }
 
@@ -3225,7 +3225,8 @@ impl AccountsDb {
         self.shrink_ancient_slots();
         let shrink_candidates_slots =
             std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
-        let (shrink_slots, shrink_slots_next_batch) = {
+            error!("ancient_append_vec: shrink_candidate_slots, len: {}", shrink_candidates_slots.len());
+            let (shrink_slots, shrink_slots_next_batch) = {
             if let AccountShrinkThreshold::TotalSpace { shrink_ratio } = self.shrink_ratio {
                 let (shrink_slots, shrink_slots_next_batch) =
                     self.select_candidates_by_total_usage(&shrink_candidates_slots, shrink_ratio);
@@ -3273,6 +3274,7 @@ impl AccountsDb {
         const OUTER_CHUNK_SIZE: usize = 2000;
 
         if is_startup {
+            error!("ancient_append_vec: shrink_all_slots, last full {:?}, startup {}", last_full_snapshot_slot, is_startup);
             self.shrink_ancient_slots();
         }
 
