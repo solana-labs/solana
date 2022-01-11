@@ -963,7 +963,7 @@ pub struct AccountsDb {
     write_cache_limit_bytes: Option<u64>,
 
     sender_bg_hasher: Option<Sender<CachedAccount>>,
-    pub read_only_accounts_cache: ReadOnlyAccountsCache,
+    read_only_accounts_cache: ReadOnlyAccountsCache,
 
     recycle_stores: RwLock<RecycleStores>,
 
@@ -3649,7 +3649,7 @@ impl AccountsDb {
         // Notice the subtle `?` at previous line, we bail out pretty early if missing.
 
         if self.caching_enabled && !storage_location.is_cached() {
-            let result = self.read_only_accounts_cache.load(pubkey, slot);
+            let result = self.read_only_accounts_cache.load(*pubkey, slot);
             if let Some(account) = result {
                 return Some((account, slot));
             }
@@ -3680,7 +3680,8 @@ impl AccountsDb {
             However, by the assumption for contradiction above ,  'A' has already been updated in 'S' which means '(S, A)'
             must exist in the write cache, which is a contradiction.
             */
-            self.read_only_accounts_cache.store(pubkey, slot, &account);
+            self.read_only_accounts_cache
+                .store(*pubkey, slot, account.clone());
         }
         Some((account, slot))
     }
@@ -4928,7 +4929,7 @@ impl AccountsDb {
         let accounts_and_meta_to_store: Vec<_> = accounts
             .iter()
             .map(|(pubkey, account)| {
-                self.read_only_accounts_cache.remove(pubkey, slot);
+                self.read_only_accounts_cache.remove(**pubkey, slot);
                 // this is the source of Some(Account) or None.
                 // Some(Account) = store 'Account'
                 // None = store a default/empty account with 0 lamports

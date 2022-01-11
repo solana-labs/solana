@@ -2066,6 +2066,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9007da9cacbd3e6343da136e98b0d2df013f553d35bdec8b518f07bea768e19c"
 
 [[package]]
+name = "index_list"
+version = "0.2.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a9d968042a4902e08810946fc7cd5851eb75e80301342305af755ca06cb82ce"
+
+[[package]]
 name = "indexmap"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5702,6 +5708,7 @@ dependencies = [
  "ed25519-dalek",
  "flate2",
  "fnv",
+ "index_list",
  "itertools 0.10.3",
  "lazy_static",
  "libsecp256k1 0.6.0",
@@ -5712,6 +5719,7 @@ dependencies = [
  "num_cpus",
  "ouroboros",
  "rand 0.7.3",
+ "rand_chacha 0.2.2",
  "rayon",
  "regex",
  "rustc_version 0.4.0",

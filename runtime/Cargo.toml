@@ -21,6 +21,7 @@ crossbeam-channel = "0.5"
 dir-diff = "0.3.2"
 flate2 = "1.0.22"
 fnv = "1.0.7"
+index_list = "0.2.7"
 itertools = "0.10.3"
 lazy_static = "1.4.0"
 log = "0.4.14"
@@ -60,9 +61,10 @@ crate-type = ["lib"]
 name = "solana_runtime"
 
 [dev-dependencies]
+assert_matches = "1.5.0"
 ed25519-dalek = "=1.0.1"
 libsecp256k1 = "0.6.0"
-assert_matches = "1.5.0"
+rand_chacha = "0.2.2"
 solana-logger = { path = "../logger", version = "=1.10.0" }
 
 [package.metadata.docs.rs]
