@@ -3724,21 +3724,14 @@ impl Bank {
 
         let account_refcells = Self::accounts_to_refcells(&mut loaded_transaction.accounts);
 
-<<<<<<< HEAD
+        let pre_account_state_info =
+            self.get_transaction_account_state_info(&account_refcells, tx.message());
+
         let instruction_recorders = if enable_cpi_recording {
             let ix_count = tx.message().instructions().len();
             let mut recorders = Vec::with_capacity(ix_count);
             recorders.resize_with(ix_count, InstructionRecorder::default);
             Some(recorders)
-=======
-        let pre_account_state_info =
-            self.get_transaction_account_state_info(&transaction_context, tx.message());
-
-        let instruction_recorder = if enable_cpi_recording {
-            Some(InstructionRecorder::new_ref(
-                tx.message().instructions().len(),
-            ))
->>>>>>> 637e366b1 (Prevent rent-paying account creation (#22292))
         } else {
             None
         };
@@ -3786,11 +3779,11 @@ impl Bank {
         let status = process_result
             .and_then(|info| {
                 let post_account_state_info =
-                    self.get_transaction_account_state_info(&transaction_context, tx.message());
+                    self.get_transaction_account_state_info(&account_refcells, tx.message());
                 self.verify_transaction_account_state_changes(
                     &pre_account_state_info,
                     &post_account_state_info,
-                    &transaction_context,
+                    &account_refcells,
                 )
                 .map(|_| info)
             })
@@ -15645,20 +15638,21 @@ pub(crate) mod tests {
     }
 
     fn mock_transfer_process_instruction(
-        _first_instruction_account: usize,
+        first_instruction_account: usize,
         data: &[u8],
         invoke_context: &mut InvokeContext,
     ) -> result::Result<(), InstructionError> {
-        let transaction_context = &invoke_context.transaction_context;
-        let instruction_context = transaction_context.get_current_instruction_context()?;
+        let keyed_accounts = invoke_context.get_keyed_accounts()?;
         if let Ok(instruction) = bincode::deserialize(data) {
             match instruction {
                 MockTransferInstruction::Transfer(amount) => {
-                    instruction_context
-                        .try_borrow_instruction_account(transaction_context, 1)?
+                    keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?
+                        .account
+                        .borrow_mut()
                         .checked_sub_lamports(amount)?;
-                    instruction_context
-                        .try_borrow_instruction_account(transaction_context, 2)?
+                    keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?
+                        .account
+                        .borrow_mut()
                         .checked_add_lamports(amount)?;
                     Ok(())
                 }

@@ -3,9 +3,9 @@ use {
     log::*,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
+        pubkey::Pubkey,
         rent::Rent,
         transaction::{Result, TransactionError},
-        transaction_context::TransactionContext,
     },
 };
 
@@ -51,17 +51,13 @@ pub(crate) fn submit_rent_state_metrics(pre_rent_state: &RentState, post_rent_st
 pub(crate) fn check_rent_state(
     pre_rent_state: Option<&RentState>,
     post_rent_state: Option<&RentState>,
-    transaction_context: &TransactionContext,
-    index: usize,
+    pubkey: &Pubkey,
+    account: &AccountSharedData,
 ) -> Result<()> {
     if let Some((pre_rent_state, post_rent_state)) = pre_rent_state.zip(post_rent_state) {
         submit_rent_state_metrics(pre_rent_state, post_rent_state);
         if !post_rent_state.transition_allowed_from(pre_rent_state) {
-            debug!(
-                "Account {:?} not rent exempt, state {:?}",
-                transaction_context.get_key_of_account_at_index(index),
-                transaction_context.get_account_at_index(index).borrow(),
-            );
+            debug!("Account {:?} not rent exempt, state {:?}", pubkey, account,);
             return Err(TransactionError::InvalidRentPayingAccount);
         }
     }
