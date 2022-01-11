@@ -51,7 +51,7 @@ use {
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         inline_spl_token,
         message_processor::MessageProcessor,
-        rent_collector::RentCollector,
+        rent_collector::{CollectedInfo, RentCollector},
         stake_weighted_timestamp::{
             calculate_stake_weighted_timestamp, MaxAllowableDrift, MAX_ALLOWABLE_DRIFT_PERCENTAGE,
             MAX_ALLOWABLE_DRIFT_PERCENTAGE_FAST, MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW,
@@ -152,7 +152,7 @@ use {
         sync::{
             atomic::{
                 AtomicBool, AtomicU64,
-                Ordering::{Acquire, Relaxed, Release},
+                Ordering::{AcqRel, Acquire, Relaxed, Release},
             },
             Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard,
         },
@@ -4034,6 +4034,27 @@ impl Bank {
         self.accounts_data_len.store(accounts_data_len, Release)
     }
 
+    /// Update the accounts data len by adding `delta`.  Since `delta` is signed, negative values
+    /// are allowed as the means to subtract from `accounts_data_len`.
+    fn update_accounts_data_len(&self, delta: i64) {
+        /// Mixed integer ops currently not stable, so copying the impl.
+        /// Copied from: https://github.com/a1phyr/rust/blob/47edde1086412b36e9efd6098b191ec15a2a760a/library/core/src/num/uint_macros.rs#L1039-L1048
+        fn saturating_add_signed(lhs: u64, rhs: i64) -> u64 {
+            let (res, overflow) = lhs.overflowing_add(rhs as u64);
+            if overflow == (rhs < 0) {
+                res
+            } else if overflow {
+                u64::MAX
+            } else {
+                u64::MIN
+            }
+        }
+        self.accounts_data_len
+            .fetch_update(AcqRel, Acquire, |x| Some(saturating_add_signed(x, delta)))
+            // SAFETY: unwrap() is safe here since our update fn always returns `Some`
+            .unwrap();
+    }
+
     /// Calculate fee for `SanitizedMessage`
     pub fn calculate_fee(message: &SanitizedMessage, lamports_per_signature: u64) -> u64 {
         let mut num_signatures = u64::from(message.header().num_required_signatures);
@@ -4428,29 +4449,33 @@ impl Bank {
 
         // parallelize?
         let rent_for_sysvars = self.rent_for_sysvars();
-        let mut total_rent = 0;
         let mut rent_debits = RentDebits::default();
+        let mut total_collected = CollectedInfo::default();
         for (pubkey, mut account) in accounts {
-            let rent = self.rent_collector.collect_from_existing_account(
+            let collected = self.rent_collector.collect_from_existing_account(
                 &pubkey,
                 &mut account,
                 rent_for_sysvars,
                 self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
             );
-            total_rent += rent;
+            total_collected += collected;
             // Store all of them unconditionally to purge old AppendVec,
             // even if collected rent is 0 (= not updated).
             // Also, there's another subtle side-effect from this: this
             // ensures we verify the whole on-chain state (= all accounts)
             // via the account delta hash slowly once per an epoch.
             self.store_account(&pubkey, &account);
-            rent_debits.insert(&pubkey, rent, account.lamports());
+            rent_debits.insert(&pubkey, collected.rent_amount, account.lamports());
         }
-        self.collected_rent.fetch_add(total_rent, Relaxed);
+        self.collected_rent
+            .fetch_add(total_collected.rent_amount, Relaxed);
         self.rewards
             .write()
             .unwrap()
             .extend(rent_debits.into_unordered_rewards_iter());
+        if total_collected.account_data_len_reclaimed > 0 {
+            self.update_accounts_data_len(-(total_collected.account_data_len_reclaimed as i64));
+        }
 
         self.rc
             .accounts
@@ -7409,10 +7434,12 @@ pub(crate) mod tests {
 
         let account_pubkey = solana_sdk::pubkey::new_rand();
         let account_balance = 1;
+        let data_len = 12345; // use non-zero data len to also test accounts_data_len
         let mut account =
-            AccountSharedData::new(account_balance, 0, &solana_sdk::pubkey::new_rand());
+            AccountSharedData::new(account_balance, data_len, &solana_sdk::pubkey::new_rand());
         account.set_executable(true);
         bank.store_account(&account_pubkey, &account);
+        bank.store_accounts_data_len(data_len as u64);
 
         let transfer_lamports = 1;
         let tx = system_transaction::transfer(
@@ -7427,6 +7454,7 @@ pub(crate) mod tests {
             Err(TransactionError::InvalidWritableAccount)
         );
         assert_eq!(bank.get_balance(&account_pubkey), account_balance);
+        assert_eq!(bank.load_accounts_data_len(), data_len as u64);
     }
 
     #[test]
@@ -8413,9 +8441,10 @@ pub(crate) mod tests {
         let genesis_bank2 = Arc::new(Bank::new_for_tests(&genesis_config));
         let bank1_with_zero = Arc::new(new_from_parent(&genesis_bank1));
         let bank1_without_zero = Arc::new(new_from_parent(&genesis_bank2));
-        let zero_lamports = 0;
 
-        let account = AccountSharedData::new(zero_lamports, 0, &Pubkey::default());
+        let zero_lamports = 0;
+        let data_len = 12345; // use non-zero data len to also test accounts_data_len
+        let account = AccountSharedData::new(zero_lamports, data_len, &Pubkey::default());
         bank1_with_zero.store_account(&zero_lamport_pubkey, &account);
         bank1_without_zero.store_account(&zero_lamport_pubkey, &account);
 
@@ -15831,5 +15860,41 @@ pub(crate) mod tests {
         );
         let result = bank.process_transaction(&tx);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_update_accounts_data_len() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(100);
+        let bank = Bank::new_for_tests(&genesis_config);
+
+        // Test: Subtraction saturates at 0
+        {
+            let data_len = 567_i64;
+            bank.store_accounts_data_len(data_len as u64);
+            bank.update_accounts_data_len(-(data_len + 1));
+            assert_eq!(bank.load_accounts_data_len(), 0);
+        }
+
+        // Test: Addition saturates at u64::MAX
+        {
+            let data_len_remaining = 567;
+            bank.store_accounts_data_len(u64::MAX - data_len_remaining);
+            bank.update_accounts_data_len((data_len_remaining + 1) as i64);
+            assert_eq!(bank.load_accounts_data_len(), u64::MAX);
+        }
+
+        // Test: Updates work as expected
+        {
+            // Set the accounts data len to be in the middle, then perform a bunch of small
+            // updates, checking the results after each one.
+            bank.store_accounts_data_len(u32::MAX as u64);
+            let mut rng = rand::thread_rng();
+            for _ in 0..100 {
+                let initial = bank.load_accounts_data_len() as i64;
+                let delta = rng.gen_range(-500, 500);
+                bank.update_accounts_data_len(delta);
+                assert_eq!(bank.load_accounts_data_len() as i64, initial + delta);
+            }
+        }
     }
 }

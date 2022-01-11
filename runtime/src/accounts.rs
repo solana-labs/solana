@@ -275,12 +275,14 @@ impl Accounts {
                             .load_with_fixed_root(ancestors, key)
                             .map(|(mut account, _)| {
                                 if message.is_writable(i) {
-                                    let rent_due = rent_collector.collect_from_existing_account(
-                                        key,
-                                        &mut account,
-                                        rent_for_sysvars,
-                                        self.accounts_db.filler_account_suffix.as_ref(),
-                                    );
+                                    let rent_due = rent_collector
+                                        .collect_from_existing_account(
+                                            key,
+                                            &mut account,
+                                            rent_for_sysvars,
+                                            self.accounts_db.filler_account_suffix.as_ref(),
+                                        )
+                                        .rent_amount;
                                     (account, rent_due)
                                 } else {
                                     (account, 0)
@@ -1199,11 +1201,9 @@ impl Accounts {
 
                     if execution_status.is_ok() || is_nonce_account || is_fee_payer {
                         if account.rent_epoch() == INITIAL_RENT_EPOCH {
-                            let rent = rent_collector.collect_from_created_account(
-                                address,
-                                account,
-                                rent_for_sysvars,
-                            );
+                            let rent = rent_collector
+                                .collect_from_created_account(address, account, rent_for_sysvars)
+                                .rent_amount;
                             loaded_transaction.rent += rent;
                             loaded_transaction.rent_debits.insert(
                                 address,
