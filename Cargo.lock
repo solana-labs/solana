@@ -4441,6 +4441,7 @@ dependencies = [
 name = "solana-bench-tps"
 version = "1.10.0"
 dependencies = [
+ "bincode",
  "clap 2.33.3",
  "log 0.4.14",
  "rayon",

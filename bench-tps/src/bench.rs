@@ -18,7 +18,7 @@ use {
         signature::{Keypair, Signer},
         system_instruction, system_transaction,
         timing::{duration_as_ms, duration_as_s, duration_as_us, timestamp},
-        transaction::Transaction,
+        transaction::{Transaction, TransactionError},
     },
     std::{
         collections::{HashSet, VecDeque},
@@ -337,12 +337,14 @@ pub fn big_transfer(
         system_instruction::transfer(&from_pubkey, &to, lamports)
         ).collect::<Vec<_>>();
 
-    Transaction::new(&[from_keypair],
+    let tx = Transaction::new(&[from_keypair],
         Message::new(
         &instructions,
         Some(&from_pubkey),
     ),
-    recent_blockhash)
+    recent_blockhash);
+    info!("transaction size: {}", bincode::serialized_size(&tx).map_err(|_| 0 as u64).unwrap());
+    tx
 }
 
 fn generate_system_txs(
