@@ -3074,6 +3074,7 @@ impl AccountsDb {
                 let all_storages = read.values().cloned().collect::<Vec<_>>();
                 drop(read);
                 let size = MAXIMUM_APPEND_VEC_FILE_SIZE - 2048; // below max?
+                let mut created_this_slot = false;
                 if current_storage.is_none() && all_storages.len() == 1 {
                     // maybe this is good
                     let first_storage = all_storages.first().unwrap();
@@ -3083,7 +3084,7 @@ impl AccountsDb {
                         current_storage = Some((slot, Arc::clone(first_storage)));
                     }
                     else {
-                        error!("ancient_append_vec: NOT reusing existing ancient append vec: {}, capacity: {}, size: {}, short: {}", slot, capacity, size, size.saturating_sub(capacity));
+                        error!("ancient_append_vec: NOT reusing existing ancient append vec: {}, capacity: {}, size: {}, short: {}, id: {}", slot, capacity, size, size.saturating_sub(capacity), first_storage.append_vec_id());
                     }
                 }
                 else if current_storage.is_none() && all_storages.len() > 1 {
@@ -3093,12 +3094,14 @@ impl AccountsDb {
                 }
                 if current_storage.is_none() {
                     // our oldest slot is not an append vec of max size, so we need to start with rewriting that storage to create an ancient append vec for the oldest slot
-                    error!(
-                        "ancient_append_vec: creating initial ancient append vec: {}, size: {}",
-                        slot,
-                        size
-                    );
                     let (shrunken_store, _time) = self.get_store_for_shrink(slot, size);
+                    error!(
+                        "ancient_append_vec: creating initial ancient append vec: {}, size: {}, id: {}",
+                        slot,
+                        size,
+                        shrunken_store.append_vec_id(),
+                    );
+                    created_this_slot = true;
                     current_storage = Some((slot, shrunken_store));
                 }
                 let writer = current_storage.as_ref().unwrap();
@@ -3173,8 +3176,14 @@ impl AccountsDb {
                             self.dirty_stores
                                 .insert((slot, store.append_vec_id()), store.clone());
                             dead_storages.push(store.clone());
+                            if created_this_slot {
+                                error!("ancient_append_vec: NOT retaining store: {}, slot: {}", store.append_vec_id(), slot);
+                            }
                             false
                         } else {
+                            if created_this_slot {
+                                error!("ancient_append_vec: retaining store: {}, slot: {}", store.append_vec_id(), slot);
+                            }
                             true
                         }
                     });
@@ -3192,7 +3201,7 @@ impl AccountsDb {
         }
         if !dropped_roots.is_empty() {
             // todo: afterwards, we need to remove the roots sometime
-            error!("ancient_append_vec: dropping roots: {:?}", dropped_roots);
+            error!("ancient_append_vec: dropping roots: first {:?}, last {:?}, len {:?}, ", dropped_roots.first(), dropped_roots.last(), dropped_roots.len());
             dropped_roots.iter().for_each(|slot| {
                 self.accounts_index
                     .clean_dead_slot(*slot, &mut AccountsIndexRootsStats::default());
