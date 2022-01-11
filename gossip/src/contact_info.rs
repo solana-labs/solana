@@ -224,18 +224,18 @@ impl ContactInfo {
         Self::is_valid_tvu_address(addr) && socket_addr_space.check(addr)
     }
 
-    pub fn client_facing_addr(&self) -> (SocketAddr, SocketAddr) {
-        (self.rpc, self.tpu)
+    pub fn client_facing_addr(&self) -> (SocketAddr, SocketAddr, SocketAddr) {
+        (self.rpc, self.tpu, self.tpu_extended)
     }
 
     pub fn valid_client_facing_addr(
         &self,
         socket_addr_space: &SocketAddrSpace,
-    ) -> Option<(SocketAddr, SocketAddr)> {
+    ) -> Option<(SocketAddr, SocketAddr, SocketAddr)> {
         if ContactInfo::is_valid_address(&self.rpc, socket_addr_space)
             && ContactInfo::is_valid_address(&self.tpu, socket_addr_space)
         {
-            Some((self.rpc, self.tpu))
+            Some((self.rpc, self.tpu, self.tpu_extended))
         } else {
             None
         }

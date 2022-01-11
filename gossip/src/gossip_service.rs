@@ -228,6 +228,7 @@ pub fn get_multi_client(
         .collect();
     let rpc_addrs: Vec<_> = addrs.iter().map(|addr| addr.0).collect();
     let tpu_addrs: Vec<_> = addrs.iter().map(|addr| addr.1).collect();
+    let tpu_extended_addrs: Vec<_> = addrs.iter().map(|addr| addr.2).collect();
     let (_, transactions_socket) = solana_net_utils::bind_in_range(
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
         VALIDATOR_PORT_RANGE,
@@ -235,7 +236,7 @@ pub fn get_multi_client(
     .unwrap();
     let num_nodes = tpu_addrs.len();
     (
-        ThinClient::new_from_addrs(rpc_addrs, tpu_addrs, transactions_socket),
+        ThinClient::new_from_addrs(rpc_addrs, tpu_addrs, tpu_extended_addrs, transactions_socket),
         num_nodes,
     )
 }
