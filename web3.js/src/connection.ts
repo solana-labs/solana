@@ -3024,6 +3024,27 @@ export class Connection {
   }
 
   /**
+   * Fetch the fee for a message from the cluster, return with context
+   */
+  async getFeeForMessage(
+    message: Message,
+    commitment?: Commitment,
+  ): Promise<RpcResponseAndContext<number>> {
+    const wireMessage = message.serialize().toString('base64');
+    const args = this._buildArgs([wireMessage], commitment);
+    const unsafeRes = await this._rpcRequest('getFeeForMessage', args);
+
+    const res = create(unsafeRes, jsonRpcResultAndContext(nullable(number())));
+    if ('error' in res) {
+      throw new Error('failed to get slot: ' + res.error.message);
+    }
+    if (res.result === null) {
+      throw new Error('invalid blockhash');
+    }
+    return res.result as unknown as RpcResponseAndContext<number>;
+  }
+
+  /**
    * Fetch a recent blockhash from the cluster
    * @return {Promise<{blockhash: Blockhash, feeCalculator: FeeCalculator}>}
    */
