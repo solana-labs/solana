@@ -3060,6 +3060,7 @@ impl AccountsDb {
         let mut current_storage = None;
         let mut dropped_roots = vec![];
         let mut i = 0;
+        let len = sorted_slots.len();
         for slot in sorted_slots {
             i += 1;
             if let Some(storages) = self.storage.0.get(&slot) {
@@ -3089,14 +3090,11 @@ impl AccountsDb {
                 if current_storage.is_none() {
                     // our oldest slot is not an append vec of max size, so we need to start with rewriting that storage to create an ancient append vec for the oldest slot
                     error!(
-                        "ancient_append_vec: creating initial ancient append vec: {}",
-                        slot
+                        "ancient_append_vec: creating initial ancient append vec: {}, size: {}",
+                        slot,
+                        size
                     );
                     let (shrunken_store, _time) = self.get_store_for_shrink(slot, size);
-                    error!(
-                        "ancient_append_vec: got initial ancient append vec: {}",
-                        slot
-                    );
                     current_storage = Some((slot, shrunken_store));
                 }
                 let writer = current_storage.as_ref().unwrap();
@@ -3196,6 +3194,7 @@ impl AccountsDb {
                     .clean_dead_slot(*slot, &mut AccountsIndexRootsStats::default());
             });
         }
+        error!("ancient_append_vec: done. slots: {:?}", len);
     }
     /*
         fn write_accounts_to_ancient_append_vec(storage: &Arc<AccountStorageEntry>, )
