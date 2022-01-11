@@ -3662,13 +3662,8 @@ impl AccountsDb {
             self.read_index_for_accessor_or_load_slow(ancestors, pubkey, max_root, false)?;
         // Notice the subtle `?` at previous line, we bail out pretty early if missing.
 
-<<<<<<< HEAD
         if self.caching_enabled && store_id != CACHE_VIRTUAL_STORAGE_ID {
-            let result = self.read_only_accounts_cache.load(pubkey, slot);
-=======
-        if self.caching_enabled && !storage_location.is_cached() {
             let result = self.read_only_accounts_cache.load(*pubkey, slot);
->>>>>>> a49ef49f8 (optimizes ReadOnlyAccountsCache LRU eviction implementation (#22403))
             if let Some(account) = result {
                 return Some((account, slot));
             }

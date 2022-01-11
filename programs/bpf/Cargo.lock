@@ -3332,12 +3332,8 @@ dependencies = [
  "dir-diff",
  "flate2",
  "fnv",
-<<<<<<< HEAD
- "itertools 0.10.1",
-=======
  "index_list",
- "itertools 0.10.3",
->>>>>>> a49ef49f8 (optimizes ReadOnlyAccountsCache LRU eviction implementation (#22403))
+ "itertools 0.10.1",
  "lazy_static",
  "log",
  "memmap2 0.5.0",
