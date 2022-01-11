@@ -62,9 +62,9 @@ impl<'a> DuplicateInstructionAccounts<'a> {
         Ok(self.map.get(&index_in_transaction).and_then(|position| {
             if position + self.index_offset == index_in_instruction {
                 // The map entry corresponds to this account, hence not a duplicate.
-                return None;
+                None
             } else {
-                return Some(position);
+                Some(position)
             }
         }))
     }
