@@ -1132,7 +1132,7 @@ impl BankingStage {
                 let tx: Transaction = limited_deserialize(&p.data[0..p.meta.size]).ok()?;
                 tx.verify_precompiles(feature_set).ok()?;
 
-                Some((tx, *tx_index))
+                Some((tx, *tx_index, p.meta.is_simple_vote_tx))
             })
             .collect();
         banking_stage_stats.cost_tracker_check_count.fetch_add(
@@ -1144,18 +1144,18 @@ impl BankingStage {
         let filtered_transactions_with_packet_indexes: Vec<_> = {
             verified_transactions_with_packet_indexes
                 .into_iter()
-                .filter_map(|(tx, tx_index)| {
+                .filter_map(|(tx, tx_index, is_simple_vote_tx)| {
                     // put transaction into retry queue if it wouldn't fit
                     // into current bank
                     if read_cost_tracker
-                            .would_transaction_fit(
-                                &tx,
-                                &cost_model
-                                    .read()
-                                    .unwrap()
-                                    .calculate_cost(&tx, demote_program_write_locks),
-                            )
-                            .is_err()
+                        .would_transaction_fit(
+                            is_simple_vote_tx,
+                            &cost_model
+                                .read()
+                                .unwrap()
+                                .calculate_cost(&tx, demote_program_write_locks),
+                        )
+                        .is_err()
                     {
                         debug!("transaction {:?} would exceed limit", tx);
                         retryable_transaction_packet_indexes.push(tx_index);
@@ -1295,7 +1295,7 @@ impl BankingStage {
         transactions.iter().enumerate().for_each(|(index, tx)| {
             if unprocessed_tx_indexes.iter().all(|&i| i != index) {
                 bank.write_cost_tracker().unwrap().add_transaction_cost(
-                    tx.transaction(),
+                    tx.is_simple_vote_transaction(),
                     &cost_model
                         .read()
                         .unwrap()
