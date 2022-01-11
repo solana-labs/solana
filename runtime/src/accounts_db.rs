@@ -3051,17 +3051,20 @@ impl AccountsDb {
             .collect::<Vec<_>>();
         m.stop();
         old_slots.sort_unstable();
-        self.combine_ancient_slots(old_slots);
+        self.combine_ancient_slots(old_slots, max_root);
     }
 
     /// combine all these slots into ancient append vecs
-    fn combine_ancient_slots(&self, sorted_slots: Vec<Slot>) {
+    fn combine_ancient_slots(&self, sorted_slots: Vec<Slot>, max_root: Slot) {
         use crate::append_vec::MAXIMUM_APPEND_VEC_FILE_SIZE;
         let mut current_storage = None;
         let mut dropped_roots = vec![];
         let mut i = 0;
         let len = sorted_slots.len();
         for slot in sorted_slots {
+            if i == 0 {
+                error!("ancient_append_vec: combine_ancient_slots max_root: {}, first slot: {}, distance from max: {}", max_root, slot, max_root.saturating_sub(slot));
+            }
             i += 1;
             if let Some(storages) = self.storage.0.get(&slot) {
                 let mut dead_storages = Vec::default();
@@ -3124,8 +3127,8 @@ impl AccountsDb {
 
                 if i % 1000 == 0 {
                     error!(
-                    "ancient_append_vec: writing to ancient append vec: slot: {}, # accts: {}, available bytes after: {}",
-                    slot, accounts_this_append_vec.len(), available_bytes
+                    "ancient_append_vec: writing to ancient append vec: slot: {}, # accts: {}, available bytes after: {}, distance to max: {}",
+                    slot, accounts_this_append_vec.len(), available_bytes, max_root.saturating_sub(slot),
                 );
                 }
 
