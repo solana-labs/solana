@@ -2513,9 +2513,9 @@ dependencies = [
 
 [[package]]
 name = "memmap2"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e8b95e4fb3de48d767d3537f161168d3a7b0d4c5dfbe26431ea3acf98432675"
+checksum = "fe3179b85e1fd8b14447cbebadb75e45a1002f541b925f0bfec366d56a81c56d"
 dependencies = [
  "libc",
 ]
@@ -4584,7 +4584,7 @@ version = "1.10.0"
 dependencies = [
  "fs_extra",
  "log 0.4.14",
- "memmap2 0.5.1",
+ "memmap2 0.5.2",
  "rand 0.7.3",
  "rayon",
  "solana-logger 1.10.0",
@@ -4963,7 +4963,7 @@ dependencies = [
  "bv",
  "generic-array 0.14.5",
  "log 0.4.14",
- "memmap2 0.5.1",
+ "memmap2 0.5.2",
  "rustc_version 0.4.0",
  "serde",
  "serde_derive",
@@ -5714,7 +5714,7 @@ dependencies = [
  "lazy_static",
  "libsecp256k1 0.6.0",
  "log 0.4.14",
- "memmap2 0.5.1",
+ "memmap2 0.5.2",
  "num-derive",
  "num-traits",
  "num_cpus",
@@ -5774,7 +5774,7 @@ dependencies = [
  "lazy_static",
  "libsecp256k1 0.6.0",
  "log 0.4.14",
- "memmap2 0.5.1",
+ "memmap2 0.5.2",
  "num-derive",
  "num-traits",
  "pbkdf2 0.10.0",
