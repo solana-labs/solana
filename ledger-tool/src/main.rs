@@ -31,6 +31,7 @@ use {
         cost_model::CostModel,
         cost_tracker::CostTracker,
         hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+        hashed_transaction::HashedTransaction,
         snapshot_utils::{self, SnapshotVersion, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
     },
     solana_sdk::{
@@ -755,7 +756,9 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
         for transaction in &entry.transactions {
             programs += transaction.message().instructions.len();
             let tx_cost = cost_model.calculate_cost(transaction, true);
-            let result = cost_tracker.try_add(transaction, &tx_cost);
+            let hashed_transaction = HashedTransaction::from(transaction);
+            let result =
+                cost_tracker.try_add(hashed_transaction.is_simple_vote_transaction(), &tx_cost);
             if result.is_err() {
                 println!(
                     "Slot: {}, CostModel rejected transaction {:?}, reason {:?}",
