@@ -19,6 +19,7 @@ bzip2 = "0.4.3"
 dashmap = { version = "5.0.0", features = ["rayon", "raw-api"] }
 crossbeam-channel = "0.5"
 dir-diff = "0.3.2"
+enum-iterator = "0.7.0"
 flate2 = "1.0.22"
 fnv = "1.0.7"
 index_list = "0.2.7"

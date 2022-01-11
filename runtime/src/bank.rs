@@ -160,6 +160,8 @@ use {
     },
 };
 
+mod transaction_account_state_info;
+
 pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
@@ -214,7 +216,7 @@ impl RentDebits {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "2r36f5cfgP7ABq7D3kRkRfQZWdggGFUnnhwTrVEWhoTC")]
+#[frozen_abi(digest = "Gr2MTwWyUdkbF6FxM6TSwGaC3c5buUirHmh64oAPgg7Z")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 // Eager rent collection repeats in cyclic manner.
@@ -3697,6 +3699,9 @@ impl Bank {
             compute_budget.max_invoke_depth.saturating_add(1),
         );
 
+        let pre_account_state_info =
+            self.get_transaction_account_state_info(&transaction_context, tx.message());
+
         let instruction_recorder = if enable_cpi_recording {
             Some(InstructionRecorder::new_ref(
                 tx.message().instructions().len(),
@@ -3746,11 +3751,28 @@ impl Bank {
         );
 
         let status = process_result
+            .and_then(|info| {
+                let post_account_state_info =
+                    self.get_transaction_account_state_info(&transaction_context, tx.message());
+                self.verify_transaction_account_state_changes(
+                    &pre_account_state_info,
+                    &post_account_state_info,
+                    &transaction_context,
+                )
+                .map(|_| info)
+            })
             .map(|info| {
                 self.store_accounts_data_len(info.accounts_data_len);
             })
             .map_err(|err| {
-                error_counters.instruction_error += 1;
+                match err {
+                    TransactionError::InvalidRentPayingAccount => {
+                        error_counters.invalid_rent_paying_account += 1;
+                    }
+                    _ => {
+                        error_counters.instruction_error += 1;
+                    }
+                }
                 err
             });
 
@@ -6254,7 +6276,7 @@ impl Bank {
                         // Adjust capitalization.... it has been wrapping, reducing the real capitalization by 1-lamport
                         self.capitalization.fetch_add(1, Relaxed);
                         info!(
-                            "purged rewards pool accont: {}, new capitalization: {}",
+                            "purged rewards pool account: {}, new capitalization: {}",
                             reward_pubkey,
                             self.capitalization()
                         );
@@ -7085,6 +7107,12 @@ pub(crate) mod tests {
             bootstrap_validator_stake_lamports,
         )
         .genesis_config;
+        // While we are preventing new accounts left in a rent-paying state, not quite ready to rip
+        // out all the rent assessment tests. Just deactivate the feature for now.
+        genesis_config
+            .accounts
+            .remove(&feature_set::require_rent_exempt_accounts::id())
+            .unwrap();
 
         genesis_config.epoch_schedule = EpochSchedule::custom(
             MINIMUM_SLOTS_PER_EPOCH,
@@ -15525,5 +15553,283 @@ pub(crate) mod tests {
             CachedExecutors::get_primer_count_upper_bound_inclusive(v.as_slice()),
             7
         );
+    }
+
+    #[derive(Serialize, Deserialize)]
+    enum MockTransferInstruction {
+        Transfer(u64),
+    }
+
+    fn mock_transfer_process_instruction(
+        _first_instruction_account: usize,
+        data: &[u8],
+        invoke_context: &mut InvokeContext,
+    ) -> result::Result<(), InstructionError> {
+        let transaction_context = &invoke_context.transaction_context;
+        let instruction_context = transaction_context.get_current_instruction_context()?;
+        if let Ok(instruction) = bincode::deserialize(data) {
+            match instruction {
+                MockTransferInstruction::Transfer(amount) => {
+                    instruction_context
+                        .try_borrow_instruction_account(transaction_context, 1)?
+                        .checked_sub_lamports(amount)?;
+                    instruction_context
+                        .try_borrow_instruction_account(transaction_context, 2)?
+                        .checked_add_lamports(amount)?;
+                    Ok(())
+                }
+            }
+        } else {
+            Err(InstructionError::InvalidInstructionData)
+        }
+    }
+
+    fn create_mock_transfer(
+        payer: &Keypair,
+        from: &Keypair,
+        to: &Keypair,
+        amount: u64,
+        mock_program_id: Pubkey,
+        recent_blockhash: Hash,
+    ) -> Transaction {
+        let account_metas = vec![
+            AccountMeta::new(payer.pubkey(), true),
+            AccountMeta::new(from.pubkey(), true),
+            AccountMeta::new(to.pubkey(), true),
+        ];
+        let transfer_instruction = Instruction::new_with_bincode(
+            mock_program_id,
+            &MockTransferInstruction::Transfer(amount),
+            account_metas,
+        );
+        Transaction::new_signed_with_payer(
+            &[transfer_instruction],
+            Some(&payer.pubkey()),
+            &[payer, from, to],
+            recent_blockhash,
+        )
+    }
+
+    #[test]
+    fn test_invalid_rent_state_changes_existing_accounts() {
+        let GenesisConfigInfo {
+            mut genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config_with_leader(sol_to_lamports(100.), &Pubkey::new_unique(), 42);
+        genesis_config.rent = Rent::default();
+
+        let mock_program_id = Pubkey::new_unique();
+        let account_data_size = 100;
+        let rent_exempt_minimum = genesis_config.rent.minimum_balance(account_data_size);
+
+        // Create legacy accounts of various kinds
+        let rent_paying_account = Keypair::new();
+        genesis_config.accounts.insert(
+            rent_paying_account.pubkey(),
+            Account::new(rent_exempt_minimum - 1, account_data_size, &mock_program_id),
+        );
+        let rent_exempt_account = Keypair::new();
+        genesis_config.accounts.insert(
+            rent_exempt_account.pubkey(),
+            Account::new(rent_exempt_minimum, account_data_size, &mock_program_id),
+        );
+        // Activate features, including require_rent_exempt_accounts
+        activate_all_features(&mut genesis_config);
+
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.add_builtin(
+            "mock_program",
+            &mock_program_id,
+            mock_transfer_process_instruction,
+        );
+        let recent_blockhash = bank.last_blockhash();
+
+        let check_account_is_rent_exempt = |pubkey: &Pubkey| -> bool {
+            let account = bank.get_account(pubkey).unwrap();
+            Rent::default().is_exempt(account.lamports(), account.data().len())
+        };
+
+        // RentPaying account can be left as Uninitialized, in other RentPaying states, or RentExempt
+        let tx = create_mock_transfer(
+            &mint_keypair,        // payer
+            &rent_paying_account, // from
+            &mint_keypair,        // to
+            1,
+            mock_program_id,
+            recent_blockhash,
+        );
+        let result = bank.process_transaction(&tx);
+        assert!(result.is_ok());
+        assert!(!check_account_is_rent_exempt(&rent_paying_account.pubkey()));
+        let tx = create_mock_transfer(
+            &mint_keypair,        // payer
+            &rent_paying_account, // from
+            &mint_keypair,        // to
+            rent_exempt_minimum - 2,
+            mock_program_id,
+            recent_blockhash,
+        );
+        let result = bank.process_transaction(&tx);
+        assert!(result.is_ok());
+        assert!(bank.get_account(&rent_paying_account.pubkey()).is_none());
+
+        bank.store_account(
+            // restore program-owned account
+            &rent_paying_account.pubkey(),
+            &AccountSharedData::new(rent_exempt_minimum - 1, account_data_size, &mock_program_id),
+        );
+        let result = bank.transfer(1, &mint_keypair, &rent_paying_account.pubkey());
+        assert!(result.is_ok());
+        assert!(check_account_is_rent_exempt(&rent_paying_account.pubkey()));
+
+        // RentExempt account can only remain RentExempt or be Uninitialized
+        let tx = create_mock_transfer(
+            &mint_keypair,        // payer
+            &rent_exempt_account, // from
+            &mint_keypair,        // to
+            1,
+            mock_program_id,
+            recent_blockhash,
+        );
+        let result = bank.process_transaction(&tx);
+        assert!(result.is_err());
+        assert!(check_account_is_rent_exempt(&rent_exempt_account.pubkey()));
+        let result = bank.transfer(1, &mint_keypair, &rent_exempt_account.pubkey());
+        assert!(result.is_ok());
+        assert!(check_account_is_rent_exempt(&rent_exempt_account.pubkey()));
+        let tx = create_mock_transfer(
+            &mint_keypair,        // payer
+            &rent_exempt_account, // from
+            &mint_keypair,        // to
+            rent_exempt_minimum + 1,
+            mock_program_id,
+            recent_blockhash,
+        );
+        let result = bank.process_transaction(&tx);
+        assert!(result.is_ok());
+        assert!(bank.get_account(&rent_exempt_account.pubkey()).is_none());
+    }
+
+    #[test]
+    fn test_invalid_rent_state_changes_new_accounts() {
+        let GenesisConfigInfo {
+            mut genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config_with_leader(sol_to_lamports(100.), &Pubkey::new_unique(), 42);
+        genesis_config.rent = Rent::default();
+
+        let mock_program_id = Pubkey::new_unique();
+        let account_data_size = 100;
+        let rent_exempt_minimum = genesis_config.rent.minimum_balance(account_data_size);
+
+        // Activate features, including require_rent_exempt_accounts
+        activate_all_features(&mut genesis_config);
+
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.add_builtin(
+            "mock_program",
+            &mock_program_id,
+            mock_transfer_process_instruction,
+        );
+        let recent_blockhash = bank.last_blockhash();
+
+        let check_account_is_rent_exempt = |pubkey: &Pubkey| -> bool {
+            let account = bank.get_account(pubkey).unwrap();
+            Rent::default().is_exempt(account.lamports(), account.data().len())
+        };
+
+        // Try to create RentPaying account
+        let rent_paying_account = Keypair::new();
+        let tx = system_transaction::create_account(
+            &mint_keypair,
+            &rent_paying_account,
+            recent_blockhash,
+            rent_exempt_minimum - 1,
+            account_data_size as u64,
+            &mock_program_id,
+        );
+        let result = bank.process_transaction(&tx);
+        assert!(result.is_err());
+        assert!(bank.get_account(&rent_paying_account.pubkey()).is_none());
+
+        // Try to create RentExempt account
+        let rent_exempt_account = Keypair::new();
+        let tx = system_transaction::create_account(
+            &mint_keypair,
+            &rent_exempt_account,
+            recent_blockhash,
+            rent_exempt_minimum,
+            account_data_size as u64,
+            &mock_program_id,
+        );
+        let result = bank.process_transaction(&tx);
+        assert!(result.is_ok());
+        assert!(check_account_is_rent_exempt(&rent_exempt_account.pubkey()));
+    }
+
+    #[test]
+    fn test_rent_state_changes_sysvars() {
+        let GenesisConfigInfo {
+            mut genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config_with_leader(sol_to_lamports(100.), &Pubkey::new_unique(), 42);
+        genesis_config.rent = Rent::default();
+        // Activate features, including require_rent_exempt_accounts
+        activate_all_features(&mut genesis_config);
+
+        let validator_pubkey = solana_sdk::pubkey::new_rand();
+        let validator_stake_lamports = sol_to_lamports(1.);
+        let validator_staking_keypair = Keypair::new();
+        let validator_voting_keypair = Keypair::new();
+
+        let validator_vote_account = vote_state::create_account(
+            &validator_voting_keypair.pubkey(),
+            &validator_pubkey,
+            0,
+            validator_stake_lamports,
+        );
+
+        let validator_stake_account = stake_state::create_account(
+            &validator_staking_keypair.pubkey(),
+            &validator_voting_keypair.pubkey(),
+            &validator_vote_account,
+            &genesis_config.rent,
+            validator_stake_lamports,
+        );
+
+        genesis_config.accounts.insert(
+            validator_pubkey,
+            Account::new(
+                genesis_config.rent.minimum_balance(0),
+                0,
+                &system_program::id(),
+            ),
+        );
+        genesis_config.accounts.insert(
+            validator_staking_keypair.pubkey(),
+            Account::from(validator_stake_account),
+        );
+        genesis_config.accounts.insert(
+            validator_voting_keypair.pubkey(),
+            Account::from(validator_vote_account),
+        );
+
+        let bank = Bank::new_for_tests(&genesis_config);
+
+        // Ensure transactions with sysvars succeed, even though sysvars appear RentPaying by balance
+        let tx = Transaction::new_signed_with_payer(
+            &[stake_instruction::deactivate_stake(
+                &validator_staking_keypair.pubkey(),
+                &validator_staking_keypair.pubkey(),
+            )],
+            Some(&mint_keypair.pubkey()),
+            &[&mint_keypair, &validator_staking_keypair],
+            bank.last_blockhash(),
+        );
+        let result = bank.process_transaction(&tx);
+        assert!(result.is_ok());
     }
 }

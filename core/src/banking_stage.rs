@@ -2425,30 +2425,47 @@ mod tests {
     fn test_write_persist_transaction_status() {
         solana_logger::setup();
         let GenesisConfigInfo {
-            genesis_config,
+            mut genesis_config,
             mint_keypair,
             ..
-        } = create_slow_genesis_config(10_000);
+        } = create_slow_genesis_config(solana_sdk::native_token::sol_to_lamports(1000.0));
+        genesis_config.rent.lamports_per_byte_year = 50;
+        genesis_config.rent.exemption_threshold = 2.0;
         let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
         let pubkey = solana_sdk::pubkey::new_rand();
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let keypair1 = Keypair::new();
 
-        let success_tx =
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash());
+        let rent_exempt_amount = bank.get_minimum_balance_for_rent_exemption(0);
+
+        let success_tx = system_transaction::transfer(
+            &mint_keypair,
+            &pubkey,
+            rent_exempt_amount,
+            genesis_config.hash(),
+        );
         let success_signature = success_tx.signatures[0];
         let entry_1 = next_entry(&genesis_config.hash(), 1, vec![success_tx.clone()]);
-        let ix_error_tx =
-            system_transaction::transfer(&keypair1, &pubkey1, 10, genesis_config.hash());
+        let ix_error_tx = system_transaction::transfer(
+            &keypair1,
+            &pubkey1,
+            2 * rent_exempt_amount,
+            genesis_config.hash(),
+        );
         let ix_error_signature = ix_error_tx.signatures[0];
         let entry_2 = next_entry(&entry_1.hash, 1, vec![ix_error_tx.clone()]);
-        let fail_tx =
-            system_transaction::transfer(&mint_keypair, &pubkey1, 1, genesis_config.hash());
+        let fail_tx = system_transaction::transfer(
+            &mint_keypair,
+            &pubkey1,
+            rent_exempt_amount,
+            genesis_config.hash(),
+        );
         let entry_3 = next_entry(&entry_2.hash, 1, vec![fail_tx.clone()]);
         let entries = vec![entry_1, entry_2, entry_3];
 
         let transactions = sanitize_transactions(vec![success_tx, ix_error_tx, fail_tx]);
-        bank.transfer(4, &mint_keypair, &keypair1.pubkey()).unwrap();
+        bank.transfer(rent_exempt_amount, &mint_keypair, &keypair1.pubkey())
+            .unwrap();
 
         let ledger_path = get_tmp_ledger_path!();
         {
