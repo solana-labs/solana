@@ -5648,6 +5648,7 @@ dependencies = [
  "dashmap",
  "dir-diff",
  "ed25519-dalek",
+ "enum-iterator",
  "flate2",
  "fnv",
  "itertools 0.10.1",

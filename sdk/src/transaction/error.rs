@@ -125,6 +125,12 @@ pub enum TransactionError {
     /// Address table lookup uses an invalid index
     #[error("Transaction address table lookup uses an invalid index")]
     InvalidAddressLookupTableIndex,
+
+    /// Transaction leaves an account with a lower balance than rent-exempt minimum
+    #[error(
+        "Transaction leaves an account with data with a lower balance than rent-exempt minimum"
+    )]
+    InvalidRentPayingAccount,
 }
 
 impl From<SanitizeError> for TransactionError {

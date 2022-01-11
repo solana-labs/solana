@@ -19,6 +19,7 @@ use {
         commitment_config::CommitmentConfig,
         hash::Hash,
         pubkey::Pubkey,
+        rent::Rent,
         signature::{Keypair, Signer},
         system_transaction,
         transaction::Transaction,
@@ -79,7 +80,12 @@ fn test_rpc_send_tx() {
         .unwrap();
 
     info!("blockhash: {:?}", blockhash);
-    let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash);
+    let tx = system_transaction::transfer(
+        &alice,
+        &bob_pubkey,
+        Rent::default().minimum_balance(0),
+        blockhash,
+    );
     let serialized_encoded_tx = bs58::encode(serialize(&tx).unwrap()).into_string();
 
     let req = json_req!("sendTransaction", json!([serialized_encoded_tx]));
@@ -242,7 +248,7 @@ fn test_rpc_subscriptions() {
             system_transaction::transfer(
                 &alice,
                 &solana_sdk::pubkey::new_rand(),
-                1,
+                Rent::default().minimum_balance(0),
                 recent_blockhash,
             )
         })
@@ -380,7 +386,7 @@ fn test_rpc_subscriptions() {
         let timeout = deadline.saturating_duration_since(Instant::now());
         match account_receiver.recv_timeout(timeout) {
             Ok(result) => {
-                assert_eq!(result.value.lamports, 1);
+                assert_eq!(result.value.lamports, Rent::default().minimum_balance(0));
                 account_notifications -= 1;
             }
             Err(_err) => {

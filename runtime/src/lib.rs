@@ -1,5 +1,10 @@
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(min_specialization))]
 #![allow(clippy::integer_arithmetic)]
+<<<<<<< HEAD
+=======
+pub mod account_info;
+pub mod account_rent_state;
+>>>>>>> 637e366b1 (Prevent rent-paying account creation (#22292))
 pub mod accounts;
 pub mod accounts_background_service;
 pub mod accounts_cache;

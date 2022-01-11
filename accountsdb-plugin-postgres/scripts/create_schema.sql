@@ -54,7 +54,8 @@ Create TYPE "TransactionErrorCode" AS ENUM (
     'AddressLookupTableNotFound',
     'InvalidAddressLookupTableOwner',
     'InvalidAddressLookupTableData',
-    'InvalidAddressLookupTableIndex'
+    'InvalidAddressLookupTableIndex',
+    'InvalidRentPayingAccount'
 );
 
 CREATE TYPE "TransactionError" AS (
