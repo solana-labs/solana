@@ -3061,6 +3061,7 @@ impl AccountsDb {
         let mut dropped_roots = vec![];
         let mut i = 0;
         let len = sorted_slots.len();
+        let mut t = Measure::start("");
         for slot in sorted_slots {
             if i == 0 {
                 error!("ancient_append_vec: combine_ancient_slots max_root: {}, first slot: {}, distance from max: {}", max_root, slot, max_root.saturating_sub(slot));
@@ -3197,7 +3198,8 @@ impl AccountsDb {
                     .clean_dead_slot(*slot, &mut AccountsIndexRootsStats::default());
             });
         }
-        error!("ancient_append_vec: done. slots: {:?}", len);
+        t.stop();
+        error!("ancient_append_vec: done. slots: {:?}, time(ms): {}", len, t.as_ms());
     }
     /*
         fn write_accounts_to_ancient_append_vec(storage: &Arc<AccountStorageEntry>, )
