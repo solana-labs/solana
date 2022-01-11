@@ -218,6 +218,7 @@ pub struct ErrorCounters {
     pub invalid_program_for_execution: usize,
     pub not_allowed_during_cluster_maintenance: usize,
     pub invalid_writable_account: usize,
+    pub invalid_rent_paying_account: usize,
 }
 
 #[derive(Debug, Default, Clone, Copy)]
