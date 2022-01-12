@@ -400,6 +400,13 @@ mod tests {
     use {
         super::*,
         bincode::serialize,
+<<<<<<< HEAD
+=======
+        solana_program_runtime::{
+            invoke_context::{mock_process_instruction, mock_process_instruction_with_sysvars},
+            sysvar_cache::SysvarCache,
+        },
+>>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
         solana_sdk::{
             account::{self, Account, AccountSharedData},
             process_instruction::{mock_set_sysvar, MockInvokeContext},
@@ -450,6 +457,7 @@ mod tests {
                 })
             })
             .collect();
+<<<<<<< HEAD
 
         for _ in 0..instruction.accounts.len() {
             accounts.push(RefCell::new(AccountSharedData::default()));
@@ -470,6 +478,28 @@ mod tests {
             .unwrap();
             super::process_instruction(&Pubkey::default(), &instruction.data, &mut invoke_context)
         }
+=======
+        let mut sysvar_cache = SysvarCache::default();
+        let rent = Rent::default();
+        sysvar_cache.push_entry(sysvar::rent::id(), bincode::serialize(&rent).unwrap());
+        let clock = Clock::default();
+        sysvar_cache.push_entry(sysvar::clock::id(), bincode::serialize(&clock).unwrap());
+        let slot_hashes = SlotHashes::default();
+        sysvar_cache.push_entry(
+            sysvar::slot_hashes::id(),
+            bincode::serialize(&slot_hashes).unwrap(),
+        );
+        mock_process_instruction_with_sysvars(
+            &id(),
+            Vec::new(),
+            &instruction.data,
+            transaction_accounts,
+            instruction.accounts.clone(),
+            expected_result,
+            &sysvar_cache,
+            super::process_instruction,
+        )
+>>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
     }
 
     fn invalid_vote_state_pubkey() -> Pubkey {

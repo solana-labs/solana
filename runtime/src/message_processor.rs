@@ -7,6 +7,7 @@ use {
     log::*,
     serde::{Deserialize, Serialize},
     solana_measure::measure::Measure,
+<<<<<<< HEAD
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
@@ -26,17 +27,37 @@ use {
             Logger, ProcessInstructionWithContext,
         },
         pubkey::Pubkey,
+=======
+    solana_program_runtime::{
+        instruction_recorder::InstructionRecorder,
+        invoke_context::{BuiltinProgram, Executors, InvokeContext},
+        log_collector::LogCollector,
+        sysvar_cache::SysvarCache,
+        timings::ExecuteTimings,
+    },
+    solana_sdk::{
+        account::WritableAccount,
+        compute_budget::ComputeBudget,
+        feature_set::{prevent_calling_precompiles_as_programs, FeatureSet},
+        hash::Hash,
+        message::SanitizedMessage,
+        precompiles::is_precompile,
+>>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
         rent::Rent,
         system_program,
         sysvar::instructions,
         transaction::TransactionError,
     },
+<<<<<<< HEAD
     std::{
         cell::{Ref, RefCell},
         collections::HashMap,
         rc::Rc,
         sync::Arc,
     },
+=======
+    std::{borrow::Cow, cell::RefCell, rc::Rc, sync::Arc},
+>>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
 };
 
 pub type Executors = HashMap<Pubkey, TransactionExecutor>;
@@ -1303,6 +1324,7 @@ impl MessageProcessor {
         instruction_recorder: Option<InstructionRecorder>,
         instruction_index: usize,
         feature_set: Arc<FeatureSet>,
+<<<<<<< HEAD
         bpf_compute_budget: BpfComputeBudget,
         compute_meter: Rc<RefCell<dyn ComputeMeter>>,
         timings: &mut ExecuteDetailsTimings,
@@ -1349,6 +1371,20 @@ impl MessageProcessor {
             executable_accounts,
             accounts,
             &self.programs,
+=======
+        compute_budget: ComputeBudget,
+        timings: &mut ExecuteTimings,
+        sysvar_cache: &SysvarCache,
+        blockhash: Hash,
+        lamports_per_signature: u64,
+        current_accounts_data_len: u64,
+    ) -> Result<ProcessedMessageInfo, TransactionError> {
+        let mut invoke_context = InvokeContext::new(
+            transaction_context,
+            rent,
+            builtin_programs,
+            Cow::Borrowed(sysvar_cache),
+>>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
             log_collector,
             bpf_compute_budget,
             compute_meter,
@@ -1453,8 +1489,15 @@ mod tests {
             account::{AccountSharedData, ReadableAccount},
             instruction::{AccountMeta, Instruction, InstructionError},
             message::Message,
+<<<<<<< HEAD
             native_loader::create_loadable_account_for_test,
             process_instruction::MockComputeMeter,
+=======
+            native_loader::{self, create_loadable_account_for_test},
+            pubkey::Pubkey,
+            secp256k1_instruction::new_secp256k1_instruction,
+            secp256k1_program,
+>>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
         },
     };
 
@@ -2104,7 +2147,44 @@ mod tests {
                 &MockSystemInstruction::Correct,
                 account_metas.clone(),
             )],
+<<<<<<< HEAD
             Some(&accounts[0].0),
+=======
+            Some(transaction_context.get_key_of_account_at_index(0)),
+        ));
+        let sysvar_cache = SysvarCache::default();
+        let result = MessageProcessor::process_message(
+            builtin_programs,
+            &message,
+            &program_indices,
+            &mut transaction_context,
+            rent_collector.rent,
+            None,
+            executors.clone(),
+            None,
+            Arc::new(FeatureSet::all_enabled()),
+            ComputeBudget::new(),
+            &mut ExecuteTimings::default(),
+            &sysvar_cache,
+            Hash::default(),
+            0,
+            0,
+        );
+        assert!(result.is_ok());
+        assert_eq!(
+            transaction_context
+                .get_account_at_index(0)
+                .borrow()
+                .lamports(),
+            100
+        );
+        assert_eq!(
+            transaction_context
+                .get_account_at_index(1)
+                .borrow()
+                .lamports(),
+            0
+>>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
         );
 
         let result = message_processor.process_message(
@@ -2116,6 +2196,7 @@ mod tests {
             executors.clone(),
             None,
             Arc::new(FeatureSet::all_enabled()),
+<<<<<<< HEAD
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             &mut ExecuteDetailsTimings::default(),
@@ -2149,6 +2230,14 @@ mod tests {
             &mut ExecuteDetailsTimings::default(),
             Arc::new(Accounts::default()),
             &ancestors,
+=======
+            ComputeBudget::new(),
+            &mut ExecuteTimings::default(),
+            &sysvar_cache,
+            Hash::default(),
+            0,
+            0,
+>>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
         );
         assert_eq!(
             result,
@@ -2176,11 +2265,20 @@ mod tests {
             executors,
             None,
             Arc::new(FeatureSet::all_enabled()),
+<<<<<<< HEAD
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             &mut ExecuteDetailsTimings::default(),
             Arc::new(Accounts::default()),
             &ancestors,
+=======
+            ComputeBudget::new(),
+            &mut ExecuteTimings::default(),
+            &sysvar_cache,
+            Hash::default(),
+            0,
+            0,
+>>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
         );
         assert_eq!(
             result,
@@ -2289,9 +2387,17 @@ mod tests {
                 &MockSystemInstruction::BorrowFail,
                 account_metas.clone(),
             )],
+<<<<<<< HEAD
             Some(&accounts[0].0),
         );
         let result = message_processor.process_message(
+=======
+            Some(transaction_context.get_key_of_account_at_index(0)),
+        ));
+        let sysvar_cache = SysvarCache::default();
+        let result = MessageProcessor::process_message(
+            builtin_programs,
+>>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
             &message,
             &loaders,
             &accounts,
@@ -2300,11 +2406,20 @@ mod tests {
             executors.clone(),
             None,
             Arc::new(FeatureSet::all_enabled()),
+<<<<<<< HEAD
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             &mut ExecuteDetailsTimings::default(),
             Arc::new(Accounts::default()),
             &ancestors,
+=======
+            ComputeBudget::new(),
+            &mut ExecuteTimings::default(),
+            &sysvar_cache,
+            Hash::default(),
+            0,
+            0,
+>>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
         );
         assert_eq!(
             result,
@@ -2332,11 +2447,20 @@ mod tests {
             executors.clone(),
             None,
             Arc::new(FeatureSet::all_enabled()),
+<<<<<<< HEAD
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             &mut ExecuteDetailsTimings::default(),
             Arc::new(Accounts::default()),
             &ancestors,
+=======
+            ComputeBudget::new(),
+            &mut ExecuteTimings::default(),
+            &sysvar_cache,
+            Hash::default(),
+            0,
+            0,
+>>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
         );
         assert_eq!(result, Ok(()));
 
@@ -2362,11 +2486,39 @@ mod tests {
             executors,
             None,
             Arc::new(FeatureSet::all_enabled()),
+<<<<<<< HEAD
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             &mut ExecuteDetailsTimings::default(),
             Arc::new(Accounts::default()),
             &ancestors,
+=======
+            ComputeBudget::new(),
+            &mut ExecuteTimings::default(),
+            &sysvar_cache,
+            Hash::default(),
+            0,
+            0,
+        );
+        assert!(result.is_ok());
+        assert_eq!(
+            transaction_context
+                .get_account_at_index(0)
+                .borrow()
+                .lamports(),
+            80
+        );
+        assert_eq!(
+            transaction_context
+                .get_account_at_index(1)
+                .borrow()
+                .lamports(),
+            20
+        );
+        assert_eq!(
+            transaction_context.get_account_at_index(0).borrow().data(),
+            &vec![42]
+>>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].1.borrow().lamports(), 80);
@@ -2448,6 +2600,7 @@ mod tests {
             (callee_program_id, Rc::new(RefCell::new(program_account))),
         ];
 
+<<<<<<< HEAD
         let programs: Vec<(_, ProcessInstructionWithContext)> =
             vec![(callee_program_id, mock_process_instruction)];
         let metas = vec![
@@ -2471,6 +2624,21 @@ mod tests {
         let mut invoke_context = ThisInvokeContext::new(
             &caller_program_id,
             Rent::default(),
+=======
+        let message = SanitizedMessage::Legacy(Message::new(
+            &[
+                new_secp256k1_instruction(
+                    &libsecp256k1::SecretKey::random(&mut rand::thread_rng()),
+                    b"hello",
+                ),
+                Instruction::new_with_bytes(mock_program_id, &[], vec![]),
+            ],
+            None,
+        ));
+        let sysvar_cache = SysvarCache::default();
+        let result = MessageProcessor::process_message(
+            builtin_programs,
+>>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
             &message,
             &caller_instruction,
             &executable_accounts,
@@ -2706,8 +2874,17 @@ mod tests {
             Rc::new(RefCell::new(Executors::default())),
             None,
             Arc::new(FeatureSet::all_enabled()),
+<<<<<<< HEAD
             Arc::new(Accounts::default()),
             &ancestors,
+=======
+            ComputeBudget::new(),
+            &mut ExecuteTimings::default(),
+            &sysvar_cache,
+            Hash::default(),
+            0,
+            0,
+>>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
         );
 
         // not owned account modified by the invoker

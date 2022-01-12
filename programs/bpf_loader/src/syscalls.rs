@@ -2766,6 +2766,10 @@ impl<'a> SyscallObject<BpfError> for SyscallLogData<'a> {
 mod tests {
     use {
         super::*,
+<<<<<<< HEAD
+=======
+        solana_program_runtime::{invoke_context::InvokeContext, sysvar_cache::SysvarCache},
+>>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
         solana_rbpf::{
             ebpf::HOST_ALIGN, memory_region::MemoryRegion, user_error::UserError, vm::Config,
         },
@@ -2775,7 +2779,7 @@ mod tests {
             hash::hashv,
             process_instruction::{MockComputeMeter, MockInvokeContext, MockLogger},
         },
-        std::str::FromStr,
+        std::{borrow::Cow, str::FromStr},
     };
 
     macro_rules! assert_access_violation {
@@ -3620,6 +3624,52 @@ mod tests {
     #[test]
     fn test_syscall_get_sysvar() {
         let config = Config::default();
+<<<<<<< HEAD
+=======
+        let src_clock = Clock {
+            slot: 1,
+            epoch_start_timestamp: 2,
+            epoch: 3,
+            leader_schedule_epoch: 4,
+            unix_timestamp: 5,
+        };
+        let src_epochschedule = EpochSchedule {
+            slots_per_epoch: 1,
+            leader_schedule_slot_offset: 2,
+            warmup: false,
+            first_normal_epoch: 3,
+            first_normal_slot: 4,
+        };
+        let src_fees = Fees {
+            fee_calculator: FeeCalculator {
+                lamports_per_signature: 1,
+            },
+        };
+        let src_rent = Rent {
+            lamports_per_byte_year: 1,
+            exemption_threshold: 2.0,
+            burn_percent: 3,
+        };
+
+        let mut sysvar_cache = SysvarCache::default();
+        sysvar_cache.push_entry(sysvar::clock::id(), bincode::serialize(&src_clock).unwrap());
+        sysvar_cache.push_entry(
+            sysvar::epoch_schedule::id(),
+            bincode::serialize(&src_epochschedule).unwrap(),
+        );
+        sysvar_cache.push_entry(sysvar::fees::id(), bincode::serialize(&src_fees).unwrap());
+        sysvar_cache.push_entry(sysvar::rent::id(), bincode::serialize(&src_rent).unwrap());
+
+        let program_id = Pubkey::new_unique();
+        let mut transaction_context = TransactionContext::new(
+            vec![(program_id, AccountSharedData::new(0, 0, &bpf_loader::id()))],
+            1,
+        );
+        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+        invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
+        invoke_context.push(&[], &[0], &[]).unwrap();
+
+>>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
         // Test clock sysvar
         {
             let got_clock = Clock::default();

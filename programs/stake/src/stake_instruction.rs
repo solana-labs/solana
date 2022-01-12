@@ -277,6 +277,13 @@ mod tests {
         super::*,
         crate::stake_state::{Meta, StakeState},
         bincode::serialize,
+<<<<<<< HEAD
+=======
+        solana_program_runtime::{
+            invoke_context::{mock_process_instruction, mock_process_instruction_with_sysvars},
+            sysvar_cache::SysvarCache,
+        },
+>>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
         solana_sdk::{
             account::{self, Account, AccountSharedData, WritableAccount},
             instruction::{AccountMeta, Instruction},
@@ -360,6 +367,7 @@ mod tests {
                 })
             })
             .collect();
+<<<<<<< HEAD
 
         {
             let keyed_accounts: Vec<_> = instruction
@@ -378,6 +386,21 @@ mod tests {
             .unwrap();
             super::process_instruction(&Pubkey::default(), &instruction.data, &mut invoke_context)
         }
+=======
+        let mut sysvar_cache = SysvarCache::default();
+        let clock = Clock::default();
+        sysvar_cache.push_entry(sysvar::clock::id(), bincode::serialize(&clock).unwrap());
+        mock_process_instruction_with_sysvars(
+            &id(),
+            Vec::new(),
+            &instruction.data,
+            transaction_accounts,
+            instruction.accounts.clone(),
+            expected_result,
+            &sysvar_cache,
+            super::process_instruction,
+        )
+>>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
     }
 
     #[test]
@@ -1031,6 +1054,7 @@ mod tests {
         .unwrap();
         let custodian_account = create_default_account();
 
+<<<<<<< HEAD
         let keyed_accounts = vec![
             KeyedAccount::new(&stake_address, false, &stake_account),
             KeyedAccount::new(&withdrawer, true, &withdrawer_account),
@@ -1056,6 +1080,40 @@ mod tests {
                 &mut invoke_context
             ),
             Ok(()),
+=======
+        let mut sysvar_cache = SysvarCache::default();
+        let clock = Clock::default();
+        sysvar_cache.push_entry(sysvar::clock::id(), bincode::serialize(&clock).unwrap());
+        mock_process_instruction_with_sysvars(
+            &id(),
+            Vec::new(),
+            &instruction.data,
+            vec![
+                (stake_address, stake_account),
+                (withdrawer, withdrawer_account),
+                (custodian, custodian_account),
+            ],
+            vec![
+                AccountMeta {
+                    pubkey: stake_address,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: withdrawer,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: custodian,
+                    is_signer: true,
+                    is_writable: false,
+                },
+            ],
+            Ok(()),
+            &sysvar_cache,
+            super::process_instruction,
+>>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
         );
     }
 }
