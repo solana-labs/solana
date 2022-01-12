@@ -4724,8 +4724,10 @@ impl AccountsDb {
                 .1
                 .map(|account| account.data().len())
                 .unwrap_or_default();
-            let storage = storage_finder(slot, data_len + STORE_META_OVERHEAD);
+                error!("{}{}", file!(), line!());
+                let storage = storage_finder(slot, data_len + STORE_META_OVERHEAD);
             storage_find.stop();
+            error!("{}{}", file!(), line!());
             total_storage_find_us += storage_find.as_us();
             let mut append_accounts = Measure::start("append_accounts");
             let rvs = storage.accounts.append_accounts(
@@ -4735,9 +4737,11 @@ impl AccountsDb {
             assert!(!rvs.is_empty());
             append_accounts.stop();
             total_append_accounts_us += append_accounts.as_us();
+            error!("{}{}", file!(), line!());
             if rvs.len() == 1 {
                 storage.set_status(AccountStorageStatus::Full);
 
+                error!("{}{}", file!(), line!());
                 // See if an account overflows the append vecs in the slot.
                 let data_len = (data_len + STORE_META_OVERHEAD) as u64;
                 if !self.has_space_available(slot, data_len) {
@@ -4758,6 +4762,7 @@ impl AccountsDb {
                 }
                 continue;
             }
+            error!("{}{}", file!(), line!());
 
             for (offsets, (_, account)) in rvs
                 .windows(2)
@@ -4774,9 +4779,11 @@ impl AccountsDb {
                         .unwrap_or_default(),
                 ));
             }
+            error!("{}{}", file!(), line!());
             // restore the state to available
             storage.set_status(AccountStorageStatus::Available);
         }
+        error!("{}{}", file!(), line!());
 
         self.stats
             .store_append_accounts
