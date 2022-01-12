@@ -8,7 +8,7 @@
     "@bonfida/spl-name-service": "^0.1.22",
     "@cloudflare/stream-react": "^1.2.0",
     "@metamask/jazzicon": "^2.0.0",
-    "@metaplex/js": "4.9.0",
+    "@metaplex/js": "4.11.3",
     "@project-serum/serum": "^0.13.61",
     "@react-hook/debounce": "^4.0.0",
     "@sentry/react": "^6.16.1",
