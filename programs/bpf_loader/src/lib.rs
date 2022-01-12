@@ -1115,9 +1115,10 @@ mod tests {
             rent::Rent,
             signature::{Keypair, Signer},
             system_program, sysvar,
+            sysvar_cache::SysvarCache,
             transaction::TransactionError,
         },
-        std::{cell::RefCell, fs::File, io::Read, ops::Range, rc::Rc, sync::Arc},
+        std::{borrow::Cow, cell::RefCell, fs::File, io::Read, ops::Range, rc::Rc, sync::Arc},
     };
 
     struct TestInstructionMeter {
@@ -1374,7 +1375,7 @@ mod tests {
             compute_meter: MockComputeMeter::default(),
             programs: vec![],
             accounts: vec![],
-            sysvars: vec![],
+            sysvar_cache: Cow::Owned(SysvarCache::default()),
             disabled_features: vec![].into_iter().collect(),
             return_data: None,
             execute_timings: ExecuteDetailsTimings::default(),

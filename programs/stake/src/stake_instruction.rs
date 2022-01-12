@@ -288,9 +288,10 @@ mod tests {
                 instruction::{self, LockupArgs},
                 state::{Authorized, Lockup, StakeAuthorize},
             },
-            sysvar::{stake_history::StakeHistory, Sysvar},
+            sysvar::stake_history::StakeHistory,
+            sysvar_cache::SysvarCache,
         },
-        std::{cell::RefCell, str::FromStr},
+        std::{borrow::Cow, cell::RefCell, str::FromStr},
     };
 
     fn create_default_account() -> RefCell<AccountSharedData> {
@@ -370,9 +371,12 @@ mod tests {
                 .collect();
 
             let mut invoke_context = MockInvokeContext::new(keyed_accounts);
-            let mut data = Vec::with_capacity(sysvar::clock::Clock::size_of());
-            bincode::serialize_into(&mut data, &sysvar::clock::Clock::default()).unwrap();
-            invoke_context.sysvars = vec![(sysvar::clock::id(), data)];
+            let mut sysvar_cache = SysvarCache::default();
+            sysvar_cache.push_entry(
+                sysvar::clock::id(),
+                bincode::serialize(&Clock::default()).unwrap(),
+            );
+            invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
             super::process_instruction(&Pubkey::default(), &instruction.data, &mut invoke_context)
         }
     }
@@ -1035,9 +1039,12 @@ mod tests {
         ];
 
         let mut invoke_context = MockInvokeContext::new(keyed_accounts);
-        let mut data = Vec::with_capacity(sysvar::clock::Clock::size_of());
-        bincode::serialize_into(&mut data, &sysvar::clock::Clock::default()).unwrap();
-        invoke_context.sysvars = vec![(sysvar::clock::id(), data)];
+        let mut sysvar_cache = SysvarCache::default();
+        sysvar_cache.push_entry(
+            sysvar::clock::id(),
+            bincode::serialize(&Clock::default()).unwrap(),
+        );
+        invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
 
         assert_eq!(
             super::process_instruction(

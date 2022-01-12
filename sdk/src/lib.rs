@@ -48,6 +48,8 @@ pub mod shred_version;
 pub mod signature;
 pub mod signer;
 pub mod system_transaction;
+#[doc(hidden)]
+pub mod sysvar_cache;
 pub mod timing;
 pub mod transaction;
 pub mod transport;

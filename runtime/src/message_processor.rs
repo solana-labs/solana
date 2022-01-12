@@ -29,9 +29,11 @@ use {
         rent::Rent,
         saturating_add_assign, system_program,
         sysvar::instructions,
+        sysvar_cache::SysvarCache,
         transaction::TransactionError,
     },
     std::{
+        borrow::Cow,
         cell::{Ref, RefCell},
         collections::HashMap,
         rc::Rc,
@@ -277,7 +279,7 @@ pub struct ThisInvokeContext<'a> {
     pre_accounts: Vec<PreAccount>,
     accounts: &'a [TransactionAccountRefCell],
     programs: &'a [(Pubkey, ProcessInstructionWithContext)],
-    sysvars: &'a [(Pubkey, Vec<u8>)],
+    sysvar_cache: Cow<'a, SysvarCache>,
     logger: Rc<RefCell<dyn Logger>>,
     bpf_compute_budget: BpfComputeBudget,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
@@ -298,7 +300,7 @@ impl<'a> ThisInvokeContext<'a> {
         executable_accounts: &'a [TransactionAccountRefCell],
         accounts: &'a [TransactionAccountRefCell],
         programs: &'a [(Pubkey, ProcessInstructionWithContext)],
-        sysvars: &'a [(Pubkey, Vec<u8>)],
+        sysvar_cache: Cow<'a, SysvarCache>,
         log_collector: Option<Rc<LogCollector>>,
         bpf_compute_budget: BpfComputeBudget,
         compute_meter: Rc<RefCell<dyn ComputeMeter>>,
@@ -327,7 +329,7 @@ impl<'a> ThisInvokeContext<'a> {
             pre_accounts,
             accounts,
             programs,
-            sysvars,
+            sysvar_cache,
             logger: Rc::new(RefCell::new(ThisLogger { log_collector })),
             bpf_compute_budget,
             compute_meter,
@@ -507,8 +509,8 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         self.timings.execute_us += execute_us;
         self.timings.deserialize_us += deserialize_us;
     }
-    fn get_sysvars(&self) -> &[(Pubkey, Vec<u8>)] {
-        self.sysvars
+    fn get_sysvar_cache(&self) -> &SysvarCache {
+        &self.sysvar_cache
     }
     fn set_return_data(&mut self, return_data: Option<(Pubkey, Vec<u8>)>) {
         self.return_data = return_data;
@@ -1184,7 +1186,7 @@ impl MessageProcessor {
         executable_accounts: &[TransactionAccountRefCell],
         accounts: &[TransactionAccountRefCell],
         rent_collector: &RentCollector,
-        sysvars: &[(Pubkey, Vec<u8>)],
+        sysvar_cache: &SysvarCache,
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
         instruction_recorder: Option<InstructionRecorder>,
@@ -1234,7 +1236,7 @@ impl MessageProcessor {
             executable_accounts,
             accounts,
             &self.programs,
-            sysvars,
+            Cow::Borrowed(sysvar_cache),
             log_collector,
             bpf_compute_budget,
             compute_meter,
@@ -1299,7 +1301,7 @@ impl MessageProcessor {
         bpf_compute_budget: BpfComputeBudget,
         compute_meter: Rc<RefCell<dyn ComputeMeter>>,
         timings: &mut ExecuteTimings,
-        sysvars: &[(Pubkey, Vec<u8>)],
+        sysvar_cache: &SysvarCache,
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             let instruction_recorder = instruction_recorders
@@ -1312,7 +1314,7 @@ impl MessageProcessor {
                     &loaders[instruction_index],
                     accounts,
                     rent_collector,
-                    sysvars,
+                    sysvar_cache,
                     log_collector.clone(),
                     executors.clone(),
                     instruction_recorder,
@@ -1386,7 +1388,7 @@ mod tests {
             &[],
             &accounts,
             &[],
-            &[],
+            Cow::Owned(SysvarCache::default()),
             None,
             BpfComputeBudget::default(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
@@ -1990,6 +1992,7 @@ mod tests {
             Some(&accounts[0].0),
         );
 
+        let sysvar_cache = SysvarCache::default();
         let result = message_processor.process_message(
             &message,
             &loaders,
@@ -2002,7 +2005,7 @@ mod tests {
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             &mut ExecuteTimings::default(),
-            &[],
+            &sysvar_cache,
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].1.borrow().lamports(), 100);
@@ -2029,7 +2032,7 @@ mod tests {
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             &mut ExecuteTimings::default(),
-            &[],
+            &sysvar_cache,
         );
         assert_eq!(
             result,
@@ -2060,7 +2063,7 @@ mod tests {
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             &mut ExecuteTimings::default(),
-            &[],
+            &sysvar_cache,
         );
         assert_eq!(
             result,
@@ -2170,6 +2173,7 @@ mod tests {
             )],
             Some(&accounts[0].0),
         );
+        let sysvar_cache = SysvarCache::default();
         let result = message_processor.process_message(
             &message,
             &loaders,
@@ -2182,7 +2186,7 @@ mod tests {
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             &mut ExecuteTimings::default(),
-            &[],
+            &sysvar_cache,
         );
         assert_eq!(
             result,
@@ -2213,7 +2217,7 @@ mod tests {
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             &mut ExecuteTimings::default(),
-            &[],
+            &sysvar_cache,
         );
         assert_eq!(result, Ok(()));
 
@@ -2241,7 +2245,7 @@ mod tests {
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             &mut ExecuteTimings::default(),
-            &[],
+            &sysvar_cache,
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].1.borrow().lamports(), 80);
@@ -2342,6 +2346,7 @@ mod tests {
         let feature_set = FeatureSet::all_enabled();
         let demote_program_write_locks = feature_set.is_active(&demote_program_write_locks::id());
 
+        let sysvar_cache = SysvarCache::default();
         let mut invoke_context = ThisInvokeContext::new(
             &caller_program_id,
             Rent::default(),
@@ -2350,7 +2355,7 @@ mod tests {
             &executable_accounts,
             &accounts,
             programs.as_slice(),
-            &[],
+            Cow::Borrowed(&sysvar_cache),
             None,
             BpfComputeBudget::default(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
@@ -2419,7 +2424,7 @@ mod tests {
                 &executable_accounts,
                 &accounts,
                 programs.as_slice(),
-                &[],
+                Cow::Borrowed(&sysvar_cache),
                 None,
                 BpfComputeBudget::default(),
                 Rc::new(RefCell::new(MockComputeMeter::default())),
@@ -2562,6 +2567,7 @@ mod tests {
         );
         let message = Message::new(&[callee_instruction.clone()], None);
 
+        let sysvar_cache = SysvarCache::default();
         let mut invoke_context = ThisInvokeContext::new(
             &caller_program_id,
             Rent::default(),
@@ -2570,7 +2576,7 @@ mod tests {
             &executable_accounts,
             &accounts,
             programs.as_slice(),
-            &[],
+            Cow::Borrowed(&sysvar_cache),
             None,
             BpfComputeBudget::default(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
@@ -2635,7 +2641,7 @@ mod tests {
                 &executable_accounts,
                 &accounts,
                 programs.as_slice(),
-                &[],
+                Cow::Borrowed(&sysvar_cache),
                 None,
                 BpfComputeBudget::default(),
                 Rc::new(RefCell::new(MockComputeMeter::default())),
