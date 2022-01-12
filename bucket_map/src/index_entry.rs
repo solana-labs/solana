@@ -145,4 +145,12 @@ mod tests {
         assert_eq!(std::mem::size_of::<PackedStorage>(), 1 + 7);
         assert_eq!(std::mem::size_of::<IndexEntry>(), 32 + 8 + 8 + 8);
     }
+
+    #[test]
+    #[should_panic(expected = "New storage offset must fit into 7 bytes!")]
+    fn test_set_storage_offset_value_too_large() {
+        let too_big = 1 << 56;
+        let mut index = IndexEntry::new(Pubkey::new_unique());
+        index.set_storage_offset(too_big);
+    }
 }
