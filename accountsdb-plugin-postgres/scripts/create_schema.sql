@@ -50,7 +50,6 @@ Create TYPE "TransactionErrorCode" AS ENUM (
     'InvalidWritableAccount',
     'WouldExceedMaxAccountDataCostLimit',
     'TooManyAccountLocks',
-    'AddressLookupError'
     'AddressLookupTableNotFound',
     'InvalidAddressLookupTableOwner',
     'InvalidAddressLookupTableData',
