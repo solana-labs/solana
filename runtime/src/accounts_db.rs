@@ -3226,14 +3226,6 @@ impl AccountsDb {
             }
         }
 
-            error!(
-                "ancient_append_vec: purge_dead_slots_from_storage: first {:?}, last {:?}, len {:?}, ",
-                dropped_roots_storages.first(),
-                dropped_roots_storages.last(),
-                dropped_roots_storages.len()
-            );
-        self.purge_dead_slots_from_storage(dropped_roots_storages.iter(), &PurgeStats::default());
-
         if !dropped_roots.is_empty() {
             // todo: afterwards, we need to remove the roots sometime
             error!(
@@ -3247,6 +3239,14 @@ impl AccountsDb {
                     .clean_dead_slot(*slot, &mut AccountsIndexRootsStats::default());
             });
         }
+            error!(
+                "ancient_append_vec: purge_dead_slots_from_storage: first {:?}, last {:?}, len {:?}, ",
+                dropped_roots_storages.first(),
+                dropped_roots_storages.last(),
+                dropped_roots_storages.len()
+            );
+        self.purge_dead_slots_from_storage(dropped_roots_storages.iter(), &PurgeStats::default());
+
         t.stop();
         error!(
             "ancient_append_vec: done. slots: {:?}, time(ms): {}",
