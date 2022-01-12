@@ -86,6 +86,7 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
             stakes: dvb.stakes,
             epoch_stakes: dvb.epoch_stakes,
             is_delta: dvb.is_delta,
+            accounts_data_len: u64::default(), // bprumo TODO: may want to revisit this
         }
     }
 }

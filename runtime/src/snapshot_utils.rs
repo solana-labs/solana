@@ -639,7 +639,7 @@ pub fn add_bank_snapshot<P: AsRef<Path>>(
     let mut bank_serialize = Measure::start("bank-serialize-ms");
     let bank_snapshot_serializer = move |stream: &mut BufWriter<File>| -> Result<()> {
         let serde_style = match snapshot_version {
-            SnapshotVersion::V1_2_0 => SerdeStyle::Newer,
+            SnapshotVersion::V1_2_0 => SerdeStyle::Older,
         };
         bank_to_stream(serde_style, stream.by_ref(), bank, snapshot_storages)?;
         Ok(())
@@ -1476,7 +1476,7 @@ fn rebuild_bank_from_snapshots(
         Ok(
             match incremental_snapshot_version.unwrap_or(full_snapshot_version) {
                 SnapshotVersion::V1_2_0 => bank_from_streams(
-                    SerdeStyle::Newer,
+                    SerdeStyle::Older,
                     snapshot_streams,
                     account_paths,
                     unpacked_append_vec_map,

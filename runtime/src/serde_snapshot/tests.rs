@@ -104,6 +104,11 @@ where
             account_paths,
             unpacked_append_vec_map,
         ),
+        SerdeStyle::Older => context_accountsdb_from_stream::<older::Context, R>(
+            stream,
+            account_paths,
+            unpacked_append_vec_map,
+        ),
     }
 }
 
@@ -121,6 +126,15 @@ where
         SerdeStyle::Newer => serialize_into(
             stream,
             &SerializableAccountsDb::<newer::Context> {
+                accounts_db,
+                slot,
+                account_storage_entries,
+                phantom: std::marker::PhantomData::default(),
+            },
+        ),
+        SerdeStyle::Older => serialize_into(
+            stream,
+            &SerializableAccountsDb::<older::Context> {
                 accounts_db,
                 slot,
                 account_storage_entries,
@@ -299,13 +313,23 @@ fn test_bank_serialize_newer() {
     test_bank_serialize_style(SerdeStyle::Newer)
 }
 
+#[test]
+fn test_accounts_serialize_older() {
+    test_accounts_serialize_style(SerdeStyle::Older)
+}
+
+#[test]
+fn test_bank_serialize_older() {
+    test_bank_serialize_style(SerdeStyle::Older)
+}
+
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 mod test_bank_serialize {
     use super::*;
 
     // This some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "7PcarCw6gpw9Yw8xypdxQP24TFjLiaHyuDkq95cgwtte")]
+    #[frozen_abi(digest = "F7zEhEewC9oyKJfJZ1QfP4ELjWeBzcQNFbubkNGAmzFo")]
     #[derive(Serialize, AbiExample)]
     pub struct BankAbiTestWrapperNewer {
         #[serde(serialize_with = "wrapper_newer")]
@@ -326,6 +350,36 @@ mod test_bank_serialize {
         assert_eq!(snapshot_storages.len(), 1);
 
         (SerializableBankAndStorage::<newer::Context> {
+            bank,
+            snapshot_storages: &snapshot_storages,
+            phantom: std::marker::PhantomData::default(),
+        })
+        .serialize(s)
+    }
+
+    // This some what long test harness is required to freeze the ABI of
+    // Bank's serialization due to versioned nature
+    #[frozen_abi(digest = "5e79TNgpa6UsqhCupy5DP3v1pz6zYXpcSppxEyzBdrsE")]
+    #[derive(Serialize, AbiExample)]
+    pub struct BankAbiTestWrapperOlder {
+        #[serde(serialize_with = "wrapper_older")]
+        bank: Bank,
+    }
+
+    pub fn wrapper_older<S>(bank: &Bank, s: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let snapshot_storages = bank
+            .rc
+            .accounts
+            .accounts_db
+            .get_snapshot_storages(0, None, None)
+            .0;
+        // ensure there is a single snapshot storage example for ABI digesting
+        assert_eq!(snapshot_storages.len(), 1);
+
+        (SerializableBankAndStorage::<older::Context> {
             bank,
             snapshot_storages: &snapshot_storages,
             phantom: std::marker::PhantomData::default(),
