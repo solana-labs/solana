@@ -3041,6 +3041,7 @@ impl AccountsDb {
     }
 
     fn shrink_ancient_slots(&self) {
+        error!("{}{}", file!(), line!());
         let max_root = self.accounts_index.max_root();
         use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
         let epoch_width = DEFAULT_SLOTS_PER_EPOCH * 1 / 10; // todo - put some 'in-this-epoch' slots into an ancient append vec
@@ -3063,7 +3064,9 @@ impl AccountsDb {
         m.stop();
         old_slots.sort_unstable();
         // old_slots.truncate(3); // artificially limit to 3 slots
+        error!("{}{}", file!(), line!());
         self.combine_ancient_slots(old_slots, max_root);
+        error!("{}{}", file!(), line!());
     }
 
     /// combine all these slots into ancient append vecs
@@ -3076,6 +3079,7 @@ impl AccountsDb {
         let len = sorted_slots.len();
         let mut t = Measure::start("");
         for slot in sorted_slots {
+            error!("{}{}", file!(), line!());
             if i == 0 {
                 error!("ancient_append_vec: combine_ancient_slots max_root: {}, first slot: {}, distance from max: {}", max_root, slot, max_root.saturating_sub(slot));
             }
@@ -3141,6 +3145,7 @@ impl AccountsDb {
                         slot,
                     ));
                 });
+                error!("{}{}", file!(), line!());
 
                 if i % 1000 == 0 {
                     error!(
@@ -3232,8 +3237,10 @@ impl AccountsDb {
                     dropped_roots.push(slot);
                 }
             }
+            error!("{}{}", file!(), line!());
         }
 
+        error!("{}{}", file!(), line!());
         if !dropped_roots.is_empty() {
             // todo: afterwards, we need to remove the roots sometime
             error!(
@@ -3247,6 +3254,7 @@ impl AccountsDb {
                     .clean_dead_slot(*slot, &mut AccountsIndexRootsStats::default());
             });
         }
+        error!("{}{}", file!(), line!());
         error!(
             "ancient_append_vec: purge_dead_slots_from_storage: first {:?}, last {:?}, len {:?}, ",
             dropped_roots_storages.first(),
@@ -3254,6 +3262,7 @@ impl AccountsDb {
             dropped_roots_storages.len()
         );
         self.purge_dead_slots_from_storage(dropped_roots_storages.iter(), &PurgeStats::default());
+        error!("{}{}", file!(), line!());
 
         t.stop();
         error!(
