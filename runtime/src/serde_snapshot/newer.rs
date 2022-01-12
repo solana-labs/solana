@@ -1,6 +1,5 @@
 use {
     super::{
-        common::UnusedAccounts,
         storage::SerializableAccountStorageEntry,
         utils::{serialize_iter_as_map, serialize_iter_as_seq},
         *,

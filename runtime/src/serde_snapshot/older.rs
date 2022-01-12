@@ -1,16 +1,22 @@
 use {
     super::{
-        common::UnusedAccounts,
         storage::SerializableAccountStorageEntry,
         utils::{serialize_iter_as_map, serialize_iter_as_seq},
         *,
     },
     crate::{ancestors::AncestorsForSerialization, stakes::StakesCache},
     solana_measure::measure::Measure,
-    std::{cell::RefCell, sync::RwLock},
+    std::{cell::RefCell, collections::HashSet, sync::RwLock},
 };
 
 type AccountsDbFields = super::AccountsDbFields<SerializableAccountStorageEntry>;
+
+#[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize, AbiExample)]
+pub(crate) struct UnusedAccounts {
+    unused1: HashSet<Pubkey>,
+    unused2: HashSet<Pubkey>,
+    unused3: HashMap<Pubkey, u64>,
+}
 
 // Deserializable version of Bank which need not be serializable,
 // because it's handled by SerializableVersionedBank.
@@ -33,6 +39,7 @@ struct DeserializableVersionedBank {
     ns_per_slot: u128,
     genesis_creation_time: UnixTimestamp,
     slots_per_year: f64,
+    #[allow(dead_code)]
     unused: u64,
     slot: Slot,
     epoch: Epoch,
