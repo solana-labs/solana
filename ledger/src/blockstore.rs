@@ -238,6 +238,101 @@ pub struct BlockstoreInsertionMetrics {
     num_coding_shreds_inserted: usize,
 }
 
+#[derive(Default)]
+/// A metrics struct that exposes RocksDB's column family properties.
+///
+/// Here we only expose a subset of all the internal properties which are
+/// relevant to the ledger store performance.
+///
+/// The list of completed RocksDB internal properties can be found
+/// [here](https://github.com/facebook/rocksdb/blob/08809f5e6cd9cc4bc3958dd4d59457ae78c76660/include/rocksdb/db.h#L654-L689).
+pub struct BlockstoreRocksDbColumnFamilyMetrics {
+    // Size related
+
+    // The storage size occupied by the column family.
+    // RocksDB's internal property key: "rocksdb.total-sst-files-size"
+    pub total_sst_files_size: u64,
+    // The memory size occupied by the column family's in-memory buffer.
+    // RocksDB's internal property key: "rocksdb.size-all-mem-tables"
+    pub size_all_mem_tables: u64,
+
+    // Snapshot related
+
+    // Number of snapshots hold for the column family.
+    // RocksDB's internal property key: "rocksdb.num-snapshots"
+    pub num_snapshots: u64,
+    // Unit timestamp of the oldest unreleased snapshot.
+    // RocksDB's internal property key: "rocksdb.oldest-snapshot-time"
+    pub oldest_snapshot_time: u64,
+
+    // Write related
+
+    // The current actual delayed write rate. 0 means no delay.
+    // RocksDB's internal property key: "rocksdb.actual-delayed-write-rate"
+    pub actual_delayed_write_rate: u64,
+    // A flag indicating whether writes are stopped on this column family.
+    // 1 indicates writes have been stopped.
+    // RocksDB's internal property key: "rocksdb.is-write-stopped"
+    pub is_write_stopped: u64,
+
+    // Memory / block cache related
+
+    // The block cache capacity of the column family.
+    // RocksDB's internal property key: "rocksdb.block-cache-capacity"
+    pub block_cache_capacity: u64,
+    // The memory size used by the column family in the block cache.
+    // RocksDB's internal property key: "rocksdb.block-cache-usage"
+    pub block_cache_usage: u64,
+    // The memory size used by the column family in the block cache where
+    // entries are pinned.
+    // RocksDB's internal property key: "rocksdb.block-cache-pinned-usage"
+    pub block_cache_pinned_usage: u64,
+
+    // The estimated memory size used for reading SST tables in this column
+    // family such as filters and index blocks. Note that this number does not
+    // include the memory used in block cache.
+    // RocksDB's internal property key: "rocksdb.estimate-table-readers-mem"
+    pub estimate_table_readers_mem: u64,
+
+    // Flush and compaction
+
+    // A 1 or 0 flag indicating whether a memtable flush is pending.
+    // If this number is 1, it means a memtable is waiting for being flushed,
+    // but there might be too many L0 files that prevents it from being flushed.
+    // RocksDB's internal property key: "rocksdb.mem-table-flush-pending"
+    pub mem_table_flush_pending: u64,
+
+    // A 1 or 0 flag indicating whether a compaction job is pending.
+    // If this number is 1, it means some part of the column family requires
+    // compaction in order to maintain shape of LSM tree, but the compaction
+    // is pending because the desired compaction job is either waiting for
+    // other dependnent compactions to be finished or waiting for an available
+    // compaction thread.
+    // RocksDB's internal property key: "rocksdb.compaction-pending"
+    pub compaction_pending: u64,
+
+    // The number of compactions that are currently running for the column family.
+    // RocksDB's internal property key: "rocksdb.num-running-compactions"
+    pub num_running_compactions: u64,
+
+    // The number of flushes that are currently running for the column family.
+    // RocksDB's internal property key: "rocksdb.num-running-flushes"
+    pub num_running_flushes: u64,
+
+    // FIFO Compaction related
+
+    // returns an estimation of the oldest key timestamp in the DB. Only vailable
+    // for FIFO compaction with compaction_options_fifo.allow_compaction = false.
+    // RocksDB's internal property key: "rocksdb.estimate-oldest-key-time"
+    pub estimate_oldest_key_time: u64,
+
+    // Misc
+
+    // The accumulated number of RocksDB background errors.
+    // RocksDB's internal property key: "rocksdb.background-errors"
+    pub background_errors: u64,
+}
+
 impl SlotMetaWorkingSetEntry {
     fn new(new_slot_meta: Rc<RefCell<SlotMeta>>, old_slot_meta: Option<SlotMeta>) -> Self {
         Self {
