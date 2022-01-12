@@ -233,7 +233,7 @@ impl ReplaySlotStats {
             );
 
         for (pubkey, time) in per_pubkey_timings.iter().take(5) {
-            datapoint_info!(
+            datapoint_trace!(
                 "per_program_timings",
                 ("slot", slot as i64, i64),
                 ("pubkey", pubkey.to_string(), String),
@@ -256,7 +256,7 @@ impl ReplaySlotStats {
             ("accumulated_units", total_units, i64),
             ("count", total_count, i64),
             ("errored_units", total_errored_units, i64),
-            ("count", total_errored_count, i64)
+            ("errored_count", total_errored_count, i64)
         );
     }
 }
