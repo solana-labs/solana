@@ -341,8 +341,9 @@ mod tests {
         super::*,
         crate::stake_state::{Meta, StakeState},
         bincode::serialize,
-        solana_program_runtime::invoke_context::{
-            mock_process_instruction, mock_process_instruction_with_sysvars,
+        solana_program_runtime::{
+            invoke_context::{mock_process_instruction, mock_process_instruction_with_sysvars},
+            sysvar_cache::SysvarCache,
         },
         solana_sdk::{
             account::{self, AccountSharedData},
@@ -354,7 +355,7 @@ mod tests {
                 instruction::{self, LockupArgs},
                 state::{Authorized, Lockup, StakeAuthorize},
             },
-            sysvar::{stake_history::StakeHistory, Sysvar},
+            sysvar::stake_history::StakeHistory,
         },
         std::str::FromStr,
     };
@@ -436,8 +437,9 @@ mod tests {
                 )
             })
             .collect();
-        let mut data = Vec::with_capacity(sysvar::clock::Clock::size_of());
-        bincode::serialize_into(&mut data, &sysvar::clock::Clock::default()).unwrap();
+        let mut sysvar_cache = SysvarCache::default();
+        let clock = Clock::default();
+        sysvar_cache.push_entry(sysvar::clock::id(), bincode::serialize(&clock).unwrap());
         mock_process_instruction_with_sysvars(
             &id(),
             Vec::new(),
@@ -445,7 +447,7 @@ mod tests {
             transaction_accounts,
             instruction.accounts.clone(),
             expected_result,
-            &[(sysvar::clock::id(), data)],
+            &sysvar_cache,
             super::process_instruction,
         )
     }
@@ -1186,8 +1188,9 @@ mod tests {
         )
         .unwrap();
 
-        let mut data = Vec::with_capacity(sysvar::clock::Clock::size_of());
-        bincode::serialize_into(&mut data, &sysvar::clock::Clock::default()).unwrap();
+        let mut sysvar_cache = SysvarCache::default();
+        let clock = Clock::default();
+        sysvar_cache.push_entry(sysvar::clock::id(), bincode::serialize(&clock).unwrap());
         mock_process_instruction_with_sysvars(
             &id(),
             Vec::new(),
@@ -1215,7 +1218,7 @@ mod tests {
                 },
             ],
             Ok(()),
-            &[(sysvar::clock::id(), data)],
+            &sysvar_cache,
             super::process_instruction,
         );
     }

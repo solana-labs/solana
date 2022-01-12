@@ -19,7 +19,7 @@ impl Bank {
         transaction_context: &TransactionContext,
         message: &SanitizedMessage,
     ) -> Vec<TransactionAccountStateInfo> {
-        (0..transaction_context.get_number_of_accounts())
+        (0..message.account_keys_len())
             .map(|i| {
                 let rent_state = if message.is_writable(i) {
                     let account = transaction_context.get_account_at_index(i).borrow();
