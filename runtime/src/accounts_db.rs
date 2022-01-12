@@ -3180,18 +3180,20 @@ impl AccountsDb {
                     // our oldest slot is not an append vec of max size, so we need to start with rewriting that storage to create an ancient append vec for the oldest slot
                     let (shrunken_store, _time) = self.get_store_for_shrink(slot, size);
                     shrunken_store.accounts.set_ancient();
-                    error!("ancient_append_vec: creating ancient append vec because previous one was full: {}, full one: {}", slot, writer.0);
+                    error!("ancient_append_vec: creating ancient append vec because previous one was full: {}, full one: {}, additional: {}, {}", slot, writer.0, accounts_next_append_vec.len(), hashes_next_append_vec.len());
                     current_storage = Some((slot, shrunken_store));
                     let writer = current_storage.as_ref().unwrap();
                     ids.push(writer.1.append_vec_id());
 
+                    error!("{}{}", file!(), line!());
+                    let clone = &writer.1.clone();
                     error!("{}{}", file!(), line!());
                     // write the rest to the next ancient storage
                     let _store_accounts_timing = self.store_accounts_frozen(
                         writer.0,
                         &accounts_next_append_vec,
                         Some(&hashes_next_append_vec),
-                        Some(Box::new(move |_, _| writer.1.clone())),
+                        Some(Box::new(move |_, _| Arc::clone(clone))),
                         None,
                     );
                     error!("{}{}", file!(), line!());
@@ -6996,6 +6998,7 @@ impl AccountsDb {
             .store_num_accounts
             .fetch_add(accounts.len() as u64, Ordering::Relaxed);
         let mut store_accounts_time = Measure::start("store_accounts");
+        error!("{}{}", file!(), line!());
         let infos = self.store_accounts_to(
             slot,
             accounts,
@@ -7005,18 +7008,21 @@ impl AccountsDb {
             is_cached_store,
         );
         store_accounts_time.stop();
+        error!("{}{}", file!(), line!());
         self.stats
             .store_accounts
             .fetch_add(store_accounts_time.as_us(), Ordering::Relaxed);
         let mut update_index_time = Measure::start("update_index");
 
         let previous_slot_entry_was_cached = self.caching_enabled && is_cached_store;
+        error!("{}{}", file!(), line!());
 
         // If the cache was flushed, then because `update_index` occurs
         // after the account are stored by the above `store_accounts_to`
         // call and all the accounts are stored, all reads after this point
         // will know to not check the cache anymore
         let mut reclaims = self.update_index(slot, infos, accounts, previous_slot_entry_was_cached);
+        error!("{}{}", file!(), line!());
 
         // For each updated account, `reclaims` should only have at most one
         // item (if the account was previously updated in this slot).
@@ -7030,6 +7036,7 @@ impl AccountsDb {
                 assert!(reclaims.is_empty());
             }
         }
+        error!("{}{}", file!(), line!());
 
         update_index_time.stop();
         self.stats
@@ -7054,6 +7061,7 @@ impl AccountsDb {
             None,
             reset_accounts,
         );
+        error!("{}{}", file!(), line!());
         handle_reclaims_time.stop();
         self.stats
             .store_handle_reclaims
