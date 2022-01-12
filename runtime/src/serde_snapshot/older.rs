@@ -71,7 +71,6 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
             ns_per_slot: dvb.ns_per_slot,
             genesis_creation_time: dvb.genesis_creation_time,
             slots_per_year: dvb.slots_per_year,
-            unused: dvb.unused,
             slot: dvb.slot,
             epoch: dvb.epoch,
             block_height: dvb.block_height,

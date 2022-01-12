@@ -33,7 +33,6 @@ struct DeserializableVersionedBank {
     ns_per_slot: u128,
     genesis_creation_time: UnixTimestamp,
     slots_per_year: f64,
-    //unused: u64, // bprumo TODO: remove me
     slot: Slot,
     epoch: Epoch,
     block_height: u64,
@@ -46,8 +45,6 @@ struct DeserializableVersionedBank {
     epoch_schedule: EpochSchedule,
     inflation: Inflation,
     stakes: Stakes,
-    //#[allow(dead_code)] // bprumo TODO: remove me
-    //unused_accounts: UnusedAccounts, // bprumo TODO: remove me
     epoch_stakes: HashMap<Epoch, EpochStakes>,
     is_delta: bool,
     accounts_data_len: u64,
@@ -72,7 +69,6 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
             ns_per_slot: dvb.ns_per_slot,
             genesis_creation_time: dvb.genesis_creation_time,
             slots_per_year: dvb.slots_per_year,
-            unused: u64::default(), //unused: dvb.unused, // bprumo TODO: `unused: u64::default()`
             slot: dvb.slot,
             epoch: dvb.epoch,
             block_height: dvb.block_height,
@@ -112,7 +108,6 @@ struct SerializableVersionedBank<'a> {
     ns_per_slot: u128,
     genesis_creation_time: UnixTimestamp,
     slots_per_year: f64,
-    //unused: u64, // bprumo TODO: remove me
     slot: Slot,
     epoch: Epoch,
     block_height: u64,
@@ -125,7 +120,6 @@ struct SerializableVersionedBank<'a> {
     epoch_schedule: EpochSchedule,
     inflation: Inflation,
     stakes: &'a StakesCache,
-    //unused_accounts: UnusedAccounts, // bprumo TODO: remove me
     epoch_stakes: &'a HashMap<Epoch, EpochStakes>,
     is_delta: bool,
     accounts_data_len: u64,
@@ -150,7 +144,6 @@ impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedB
             ns_per_slot: rhs.ns_per_slot,
             genesis_creation_time: rhs.genesis_creation_time,
             slots_per_year: rhs.slots_per_year,
-            //unused: default(), // bprumo TODO: remove me
             slot: rhs.slot,
             epoch: rhs.epoch,
             block_height: rhs.block_height,
@@ -163,7 +156,6 @@ impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedB
             epoch_schedule: rhs.epoch_schedule,
             inflation: rhs.inflation,
             stakes: rhs.stakes,
-            //unused_accounts: default(), // bprumo TODO: remove me
             epoch_stakes: rhs.epoch_stakes,
             is_delta: rhs.is_delta,
             accounts_data_len: rhs.accounts_data_len,
