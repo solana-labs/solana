@@ -1698,6 +1698,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "modular-bitfield"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a53d79ba8304ac1c4f9eb3b9d281f21f7be9d4626f72ce7df4ad8fbde4f38a74"
+dependencies = [
+ "modular-bitfield-impl",
+ "static_assertions",
+]
+
+[[package]]
+name = "modular-bitfield-impl"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a7d5f7076603ebc68de2dc6a650ec331a062a13abaa346975be747bbfa4b789"
+dependencies = [
+ "proc-macro2 1.0.24",
+ "quote 1.0.6",
+ "syn 1.0.67",
+]
+
+[[package]]
 name = "net2"
 version = "0.2.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3044,6 +3065,7 @@ version = "1.10.0"
 dependencies = [
  "log",
  "memmap2 0.5.2",
+ "modular-bitfield",
  "rand 0.7.3",
  "solana-measure",
  "solana-sdk",
