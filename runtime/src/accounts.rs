@@ -253,7 +253,6 @@ impl Accounts {
             let mut accounts = Vec::with_capacity(message.account_keys_len());
             let mut account_deps = Vec::with_capacity(message.account_keys_len());
             let mut rent_debits = RentDebits::default();
-            let rent_for_sysvars = feature_set.is_active(&feature_set::rent_for_sysvars::id());
             for (i, key) in message.account_keys_iter().enumerate() {
                 let account = if !message.is_non_loader_key(i) {
                     // Fill in an empty account for the program slots.
@@ -279,7 +278,6 @@ impl Accounts {
                                         .collect_from_existing_account(
                                             key,
                                             &mut account,
-                                            rent_for_sysvars,
                                             self.accounts_db.filler_account_suffix.as_ref(),
                                         )
                                         .rent_amount;
@@ -1105,7 +1103,6 @@ impl Accounts {
         rent_collector: &RentCollector,
         blockhash: &Hash,
         lamports_per_signature: u64,
-        rent_for_sysvars: bool,
         leave_nonce_on_success: bool,
     ) {
         let accounts_to_store = self.collect_accounts_to_store(
@@ -1115,7 +1112,6 @@ impl Accounts {
             rent_collector,
             blockhash,
             lamports_per_signature,
-            rent_for_sysvars,
             leave_nonce_on_success,
         );
         self.accounts_db.store_cached(slot, &accounts_to_store);
@@ -1142,7 +1138,6 @@ impl Accounts {
         rent_collector: &RentCollector,
         blockhash: &Hash,
         lamports_per_signature: u64,
-        rent_for_sysvars: bool,
         leave_nonce_on_success: bool,
     ) -> Vec<(&'a Pubkey, &'a AccountSharedData)> {
         let mut accounts = Vec::with_capacity(load_results.len());
@@ -1202,7 +1197,7 @@ impl Accounts {
                     if execution_status.is_ok() || is_nonce_account || is_fee_payer {
                         if account.rent_epoch() == INITIAL_RENT_EPOCH {
                             let rent = rent_collector
-                                .collect_from_created_account(address, account, rent_for_sysvars)
+                                .collect_from_created_account(address, account)
                                 .rent_amount;
                             loaded_transaction.rent += rent;
                             loaded_transaction.rent_debits.insert(
@@ -2917,7 +2912,6 @@ mod tests {
             &rent_collector,
             &Hash::default(),
             0,
-            true,
             true, // leave_nonce_on_success
         );
         assert_eq!(collected_accounts.len(), 2);
@@ -3346,7 +3340,6 @@ mod tests {
             &rent_collector,
             &next_blockhash,
             0,
-            true,
             true, // leave_nonce_on_success
         );
         assert_eq!(collected_accounts.len(), 2);
@@ -3456,7 +3449,6 @@ mod tests {
             &rent_collector,
             &next_blockhash,
             0,
-            true,
             true, // leave_nonce_on_success
         );
         assert_eq!(collected_accounts.len(), 1);
