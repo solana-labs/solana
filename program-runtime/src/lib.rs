@@ -8,4 +8,5 @@ pub mod native_loader;
 pub mod neon_evm_program;
 pub mod pre_account;
 pub mod stable_log;
+pub mod sysvar_cache;
 pub mod timings;

@@ -449,7 +449,14 @@ mod tests {
     use {
         super::*,
         bincode::serialize,
+<<<<<<< HEAD
         solana_program_runtime::invoke_context::mock_process_instruction,
+=======
+        solana_program_runtime::{
+            invoke_context::{mock_process_instruction, mock_process_instruction_with_sysvars},
+            sysvar_cache::SysvarCache,
+        },
+>>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
         solana_sdk::{
             account::{self, Account, AccountSharedData},
             rent::Rent,
@@ -498,6 +505,7 @@ mod tests {
                 }))
             })
             .collect();
+<<<<<<< HEAD
         #[allow(clippy::same_item_push)]
         for _ in 0..instruction.accounts.len() {
             accounts.push(AccountSharedData::new_ref(0, 0, &Pubkey::new_unique()));
@@ -517,6 +525,26 @@ mod tests {
             &instruction.data,
             &keyed_accounts,
             &[rent_sysvar],
+=======
+        let mut sysvar_cache = SysvarCache::default();
+        let rent = Rent::default();
+        sysvar_cache.push_entry(sysvar::rent::id(), bincode::serialize(&rent).unwrap());
+        let clock = Clock::default();
+        sysvar_cache.push_entry(sysvar::clock::id(), bincode::serialize(&clock).unwrap());
+        let slot_hashes = SlotHashes::default();
+        sysvar_cache.push_entry(
+            sysvar::slot_hashes::id(),
+            bincode::serialize(&slot_hashes).unwrap(),
+        );
+        mock_process_instruction_with_sysvars(
+            &id(),
+            Vec::new(),
+            &instruction.data,
+            transaction_accounts,
+            instruction.accounts.clone(),
+            expected_result,
+            &sysvar_cache,
+>>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
             super::process_instruction,
         )
     }

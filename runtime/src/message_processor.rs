@@ -8,6 +8,7 @@ use {
             TransactionAccountRefCell,
         },
         log_collector::LogCollector,
+        sysvar_cache::SysvarCache,
         timings::ExecuteTimings,
     },
     solana_sdk::{
@@ -17,13 +18,12 @@ use {
         hash::Hash,
         message::SanitizedMessage,
         precompiles::is_precompile,
-        pubkey::Pubkey,
         rent::Rent,
         saturating_add_assign,
         sysvar::instructions,
         transaction::TransactionError,
     },
-    std::{cell::RefCell, rc::Rc, sync::Arc},
+    std::{borrow::Cow, cell::RefCell, rc::Rc, sync::Arc},
 };
 
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
@@ -64,7 +64,7 @@ impl MessageProcessor {
         feature_set: Arc<FeatureSet>,
         compute_budget: ComputeBudget,
         timings: &mut ExecuteTimings,
-        sysvars: &[(Pubkey, Vec<u8>)],
+        sysvar_cache: &SysvarCache,
         blockhash: Hash,
         lamports_per_signature: u64,
         current_accounts_data_len: u64,
@@ -73,7 +73,7 @@ impl MessageProcessor {
             rent,
             accounts,
             builtin_programs,
-            sysvars,
+            Cow::Borrowed(sysvar_cache),
             log_collector,
             compute_budget,
             executors,
@@ -159,6 +159,7 @@ mod tests {
             keyed_account::keyed_account_at_index,
             message::Message,
             native_loader::{self, create_loadable_account_for_test},
+            pubkey::Pubkey,
             secp256k1_instruction::new_secp256k1_instruction,
             secp256k1_program,
         },
@@ -253,7 +254,11 @@ mod tests {
             )],
             Some(&accounts[0].0),
         ));
+<<<<<<< HEAD
 
+=======
+        let sysvar_cache = SysvarCache::default();
+>>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -266,7 +271,7 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),
-            &[],
+            &sysvar_cache,
             Hash::default(),
             0,
             0,
@@ -296,7 +301,7 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),
-            &[],
+            &sysvar_cache,
             Hash::default(),
             0,
             0,
@@ -330,7 +335,7 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),
-            &[],
+            &sysvar_cache,
             Hash::default(),
             0,
             0,
@@ -463,6 +468,7 @@ mod tests {
             )],
             Some(&accounts[0].0),
         ));
+        let sysvar_cache = SysvarCache::default();
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -475,7 +481,7 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),
-            &[],
+            &sysvar_cache,
             Hash::default(),
             0,
             0,
@@ -509,7 +515,7 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),
-            &[],
+            &sysvar_cache,
             Hash::default(),
             0,
             0,
@@ -540,7 +546,7 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),
-            &[],
+            &sysvar_cache,
             Hash::default(),
             0,
             0,
@@ -585,7 +591,11 @@ mod tests {
             ],
             None,
         ));
+<<<<<<< HEAD
 
+=======
+        let sysvar_cache = SysvarCache::default();
+>>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -598,7 +608,7 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),
-            &[],
+            &sysvar_cache,
             Hash::default(),
             0,
             0,

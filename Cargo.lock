@@ -5460,7 +5460,13 @@ dependencies = [
  "num-traits",
  "rustc_version 0.4.0",
  "serde",
+<<<<<<< HEAD
  "solana-logger 1.9.5",
+=======
+ "solana-frozen-abi 1.10.0",
+ "solana-frozen-abi-macro 1.10.0",
+ "solana-logger 1.10.0",
+>>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
  "solana-measure",
  "solana-sdk",
  "thiserror",
