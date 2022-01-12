@@ -22,6 +22,7 @@ impl Bank {
     ) -> Vec<TransactionAccountStateInfo> {
         transaction_account_refcells
             .iter()
+            .take(message.account_keys_len())
             .enumerate()
             .map(|(i, (_pubkey, account_refcell))| {
                 let account = account_refcell.borrow();
