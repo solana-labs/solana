@@ -2921,7 +2921,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallLogData<'a, 'b> {
 mod tests {
     use {
         super::*,
-        solana_program_runtime::invoke_context::InvokeContext,
+        solana_program_runtime::{invoke_context::InvokeContext, sysvar_cache::SysvarCache},
         solana_rbpf::{
             ebpf::HOST_ALIGN, memory_region::MemoryRegion, user_error::UserError, vm::Config,
         },
@@ -2929,7 +2929,7 @@ mod tests {
             account::AccountSharedData, bpf_loader, fee_calculator::FeeCalculator, hash::hashv,
             transaction_context::TransactionContext,
         },
-        std::str::FromStr,
+        std::{borrow::Cow, str::FromStr},
     };
 
     macro_rules! assert_access_violation {
@@ -3792,8 +3792,6 @@ mod tests {
             leader_schedule_epoch: 4,
             unix_timestamp: 5,
         };
-        let mut data_clock = vec![];
-        bincode::serialize_into(&mut data_clock, &src_clock).unwrap();
         let src_epochschedule = EpochSchedule {
             slots_per_epoch: 1,
             leader_schedule_slot_offset: 2,
@@ -3801,35 +3799,33 @@ mod tests {
             first_normal_epoch: 3,
             first_normal_slot: 4,
         };
-        let mut data_epochschedule = vec![];
-        bincode::serialize_into(&mut data_epochschedule, &src_epochschedule).unwrap();
         let src_fees = Fees {
             fee_calculator: FeeCalculator {
                 lamports_per_signature: 1,
             },
         };
-        let mut data_fees = vec![];
-        bincode::serialize_into(&mut data_fees, &src_fees).unwrap();
         let src_rent = Rent {
             lamports_per_byte_year: 1,
             exemption_threshold: 2.0,
             burn_percent: 3,
         };
-        let mut data_rent = vec![];
-        bincode::serialize_into(&mut data_rent, &src_rent).unwrap();
-        let sysvars = [
-            (sysvar::clock::id(), data_clock),
-            (sysvar::epoch_schedule::id(), data_epochschedule),
-            (sysvar::fees::id(), data_fees),
-            (sysvar::rent::id(), data_rent),
-        ];
+
+        let mut sysvar_cache = SysvarCache::default();
+        sysvar_cache.push_entry(sysvar::clock::id(), bincode::serialize(&src_clock).unwrap());
+        sysvar_cache.push_entry(
+            sysvar::epoch_schedule::id(),
+            bincode::serialize(&src_epochschedule).unwrap(),
+        );
+        sysvar_cache.push_entry(sysvar::fees::id(), bincode::serialize(&src_fees).unwrap());
+        sysvar_cache.push_entry(sysvar::rent::id(), bincode::serialize(&src_rent).unwrap());
+
         let program_id = Pubkey::new_unique();
         let mut transaction_context = TransactionContext::new(
             vec![(program_id, AccountSharedData::new(0, 0, &bpf_loader::id()))],
             1,
         );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        invoke_context.sysvars = &sysvars;
+        invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
         invoke_context.push(&[], &[0], &[]).unwrap();
 
         // Test clock sysvar

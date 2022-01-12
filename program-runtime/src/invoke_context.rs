@@ -6,6 +6,7 @@ use {
         log_collector::LogCollector,
         native_loader::NativeLoader,
         pre_account::PreAccount,
+        sysvar_cache::SysvarCache,
         timings::{ExecuteDetailsTimings, ExecuteTimings},
     },
     solana_measure::measure::Measure,
@@ -28,7 +29,7 @@ use {
         sysvar::Sysvar,
         transaction_context::{InstructionAccount, TransactionAccount, TransactionContext},
     },
-    std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, sync::Arc},
+    std::{borrow::Cow, cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, sync::Arc},
 };
 
 pub type ProcessInstructionWithContext =
@@ -185,7 +186,7 @@ pub struct InvokeContext<'a> {
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
     builtin_programs: &'a [BuiltinProgram],
-    pub sysvars: &'a [(Pubkey, Vec<u8>)],
+    pub sysvar_cache: Cow<'a, SysvarCache>,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     compute_budget: ComputeBudget,
     current_compute_budget: ComputeBudget,
@@ -205,7 +206,7 @@ impl<'a> InvokeContext<'a> {
         transaction_context: &'a mut TransactionContext,
         rent: Rent,
         builtin_programs: &'a [BuiltinProgram],
-        sysvars: &'a [(Pubkey, Vec<u8>)],
+        sysvar_cache: Cow<'a, SysvarCache>,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         compute_budget: ComputeBudget,
         executors: Rc<RefCell<Executors>>,
@@ -221,7 +222,7 @@ impl<'a> InvokeContext<'a> {
             rent,
             pre_accounts: Vec::new(),
             builtin_programs,
-            sysvars,
+            sysvar_cache,
             log_collector,
             current_compute_budget: compute_budget,
             compute_budget,
@@ -244,7 +245,7 @@ impl<'a> InvokeContext<'a> {
             transaction_context,
             Rent::default(),
             builtin_programs,
-            &[],
+            Cow::Owned(SysvarCache::default()),
             Some(LogCollector::new_ref()),
             ComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
@@ -989,7 +990,7 @@ impl<'a> InvokeContext<'a> {
 
     /// Get the value of a sysvar by its id
     pub fn get_sysvar<T: Sysvar>(&self, id: &Pubkey) -> Result<T, InstructionError> {
-        self.sysvars
+        self.sysvar_cache
             .iter()
             .find_map(|(key, data)| {
                 if id == key {
@@ -1081,7 +1082,7 @@ pub fn mock_process_instruction_with_sysvars(
     transaction_accounts: Vec<TransactionAccount>,
     instruction_accounts: Vec<AccountMeta>,
     expected_result: Result<(), InstructionError>,
-    sysvars: &[(Pubkey, Vec<u8>)],
+    sysvar_cache: &SysvarCache,
     process_instruction: ProcessInstructionWithContext,
 ) -> Vec<AccountSharedData> {
     program_indices.insert(0, transaction_accounts.len());
@@ -1096,7 +1097,7 @@ pub fn mock_process_instruction_with_sysvars(
         ComputeBudget::default().max_invoke_depth.saturating_add(1),
     );
     let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-    invoke_context.sysvars = sysvars;
+    invoke_context.sysvar_cache = Cow::Borrowed(sysvar_cache);
     let result = invoke_context
         .push(
             &preparation.instruction_accounts,
@@ -1127,7 +1128,7 @@ pub fn mock_process_instruction(
         transaction_accounts,
         instruction_accounts,
         expected_result,
-        &[],
+        &SysvarCache::default(),
         process_instruction,
     )
 }
