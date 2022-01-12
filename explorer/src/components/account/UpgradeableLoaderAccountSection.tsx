@@ -14,6 +14,7 @@ import { addressLabel } from "utils/tx";
 import { useCluster } from "providers/cluster";
 import { ErrorCard } from "components/common/ErrorCard";
 import { UnknownAccountCard } from "components/account/UnknownAccountCard";
+import { Downloadable } from "components/common/Downloadable";
 
 export function UpgradeableLoaderAccountSection({
   account,
@@ -179,7 +180,14 @@ export function UpgradeableProgramDataSection({
         {account.details?.space !== undefined && (
           <tr>
             <td>Data (Bytes)</td>
-            <td className="text-lg-end">{account.details.space}</td>
+            <td className="text-lg-end">
+              <Downloadable
+                data={programData.data[0]}
+                filename={`${account.pubkey.toString()}.bin`}
+              >
+                <span className="me-2">{account.details.space}</span>
+              </Downloadable>
+            </td>
           </tr>
         )}
         <tr>
