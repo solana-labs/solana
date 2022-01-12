@@ -3079,7 +3079,6 @@ impl AccountsDb {
             if i == 0 {
                 error!("ancient_append_vec: combine_ancient_slots max_root: {}, first slot: {}, distance from max: {}", max_root, slot, max_root.saturating_sub(slot));
             }
-            i += 1;
             if let Some(storages) = self.storage.map.get(&slot) {
                 let mut dead_storages = Vec::default();
                 let storages = storages.value();
@@ -3092,9 +3091,10 @@ impl AccountsDb {
                     // maybe this is good
                     let first_storage = all_storages.first().unwrap();
                     let capacity = first_storage.accounts.capacity();
-                    if capacity >= size {
+                    if first_storage.accounts.is_ancient() {
                         error!("ancient_append_vec: reusing existing ancient append vec: {}, capacity: {}", slot, capacity);
                         current_storage = Some((slot, Arc::clone(first_storage)));
+                        continue; // we're done with this slot - this slot IS the ancient append vec
                     } else {
                         error!("ancient_append_vec: NOT reusing existing ancient append vec: {}, capacity: {}, size: {}, short: {}, id: {}", slot, capacity, size, size.saturating_sub(capacity), first_storage.append_vec_id());
                     }
@@ -3103,6 +3103,7 @@ impl AccountsDb {
                     let capacity = first_storage.accounts.capacity();
                     error!("ancient_append_vec: we have {} storages: NOT reusing existing ancient append vec: {}, capacity: {}, size: {}, short: {}", all_storages.len(), slot, capacity, size, size.saturating_sub(capacity));
                 }
+                i += 1;
                 if current_storage.is_none() {
                     // our oldest slot is not an append vec of max size, so we need to start with rewriting that storage to create an ancient append vec for the oldest slot
                     let (shrunken_store, _time) = self.get_store_for_shrink(slot, size);
@@ -3162,7 +3163,14 @@ impl AccountsDb {
                 if !accounts_next_append_vec.is_empty() {
                     drop_root = false;
                     // we need a new ancient append vec
-                    assert!(slot > writer.0, "slot: {}, writer.0: {}, remaining accounts: {}, available_bytes: {}", slot, writer.0, accounts_next_append_vec.len(), available_bytes);
+                    assert!(
+                        slot > writer.0,
+                        "slot: {}, writer.0: {}, remaining accounts: {}, available_bytes: {}",
+                        slot,
+                        writer.0,
+                        accounts_next_append_vec.len(),
+                        available_bytes
+                    );
                     // our oldest slot is not an append vec of max size, so we need to start with rewriting that storage to create an ancient append vec for the oldest slot
                     let (shrunken_store, _time) = self.get_store_for_shrink(slot, size);
                     shrunken_store.accounts.set_ancient();
@@ -3239,12 +3247,12 @@ impl AccountsDb {
                     .clean_dead_slot(*slot, &mut AccountsIndexRootsStats::default());
             });
         }
-            error!(
-                "ancient_append_vec: purge_dead_slots_from_storage: first {:?}, last {:?}, len {:?}, ",
-                dropped_roots_storages.first(),
-                dropped_roots_storages.last(),
-                dropped_roots_storages.len()
-            );
+        error!(
+            "ancient_append_vec: purge_dead_slots_from_storage: first {:?}, last {:?}, len {:?}, ",
+            dropped_roots_storages.first(),
+            dropped_roots_storages.last(),
+            dropped_roots_storages.len()
+        );
         self.purge_dead_slots_from_storage(dropped_roots_storages.iter(), &PurgeStats::default());
 
         t.stop();
