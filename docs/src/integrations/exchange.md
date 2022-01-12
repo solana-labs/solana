@@ -568,8 +568,9 @@ public class PubkeyValidator
 
 ## Minimum Deposit & Withdrawal Amounts
 
-Every deposit and withdrawal must be greater or equal to the minimum rent-exempt
-balance for a 0-data account, currently: 0.000890880 SOL
+Every deposit and withdrawal of SOL must be greater or equal to the minimum
+rent-exempt balance for the account at the wallet address (a basic SOL account
+holding no data), currently: 0.000890880 SOL
 
 Similarly, every deposit account must contain at least this balance.
 
