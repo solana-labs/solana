@@ -3161,7 +3161,7 @@ impl AccountsDb {
                 if !accounts_next_append_vec.is_empty() {
                     drop_root = false;
                     // we need a new ancient append vec
-                    assert!(slot > writer.0);
+                    assert!(slot > writer.0, "slot: {}, writer.0: {}, remaining accounts: {}, available_bytes: {}", slot, writer.0, accounts_next_append_vec.len(), available_bytes);
                     // our oldest slot is not an append vec of max size, so we need to start with rewriting that storage to create an ancient append vec for the oldest slot
                     let (shrunken_store, _time) = self.get_store_for_shrink(slot, size);
                     shrunken_store.accounts.set_ancient();
