@@ -294,7 +294,7 @@ mod tests {
 
         *time_previous = time_now;
         *storage_previous = storage_now;
-        *data_shred_storage_previous = data_shred_storage_now;
+        *data_shred_storage_previous = data_shred_storage_now.try_into().unwrap();
     }
 
     /// Helper function of the benchmark `test_ledger_cleanup_compaction` which
