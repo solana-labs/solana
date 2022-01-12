@@ -3198,7 +3198,7 @@ impl AccountsDb {
                             self.dirty_stores
                                 .insert((slot, store.append_vec_id()), store.clone());
                             dead_storages.push(store.clone());
-                            if created_this_slot || true {
+                            if created_this_slot {
                                 error!(
                                     "ancient_append_vec: NOT retaining store: {}, slot: {}",
                                     store.append_vec_id(),
@@ -3208,7 +3208,7 @@ impl AccountsDb {
                             store.accounts.reset();
                             false
                         } else {
-                            if created_this_slot || true {
+                            if created_this_slot {
                                 error!(
                                     "ancient_append_vec: retaining store: {}, slot: {}",
                                     store.append_vec_id(),
