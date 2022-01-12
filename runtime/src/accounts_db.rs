@@ -3071,6 +3071,7 @@ impl AccountsDb {
         use crate::append_vec::MAXIMUM_APPEND_VEC_FILE_SIZE;
         let mut current_storage = None;
         let mut dropped_roots = vec![];
+        let mut dropped_roots_storages = vec![];
         let mut i = 0;
         let len = sorted_slots.len();
         let mut t = Measure::start("");
@@ -3210,8 +3211,7 @@ impl AccountsDb {
                         }
                     });
                     if stores.is_empty() {
-                        drop(stores);
-                        self.purge_dead_slots_from_storage([slot].iter(), &PurgeStats::default());
+                        dropped_roots_storages.push(slot);
                     }
                 }
                 start.stop();
@@ -3225,6 +3225,15 @@ impl AccountsDb {
                 }
             }
         }
+
+            error!(
+                "ancient_append_vec: purge_dead_slots_from_storage: first {:?}, last {:?}, len {:?}, ",
+                dropped_roots_storages.first(),
+                dropped_roots_storages.last(),
+                dropped_roots_storages.len()
+            );
+        self.purge_dead_slots_from_storage(dropped_roots_storages.iter(), &PurgeStats::default());
+
         if !dropped_roots.is_empty() {
             // todo: afterwards, we need to remove the roots sometime
             error!(
