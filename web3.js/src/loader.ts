@@ -170,16 +170,23 @@ export class Loader {
         programId,
         data,
       });
-      transactions.push(
-        sendAndConfirmTransaction(connection, transaction, [payer, program], {
+
+      const tx = sendAndConfirmTransaction(
+        connection,
+        transaction,
+        [payer, program],
+        {
           commitment: 'confirmed',
-        }),
+        },
       );
 
       // Delay between sends in an attempt to reduce rate limit errors
       if (connection._rpcEndpoint.includes('solana.com')) {
+        await tx;
         const REQUESTS_PER_SECOND = 4;
         await sleep(1000 / REQUESTS_PER_SECOND);
+      } else {
+        transactions.push(tx);
       }
 
       offset += chunkSize;
