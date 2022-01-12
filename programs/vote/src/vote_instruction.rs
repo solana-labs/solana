@@ -518,8 +518,9 @@ mod tests {
     use {
         super::*,
         bincode::serialize,
-        solana_program_runtime::invoke_context::{
-            mock_process_instruction, mock_process_instruction_with_sysvars,
+        solana_program_runtime::{
+            invoke_context::{mock_process_instruction, mock_process_instruction_with_sysvars},
+            sysvar_cache::SysvarCache,
         },
         solana_sdk::{
             account::{self, Account, AccountSharedData},
@@ -579,12 +580,13 @@ mod tests {
                 )
             })
             .collect();
+        let mut sysvar_cache = SysvarCache::default();
         let rent = Rent::default();
-        let rent_sysvar = (sysvar::rent::id(), bincode::serialize(&rent).unwrap());
+        sysvar_cache.push_entry(sysvar::rent::id(), bincode::serialize(&rent).unwrap());
         let clock = Clock::default();
-        let clock_sysvar = (sysvar::clock::id(), bincode::serialize(&clock).unwrap());
+        sysvar_cache.push_entry(sysvar::clock::id(), bincode::serialize(&clock).unwrap());
         let slot_hashes = SlotHashes::default();
-        let slot_hashes_sysvar = (
+        sysvar_cache.push_entry(
             sysvar::slot_hashes::id(),
             bincode::serialize(&slot_hashes).unwrap(),
         );
@@ -595,7 +597,7 @@ mod tests {
             transaction_accounts,
             instruction.accounts.clone(),
             expected_result,
-            &[rent_sysvar, clock_sysvar, slot_hashes_sysvar],
+            &sysvar_cache,
             super::process_instruction,
         )
     }

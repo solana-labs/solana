@@ -5514,6 +5514,8 @@ dependencies = [
  "num-traits",
  "rustc_version 0.4.0",
  "serde",
+ "solana-frozen-abi 1.10.0",
+ "solana-frozen-abi-macro 1.10.0",
  "solana-logger 1.10.0",
  "solana-measure",
  "solana-sdk",
