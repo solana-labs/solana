@@ -153,10 +153,9 @@ generate a Solana keypair using any of our [wallet tools](../wallet-guide/cli.md
 
 We recommend using a unique deposit account for each of your users.
 
-Solana accounts are charged [rent](developing/programming-model/accounts.md#rent) on creation and once per
-epoch, but they can be made rent-exempt if they contain 2-years worth of rent in
-SOL. In order to find the minimum rent-exempt balance for your deposit accounts,
-query the
+Solana accounts must be made rent-exempt by containing 2-years worth of
+[rent](developing/programming-model/accounts.md#rent) in SOL. In order to find
+the minimum rent-exempt balance for your deposit accounts, query the
 [`getMinimumBalanceForRentExemption` endpoint](developing/clients/jsonrpc-api.md#getminimumbalanceforrentexemption):
 
 ```bash
@@ -567,6 +566,20 @@ public class PubkeyValidator
 }
 ```
 
+## Minimum Deposit & Withdrawal Amounts
+
+Every deposit and withdrawal of SOL must be greater or equal to the minimum
+rent-exempt balance for the account at the wallet address (a basic SOL account
+holding no data), currently: 0.000890880 SOL
+
+Similarly, every deposit account must contain at least this balance.
+
+```bash
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getMinimumBalanceForRentExemption","params":[0]}' localhost:8899
+
+{"jsonrpc":"2.0","result":890880,"id":1}
+```
+
 ## Supporting the SPL Token Standard
 
 [SPL Token](https://spl.solana.com/token) is the standard for wrapped/synthetic
@@ -750,4 +763,4 @@ Be sure to test your complete workflow on Solana devnet and testnet
 [clusters](../clusters.md) before moving to production on mainnet-beta. Devnet
 is the most open and flexible, and ideal for initial development, while testnet
 offers more realistic cluster configuration. Both devnet and testnet support a faucet,
-run `solana airdrop 1` to obtain some devnet or testnet SOL for developement and testing.
+run `solana airdrop 1` to obtain some devnet or testnet SOL for development and testing.
