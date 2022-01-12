@@ -86,7 +86,7 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
             stakes: dvb.stakes,
             epoch_stakes: dvb.epoch_stakes,
             is_delta: dvb.is_delta,
-            accounts_data_len: u64::default(), // bprumo TODO: may want to revisit this
+            accounts_data_len: None,
         }
     }
 }
@@ -131,9 +131,6 @@ pub(crate) struct SerializableVersionedBank<'a> {
 
 impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedBank<'a> {
     fn from(rhs: crate::bank::BankFieldsToSerialize<'a>) -> Self {
-        fn new<T: Default>() -> T {
-            T::default()
-        }
         Self {
             blockhash_queue: rhs.blockhash_queue,
             ancestors: rhs.ancestors,
@@ -151,7 +148,7 @@ impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedB
             ns_per_slot: rhs.ns_per_slot,
             genesis_creation_time: rhs.genesis_creation_time,
             slots_per_year: rhs.slots_per_year,
-            unused: rhs.unused,
+            unused: u64::default(),
             slot: rhs.slot,
             epoch: rhs.epoch,
             block_height: rhs.block_height,
@@ -164,7 +161,7 @@ impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedB
             epoch_schedule: rhs.epoch_schedule,
             inflation: rhs.inflation,
             stakes: rhs.stakes,
-            unused_accounts: new(),
+            unused_accounts: UnusedAccounts::default(),
             epoch_stakes: rhs.epoch_stakes,
             is_delta: rhs.is_delta,
         }

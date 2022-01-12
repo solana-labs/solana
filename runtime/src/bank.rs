@@ -865,7 +865,7 @@ pub(crate) struct BankFieldsToDeserialize {
     pub(crate) genesis_creation_time: UnixTimestamp,
     pub(crate) slots_per_year: f64,
     #[allow(dead_code)]
-    pub(crate) unused: u64,
+    pub(crate) unused: u64, // bprumo TODO: Remove this field once only newer snapshot serde style is supported
     pub(crate) slot: Slot,
     pub(crate) epoch: Epoch,
     pub(crate) block_height: u64,
@@ -880,7 +880,7 @@ pub(crate) struct BankFieldsToDeserialize {
     pub(crate) stakes: Stakes,
     pub(crate) epoch_stakes: HashMap<Epoch, EpochStakes>,
     pub(crate) is_delta: bool,
-    pub(crate) accounts_data_len: u64,
+    pub(crate) accounts_data_len: Option<u64>, // bprumo TODO: Remove Option wrapper once only newer snapshot serde style is supported
 }
 
 // Bank's common fields shared by all supported snapshot versions for serialization.
@@ -905,7 +905,7 @@ pub(crate) struct BankFieldsToSerialize<'a> {
     pub(crate) ns_per_slot: u128,
     pub(crate) genesis_creation_time: UnixTimestamp,
     pub(crate) slots_per_year: f64,
-    pub(crate) unused: u64,
+    //pub(crate) unused: u64, // bprumo TODO: Remove this field once only newer snapshot serde style is supported
     pub(crate) slot: Slot,
     pub(crate) epoch: Epoch,
     pub(crate) block_height: u64,
@@ -945,7 +945,7 @@ impl PartialEq for Bank {
             && self.ns_per_slot == other.ns_per_slot
             && self.genesis_creation_time == other.genesis_creation_time
             && self.slots_per_year == other.slots_per_year
-            && self.unused == other.unused
+            //&& self.unused == other.unused // bprumo TODO: try to remove this
             && self.slot == other.slot
             && self.epoch == other.epoch
             && self.block_height == other.block_height
@@ -1098,7 +1098,7 @@ pub struct Bank {
     slots_per_year: f64,
 
     /// Unused
-    unused: u64,
+    //unused: u64, // bprumo TODO: try to remove this
 
     /// Bank slot (i.e. block)
     slot: Slot,
@@ -1302,7 +1302,7 @@ impl Bank {
             ns_per_slot: u128::default(),
             genesis_creation_time: UnixTimestamp::default(),
             slots_per_year: f64::default(),
-            unused: u64::default(),
+            //unused: u64::default(), // bprumo TODO: try to remove this
             slot: Slot::default(),
             bank_id: BankId::default(),
             epoch: Epoch::default(),
@@ -1533,7 +1533,7 @@ impl Bank {
             ticks_per_slot: parent.ticks_per_slot,
             ns_per_slot: parent.ns_per_slot,
             genesis_creation_time: parent.genesis_creation_time,
-            unused: parent.unused,
+            //unused: parent.unused, // bprumo TODO: try to remove this
             slots_per_year: parent.slots_per_year,
             epoch_schedule,
             collected_rent: AtomicU64::new(0),
@@ -1713,7 +1713,7 @@ impl Bank {
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
         debug_do_not_add_builtins: bool,
-        _accounts_data_len: u64, // bprumo TODO: remove me
+        computed_accounts_data_len: u64, // bprumo TODO: Remove this parameter once only newer snapshot serde style is supported
     ) -> Self {
         fn new<T: Default>() -> T {
             T::default()
@@ -1740,7 +1740,7 @@ impl Bank {
             ns_per_slot: fields.ns_per_slot,
             genesis_creation_time: fields.genesis_creation_time,
             slots_per_year: fields.slots_per_year,
-            unused: genesis_config.unused,
+            //unused: genesis_config.unused, // bprumo TODO: try to remove this
             slot: fields.slot,
             bank_id: 0,
             epoch: fields.epoch,
@@ -1777,8 +1777,13 @@ impl Bank {
             vote_only_bank: false,
             cost_tracker: RwLock::new(CostTracker::default()),
             sysvar_cache: RwLock::new(SysvarCache::default()),
-            accounts_data_len: AtomicU64::new(fields.accounts_data_len),
+            accounts_data_len: AtomicU64::new(
+                fields
+                    .accounts_data_len
+                    .map_or(computed_accounts_data_len, |len| len),
+            ),
         };
+
         bank.finish_init(
             genesis_config,
             additional_builtins,
@@ -1800,7 +1805,7 @@ impl Bank {
                 * genesis_config.ticks_per_slot as u128
         );
         assert_eq!(bank.genesis_creation_time, genesis_config.creation_time);
-        assert_eq!(bank.unused, genesis_config.unused);
+        //assert_eq!(bank.unused, genesis_config.unused); // bprumo TODO: try to remove this
         assert_eq!(bank.max_tick_height, (bank.slot + 1) * bank.ticks_per_slot);
         assert_eq!(
             bank.slots_per_year,
@@ -1845,7 +1850,7 @@ impl Bank {
             ns_per_slot: self.ns_per_slot,
             genesis_creation_time: self.genesis_creation_time,
             slots_per_year: self.slots_per_year,
-            unused: self.unused,
+            //unused: u64::default(), //self.unused, // bprumo TODO: try to remove this
             slot: self.slot,
             epoch: self.epoch,
             block_height: self.block_height,
@@ -1984,9 +1989,12 @@ impl Bank {
     }
 
     /// Unused conversion
-    pub fn get_unused_from_slot(rooted_slot: Slot, unused: u64) -> u64 {
-        (rooted_slot + (unused - 1)) / unused
-    }
+    // bprumo TODO: try to remove this
+    /*
+     * pub fn get_unused_from_slot(rooted_slot: Slot, unused: u64) -> u64 {
+     *     (rooted_slot + (unused - 1)) / unused
+     * }
+     */
 
     pub fn clock(&self) -> sysvar::clock::Clock {
         from_account(&self.get_account(&sysvar::clock::id()).unwrap_or_default())
@@ -2913,7 +2921,7 @@ impl Bank {
         self.ticks_per_slot = genesis_config.ticks_per_slot();
         self.ns_per_slot = genesis_config.ns_per_slot();
         self.genesis_creation_time = genesis_config.creation_time;
-        self.unused = genesis_config.unused;
+        //self.unused = genesis_config.unused; // bprumo TODO: try to remove me
         self.max_tick_height = (self.slot + 1) * self.ticks_per_slot;
         self.slots_per_year = genesis_config.slots_per_year();
 
