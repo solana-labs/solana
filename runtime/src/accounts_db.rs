@@ -3088,6 +3088,7 @@ impl AccountsDb {
                 let storages = storages.value();
                 let read = storages.read().unwrap();
                 let all_storages = read.values().cloned().collect::<Vec<_>>();
+                drop(storages);
                 drop(read);
                 let size = MAXIMUM_APPEND_VEC_FILE_SIZE - 2048; // below max?
                 let mut created_this_slot = false;
@@ -3184,6 +3185,7 @@ impl AccountsDb {
                     let writer = current_storage.as_ref().unwrap();
                     ids.push(writer.1.append_vec_id());
 
+                    error!("{}{}", file!(), line!());
                     // write the rest to the next ancient storage
                     let _store_accounts_timing = self.store_accounts_frozen(
                         writer.0,
@@ -3192,11 +3194,14 @@ impl AccountsDb {
                         Some(Box::new(move |_, _| writer.1.clone())),
                         None,
                     );
+                    error!("{}{}", file!(), line!());
                 }
 
+                error!("{}{}", file!(), line!());
                 // Purge old, overwritten storage entries
                 let mut start = Measure::start("write_storage_elapsed");
                 if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
+                    error!("{}{}", file!(), line!());
                     let mut stores = slot_stores.write().unwrap();
                     stores.retain(|_key, store| {
                         if store.count() == 0 || !ids.contains(&store.append_vec_id()) {
