@@ -168,9 +168,9 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
     let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
     let (vote_sender, vote_receiver) = unbounded();
     let mut bank = Bank::new_for_benches(&genesis_config);
+    // Allow arbitrary transaction processing time for the purposes of this bench
     bank.ns_per_slot = u128::MAX;
     let bank = Arc::new(bank);
-    // Allow arbitrary transaction processing time for the purposes of this bench
 
     // set cost tracker limits to MAX so it will not filter out TXs
     bank.write_cost_tracker()
