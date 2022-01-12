@@ -9,6 +9,7 @@ use {
     log::*,
     num_derive::{FromPrimitive, ToPrimitive},
     serde_derive::{Deserialize, Serialize},
+    solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_info,
     solana_sdk::{
         decode_error::DecodeError,
@@ -314,6 +315,7 @@ pub fn process_instruction(
     data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
+    let mut start = Measure::start("vote_start");
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
     trace!("process_instruction: {:?}", data);
@@ -355,14 +357,34 @@ pub fn process_instruction(
             vote_state::update_commission(me, commission, &signers)
         }
         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
+            start.stop();
+            let mut args = Measure::start("args");
             inc_new_counter_info!("vote-native", 1);
-            vote_state::process_vote(
+            let a = &from_keyed_account::<SlotHashes>(keyed_account_at_index(keyed_accounts, 1)?)?;
+            let b = &from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 2)?)?;
+            args.stop();
+            let mut process = Measure::start("process");
+            let mut start_ns = 0;
+            let mut next_slots_ns = 0;
+            let mut verify_ns = 0;
+            let mut get_state_ns = 0;
+            let mut set_state_ns = 0;
+            let r = vote_state::process_vote(
                 me,
-                &from_keyed_account::<SlotHashes>(keyed_account_at_index(keyed_accounts, 1)?)?,
-                &from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 2)?)?,
+                a,
+                b,
                 &vote,
                 &signers,
-            )
+                &mut start_ns,
+                &mut next_slots_ns,
+                &mut get_state_ns,
+                &mut verify_ns,
+                &mut set_state_ns,
+            );
+            process.stop();
+            info!("{} {} {} start: {}ns next_slots: {}ns get_state: {}ns verify: {}ns set_state: {}ns",
+                start, args, process, start_ns, next_slots_ns, get_state_ns, verify_ns, set_state_ns);
+            r
         }
         VoteInstruction::Withdraw(lamports) => {
             let to = keyed_account_at_index(keyed_accounts, 1)?;

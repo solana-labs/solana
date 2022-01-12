@@ -5,6 +5,7 @@ use {
     bincode::{deserialize, serialize_into, serialized_size, ErrorKind},
     log::*,
     serde_derive::{Deserialize, Serialize},
+    solana_measure::measure::Measure,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::State,
@@ -352,15 +353,30 @@ impl VoteState {
         vote: &Vote,
         slot_hashes: &[SlotHash],
         epoch: Epoch,
+        start_ns: &mut u64,
+        next_slots_ns: &mut u64,
     ) -> Result<(), VoteError> {
+        let mut start = Measure::start("process_vote");
         if vote.slots.is_empty() {
+            start.stop();
+            *start_ns += start.as_ns();
             return Err(VoteError::EmptySlots);
         }
-        self.check_slots_are_valid(vote, slot_hashes)?;
+        let e = self.check_slots_are_valid(vote, slot_hashes);
+        if e.is_err() {
+            start.stop();
+            *start_ns += start.as_ns();
+            return e;
+        }
+        start.stop();
+        *start_ns += start.as_ns();
 
+        let mut next_slots = Measure::start("next_slots");
         vote.slots
             .iter()
             .for_each(|s| self.process_next_vote_slot(*s, epoch));
+        next_slots.stop();
+        *next_slots_ns += next_slots.as_ns();
         Ok(())
     }
 
@@ -419,7 +435,7 @@ impl VoteState {
     /// "unchecked" functions used by tests and Tower
     pub fn process_vote_unchecked(&mut self, vote: &Vote) {
         let slot_hashes: Vec<_> = vote.slots.iter().rev().map(|x| (*x, vote.hash)).collect();
-        let _ignored = self.process_vote(vote, &slot_hashes, self.current_epoch());
+        let _ignored = self.process_vote(vote, &slot_hashes, self.current_epoch(), &mut 0, &mut 0);
     }
     pub fn process_slot_vote_unchecked(&mut self, slot: Slot) {
         self.process_vote_unchecked(&Vote::new(vec![slot], Hash::default()));
@@ -744,9 +760,18 @@ pub fn process_vote<S: std::hash::BuildHasher>(
     clock: &Clock,
     vote: &Vote,
     signers: &HashSet<Pubkey, S>,
+    start_ns: &mut u64,
+    next_slots_ns: &mut u64,
+    get_state_ns: &mut u64,
+    verify_ns: &mut u64,
+    set_state_ns: &mut u64,
 ) -> Result<(), InstructionError> {
+    let mut get_state = Measure::start("get_state");
     let versioned = State::<VoteStateVersions>::state(vote_account)?;
+    get_state.stop();
+    *get_state_ns += get_state.as_ns();
 
+    let mut verify = Measure::start("verify");
     if versioned.is_uninitialized() {
         return Err(InstructionError::UninitializedAccount);
     }
@@ -754,8 +779,11 @@ pub fn process_vote<S: std::hash::BuildHasher>(
     let mut vote_state = versioned.convert_to_current();
     let authorized_voter = vote_state.get_and_update_authorized_voter(clock.epoch)?;
     verify_authorized_signer(&authorized_voter, signers)?;
+    verify.stop();
+    *verify_ns += verify.as_ns();
 
-    vote_state.process_vote(vote, slot_hashes, clock.epoch)?;
+    vote_state.process_vote(vote, slot_hashes, clock.epoch, start_ns, next_slots_ns)?;
+    let mut set_state = Measure::start("set_state");
     if let Some(timestamp) = vote.timestamp {
         vote.slots
             .iter()
@@ -763,7 +791,10 @@ pub fn process_vote<S: std::hash::BuildHasher>(
             .ok_or(VoteError::EmptySlots)
             .and_then(|slot| vote_state.process_timestamp(*slot, timestamp))?;
     }
-    vote_account.set_state(&VoteStateVersions::new_current(vote_state))
+    let r = vote_account.set_state(&VoteStateVersions::new_current(vote_state));
+    set_state.stop();
+    *set_state_ns += set_state.as_ns();
+    r
 }
 
 pub fn create_account_with_authorized(

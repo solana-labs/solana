@@ -20,6 +20,7 @@ solana-frozen-abi = { path = "../../frozen-abi", version = "=1.8.13" }
 solana-frozen-abi-macro = { path = "../../frozen-abi/macro", version = "=1.8.13" }
 solana-logger = { path = "../../logger", version = "=1.8.13" }
 solana-metrics = { path = "../../metrics", version = "=1.8.13" }
+solana-measure = { path = "../../measure", version = "=1.8.13" }
 solana-sdk = { path = "../../sdk", version = "=1.8.13" }
 thiserror = "1.0"
 
