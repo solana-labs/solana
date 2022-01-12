@@ -973,7 +973,7 @@ pub fn withdraw<S: std::hash::BuildHasher>(
     lamports: u64,
     to_account: &KeyedAccount,
     signers: &HashSet<Pubkey, S>,
-    rent_sysvar: Option<Rent>,
+    rent_sysvar: Option<&Rent>,
 ) -> Result<(), InstructionError> {
     let vote_state: VoteState =
         State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
@@ -2072,7 +2072,7 @@ mod tests {
                     &RefCell::new(AccountSharedData::default()),
                 ),
                 &signers,
-                Some(rent_sysvar),
+                Some(&rent_sysvar),
             );
             assert_eq!(res, Err(InstructionError::InsufficientFunds));
         }
@@ -2095,7 +2095,7 @@ mod tests {
                 withdraw_lamports,
                 &KeyedAccount::new(&solana_sdk::pubkey::new_rand(), false, &to_account),
                 &signers,
-                Some(rent_sysvar),
+                Some(&rent_sysvar),
             );
             assert_eq!(res, Ok(()));
             assert_eq!(
@@ -2108,7 +2108,7 @@ mod tests {
         // full withdraw, before/after activation
         {
             let rent_sysvar = Rent::default();
-            for rent_sysvar in [None, Some(rent_sysvar)] {
+            for rent_sysvar in [None, Some(&rent_sysvar)] {
                 let to_account = RefCell::new(AccountSharedData::default());
                 let (vote_pubkey, vote_account) = create_test_account();
                 let lamports = vote_account.borrow().lamports();
