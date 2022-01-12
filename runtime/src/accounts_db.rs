@@ -3092,7 +3092,7 @@ impl AccountsDb {
                     let first_storage = all_storages.first().unwrap();
                     let capacity = first_storage.accounts.capacity();
                     if first_storage.accounts.is_ancient() {
-                        error!("ancient_append_vec: reusing existing ancient append vec: {}, capacity: {}", slot, capacity);
+                        error!("ancient_append_vec: reusing existing ancient append vec: {}, capacity: {}, full: {}%", slot, capacity, first_storage.accounts.remaining_bytes() * 100 / capacity);
                         current_storage = Some((slot, Arc::clone(first_storage)));
                         continue; // we're done with this slot - this slot IS the ancient append vec
                     } else {
