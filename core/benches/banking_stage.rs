@@ -175,7 +175,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
     // set cost tracker limits to MAX so it will not filter out TXs
     bank.write_cost_tracker()
         .unwrap()
-        .set_limits(std::u64::MAX, std::u64::MAX);
+        .set_limits(std::u64::MAX, std::u64::MAX, std::u64::MAX);
 
     debug!("threads: {} txs: {}", num_threads, txes);
 

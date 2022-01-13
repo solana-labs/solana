@@ -727,6 +727,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
             25 => TransactionError::InvalidAddressLookupTableData,
             26 => TransactionError::InvalidAddressLookupTableIndex,
             27 => TransactionError::InvalidRentPayingAccount,
+            28 => TransactionError::WouldExceedMaxVoteCostLimit,
             _ => return Err("Invalid TransactionError"),
         })
     }
@@ -815,9 +816,11 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                 TransactionError::InvalidAddressLookupTableIndex => {
                     tx_by_addr::TransactionErrorType::InvalidAddressLookupTableIndex
                 }
-
                 TransactionError::InvalidRentPayingAccount => {
                     tx_by_addr::TransactionErrorType::InvalidRentPayingAccount
+                }
+                TransactionError::WouldExceedMaxVoteCostLimit => {
+                    tx_by_addr::TransactionErrorType::WouldExceedMaxVoteCostLimit
                 }
             } as i32,
             instruction_error: match transaction_error {
@@ -1226,6 +1229,14 @@ mod test {
         );
 
         let transaction_error = TransactionError::WouldExceedMaxBlockCostLimit;
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error = TransactionError::WouldExceedMaxVoteCostLimit;
         let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
             transaction_error.clone().into();
         assert_eq!(

@@ -5,10 +5,7 @@
 //! The main function is `calculate_cost` which returns &TransactionCost.
 //!
 use {
-    crate::{
-        bank::is_simple_vote_transaction, block_cost_limits::*,
-        execute_cost_table::ExecuteCostTable,
-    },
+    crate::{block_cost_limits::*, execute_cost_table::ExecuteCostTable},
     log::*,
     solana_sdk::{
         instruction::CompiledInstruction, program_utils::limited_deserialize, pubkey::Pubkey,
@@ -27,9 +24,6 @@ pub struct TransactionCost {
     pub write_lock_cost: u64,
     pub data_bytes_cost: u64,
     pub execution_cost: u64,
-    // `cost_weight` is a multiplier could be applied to transaction cost,
-    // if set to zero allows the transaction to bypass cost limit check.
-    pub cost_weight: u32,
     pub account_data_size: u64,
 }
 
@@ -41,7 +35,6 @@ impl Default for TransactionCost {
             write_lock_cost: 0u64,
             data_bytes_cost: 0u64,
             execution_cost: 0u64,
-            cost_weight: 1u32,
             account_data_size: 0u64,
         }
     }
@@ -61,7 +54,6 @@ impl TransactionCost {
         self.write_lock_cost = 0;
         self.data_bytes_cost = 0;
         self.execution_cost = 0;
-        self.cost_weight = 1;
     }
 
     pub fn sum(&self) -> u64 {
@@ -118,7 +110,6 @@ impl CostModel {
         self.get_write_lock_cost(&mut tx_cost, transaction);
         tx_cost.data_bytes_cost = self.get_data_bytes_cost(transaction);
         tx_cost.execution_cost = self.get_transaction_cost(transaction);
-        tx_cost.cost_weight = self.calculate_cost_weight(transaction);
         tx_cost.account_data_size = self.calculate_account_data_size(transaction);
 
         debug!("transaction {:?} has cost {:?}", transaction, tx_cost);
@@ -254,15 +245,6 @@ impl CostModel {
             })
             .sum()
     }
-
-    fn calculate_cost_weight(&self, transaction: &SanitizedTransaction) -> u32 {
-        if is_simple_vote_transaction(transaction) {
-            // vote has zero cost weight, so it bypasses block cost limit checking
-            0u32
-        } else {
-            1u32
-        }
-    }
 }
 
 #[cfg(test)]
@@ -283,7 +265,6 @@ mod tests {
             system_program, system_transaction,
             transaction::Transaction,
         },
-        solana_vote_program::vote_transaction,
         std::{
             str::FromStr,
             sync::{Arc, RwLock},
@@ -530,7 +511,6 @@ mod tests {
         assert_eq!(expected_account_cost, tx_cost.write_lock_cost);
         assert_eq!(expected_execution_cost, tx_cost.execution_cost);
         assert_eq!(2, tx_cost.writable_accounts.len());
-        assert_eq!(1u32, tx_cost.cost_weight);
     }
 
     #[test]
@@ -635,32 +615,5 @@ mod tests {
             .instruction_execution_cost_table
             .get_cost(&solana_vote_program::id())
             .is_some());
-    }
-
-    #[test]
-    fn test_calculate_cost_weight() {
-        let (mint_keypair, start_hash) = test_setup();
-
-        let keypair = Keypair::new();
-        let simple_transaction = SanitizedTransaction::from_transaction_for_tests(
-            system_transaction::transfer(&mint_keypair, &keypair.pubkey(), 2, start_hash),
-        );
-        let vote_transaction = SanitizedTransaction::from_transaction_for_tests(
-            vote_transaction::new_vote_transaction(
-                vec![42],
-                Hash::default(),
-                Hash::default(),
-                &keypair,
-                &keypair,
-                &keypair,
-                None,
-            ),
-        );
-
-        let testee = CostModel::default();
-
-        // For now, vote has zero weight, everything else is neutral, for now
-        assert_eq!(1u32, testee.calculate_cost_weight(&simple_transaction));
-        assert_eq!(0u32, testee.calculate_cost_weight(&vote_transaction));
     }
 }

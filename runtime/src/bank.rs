@@ -218,7 +218,7 @@ impl RentDebits {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "Gr2MTwWyUdkbF6FxM6TSwGaC3c5buUirHmh64oAPgg7Z")]
+#[frozen_abi(digest = "FPLuTUU5MjwsijzDubxY6BvBEkWULhYNUyY6Puqejb4g")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 // Eager rent collection repeats in cyclic manner.
@@ -3791,6 +3791,7 @@ impl Bank {
                     Some(index)
                 }
                 Err(TransactionError::WouldExceedMaxBlockCostLimit)
+                | Err(TransactionError::WouldExceedMaxVoteCostLimit)
                 | Err(TransactionError::WouldExceedMaxAccountCostLimit)
                 | Err(TransactionError::WouldExceedMaxAccountDataCostLimit) => Some(index),
                 Err(_) => None,
@@ -6416,7 +6417,7 @@ pub fn goto_end_of_slot(bank: &mut Bank) {
     }
 }
 
-pub fn is_simple_vote_transaction(transaction: &SanitizedTransaction) -> bool {
+fn is_simple_vote_transaction(transaction: &SanitizedTransaction) -> bool {
     if transaction.message().instructions().len() == 1 {
         let (program_pubkey, instruction) = transaction
             .message()
