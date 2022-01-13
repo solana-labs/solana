@@ -3850,6 +3850,7 @@ impl Bank {
                     Some(index)
                 }
                 Err(TransactionError::WouldExceedMaxBlockCostLimit)
+                | Err(TransactionError::WouldExceedMaxVoteCostLimit)
                 | Err(TransactionError::WouldExceedMaxAccountCostLimit) => Some(index),
                 Err(_) => None,
                 Ok(_) => None,
@@ -6433,7 +6434,7 @@ pub fn goto_end_of_slot(bank: &mut Bank) {
     }
 }
 
-pub fn is_simple_vote_transaction(transaction: &SanitizedTransaction) -> bool {
+fn is_simple_vote_transaction(transaction: &SanitizedTransaction) -> bool {
     if transaction.message().instructions().len() == 1 {
         let (program_pubkey, instruction) = transaction
             .message()
