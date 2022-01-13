@@ -3043,7 +3043,7 @@ impl AccountsDb {
     fn shrink_ancient_slots(&self) {
                 let max_root = self.accounts_index.max_root();
         use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
-        let epoch_width = DEFAULT_SLOTS_PER_EPOCH * 1 / 10; // todo - put some 'in-this-epoch' slots into an ancient append vec
+        let epoch_width = DEFAULT_SLOTS_PER_EPOCH * 1 / 100; // todo - put some 'in-this-epoch' slots into an ancient append vec
         let old_root = max_root.saturating_sub(epoch_width);
 
         let mut m = Measure::start("get slots");
@@ -3086,7 +3086,7 @@ impl AccountsDb {
                 let all_storages = read.values().cloned().collect::<Vec<_>>();
                 drop(storages);
                 drop(read);
-                let size = (MAXIMUM_APPEND_VEC_FILE_SIZE - 2048) / 10; // below max? todo - too small to make us do this more often
+                let size = (MAXIMUM_APPEND_VEC_FILE_SIZE - 2048) / 1; // below max? todo - too small to make us do this more often
                 let mut created_this_slot = false;
                 if current_storage.is_none() && all_storages.len() == 1 {
                     // maybe this is good
