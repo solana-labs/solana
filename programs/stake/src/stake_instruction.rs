@@ -17,7 +17,7 @@ use {
             program::id,
             state::{Authorized, Lockup},
         },
-        sysvar::{self, clock::Clock, rent::Rent, stake_history::StakeHistory},
+        sysvar::{clock::Clock, rent::Rent, stake_history::StakeHistory},
     },
 };
 
@@ -204,11 +204,11 @@ pub fn process_instruction(
                 .feature_set
                 .is_active(&feature_set::stake_program_v4::id())
             {
-                Some(invoke_context.get_sysvar::<Clock>(&sysvar::clock::id())?)
+                Some(invoke_context.get_sysvar_cache().get_clock()?)
             } else {
                 None
             };
-            me.set_lockup(&lockup, &signers, clock.as_ref())
+            me.set_lockup(&lockup, &signers, clock.as_deref())
         }
         StakeInstruction::InitializeChecked => {
             if invoke_context
@@ -326,8 +326,8 @@ pub fn process_instruction(
                     epoch: lockup_checked.epoch,
                     custodian,
                 };
-                let clock = Some(invoke_context.get_sysvar::<Clock>(&sysvar::clock::id())?);
-                me.set_lockup(&lockup, &signers, clock.as_ref())
+                let clock = Some(invoke_context.get_sysvar_cache().get_clock()?);
+                me.set_lockup(&lockup, &signers, clock.as_deref())
             } else {
                 Err(InstructionError::InvalidInstructionData)
             }
@@ -355,7 +355,7 @@ mod tests {
                 instruction::{self, LockupArgs},
                 state::{Authorized, Lockup, StakeAuthorize},
             },
-            sysvar::stake_history::StakeHistory,
+            sysvar::{self, stake_history::StakeHistory},
         },
         std::str::FromStr,
     };
@@ -438,8 +438,7 @@ mod tests {
             })
             .collect();
         let mut sysvar_cache = SysvarCache::default();
-        let clock = Clock::default();
-        sysvar_cache.push_entry(sysvar::clock::id(), bincode::serialize(&clock).unwrap());
+        sysvar_cache.set_clock(Clock::default());
         mock_process_instruction_with_sysvars(
             &id(),
             Vec::new(),
@@ -1189,8 +1188,7 @@ mod tests {
         .unwrap();
 
         let mut sysvar_cache = SysvarCache::default();
-        let clock = Clock::default();
-        sysvar_cache.push_entry(sysvar::clock::id(), bincode::serialize(&clock).unwrap());
+        sysvar_cache.set_clock(Clock::default());
         mock_process_instruction_with_sysvars(
             &id(),
             Vec::new(),
