@@ -7,9 +7,12 @@ use {
             v0::{self, LoadedAddresses},
             MessageHeader,
         },
+        nonce::NONCED_TX_MARKER_IX_INDEX,
+        program_utils::limited_deserialize,
         pubkey::Pubkey,
         sanitize::{Sanitize, SanitizeError},
         serialize_utils::{append_slice, append_u16, append_u8},
+        solana_program::{system_instruction::SystemInstruction, system_program},
     },
     bitflags::bitflags,
     std::convert::TryFrom,
@@ -291,6 +294,34 @@ impl SanitizedMessage {
             Self::Legacy(message) => message.is_upgradeable_loader_present(),
             Self::V0(message) => message.is_upgradeable_loader_present(),
         }
+    }
+
+    /// If the message uses a durable nonce, return the pubkey of the nonce account
+    pub fn get_durable_nonce(&self, nonce_must_be_writable: bool) -> Option<&Pubkey> {
+        self.instructions()
+            .get(NONCED_TX_MARKER_IX_INDEX as usize)
+            .filter(
+                |ix| match self.get_account_key(ix.program_id_index as usize) {
+                    Some(program_id) => system_program::check_id(program_id),
+                    _ => false,
+                },
+            )
+            .filter(|ix| {
+                matches!(
+                    limited_deserialize(&ix.data, 4 /* serialized size of AdvanceNonceAccount */),
+                    Ok(SystemInstruction::AdvanceNonceAccount)
+                )
+            })
+            .and_then(|ix| {
+                ix.accounts.get(0).and_then(|idx| {
+                    let idx = *idx as usize;
+                    if nonce_must_be_writable && !self.is_writable(idx) {
+                        None
+                    } else {
+                        self.get_account_key(idx)
+                    }
+                })
+            })
     }
 }
 
