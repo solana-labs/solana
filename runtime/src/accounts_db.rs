@@ -3041,8 +3041,7 @@ impl AccountsDb {
     }
 
     fn shrink_ancient_slots(&self) {
-        error!("{}{}", file!(), line!());
-        let max_root = self.accounts_index.max_root();
+                let max_root = self.accounts_index.max_root();
         use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
         let epoch_width = DEFAULT_SLOTS_PER_EPOCH * 7 / 10; // todo - put some 'in-this-epoch' slots into an ancient append vec
         let old_root = max_root.saturating_sub(epoch_width);
@@ -3064,10 +3063,8 @@ impl AccountsDb {
         m.stop();
         old_slots.sort_unstable();
         // old_slots.truncate(3); // artificially limit to 3 slots
-        error!("{}{}", file!(), line!());
-        self.combine_ancient_slots(old_slots, max_root);
-        error!("{}{}", file!(), line!());
-    }
+                self.combine_ancient_slots(old_slots, max_root);
+            }
 
     /// combine all these slots into ancient append vecs
     fn combine_ancient_slots(&self, sorted_slots: Vec<Slot>, max_root: Slot) {
@@ -3079,8 +3076,7 @@ impl AccountsDb {
         let len = sorted_slots.len();
         let mut t = Measure::start("");
         for slot in sorted_slots {
-            error!("{}{}", file!(), line!());
-            if i == 0 {
+                        if i == 0 {
                 error!("ancient_append_vec: combine_ancient_slots max_root: {}, first slot: {}, distance from max: {}", max_root, slot, max_root.saturating_sub(slot));
             }
             if let Some(storages) = self.storage.map.get(&slot) {
@@ -3150,8 +3146,7 @@ impl AccountsDb {
                         slot,
                     ));
                 });
-                error!("{}{}", file!(), line!());
-
+                
                 if i % 1000 == 0 {
                     error!(
                     "ancient_append_vec: writing to ancient append vec: slot: {}, # accts: {}, available bytes after: {}, distance to max: {}, id: {:?}, # stores: {}, # stores {}, original bytes: {}",
@@ -3190,10 +3185,8 @@ impl AccountsDb {
                     let writer = current_storage.as_ref().unwrap();
                     ids.push(writer.1.append_vec_id());
 
-                    error!("{}{}", file!(), line!());
-                    let clone = &writer.1.clone();
-                    error!("{}{}", file!(), line!());
-                    // write the rest to the next ancient storage
+                                        let clone = &writer.1.clone();
+                                        // write the rest to the next ancient storage
                     let _store_accounts_timing = self.store_accounts_frozen(
                         writer.0,
                         &accounts_next_append_vec,
@@ -3201,15 +3194,12 @@ impl AccountsDb {
                         Some(Box::new(move |_, _| Arc::clone(clone))),
                         None,
                     );
-                    error!("{}{}", file!(), line!());
-                }
+                                    }
 
-                error!("{}{}", file!(), line!());
-                // Purge old, overwritten storage entries
+                                // Purge old, overwritten storage entries
                 let mut start = Measure::start("write_storage_elapsed");
                 if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
-                    error!("{}{}", file!(), line!());
-                    let mut stores = slot_stores.write().unwrap();
+                                        let mut stores = slot_stores.write().unwrap();
                     stores.retain(|_key, store| {
                         if store.count() == 0 || !ids.contains(&store.append_vec_id()) {
                             self.dirty_stores
@@ -3249,11 +3239,9 @@ impl AccountsDb {
                     dropped_roots.push(slot);
                 }
             }
-            error!("{}{}", file!(), line!());
-        }
+                    }
 
-        error!("{}{}", file!(), line!());
-        if !dropped_roots.is_empty() {
+                if !dropped_roots.is_empty() {
             // todo: afterwards, we need to remove the roots sometime
             error!(
                 "ancient_append_vec: dropping roots: first {:?}, last {:?}, len {:?}, ",
@@ -3266,16 +3254,14 @@ impl AccountsDb {
                     .clean_dead_slot(*slot, &mut AccountsIndexRootsStats::default());
             });
         }
-        error!("{}{}", file!(), line!());
-        error!(
+                error!(
             "ancient_append_vec: purge_dead_slots_from_storage: first {:?}, last {:?}, len {:?}, ",
             dropped_roots_storages.first(),
             dropped_roots_storages.last(),
             dropped_roots_storages.len()
         );
         self.purge_dead_slots_from_storage(dropped_roots_storages.iter(), &PurgeStats::default());
-        error!("{}{}", file!(), line!());
-
+        
         t.stop();
         error!(
             "ancient_append_vec: done. slots: {:?}, time(ms): {}",
@@ -4736,11 +4722,9 @@ impl AccountsDb {
                 .1
                 .map(|account| account.data().len())
                 .unwrap_or_default();
-                error!("{}{}", file!(), line!());
-                let storage = storage_finder(slot, data_len + STORE_META_OVERHEAD);
+                                let storage = storage_finder(slot, data_len + STORE_META_OVERHEAD);
             storage_find.stop();
-            error!("{}{}", file!(), line!());
-            total_storage_find_us += storage_find.as_us();
+                        total_storage_find_us += storage_find.as_us();
             let mut append_accounts = Measure::start("append_accounts");
             let rvs = storage.accounts.append_accounts(
                 &accounts_and_meta_to_store[infos.len()..],
@@ -4749,12 +4733,10 @@ impl AccountsDb {
             assert!(!rvs.is_empty());
             append_accounts.stop();
             total_append_accounts_us += append_accounts.as_us();
-            error!("{}{}", file!(), line!());
-            if rvs.len() == 1 {
+                        if rvs.len() == 1 {
                 storage.set_status(AccountStorageStatus::Full);
 
-                error!("{}{}", file!(), line!());
-                // See if an account overflows the append vecs in the slot.
+                                // See if an account overflows the append vecs in the slot.
                 let data_len = (data_len + STORE_META_OVERHEAD) as u64;
                 if !self.has_space_available(slot, data_len) {
                     let special_store_size = std::cmp::max(data_len * 2, self.file_size);
@@ -4774,8 +4756,7 @@ impl AccountsDb {
                 }
                 continue;
             }
-            error!("{}{}", file!(), line!());
-
+            
             for (offsets, (_, account)) in rvs
                 .windows(2)
                 .zip(&accounts_and_meta_to_store[infos.len()..])
@@ -4791,12 +4772,10 @@ impl AccountsDb {
                         .unwrap_or_default(),
                 ));
             }
-            error!("{}{}", file!(), line!());
-            // restore the state to available
+                        // restore the state to available
             storage.set_status(AccountStorageStatus::Available);
         }
-        error!("{}{}", file!(), line!());
-
+        
         self.stats
             .store_append_accounts
             .fetch_add(total_append_accounts_us, Ordering::Relaxed);
@@ -7017,8 +6996,7 @@ impl AccountsDb {
             .store_num_accounts
             .fetch_add(accounts.len() as u64, Ordering::Relaxed);
         let mut store_accounts_time = Measure::start("store_accounts");
-        error!("{}{}", file!(), line!());
-        let infos = self.store_accounts_to(
+                let infos = self.store_accounts_to(
             slot,
             accounts,
             hashes,
@@ -7027,22 +7005,19 @@ impl AccountsDb {
             is_cached_store,
         );
         store_accounts_time.stop();
-        error!("{}{}", file!(), line!());
-        self.stats
+                self.stats
             .store_accounts
             .fetch_add(store_accounts_time.as_us(), Ordering::Relaxed);
         let mut update_index_time = Measure::start("update_index");
 
         let previous_slot_entry_was_cached = self.caching_enabled && is_cached_store;
-        error!("{}{}", file!(), line!());
-
+        
         // If the cache was flushed, then because `update_index` occurs
         // after the account are stored by the above `store_accounts_to`
         // call and all the accounts are stored, all reads after this point
         // will know to not check the cache anymore
         let mut reclaims = self.update_index(slot, infos, accounts, previous_slot_entry_was_cached);
-        error!("{}{}", file!(), line!());
-
+        
         // For each updated account, `reclaims` should only have at most one
         // item (if the account was previously updated in this slot).
         // filter out the cached reclaims as those don't actually map
@@ -7055,8 +7030,7 @@ impl AccountsDb {
                 assert!(reclaims.is_empty());
             }
         }
-        error!("{}{}", file!(), line!());
-
+        
         update_index_time.stop();
         self.stats
             .store_update_index
@@ -7080,8 +7054,7 @@ impl AccountsDb {
             None,
             reset_accounts,
         );
-        error!("{}{}", file!(), line!());
-        handle_reclaims_time.stop();
+                handle_reclaims_time.stop();
         self.stats
             .store_handle_reclaims
             .fetch_add(handle_reclaims_time.as_us(), Ordering::Relaxed);
@@ -12102,22 +12075,14 @@ pub mod tests {
     fn test_flush_accounts_cache_if_needed() {
         solana_logger::setup();
         run_test_flush_accounts_cache_if_needed(0, 2 * max_cache_slots());
-        error!("{}{}", file!(), line!());
-        run_test_flush_accounts_cache_if_needed(2 * max_cache_slots(), 0);
-        error!("{}{}", file!(), line!());
-        run_test_flush_accounts_cache_if_needed(max_cache_slots() - 1, 0);
-        error!("{}{}", file!(), line!());
-        run_test_flush_accounts_cache_if_needed(0, max_cache_slots() - 1);
-        error!("{}{}", file!(), line!());
-        run_test_flush_accounts_cache_if_needed(max_cache_slots(), 0);
-        error!("{}{}", file!(), line!());
-        run_test_flush_accounts_cache_if_needed(0, max_cache_slots());
-        error!("{}{}", file!(), line!());
-        run_test_flush_accounts_cache_if_needed(2 * max_cache_slots(), 2 * max_cache_slots());
-        error!("{}{}", file!(), line!());
-        run_test_flush_accounts_cache_if_needed(max_cache_slots() - 1, max_cache_slots() - 1);
-        error!("{}{}", file!(), line!());
-        run_test_flush_accounts_cache_if_needed(max_cache_slots(), max_cache_slots());
+                run_test_flush_accounts_cache_if_needed(2 * max_cache_slots(), 0);
+                run_test_flush_accounts_cache_if_needed(max_cache_slots() - 1, 0);
+                run_test_flush_accounts_cache_if_needed(0, max_cache_slots() - 1);
+                run_test_flush_accounts_cache_if_needed(max_cache_slots(), 0);
+                run_test_flush_accounts_cache_if_needed(0, max_cache_slots());
+                run_test_flush_accounts_cache_if_needed(2 * max_cache_slots(), 2 * max_cache_slots());
+                run_test_flush_accounts_cache_if_needed(max_cache_slots() - 1, max_cache_slots() - 1);
+                run_test_flush_accounts_cache_if_needed(max_cache_slots(), max_cache_slots());
     }
 
     fn run_test_flush_accounts_cache_if_needed(num_roots: usize, num_unrooted: usize) {
@@ -12128,8 +12093,7 @@ pub mod tests {
         let account0 = AccountSharedData::new(1, space, &Pubkey::default());
         let mut keys = vec![];
         let num_slots = 2 * max_cache_slots();
-        error!("{}{}", file!(), line!());
-        for i in 0..num_roots + num_unrooted {
+                for i in 0..num_roots + num_unrooted {
             let key = Pubkey::new_unique();
             db.store_cached(i as Slot, &[(&key, &account0, i as Slot)]);
             keys.push(key);
@@ -12139,10 +12103,8 @@ pub mod tests {
             }
         }
 
-        error!("{}{}", file!(), line!());
-        db.flush_accounts_cache(false, None);
-        error!("{}{}", file!(), line!());
-
+                db.flush_accounts_cache(false, None);
+        
         let total_slots = num_roots + num_unrooted;
         // If there's <= the max size, then nothing will be flushed from the slot
         if total_slots <= max_cache_slots() {
