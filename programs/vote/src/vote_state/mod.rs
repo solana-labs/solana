@@ -1255,18 +1255,6 @@ pub fn process_vote_state_update<S: std::hash::BuildHasher>(
 ) -> Result<(), InstructionError> {
     let mut vote_state = verify_and_get_vote_state(vote_account, clock, signers)?;
     vote_state.check_update_vote_state_slots_are_valid(&mut vote_state_update, slot_hashes)?;
-    {
-        let vote = Vote {
-            slots: vote_state_update
-                .lockouts
-                .iter()
-                .map(|lockout| lockout.slot)
-                .collect(),
-            hash: vote_state_update.hash,
-            timestamp: vote_state_update.timestamp,
-        };
-        vote_state.check_slots_are_valid(&vote.slots, &vote.hash, slot_hashes)?;
-    }
     vote_state.process_new_vote_state(
         vote_state_update.lockouts,
         vote_state_update.root,
@@ -3393,6 +3381,23 @@ mod tests {
         // Vote with only some slots older than the SlotHashes history should
         // filter out those older slots
         let vote_slot = 2;
+        let vote_slot_hash = slot_hashes
+            .iter()
+            .find(|(slot, _hash)| *slot == vote_slot)
+            .unwrap()
+            .1;
+
+        let vote = Vote::new(vec![old_vote_slot, vote_slot], vote_slot_hash);
+        vote_state
+            .process_vote(&vote, &slot_hashes, 0, Some(&feature_set))
+            .unwrap();
+        assert_eq!(
+            vote_state.votes.into_iter().collect::<Vec<Lockout>>(),
+            vec![Lockout {
+                slot: vote_slot,
+                confirmation_count: 1,
+            }]
+        );
     }
 
     fn build_slot_hashes(slots: Vec<Slot>) -> Vec<(Slot, Hash)> {
@@ -3413,7 +3418,7 @@ mod tests {
                 .unwrap()
                 .1;
             vote_state
-                .process_vote(&Vote::new(vote_slots, vote_hash), slot_hashes, 0)
+                .process_vote(&Vote::new(vote_slots, vote_hash), slot_hashes, 0, None)
                 .unwrap();
         }
 
