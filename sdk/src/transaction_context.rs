@@ -2,7 +2,7 @@
 
 use crate::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
-    instruction::{CompiledInstruction, InstructionError},
+    instruction::InstructionError,
     lamports::LamportsError,
     pubkey::Pubkey,
 };
@@ -32,7 +32,8 @@ pub struct TransactionContext {
     instruction_context_capacity: usize,
     instruction_context_stack: Vec<InstructionContext>,
     number_of_instructions_at_transaction_level: usize,
-    instruction_trace: Vec<Vec<CompiledInstruction>>,
+    top_level_instruction_trace: Vec<InstructionContext>,
+    inner_instruction_trace: Vec<Vec<(usize, InstructionContext)>>,
     return_data: (Pubkey, Vec<u8>),
 }
 
@@ -54,13 +55,23 @@ impl TransactionContext {
             instruction_context_capacity,
             instruction_context_stack: Vec::with_capacity(instruction_context_capacity),
             number_of_instructions_at_transaction_level,
-            instruction_trace: Vec::with_capacity(number_of_instructions_at_transaction_level),
+            top_level_instruction_trace: Vec::with_capacity(
+                number_of_instructions_at_transaction_level,
+            ),
+            inner_instruction_trace: Vec::with_capacity(
+                number_of_instructions_at_transaction_level,
+            ),
             return_data: (Pubkey::default(), Vec::new()),
         }
     }
 
     /// Used by the bank in the runtime to write back the processed accounts and recorded instructions
-    pub fn deconstruct(self) -> (Vec<TransactionAccount>, Vec<Vec<CompiledInstruction>>) {
+    pub fn deconstruct(
+        self,
+    ) -> (
+        Vec<TransactionAccount>,
+        Vec<Vec<(usize, InstructionContext)>>,
+    ) {
         (
             Vec::from(Pin::into_inner(self.account_keys))
                 .into_iter()
@@ -70,7 +81,7 @@ impl TransactionContext {
                         .map(|account| account.into_inner()),
                 )
                 .collect(),
-            self.instruction_trace,
+            self.inner_instruction_trace,
         )
     }
 
@@ -151,17 +162,23 @@ impl TransactionContext {
         if self.instruction_context_stack.len() >= self.instruction_context_capacity {
             return Err(InstructionError::CallDepth);
         }
-        if self.instruction_context_stack.is_empty() {
-            debug_assert!(
-                self.instruction_trace.len() < self.number_of_instructions_at_transaction_level
-            );
-            self.instruction_trace.push(Vec::new());
-        }
-        self.instruction_context_stack.push(InstructionContext {
+
+        let instruction_context = InstructionContext {
             program_accounts: program_accounts.to_vec(),
             instruction_accounts: instruction_accounts.to_vec(),
             instruction_data: instruction_data.to_vec(),
-        });
+        };
+        if self.instruction_context_stack.is_empty() {
+            debug_assert!(
+                self.inner_instruction_trace.len()
+                    < self.number_of_instructions_at_transaction_level
+            );
+            self.inner_instruction_trace.push(Vec::new());
+            self.top_level_instruction_trace
+                .push(instruction_context.clone());
+        }
+
+        self.instruction_context_stack.push(instruction_context);
         Ok(())
     }
 
@@ -204,17 +221,31 @@ impl TransactionContext {
     }
 
     /// Used by the runtime when a new CPI instruction begins
-    pub fn record_compiled_instruction(&mut self, instruction: CompiledInstruction) {
-        if let Some(records) = self.instruction_trace.last_mut() {
-            records.push(instruction);
+    pub fn record_inner_instruction(
+        &mut self,
+        stack_height: usize,
+        instruction: InstructionContext,
+    ) {
+        if let Some(records) = self.inner_instruction_trace.last_mut() {
+            records.push((stack_height, instruction));
         }
+    }
+
+    /// Returns inner instruction trace
+    pub fn get_inner_instruction_trace(&self) -> &[Vec<(usize, InstructionContext)>] {
+        &self.inner_instruction_trace
+    }
+
+    /// Returns the top-level instruction trace
+    pub fn get_top_level_instruction_trace(&self) -> &[InstructionContext] {
+        &self.top_level_instruction_trace
     }
 }
 
 /// Loaded instruction shared between runtime and programs.
 ///
 /// This context is valid for the entire duration of a (possibly cross program) instruction being processed.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InstructionContext {
     program_accounts: Vec<usize>,
     instruction_accounts: Vec<InstructionAccount>,
@@ -222,14 +253,42 @@ pub struct InstructionContext {
 }
 
 impl InstructionContext {
+    /// New
+    pub fn new(
+        program_accounts: &[usize],
+        instruction_accounts: &[InstructionAccount],
+        instruction_data: &[u8],
+    ) -> Self {
+        InstructionContext {
+            program_accounts: program_accounts.to_vec(),
+            instruction_accounts: instruction_accounts.to_vec(),
+            instruction_data: instruction_data.to_vec(),
+        }
+    }
+
     /// Number of program accounts
     pub fn get_number_of_program_accounts(&self) -> usize {
         self.program_accounts.len()
     }
 
+    /// Get the index of the instruction's program id
+    pub fn get_program_id_index(&self) -> usize {
+        self.program_accounts.last().cloned().unwrap_or_default()
+    }
+
+    /// Get the instruction's program id
+    pub fn get_program_id(&self, transaction_context: &TransactionContext) -> Pubkey {
+        transaction_context.account_keys[self.program_accounts.last().cloned().unwrap_or_default()]
+    }
+
     /// Number of accounts in this Instruction (without program accounts)
     pub fn get_number_of_instruction_accounts(&self) -> usize {
         self.instruction_accounts.len()
+    }
+
+    /// Get the instruction's accounts
+    pub fn get_instruction_accounts(&self) -> &[InstructionAccount] {
+        &self.instruction_accounts
     }
 
     /// Number of accounts in this Instruction

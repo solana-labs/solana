@@ -3890,14 +3890,38 @@ impl Bank {
         let (accounts, instruction_trace) = transaction_context.deconstruct();
         loaded_transaction.accounts = accounts;
 
+        let inner_instructions = if enable_cpi_recording {
+            Some(
+                instruction_trace
+                    .iter()
+                    .map(|inner_instructions| {
+                        inner_instructions
+                            .iter()
+                            .map(|(_, instruction_context)|
+                            // TODO this could be a helper
+                            CompiledInstruction {
+                                program_id_index: instruction_context.get_program_id_index() as u8,
+                                data: instruction_context.get_instruction_data().to_vec(),
+                                accounts: instruction_context
+                                    .get_instruction_accounts()
+                                    .iter()
+                                    .map(|instruction_account| {
+                                        instruction_account.index_in_transaction as u8
+                                    })
+                                    .collect(),
+                            })
+                            .collect()
+                    })
+                    .collect(),
+            )
+        } else {
+            None
+        };
+
         TransactionExecutionResult::Executed(TransactionExecutionDetails {
             status,
             log_messages,
-            inner_instructions: if enable_cpi_recording {
-                Some(instruction_trace)
-            } else {
-                None
-            },
+            inner_instructions,
             durable_nonce_fee,
         })
     }

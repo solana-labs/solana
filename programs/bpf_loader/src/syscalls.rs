@@ -22,14 +22,14 @@ use {
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
-            self, blake3_syscall_enabled, disable_fees_sysvar, do_support_realloc,
-            fixed_memcpy_nonoverlapping_check, libsecp256k1_0_5_upgrade_enabled,
-            prevent_calling_precompiles_as_programs, return_data_syscall_enabled,
-            secp256k1_recover_syscall_enabled, sol_log_data_syscall_enabled,
-            update_syscall_base_costs,
+            self, add_get_processed_sibling_instruction_syscall, blake3_syscall_enabled,
+            disable_fees_sysvar, do_support_realloc, fixed_memcpy_nonoverlapping_check,
+            libsecp256k1_0_5_upgrade_enabled, prevent_calling_precompiles_as_programs,
+            return_data_syscall_enabled, secp256k1_recover_syscall_enabled,
+            sol_log_data_syscall_enabled, update_syscall_base_costs,
         },
         hash::{Hasher, HASH_BYTES},
-        instruction::{AccountMeta, Instruction, InstructionError},
+        instruction::{AccountMeta, Instruction, InstructionError, ProcessedSiblingInstruction},
         keccak, native_loader,
         precompiles::is_precompile,
         program::MAX_RETURN_DATA,
@@ -222,6 +222,24 @@ pub fn register_syscalls(
         syscall_registry.register_syscall_by_name(b"sol_log_data", SyscallLogData::call)?;
     }
 
+    if invoke_context
+        .feature_set
+        .is_active(&add_get_processed_sibling_instruction_syscall::id())
+    {
+        syscall_registry.register_syscall_by_name(
+            b"sol_get_processed_sibling_instruction",
+            SyscallGetProcessedSiblingInstruction::call,
+        )?;
+    }
+
+    if invoke_context
+        .feature_set
+        .is_active(&add_get_processed_sibling_instruction_syscall::id())
+    {
+        syscall_registry
+            .register_syscall_by_name(b"sol_get_invoke_depth", SyscallGetInvokeDepth::call)?;
+    }
+
     Ok(syscall_registry)
 }
 
@@ -262,6 +280,9 @@ pub fn bind_syscall_context_objects<'a, 'b>(
     let is_zk_token_sdk_enabled = invoke_context
         .feature_set
         .is_active(&feature_set::zk_token_sdk_enabled::id());
+    let add_get_processed_sibling_instruction_syscall = invoke_context
+        .feature_set
+        .is_active(&add_get_processed_sibling_instruction_syscall::id());
 
     let loader_id = invoke_context
         .transaction_context
@@ -440,6 +461,24 @@ pub fn bind_syscall_context_objects<'a, 'b>(
         vm,
         is_sol_log_data_syscall_active,
         Box::new(SyscallLogData {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+
+    // processed inner instructions
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        add_get_processed_sibling_instruction_syscall,
+        Box::new(SyscallGetProcessedSiblingInstruction {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+
+    // invoke depth
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        add_get_processed_sibling_instruction_syscall,
+        Box::new(SyscallGetInvokeDepth {
             invoke_context: invoke_context.clone(),
         }),
     );
@@ -2952,6 +2991,173 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallLogData<'a, 'b> {
         stable_log::program_data(&log_collector, &fields);
 
         *result = Ok(0);
+    }
+}
+
+pub struct SyscallGetProcessedSiblingInstruction<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallGetProcessedSiblingInstruction<'a, 'b> {
+    fn call(
+        &mut self,
+        index: u64,
+        meta_addr: u64,
+        program_id_addr: u64,
+        data_addr: u64,
+        accounts_addr: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+        let loader_id = question_mark!(
+            invoke_context
+                .transaction_context
+                .get_loader_key()
+                .map_err(SyscallError::InstructionError),
+            result
+        );
+
+        let budget = invoke_context.get_compute_budget();
+        question_mark!(
+            invoke_context
+                .get_compute_meter()
+                .consume(budget.syscall_base_cost),
+            result
+        );
+
+        let invoke_depth = invoke_context.get_invoke_depth();
+        let instruction_context = if invoke_depth == 1 {
+            let trace = invoke_context.get_top_level_instruction_trace();
+            trace
+                .len()
+                .checked_sub((index as usize).saturating_add(1).saturating_add(1))
+                .map(|index| trace.get(index))
+                .flatten()
+        } else {
+            invoke_context
+                .get_inner_instruction_trace()
+                .last()
+                .map(|inners| {
+                    let mut current_index = 0;
+                    inners
+                        .iter()
+                        .rev()
+                        .skip(1)
+                        .find(|(stack_depth, _)| {
+                            if invoke_depth == *stack_depth {
+                                if index == current_index {
+                                    return true;
+                                } else {
+                                    current_index += 1;
+                                }
+                            }
+                            false
+                        })
+                        .map(|(_, instruction_context)| instruction_context)
+                })
+                .flatten()
+        };
+
+        if let Some(instruction_context) = instruction_context {
+            let ProcessedSiblingInstruction {
+                data_len,
+                accounts_len,
+                depth,
+            } = question_mark!(
+                translate_type_mut::<ProcessedSiblingInstruction>(
+                    memory_mapping,
+                    meta_addr,
+                    &loader_id
+                ),
+                result
+            );
+
+            if *data_len >= instruction_context.get_instruction_data().len()
+                && *accounts_len == instruction_context.get_number_of_instruction_accounts()
+            {
+                let program_id = question_mark!(
+                    translate_type_mut::<Pubkey>(memory_mapping, program_id_addr, &loader_id),
+                    result
+                );
+                let data = question_mark!(
+                    translate_slice_mut::<u8>(
+                        memory_mapping,
+                        data_addr,
+                        *data_len as u64,
+                        &loader_id,
+                    ),
+                    result
+                );
+                let accounts = question_mark!(
+                    translate_slice_mut::<AccountMeta>(
+                        memory_mapping,
+                        accounts_addr,
+                        *accounts_len as u64,
+                        &loader_id,
+                    ),
+                    result
+                );
+
+                *program_id =
+                    instruction_context.get_program_id(invoke_context.transaction_context);
+                data.clone_from_slice(instruction_context.get_instruction_data());
+                let account_metas = instruction_context
+                    .get_instruction_accounts()
+                    .iter()
+                    .map(|instruction_account| AccountMeta {
+                        pubkey: *invoke_context
+                            .get_key_of_account_at_index(instruction_account.index_in_transaction),
+                        is_signer: instruction_account.is_signer,
+                        is_writable: instruction_account.is_writable,
+                    })
+                    .collect::<Vec<_>>();
+                accounts.clone_from_slice(account_metas.as_slice());
+            }
+            *data_len = instruction_context.get_instruction_data().len();
+            *accounts_len = instruction_context.get_number_of_instruction_accounts();
+            *depth = invoke_depth;
+            *result = Ok(true as u64);
+            return;
+        }
+        *result = Ok(false as u64);
+    }
+}
+
+pub struct SyscallGetInvokeDepth<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallGetInvokeDepth<'a, 'b> {
+    fn call(
+        &mut self,
+        _arg1: u64,
+        _arg2: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        _memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+
+        let budget = invoke_context.get_compute_budget();
+        question_mark!(
+            invoke_context
+                .get_compute_meter()
+                .consume(budget.syscall_base_cost),
+            result
+        );
+
+        *result = Ok(invoke_context.get_invoke_depth() as u64);
     }
 }
 
