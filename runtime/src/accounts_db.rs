@@ -5052,7 +5052,7 @@ impl AccountsDb {
         // Iterate from highest to lowest so that we don't need to flush earlier
         // outdated updates in earlier roots
         let mut num_roots_flushed = 0;
-        if true {
+        if false {
             // outdated updates in earlier roots
             for &root in cached_roots.iter().rev() {
                 let should_flush_f = if let Some(max_clean_root) = max_clean_root {
