@@ -2953,11 +2953,13 @@ impl ReplayStage {
             forks.insert(bank);
         }
         generate_new_bank_forks_write_lock.stop();
-        replay_timing.generate_new_bank_forks_read_lock += generate_new_bank_forks_read_lock;
+        replay_timing.generate_new_bank_forks_read_lock +=
+            generate_new_bank_forks_read_lock.as_us();
         replay_timing.generate_new_bank_forks_get_slots_since +=
-            generate_new_bank_forks_get_slots_since;
-        replay_timing.generate_new_bank_forks_loop += generate_new_bank_forks_loop;
-        replay_timing.generate_new_bank_forks_write_lock += generate_new_bank_forks_write_lock;
+            generate_new_bank_forks_get_slots_since.as_us();
+        replay_timing.generate_new_bank_forks_loop += generate_new_bank_forks_loop.as_us();
+        replay_timing.generate_new_bank_forks_write_lock +=
+            generate_new_bank_forks_write_lock.as_us();
     }
 
     fn new_bank_from_parent_with_notify(
