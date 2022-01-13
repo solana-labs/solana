@@ -8,7 +8,6 @@ use {
     solana_measure::measure::Measure,
     solana_metrics::*,
     solana_rpc::transaction_notifier_interface::TransactionNotifier,
-    solana_runtime::bank,
     solana_sdk::{clock::Slot, signature::Signature, transaction::SanitizedTransaction},
     solana_transaction_status::TransactionStatusMeta,
     std::sync::{Arc, RwLock},
@@ -85,7 +84,7 @@ impl TransactionNotifierImpl {
     ) -> ReplicaTransactionInfo<'a> {
         ReplicaTransactionInfo {
             signature,
-            is_vote: bank::is_simple_vote_transaction(transaction),
+            is_vote: transaction.is_simple_vote_transaction(),
             transaction,
             transaction_status_meta,
         }
