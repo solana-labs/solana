@@ -3467,7 +3467,14 @@ impl AccountsDb {
                     .get_account_accessor(slot, pubkey, &account_info.storage_location())
                     .get_loaded_account()
                     .map(|loaded_account| (pubkey, loaded_account.take_account(), slot))
-                    .unwrap();
+                    ;//.unwrap();
+                if account_slot.is_none() {
+                    panic!("missing: {:?}, index: {:?}", (slot, pubkey, &account_info.storage_location()), {
+                        let g = self.accounts_index.get_account_read_entry(pubkey);
+                        g.unwrap().slot_list()
+                    });
+                }
+                let account_slot = account_slot.unwrap();
                 scan_func(&mut collector, Some(account_slot))
             },
         );
