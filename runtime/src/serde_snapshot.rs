@@ -515,7 +515,7 @@ where
         .write()
         .unwrap()
         .insert(snapshot_slot, snapshot_bank_hash_info);
-    accounts_db.storage.0.extend(
+    accounts_db.storage.map.extend(
         storage
             .into_iter()
             .map(|(slot, slot_storage_entry)| (slot, Arc::new(RwLock::new(slot_storage_entry)))),
