@@ -2253,9 +2253,11 @@ impl AccountsDb {
                     );
                     let count = self
                         .storage
-                        .slot_store_count(*slot, account_info.store_id())
-                        .unwrap()
-                        - 1;
+                        .slot_store_count(*slot, account_info.store_id());
+                    let count = match count {
+                        Some(count) => count - 1,
+                        None => {return false;}
+                    };
                     debug!(
                         "store_counts, inserting slot: {}, store id: {}, count: {}",
                         slot, account_info.store_id(), count
