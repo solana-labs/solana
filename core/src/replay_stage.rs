@@ -164,10 +164,10 @@ pub struct ReplayTiming {
     process_unfrozen_gossip_verified_vote_hashes_elapsed: u64,
     repair_correct_slots_elapsed: u64,
     retransmit_not_propagated_elapsed: u64,
-    generate_new_bank_forks_read_lock: u64,
-    generate_new_bank_forks_get_slots_since: u64,
-    generate_new_bank_forks_loop: u64,
-    generate_new_bank_forks_write_lock: u64,
+    generate_new_bank_forks_read_lock_us: u64,
+    generate_new_bank_forks_get_slots_since_us: u64,
+    generate_new_bank_forks_loop_us: u64,
+    generate_new_bank_forks_write_lock_us: u64,
 }
 impl ReplayTiming {
     #[allow(clippy::too_many_arguments)]
@@ -308,23 +308,23 @@ impl ReplayTiming {
                     i64
                 ),
                 (
-                    "generate_new_bank_forks_read_lock",
-                    self.generate_new_bank_forks_read_lock as i64,
+                    "generate_new_bank_forks_read_lock_us",
+                    self.generate_new_bank_forks_read_lock_us as i64,
                     i64
                 ),
                 (
-                    "generate_new_bank_forks_get_slots_since",
-                    self.generate_new_bank_forks_get_slots_since as i64,
+                    "generate_new_bank_forks_get_slots_since_us",
+                    self.generate_new_bank_forks_get_slots_since_us as i64,
                     i64
                 ),
                 (
-                    "generate_new_bank_forks_loop",
-                    self.generate_new_bank_forks_loop as i64,
+                    "generate_new_bank_forks_loop_us",
+                    self.generate_new_bank_forks_loop_us as i64,
                     i64
                 ),
                 (
-                    "generate_new_bank_forks_write_lock",
-                    self.generate_new_bank_forks_write_lock as i64,
+                    "generate_new_bank_forks_write_lock_us",
+                    self.generate_new_bank_forks_write_lock_us as i64,
                     i64
                 ),
             );
@@ -2953,13 +2953,11 @@ impl ReplayStage {
             forks.insert(bank);
         }
         generate_new_bank_forks_write_lock.stop();
-        replay_timing.generate_new_bank_forks_read_lock +=
-            generate_new_bank_forks_read_lock.as_us();
-        replay_timing.generate_new_bank_forks_get_slots_since +=
-            generate_new_bank_forks_get_slots_since.as_us();
-        replay_timing.generate_new_bank_forks_loop += generate_new_bank_forks_loop.as_us();
-        replay_timing.generate_new_bank_forks_write_lock +=
-            generate_new_bank_forks_write_lock.as_us();
+        saturating_add_assign!(replay_timing.generate_new_bank_forks_read_lock_us, generate_new_bank_forks_read_lock.as_us());
+        saturating_add_assign!(replay_timing.generate_new_bank_forks_get_slots_since_us,
+            generate_new_bank_forks_get_slots_since.as_us());
+        saturating_add_assign!(replay_timing.generate_new_bank_forks_loop_us, generate_new_bank_forks_loop.as_us());
+        saturating_add_assign!(replay_timing.generate_new_bank_forks_write_lock_us, generate_new_bank_forks_write_lock.as_us());
     }
 
     fn new_bank_from_parent_with_notify(
