@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use {
     solana_cli::cli::{process_command, CliCommand, CliConfig},
     solana_client::rpc_client::RpcClient,

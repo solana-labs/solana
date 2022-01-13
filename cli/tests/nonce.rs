@@ -1,8 +1,10 @@
+#![allow(clippy::integer_arithmetic)]
 use {
     solana_cli::{
+        check_balance,
         cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
         spend_utils::SpendAmount,
-        test_utils::{check_ready, check_recent_balance},
+        test_utils::check_ready,
     },
     solana_cli_output::{parse_sign_only_reply_string, OutputFormat},
     solana_client::{
@@ -77,7 +79,7 @@ fn full_battery_tests(
         sol_to_lamports(2000.0),
     )
     .unwrap();
-    check_recent_balance(
+    check_balance!(
         sol_to_lamports(2000.0),
         &rpc_client,
         &config_payer.signers[0].pubkey(),
@@ -117,12 +119,12 @@ fn full_battery_tests(
     };
 
     process_command(&config_payer).unwrap();
-    check_recent_balance(
+    check_balance!(
         sol_to_lamports(1000.0),
         &rpc_client,
         &config_payer.signers[0].pubkey(),
     );
-    check_recent_balance(sol_to_lamports(1000.0), &rpc_client, &nonce_account);
+    check_balance!(sol_to_lamports(1000.0), &rpc_client, &nonce_account);
 
     // Get nonce
     config_payer.signers.pop();
@@ -173,13 +175,13 @@ fn full_battery_tests(
         lamports: sol_to_lamports(100.0),
     };
     process_command(&config_payer).unwrap();
-    check_recent_balance(
+    check_balance!(
         sol_to_lamports(1000.0),
         &rpc_client,
         &config_payer.signers[0].pubkey(),
     );
-    check_recent_balance(sol_to_lamports(900.0), &rpc_client, &nonce_account);
-    check_recent_balance(sol_to_lamports(100.0), &rpc_client, &payee_pubkey);
+    check_balance!(sol_to_lamports(900.0), &rpc_client, &nonce_account);
+    check_balance!(sol_to_lamports(100.0), &rpc_client, &payee_pubkey);
 
     // Show nonce account
     config_payer.command = CliCommand::ShowNonceAccount {
@@ -224,13 +226,13 @@ fn full_battery_tests(
         lamports: sol_to_lamports(100.0),
     };
     process_command(&config_payer).unwrap();
-    check_recent_balance(
+    check_balance!(
         sol_to_lamports(1000.0),
         &rpc_client,
         &config_payer.signers[0].pubkey(),
     );
-    check_recent_balance(sol_to_lamports(800.0), &rpc_client, &nonce_account);
-    check_recent_balance(sol_to_lamports(200.0), &rpc_client, &payee_pubkey);
+    check_balance!(sol_to_lamports(800.0), &rpc_client, &nonce_account);
+    check_balance!(sol_to_lamports(200.0), &rpc_client, &payee_pubkey);
 }
 
 #[test]
@@ -268,17 +270,17 @@ fn test_create_account_with_seed() {
         sol_to_lamports(4242.0),
     )
     .unwrap();
-    check_recent_balance(
+    check_balance!(
         sol_to_lamports(42.0),
         &rpc_client,
         &offline_nonce_authority_signer.pubkey(),
     );
-    check_recent_balance(
+    check_balance!(
         sol_to_lamports(4242.0),
         &rpc_client,
         &online_nonce_creator_signer.pubkey(),
     );
-    check_recent_balance(0, &rpc_client, &to_address);
+    check_balance!(0, &rpc_client, &to_address);
 
     check_ready(&rpc_client);
 
@@ -288,7 +290,7 @@ fn test_create_account_with_seed() {
     let seed = authority_pubkey.to_string()[0..32].to_string();
     let nonce_address =
         Pubkey::create_with_seed(&creator_pubkey, &seed, &system_program::id()).unwrap();
-    check_recent_balance(0, &rpc_client, &nonce_address);
+    check_balance!(0, &rpc_client, &nonce_address);
 
     let mut creator_config = CliConfig::recent_for_tests();
     creator_config.json_rpc_url = test_validator.rpc_url();
@@ -301,18 +303,18 @@ fn test_create_account_with_seed() {
         amount: SpendAmount::Some(sol_to_lamports(241.0)),
     };
     process_command(&creator_config).unwrap();
-    check_recent_balance(sol_to_lamports(241.0), &rpc_client, &nonce_address);
-    check_recent_balance(
+    check_balance!(sol_to_lamports(241.0), &rpc_client, &nonce_address);
+    check_balance!(
         sol_to_lamports(42.0),
         &rpc_client,
         &offline_nonce_authority_signer.pubkey(),
     );
-    check_recent_balance(
+    check_balance!(
         sol_to_lamports(4000.999999999),
         &rpc_client,
         &online_nonce_creator_signer.pubkey(),
     );
-    check_recent_balance(0, &rpc_client, &to_address);
+    check_balance!(0, &rpc_client, &to_address);
 
     // Fetch nonce hash
     let nonce_hash = nonce_utils::get_account_with_commitment(
@@ -377,16 +379,16 @@ fn test_create_account_with_seed() {
         derived_address_program_id: None,
     };
     process_command(&submit_config).unwrap();
-    check_recent_balance(sol_to_lamports(241.0), &rpc_client, &nonce_address);
-    check_recent_balance(
+    check_balance!(sol_to_lamports(241.0), &rpc_client, &nonce_address);
+    check_balance!(
         sol_to_lamports(31.999999999),
         &rpc_client,
         &offline_nonce_authority_signer.pubkey(),
     );
-    check_recent_balance(
+    check_balance!(
         sol_to_lamports(4000.999999999),
         &rpc_client,
         &online_nonce_creator_signer.pubkey(),
     );
-    check_recent_balance(sol_to_lamports(10.0), &rpc_client, &to_address);
+    check_balance!(sol_to_lamports(10.0), &rpc_client, &to_address);
 }

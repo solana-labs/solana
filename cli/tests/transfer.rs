@@ -1,9 +1,11 @@
+#![allow(clippy::integer_arithmetic)]
 #![allow(clippy::redundant_closure)]
 use {
     solana_cli::{
+        check_balance,
         cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
         spend_utils::SpendAmount,
-        test_utils::{check_ready, check_recent_balance},
+        test_utils::check_ready,
     },
     solana_cli_output::{parse_sign_only_reply_string, OutputFormat},
     solana_client::{
@@ -52,8 +54,8 @@ fn test_transfer() {
 
     request_and_confirm_airdrop(&rpc_client, &config, &sender_pubkey, sol_to_lamports(5.0))
         .unwrap();
-    check_recent_balance(sol_to_lamports(5.0), &rpc_client, &sender_pubkey);
-    check_recent_balance(0, &rpc_client, &recipient_pubkey);
+    check_balance!(sol_to_lamports(5.0), &rpc_client, &sender_pubkey);
+    check_balance!(0, &rpc_client, &recipient_pubkey);
 
     check_ready(&rpc_client);
 
@@ -75,8 +77,8 @@ fn test_transfer() {
         derived_address_program_id: None,
     };
     process_command(&config).unwrap();
-    check_recent_balance(sol_to_lamports(4.0) - 1, &rpc_client, &sender_pubkey);
-    check_recent_balance(sol_to_lamports(1.0), &rpc_client, &recipient_pubkey);
+    check_balance!(sol_to_lamports(4.0) - 1, &rpc_client, &sender_pubkey);
+    check_balance!(sol_to_lamports(1.0), &rpc_client, &recipient_pubkey);
 
     // Plain ole transfer, failure due to InsufficientFundsForSpendAndFee
     config.command = CliCommand::Transfer {
@@ -96,8 +98,8 @@ fn test_transfer() {
         derived_address_program_id: None,
     };
     assert!(process_command(&config).is_err());
-    check_recent_balance(sol_to_lamports(4.0) - 1, &rpc_client, &sender_pubkey);
-    check_recent_balance(sol_to_lamports(1.0), &rpc_client, &recipient_pubkey);
+    check_balance!(sol_to_lamports(4.0) - 1, &rpc_client, &sender_pubkey);
+    check_balance!(sol_to_lamports(1.0), &rpc_client, &recipient_pubkey);
 
     let mut offline = CliConfig::recent_for_tests();
     offline.json_rpc_url = String::default();
@@ -109,7 +111,7 @@ fn test_transfer() {
     let offline_pubkey = offline.signers[0].pubkey();
     request_and_confirm_airdrop(&rpc_client, &offline, &offline_pubkey, sol_to_lamports(1.0))
         .unwrap();
-    check_recent_balance(sol_to_lamports(1.0), &rpc_client, &offline_pubkey);
+    check_balance!(sol_to_lamports(1.0), &rpc_client, &offline_pubkey);
 
     // Offline transfer
     let blockhash = rpc_client.get_latest_blockhash().unwrap();
@@ -152,8 +154,8 @@ fn test_transfer() {
         derived_address_program_id: None,
     };
     process_command(&config).unwrap();
-    check_recent_balance(sol_to_lamports(0.5) - 1, &rpc_client, &offline_pubkey);
-    check_recent_balance(sol_to_lamports(1.5), &rpc_client, &recipient_pubkey);
+    check_balance!(sol_to_lamports(0.5) - 1, &rpc_client, &offline_pubkey);
+    check_balance!(sol_to_lamports(1.5), &rpc_client, &recipient_pubkey);
 
     // Create nonce account
     let nonce_account = keypair_from_seed(&[3u8; 32]).unwrap();
@@ -169,7 +171,7 @@ fn test_transfer() {
         amount: SpendAmount::Some(minimum_nonce_balance),
     };
     process_command(&config).unwrap();
-    check_recent_balance(
+    check_balance!(
         sol_to_lamports(4.0) - 3 - minimum_nonce_balance,
         &rpc_client,
         &sender_pubkey,
@@ -207,12 +209,12 @@ fn test_transfer() {
         derived_address_program_id: None,
     };
     process_command(&config).unwrap();
-    check_recent_balance(
+    check_balance!(
         sol_to_lamports(3.0) - 4 - minimum_nonce_balance,
         &rpc_client,
         &sender_pubkey,
     );
-    check_recent_balance(sol_to_lamports(2.5), &rpc_client, &recipient_pubkey);
+    check_balance!(sol_to_lamports(2.5), &rpc_client, &recipient_pubkey);
     let new_nonce_hash = nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
@@ -232,7 +234,7 @@ fn test_transfer() {
         new_authority: offline_pubkey,
     };
     process_command(&config).unwrap();
-    check_recent_balance(
+    check_balance!(
         sol_to_lamports(3.0) - 5 - minimum_nonce_balance,
         &rpc_client,
         &sender_pubkey,
@@ -291,8 +293,8 @@ fn test_transfer() {
         derived_address_program_id: None,
     };
     process_command(&config).unwrap();
-    check_recent_balance(sol_to_lamports(0.1) - 2, &rpc_client, &offline_pubkey);
-    check_recent_balance(sol_to_lamports(2.9), &rpc_client, &recipient_pubkey);
+    check_balance!(sol_to_lamports(0.1) - 2, &rpc_client, &offline_pubkey);
+    check_balance!(sol_to_lamports(2.9), &rpc_client, &recipient_pubkey);
 }
 
 #[test]
@@ -330,17 +332,17 @@ fn test_transfer_multisession_signing() {
         sol_to_lamports(1.0) + 3,
     )
     .unwrap();
-    check_recent_balance(
+    check_balance!(
         sol_to_lamports(43.0),
         &rpc_client,
         &offline_from_signer.pubkey(),
     );
-    check_recent_balance(
+    check_balance!(
         sol_to_lamports(1.0) + 3,
         &rpc_client,
         &offline_fee_payer_signer.pubkey(),
     );
-    check_recent_balance(0, &rpc_client, &to_pubkey);
+    check_balance!(0, &rpc_client, &to_pubkey);
 
     check_ready(&rpc_client);
 
@@ -430,17 +432,17 @@ fn test_transfer_multisession_signing() {
     };
     process_command(&config).unwrap();
 
-    check_recent_balance(
+    check_balance!(
         sol_to_lamports(1.0),
         &rpc_client,
         &offline_from_signer.pubkey(),
     );
-    check_recent_balance(
+    check_balance!(
         sol_to_lamports(1.0) + 1,
         &rpc_client,
         &offline_fee_payer_signer.pubkey(),
     );
-    check_recent_balance(sol_to_lamports(42.0), &rpc_client, &to_pubkey);
+    check_balance!(sol_to_lamports(42.0), &rpc_client, &to_pubkey);
 }
 
 #[test]
@@ -469,8 +471,8 @@ fn test_transfer_all() {
     let recipient_pubkey = Pubkey::new(&[1u8; 32]);
 
     request_and_confirm_airdrop(&rpc_client, &config, &sender_pubkey, 50_000).unwrap();
-    check_recent_balance(50_000, &rpc_client, &sender_pubkey);
-    check_recent_balance(0, &rpc_client, &recipient_pubkey);
+    check_balance!(50_000, &rpc_client, &sender_pubkey);
+    check_balance!(0, &rpc_client, &recipient_pubkey);
 
     check_ready(&rpc_client);
 
@@ -492,8 +494,8 @@ fn test_transfer_all() {
         derived_address_program_id: None,
     };
     process_command(&config).unwrap();
-    check_recent_balance(0, &rpc_client, &sender_pubkey);
-    check_recent_balance(49_999, &rpc_client, &recipient_pubkey);
+    check_balance!(0, &rpc_client, &sender_pubkey);
+    check_balance!(49_999, &rpc_client, &recipient_pubkey);
 }
 
 #[test]
@@ -522,8 +524,8 @@ fn test_transfer_unfunded_recipient() {
     let recipient_pubkey = Pubkey::new(&[1u8; 32]);
 
     request_and_confirm_airdrop(&rpc_client, &config, &sender_pubkey, 50_000).unwrap();
-    check_recent_balance(50_000, &rpc_client, &sender_pubkey);
-    check_recent_balance(0, &rpc_client, &recipient_pubkey);
+    check_balance!(50_000, &rpc_client, &sender_pubkey);
+    check_balance!(0, &rpc_client, &recipient_pubkey);
 
     check_ready(&rpc_client);
 
@@ -586,9 +588,9 @@ fn test_transfer_with_seed() {
         .unwrap();
     request_and_confirm_airdrop(&rpc_client, &config, &derived_address, sol_to_lamports(5.0))
         .unwrap();
-    check_recent_balance(sol_to_lamports(1.0), &rpc_client, &sender_pubkey);
-    check_recent_balance(sol_to_lamports(5.0), &rpc_client, &derived_address);
-    check_recent_balance(0, &rpc_client, &recipient_pubkey);
+    check_balance!(sol_to_lamports(1.0), &rpc_client, &sender_pubkey);
+    check_balance!(sol_to_lamports(5.0), &rpc_client, &derived_address);
+    check_balance!(0, &rpc_client, &recipient_pubkey);
 
     check_ready(&rpc_client);
 
@@ -610,7 +612,7 @@ fn test_transfer_with_seed() {
         derived_address_program_id: Some(derived_address_program_id),
     };
     process_command(&config).unwrap();
-    check_recent_balance(sol_to_lamports(1.0) - 1, &rpc_client, &sender_pubkey);
-    check_recent_balance(sol_to_lamports(5.0), &rpc_client, &recipient_pubkey);
-    check_recent_balance(0, &rpc_client, &derived_address);
+    check_balance!(sol_to_lamports(1.0) - 1, &rpc_client, &sender_pubkey);
+    check_balance!(sol_to_lamports(5.0), &rpc_client, &recipient_pubkey);
+    check_balance!(0, &rpc_client, &derived_address);
 }
