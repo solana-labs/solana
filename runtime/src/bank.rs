@@ -4218,8 +4218,11 @@ impl Bank {
     }
 
     /// This is the inverse of pubkey_range_from_partition.
-    /// return the partition index given the pubkey and the partition_count
-    pub fn partition_from_pubkey(pubkey: &Pubkey, partition_count: PartitionsPerCycle) -> PartitionIndex {
+    /// return the lowest end_index which would contain this pubkey
+    pub fn partition_from_pubkey(
+        pubkey: &Pubkey,
+        partition_count: PartitionsPerCycle,
+    ) -> PartitionIndex {
         type Prefix = u64;
         const PREFIX_SIZE: usize = mem::size_of::<Prefix>();
         const PREFIX_MAX: Prefix = Prefix::max_value();
@@ -4232,12 +4235,20 @@ impl Bank {
         let partition_width = (PREFIX_MAX - partition_count + 1) / partition_count + 1;
 
         let prefix = u64::from_be_bytes(pubkey.as_ref()[0..PREFIX_SIZE].try_into().unwrap());
+        if prefix == 0 {
+            return 0;
+        }
+
         if prefix == PREFIX_MAX {
             return partition_count - 1;
         }
 
-        let partition = (prefix / partition_width).saturating_sub(1);
-        partition
+        let mut result = (prefix + 1) / partition_width;
+        if (prefix + 1) % partition_width == 0 {
+            // adjust for integer divide
+            result = result.saturating_sub(1);
+        }
+        result
     }
 
     // Mostly, the pair (start_index & end_index) is equivalent to this range:
@@ -4295,6 +4306,19 @@ impl Bank {
 
         start_pubkey[0..PREFIX_SIZE].copy_from_slice(&start_key_prefix.to_be_bytes());
         end_pubkey[0..PREFIX_SIZE].copy_from_slice(&end_key_prefix.to_be_bytes());
+        let start_pubkey_final = Pubkey::new_from_array(start_pubkey);
+        let end_pubkey_final = Pubkey::new_from_array(end_pubkey);
+        if start_index != 0 && start_index == end_index {
+            error!(
+                "start=end, {}, {}, start, end: {:?}, {:?}, pubkeys: {}, {}",
+                start_pubkey.iter().map(|x| format!("{:02x}", x)).join(""),
+                end_pubkey.iter().map(|x| format!("{:02x}", x)).join(""),
+                start_key_prefix,
+                end_key_prefix,
+                start_pubkey_final,
+                end_pubkey_final
+            );
+        }
         trace!(
             "pubkey_range_from_partition: ({}-{})/{} [{}]: {}-{}",
             start_index,
@@ -4304,15 +4328,66 @@ impl Bank {
             start_pubkey.iter().map(|x| format!("{:02x}", x)).join(""),
             end_pubkey.iter().map(|x| format!("{:02x}", x)).join(""),
         );
-        let start_pubkey = Pubkey::new_from_array(start_pubkey);
-        let end_pubkey = Pubkey::new_from_array(end_pubkey);
         #[cfg(test)]
-        assert!((start_index..=end_index).contains(&Self::partition_from_pubkey(&start_pubkey, partition_count)), "{}, {}, found: {}, {}, {}", start_index, end_index, Self::partition_from_pubkey(&start_pubkey, partition_count), start_pubkey, partition_count);
-        #[cfg(test)]
-        assert!((start_index..=end_index).contains(&Self::partition_from_pubkey(&start_pubkey, partition_count)), "{}, {}, found: {}, {}, {}", start_index, end_index, Self::partition_from_pubkey(&end_pubkey, partition_count), start_pubkey, partition_count);
+        if start_index != end_index {
+            assert_eq!(
+                if start_index == 0 && end_index == 0 {
+                    0
+                } else {
+                    start_index + 1
+                },
+                Self::partition_from_pubkey(&start_pubkey_final, partition_count),
+                "{}, {}, start_key_prefix: {}, {}, {}",
+                start_index,
+                end_index,
+                start_key_prefix,
+                start_pubkey_final,
+                partition_count
+            );
+            assert_eq!(
+                end_index,
+                Self::partition_from_pubkey(&end_pubkey_final, partition_count),
+                "{}, {}, {}, {}",
+                start_index,
+                end_index,
+                end_pubkey_final,
+                partition_count
+            );
+            if start_index != 0 {
+                start_pubkey[0..PREFIX_SIZE]
+                    .copy_from_slice(&start_key_prefix.saturating_sub(1).to_be_bytes());
+                let pubkey_test = Pubkey::new_from_array(start_pubkey);
+                assert_eq!(
+                    start_index,
+                    Self::partition_from_pubkey(&pubkey_test, partition_count),
+                    "{}, {}, start_key_prefix-1: {}, {}, {}",
+                    start_index,
+                    end_index,
+                    start_key_prefix.saturating_sub(1),
+                    pubkey_test,
+                    partition_count
+                );
+            }
+            if end_index != partition_count - 1 && end_index != 0 {
+                end_pubkey[0..PREFIX_SIZE]
+                    .copy_from_slice(&end_key_prefix.saturating_add(1).to_be_bytes());
+                let pubkey_test = Pubkey::new_from_array(end_pubkey);
+                assert_eq!(
+                    end_index.saturating_add(1),
+                    Self::partition_from_pubkey(&pubkey_test, partition_count),
+                    "start: {}, end: {}, pubkey: {}, partition_count: {}, prefix_before_addition: {}, prefix after: {}",
+                    start_index,
+                    end_index,
+                    pubkey_test,
+                    partition_count,
+                    end_key_prefix,
+                    end_key_prefix.saturating_add(1),
+                );
+            }
+        }
         // should be an inclusive range (a closed interval) like this:
         // [0xgg00-0xhhff], [0xii00-0xjjff], ... (where 0xii00 == 0xhhff + 1)
-        start_pubkey..=end_pubkey
+        start_pubkey_final..=end_pubkey_final
     }
 
     pub fn get_partitions(
