@@ -3088,9 +3088,17 @@ impl Bank {
     }
 
     pub fn get_fee_for_message(&self, message: &SanitizedMessage) -> Option<u64> {
-        let blockhash_queue = self.blockhash_queue.read().unwrap();
-        let lamports_per_signature =
-            blockhash_queue.get_lamports_per_signature(message.recent_blockhash())?;
+        let lamports_per_signature = {
+            let blockhash_queue = self.blockhash_queue.read().unwrap();
+            blockhash_queue.get_lamports_per_signature(message.recent_blockhash())
+        }
+        .or_else(|| {
+            self.check_message_for_nonce(message)
+                .and_then(|(address, account)| {
+                    NoncePartial::new(address, account).lamports_per_signature()
+                })
+        })?;
+
         Some(Self::calculate_fee(message, lamports_per_signature))
     }
 
@@ -3453,18 +3461,31 @@ impl Bank {
             .check_hash_age(hash, max_age)
     }
 
+<<<<<<< HEAD
     pub fn check_transaction_for_nonce(
         &self,
         tx: &SanitizedTransaction,
     ) -> Option<(Pubkey, AccountSharedData)> {
         tx.get_durable_nonce(self.feature_set.is_active(&nonce_must_be_writable::id()))
+=======
+    fn check_message_for_nonce(&self, message: &SanitizedMessage) -> Option<TransactionAccount> {
+        message
+            .get_durable_nonce(self.feature_set.is_active(&nonce_must_be_writable::id()))
+>>>>>>> 4c577d7f8 (`Bank::get_fee_for_message` is now nonce aware)
             .and_then(|nonce_address| {
                 self.get_account_with_fixed_root(nonce_address)
                     .map(|nonce_account| (*nonce_address, nonce_account))
             })
             .filter(|(_, nonce_account)| {
-                nonce_account::verify_nonce_account(nonce_account, tx.message().recent_blockhash())
+                nonce_account::verify_nonce_account(nonce_account, message.recent_blockhash())
             })
+    }
+
+    pub fn check_transaction_for_nonce(
+        &self,
+        tx: &SanitizedTransaction,
+    ) -> Option<TransactionAccount> {
+        self.check_message_for_nonce(tx.message())
     }
 
     pub fn check_transactions(
