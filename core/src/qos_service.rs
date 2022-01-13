@@ -137,6 +137,10 @@ impl QosService {
                             self.metrics.retried_txs_per_block_limit_count.fetch_add(1, Ordering::Relaxed);
                             Err(TransactionError::WouldExceedMaxBlockCostLimit)
                         }
+                        CostTrackerError::WouldExceedVoteMaxLimit => {
+                            self.metrics.retried_txs_per_vote_limit_count.fetch_add(1, Ordering::Relaxed);
+                            Err(TransactionError::WouldExceedMaxVoteCostLimit)
+                        }
                         CostTrackerError::WouldExceedAccountMaxLimit => {
                             self.metrics.retried_txs_per_account_limit_count.fetch_add(1, Ordering::Relaxed);
                             Err(TransactionError::WouldExceedMaxAccountCostLimit)
@@ -254,6 +258,9 @@ struct QosServiceMetrics {
     // number of transactions to be queued for retry due to its potential to breach block limit
     retried_txs_per_block_limit_count: AtomicU64,
 
+    // number of transactions to be queued for retry due to its potential to breach vote limit
+    retried_txs_per_vote_limit_count: AtomicU64,
+
     // number of transactions to be queued for retry due to its potential to breach writable
     // account limit
     retried_txs_per_account_limit_count: AtomicU64,
@@ -324,6 +331,12 @@ impl QosServiceMetrics {
                 (
                     "retried_txs_per_block_limit_count",
                     self.retried_txs_per_block_limit_count
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "retried_txs_per_vote_limit_count",
+                    self.retried_txs_per_vote_limit_count
                         .swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
@@ -429,6 +442,7 @@ mod tests {
             .unwrap()
             .calculate_cost(&transfer_tx)
             .sum();
+        let vote_tx_cost = cost_model.read().unwrap().calculate_cost(&vote_tx).sum();
 
         // make a vec of txs
         let txs = vec![transfer_tx.clone(), vote_tx.clone(), transfer_tx, vote_tx];
@@ -436,18 +450,18 @@ mod tests {
         let qos_service = QosService::new(cost_model, 1);
         let txs_costs = qos_service.compute_transaction_costs(txs.iter());
 
-        // set cost tracker limit to fit 1 transfer tx, vote tx bypasses limit check
-        let cost_limit = transfer_tx_cost;
+        // set cost tracker limit to fit 1 transfer tx and 1 vote tx
+        let cost_limit = transfer_tx_cost + vote_tx_cost;
         bank.write_cost_tracker()
             .unwrap()
-            .set_limits(cost_limit, cost_limit);
+            .set_limits(cost_limit, cost_limit, cost_limit);
         let results = qos_service.select_transactions_per_cost(txs.iter(), txs_costs.iter(), &bank);
 
-        // verify that first transfer tx and all votes are allowed
+        // verify that first transfer tx and first vote are allowed
         assert_eq!(results.len(), txs.len());
         assert!(results[0].is_ok());
         assert!(results[1].is_ok());
         assert!(results[2].is_err());
-        assert!(results[3].is_ok());
+        assert!(results[3].is_err());
     }
 }

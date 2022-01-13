@@ -982,7 +982,8 @@ impl BankingStage {
         lock_time.stop();
 
         // retryable_txs includes AccountInUse, WouldExceedMaxBlockCostLimit
-        // WouldExceedMaxAccountCostLimit, and WouldExceedMaxAccountDataCostLimit
+        // WouldExceedMaxAccountCostLimit, WouldExceedMaxVoteCostLimit
+        // and WouldExceedMaxAccountDataCostLimit
         let (result, mut retryable_txs) = Self::process_and_record_transactions_locked(
             bank,
             poh,
