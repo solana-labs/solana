@@ -3090,7 +3090,7 @@ impl AccountsDb {
                 let all_storages = read.values().cloned().collect::<Vec<_>>();
                 drop(storages);
                 drop(read);
-                let size = (MAXIMUM_APPEND_VEC_FILE_SIZE - 2048) / 100; // below max? todo - too small to make us do this more often
+                let size = (MAXIMUM_APPEND_VEC_FILE_SIZE - 2048) / 10; // below max? todo - too small to make us do this more often
                 let mut created_this_slot = false;
                 if current_storage.is_none() && all_storages.len() == 1 {
                     // maybe this is good
