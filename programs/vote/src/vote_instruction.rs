@@ -431,30 +431,6 @@ pub fn process_instruction(
             )?;
             vote_state::process_vote(me, &slot_hashes, &clock, &vote, &signers)
         }
-<<<<<<< HEAD
-=======
-        VoteInstruction::UpdateVoteState(vote_state_update)
-        | VoteInstruction::UpdateVoteStateSwitch(vote_state_update, _) => {
-            if invoke_context
-                .feature_set
-                .is_active(&feature_set::allow_votes_to_directly_update_vote_state::id())
-            {
-                inc_new_counter_info!("vote-state-native", 1);
-                let sysvar_cache = invoke_context.get_sysvar_cache();
-                let slot_hashes = sysvar_cache.get_slot_hashes()?;
-                let clock = sysvar_cache.get_clock()?;
-                vote_state::process_vote_state_update(
-                    me,
-                    slot_hashes.slot_hashes(),
-                    &clock,
-                    vote_state_update,
-                    &signers,
-                )
-            } else {
-                Err(InstructionError::InvalidInstructionData)
-            }
-        }
->>>>>>> 2370e61431 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
         VoteInstruction::Withdraw(lamports) => {
             let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             let rent_sysvar = if invoke_context
@@ -561,26 +537,10 @@ mod tests {
             .collect();
 
         let mut sysvar_cache = SysvarCache::default();
-<<<<<<< HEAD
-        sysvar_cache.push_entry(
-            sysvar::rent::id(),
-            bincode::serialize(&Rent::free()).unwrap(),
-        );
-        sysvar_cache.push_entry(
-            sysvar::clock::id(),
-            bincode::serialize(&Clock::default()).unwrap(),
-        );
-        sysvar_cache.push_entry(
-            sysvar::slot_hashes::id(),
-            bincode::serialize(&SlotHashes::default()).unwrap(),
-        );
-        solana_program_runtime::invoke_context::mock_process_instruction_with_sysvars(
-=======
         sysvar_cache.set_rent(Rent::free());
         sysvar_cache.set_clock(Clock::default());
         sysvar_cache.set_slot_hashes(SlotHashes::default());
-        mock_process_instruction_with_sysvars(
->>>>>>> 2370e61431 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
+        solana_program_runtime::invoke_context::mock_process_instruction_with_sysvars(
             &id(),
             Vec::new(),
             &instruction.data,

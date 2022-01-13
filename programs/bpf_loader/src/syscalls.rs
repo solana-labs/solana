@@ -1,5 +1,3 @@
-#[allow(deprecated)]
-use solana_sdk::sysvar::fees::Fees;
 use {
     crate::{alloc, BpfError},
     alloc::Alloc,
@@ -39,12 +37,7 @@ use {
         secp256k1_recover::{
             Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
         },
-<<<<<<< HEAD
-        sysvar::{self, Sysvar, SysvarId},
-=======
         sysvar::{Sysvar, SysvarId},
-        transaction_context::InstructionAccount,
->>>>>>> 2370e61431 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
     },
     std::{
         alloc::Layout,
@@ -2655,18 +2648,13 @@ mod tests {
         solana_rbpf::{
             ebpf::HOST_ALIGN, memory_region::MemoryRegion, user_error::UserError, vm::Config,
         },
-<<<<<<< HEAD
-        solana_sdk::{bpf_loader, fee_calculator::FeeCalculator, hash::hashv},
-=======
         solana_sdk::{
             account::AccountSharedData,
             bpf_loader,
             fee_calculator::FeeCalculator,
             hash::hashv,
             sysvar::{clock::Clock, epoch_schedule::EpochSchedule, rent::Rent},
-            transaction_context::TransactionContext,
         },
->>>>>>> 2370e61431 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
         std::{borrow::Cow, str::FromStr},
     };
 
@@ -3539,40 +3527,6 @@ mod tests {
     #[test]
     fn test_syscall_get_sysvar() {
         let config = Config::default();
-<<<<<<< HEAD
-=======
-        let src_clock = Clock {
-            slot: 1,
-            epoch_start_timestamp: 2,
-            epoch: 3,
-            leader_schedule_epoch: 4,
-            unix_timestamp: 5,
-        };
-        let src_epochschedule = EpochSchedule {
-            slots_per_epoch: 1,
-            leader_schedule_slot_offset: 2,
-            warmup: false,
-            first_normal_epoch: 3,
-            first_normal_slot: 4,
-        };
-        let src_fees = Fees {
-            fee_calculator: FeeCalculator {
-                lamports_per_signature: 1,
-            },
-        };
-        let src_rent = Rent {
-            lamports_per_byte_year: 1,
-            exemption_threshold: 2.0,
-            burn_percent: 3,
-        };
-
-        let mut sysvar_cache = SysvarCache::default();
-        sysvar_cache.set_clock(src_clock.clone());
-        sysvar_cache.set_epoch_schedule(src_epochschedule);
-        sysvar_cache.set_fees(src_fees.clone());
-        sysvar_cache.set_rent(src_rent);
-
->>>>>>> 2370e61431 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
         let program_id = Pubkey::new_unique();
         let program_account = AccountSharedData::new_ref(0, 0, &bpf_loader::id());
         let accounts = [(program_id, program_account)];
@@ -3608,8 +3562,10 @@ mod tests {
                 leader_schedule_epoch: 4,
                 unix_timestamp: 5,
             };
+
             let mut sysvar_cache = SysvarCache::default();
-            sysvar_cache.push_entry(sysvar::clock::id(), bincode::serialize(&src_clock).unwrap());
+            sysvar_cache.set_clock(src_clock.clone());
+
             let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
             invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
             invoke_context
@@ -3652,11 +3608,10 @@ mod tests {
                 first_normal_epoch: 3,
                 first_normal_slot: 4,
             };
+
             let mut sysvar_cache = SysvarCache::default();
-            sysvar_cache.push_entry(
-                sysvar::epoch_schedule::id(),
-                bincode::serialize(&src_epochschedule).unwrap(),
-            );
+            sysvar_cache.set_epoch_schedule(src_epochschedule);
+
             let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
             invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
             invoke_context
@@ -3706,8 +3661,10 @@ mod tests {
                     lamports_per_signature: 1,
                 },
             };
+
             let mut sysvar_cache = SysvarCache::default();
-            sysvar_cache.push_entry(sysvar::fees::id(), bincode::serialize(&src_fees).unwrap());
+            sysvar_cache.set_fees(src_fees.clone());
+
             let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
             invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
             invoke_context
@@ -3748,8 +3705,10 @@ mod tests {
                 exemption_threshold: 2.0,
                 burn_percent: 3,
             };
+
             let mut sysvar_cache = SysvarCache::default();
-            sysvar_cache.push_entry(sysvar::rent::id(), bincode::serialize(&src_rent).unwrap());
+            sysvar_cache.set_rent(src_rent);
+
             let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
             invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
             invoke_context

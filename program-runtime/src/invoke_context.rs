@@ -27,11 +27,6 @@ use {
         pubkey::Pubkey,
         rent::Rent,
         saturating_add_assign,
-<<<<<<< HEAD
-        sysvar::Sysvar,
-=======
-        transaction_context::{InstructionAccount, TransactionAccount, TransactionContext},
->>>>>>> 2370e61431 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
     },
     std::{borrow::Cow, cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, sync::Arc},
 };
