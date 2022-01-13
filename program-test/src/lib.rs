@@ -1,8 +1,11 @@
 //! The solana-program-test provides a BanksClient-based test framework BPF programs
 #![allow(clippy::integer_arithmetic)]
 
+<<<<<<< HEAD
 // Export types so test clients can limit their solana crate dependencies
 pub use solana_banks_client::BanksClient;
+=======
+>>>>>>> 2370e6143 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
 // Export tokio for test clients
 pub use tokio;
 use {
@@ -20,10 +23,16 @@ use {
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_info::AccountInfo,
+<<<<<<< HEAD
         clock::{Clock, Slot},
         entrypoint::{ProgramResult, SUCCESS},
         epoch_schedule::EpochSchedule,
         feature_set::demote_program_write_locks,
+=======
+        clock::Slot,
+        compute_budget::ComputeBudget,
+        entrypoint::{ProgramResult, SUCCESS},
+>>>>>>> 2370e6143 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
@@ -38,11 +47,15 @@ use {
         pubkey::Pubkey,
         rent::Rent,
         signature::{Keypair, Signer},
+<<<<<<< HEAD
         sysvar::{
             clock, epoch_schedule,
             fees::{self, Fees},
             rent, Sysvar,
         },
+=======
+        sysvar::{Sysvar, SysvarId},
+>>>>>>> 2370e6143 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
     },
     solana_vote_program::vote_state::{VoteState, VoteStateVersions},
     std::{
@@ -191,8 +204,8 @@ macro_rules! processor {
     };
 }
 
-fn get_sysvar<T: Default + Sysvar + Sized + serde::de::DeserializeOwned>(
-    id: &Pubkey,
+fn get_sysvar<T: Default + Sysvar + Sized + serde::de::DeserializeOwned + Clone>(
+    sysvar: Result<Arc<T>, InstructionError>,
     var_addr: *mut u8,
 ) -> u64 {
     let invoke_context = get_invoke_context();
@@ -225,7 +238,17 @@ fn get_sysvar<T: Default + Sysvar + Sized + serde::de::DeserializeOwned>(
         panic!("Exceeded compute budget");
     }
 
+<<<<<<< HEAD
     SUCCESS
+=======
+    match sysvar {
+        Ok(sysvar_data) => unsafe {
+            *(var_addr as *mut _ as *mut T) = T::clone(&sysvar_data);
+            SUCCESS
+        },
+        Err(_) => UNSUPPORTED_SYSVAR,
+    }
+>>>>>>> 2370e6143 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
 }
 
 struct SyscallStubs {}
@@ -380,19 +403,25 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
     }
 
     fn sol_get_clock_sysvar(&self, var_addr: *mut u8) -> u64 {
-        get_sysvar::<Clock>(&clock::id(), var_addr)
+        get_sysvar(
+            get_invoke_context().get_sysvar_cache().get_clock(),
+            var_addr,
+        )
     }
 
     fn sol_get_epoch_schedule_sysvar(&self, var_addr: *mut u8) -> u64 {
-        get_sysvar::<EpochSchedule>(&epoch_schedule::id(), var_addr)
+        get_sysvar(
+            get_invoke_context().get_sysvar_cache().get_epoch_schedule(),
+            var_addr,
+        )
     }
 
     fn sol_get_fees_sysvar(&self, var_addr: *mut u8) -> u64 {
-        get_sysvar::<Fees>(&fees::id(), var_addr)
+        get_sysvar(get_invoke_context().get_sysvar_cache().get_fees(), var_addr)
     }
 
     fn sol_get_rent_sysvar(&self, var_addr: *mut u8) -> u64 {
-        get_sysvar::<Rent>(&rent::id(), var_addr)
+        get_sysvar(get_invoke_context().get_sysvar_cache().get_rent(), var_addr)
     }
 }
 

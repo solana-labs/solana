@@ -19,7 +19,11 @@ use {
         native_loader,
         pubkey::Pubkey,
         rent::Rent,
+<<<<<<< HEAD
         sysvar::Sysvar,
+=======
+        saturating_add_assign,
+>>>>>>> 2370e6143 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
         transaction_context::{InstructionAccount, TransactionAccount, TransactionContext},
     },
     std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, sync::Arc},
@@ -946,6 +950,7 @@ impl<'a> InvokeContext<'a> {
         &self.current_compute_budget
     }
 
+<<<<<<< HEAD
     /// Get the value of a sysvar by its id
     pub fn get_sysvar<T: Sysvar>(&self, id: &Pubkey) -> Result<T, InstructionError> {
         self.sysvars
@@ -961,6 +966,11 @@ impl<'a> InvokeContext<'a> {
                 ic_msg!(self, "Unable to get sysvar {}", id);
                 InstructionError::UnsupportedSysvar
             })
+=======
+    /// Get cached sysvars
+    pub fn get_sysvar_cache(&self) -> &SysvarCache {
+        &self.sysvar_cache
+>>>>>>> 2370e6143 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
     }
 }
 

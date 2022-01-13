@@ -1316,6 +1316,10 @@ impl Bank {
         bank.update_rent();
         bank.update_epoch_schedule();
         bank.update_recent_blockhashes();
+<<<<<<< HEAD
+=======
+        bank.fill_missing_sysvar_cache_entries();
+>>>>>>> 2370e6143 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
         bank
     }
 
@@ -1494,9 +1498,13 @@ impl Bank {
         new.update_stake_history(Some(parent_epoch));
         new.update_clock(Some(parent_epoch));
         new.update_fees();
+<<<<<<< HEAD
         if !new.fix_recent_blockhashes_sysvar_delay() {
             new.update_recent_blockhashes();
         }
+=======
+        new.fill_missing_sysvar_cache_entries();
+>>>>>>> 2370e6143 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
 
         time.stop();
 
@@ -1555,7 +1563,7 @@ impl Bank {
                 new.inherit_specially_retained_account_fields(account),
             )
         });
-
+        new.fill_missing_sysvar_cache_entries();
         new.freeze();
         new
     }
@@ -1915,6 +1923,25 @@ impl Bank {
         });
     }
 
+<<<<<<< HEAD
+=======
+    pub fn set_sysvar_for_tests<T>(&self, sysvar: &T)
+    where
+        T: Sysvar + SysvarId,
+    {
+        self.update_sysvar_account(&T::id(), |account| {
+            create_account(
+                sysvar,
+                self.inherit_specially_retained_account_fields(account),
+            )
+        });
+        // Simply force fill sysvar cache rather than checking which sysvar was
+        // actually updated since tests don't need to be optimized for performance.
+        self.reset_sysvar_cache();
+        self.fill_missing_sysvar_cache_entries();
+    }
+
+>>>>>>> 2370e6143 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
     fn update_slot_history(&self) {
         self.update_sysvar_account(&sysvar::slot_history::id(), |account| {
             let mut slot_history = account
@@ -3467,6 +3494,166 @@ impl Bank {
         Arc::make_mut(&mut cache).remove(pubkey);
     }
 
+<<<<<<< HEAD
+=======
+    pub fn load_lookup_table_addresses(
+        &self,
+        address_table_lookups: &[MessageAddressTableLookup],
+    ) -> Result<LoadedAddresses> {
+        if !self.versioned_tx_message_enabled() {
+            return Err(TransactionError::UnsupportedVersion);
+        }
+
+        let slot_hashes = self
+            .sysvar_cache
+            .read()
+            .unwrap()
+            .get_slot_hashes()
+            .map_err(|_| TransactionError::AccountNotFound)?;
+
+        Ok(address_table_lookups
+            .iter()
+            .map(|address_table_lookup| {
+                self.rc.accounts.load_lookup_table_addresses(
+                    &self.ancestors,
+                    address_table_lookup,
+                    &slot_hashes,
+                )
+            })
+            .collect::<std::result::Result<_, AddressLookupError>>()?)
+    }
+
+    /// Execute a transaction using the provided loaded accounts and update
+    /// the executors cache if the transaction was successful.
+    fn execute_loaded_transaction(
+        &self,
+        tx: &SanitizedTransaction,
+        loaded_transaction: &mut LoadedTransaction,
+        compute_budget: ComputeBudget,
+        durable_nonce_fee: Option<DurableNonceFee>,
+        enable_cpi_recording: bool,
+        enable_log_recording: bool,
+        timings: &mut ExecuteTimings,
+        error_counters: &mut ErrorCounters,
+    ) -> TransactionExecutionResult {
+        let mut get_executors_time = Measure::start("get_executors_time");
+        let executors = self.get_executors(
+            tx.message(),
+            &loaded_transaction.accounts,
+            &loaded_transaction.program_indices,
+        );
+        get_executors_time.stop();
+        saturating_add_assign!(
+            timings.execute_accessories.get_executors_us,
+            get_executors_time.as_us()
+        );
+
+        let mut transaction_accounts = Vec::new();
+        std::mem::swap(&mut loaded_transaction.accounts, &mut transaction_accounts);
+        let mut transaction_context = TransactionContext::new(
+            transaction_accounts,
+            compute_budget.max_invoke_depth.saturating_add(1),
+        );
+
+        let pre_account_state_info =
+            self.get_transaction_account_state_info(&transaction_context, tx.message());
+
+        let instruction_recorder = if enable_cpi_recording {
+            Some(InstructionRecorder::new_ref(
+                tx.message().instructions().len(),
+            ))
+        } else {
+            None
+        };
+
+        let log_collector = if enable_log_recording {
+            Some(LogCollector::new_ref())
+        } else {
+            None
+        };
+
+        let (blockhash, lamports_per_signature) = self.last_blockhash_and_lamports_per_signature();
+
+        let mut process_message_time = Measure::start("process_message_time");
+        let process_result = MessageProcessor::process_message(
+            &self.builtin_programs.vec,
+            tx.message(),
+            &loaded_transaction.program_indices,
+            &mut transaction_context,
+            self.rent_collector.rent,
+            log_collector.clone(),
+            executors.clone(),
+            instruction_recorder.clone(),
+            self.feature_set.clone(),
+            compute_budget,
+            timings,
+            &*self.sysvar_cache.read().unwrap(),
+            blockhash,
+            lamports_per_signature,
+            self.load_accounts_data_len(),
+        );
+        process_message_time.stop();
+        saturating_add_assign!(
+            timings.execute_accessories.process_message_us,
+            process_message_time.as_us()
+        );
+
+        let mut update_executors_time = Measure::start("update_executors_time");
+        self.update_executors(process_result.is_ok(), executors);
+        update_executors_time.stop();
+        saturating_add_assign!(
+            timings.execute_accessories.update_executors_us,
+            update_executors_time.as_us()
+        );
+
+        let status = process_result
+            .and_then(|info| {
+                let post_account_state_info =
+                    self.get_transaction_account_state_info(&transaction_context, tx.message());
+                self.verify_transaction_account_state_changes(
+                    &pre_account_state_info,
+                    &post_account_state_info,
+                    &transaction_context,
+                )
+                .map(|_| info)
+            })
+            .map(|info| {
+                self.store_accounts_data_len(info.accounts_data_len);
+            })
+            .map_err(|err| {
+                match err {
+                    TransactionError::InvalidRentPayingAccount => {
+                        error_counters.invalid_rent_paying_account += 1;
+                    }
+                    _ => {
+                        error_counters.instruction_error += 1;
+                    }
+                }
+                err
+            });
+
+        let log_messages: Option<TransactionLogMessages> =
+            log_collector.and_then(|log_collector| {
+                Rc::try_unwrap(log_collector)
+                    .map(|log_collector| log_collector.into_inner().into())
+                    .ok()
+            });
+
+        let inner_instructions = instruction_recorder
+            .and_then(|instruction_recorder| Rc::try_unwrap(instruction_recorder).ok())
+            .map(|instruction_recorder| instruction_recorder.into_inner().deconstruct());
+
+        loaded_transaction.accounts = transaction_context.deconstruct();
+
+        TransactionExecutionResult::Executed(TransactionExecutionDetails {
+            status,
+            log_messages,
+            inner_instructions,
+            durable_nonce_fee,
+        })
+    }
+
+>>>>>>> 2370e6143 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,

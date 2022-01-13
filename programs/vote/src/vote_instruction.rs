@@ -20,9 +20,13 @@ use {
         program_utils::limited_deserialize,
         pubkey::Pubkey,
         system_instruction,
+<<<<<<< HEAD
         sysvar::{self, clock::Clock, slot_hashes::SlotHashes},
+=======
+        sysvar::{self, clock::Clock, rent::Rent, slot_hashes::SlotHashes},
+>>>>>>> 2370e6143 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
     },
-    std::collections::HashSet,
+    std::{collections::HashSet, sync::Arc},
     thiserror::Error,
 };
 
@@ -309,6 +313,42 @@ fn verify_rent_exemption(
     }
 }
 
+<<<<<<< HEAD
+=======
+/// These methods facilitate a transition from fetching sysvars from keyed
+/// accounts to fetching from the sysvar cache without breaking consensus. In
+/// order to keep consistent behavior, they continue to enforce the same checks
+/// as `solana_sdk::keyed_account::from_keyed_account` despite dynamically
+/// loading them instead of deserializing from account data.
+mod get_sysvar_with_keyed_account_check {
+    use super::*;
+
+    pub fn clock(
+        keyed_account: &KeyedAccount,
+        invoke_context: &InvokeContext,
+    ) -> Result<Arc<Clock>, InstructionError> {
+        check_sysvar_keyed_account::<Clock>(keyed_account)?;
+        invoke_context.get_sysvar_cache().get_clock()
+    }
+
+    pub fn rent(
+        keyed_account: &KeyedAccount,
+        invoke_context: &InvokeContext,
+    ) -> Result<Arc<Rent>, InstructionError> {
+        check_sysvar_keyed_account::<Rent>(keyed_account)?;
+        invoke_context.get_sysvar_cache().get_rent()
+    }
+
+    pub fn slot_hashes(
+        keyed_account: &KeyedAccount,
+        invoke_context: &InvokeContext,
+    ) -> Result<Arc<SlotHashes>, InstructionError> {
+        check_sysvar_keyed_account::<SlotHashes>(keyed_account)?;
+        invoke_context.get_sysvar_cache().get_slot_hashes()
+    }
+}
+
+>>>>>>> 2370e6143 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
 pub fn process_instruction(
     _program_id: &Pubkey,
     data: &[u8],
@@ -331,6 +371,7 @@ pub fn process_instruction(
 
     match limited_deserialize(data)? {
         VoteInstruction::InitializeAccount(vote_init) => {
+<<<<<<< HEAD
             verify_rent_exemption(me, keyed_account_at_index(keyed_accounts, 1)?)?;
             vote_state::initialize_account(
                 me,
@@ -338,6 +379,25 @@ pub fn process_instruction(
                 &signers,
                 &from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 2)?)?,
             )
+=======
+            let rent = get_sysvar_with_keyed_account_check::rent(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
+                invoke_context,
+            )?;
+            verify_rent_exemption(me, &rent)?;
+            let clock = get_sysvar_with_keyed_account_check::clock(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
+                invoke_context,
+            )?;
+            vote_state::initialize_account(me, &vote_init, &signers, &clock)
+        }
+        VoteInstruction::Authorize(voter_pubkey, vote_authorize) => {
+            let clock = get_sysvar_with_keyed_account_check::clock(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
+                invoke_context,
+            )?;
+            vote_state::authorize(me, &voter_pubkey, vote_authorize, &signers, &clock)
+>>>>>>> 2370e6143 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
         }
         VoteInstruction::Authorize(voter_pubkey, vote_authorize) => vote_state::authorize(
             me,
@@ -356,6 +416,7 @@ pub fn process_instruction(
         }
         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
             inc_new_counter_info!("vote-native", 1);
+<<<<<<< HEAD
             vote_state::process_vote(
                 me,
                 &from_keyed_account::<SlotHashes>(keyed_account_at_index(keyed_accounts, 1)?)?,
@@ -363,17 +424,53 @@ pub fn process_instruction(
                 &vote,
                 &signers,
             )
+=======
+            let slot_hashes = get_sysvar_with_keyed_account_check::slot_hashes(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
+                invoke_context,
+            )?;
+            let clock = get_sysvar_with_keyed_account_check::clock(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
+                invoke_context,
+            )?;
+            vote_state::process_vote(me, &slot_hashes, &clock, &vote, &signers)
+        }
+        VoteInstruction::UpdateVoteState(vote_state_update)
+        | VoteInstruction::UpdateVoteStateSwitch(vote_state_update, _) => {
+            if invoke_context
+                .feature_set
+                .is_active(&feature_set::allow_votes_to_directly_update_vote_state::id())
+            {
+                inc_new_counter_info!("vote-state-native", 1);
+                let sysvar_cache = invoke_context.get_sysvar_cache();
+                let slot_hashes = sysvar_cache.get_slot_hashes()?;
+                let clock = sysvar_cache.get_clock()?;
+                vote_state::process_vote_state_update(
+                    me,
+                    slot_hashes.slot_hashes(),
+                    &clock,
+                    vote_state_update,
+                    &signers,
+                )
+            } else {
+                Err(InstructionError::InvalidInstructionData)
+            }
+>>>>>>> 2370e6143 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
         }
         VoteInstruction::Withdraw(lamports) => {
             let to = keyed_account_at_index(keyed_accounts, 1)?;
             let rent_sysvar = if invoke_context
                 .is_feature_active(&feature_set::reject_non_rent_exempt_vote_withdraws::id())
             {
+<<<<<<< HEAD
                 Some(get_sysvar(invoke_context, &sysvar::rent::id())?)
+=======
+                Some(invoke_context.get_sysvar_cache().get_rent()?)
+>>>>>>> 2370e6143 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
             } else {
                 None
             };
-            vote_state::withdraw(me, lamports, to, &signers, rent_sysvar)
+            vote_state::withdraw(me, lamports, to, &signers, rent_sysvar.as_deref())
         }
         VoteInstruction::AuthorizeChecked(vote_authorize) => {
             if invoke_context.is_feature_active(&feature_set::vote_stake_checked_instructions::id())
@@ -450,6 +547,7 @@ mod tests {
                 })
             })
             .collect();
+<<<<<<< HEAD
 
         for _ in 0..instruction.accounts.len() {
             accounts.push(RefCell::new(AccountSharedData::default()));
@@ -470,6 +568,22 @@ mod tests {
             .unwrap();
             super::process_instruction(&Pubkey::default(), &instruction.data, &mut invoke_context)
         }
+=======
+        let mut sysvar_cache = SysvarCache::default();
+        sysvar_cache.set_rent(Rent::free());
+        sysvar_cache.set_clock(Clock::default());
+        sysvar_cache.set_slot_hashes(SlotHashes::default());
+        mock_process_instruction_with_sysvars(
+            &id(),
+            Vec::new(),
+            &instruction.data,
+            transaction_accounts,
+            instruction.accounts.clone(),
+            expected_result,
+            &sysvar_cache,
+            super::process_instruction,
+        )
+>>>>>>> 2370e6143 (Perf: Store deserialized sysvars in the sysvars cache (#22455))
     }
 
     fn invalid_vote_state_pubkey() -> Pubkey {
