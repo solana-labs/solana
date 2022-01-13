@@ -49,6 +49,7 @@ pub const DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = 100;
 const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
 const MAX_SNAPSHOT_VERSION_FILE_SIZE: u64 = 8; // byte
 const VERSION_STRING_V1_2_0: &str = "1.2.0";
+const VERSION_STRING_V1_3_0: &str = "1.3.0";
 pub(crate) const TMP_BANK_SNAPSHOT_PREFIX: &str = "tmp-bank-snapshot-";
 pub const TMP_SNAPSHOT_ARCHIVE_PREFIX: &str = "tmp-snapshot-archive-";
 pub const MAX_BANK_SNAPSHOTS_TO_RETAIN: usize = 8; // Save some bank snapshots but not too many
@@ -60,6 +61,7 @@ pub const INCREMENTAL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str = r"^incremental-sna
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum SnapshotVersion {
     V1_2_0,
+    V1_3_0,
 }
 
 impl Default for SnapshotVersion {
@@ -78,6 +80,7 @@ impl From<SnapshotVersion> for &'static str {
     fn from(snapshot_version: SnapshotVersion) -> &'static str {
         match snapshot_version {
             SnapshotVersion::V1_2_0 => VERSION_STRING_V1_2_0,
+            SnapshotVersion::V1_3_0 => VERSION_STRING_V1_3_0,
         }
     }
 }
@@ -87,6 +90,8 @@ impl FromStr for SnapshotVersion {
 
     fn from_str(version_string: &str) -> std::result::Result<Self, Self::Err> {
         // Remove leading 'v' or 'V' from slice
+        // bprumo TODO: Once version 1.3.0 is the only supported version, can remove this block
+        // that strips leading 'v'.
         let version_string = if version_string
             .get(..1)
             .map_or(false, |s| s.eq_ignore_ascii_case("v"))
@@ -97,6 +102,7 @@ impl FromStr for SnapshotVersion {
         };
         match version_string {
             VERSION_STRING_V1_2_0 => Ok(SnapshotVersion::V1_2_0),
+            VERSION_STRING_V1_3_0 => Ok(SnapshotVersion::V1_3_0),
             _ => Err("unsupported snapshot version"),
         }
     }
@@ -640,6 +646,7 @@ pub fn add_bank_snapshot<P: AsRef<Path>>(
     let bank_snapshot_serializer = move |stream: &mut BufWriter<File>| -> Result<()> {
         let serde_style = match snapshot_version {
             SnapshotVersion::V1_2_0 => SerdeStyle::Older,
+            SnapshotVersion::V1_3_0 => SerdeStyle::Newer,
         };
         bank_to_stream(serde_style, stream.by_ref(), bank, snapshot_storages)?;
         Ok(())
@@ -1477,6 +1484,22 @@ fn rebuild_bank_from_snapshots(
             match incremental_snapshot_version.unwrap_or(full_snapshot_version) {
                 SnapshotVersion::V1_2_0 => bank_from_streams(
                     SerdeStyle::Older,
+                    snapshot_streams,
+                    account_paths,
+                    unpacked_append_vec_map,
+                    genesis_config,
+                    debug_keys,
+                    additional_builtins,
+                    account_secondary_indexes,
+                    accounts_db_caching_enabled,
+                    limit_load_slot_count_from_snapshot,
+                    shrink_ratio,
+                    verify_index,
+                    accounts_db_config,
+                    accounts_update_notifier,
+                ),
+                SnapshotVersion::V1_3_0 => bank_from_streams(
+                    SerdeStyle::Newer,
                     snapshot_streams,
                     account_paths,
                     unpacked_append_vec_map,
