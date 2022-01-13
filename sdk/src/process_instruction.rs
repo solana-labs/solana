@@ -103,23 +103,8 @@ pub trait InvokeContext {
         execute_us: u64,
         deserialize_us: u64,
     );
-<<<<<<< HEAD
-    /// Get sysvar data
-    fn get_sysvar_data(&self, id: &Pubkey) -> Option<Rc<Vec<u8>>>;
-=======
     /// Get sysvars
     fn get_sysvars(&self) -> &[(Pubkey, Vec<u8>)];
-    /// Get this invocation's compute budget
-    fn get_compute_budget(&self) -> &ComputeBudget;
-    /// Set this invocation's blockhash
-    fn set_blockhash(&mut self, hash: Hash);
-    /// Get this invocation's blockhash
-    fn get_blockhash(&self) -> &Hash;
-    /// Set this invocation's lamports_per_signature value
-    fn set_lamports_per_signature(&mut self, lamports_per_signature: u64);
-    /// Get this invocation's lamports_per_signature value
-    fn get_lamports_per_signature(&self) -> u64;
->>>>>>> 29ad08155 (Stop caching sysvars, instead load them ahead of time. (#21108))
     /// Set the return data
     fn set_return_data(&mut self, return_data: Option<(Pubkey, Vec<u8>)>);
     /// Get the return data
@@ -406,11 +391,7 @@ pub struct MockInvokeContext<'a> {
     pub compute_meter: MockComputeMeter,
     pub programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
     pub accounts: Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
-<<<<<<< HEAD
-    pub sysvars: Vec<(Pubkey, Option<Rc<Vec<u8>>>)>,
-=======
-    pub sysvars: &'a [(Pubkey, Vec<u8>)],
->>>>>>> 29ad08155 (Stop caching sysvars, instead load them ahead of time. (#21108))
+    pub sysvars: Vec<(Pubkey, Vec<u8>)>,
     pub disabled_features: HashSet<Pubkey>,
     pub return_data: Option<(Pubkey, Vec<u8>)>,
 }
@@ -427,11 +408,7 @@ impl<'a> MockInvokeContext<'a> {
             },
             programs: vec![],
             accounts: vec![],
-<<<<<<< HEAD
             sysvars: vec![],
-=======
-            sysvars: &[],
->>>>>>> 29ad08155 (Stop caching sysvars, instead load them ahead of time. (#21108))
             disabled_features: HashSet::default(),
             return_data: None,
         };
@@ -443,21 +420,6 @@ impl<'a> MockInvokeContext<'a> {
             ));
         invoke_context
     }
-}
-
-pub fn mock_set_sysvar<T: Sysvar>(
-    mock_invoke_context: &mut MockInvokeContext,
-    id: Pubkey,
-    sysvar: T,
-) -> Result<(), InstructionError> {
-    let mut data = Vec::with_capacity(T::size_of());
-
-    bincode::serialize_into(&mut data, &sysvar).map_err(|err| {
-        ic_msg!(mock_invoke_context, "Unable to serialize sysvar: {:?}", err);
-        InstructionError::GenericError
-    })?;
-    mock_invoke_context.sysvars.push((id, Some(Rc::new(data))));
-    Ok(())
 }
 
 impl<'a> InvokeContext for MockInvokeContext<'a> {
@@ -547,15 +509,8 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
         _deserialize_us: u64,
     ) {
     }
-<<<<<<< HEAD
-    fn get_sysvar_data(&self, id: &Pubkey) -> Option<Rc<Vec<u8>>> {
-        self.sysvars
-            .iter()
-            .find_map(|(key, sysvar)| if id == key { sysvar.clone() } else { None })
-=======
     fn get_sysvars(&self) -> &[(Pubkey, Vec<u8>)] {
-        self.sysvars
->>>>>>> 29ad08155 (Stop caching sysvars, instead load them ahead of time. (#21108))
+        &self.sysvars
     }
     fn set_return_data(&mut self, return_data: Option<(Pubkey, Vec<u8>)>) {
         self.return_data = return_data;

@@ -14,8 +14,6 @@ pub mod slot_hashes;
 pub mod slot_history;
 pub mod stake_history;
 
-<<<<<<< HEAD
-=======
 lazy_static! {
     pub static ref ALL_IDS: Vec<Pubkey> = vec![
         clock::id(),
@@ -33,7 +31,6 @@ lazy_static! {
     ];
 }
 
->>>>>>> 29ad08155 (Stop caching sysvars, instead load them ahead of time. (#21108))
 pub fn is_sysvar_id(id: &Pubkey) -> bool {
     ALL_IDS.iter().any(|key| key == id)
 }

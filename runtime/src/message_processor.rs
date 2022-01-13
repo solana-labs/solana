@@ -1,26 +1,7 @@
-<<<<<<< HEAD
 use {
     crate::{
-        accounts::Accounts, ancestors::Ancestors, bank::TransactionAccountRefCell,
-        instruction_recorder::InstructionRecorder, log_collector::LogCollector,
-        native_loader::NativeLoader, rent_collector::RentCollector,
-=======
-use crate::{
-    instruction_recorder::InstructionRecorder, log_collector::LogCollector,
-    rent_collector::RentCollector,
-};
-use log::*;
-use serde::{Deserialize, Serialize};
-use solana_measure::measure::Measure;
-use solana_program_runtime::{ExecuteDetailsTimings, Executors, InstructionProcessor, PreAccount};
-use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount, WritableAccount},
-    compute_budget::ComputeBudget,
-    feature_set::{
-        demote_program_write_locks, do_support_realloc, neon_evm_compute_budget,
-        prevent_calling_precompiles_as_programs, remove_native_loader, requestable_heap_size,
-        tx_wide_compute_cap, FeatureSet,
->>>>>>> 29ad08155 (Stop caching sysvars, instead load them ahead of time. (#21108))
+        bank::TransactionAccountRefCell, instruction_recorder::InstructionRecorder,
+        log_collector::LogCollector, native_loader::NativeLoader, rent_collector::RentCollector,
     },
     log::*,
     serde::{Deserialize, Serialize},
@@ -389,6 +370,7 @@ pub struct ThisInvokeContext<'a> {
     pre_accounts: Vec<PreAccount>,
     accounts: &'a [TransactionAccountRefCell],
     programs: &'a [(Pubkey, ProcessInstructionWithContext)],
+    sysvars: &'a [(Pubkey, Vec<u8>)],
     logger: Rc<RefCell<dyn Logger>>,
     bpf_compute_budget: BpfComputeBudget,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
@@ -396,10 +378,6 @@ pub struct ThisInvokeContext<'a> {
     instruction_recorder: Option<InstructionRecorder>,
     feature_set: Arc<FeatureSet>,
     pub timings: ExecuteDetailsTimings,
-    account_db: Arc<Accounts>,
-    ancestors: &'a Ancestors,
-    #[allow(clippy::type_complexity)]
-    sysvars: RefCell<Vec<(Pubkey, Option<Rc<Vec<u8>>>)>>,
     // return data and program_id that set it
     return_data: Option<(Pubkey, Vec<u8>)>,
 }
@@ -413,14 +391,13 @@ impl<'a> ThisInvokeContext<'a> {
         executable_accounts: &'a [TransactionAccountRefCell],
         accounts: &'a [TransactionAccountRefCell],
         programs: &'a [(Pubkey, ProcessInstructionWithContext)],
+        sysvars: &'a [(Pubkey, Vec<u8>)],
         log_collector: Option<Rc<LogCollector>>,
         bpf_compute_budget: BpfComputeBudget,
         compute_meter: Rc<RefCell<dyn ComputeMeter>>,
         executors: Rc<RefCell<Executors>>,
         instruction_recorder: Option<InstructionRecorder>,
         feature_set: Arc<FeatureSet>,
-        account_db: Arc<Accounts>,
-        ancestors: &'a Ancestors,
     ) -> Self {
         let pre_accounts = MessageProcessor::create_pre_accounts(message, instruction, accounts);
         let keyed_accounts = MessageProcessor::create_keyed_accounts(
@@ -443,6 +420,7 @@ impl<'a> ThisInvokeContext<'a> {
             pre_accounts,
             accounts,
             programs,
+            sysvars,
             logger: Rc::new(RefCell::new(ThisLogger { log_collector })),
             bpf_compute_budget,
             compute_meter,
@@ -450,9 +428,6 @@ impl<'a> ThisInvokeContext<'a> {
             instruction_recorder,
             feature_set,
             timings: ExecuteDetailsTimings::default(),
-            account_db,
-            ancestors,
-            sysvars: RefCell::new(vec![]),
             return_data: None,
         };
         invoke_context
@@ -625,25 +600,8 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         self.timings.execute_us += execute_us;
         self.timings.deserialize_us += deserialize_us;
     }
-    fn get_sysvar_data(&self, id: &Pubkey) -> Option<Rc<Vec<u8>>> {
-        if let Ok(mut sysvars) = self.sysvars.try_borrow_mut() {
-            // Try share from cache
-            let mut result = sysvars
-                .iter()
-                .find_map(|(key, sysvar)| if id == key { sysvar.clone() } else { None });
-            if result.is_none() {
-                // Load it
-                result = self
-                    .account_db
-                    .load_with_fixed_root(self.ancestors, id)
-                    .map(|(account, _)| Rc::new(account.data().to_vec()));
-                // Cache it
-                sysvars.push((*id, result.clone()));
-            }
-            result
-        } else {
-            None
-        }
+    fn get_sysvars(&self) -> &[(Pubkey, Vec<u8>)] {
+        self.sysvars
     }
     fn set_return_data(&mut self, return_data: Option<(Pubkey, Vec<u8>)>) {
         self.return_data = return_data;
@@ -709,7 +667,6 @@ impl std::fmt::Debug for MessageProcessor {
     }
 }
 
-<<<<<<< HEAD
 impl Default for MessageProcessor {
     fn default() -> Self {
         Self {
@@ -778,96 +735,6 @@ impl MessageProcessor {
                 )
             }))
             .collect::<Vec<_>>()
-=======
-pub struct ThisInvokeContext<'a> {
-    instruction_index: usize,
-    invoke_stack: Vec<InvokeContextStackFrame<'a>>,
-    rent: Rent,
-    pre_accounts: Vec<PreAccount>,
-    accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
-    programs: &'a [(Pubkey, ProcessInstructionWithContext)],
-    sysvars: &'a [(Pubkey, Vec<u8>)],
-    logger: Rc<RefCell<dyn Logger>>,
-    compute_budget: ComputeBudget,
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
-    executors: Rc<RefCell<Executors>>,
-    instruction_recorders: Option<&'a [InstructionRecorder]>,
-    feature_set: Arc<FeatureSet>,
-    pub timings: ExecuteDetailsTimings,
-    blockhash: Hash,
-    lamports_per_signature: u64,
-    return_data: (Pubkey, Vec<u8>),
-}
-impl<'a> ThisInvokeContext<'a> {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        rent: Rent,
-        accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        programs: &'a [(Pubkey, ProcessInstructionWithContext)],
-        sysvars: &'a [(Pubkey, Vec<u8>)],
-        log_collector: Option<Rc<LogCollector>>,
-        compute_budget: ComputeBudget,
-        compute_meter: Rc<RefCell<dyn ComputeMeter>>,
-        executors: Rc<RefCell<Executors>>,
-        instruction_recorders: Option<&'a [InstructionRecorder]>,
-        feature_set: Arc<FeatureSet>,
-        blockhash: Hash,
-        lamports_per_signature: u64,
-    ) -> Self {
-        Self {
-            instruction_index: 0,
-            invoke_stack: Vec::with_capacity(compute_budget.max_invoke_depth),
-            rent,
-            pre_accounts: Vec::new(),
-            accounts,
-            programs,
-            sysvars,
-            logger: ThisLogger::new_ref(log_collector),
-            compute_budget,
-            compute_meter,
-            executors,
-            instruction_recorders,
-            feature_set,
-            timings: ExecuteDetailsTimings::default(),
-            blockhash,
-            lamports_per_signature,
-            return_data: (Pubkey::default(), Vec::new()),
-        }
-    }
-
-    pub fn new_mock_with_sysvars_and_features(
-        accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        programs: &'a [(Pubkey, ProcessInstructionWithContext)],
-        sysvars: &'a [(Pubkey, Vec<u8>)],
-        feature_set: Arc<FeatureSet>,
-    ) -> Self {
-        Self::new(
-            Rent::default(),
-            accounts,
-            programs,
-            sysvars,
-            None,
-            ComputeBudget::default(),
-            ThisComputeMeter::new_ref(std::i64::MAX as u64),
-            Rc::new(RefCell::new(Executors::default())),
-            None,
-            feature_set,
-            Hash::default(),
-            0,
-        )
-    }
-
-    pub fn new_mock(
-        accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        programs: &'a [(Pubkey, ProcessInstructionWithContext)],
-    ) -> Self {
-        Self::new_mock_with_sysvars_and_features(
-            accounts,
-            programs,
-            &[],
-            Arc::new(FeatureSet::all_enabled()),
-        )
->>>>>>> 29ad08155 (Stop caching sysvars, instead load them ahead of time. (#21108))
     }
 
     /// Process an instruction
@@ -1394,122 +1261,20 @@ impl<'a> ThisInvokeContext<'a> {
         }
         Ok(())
     }
-<<<<<<< HEAD
-=======
-    fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
-        self.invoke_stack
-            .last()
-            .and_then(|frame| frame.program_id())
-            .ok_or(InstructionError::CallDepth)
-    }
-    fn remove_first_keyed_account(&mut self) -> Result<(), InstructionError> {
-        if !self.is_feature_active(&remove_native_loader::id()) {
-            let stack_frame = &mut self
-                .invoke_stack
-                .last_mut()
-                .ok_or(InstructionError::CallDepth)?;
-            stack_frame.keyed_accounts_range.start =
-                stack_frame.keyed_accounts_range.start.saturating_add(1);
-        }
-        Ok(())
-    }
-    fn get_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError> {
-        self.invoke_stack
-            .last()
-            .map(|frame| &frame.keyed_accounts[frame.keyed_accounts_range.clone()])
-            .ok_or(InstructionError::CallDepth)
-    }
-    fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {
-        self.programs
-    }
-    fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
-        self.logger.clone()
-    }
-    fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
-        self.compute_meter.clone()
-    }
-    fn add_executor(&self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {
-        self.executors.borrow_mut().insert(*pubkey, executor);
-    }
-    fn get_executor(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
-        self.executors.borrow().get(pubkey)
-    }
-    fn set_instruction_index(&mut self, instruction_index: usize) {
-        self.instruction_index = instruction_index;
-    }
-    fn record_instruction(&self, instruction: &Instruction) {
-        if let Some(instruction_recorders) = &self.instruction_recorders {
-            instruction_recorders[self.instruction_index].record_instruction(instruction.clone());
-        }
-    }
-    fn is_feature_active(&self, feature_id: &Pubkey) -> bool {
-        self.feature_set.is_active(feature_id)
-    }
-    fn get_account(&self, pubkey: &Pubkey) -> Option<(usize, Rc<RefCell<AccountSharedData>>)> {
-        for (index, (key, account)) in self.accounts.iter().enumerate().rev() {
-            if key == pubkey {
-                return Some((index, account.clone()));
-            }
-        }
-        None
-    }
-    fn update_timing(
-        &mut self,
-        serialize_us: u64,
-        create_vm_us: u64,
-        execute_us: u64,
-        deserialize_us: u64,
-    ) {
-        self.timings.serialize_us += serialize_us;
-        self.timings.create_vm_us += create_vm_us;
-        self.timings.execute_us += execute_us;
-        self.timings.deserialize_us += deserialize_us;
-    }
-    fn get_sysvars(&self) -> &[(Pubkey, Vec<u8>)] {
-        self.sysvars
-    }
-    fn get_compute_budget(&self) -> &ComputeBudget {
-        &self.compute_budget
-    }
-    fn set_blockhash(&mut self, hash: Hash) {
-        self.blockhash = hash;
-    }
-    fn get_blockhash(&self) -> &Hash {
-        &self.blockhash
-    }
-    fn set_lamports_per_signature(&mut self, lamports_per_signature: u64) {
-        self.lamports_per_signature = lamports_per_signature;
-    }
-    fn get_lamports_per_signature(&self) -> u64 {
-        self.lamports_per_signature
-    }
-    fn set_return_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError> {
-        self.return_data = (*self.get_caller()?, data);
-        Ok(())
-    }
-    fn get_return_data(&self) -> (Pubkey, &[u8]) {
-        (self.return_data.0, &self.return_data.1)
-    }
-}
->>>>>>> 29ad08155 (Stop caching sysvars, instead load them ahead of time. (#21108))
 
     /// Execute an instruction
     /// This method calls the instruction's program entrypoint method and verifies that the result of
     /// the call does not violate the bank's accounting rules.
     /// The accounts are committed back to the bank only if this function returns Ok(_).
     #[allow(clippy::too_many_arguments)]
-<<<<<<< HEAD
     fn execute_instruction(
         &self,
-=======
-    pub fn process_message(
-        instruction_processor: &InstructionProcessor,
->>>>>>> 29ad08155 (Stop caching sysvars, instead load them ahead of time. (#21108))
         message: &Message,
         instruction: &CompiledInstruction,
         executable_accounts: &[TransactionAccountRefCell],
         accounts: &[TransactionAccountRefCell],
         rent_collector: &RentCollector,
+        sysvars: &[(Pubkey, Vec<u8>)],
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
         instruction_recorder: Option<InstructionRecorder>,
@@ -1518,57 +1283,11 @@ impl<'a> ThisInvokeContext<'a> {
         bpf_compute_budget: BpfComputeBudget,
         compute_meter: Rc<RefCell<dyn ComputeMeter>>,
         timings: &mut ExecuteDetailsTimings,
-<<<<<<< HEAD
-        account_db: Arc<Accounts>,
-        ancestors: &Ancestors,
     ) -> Result<(), InstructionError> {
         // Fixup the special instructions key if present
         // before the account pre-values are taken care of
         if feature_set.is_active(&instructions_sysvar_enabled::id()) {
             for (pubkey, account) in accounts.iter().take(message.account_keys.len()) {
-=======
-        sysvars: &[(Pubkey, Vec<u8>)],
-        blockhash: Hash,
-        lamports_per_signature: u64,
-    ) -> Result<(), TransactionError> {
-        let mut invoke_context = ThisInvokeContext::new(
-            rent_collector.rent,
-            accounts,
-            instruction_processor.programs(),
-            sysvars,
-            log_collector,
-            compute_budget,
-            compute_meter,
-            executors,
-            instruction_recorders,
-            feature_set,
-            blockhash,
-            lamports_per_signature,
-        );
-        let compute_meter = invoke_context.get_compute_meter();
-
-        debug_assert_eq!(program_indices.len(), message.instructions.len());
-        for (instruction_index, (instruction, program_indices)) in message
-            .instructions
-            .iter()
-            .zip(program_indices.iter())
-            .enumerate()
-        {
-            let program_id = instruction.program_id(&message.account_keys);
-            if invoke_context.is_feature_active(&prevent_calling_precompiles_as_programs::id())
-                && is_precompile(program_id, |id| invoke_context.is_feature_active(id))
-            {
-                // Precompiled programs don't have an instruction processor
-                continue;
-            }
-
-            let mut time = Measure::start("execute_instruction");
-            let pre_remaining_units = compute_meter.borrow().get_remaining();
-
-            // Fixup the special instructions key if present
-            // before the account pre-values are taken care of
-            for (pubkey, accont) in accounts.iter().take(message.account_keys.len()) {
->>>>>>> 29ad08155 (Stop caching sysvars, instead load them ahead of time. (#21108))
                 if instructions::check_id(pubkey) {
                     let mut mut_account_ref = account.borrow_mut();
                     instructions::store_current_index(
@@ -1605,14 +1324,13 @@ impl<'a> ThisInvokeContext<'a> {
             executable_accounts,
             accounts,
             &self.programs,
+            sysvars,
             log_collector,
             bpf_compute_budget,
             compute_meter,
             executors,
             instruction_recorder,
             feature_set,
-            account_db,
-            ancestors,
         );
         let pre_remaining_units = invoke_context.get_compute_meter().borrow().get_remaining();
         let mut time = Measure::start("execute_instruction");
@@ -1667,8 +1385,7 @@ impl<'a> ThisInvokeContext<'a> {
         bpf_compute_budget: BpfComputeBudget,
         compute_meter: Rc<RefCell<dyn ComputeMeter>>,
         timings: &mut ExecuteDetailsTimings,
-        account_db: Arc<Accounts>,
-        ancestors: &Ancestors,
+        sysvars: &[(Pubkey, Vec<u8>)],
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             let instruction_recorder = instruction_recorders
@@ -1681,6 +1398,7 @@ impl<'a> ThisInvokeContext<'a> {
                     &loaders[instruction_index],
                     accounts,
                     rent_collector,
+                    sysvars,
                     log_collector.clone(),
                     executors.clone(),
                     instruction_recorder,
@@ -1689,8 +1407,6 @@ impl<'a> ThisInvokeContext<'a> {
                     bpf_compute_budget,
                     compute_meter.clone(),
                     timings,
-                    account_db.clone(),
-                    ancestors,
                 )
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err));
 
@@ -1748,7 +1464,6 @@ mod tests {
             &[Instruction::new_with_bytes(invoke_stack[0], &[0], metas)],
             None,
         );
-        let ancestors = Ancestors::default();
         let mut invoke_context = ThisInvokeContext::new(
             &invoke_stack[0],
             Rent::default(),
@@ -1757,14 +1472,13 @@ mod tests {
             &[],
             &accounts,
             &[],
+            &[],
             None,
             BpfComputeBudget::default(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             Rc::new(RefCell::new(Executors::default())),
             None,
             Arc::new(FeatureSet::all_enabled()),
-            Arc::new(Accounts::default()),
-            &ancestors,
         );
 
         // Check call depth increases and has a limit
@@ -2374,14 +2088,7 @@ mod tests {
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             &mut ExecuteDetailsTimings::default(),
-<<<<<<< HEAD
-            Arc::new(Accounts::default()),
-            &ancestors,
-=======
             &[],
-            Hash::default(),
-            0,
->>>>>>> 29ad08155 (Stop caching sysvars, instead load them ahead of time. (#21108))
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].1.borrow().lamports(), 100);
@@ -2408,14 +2115,7 @@ mod tests {
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             &mut ExecuteDetailsTimings::default(),
-<<<<<<< HEAD
-            Arc::new(Accounts::default()),
-            &ancestors,
-=======
             &[],
-            Hash::default(),
-            0,
->>>>>>> 29ad08155 (Stop caching sysvars, instead load them ahead of time. (#21108))
         );
         assert_eq!(
             result,
@@ -2446,14 +2146,7 @@ mod tests {
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             &mut ExecuteDetailsTimings::default(),
-<<<<<<< HEAD
-            Arc::new(Accounts::default()),
-            &ancestors,
-=======
             &[],
-            Hash::default(),
-            0,
->>>>>>> 29ad08155 (Stop caching sysvars, instead load them ahead of time. (#21108))
         );
         assert_eq!(
             result,
@@ -2575,14 +2268,7 @@ mod tests {
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             &mut ExecuteDetailsTimings::default(),
-<<<<<<< HEAD
-            Arc::new(Accounts::default()),
-            &ancestors,
-=======
             &[],
-            Hash::default(),
-            0,
->>>>>>> 29ad08155 (Stop caching sysvars, instead load them ahead of time. (#21108))
         );
         assert_eq!(
             result,
@@ -2613,14 +2299,7 @@ mod tests {
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             &mut ExecuteDetailsTimings::default(),
-<<<<<<< HEAD
-            Arc::new(Accounts::default()),
-            &ancestors,
-=======
             &[],
-            Hash::default(),
-            0,
->>>>>>> 29ad08155 (Stop caching sysvars, instead load them ahead of time. (#21108))
         );
         assert_eq!(result, Ok(()));
 
@@ -2636,13 +2315,7 @@ mod tests {
             )],
             Some(&accounts[0].0),
         );
-<<<<<<< HEAD
-        let ancestors = Ancestors::default();
         let result = message_processor.process_message(
-=======
-        let result = MessageProcessor::process_message(
-            &instruction_processor,
->>>>>>> 29ad08155 (Stop caching sysvars, instead load them ahead of time. (#21108))
             &message,
             &loaders,
             &accounts,
@@ -2654,14 +2327,7 @@ mod tests {
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             &mut ExecuteDetailsTimings::default(),
-<<<<<<< HEAD
-            Arc::new(Accounts::default()),
-            &ancestors,
-=======
             &[],
-            Hash::default(),
-            0,
->>>>>>> 29ad08155 (Stop caching sysvars, instead load them ahead of time. (#21108))
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].1.borrow().lamports(), 80);
@@ -2762,7 +2428,6 @@ mod tests {
         let feature_set = FeatureSet::all_enabled();
         let demote_program_write_locks = feature_set.is_active(&demote_program_write_locks::id());
 
-        let ancestors = Ancestors::default();
         let mut invoke_context = ThisInvokeContext::new(
             &caller_program_id,
             Rent::default(),
@@ -2771,14 +2436,13 @@ mod tests {
             &executable_accounts,
             &accounts,
             programs.as_slice(),
+            &[],
             None,
             BpfComputeBudget::default(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             Rc::new(RefCell::new(Executors::default())),
             None,
             Arc::new(feature_set),
-            Arc::new(Accounts::default()),
-            &ancestors,
         );
 
         // not owned account modified by the caller (before the invoke)
@@ -2833,7 +2497,6 @@ mod tests {
                 Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
             let message = Message::new(&[callee_instruction], None);
 
-            let ancestors = Ancestors::default();
             let mut invoke_context = ThisInvokeContext::new(
                 &caller_program_id,
                 Rent::default(),
@@ -2842,14 +2505,13 @@ mod tests {
                 &executable_accounts,
                 &accounts,
                 programs.as_slice(),
+                &[],
                 None,
                 BpfComputeBudget::default(),
                 Rc::new(RefCell::new(MockComputeMeter::default())),
                 Rc::new(RefCell::new(Executors::default())),
                 None,
                 Arc::new(FeatureSet::all_enabled()),
-                Arc::new(Accounts::default()),
-                &ancestors,
             );
 
             let caller_write_privileges = message
@@ -2986,7 +2648,6 @@ mod tests {
         );
         let message = Message::new(&[callee_instruction.clone()], None);
 
-        let ancestors = Ancestors::default();
         let mut invoke_context = ThisInvokeContext::new(
             &caller_program_id,
             Rent::default(),
@@ -2995,14 +2656,13 @@ mod tests {
             &executable_accounts,
             &accounts,
             programs.as_slice(),
+            &[],
             None,
             BpfComputeBudget::default(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             Rc::new(RefCell::new(Executors::default())),
             None,
             Arc::new(FeatureSet::all_enabled()),
-            Arc::new(Accounts::default()),
-            &ancestors,
         );
 
         // not owned account modified by the invoker
@@ -3053,7 +2713,6 @@ mod tests {
                 Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
             let message = Message::new(&[callee_instruction.clone()], None);
 
-            let ancestors = Ancestors::default();
             let mut invoke_context = ThisInvokeContext::new(
                 &caller_program_id,
                 Rent::default(),
@@ -3062,14 +2721,13 @@ mod tests {
                 &executable_accounts,
                 &accounts,
                 programs.as_slice(),
+                &[],
                 None,
                 BpfComputeBudget::default(),
                 Rc::new(RefCell::new(MockComputeMeter::default())),
                 Rc::new(RefCell::new(Executors::default())),
                 None,
                 Arc::new(FeatureSet::all_enabled()),
-                Arc::new(Accounts::default()),
-                &ancestors,
             );
 
             assert_eq!(
@@ -3158,37 +2816,10 @@ mod tests {
         other_execute_details_timings.total_data_size = data_size_changed;
         other_execute_details_timings.data_size_changed = data_size_changed;
 
-<<<<<<< HEAD
         // Accumulate the other instance into the current instance
         execute_details_timings.accumulate(&other_execute_details_timings);
 
         // Check that the two instances are equal
         assert_eq!(execute_details_timings, other_execute_details_timings);
-=======
-        let result = MessageProcessor::process_message(
-            &instruction_processor,
-            &message,
-            &[vec![0], vec![1]],
-            &accounts,
-            &RentCollector::default(),
-            None,
-            Rc::new(RefCell::new(Executors::default())),
-            None,
-            Arc::new(FeatureSet::all_enabled()),
-            ComputeBudget::new(),
-            ThisComputeMeter::new_ref(std::i64::MAX as u64),
-            &mut ExecuteDetailsTimings::default(),
-            &[],
-            Hash::default(),
-            0,
-        );
-        assert_eq!(
-            result,
-            Err(TransactionError::InstructionError(
-                1,
-                InstructionError::Custom(0xbabb1e)
-            ))
-        );
->>>>>>> 29ad08155 (Stop caching sysvars, instead load them ahead of time. (#21108))
     }
 }

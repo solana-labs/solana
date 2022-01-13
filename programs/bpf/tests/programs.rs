@@ -1395,7 +1395,6 @@ fn assert_instruction_count() {
     {
         programs.extend_from_slice(&[
             ("solana_bpf_rust_128bit", 584),
-<<<<<<< HEAD
             ("solana_bpf_rust_alloc", 8906),
             ("solana_bpf_rust_custom_heap", 539),
             ("solana_bpf_rust_dep_crate", 2),
@@ -1410,22 +1409,6 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_sanity", 917),
             ("solana_bpf_rust_secp256k1_recover", 306),
             ("solana_bpf_rust_sha", 29131),
-=======
-            ("solana_bpf_rust_alloc", 7388),
-            ("solana_bpf_rust_custom_heap", 535),
-            ("solana_bpf_rust_dep_crate", 47),
-            ("solana_bpf_rust_external_spend", 506),
-            ("solana_bpf_rust_iter", 824),
-            ("solana_bpf_rust_many_args", 941),
-            ("solana_bpf_rust_mem", 3085),
-            ("solana_bpf_rust_membuiltins", 3976),
-            ("solana_bpf_rust_noop", 480),
-            ("solana_bpf_rust_param_passing", 146),
-            ("solana_bpf_rust_rand", 487),
-            ("solana_bpf_rust_sanity", 8454),
-            ("solana_bpf_rust_secp256k1_recover", 25216),
-            ("solana_bpf_rust_sha", 30692),
->>>>>>> 29ad08155 (Stop caching sysvars, instead load them ahead of time. (#21108))
         ]);
     }
 
