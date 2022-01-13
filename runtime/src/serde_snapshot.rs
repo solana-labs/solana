@@ -3,7 +3,11 @@ use {
         accounts::Accounts,
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig, AppendVecId,
+<<<<<<< HEAD
             BankHashInfo, IndexGenerationInfo,
+=======
+            AtomicAppendVecId, BankHashInfo, IndexGenerationInfo, SnapshotStorage,
+>>>>>>> 2756abce3 (More serde snapshot cleanup (#22449))
         },
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -14,7 +18,10 @@ use {
         epoch_stakes::EpochStakes,
         hardened_unpack::UnpackedAppendVecMap,
         rent_collector::RentCollector,
+<<<<<<< HEAD
         serde_snapshot::newer::SerializableStorage,
+=======
+>>>>>>> 2756abce3 (More serde snapshot cleanup (#22449))
         stakes::Stakes,
     },
     bincode::{self, config::Options, Error},
@@ -47,15 +54,15 @@ use {
 
 mod common;
 mod newer;
+mod storage;
 mod tests;
 mod utils;
 
+use storage::{SerializableStorage, SerializedAppendVecId};
+
 // a number of test cases in accounts_db use this
 #[cfg(test)]
-pub(crate) use self::tests::reconstruct_accounts_db_via_serialization;
-pub(crate) use crate::accounts_db::{SnapshotStorage, SnapshotStorages};
-#[allow(unused_imports)]
-use utils::{serialize_iter_as_map, serialize_iter_as_seq, serialize_iter_as_tuple};
+pub(crate) use tests::reconstruct_accounts_db_via_serialization;
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub(crate) enum SerdeStyle {
@@ -466,7 +473,11 @@ where
                     //    rename the file to this new path.
                     //    **DEVELOPER NOTE:**  Keep this check last so that it can short-circuit if
                     //    possible.
+<<<<<<< HEAD
                     if storage_entry.id() == remapped_append_vec_id
+=======
+                    if storage_entry.id() == remapped_append_vec_id as SerializedAppendVecId
+>>>>>>> 2756abce3 (More serde snapshot cleanup (#22449))
                         || std::fs::metadata(&remapped_append_vec_path).is_err()
                     {
                         break (remapped_append_vec_id, remapped_append_vec_path);
@@ -477,7 +488,11 @@ where
                     num_collisions.fetch_add(1, Ordering::Relaxed);
                 };
                 // Only rename the file if the new ID is actually different from the original.
+<<<<<<< HEAD
                 if storage_entry.id() != remapped_append_vec_id {
+=======
+                if storage_entry.id() != remapped_append_vec_id as SerializedAppendVecId {
+>>>>>>> 2756abce3 (More serde snapshot cleanup (#22449))
                     std::fs::rename(append_vec_path, &remapped_append_vec_path)?;
                 }
 
