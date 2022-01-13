@@ -22,7 +22,7 @@
     "@types/chai": "^4.2.22",
     "@types/chart.js": "^2.9.34",
     "@types/classnames": "^2.3.1",
-    "@types/jest": "^27.0.3",
+    "@types/jest": "^27.4.0",
     "@types/node": "^16.11.12",
     "@types/react": "^17.0.37",
     "@types/react-dom": "^17.0.11",
