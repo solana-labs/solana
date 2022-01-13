@@ -103,8 +103,8 @@ pub trait InvokeContext {
         execute_us: u64,
         deserialize_us: u64,
     );
-    /// Get sysvar data
-    fn get_sysvar_data(&self, id: &Pubkey) -> Option<Rc<Vec<u8>>>;
+    /// Get sysvars
+    fn get_sysvars(&self) -> &[(Pubkey, Vec<u8>)];
     /// Set the return data
     fn set_return_data(&mut self, return_data: Option<(Pubkey, Vec<u8>)>);
     /// Get the return data
@@ -145,15 +145,20 @@ pub fn get_sysvar<T: Sysvar>(
     invoke_context: &dyn InvokeContext,
     id: &Pubkey,
 ) -> Result<T, InstructionError> {
-    let sysvar_data = invoke_context.get_sysvar_data(id).ok_or_else(|| {
-        ic_msg!(invoke_context, "Unable to get sysvar {}", id);
-        InstructionError::UnsupportedSysvar
-    })?;
-
-    bincode::deserialize(&sysvar_data).map_err(|err| {
-        ic_msg!(invoke_context, "Unable to get sysvar {}: {:?}", id, err);
-        InstructionError::UnsupportedSysvar
-    })
+    invoke_context
+        .get_sysvars()
+        .iter()
+        .find_map(|(key, data)| {
+            if id == key {
+                bincode::deserialize(data).ok()
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| {
+            ic_msg!(invoke_context, "Unable to get sysvar {}", id);
+            InstructionError::UnsupportedSysvar
+        })
 }
 
 #[derive(Clone, Copy, Debug, AbiExample, PartialEq)]
@@ -386,7 +391,7 @@ pub struct MockInvokeContext<'a> {
     pub compute_meter: MockComputeMeter,
     pub programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
     pub accounts: Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
-    pub sysvars: Vec<(Pubkey, Option<Rc<Vec<u8>>>)>,
+    pub sysvars: Vec<(Pubkey, Vec<u8>)>,
     pub disabled_features: HashSet<Pubkey>,
     pub return_data: Option<(Pubkey, Vec<u8>)>,
 }
@@ -415,21 +420,6 @@ impl<'a> MockInvokeContext<'a> {
             ));
         invoke_context
     }
-}
-
-pub fn mock_set_sysvar<T: Sysvar>(
-    mock_invoke_context: &mut MockInvokeContext,
-    id: Pubkey,
-    sysvar: T,
-) -> Result<(), InstructionError> {
-    let mut data = Vec::with_capacity(T::size_of());
-
-    bincode::serialize_into(&mut data, &sysvar).map_err(|err| {
-        ic_msg!(mock_invoke_context, "Unable to serialize sysvar: {:?}", err);
-        InstructionError::GenericError
-    })?;
-    mock_invoke_context.sysvars.push((id, Some(Rc::new(data))));
-    Ok(())
 }
 
 impl<'a> InvokeContext for MockInvokeContext<'a> {
@@ -519,10 +509,8 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
         _deserialize_us: u64,
     ) {
     }
-    fn get_sysvar_data(&self, id: &Pubkey) -> Option<Rc<Vec<u8>>> {
-        self.sysvars
-            .iter()
-            .find_map(|(key, sysvar)| if id == key { sysvar.clone() } else { None })
+    fn get_sysvars(&self) -> &[(Pubkey, Vec<u8>)] {
+        &self.sysvars
     }
     fn set_return_data(&mut self, return_data: Option<(Pubkey, Vec<u8>)>) {
         self.return_data = return_data;
