@@ -15,12 +15,19 @@ use {
         feature_set,
         hash::Hash,
         instruction::{AccountMeta, Instruction, InstructionError},
+<<<<<<< HEAD
         keyed_account::{from_keyed_account, get_signers, keyed_account_at_index, KeyedAccount},
         process_instruction::{get_sysvar, InvokeContext},
+=======
+        keyed_account::{
+            check_sysvar_keyed_account, from_keyed_account, get_signers, keyed_account_at_index,
+            KeyedAccount,
+        },
+>>>>>>> b211f839c (Fetch sysvars from invoke context for vote program (#22444))
         program_utils::limited_deserialize,
         pubkey::Pubkey,
         system_instruction,
-        sysvar::{self, clock::Clock, slot_hashes::SlotHashes},
+        sysvar::{self, clock::Clock, rent::Rent, slot_hashes::SlotHashes, Sysvar},
     },
     std::collections::HashSet,
     thiserror::Error,
@@ -299,14 +306,26 @@ pub fn withdraw(
 
 fn verify_rent_exemption(
     keyed_account: &KeyedAccount,
-    rent_sysvar_account: &KeyedAccount,
+    rent: &Rent,
 ) -> Result<(), InstructionError> {
-    let rent: sysvar::rent::Rent = from_keyed_account(rent_sysvar_account)?;
     if !rent.is_exempt(keyed_account.lamports()?, keyed_account.data_len()?) {
         Err(InstructionError::InsufficientFunds)
     } else {
         Ok(())
     }
+}
+
+/// This method facilitates a transition from fetching sysvars from keyed
+/// accounts to fetching from the sysvar cache without breaking consensus. In
+/// order to keep consistent behavior, it continues to enforce the same checks
+/// as `solana_sdk::keyed_account::from_keyed_account` despite dynamically
+/// loading them instead of deserializing from account data.
+fn get_sysvar_with_keyed_account_check<S: Sysvar>(
+    keyed_account: &KeyedAccount,
+    invoke_context: &InvokeContext,
+) -> Result<S, InstructionError> {
+    check_sysvar_keyed_account::<S>(keyed_account)?;
+    invoke_context.get_sysvar(keyed_account.unsigned_key())
 }
 
 pub fn process_instruction(
@@ -331,6 +350,7 @@ pub fn process_instruction(
 
     match limited_deserialize(data)? {
         VoteInstruction::InitializeAccount(vote_init) => {
+<<<<<<< HEAD
             verify_rent_exemption(me, keyed_account_at_index(keyed_accounts, 1)?)?;
             vote_state::initialize_account(
                 me,
@@ -346,6 +366,26 @@ pub fn process_instruction(
             &signers,
             &from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 1)?)?,
         ),
+=======
+            let rent: Rent = get_sysvar_with_keyed_account_check(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
+                invoke_context,
+            )?;
+            verify_rent_exemption(me, &rent)?;
+            let clock: Clock = get_sysvar_with_keyed_account_check(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
+                invoke_context,
+            )?;
+            vote_state::initialize_account(me, &vote_init, &signers, &clock)
+        }
+        VoteInstruction::Authorize(voter_pubkey, vote_authorize) => {
+            let clock: Clock = get_sysvar_with_keyed_account_check(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
+                invoke_context,
+            )?;
+            vote_state::authorize(me, &voter_pubkey, vote_authorize, &signers, &clock)
+        }
+>>>>>>> b211f839c (Fetch sysvars from invoke context for vote program (#22444))
         VoteInstruction::UpdateValidatorIdentity => vote_state::update_validator_identity(
             me,
             keyed_account_at_index(keyed_accounts, 1)?.unsigned_key(),
@@ -356,6 +396,7 @@ pub fn process_instruction(
         }
         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
             inc_new_counter_info!("vote-native", 1);
+<<<<<<< HEAD
             vote_state::process_vote(
                 me,
                 &from_keyed_account::<SlotHashes>(keyed_account_at_index(keyed_accounts, 1)?)?,
@@ -363,6 +404,17 @@ pub fn process_instruction(
                 &vote,
                 &signers,
             )
+=======
+            let slot_hashes: SlotHashes = get_sysvar_with_keyed_account_check(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
+                invoke_context,
+            )?;
+            let clock: Clock = get_sysvar_with_keyed_account_check(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
+                invoke_context,
+            )?;
+            vote_state::process_vote(me, &slot_hashes, &clock, &vote, &signers)
+>>>>>>> b211f839c (Fetch sysvars from invoke context for vote program (#22444))
         }
         VoteInstruction::Withdraw(lamports) => {
             let to = keyed_account_at_index(keyed_accounts, 1)?;
@@ -400,12 +452,21 @@ mod tests {
     use {
         super::*,
         bincode::serialize,
+<<<<<<< HEAD
         solana_sdk::{
             account::{self, Account, AccountSharedData},
             process_instruction::{mock_set_sysvar, MockInvokeContext},
             rent::Rent,
         },
         std::{cell::RefCell, str::FromStr},
+=======
+        solana_program_runtime::{
+            invoke_context::{mock_process_instruction, mock_process_instruction_with_sysvars},
+            sysvar_cache::SysvarCache,
+        },
+        solana_sdk::account::{self, Account, AccountSharedData},
+        std::str::FromStr,
+>>>>>>> b211f839c (Fetch sysvars from invoke context for vote program (#22444))
     };
 
     fn create_default_account() -> RefCell<AccountSharedData> {
@@ -450,6 +511,7 @@ mod tests {
                 })
             })
             .collect();
+<<<<<<< HEAD
 
         for _ in 0..instruction.accounts.len() {
             accounts.push(RefCell::new(AccountSharedData::default()));
@@ -470,6 +532,28 @@ mod tests {
             .unwrap();
             super::process_instruction(&Pubkey::default(), &instruction.data, &mut invoke_context)
         }
+=======
+        let mut sysvar_cache = SysvarCache::default();
+        let rent = Rent::free();
+        sysvar_cache.push_entry(sysvar::rent::id(), bincode::serialize(&rent).unwrap());
+        let clock = Clock::default();
+        sysvar_cache.push_entry(sysvar::clock::id(), bincode::serialize(&clock).unwrap());
+        let slot_hashes = SlotHashes::default();
+        sysvar_cache.push_entry(
+            sysvar::slot_hashes::id(),
+            bincode::serialize(&slot_hashes).unwrap(),
+        );
+        mock_process_instruction_with_sysvars(
+            &id(),
+            Vec::new(),
+            &instruction.data,
+            transaction_accounts,
+            instruction.accounts.clone(),
+            expected_result,
+            &sysvar_cache,
+            super::process_instruction,
+        )
+>>>>>>> b211f839c (Fetch sysvars from invoke context for vote program (#22444))
     }
 
     fn invalid_vote_state_pubkey() -> Pubkey {
@@ -656,7 +740,7 @@ mod tests {
 
     #[test]
     fn test_minimum_balance() {
-        let rent = solana_sdk::rent::Rent::default();
+        let rent = Rent::default();
         let minimum_balance = rent.minimum_balance(VoteState::size_of());
         // golden, may need updating when vote_state grows
         assert!(minimum_balance as f64 / 10f64.powf(9.0) < 0.04)
