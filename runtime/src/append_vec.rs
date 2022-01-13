@@ -161,6 +161,8 @@ pub struct AppendVec {
     remove_on_drop: bool,
 
     ancient_append_vec: AtomicBool,
+
+    full_ancient_append_vec: AtomicBool,
 }
 
 impl Drop for AppendVec {
@@ -182,6 +184,12 @@ impl AppendVec {
     }
     pub fn set_ancient(&self) {
         self.ancient_append_vec.store(true, Ordering::Relaxed)
+    }
+    pub fn is_full_ancient(&self) -> bool {
+        self.full_ancient_append_vec.load(Ordering::Relaxed)
+    }
+    pub fn set_full_ancient(&self) {
+        self.full_ancient_append_vec.store(true, Ordering::Relaxed)
     }
     pub fn new(file: &Path, create: bool, size: usize) -> Self {
         let initial_len = 0;
@@ -236,6 +244,7 @@ impl AppendVec {
             file_size: size as u64,
             remove_on_drop: true,
             ancient_append_vec: AtomicBool::default(),
+            full_ancient_append_vec: AtomicBool::default(),
         }
     }
 
@@ -261,6 +270,7 @@ impl AppendVec {
             file_size: 0, // will be filled by set_file()
             remove_on_drop: true,
             ancient_append_vec: AtomicBool::default(),
+            full_ancient_append_vec: AtomicBool::default(),
         }
     }
 
@@ -298,6 +308,7 @@ impl AppendVec {
         let _lock = self.append_lock.lock().unwrap();
         self.current_len.store(0, Ordering::Relaxed);
         self.ancient_append_vec.store(false, Ordering::Relaxed); // todo ordering
+        self.full_ancient_append_vec.store(false, Ordering::Relaxed); // todo ordering
     }
 
     pub fn remaining_bytes(&self) -> u64 {
@@ -347,6 +358,7 @@ impl AppendVec {
             file_size,
             remove_on_drop: true,
             ancient_append_vec: AtomicBool::default(),
+            full_ancient_append_vec: AtomicBool::default(),
         };
 
         let (sanitized, num_accounts) = new.sanitize_layout_and_length();

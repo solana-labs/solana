@@ -3097,6 +3097,10 @@ impl AccountsDb {
                     let first_storage = all_storages.first().unwrap();
                     let capacity = first_storage.accounts.capacity();
                     if first_storage.accounts.is_ancient() {
+                        if first_storage.accounts.is_full_ancient() {
+                            error!("ancient_append_vec: skipping existing full ancient append vec: {}, capacity: {}, full: {}%", slot, capacity, first_storage.accounts.remaining_bytes() * 100 / capacity);
+                            continue; // skip this full ancient append vec completely
+                        }
                         error!("ancient_append_vec: reusing existing ancient append vec: {}, capacity: {}, full: {}%", slot, capacity, first_storage.accounts.remaining_bytes() * 100 / capacity);
                         current_storage = Some((slot, Arc::clone(first_storage)));
                         continue; // we're done with this slot - this slot IS the ancient append vec
@@ -3167,6 +3171,7 @@ impl AccountsDb {
                 );
 
                 if !accounts_next_append_vec.is_empty() {
+                    writer.1.accounts.set_full_ancient();
                     drop_root = false;
                     // we need a new ancient append vec
                     assert!(
