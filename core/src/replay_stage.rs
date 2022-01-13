@@ -58,6 +58,7 @@ use {
         genesis_config::ClusterType,
         hash::Hash,
         pubkey::Pubkey,
+        saturating_add_assign,
         signature::{Keypair, Signature, Signer},
         timing::timestamp,
         transaction::Transaction,
@@ -2953,11 +2954,22 @@ impl ReplayStage {
             forks.insert(bank);
         }
         generate_new_bank_forks_write_lock.stop();
-        saturating_add_assign!(replay_timing.generate_new_bank_forks_read_lock_us, generate_new_bank_forks_read_lock.as_us());
-        saturating_add_assign!(replay_timing.generate_new_bank_forks_get_slots_since_us,
-            generate_new_bank_forks_get_slots_since.as_us());
-        saturating_add_assign!(replay_timing.generate_new_bank_forks_loop_us, generate_new_bank_forks_loop.as_us());
-        saturating_add_assign!(replay_timing.generate_new_bank_forks_write_lock_us, generate_new_bank_forks_write_lock.as_us());
+        saturating_add_assign!(
+            replay_timing.generate_new_bank_forks_read_lock_us,
+            generate_new_bank_forks_read_lock.as_us()
+        );
+        saturating_add_assign!(
+            replay_timing.generate_new_bank_forks_get_slots_since_us,
+            generate_new_bank_forks_get_slots_since.as_us()
+        );
+        saturating_add_assign!(
+            replay_timing.generate_new_bank_forks_loop_us,
+            generate_new_bank_forks_loop.as_us()
+        );
+        saturating_add_assign!(
+            replay_timing.generate_new_bank_forks_write_lock_us,
+            generate_new_bank_forks_write_lock.as_us()
+        );
     }
 
     fn new_bank_from_parent_with_notify(
