@@ -3331,3 +3331,53 @@ fn test_program_bpf_realloc_invoke() {
         TransactionError::InstructionError(0, InstructionError::InvalidRealloc)
     );
 }
+
+#[test]
+#[cfg(any(feature = "bpf_rust"))]
+fn test_program_bpf_processed_inner_instruction() {
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
+    let mut bank = Bank::new_for_tests(&genesis_config);
+    let (name, id, entrypoint) = solana_bpf_loader_program!();
+    bank.add_builtin(&name, &id, entrypoint);
+    let bank = Arc::new(bank);
+    let bank_client = BankClient::new_shared(&bank);
+
+    let program_id = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_inner_instructions",
+    );
+    let noop_program_id = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_noop",
+    );
+    let invoke_and_return_program_id = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_invoke_and_return",
+    );
+
+    let instruction = Instruction::new_with_bytes(
+        program_id,
+        &[1, 2, 3, 0, 4, 5, 6],
+        vec![
+            AccountMeta::new(mint_keypair.pubkey(), true),
+            AccountMeta::new_readonly(noop_program_id, false),
+            AccountMeta::new_readonly(invoke_and_return_program_id, false),
+        ],
+    );
+    let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
+    assert!(bank_client
+        .send_and_confirm_message(&[&mint_keypair], message)
+        .is_ok());
+}

@@ -22,14 +22,14 @@ use {
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
-            self, blake3_syscall_enabled, disable_fees_sysvar, do_support_realloc,
-            fixed_memcpy_nonoverlapping_check, libsecp256k1_0_5_upgrade_enabled,
-            prevent_calling_precompiles_as_programs, return_data_syscall_enabled,
-            secp256k1_recover_syscall_enabled, sol_log_data_syscall_enabled,
-            update_syscall_base_costs,
+            self, add_get_processed_inner_instruction_syscall, blake3_syscall_enabled,
+            disable_fees_sysvar, do_support_realloc, fixed_memcpy_nonoverlapping_check,
+            libsecp256k1_0_5_upgrade_enabled, prevent_calling_precompiles_as_programs,
+            return_data_syscall_enabled, secp256k1_recover_syscall_enabled,
+            sol_log_data_syscall_enabled, update_syscall_base_costs,
         },
         hash::{Hasher, HASH_BYTES},
-        instruction::{AccountMeta, Instruction, InstructionError},
+        instruction::{AccountMeta, InnerMeta, Instruction, InstructionError},
         keccak, native_loader,
         precompiles::is_precompile,
         program::MAX_RETURN_DATA,
@@ -222,6 +222,16 @@ pub fn register_syscalls(
         syscall_registry.register_syscall_by_name(b"sol_log_data", SyscallLogData::call)?;
     }
 
+    if invoke_context
+        .feature_set
+        .is_active(&add_get_processed_inner_instruction_syscall::id())
+    {
+        syscall_registry.register_syscall_by_name(
+            b"sol_get_processed_inner_instruction",
+            SyscallGetProcessedInnerInstruction::call,
+        )?;
+    }
+
     Ok(syscall_registry)
 }
 
@@ -262,6 +272,9 @@ pub fn bind_syscall_context_objects<'a, 'b>(
     let is_zk_token_sdk_enabled = invoke_context
         .feature_set
         .is_active(&feature_set::zk_token_sdk_enabled::id());
+    let add_get_processed_inner_instruction_syscall = invoke_context
+        .feature_set
+        .is_active(&add_get_processed_inner_instruction_syscall::id());
 
     let loader_id = invoke_context
         .transaction_context
@@ -440,6 +453,15 @@ pub fn bind_syscall_context_objects<'a, 'b>(
         vm,
         is_sol_log_data_syscall_active,
         Box::new(SyscallLogData {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+
+    // processed inner instructions
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        add_get_processed_inner_instruction_syscall,
+        Box::new(SyscallGetProcessedInnerInstruction {
             invoke_context: invoke_context.clone(),
         }),
     );
@@ -2610,7 +2632,6 @@ fn check_authorized_program(
     }
     Ok(())
 }
-
 /// Call process instruction, common to both Rust and C
 fn call<'a, 'b: 'a>(
     syscall: &mut dyn SyscallInvokeSigned<'a, 'b>,
@@ -2676,6 +2697,8 @@ fn call<'a, 'b: 'a>(
             &mut ExecuteTimings::default(),
         )
         .map_err(SyscallError::InstructionError)?;
+
+    invoke_context.add_processed_inner_instruction(instruction);
 
     // Copy results back to caller
     for (callee_account_index, caller_account) in accounts.iter_mut() {
@@ -2952,6 +2975,86 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallLogData<'a, 'b> {
         stable_log::program_data(&log_collector, &fields);
 
         *result = Ok(0);
+    }
+}
+
+pub struct SyscallGetProcessedInnerInstruction<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallGetProcessedInnerInstruction<'a, 'b> {
+    fn call(
+        &mut self,
+        index: u64,
+        meta_addr: u64,
+        program_id_addr: u64,
+        data_addr: u64,
+        accounts_addr: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+        let loader_id = question_mark!(
+            invoke_context
+                .transaction_context
+                .get_loader_key()
+                .map_err(SyscallError::InstructionError),
+            result
+        );
+
+        let budget = invoke_context.get_compute_budget();
+        question_mark!(
+            invoke_context
+                .get_compute_meter()
+                .consume(budget.syscall_base_cost),
+            result
+        );
+
+        if let Some((stack_depth, instruction)) = invoke_context.get_processed_inner_instruction(index as usize) {
+            let InnerMeta {
+                data_len,
+                accounts_len,
+                depth,
+            } = question_mark!(
+                translate_type_mut::<InnerMeta>(memory_mapping, meta_addr, &loader_id),
+                result
+            );
+            if *data_len >= instruction.data.len()
+                && *accounts_len >= instruction.accounts.len()
+            {
+                let program_id = question_mark!(
+                    translate_type_mut::<Pubkey>(memory_mapping, program_id_addr, &loader_id),
+                    result
+                );
+                let data = question_mark!(
+                    translate_slice_mut::<u8>(memory_mapping, data_addr, *data_len as u64, &loader_id,),
+                    result
+                );
+                let accounts = question_mark!(
+                    translate_slice_mut::<AccountMeta>(
+                        memory_mapping,
+                        accounts_addr,
+                        *accounts_len as u64,
+                        &loader_id,
+                    ),
+                    result
+                );
+
+                *program_id = instruction.program_id;
+                data.clone_from_slice(instruction.data.as_slice());
+                accounts.clone_from_slice(instruction.accounts.as_slice());
+            }
+            *data_len = instruction.data.len();
+            *accounts_len = instruction.accounts.len();
+            *depth = stack_depth;
+            *result = Ok(true as u64);
+        } else {
+            *result = Ok(false as u64);
+        }
     }
 }
 

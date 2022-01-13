@@ -70,6 +70,7 @@ fn main() {
             "log_data",
             "external_spend",
             "finalize",
+            "inner_instruction",
             "instruction_introspection",
             "invoke",
             "invoke_and_error",

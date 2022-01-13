@@ -58,6 +58,7 @@ members = [
     "rust/log_data",
     "rust/external_spend",
     "rust/finalize",
+    "rust/inner_instruction",
     "rust/instruction_introspection",
     "rust/invoke",
     "rust/invoke_and_error",

@@ -524,7 +524,8 @@ pub fn checked_add(a: u64, b: u64) -> Result<u64, InstructionError> {
 /// default [`AccountMeta::new`] constructor creates writable accounts, this is
 /// a minor hazard: use [`AccountMeta::new_readonly`] to specify that an account
 /// is not writable.
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[repr(C)]
+#[derive(Debug, Default, PartialEq, Clone, Serialize, Deserialize)]
 pub struct AccountMeta {
     /// An account's public key.
     pub pubkey: Pubkey,
@@ -643,4 +644,114 @@ impl CompiledInstruction {
     pub fn program_id<'a>(&self, program_ids: &'a [Pubkey]) -> &'a Pubkey {
         &program_ids[self.program_id_index as usize]
     }
+}
+
+/// Use to query and convey information about the inner instruction components
+/// when calling the `sol_get_processed_inner_instruction` syscall.
+#[repr(C)]
+#[derive(Default, Debug, Clone, Copy)]
+pub struct InnerMeta {
+    pub data_len: usize,
+    pub accounts_len: usize,
+    pub depth: usize,
+}
+
+/// Returns a inner instruction from the processed inner instruction list.
+///
+/// The processed inner instruction list is a reverse-ordered list of
+/// successfully processed inner instructions. For example, given the call flow:
+///
+/// A
+/// B -> C -> D
+/// B -> E
+/// B -> F
+///
+/// Then B's processed inner instruction list is: [(1, F), (1, E), (1, C), (2, D)]
+pub fn get_processed_inner_instruction(index: usize) -> Option<(usize, Instruction)> {
+    #[cfg(target_arch = "bpf")]
+    {
+        extern "C" {
+            fn sol_get_processed_inner_instruction(
+                index: u64,
+                meta: *mut InnerMeta,
+                program_id: *mut Pubkey,
+                data: *mut u8,
+                accounts: *mut AccountMeta,
+            ) -> u64;
+        }
+
+        let mut meta = InnerMeta::default();
+        let mut program_id = Pubkey::default();
+
+        if 1 == unsafe {
+            sol_get_processed_inner_instruction(
+                index as u64,
+                &mut meta,
+                &mut program_id,
+                &mut u8::default(),
+                &mut AccountMeta::default(),
+            )
+        } {
+            let mut data = Vec::new();
+            let mut accounts = Vec::new();
+            data.resize_with(meta.data_len, u8::default);
+            accounts.resize_with(meta.accounts_len, AccountMeta::default);
+
+            let _ = unsafe {
+                sol_get_processed_inner_instruction(
+                    index as u64,
+                    &mut meta,
+                    &mut program_id,
+                    data.as_mut_ptr(),
+                    accounts.as_mut_ptr(),
+                )
+            };
+
+            Some((meta.depth, Instruction::new_with_bytes(program_id, &data, accounts)))
+        } else {
+            None
+        }
+    }
+
+    #[cfg(not(target_arch = "bpf"))]
+    crate::program_stubs::get_processed_inner_instruction(index)
+}
+
+#[test]
+fn test_account_meta_layout() {
+    #[derive(Debug, Default, PartialEq, Clone, Serialize, Deserialize)]
+    struct AccountMetaRust {
+        pub pubkey: Pubkey,
+        pub is_signer: bool,
+        pub is_writable: bool,
+    }
+
+    let account_meta_rust = AccountMetaRust::default();
+    let base_rust_addr = &account_meta_rust as *const _ as u64;
+    let pubkey_rust_addr = &account_meta_rust.pubkey as *const _ as u64;
+    let is_signer_rust_addr = &account_meta_rust.is_signer as *const _ as u64;
+    let is_writable_rust_addr = &account_meta_rust.is_writable as *const _ as u64;
+
+    let account_meta_c = AccountMeta::default();
+    let base_c_addr = &account_meta_c as *const _ as u64;
+    let pubkey_c_addr = &account_meta_c.pubkey as *const _ as u64;
+    let is_signer_c_addr = &account_meta_c.is_signer as *const _ as u64;
+    let is_writable_c_addr = &account_meta_c.is_writable as *const _ as u64;
+
+    assert_eq!(
+        std::mem::size_of::<AccountMetaRust>(),
+        std::mem::size_of::<AccountMeta>()
+    );
+    assert_eq!(
+        pubkey_rust_addr - base_rust_addr,
+        pubkey_c_addr - base_c_addr
+    );
+    assert_eq!(
+        is_signer_rust_addr - base_rust_addr,
+        is_signer_c_addr - base_c_addr
+    );
+    assert_eq!(
+        is_writable_rust_addr - base_rust_addr,
+        is_writable_c_addr - base_c_addr
+    );
 }

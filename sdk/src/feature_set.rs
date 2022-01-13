@@ -311,6 +311,10 @@ pub mod vote_withdraw_authority_may_change_authorized_voter {
     solana_sdk::declare_id!("AVZS3ZsN4gi6Rkx2QUibYuSJG3S6QHib7xCYhG6vGJxU");
 }
 
+pub mod add_get_processed_inner_instruction_syscall {
+    solana_sdk::declare_id!("CFK1hRCNy8JJuAAY8Pb2GjLFNdCThS2qwZNe3izzBMgn");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -383,6 +387,7 @@ lazy_static! {
         (filter_votes_outside_slot_hashes::id(), "filter vote slots older than the slot hashes history"),
         (update_syscall_base_costs::id(), "Update syscall base costs"),
         (vote_withdraw_authority_may_change_authorized_voter::id(), "vote account withdraw authority may change the authorized voter #22521"),
+        (add_get_processed_inner_instruction_syscall::id(), "add add_get_processed_inner_instruction_syscall"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

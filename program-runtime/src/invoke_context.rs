@@ -195,6 +195,7 @@ pub struct InvokeContext<'a> {
     pub timings: ExecuteDetailsTimings,
     pub blockhash: Hash,
     pub lamports_per_signature: u64,
+    pub processed_inner_instructions: Vec<(usize, Instruction)>,
 }
 
 impl<'a> InvokeContext<'a> {
@@ -229,6 +230,7 @@ impl<'a> InvokeContext<'a> {
             timings: ExecuteDetailsTimings::default(),
             blockhash,
             lamports_per_signature,
+            processed_inner_instructions: Vec::new(),
         }
     }
 
@@ -805,6 +807,7 @@ impl<'a> InvokeContext<'a> {
             .transaction_context
             .get_instruction_context_stack_height()
             == 0;
+
         if !is_lowest_invocation_level {
             // Verify the calling program hasn't misbehaved
             let mut verify_caller_time = Measure::start("verify_caller_time");
@@ -833,6 +836,8 @@ impl<'a> InvokeContext<'a> {
             };
             self.transaction_context
                 .record_compiled_instruction(compiled_instruction);
+        } else {
+            self.processed_inner_instructions.clear();
         }
 
         let result = self
@@ -997,6 +1002,24 @@ impl<'a> InvokeContext<'a> {
     /// Get cached sysvars
     pub fn get_sysvar_cache(&self) -> &SysvarCache {
         &self.sysvar_cache
+    }
+
+    // Push a processed inner instruction
+    pub fn add_processed_inner_instruction(&mut self, instruction: Instruction) {
+        self.processed_inner_instructions
+            .push((self.invoke_depth(), instruction));
+    }
+
+    /// Get a processed inner instruction, reverse ordered list, where last added is index 0
+    pub fn get_processed_inner_instruction(&self, index: usize) -> Option<(usize, &Instruction)> {
+        let index = self
+            .processed_inner_instructions
+            .len()
+            .checked_sub(1)?
+            .checked_sub(index)?;
+        self.processed_inner_instructions
+            .get(index)
+            .map(|(usize, instruction)| (*usize, instruction))
     }
 }
 
