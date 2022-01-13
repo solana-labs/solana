@@ -90,8 +90,7 @@ impl FromStr for SnapshotVersion {
 
     fn from_str(version_string: &str) -> std::result::Result<Self, Self::Err> {
         // Remove leading 'v' or 'V' from slice
-        // bprumo TODO: Once version 1.3.0 is the only supported version, can remove this block
-        // that strips leading 'v'.
+        // TODO: Once version 1.3.0 is the only supported version, remove this block that strips leading 'v'.
         let version_string = if version_string
             .get(..1)
             .map_or(false, |s| s.eq_ignore_ascii_case("v"))

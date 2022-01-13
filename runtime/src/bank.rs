@@ -878,7 +878,7 @@ pub(crate) struct BankFieldsToDeserialize {
     pub(crate) stakes: Stakes,
     pub(crate) epoch_stakes: HashMap<Epoch, EpochStakes>,
     pub(crate) is_delta: bool,
-    pub(crate) accounts_data_len: Option<u64>, // bprumo TODO: Remove Option wrapper once only newer snapshot serde style is supported
+    pub(crate) accounts_data_len: Option<u64>, // TODO: Remove Option wrapper once "newer" snapshot serde style is the only one supported
 }
 
 // Bank's common fields shared by all supported snapshot versions for serialization.
@@ -1704,7 +1704,7 @@ impl Bank {
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
         debug_do_not_add_builtins: bool,
-        computed_accounts_data_len: u64, // bprumo TODO: Remove this parameter once only newer snapshot serde style is supported
+        computed_accounts_data_len: u64, // TODO: Remove this parameter once "newer" snapshot serde style is the only one supported
     ) -> Self {
         fn new<T: Default>() -> T {
             T::default()
