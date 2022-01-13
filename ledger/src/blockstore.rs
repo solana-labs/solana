@@ -516,10 +516,19 @@ impl Blockstore {
         }
     }
 
+    /// Whether to disable compaction in [`compact_storage`], which is used
+    /// by the ledger cleanup service and [`backup_and_clear_blockstore`].
+    ///
+    /// Note that this setting is not related to the RocksDB's background
+    /// compaction.
+    ///
+    /// To disable RocksDB's background compaction, open the Blockstore
+    /// with AccessType::PrimaryOnlyForMaintenance.
     pub fn set_no_compaction(&mut self, no_compaction: bool) {
         self.no_compaction = no_compaction;
     }
 
+    /// Deletes the blockstore at the specified path.
     pub fn destroy(ledger_path: &Path) -> Result<()> {
         // Database::destroy() fails if the path doesn't exist
         fs::create_dir_all(ledger_path)?;
@@ -527,10 +536,12 @@ impl Blockstore {
         Database::destroy(&blockstore_path)
     }
 
+    /// Returns the SlotMeta of the specified slot.
     pub fn meta(&self, slot: Slot) -> Result<Option<SlotMeta>> {
         self.meta_cf.get(slot)
     }
 
+    /// Returns true if the specified slot is full.
     pub fn is_full(&self, slot: Slot) -> bool {
         if let Ok(Some(meta)) = self.meta_cf.get(slot) {
             return meta.is_full();
@@ -542,11 +553,17 @@ impl Blockstore {
         self.erasure_meta_cf.get(erasure_set.store_key())
     }
 
+    /// Check whether the specified slot is an orphan slot which does not
+    /// have a parent slot.
+    ///
+    /// Returns true if the specified slot does not have a parent slot.
+    /// For other return values, it means either the slot is not in the
+    /// blockstore or the slot isn't an orphan slot.
     pub fn orphan(&self, slot: Slot) -> Result<Option<bool>> {
         self.orphans_cf.get(slot)
     }
 
-    // Get max root or 0 if it doesn't exist
+    /// Returns the max root or 0 if it does not exist.
     pub fn max_root(&self) -> Slot {
         self.db
             .iter::<cf::Root>(IteratorMode::End)
