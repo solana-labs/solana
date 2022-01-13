@@ -661,8 +661,8 @@ impl VoteState {
         });
 
         let vote_slots = filtered_vote_slots.as_ref().unwrap_or(&vote.slots);
-        if vote.slots.is_empty() {
-            return Err(VoteError::VoteTooOld);
+        if vote_slots.is_empty() {
+            return Err(VoteError::VotesTooOldAllFiltered);
         }
 
         self.check_slots_are_valid(vote_slots, &vote.hash, slot_hashes)?;
@@ -3177,5 +3177,45 @@ mod tests {
             .process_new_vote_state(good_votes.clone(), root, None, vote_state1.current_epoch())
             .unwrap();
         assert_eq!(vote_state1.votes, good_votes);
+    }
+
+    #[test]
+    fn test_filter_old_votes() {
+        // Enable feature
+        let mut feature_set = FeatureSet::default();
+        feature_set.activate(&filter_votes_outside_slot_hashes::id(), 0);
+
+        let mut vote_state = VoteState::default();
+        let old_vote_slot = 1;
+        let vote = Vote::new(vec![old_vote_slot], Hash::default());
+
+        // Vote with all slots that are all older than the SlotHashes history should
+        // error with `VotesTooOldAllFiltered`
+        let slot_hashes = vec![(3, Hash::new_unique()), (2, Hash::new_unique())];
+        assert_eq!(
+            vote_state.process_vote(&vote, &slot_hashes, 0, Some(&feature_set),),
+            Err(VoteError::VotesTooOldAllFiltered)
+        );
+
+        // Vote with only some slots older than the SlotHashes history should
+        // filter out those older slots
+        let vote_slot = 2;
+        let vote_slot_hash = slot_hashes
+            .iter()
+            .find(|(slot, _hash)| *slot == vote_slot)
+            .unwrap()
+            .1;
+
+        let vote = Vote::new(vec![old_vote_slot, vote_slot], vote_slot_hash);
+        vote_state
+            .process_vote(&vote, &slot_hashes, 0, Some(&feature_set))
+            .unwrap();
+        assert_eq!(
+            vote_state.votes.into_iter().collect::<Vec<Lockout>>(),
+            vec![Lockout {
+                slot: vote_slot,
+                confirmation_count: 1,
+            }]
+        );
     }
 }
