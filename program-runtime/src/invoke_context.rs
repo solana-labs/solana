@@ -236,6 +236,27 @@ impl<'a> InvokeContext<'a> {
         }
     }
 
+    pub fn new_mock_with_sysvars_and_features(
+        transaction_context: &'a mut TransactionContext,
+        sysvar_cache: &'a SysvarCache,
+        feature_set: Arc<FeatureSet>,
+    ) -> Self {
+        Self::new(
+            transaction_context,
+            Rent::default(),
+            &[],
+            Cow::Borrowed(sysvar_cache),
+            Some(LogCollector::new_ref()),
+            ComputeBudget::default(),
+            Rc::new(RefCell::new(Executors::default())),
+            None,
+            feature_set,
+            Hash::default(),
+            0,
+            0,
+        )
+    }
+
     pub fn new_mock(
         transaction_context: &'a mut TransactionContext,
         builtin_programs: &'a [BuiltinProgram],

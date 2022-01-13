@@ -17,10 +17,6 @@ use {
         signature::{Keypair, Signer},
         transaction::Transaction,
     },
-    solana_vote_program::{
-        vote_instruction,
-        vote_state::{Vote, VoteInit},
-    },
     std::{sync::Arc, thread::sleep, time::Duration},
     test::Bencher,
 };
@@ -62,52 +58,6 @@ pub fn create_builtin_transactions(
             let blockhash = bank_client.get_latest_blockhash().unwrap();
             let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
             Transaction::new(&[&rando0], message, blockhash)
-        })
-        .collect()
-}
-
-pub fn create_vote_transactions(
-    bank_client: &BankClient,
-    mint_keypair: &Keypair,
-) -> Vec<Transaction> {
-    let blockhash = bank_client.get_latest_blockhash().unwrap();
-    (0..4096)
-        .map(|_| {
-            // Seed the signer account
-            let payer_keypair = Keypair::new();
-            bank_client
-                .transfer_and_confirm(27_000_000, mint_keypair, &payer_keypair.pubkey())
-                .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
-
-            // Setup vote
-            let vote_keypair = Keypair::new();
-            let instructions = vote_instruction::create_account(
-                &payer_keypair.pubkey(),
-                &vote_keypair.pubkey(),
-                &VoteInit {
-                    node_pubkey: payer_keypair.pubkey(),
-                    authorized_voter: payer_keypair.pubkey(),
-                    authorized_withdrawer: payer_keypair.pubkey(),
-                    commission: 100u8,
-                },
-                26_858_640,
-            );
-            let message = Message::new(&instructions, Some(&payer_keypair.pubkey()));
-            bank_client
-                .send_and_confirm_message(&[&payer_keypair, &vote_keypair], message)
-                .unwrap();
-
-            let vote_ix = vote_instruction::vote(
-                &vote_keypair.pubkey(),
-                &payer_keypair.pubkey(),
-                Vote {
-                    slots: vec![0],
-                    hash: blockhash,
-                    timestamp: None,
-                },
-            );
-            let message = Message::new(&[vote_ix], Some(&payer_keypair.pubkey()));
-            Transaction::new(&[&payer_keypair], message, blockhash)
         })
         .collect()
 }
@@ -219,12 +169,6 @@ fn bench_bank_sync_process_builtin_transactions(bencher: &mut Bencher) {
 #[ignore]
 fn bench_bank_sync_process_native_loader_transactions(bencher: &mut Bencher) {
     do_bench_transactions(bencher, &sync_bencher, &create_native_loader_transactions);
-}
-
-#[bench]
-#[ignore]
-fn bench_bank_sync_process_vote_transactions(bencher: &mut Bencher) {
-    do_bench_transactions(bencher, &sync_bencher, &create_vote_transactions);
 }
 
 #[bench]
