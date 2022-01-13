@@ -1,5 +1,10 @@
 use {
-    super::{common::UnusedAccounts, *},
+    super::{
+        common::UnusedAccounts,
+        storage::SerializableAccountStorageEntry,
+        utils::{serialize_iter_as_map, serialize_iter_as_seq},
+        *,
+    },
     crate::{ancestors::AncestorsForSerialization, stakes::StakesCache},
     solana_measure::measure::Measure,
     std::{cell::RefCell, sync::RwLock},
@@ -7,80 +12,44 @@ use {
 
 type AccountsDbFields = super::AccountsDbFields<SerializableAccountStorageEntry>;
 
-/// the serialized type is fixed as usize
-pub type AppendVecIdSerialized = usize;
-
-// Serializable version of AccountStorageEntry for snapshot format
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
-pub(super) struct SerializableAccountStorageEntry {
-    id: AppendVecIdSerialized,
-    accounts_current_len: usize,
-}
-
-pub trait SerializableStorage {
-    fn id(&self) -> AppendVecIdSerialized;
-    fn current_len(&self) -> usize;
-}
-
-impl SerializableStorage for SerializableAccountStorageEntry {
-    fn id(&self) -> AppendVecIdSerialized {
-        self.id
-    }
-    fn current_len(&self) -> usize {
-        self.accounts_current_len
-    }
-}
-
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-impl solana_frozen_abi::abi_example::IgnoreAsHelper for SerializableAccountStorageEntry {}
-
-impl From<&AccountStorageEntry> for SerializableAccountStorageEntry {
-    fn from(rhs: &AccountStorageEntry) -> Self {
-        Self {
-            id: rhs.append_vec_id() as AppendVecIdSerialized,
-            accounts_current_len: rhs.accounts.len(),
-        }
-    }
-}
-
 // Deserializable version of Bank which need not be serializable,
 // because it's handled by SerializableVersionedBank.
 // So, sync fields with it!
 #[derive(Clone, Deserialize)]
-pub(crate) struct DeserializableVersionedBank {
-    pub(crate) blockhash_queue: BlockhashQueue,
-    pub(crate) ancestors: AncestorsForSerialization,
-    pub(crate) hash: Hash,
-    pub(crate) parent_hash: Hash,
-    pub(crate) parent_slot: Slot,
-    pub(crate) hard_forks: HardForks,
-    pub(crate) transaction_count: u64,
-    pub(crate) tick_height: u64,
-    pub(crate) signature_count: u64,
-    pub(crate) capitalization: u64,
-    pub(crate) max_tick_height: u64,
-    pub(crate) hashes_per_tick: Option<u64>,
-    pub(crate) ticks_per_slot: u64,
-    pub(crate) ns_per_slot: u128,
-    pub(crate) genesis_creation_time: UnixTimestamp,
-    pub(crate) slots_per_year: f64,
-    pub(crate) unused: u64,
-    pub(crate) slot: Slot,
-    pub(crate) epoch: Epoch,
-    pub(crate) block_height: u64,
-    pub(crate) collector_id: Pubkey,
-    pub(crate) collector_fees: u64,
-    pub(crate) fee_calculator: FeeCalculator,
-    pub(crate) fee_rate_governor: FeeRateGovernor,
-    pub(crate) collected_rent: u64,
-    pub(crate) rent_collector: RentCollector,
-    pub(crate) epoch_schedule: EpochSchedule,
-    pub(crate) inflation: Inflation,
-    pub(crate) stakes: Stakes,
+struct DeserializableVersionedBank {
+    blockhash_queue: BlockhashQueue,
+    ancestors: AncestorsForSerialization,
+    hash: Hash,
+    parent_hash: Hash,
+    parent_slot: Slot,
+    hard_forks: HardForks,
+    transaction_count: u64,
+    tick_height: u64,
+    signature_count: u64,
+    capitalization: u64,
+    max_tick_height: u64,
+    hashes_per_tick: Option<u64>,
+    ticks_per_slot: u64,
+    ns_per_slot: u128,
+    genesis_creation_time: UnixTimestamp,
+    slots_per_year: f64,
+    unused: u64,
+    slot: Slot,
+    epoch: Epoch,
+    block_height: u64,
+    collector_id: Pubkey,
+    collector_fees: u64,
+    fee_calculator: FeeCalculator,
+    fee_rate_governor: FeeRateGovernor,
+    collected_rent: u64,
+    rent_collector: RentCollector,
+    epoch_schedule: EpochSchedule,
+    inflation: Inflation,
+    stakes: Stakes,
     #[allow(dead_code)]
-    pub(crate) unused_accounts: UnusedAccounts,
-    pub(crate) epoch_stakes: HashMap<Epoch, EpochStakes>,
-    pub(crate) is_delta: bool,
+    unused_accounts: UnusedAccounts,
+    epoch_stakes: HashMap<Epoch, EpochStakes>,
+    is_delta: bool,
 }
 
 impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
@@ -124,39 +93,39 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
 // Serializable version of Bank, not Deserializable to avoid cloning by using refs.
 // Sync fields with DeserializableVersionedBank!
 #[derive(Serialize)]
-pub(crate) struct SerializableVersionedBank<'a> {
-    pub(crate) blockhash_queue: &'a RwLock<BlockhashQueue>,
-    pub(crate) ancestors: &'a AncestorsForSerialization,
-    pub(crate) hash: Hash,
-    pub(crate) parent_hash: Hash,
-    pub(crate) parent_slot: Slot,
-    pub(crate) hard_forks: &'a RwLock<HardForks>,
-    pub(crate) transaction_count: u64,
-    pub(crate) tick_height: u64,
-    pub(crate) signature_count: u64,
-    pub(crate) capitalization: u64,
-    pub(crate) max_tick_height: u64,
-    pub(crate) hashes_per_tick: Option<u64>,
-    pub(crate) ticks_per_slot: u64,
-    pub(crate) ns_per_slot: u128,
-    pub(crate) genesis_creation_time: UnixTimestamp,
-    pub(crate) slots_per_year: f64,
-    pub(crate) unused: u64,
-    pub(crate) slot: Slot,
-    pub(crate) epoch: Epoch,
-    pub(crate) block_height: u64,
-    pub(crate) collector_id: Pubkey,
-    pub(crate) collector_fees: u64,
-    pub(crate) fee_calculator: FeeCalculator,
-    pub(crate) fee_rate_governor: FeeRateGovernor,
-    pub(crate) collected_rent: u64,
-    pub(crate) rent_collector: RentCollector,
-    pub(crate) epoch_schedule: EpochSchedule,
-    pub(crate) inflation: Inflation,
-    pub(crate) stakes: &'a StakesCache,
-    pub(crate) unused_accounts: UnusedAccounts,
-    pub(crate) epoch_stakes: &'a HashMap<Epoch, EpochStakes>,
-    pub(crate) is_delta: bool,
+struct SerializableVersionedBank<'a> {
+    blockhash_queue: &'a RwLock<BlockhashQueue>,
+    ancestors: &'a AncestorsForSerialization,
+    hash: Hash,
+    parent_hash: Hash,
+    parent_slot: Slot,
+    hard_forks: &'a RwLock<HardForks>,
+    transaction_count: u64,
+    tick_height: u64,
+    signature_count: u64,
+    capitalization: u64,
+    max_tick_height: u64,
+    hashes_per_tick: Option<u64>,
+    ticks_per_slot: u64,
+    ns_per_slot: u128,
+    genesis_creation_time: UnixTimestamp,
+    slots_per_year: f64,
+    unused: u64,
+    slot: Slot,
+    epoch: Epoch,
+    block_height: u64,
+    collector_id: Pubkey,
+    collector_fees: u64,
+    fee_calculator: FeeCalculator,
+    fee_rate_governor: FeeRateGovernor,
+    collected_rent: u64,
+    rent_collector: RentCollector,
+    epoch_schedule: EpochSchedule,
+    inflation: Inflation,
+    stakes: &'a StakesCache,
+    unused_accounts: UnusedAccounts,
+    epoch_stakes: &'a HashMap<Epoch, EpochStakes>,
+    is_delta: bool,
 }
 
 impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedBank<'a> {
@@ -205,6 +174,7 @@ impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedB
 impl<'a> solana_frozen_abi::abi_example::IgnoreAsHelper for SerializableVersionedBank<'a> {}
 
 pub(super) struct Context {}
+
 impl<'a> TypeContext<'a> for Context {
     type SerializableAccountStorageEntry = SerializableAccountStorageEntry;
 
