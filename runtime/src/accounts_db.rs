@@ -1219,6 +1219,7 @@ struct LatestAccountsIndexRootsStats {
     uncleaned_roots_len: AtomicUsize,
     previous_uncleaned_roots_len: AtomicUsize,
     roots_range: AtomicU64,
+    farthest_distance_non_root_from_max: AtomicU64,
     rooted_cleaned_count: AtomicUsize,
     unrooted_cleaned_count: AtomicUsize,
     clean_unref_from_storage_us: AtomicU64,
@@ -1233,6 +1234,8 @@ impl LatestAccountsIndexRootsStats {
             accounts_index_roots_stats.uncleaned_roots_len,
             Ordering::Relaxed,
         );
+        let max = std::cmp::max(accounts_index_roots_stats.farthest_distance_non_root_from_max, self.farthest_distance_non_root_from_max.load(Ordering::Relaxed));
+        self.farthest_distance_non_root_from_max.store(max, Ordering::Relaxed);
         self.previous_uncleaned_roots_len.store(
             accounts_index_roots_stats.previous_uncleaned_roots_len,
             Ordering::Relaxed,
@@ -1280,6 +1283,7 @@ impl LatestAccountsIndexRootsStats {
                 self.roots_range.load(Ordering::Relaxed) as i64,
                 i64
             ),
+            ("farthest_distance_non_root_from_max", self.farthest_distance_non_root_from_max.swap(0, Ordering::Relaxed), i64),
             (
                 "unrooted_cleaned_count",
                 self.unrooted_cleaned_count.swap(0, Ordering::Relaxed) as i64,

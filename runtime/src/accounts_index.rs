@@ -363,11 +363,12 @@ impl<T: IndexValue> PreAllocatedAccountMapEntry<T> {
     }
 }
 
-#[derive(Debug, Default, AbiExample, Clone)]
+#[derive(Debug, Default, AbiExample)]
 pub struct RollingBitField {
     max_width: u64,
     min: u64,
     max: u64, // exclusive
+    farthest_distance_non_root_from_max: AtomicU64,
     bits: BitVec,
     count: usize,
     // These are items that are true and lower than min.
@@ -407,12 +408,17 @@ impl RollingBitField {
             min: 0,
             max: 0,
             excess: HashSet::new(),
+            farthest_distance_non_root_from_max: AtomicU64::default(),
         }
     }
 
     // find the array index
     fn get_address(&self, key: &u64) -> u64 {
         key % self.max_width
+    }
+
+    pub fn farthest_distance_non_root_from_max(&self) -> u64 {
+        self.farthest_distance_non_root_from_max.swap(0, Ordering::Relaxed)
     }
 
     pub fn range_width(&self) -> u64 {
@@ -570,12 +576,19 @@ impl RollingBitField {
     // This needs be fast for the most common case of asking for key >= min.
     pub fn contains(&self, key: &u64) -> bool {
         if key < &self.max {
-            if key >= &self.min {
+            let r = if key >= &self.min {
                 // in the bitfield range
                 self.contains_assume_in_range(key)
             } else {
                 self.excess.contains(key)
+            };
+            if !r {
+                let distance = self.max - key;
+                if distance > self.farthest_distance_non_root_from_max.load(Ordering::Relaxed) {
+                    self.farthest_distance_non_root_from_max.store(distance, Ordering::Relaxed);
+                }
             }
+            r
         } else {
             false
         }
@@ -652,6 +665,7 @@ pub struct AccountsIndexRootsStats {
     pub uncleaned_roots_len: usize,
     pub previous_uncleaned_roots_len: usize,
     pub roots_range: u64,
+    pub farthest_distance_non_root_from_max: u64,
     pub rooted_cleaned_count: usize,
     pub unrooted_cleaned_count: usize,
     pub clean_unref_from_storage_us: u64,
@@ -1933,6 +1947,7 @@ impl<T: IndexValue> AccountsIndex<T> {
             stats.uncleaned_roots_len = w_roots_tracker.uncleaned_roots.len();
             stats.previous_uncleaned_roots_len = w_roots_tracker.previous_uncleaned_roots.len();
             stats.roots_range = w_roots_tracker.roots.range_width();
+            stats.farthest_distance_non_root_from_max = w_roots_tracker.roots.farthest_distance_non_root_from_max();
             true
         }
     }
