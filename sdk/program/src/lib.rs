@@ -38,6 +38,7 @@ pub mod program_memory;
 pub mod program_option;
 pub mod program_pack;
 pub mod program_stubs;
+pub mod program_utils;
 pub mod pubkey;
 pub mod rent;
 pub mod sanitize;
