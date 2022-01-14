@@ -153,7 +153,7 @@ fn do_bench(bencher: &mut Bencher, feature: Option<Pubkey>) {
 
         let first_instruction_account = 1;
         assert_eq!(
-            solana_vote_program::vote_instruction::process_instruction(
+            solana_vote_program::vote_processor::process_instruction(
                 first_instruction_account,
                 &instruction.data,
                 &mut invoke_context
