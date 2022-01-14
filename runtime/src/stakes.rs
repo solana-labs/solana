@@ -335,7 +335,7 @@ impl Stakes {
         &self.stake_delegations
     }
 
-    pub fn staked_nodes(&self) -> HashMap<Pubkey, u64> {
+    pub fn staked_nodes(&self) -> Arc<HashMap<Pubkey, u64>> {
         self.vote_accounts.staked_nodes()
     }
 

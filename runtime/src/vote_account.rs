@@ -1,4 +1,5 @@
 use {
+    itertools::Itertools,
     serde::{
         de::{Deserialize, Deserializer},
         ser::{Serialize, Serializer},
@@ -40,9 +41,11 @@ pub struct VoteAccounts {
     // Inner Arc is meant to implement copy-on-write semantics as opposed to
     // sharing mutations (hence RwLock<Arc<...>> instead of Arc<RwLock<...>>).
     staked_nodes: RwLock<
-        HashMap<
-            Pubkey, // VoteAccount.vote_state.node_pubkey.
-            u64,    // Total stake across all vote-accounts.
+        Arc<
+            HashMap<
+                Pubkey, // VoteAccount.vote_state.node_pubkey.
+                u64,    // Total stake across all vote-accounts.
+            >,
         >,
     >,
     staked_nodes_once: Once,
@@ -69,20 +72,19 @@ impl VoteAccount {
 }
 
 impl VoteAccounts {
-    pub fn staked_nodes(&self) -> HashMap<Pubkey, u64> {
+    pub fn staked_nodes(&self) -> Arc<HashMap<Pubkey, u64>> {
         self.staked_nodes_once.call_once(|| {
-            let mut staked_nodes = HashMap::new();
-            for (stake, vote_account) in
-                self.vote_accounts.values().filter(|(stake, _)| *stake != 0)
-            {
-                if let Some(node_pubkey) = vote_account.node_pubkey() {
-                    staked_nodes
-                        .entry(node_pubkey)
-                        .and_modify(|s| *s += *stake)
-                        .or_insert(*stake);
-                }
-            }
-            *self.staked_nodes.write().unwrap() = staked_nodes
+            let staked_nodes = self
+                .vote_accounts
+                .values()
+                .filter(|(stake, _)| *stake != 0)
+                .filter_map(|(stake, vote_account)| {
+                    let node_pubkey = vote_account.node_pubkey()?;
+                    Some((node_pubkey, stake))
+                })
+                .into_grouping_map()
+                .aggregate(|acc, _node_pubkey, stake| Some(acc.unwrap_or_default() + stake));
+            *self.staked_nodes.write().unwrap() = Arc::new(staked_nodes)
         });
         self.staked_nodes.read().unwrap().clone()
     }
@@ -135,9 +137,9 @@ impl VoteAccounts {
     fn add_node_stake(&mut self, stake: u64, vote_account: &VoteAccount) {
         if stake != 0 && self.staked_nodes_once.is_completed() {
             if let Some(node_pubkey) = vote_account.node_pubkey() {
-                self.staked_nodes
-                    .write()
-                    .unwrap()
+                let mut staked_nodes = self.staked_nodes.write().unwrap();
+                let staked_nodes = Arc::make_mut(&mut staked_nodes);
+                staked_nodes
                     .entry(node_pubkey)
                     .and_modify(|s| *s += stake)
                     .or_insert(stake);
@@ -148,7 +150,9 @@ impl VoteAccounts {
     fn sub_node_stake(&mut self, stake: u64, vote_account: &VoteAccount) {
         if stake != 0 && self.staked_nodes_once.is_completed() {
             if let Some(node_pubkey) = vote_account.node_pubkey() {
-                match self.staked_nodes.write().unwrap().entry(node_pubkey) {
+                let mut staked_nodes = self.staked_nodes.write().unwrap();
+                let staked_nodes = Arc::make_mut(&mut staked_nodes);
+                match staked_nodes.entry(node_pubkey) {
                     Entry::Vacant(_) => panic!("this should not happen!"),
                     Entry::Occupied(mut entry) => match entry.get().cmp(&stake) {
                         Ordering::Less => panic!("subtraction value exceeds node's stake"),
@@ -485,7 +489,7 @@ mod tests {
             if (k + 1) % 128 == 0 {
                 assert_eq!(
                     staked_nodes(&accounts[..k + 1]),
-                    vote_accounts.staked_nodes()
+                    *vote_accounts.staked_nodes()
                 );
             }
         }
@@ -495,7 +499,7 @@ mod tests {
             let (pubkey, (_, _)) = accounts.swap_remove(index);
             vote_accounts.remove(&pubkey);
             if (k + 1) % 32 == 0 {
-                assert_eq!(staked_nodes(&accounts), vote_accounts.staked_nodes());
+                assert_eq!(staked_nodes(&accounts), *vote_accounts.staked_nodes());
             }
         }
         // Modify the stakes for some of the accounts.
@@ -510,7 +514,7 @@ mod tests {
             }
             *stake = new_stake;
             if (k + 1) % 128 == 0 {
-                assert_eq!(staked_nodes(&accounts), vote_accounts.staked_nodes());
+                assert_eq!(staked_nodes(&accounts), *vote_accounts.staked_nodes());
             }
         }
         // Remove everything.
@@ -519,7 +523,7 @@ mod tests {
             let (pubkey, (_, _)) = accounts.swap_remove(index);
             vote_accounts.remove(&pubkey);
             if accounts.len() % 32 == 0 {
-                assert_eq!(staked_nodes(&accounts), vote_accounts.staked_nodes());
+                assert_eq!(staked_nodes(&accounts), *vote_accounts.staked_nodes());
             }
         }
         assert!(vote_accounts.staked_nodes.read().unwrap().is_empty());

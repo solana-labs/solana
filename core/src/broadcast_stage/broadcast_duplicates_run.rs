@@ -216,8 +216,9 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         let mut stakes: Vec<(Pubkey, u64)> = bank
             .epoch_staked_nodes(bank_epoch)
             .unwrap()
-            .into_iter()
-            .filter(|(pubkey, _)| *pubkey != self.keypair.pubkey())
+            .iter()
+            .filter(|(pubkey, _)| **pubkey != self.keypair.pubkey())
+            .map(|(pubkey, stake)| (*pubkey, *stake))
             .collect();
         stakes.sort_by(|(l_key, l_stake), (r_key, r_stake)| {
             if r_stake == l_stake {
