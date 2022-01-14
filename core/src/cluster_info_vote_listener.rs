@@ -609,6 +609,9 @@ impl ClusterInfoVoteListener {
 
             // The last vote slot, which is the greatest slot in the stack
             // of votes in a vote transaction, qualifies for optimistic confirmation.
+            // We cannot count any other slots in this vote toward optimistic confirmation because:
+            // 1) There may have been a switch between the earlier vote and the last vote
+            // 2) We do not know the hash of the earlier slot
             if slot == last_vote_slot {
                 let vote_accounts = epoch_stakes.stakes().vote_accounts();
                 let stake = vote_accounts
