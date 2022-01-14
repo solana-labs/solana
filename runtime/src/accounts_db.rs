@@ -3609,7 +3609,7 @@ impl AccountsDb {
                 // cleaned yet. That means this must be rpc access and not replay/banking at the
                 // very least. Note that purge shouldn't occur even for RPC as caller must hold all
                 // of ancestor slots..
-                assert!(load_hint == LoadHint::Unspecified);
+                assert_eq!(load_hint, LoadHint::Unspecified);
 
                 // Everything being assert!()-ed, let's panic!() here as it's an error condition
                 // after all....
