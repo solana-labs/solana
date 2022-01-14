@@ -3160,6 +3160,10 @@ impl AccountsDb {
                 );
                 }
 
+                if created_this_slot {
+                    error!("rewrites from same slot as ancient: {}, {:?}", slot, accounts_next_append_vec);
+                }
+
                 let mut ids = vec![writer.1.append_vec_id()];
                 let mut drop_root = slot > writer.0;
                 // write what we can to the current ancient storage
@@ -3188,8 +3192,12 @@ impl AccountsDb {
                     shrunken_store.accounts.set_ancient();
                     error!("ancient_append_vec: creating ancient append vec because previous one was full: {}, full one: {}, additional: {}, {}", slot, writer.0, accounts_next_append_vec.len(), hashes_next_append_vec.len());
                     current_storage = Some((slot, shrunken_store));
+                    created_this_slot = true;
                     let writer = current_storage.as_ref().unwrap();
                     ids.push(writer.1.append_vec_id());
+                    if created_this_slot {
+                        error!("rewrites2 from same slot as ancient: {}, {:?}", slot, accounts_next_append_vec);
+                    }
 
                                         let clone = &writer.1.clone();
                                         // write the rest to the next ancient storage
