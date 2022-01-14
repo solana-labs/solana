@@ -354,6 +354,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     other_slot,
                     reclaims,
                     previous_slot_entry_was_cached,
+                    pubkey,
                 );
                 if reclaims.len() > 1 {
                     error!("2.2 reclaims: {:?}, {}, {:?}", reclaims, pubkey, other_slot);
@@ -365,8 +366,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 let entry = map.entry(*pubkey);
                 m.stop();
                 let found = matches!(entry, Entry::Occupied(_));
+                let reclaims_orig_len = reclaims.len();
                 match entry {
                     Entry::Occupied(mut occupied) => {
+                        let key = *occupied.key();
                         let current = occupied.get_mut();
                         Self::lock_and_update_slot_list(
                             current,
@@ -374,6 +377,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             other_slot,
                             reclaims,
                             previous_slot_entry_was_cached,
+                            &key,
                         );
                         current.set_age(self.storage.future_age_to_flush());
                         Self::update_stat(&self.stats().updates_in_mem, 1);
@@ -408,6 +412,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                                     None, // todo
                                     reclaims,
                                     previous_slot_entry_was_cached,
+                                    vacant.key(),
                                 );
                                 disk_entry
                             } else {
@@ -422,8 +427,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     }
                 }
 
-                if reclaims.len() > 1 {
-                    error!("2 reclaims: {:?}, {}, {:?}", reclaims, pubkey, other_slot);
+                let reclaims_now_len = reclaims.len();
+                if reclaims_now_len - reclaims_orig_len > 1 {
+                    error!("at least 2 reclaims: {:?}, {}, {:?}", reclaims, pubkey, other_slot);
                 }
 
                 drop(map);
@@ -453,6 +459,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         other_slot: Option<Slot>,
         reclaims: &mut SlotList<T>,
         previous_slot_entry_was_cached: bool,
+        pubkey: &Pubkey,
     ) {
         let mut slot_list = current.slot_list.write().unwrap();
         let addref = Self::update_slot_list(
@@ -462,6 +469,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             reclaims,
             previous_slot_entry_was_cached,
         );
+        if slot_list.len() > 1 {
+            use log::*;
+            error!("slot list: {:?}, {}", slot_list, pubkey);
+        }
         if addref {
             current.add_un_ref(true);
         }
@@ -597,6 +608,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     None, // todo
                     &mut Vec::default(),
                     false,
+                    occupied.key(),
                 );
                 (
                     true, /* found in mem */
@@ -624,6 +636,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             None, // todo
                             &mut Vec::default(),
                             false,
+                            vacant.key(),
                         );
                         vacant.insert(disk_entry);
                         (
