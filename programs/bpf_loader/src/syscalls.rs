@@ -20,9 +20,7 @@ use {
         account::{ReadableAccount, WritableAccount},
         account_info::AccountInfo,
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
-        clock::Clock,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
-        epoch_schedule::EpochSchedule,
         feature_set::{
             self, blake3_syscall_enabled, disable_fees_sysvar, do_support_realloc,
             fixed_memcpy_nonoverlapping_check, libsecp256k1_0_5_upgrade_enabled,
@@ -36,11 +34,10 @@ use {
         program::MAX_RETURN_DATA,
         program_stubs::is_nonoverlapping,
         pubkey::{Pubkey, PubkeyError, MAX_SEEDS, MAX_SEED_LEN},
-        rent::Rent,
         secp256k1_recover::{
             Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
         },
-        sysvar::{self, fees::Fees, Sysvar, SysvarId},
+        sysvar::{Sysvar, SysvarId},
         transaction_context::InstructionAccount,
     },
     std::{
@@ -50,6 +47,7 @@ use {
         rc::Rc,
         slice::from_raw_parts_mut,
         str::{from_utf8, Utf8Error},
+        sync::Arc,
     },
     thiserror::Error as ThisError,
 };
@@ -1070,8 +1068,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSha256<'a, 'b> {
     }
 }
 
-fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId>(
-    id: &Pubkey,
+fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId + Clone>(
+    sysvar: Result<Arc<T>, InstructionError>,
     var_addr: u64,
     loader_id: &Pubkey,
     memory_mapping: &MemoryMapping,
@@ -1082,9 +1080,8 @@ fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId>(
         .consume(invoke_context.get_compute_budget().sysvar_base_cost + size_of::<T>() as u64)?;
     let var = translate_type_mut::<T>(memory_mapping, var_addr, loader_id)?;
 
-    *var = invoke_context
-        .get_sysvar::<T>(id)
-        .map_err(SyscallError::InstructionError)?;
+    let sysvar: Arc<T> = sysvar.map_err(SyscallError::InstructionError)?;
+    *var = T::clone(sysvar.as_ref());
 
     Ok(SUCCESS)
 }
@@ -1117,8 +1114,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetClockSysvar<'a, 'b> {
                 .map_err(SyscallError::InstructionError),
             result
         );
-        *result = get_sysvar::<Clock>(
-            &sysvar::clock::id(),
+        *result = get_sysvar(
+            invoke_context.get_sysvar_cache().get_clock(),
             var_addr,
             &loader_id,
             memory_mapping,
@@ -1154,8 +1151,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetEpochScheduleSysvar<'a, 'b> {
                 .map_err(SyscallError::InstructionError),
             result
         );
-        *result = get_sysvar::<EpochSchedule>(
-            &sysvar::epoch_schedule::id(),
+        *result = get_sysvar(
+            invoke_context.get_sysvar_cache().get_epoch_schedule(),
             var_addr,
             &loader_id,
             memory_mapping,
@@ -1192,8 +1189,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetFeesSysvar<'a, 'b> {
                 .map_err(SyscallError::InstructionError),
             result
         );
-        *result = get_sysvar::<Fees>(
-            &sysvar::fees::id(),
+        *result = get_sysvar(
+            invoke_context.get_sysvar_cache().get_fees(),
             var_addr,
             &loader_id,
             memory_mapping,
@@ -1229,8 +1226,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetRentSysvar<'a, 'b> {
                 .map_err(SyscallError::InstructionError),
             result
         );
-        *result = get_sysvar::<Rent>(
-            &sysvar::rent::id(),
+        *result = get_sysvar(
+            invoke_context.get_sysvar_cache().get_rent(),
             var_addr,
             &loader_id,
             memory_mapping,
@@ -2749,14 +2746,20 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSetReturnData<'a, 'b> {
             )
             .to_vec()
         };
-        let program_id = question_mark!(
+        let program_id = *question_mark!(
             invoke_context
                 .transaction_context
                 .get_program_key()
                 .map_err(SyscallError::InstructionError),
             result
         );
-        invoke_context.return_data = (*program_id, return_data);
+        question_mark!(
+            invoke_context
+                .transaction_context
+                .set_return_data(program_id, return_data)
+                .map_err(SyscallError::InstructionError),
+            result
+        );
 
         *result = Ok(0);
     }
@@ -2799,7 +2802,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetReturnData<'a, 'b> {
             result
         );
 
-        let (program_id, return_data) = &invoke_context.return_data;
+        let (program_id, return_data) = invoke_context.transaction_context.get_return_data();
         length = length.min(return_data.len() as u64);
         if length != 0 {
             question_mark!(
@@ -2913,17 +2916,23 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallLogData<'a, 'b> {
 
 #[cfg(test)]
 mod tests {
+    #[allow(deprecated)]
+    use solana_sdk::sysvar::fees::Fees;
     use {
         super::*,
-        solana_program_runtime::invoke_context::InvokeContext,
+        solana_program_runtime::{invoke_context::InvokeContext, sysvar_cache::SysvarCache},
         solana_rbpf::{
             ebpf::HOST_ALIGN, memory_region::MemoryRegion, user_error::UserError, vm::Config,
         },
         solana_sdk::{
-            account::AccountSharedData, bpf_loader, fee_calculator::FeeCalculator, hash::hashv,
+            account::AccountSharedData,
+            bpf_loader,
+            fee_calculator::FeeCalculator,
+            hash::hashv,
+            sysvar::{clock::Clock, epoch_schedule::EpochSchedule, rent::Rent},
             transaction_context::TransactionContext,
         },
-        std::str::FromStr,
+        std::{borrow::Cow, str::FromStr},
     };
 
     macro_rules! assert_access_violation {
@@ -3786,8 +3795,6 @@ mod tests {
             leader_schedule_epoch: 4,
             unix_timestamp: 5,
         };
-        let mut data_clock = vec![];
-        bincode::serialize_into(&mut data_clock, &src_clock).unwrap();
         let src_epochschedule = EpochSchedule {
             slots_per_epoch: 1,
             leader_schedule_slot_offset: 2,
@@ -3795,35 +3802,30 @@ mod tests {
             first_normal_epoch: 3,
             first_normal_slot: 4,
         };
-        let mut data_epochschedule = vec![];
-        bincode::serialize_into(&mut data_epochschedule, &src_epochschedule).unwrap();
         let src_fees = Fees {
             fee_calculator: FeeCalculator {
                 lamports_per_signature: 1,
             },
         };
-        let mut data_fees = vec![];
-        bincode::serialize_into(&mut data_fees, &src_fees).unwrap();
         let src_rent = Rent {
             lamports_per_byte_year: 1,
             exemption_threshold: 2.0,
             burn_percent: 3,
         };
-        let mut data_rent = vec![];
-        bincode::serialize_into(&mut data_rent, &src_rent).unwrap();
-        let sysvars = [
-            (sysvar::clock::id(), data_clock),
-            (sysvar::epoch_schedule::id(), data_epochschedule),
-            (sysvar::fees::id(), data_fees),
-            (sysvar::rent::id(), data_rent),
-        ];
+
+        let mut sysvar_cache = SysvarCache::default();
+        sysvar_cache.set_clock(src_clock.clone());
+        sysvar_cache.set_epoch_schedule(src_epochschedule);
+        sysvar_cache.set_fees(src_fees.clone());
+        sysvar_cache.set_rent(src_rent);
+
         let program_id = Pubkey::new_unique();
         let mut transaction_context = TransactionContext::new(
             vec![(program_id, AccountSharedData::new(0, 0, &bpf_loader::id()))],
             1,
         );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        invoke_context.sysvars = &sysvars;
+        invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
         invoke_context.push(&[], &[0], &[]).unwrap();
 
         // Test clock sysvar

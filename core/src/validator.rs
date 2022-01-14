@@ -17,10 +17,10 @@ use {
         stats_reporter_service::StatsReporterService,
         system_monitor_service::{verify_udp_stats_access, SystemMonitorService},
         tower_storage::TowerStorage,
-        tpu::{Tpu, DEFAULT_TPU_COALESCE_MS},
-        tvu::{Sockets, Tvu, TvuConfig},
+        tpu::{Tpu, TpuSockets, DEFAULT_TPU_COALESCE_MS},
+        tvu::{Tvu, TvuConfig, TvuSockets},
     },
-    crossbeam_channel::{bounded, unbounded},
+    crossbeam_channel::{bounded, unbounded, Receiver},
     rand::{thread_rng, Rng},
     solana_accountsdb_plugin_manager::accountsdb_plugin_service::AccountsDbPluginService,
     solana_entry::poh::compute_hash_time_ns,
@@ -100,7 +100,6 @@ use {
         path::{Path, PathBuf},
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
-            mpsc::{channel, Receiver},
             Arc, Mutex, RwLock,
         },
         thread::{sleep, Builder, JoinHandle},
@@ -411,7 +410,7 @@ impl Validator {
                 .register_exit(Box::new(move || exit.store(true, Ordering::Relaxed)));
         }
 
-        let accounts_package_channel = channel();
+        let accounts_package_channel = unbounded();
 
         let accounts_update_notifier =
             accountsdb_plugin_service
@@ -707,9 +706,7 @@ impl Validator {
             )),
         };
 
-        let (stats_reporter_sender, stats_reporter_receiver) = channel();
-        // https://github.com/rust-lang/rust/issues/39364#issuecomment-634545136
-        let _stats_reporter_sender = stats_reporter_sender.clone();
+        let (stats_reporter_sender, stats_reporter_receiver) = unbounded();
 
         let stats_reporter_service = StatsReporterService::new(stats_reporter_receiver, &exit);
 
@@ -822,35 +819,12 @@ impl Validator {
             authorized_voter_keypairs,
             &bank_forks,
             &cluster_info,
-            Sockets {
-                repair: node
-                    .sockets
-                    .repair
-                    .try_clone()
-                    .expect("Failed to clone repair socket"),
-                retransmit: node
-                    .sockets
-                    .retransmit_sockets
-                    .iter()
-                    .map(|s| s.try_clone().expect("Failed to clone retransmit socket"))
-                    .collect(),
-                fetch: node
-                    .sockets
-                    .tvu
-                    .iter()
-                    .map(|s| s.try_clone().expect("Failed to clone TVU Sockets"))
-                    .collect(),
-                forwards: node
-                    .sockets
-                    .tvu_forwards
-                    .iter()
-                    .map(|s| s.try_clone().expect("Failed to clone TVU forwards Sockets"))
-                    .collect(),
-                ancestor_hashes_requests: node
-                    .sockets
-                    .ancestor_hashes_requests
-                    .try_clone()
-                    .expect("Failed to clone ancestor_hashes_requests socket"),
+            TvuSockets {
+                repair: node.sockets.repair,
+                retransmit: node.sockets.retransmit_sockets,
+                fetch: node.sockets.tvu,
+                forwards: node.sockets.tvu_forwards,
+                ancestor_hashes_requests: node.sockets.ancestor_hashes_requests,
             },
             blockstore.clone(),
             ledger_signal_receiver,
@@ -902,10 +876,12 @@ impl Validator {
             &poh_recorder,
             entry_receiver,
             retransmit_slots_receiver,
-            node.sockets.tpu,
-            node.sockets.tpu_forwards,
-            node.sockets.tpu_vote,
-            node.sockets.broadcast,
+            TpuSockets {
+                transactions: node.sockets.tpu,
+                transaction_forwards: node.sockets.tpu_forwards,
+                vote: node.sockets.tpu_vote,
+                broadcast: node.sockets.broadcast,
+            },
             &rpc_subscriptions,
             transaction_status_sender,
             &blockstore,

@@ -7,9 +7,12 @@ use {
             v0::{self, LoadedAddresses},
             MessageHeader,
         },
+        nonce::NONCED_TX_MARKER_IX_INDEX,
+        program_utils::limited_deserialize,
         pubkey::Pubkey,
         sanitize::{Sanitize, SanitizeError},
         serialize_utils::{append_slice, append_u16, append_u8},
+        solana_program::{system_instruction::SystemInstruction, system_program},
     },
     bitflags::bitflags,
     std::convert::TryFrom,
@@ -22,7 +25,7 @@ use {
 pub enum SanitizedMessage {
     /// Sanitized legacy message
     Legacy(LegacyMessage),
-    /// Sanitized version #0 message with mapped addresses
+    /// Sanitized version #0 message with dynamically loaded addresses
     V0(v0::LoadedMessage),
 }
 
@@ -130,7 +133,7 @@ impl SanitizedMessage {
         })
     }
 
-    /// Iterator of all account keys referenced in this message, included mapped keys.
+    /// Iterator of all account keys referenced in this message, including dynamically loaded keys.
     pub fn account_keys_iter(&self) -> Box<dyn Iterator<Item = &Pubkey> + '_> {
         match self {
             Self::Legacy(message) => Box::new(message.account_keys.iter()),
@@ -138,7 +141,7 @@ impl SanitizedMessage {
         }
     }
 
-    /// Length of all account keys referenced in this message, included mapped keys.
+    /// Length of all account keys referenced in this message, including dynamically loaded keys.
     pub fn account_keys_len(&self) -> usize {
         match self {
             Self::Legacy(message) => message.account_keys.len(),
@@ -257,11 +260,11 @@ impl SanitizedMessage {
 
     /// Return the number of readonly accounts loaded by this message.
     pub fn num_readonly_accounts(&self) -> usize {
-        let mapped_readonly_addresses = self
+        let loaded_readonly_addresses = self
             .loaded_lookup_table_addresses()
             .map(|keys| keys.readonly.len())
             .unwrap_or_default();
-        mapped_readonly_addresses
+        loaded_readonly_addresses
             .saturating_add(usize::from(self.header().num_readonly_signed_accounts))
             .saturating_add(usize::from(self.header().num_readonly_unsigned_accounts))
     }
@@ -291,6 +294,34 @@ impl SanitizedMessage {
             Self::Legacy(message) => message.is_upgradeable_loader_present(),
             Self::V0(message) => message.is_upgradeable_loader_present(),
         }
+    }
+
+    /// If the message uses a durable nonce, return the pubkey of the nonce account
+    pub fn get_durable_nonce(&self, nonce_must_be_writable: bool) -> Option<&Pubkey> {
+        self.instructions()
+            .get(NONCED_TX_MARKER_IX_INDEX as usize)
+            .filter(
+                |ix| match self.get_account_key(ix.program_id_index as usize) {
+                    Some(program_id) => system_program::check_id(program_id),
+                    _ => false,
+                },
+            )
+            .filter(|ix| {
+                matches!(
+                    limited_deserialize(&ix.data, 4 /* serialized size of AdvanceNonceAccount */),
+                    Ok(SystemInstruction::AdvanceNonceAccount)
+                )
+            })
+            .and_then(|ix| {
+                ix.accounts.get(0).and_then(|idx| {
+                    let idx = *idx as usize;
+                    if nonce_must_be_writable && !self.is_writable(idx) {
+                        None
+                    } else {
+                        self.get_account_key(idx)
+                    }
+                })
+            })
     }
 }
 

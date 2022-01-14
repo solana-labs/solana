@@ -261,6 +261,7 @@ mod tests {
             get_tmp_ledger_path_auto_delete,
             staking_utils::tests::setup_vote_and_stake_accounts,
         },
+        crossbeam_channel::unbounded,
         solana_runtime::bank::Bank,
         solana_sdk::{
             clock::NUM_CONSECUTIVE_LEADER_SLOTS,
@@ -270,10 +271,7 @@ mod tests {
             },
             signature::{Keypair, Signer},
         },
-        std::{
-            sync::{mpsc::channel, Arc},
-            thread::Builder,
-        },
+        std::{sync::Arc, thread::Builder},
     };
 
     #[test]
@@ -350,7 +348,7 @@ mod tests {
             .map(|_| {
                 let cache = cache.clone();
                 let bank = bank.clone();
-                let (sender, receiver) = channel();
+                let (sender, receiver) = unbounded();
                 (
                     Builder::new()
                         .name("test_thread_race_leader_schedule_cache".to_string())

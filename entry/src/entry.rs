@@ -4,6 +4,7 @@
 //! represents an approximate amount of time since the last Entry was created.
 use {
     crate::poh::Poh,
+    crossbeam_channel::{Receiver, Sender},
     dlopen::symbor::{Container, SymBorApi, Symbol},
     dlopen_derive::SymBorApi,
     log::*,
@@ -34,10 +35,7 @@ use {
         cell::RefCell,
         cmp,
         ffi::OsStr,
-        sync::{
-            mpsc::{Receiver, Sender},
-            Arc, Mutex, Once,
-        },
+        sync::{Arc, Mutex, Once},
         thread::{self, JoinHandle},
         time::Instant,
     },

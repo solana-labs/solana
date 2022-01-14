@@ -1,5 +1,6 @@
 use {
     clap::{crate_name, value_t, value_t_or_exit, values_t_or_exit, App, Arg},
+    crossbeam_channel::unbounded,
     log::*,
     solana_clap_utils::{
         input_parsers::{pubkey_of, pubkeys_of, value_of},
@@ -35,7 +36,7 @@ use {
         net::{IpAddr, Ipv4Addr, SocketAddr},
         path::{Path, PathBuf},
         process::exit,
-        sync::{mpsc::channel, Arc, RwLock},
+        sync::{Arc, RwLock},
         time::{Duration, SystemTime, UNIX_EPOCH},
     },
 };
@@ -524,7 +525,7 @@ fn main() {
     let faucet_pubkey = faucet_keypair.pubkey();
 
     if let Some(faucet_addr) = &faucet_addr {
-        let (sender, receiver) = channel();
+        let (sender, receiver) = unbounded();
         run_local_faucet_with_port(faucet_keypair, sender, None, faucet_addr.port());
         let _ = receiver.recv().expect("run faucet").unwrap_or_else(|err| {
             println!("Error: failed to start faucet: {}", err);

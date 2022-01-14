@@ -1,5 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 use {
+    crossbeam_channel::unbounded,
     serial_test::serial,
     solana_bench_tps::{
         bench::{do_bench_tps, generate_and_fund_keypairs},
@@ -15,10 +16,7 @@ use {
     },
     solana_sdk::signature::{Keypair, Signer},
     solana_streamer::socket::SocketAddrSpace,
-    std::{
-        sync::{mpsc::channel, Arc},
-        time::Duration,
-    },
+    std::{sync::Arc, time::Duration},
 };
 
 fn test_bench_tps_local_cluster(config: Config) {
@@ -52,7 +50,7 @@ fn test_bench_tps_local_cluster(config: Config) {
         VALIDATOR_PORT_RANGE,
     ));
 
-    let (addr_sender, addr_receiver) = channel();
+    let (addr_sender, addr_receiver) = unbounded();
     run_local_faucet_with_port(faucet_keypair, addr_sender, None, 0);
     let faucet_addr = addr_receiver
         .recv_timeout(Duration::from_secs(2))

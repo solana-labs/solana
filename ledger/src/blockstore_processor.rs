@@ -433,22 +433,22 @@ fn process_entries_with_callback(
 
 #[derive(Error, Debug)]
 pub enum BlockstoreProcessorError {
-    #[error("failed to load entries")]
+    #[error("failed to load entries, error: {0}")]
     FailedToLoadEntries(#[from] BlockstoreError),
 
     #[error("failed to load meta")]
     FailedToLoadMeta,
 
-    #[error("invalid block")]
+    #[error("invalid block error: {0}")]
     InvalidBlock(#[from] BlockError),
 
-    #[error("invalid transaction")]
+    #[error("invalid transaction error: {0}")]
     InvalidTransaction(#[from] TransactionError),
 
     #[error("no valid forks found")]
     NoValidForksFound,
 
-    #[error("invalid hard fork")]
+    #[error("invalid hard fork slot {0}")]
     InvalidHardFork(Slot),
 
     #[error("root bank with mismatched capitalization at {0}")]
@@ -1128,6 +1128,7 @@ fn load_frozen_forks(
     let dev_halt_at_slot = opts.dev_halt_at_slot.unwrap_or(std::u64::MAX);
     if root_bank.slot() != dev_halt_at_slot {
         while !pending_slots.is_empty() {
+            timing.details.per_program_timings.clear();
             let (meta, bank, last_entry_hash) = pending_slots.pop().unwrap();
             let slot = bank.slot();
             if last_status_report.elapsed() > Duration::from_secs(2) {
@@ -1529,10 +1530,7 @@ pub mod tests {
             vote_state::{VoteState, VoteStateVersions, MAX_LOCKOUT_HISTORY},
             vote_transaction,
         },
-        std::{
-            collections::BTreeSet,
-            sync::{mpsc::channel, RwLock},
-        },
+        std::{collections::BTreeSet, sync::RwLock},
         tempfile::TempDir,
         trees::tr,
     };
@@ -1542,7 +1540,7 @@ pub mod tests {
         blockstore: &Blockstore,
         opts: ProcessOptions,
     ) -> BlockstoreProcessorInner {
-        let (accounts_package_sender, _) = channel();
+        let (accounts_package_sender, _) = unbounded();
         process_blockstore(
             genesis_config,
             blockstore,
@@ -3118,7 +3116,7 @@ pub mod tests {
         bank1.squash();
 
         // Test process_blockstore_from_root() from slot 1 onwards
-        let (accounts_package_sender, _) = channel();
+        let (accounts_package_sender, _) = unbounded();
         let (bank_forks, ..) = do_process_blockstore_from_root(
             &blockstore,
             bank1,
@@ -3222,7 +3220,7 @@ pub mod tests {
             ..SnapshotConfig::default()
         };
 
-        let (accounts_package_sender, accounts_package_receiver) = channel();
+        let (accounts_package_sender, accounts_package_receiver) = unbounded();
 
         do_process_blockstore_from_root(
             &blockstore,

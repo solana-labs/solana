@@ -570,6 +570,11 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
             20 => TransactionError::WouldExceedMaxAccountCostLimit,
             21 => TransactionError::WouldExceedMaxAccountDataCostLimit,
             22 => TransactionError::TooManyAccountLocks,
+            23 => TransactionError::AddressLookupTableNotFound,
+            24 => TransactionError::InvalidAddressLookupTableOwner,
+            25 => TransactionError::InvalidAddressLookupTableData,
+            26 => TransactionError::InvalidAddressLookupTableIndex,
+            27 => TransactionError::InvalidRentPayingAccount,
             _ => return Err("Invalid TransactionError"),
         })
     }
@@ -645,6 +650,22 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                 }
                 TransactionError::TooManyAccountLocks => {
                     tx_by_addr::TransactionErrorType::TooManyAccountLocks
+                }
+                TransactionError::AddressLookupTableNotFound => {
+                    tx_by_addr::TransactionErrorType::AddressLookupTableNotFound
+                }
+                TransactionError::InvalidAddressLookupTableOwner => {
+                    tx_by_addr::TransactionErrorType::InvalidAddressLookupTableOwner
+                }
+                TransactionError::InvalidAddressLookupTableData => {
+                    tx_by_addr::TransactionErrorType::InvalidAddressLookupTableData
+                }
+                TransactionError::InvalidAddressLookupTableIndex => {
+                    tx_by_addr::TransactionErrorType::InvalidAddressLookupTableIndex
+                }
+
+                TransactionError::InvalidRentPayingAccount => {
+                    tx_by_addr::TransactionErrorType::InvalidRentPayingAccount
                 }
             } as i32,
             instruction_error: match transaction_error {

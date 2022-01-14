@@ -332,6 +332,11 @@ pub enum DbTransactionErrorCode {
     InvalidWritableAccount,
     WouldExceedMaxAccountDataCostLimit,
     TooManyAccountLocks,
+    AddressLookupTableNotFound,
+    InvalidAddressLookupTableOwner,
+    InvalidAddressLookupTableData,
+    InvalidAddressLookupTableIndex,
+    InvalidRentPayingAccount,
 }
 
 impl From<&TransactionError> for DbTransactionErrorCode {
@@ -364,6 +369,15 @@ impl From<&TransactionError> for DbTransactionErrorCode {
                 Self::WouldExceedMaxAccountDataCostLimit
             }
             TransactionError::TooManyAccountLocks => Self::TooManyAccountLocks,
+            TransactionError::AddressLookupTableNotFound => Self::AddressLookupTableNotFound,
+            TransactionError::InvalidAddressLookupTableOwner => {
+                Self::InvalidAddressLookupTableOwner
+            }
+            TransactionError::InvalidAddressLookupTableData => Self::InvalidAddressLookupTableData,
+            TransactionError::InvalidAddressLookupTableIndex => {
+                Self::InvalidAddressLookupTableIndex
+            }
+            TransactionError::InvalidRentPayingAccount => Self::InvalidRentPayingAccount,
         }
     }
 }

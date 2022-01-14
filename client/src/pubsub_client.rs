@@ -10,6 +10,7 @@ use {
             RpcSignatureResult, RpcVote, SlotInfo, SlotUpdate,
         },
     },
+    crossbeam_channel::{unbounded, Receiver, Sender},
     log::*,
     serde::de::DeserializeOwned,
     serde_json::{
@@ -24,7 +25,6 @@ use {
         net::TcpStream,
         sync::{
             atomic::{AtomicBool, Ordering},
-            mpsc::{channel, Receiver, Sender},
             Arc, RwLock,
         },
         thread::{sleep, JoinHandle},
@@ -242,7 +242,7 @@ impl PubsubClient {
     ) -> Result<AccountSubscription, PubsubClientError> {
         let url = Url::parse(url)?;
         let socket = connect_with_retry(url)?;
-        let (sender, receiver) = channel();
+        let (sender, receiver) = unbounded();
 
         let socket = Arc::new(RwLock::new(socket));
         let socket_clone = socket.clone();
@@ -283,7 +283,7 @@ impl PubsubClient {
     ) -> Result<BlockSubscription, PubsubClientError> {
         let url = Url::parse(url)?;
         let socket = connect_with_retry(url)?;
-        let (sender, receiver) = channel();
+        let (sender, receiver) = unbounded();
 
         let socket = Arc::new(RwLock::new(socket));
         let socket_clone = socket.clone();
@@ -322,7 +322,7 @@ impl PubsubClient {
     ) -> Result<LogsSubscription, PubsubClientError> {
         let url = Url::parse(url)?;
         let socket = connect_with_retry(url)?;
-        let (sender, receiver) = channel();
+        let (sender, receiver) = unbounded();
 
         let socket = Arc::new(RwLock::new(socket));
         let socket_clone = socket.clone();
@@ -361,7 +361,7 @@ impl PubsubClient {
     ) -> Result<ProgramSubscription, PubsubClientError> {
         let url = Url::parse(url)?;
         let socket = connect_with_retry(url)?;
-        let (sender, receiver) = channel();
+        let (sender, receiver) = unbounded();
 
         let socket = Arc::new(RwLock::new(socket));
         let socket_clone = socket.clone();
@@ -398,7 +398,7 @@ impl PubsubClient {
     pub fn vote_subscribe(url: &str) -> Result<VoteSubscription, PubsubClientError> {
         let url = Url::parse(url)?;
         let socket = connect_with_retry(url)?;
-        let (sender, receiver) = channel();
+        let (sender, receiver) = unbounded();
 
         let socket = Arc::new(RwLock::new(socket));
         let socket_clone = socket.clone();
@@ -431,7 +431,7 @@ impl PubsubClient {
     pub fn root_subscribe(url: &str) -> Result<RootSubscription, PubsubClientError> {
         let url = Url::parse(url)?;
         let socket = connect_with_retry(url)?;
-        let (sender, receiver) = channel();
+        let (sender, receiver) = unbounded();
 
         let socket = Arc::new(RwLock::new(socket));
         let socket_clone = socket.clone();
@@ -468,7 +468,7 @@ impl PubsubClient {
     ) -> Result<SignatureSubscription, PubsubClientError> {
         let url = Url::parse(url)?;
         let socket = connect_with_retry(url)?;
-        let (sender, receiver) = channel();
+        let (sender, receiver) = unbounded();
 
         let socket = Arc::new(RwLock::new(socket));
         let socket_clone = socket.clone();
@@ -506,7 +506,7 @@ impl PubsubClient {
     pub fn slot_subscribe(url: &str) -> Result<SlotsSubscription, PubsubClientError> {
         let url = Url::parse(url)?;
         let socket = connect_with_retry(url)?;
-        let (sender, receiver) = channel::<SlotInfo>();
+        let (sender, receiver) = unbounded::<SlotInfo>();
 
         let socket = Arc::new(RwLock::new(socket));
         let socket_clone = socket.clone();

@@ -13,7 +13,7 @@ use {
         repair_service::{DuplicateSlotsResetSender, RepairInfo},
         window_service::{should_retransmit_and_persist, WindowService},
     },
-    crossbeam_channel::{Receiver, Sender},
+    crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
     lru::LruCache,
     rayon::{prelude::*, ThreadPool, ThreadPoolBuilder},
     solana_client::rpc_response::SlotUpdate,
@@ -39,7 +39,6 @@ use {
         ops::{AddAssign, DerefMut},
         sync::{
             atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
-            mpsc::{self, channel, RecvTimeoutError},
             Arc, Mutex, RwLock,
         },
         thread::{self, Builder, JoinHandle},
@@ -216,7 +215,7 @@ fn retransmit(
     bank_forks: &RwLock<BankForks>,
     leader_schedule_cache: &LeaderScheduleCache,
     cluster_info: &ClusterInfo,
-    shreds_receiver: &mpsc::Receiver<Vec<Shred>>,
+    shreds_receiver: &Receiver<Vec<Shred>>,
     sockets: &[UdpSocket],
     stats: &mut RetransmitStats,
     cluster_nodes_cache: &ClusterNodesCache<RetransmitStage>,
@@ -369,7 +368,7 @@ pub fn retransmitter(
     bank_forks: Arc<RwLock<BankForks>>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     cluster_info: Arc<ClusterInfo>,
-    shreds_receiver: mpsc::Receiver<Vec<Shred>>,
+    shreds_receiver: Receiver<Vec<Shred>>,
     max_slots: Arc<MaxSlots>,
     rpc_subscriptions: Option<Arc<RpcSubscriptions>>,
 ) -> JoinHandle<()> {
@@ -450,9 +449,7 @@ impl RetransmitStage {
         duplicate_slots_sender: Sender<Slot>,
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
     ) -> Self {
-        let (retransmit_sender, retransmit_receiver) = channel();
-        // https://github.com/rust-lang/rust/issues/39364#issuecomment-634545136
-        let _retransmit_sender = retransmit_sender.clone();
+        let (retransmit_sender, retransmit_receiver) = unbounded();
 
         let retransmit_thread_handle = retransmitter(
             retransmit_sockets,
@@ -553,7 +550,7 @@ mod tests {
             full_leader_cache: true,
             ..ProcessOptions::default()
         };
-        let (accounts_package_sender, _) = channel();
+        let (accounts_package_sender, _) = unbounded();
         let (bank_forks, cached_leader_schedule, _) = process_blockstore(
             &genesis_config,
             &blockstore,
@@ -597,7 +594,7 @@ mod tests {
         let retransmit_socket = Arc::new(vec![UdpSocket::bind("0.0.0.0:0").unwrap()]);
         let cluster_info = Arc::new(cluster_info);
 
-        let (retransmit_sender, retransmit_receiver) = channel();
+        let (retransmit_sender, retransmit_receiver) = unbounded();
         let _retransmit_sender = retransmit_sender.clone();
         let _t_retransmit = retransmitter(
             retransmit_socket,

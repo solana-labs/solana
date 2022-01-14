@@ -66,6 +66,8 @@ pub struct ClusterConfig {
     pub validator_keys: Option<Vec<(Arc<Keypair>, bool)>>,
     /// The stakes of each node
     pub node_stakes: Vec<u64>,
+    /// Optional vote keypairs to use for each node
+    pub node_vote_keys: Option<Vec<Arc<Keypair>>>,
     /// The total lamports available to the cluster
     pub cluster_lamports: u64,
     pub ticks_per_slot: u64,
@@ -85,6 +87,7 @@ impl Default for ClusterConfig {
             num_listeners: 0,
             validator_keys: None,
             node_stakes: vec![],
+            node_vote_keys: None,
             cluster_lamports: 0,
             ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
             slots_per_epoch: DEFAULT_DEV_SLOTS_PER_EPOCH,
@@ -129,6 +132,7 @@ impl LocalCluster {
 
     pub fn new(config: &mut ClusterConfig, socket_addr_space: SocketAddrSpace) -> Self {
         assert_eq!(config.validator_configs.len(), config.node_stakes.len());
+
         let mut validator_keys = {
             if let Some(ref keys) = config.validator_keys {
                 assert_eq!(config.validator_configs.len(), keys.len());
@@ -140,16 +144,29 @@ impl LocalCluster {
             }
         };
 
+        let vote_keys = {
+            if let Some(ref node_vote_keys) = config.node_vote_keys {
+                assert_eq!(config.validator_configs.len(), node_vote_keys.len());
+                node_vote_keys.clone()
+            } else {
+                iter::repeat_with(|| Arc::new(Keypair::new()))
+                    .take(config.validator_configs.len())
+                    .collect()
+            }
+        };
+
         // Bootstrap leader should always be in genesis block
         validator_keys[0].1 = true;
         let (keys_in_genesis, stakes_in_genesis): (Vec<ValidatorVoteKeypairs>, Vec<u64>) =
             validator_keys
                 .iter()
                 .zip(&config.node_stakes)
-                .filter_map(|((node_keypair, in_genesis), stake)| {
+                .zip(&vote_keys)
+                .filter_map(|(((node_keypair, in_genesis), stake), vote_keypair)| {
                     info!(
-                        "STARTING LOCAL CLUSTER: key {} has {} stake",
+                        "STARTING LOCAL CLUSTER: key {} vote_key {} has {} stake",
                         node_keypair.pubkey(),
+                        vote_keypair.pubkey(),
                         stake
                     );
                     if *in_genesis {
@@ -157,7 +174,8 @@ impl LocalCluster {
                             ValidatorVoteKeypairs {
                                 node_keypair: Keypair::from_bytes(&node_keypair.to_bytes())
                                     .unwrap(),
-                                vote_keypair: Keypair::new(),
+                                vote_keypair: Keypair::from_bytes(&vote_keypair.to_bytes())
+                                    .unwrap(),
                                 stake_keypair: Keypair::new(),
                             },
                             stake,
@@ -171,6 +189,7 @@ impl LocalCluster {
         let leader_vote_keypair = &keys_in_genesis[0].vote_keypair;
         let leader_pubkey = leader_keypair.pubkey();
         let leader_node = Node::new_localhost_with_pubkey(&leader_pubkey);
+
         let GenesisConfigInfo {
             mut genesis_config,
             mint_keypair,

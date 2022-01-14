@@ -70,7 +70,7 @@ pub fn remove_tower(tower_path: &Path, node_pubkey: &Pubkey) {
 }
 
 pub fn open_blockstore(ledger_path: &Path) -> Blockstore {
-    Blockstore::open_with_access_type(
+    Blockstore::open_with_options(
         ledger_path,
         BlockstoreOptions {
             access_type: AccessType::TryPrimaryThenSecondary,

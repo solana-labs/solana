@@ -10,6 +10,7 @@ documentation = "https://docs.rs/solana-poh"
 edition = "2021"
 
 [dependencies]
+crossbeam-channel = "0.5"
 dlopen = "0.1.8"
 dlopen_derive = "0.1.4"
 log = "0.4.11"

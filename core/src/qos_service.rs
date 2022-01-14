@@ -3,6 +3,7 @@
 //! how transactions are included in blocks, and optimize those blocks.
 //!
 use {
+    crossbeam_channel::{unbounded, Receiver, Sender},
     solana_measure::measure::Measure,
     solana_runtime::{
         bank::Bank,
@@ -16,7 +17,6 @@ use {
     std::{
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
-            mpsc::{channel, Receiver, Sender},
             Arc, RwLock,
         },
         thread::{self, Builder, JoinHandle},
@@ -59,7 +59,7 @@ impl Drop for QosService {
 
 impl QosService {
     pub fn new(cost_model: Arc<RwLock<CostModel>>, id: u32) -> Self {
-        let (report_sender, report_receiver) = channel();
+        let (report_sender, report_receiver) = unbounded();
         let running_flag = Arc::new(AtomicBool::new(true));
         let metrics = Arc::new(QosServiceMetrics::new(id));
 

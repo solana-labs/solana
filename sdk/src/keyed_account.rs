@@ -7,6 +7,7 @@ use {
     std::{
         cell::{Ref, RefCell, RefMut},
         iter::FromIterator,
+        ops::Deref,
         rc::Rc,
     },
 };
@@ -248,14 +249,20 @@ where
     }
 }
 
-pub fn from_keyed_account<S: Sysvar>(
-    keyed_account: &crate::keyed_account::KeyedAccount,
-) -> Result<S, InstructionError> {
+pub fn check_sysvar_keyed_account<'a, S: Sysvar>(
+    keyed_account: &'a crate::keyed_account::KeyedAccount<'_>,
+) -> Result<impl Deref<Target = AccountSharedData> + 'a, InstructionError> {
     if !S::check_id(keyed_account.unsigned_key()) {
         return Err(InstructionError::InvalidArgument);
     }
-    from_account::<S, AccountSharedData>(&*keyed_account.try_account_ref()?)
-        .ok_or(InstructionError::InvalidArgument)
+    keyed_account.try_account_ref()
+}
+
+pub fn from_keyed_account<S: Sysvar>(
+    keyed_account: &crate::keyed_account::KeyedAccount,
+) -> Result<S, InstructionError> {
+    let sysvar_account = check_sysvar_keyed_account::<S>(keyed_account)?;
+    from_account::<S, AccountSharedData>(&*sysvar_account).ok_or(InstructionError::InvalidArgument)
 }
 
 #[cfg(test)]

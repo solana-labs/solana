@@ -359,17 +359,16 @@ dependencies = [
 
 [[package]]
 name = "blake3"
-version = "1.2.0"
+version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "526c210b4520e416420759af363083471656e819a75e831b8d2c9d5a584f2413"
+checksum = "882e99e4a0cb2ae6cb6e442102e8e6b7131718d94110e64c3e6a34ea9b106f37"
 dependencies = [
  "arrayref",
  "arrayvec 0.7.2",
  "cc",
  "cfg-if 1.0.0",
  "constant_time_eq",
- "crypto-mac 0.11.1",
- "digest 0.9.0",
+ "digest 0.10.1",
 ]
 
 [[package]]
@@ -892,9 +891,9 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-channel"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06ed27e177f16d65f0f0c22a213e17c696ace5dd64b14258b52f9417ccb52db4"
+checksum = "e54ea8bc3fb1ee042f5aace6e3c6e025d3874866da222930f70ce62aceba0bfa"
 dependencies = [
  "cfg-if 1.0.0",
  "crossbeam-utils 0.8.5",
@@ -1060,13 +1059,12 @@ dependencies = [
 
 [[package]]
 name = "dashmap"
-version = "5.0.0"
+version = "4.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b799062aaf67eb976af3bdca031ee6f846d2f0a5710ddbb0d2efee33f3cc4760"
+checksum = "e77a43b28d0668df09411cb0bc9a8c2adc40f9a048afe863e05fd43251e8e39c"
 dependencies = [
  "cfg-if 1.0.0",
  "num_cpus",
- "parking_lot 0.11.2",
  "rayon",
 ]
 
@@ -1367,9 +1365,9 @@ dependencies = [
 
 [[package]]
 name = "etcd-client"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3bfae4cb9cd8c3c2a552d45e155cafd079f385a3b9421b9a010878f44531f1e"
+checksum = "d267091320c099e5b53e81261e7fc01c5280d308da0444f7cd4ee94696569820"
 dependencies = [
  "http",
  "prost",
@@ -1415,6 +1413,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2465292146cdfc2011350fe3b1c616ac83cf0faeedb33463ba1c332ed8948d66"
 dependencies = [
  "ieee754",
+]
+
+[[package]]
+name = "fastrand"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "779d043b6a0b90cc4c0ed7ee380a6504394cee7efd7db050e3774eee387324b2"
+dependencies = [
+ "instant",
 ]
 
 [[package]]
@@ -2058,10 +2065,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9007da9cacbd3e6343da136e98b0d2df013f553d35bdec8b518f07bea768e19c"
 
 [[package]]
-name = "indexmap"
-version = "1.7.0"
+name = "index_list"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc633605454125dec4b66843673f01c7df2b89479b32e0ed634e43a91cff62a5"
+checksum = "5a9d968042a4902e08810946fc7cd5851eb75e80301342305af755ca06cb82ce"
+
+[[package]]
+name = "indexmap"
+version = "1.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "282a6247722caba404c065016bbfa522806e51714c34f5dfc3e4a3a46fcb4223"
 dependencies = [
  "autocfg 1.0.1",
  "hashbrown 0.11.2",
@@ -2499,9 +2512,9 @@ dependencies = [
 
 [[package]]
 name = "memmap2"
-version = "0.5.0"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4647a11b578fead29cdbb34d4adef8dd3dc35b876c9c6d5240d83f205abfe96e"
+checksum = "fe3179b85e1fd8b14447cbebadb75e45a1002f541b925f0bfec366d56a81c56d"
 dependencies = [
  "libc",
 ]
@@ -2517,13 +2530,13 @@ dependencies = [
 
 [[package]]
 name = "merlin"
-version = "2.0.1"
+version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e261cf0f8b3c42ded9f7d2bb59dea03aa52bc8a1cbc7482f9fc3fd1229d3b42"
+checksum = "58c38e2799fc0978b65dfff8023ec7843e2330bb462f19198840b34b6582397d"
 dependencies = [
  "byteorder",
  "keccak",
- "rand_core 0.5.1",
+ "rand_core 0.6.3",
  "zeroize",
 ]
 
@@ -2609,6 +2622,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9f1c5b025cda876f66ef43a113f91ebc9f4ccef34843000e0adf6ebbab84e21"
 dependencies = [
  "winapi 0.3.9",
+]
+
+[[package]]
+name = "modular-bitfield"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a53d79ba8304ac1c4f9eb3b9d281f21f7be9d4626f72ce7df4ad8fbde4f38a74"
+dependencies = [
+ "modular-bitfield-impl",
+ "static_assertions",
+]
+
+[[package]]
+name = "modular-bitfield-impl"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a7d5f7076603ebc68de2dc6a650ec331a062a13abaa346975be747bbfa4b789"
+dependencies = [
+ "proc-macro2 1.0.32",
+ "quote 1.0.10",
+ "syn 1.0.81",
 ]
 
 [[package]]
@@ -4150,9 +4184,9 @@ dependencies = [
 
 [[package]]
 name = "sha2"
-version = "0.10.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "900d964dd36bb15bcf2f2b35694c072feab74969a54f2bbeec7a2d725d2bdcb6"
+checksum = "99c3bd8169c58782adad9290a9af5939994036b76187f7b4f0e6de91dbbfc0ec"
 dependencies = [
  "cfg-if 1.0.0",
  "cpufeatures",
@@ -4495,6 +4529,7 @@ name = "solana-banks-server"
 version = "1.10.0"
 dependencies = [
  "bincode",
+ "crossbeam-channel",
  "futures 0.3.19",
  "solana-banks-interface",
  "solana-runtime",
@@ -4511,6 +4546,7 @@ name = "solana-bench-streamer"
 version = "1.10.0"
 dependencies = [
  "clap 2.33.3",
+ "crossbeam-channel",
  "solana-net-utils",
  "solana-streamer",
  "solana-version",
@@ -4521,6 +4557,7 @@ name = "solana-bench-tps"
 version = "1.10.0"
 dependencies = [
  "clap 2.33.3",
+ "crossbeam-channel",
  "log 0.4.14",
  "rayon",
  "serde_json",
@@ -4552,6 +4589,7 @@ dependencies = [
  "log 0.4.14",
  "rand 0.7.3",
  "solana-measure",
+ "solana-metrics",
  "solana-program-runtime",
  "solana-runtime",
  "solana-sdk",
@@ -4566,7 +4604,8 @@ version = "1.10.0"
 dependencies = [
  "fs_extra",
  "log 0.4.14",
- "memmap2 0.5.0",
+ "memmap2 0.5.2",
+ "modular-bitfield",
  "rand 0.7.3",
  "rayon",
  "solana-logger 1.10.0",
@@ -4624,6 +4663,7 @@ dependencies = [
  "console",
  "const_format",
  "criterion-stats",
+ "crossbeam-channel",
  "ctrlc",
  "humantime",
  "log 0.4.14",
@@ -4702,6 +4742,7 @@ dependencies = [
  "bincode",
  "bs58 0.4.0",
  "clap 2.33.3",
+ "crossbeam-channel",
  "indicatif",
  "jsonrpc-core",
  "jsonrpc-http-server",
@@ -4876,6 +4917,7 @@ name = "solana-entry"
 version = "1.10.0"
 dependencies = [
  "bincode",
+ "crossbeam-channel",
  "dlopen",
  "dlopen_derive",
  "log 0.4.14",
@@ -4899,6 +4941,7 @@ dependencies = [
  "bincode",
  "byteorder",
  "clap 2.33.3",
+ "crossbeam-channel",
  "log 0.4.14",
  "serde",
  "serde_derive",
@@ -4941,11 +4984,11 @@ dependencies = [
  "bv",
  "generic-array 0.14.5",
  "log 0.4.14",
- "memmap2 0.5.0",
+ "memmap2 0.5.2",
  "rustc_version 0.4.0",
  "serde",
  "serde_derive",
- "sha2 0.10.0",
+ "sha2 0.10.1",
  "solana-frozen-abi-macro 1.10.0",
  "solana-logger 1.10.0",
  "thiserror",
@@ -5011,6 +5054,7 @@ dependencies = [
  "bincode",
  "bv",
  "clap 2.33.3",
+ "crossbeam-channel",
  "flate2",
  "indexmap",
  "itertools 0.10.3",
@@ -5057,6 +5101,7 @@ dependencies = [
  "chrono",
  "clap 2.33.3",
  "console",
+ "crossbeam-channel",
  "ctrlc",
  "dirs-next",
  "indicatif",
@@ -5124,7 +5169,7 @@ dependencies = [
  "rustc_version 0.4.0",
  "serde",
  "serde_bytes",
- "sha2 0.10.0",
+ "sha2 0.10.1",
  "solana-account-decoder",
  "solana-bpf-loader-program",
  "solana-entry",
@@ -5157,6 +5202,7 @@ dependencies = [
  "bs58 0.4.0",
  "bytecount",
  "clap 2.33.3",
+ "crossbeam-channel",
  "csv",
  "dashmap",
  "histogram",
@@ -5280,6 +5326,7 @@ dependencies = [
 name = "solana-metrics"
 version = "1.10.0"
 dependencies = [
+ "crossbeam-channel",
  "env_logger 0.9.0",
  "gethostname",
  "lazy_static",
@@ -5307,6 +5354,7 @@ version = "1.10.0"
 dependencies = [
  "bincode",
  "clap 2.33.3",
+ "crossbeam-channel",
  "log 0.4.14",
  "nix",
  "rand 0.7.3",
@@ -5437,7 +5485,7 @@ dependencies = [
  "base64 0.13.0",
  "bincode",
  "bitflags",
- "blake3 1.2.0",
+ "blake3 1.3.0",
  "borsh",
  "borsh-derive",
  "bs58 0.4.0",
@@ -5462,7 +5510,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
- "sha2 0.10.0",
+ "sha2 0.10.1",
  "sha3 0.10.0",
  "solana-frozen-abi 1.10.0",
  "solana-frozen-abi-macro 1.10.0",
@@ -5487,6 +5535,8 @@ dependencies = [
  "num-traits",
  "rustc_version 0.4.0",
  "serde",
+ "solana-frozen-abi 1.10.0",
+ "solana-frozen-abi-macro 1.10.0",
  "solana-logger 1.10.0",
  "solana-measure",
  "solana-sdk",
@@ -5646,6 +5696,7 @@ version = "1.10.0"
 dependencies = [
  "bincode",
  "bs58 0.4.0",
+ "crossbeam-channel",
  "jsonrpc-core",
  "jsonrpc-core-client",
  "log 0.4.14",
@@ -5670,7 +5721,7 @@ dependencies = [
  "arrayref",
  "assert_matches",
  "bincode",
- "blake3 1.2.0",
+ "blake3 1.3.0",
  "bv",
  "byteorder",
  "bzip2",
@@ -5678,18 +5729,21 @@ dependencies = [
  "dashmap",
  "dir-diff",
  "ed25519-dalek",
+ "enum-iterator",
  "flate2",
  "fnv",
+ "index_list",
  "itertools 0.10.3",
  "lazy_static",
  "libsecp256k1 0.6.0",
  "log 0.4.14",
- "memmap2 0.5.0",
+ "memmap2 0.5.2",
  "num-derive",
  "num-traits",
  "num_cpus",
  "ouroboros",
  "rand 0.7.3",
+ "rand_chacha 0.2.2",
  "rayon",
  "regex",
  "rustc_version 0.4.0",
@@ -5743,7 +5797,7 @@ dependencies = [
  "lazy_static",
  "libsecp256k1 0.6.0",
  "log 0.4.14",
- "memmap2 0.5.0",
+ "memmap2 0.5.2",
  "num-derive",
  "num-traits",
  "pbkdf2 0.10.0",
@@ -5756,7 +5810,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
- "sha2 0.10.0",
+ "sha2 0.10.1",
  "sha3 0.10.0",
  "solana-frozen-abi 1.10.0",
  "solana-frozen-abi-macro 1.10.0",
@@ -5797,6 +5851,7 @@ dependencies = [
 name = "solana-send-transaction-service"
 version = "1.10.0"
 dependencies = [
+ "crossbeam-channel",
  "log 0.4.14",
  "solana-logger 1.10.0",
  "solana-metrics",
@@ -5897,6 +5952,7 @@ dependencies = [
 name = "solana-streamer"
 version = "1.10.0"
 dependencies = [
+ "crossbeam-channel",
  "histogram",
  "itertools 0.10.3",
  "libc",
@@ -6044,6 +6100,7 @@ dependencies = [
  "clap 2.33.3",
  "console",
  "core_affinity",
+ "crossbeam-channel",
  "fd-lock",
  "indicatif",
  "jsonrpc-core",
@@ -6484,13 +6541,13 @@ dependencies = [
 
 [[package]]
 name = "tempfile"
-version = "3.2.0"
+version = "3.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dac1c663cfc93810f88aed9b8941d48cabf856a1b111c29a40439018d870eb22"
+checksum = "5cdb1ef4eaeeaddc8fbd371e5017057064af0911902ef36b39801f67cc6d79e4"
 dependencies = [
  "cfg-if 1.0.0",
+ "fastrand",
  "libc",
- "rand 0.8.4",
  "redox_syscall 0.2.10",
  "remove_dir_all",
  "winapi 0.3.9",
@@ -7654,18 +7711,18 @@ dependencies = [
 
 [[package]]
 name = "zstd"
-version = "0.9.1+zstd.1.5.1"
+version = "0.9.2+zstd.1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "538b8347df9257b7fbce37677ef7535c00a3c7bf1f81023cc328ed7fe4b41de8"
+checksum = "2390ea1bf6c038c39674f22d95f0564725fc06034a47129179810b2fc58caa54"
 dependencies = [
  "zstd-safe",
 ]
 
 [[package]]
 name = "zstd-safe"
-version = "4.1.2+zstd.1.5.1"
+version = "4.1.3+zstd.1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9fb4cfe2f6e6d35c5d27ecd9d256c4b6f7933c4895654917460ec56c29336cc1"
+checksum = "e99d81b99fb3c2c2c794e3fe56c305c63d5173a16a46b5850b07c935ffc7db79"
 dependencies = [
  "libc",
  "zstd-sys",

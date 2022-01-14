@@ -1,5 +1,6 @@
 use {
     crate::consensus::Stake,
+    crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
     solana_measure::measure::Measure,
     solana_metrics::datapoint_info,
     solana_rpc::rpc_subscriptions::RpcSubscriptions,
@@ -14,7 +15,6 @@ use {
         collections::HashMap,
         sync::{
             atomic::{AtomicBool, Ordering},
-            mpsc::{channel, Receiver, RecvTimeoutError, Sender},
             Arc, RwLock,
         },
         thread::{self, Builder, JoinHandle},
@@ -63,7 +63,7 @@ impl AggregateCommitmentService {
         let (sender, receiver): (
             Sender<CommitmentAggregationData>,
             Receiver<CommitmentAggregationData>,
-        ) = channel();
+        ) = unbounded();
         let exit_ = exit.clone();
         (
             sender,

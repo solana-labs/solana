@@ -10,6 +10,7 @@ documentation = "https://docs.rs/solana-metrics"
 edition = "2021"
 
 [dependencies]
+crossbeam-channel = "0.5"
 gethostname = "0.2.1"
 lazy_static = "1.4.0"
 log = "0.4.14"

@@ -15,10 +15,7 @@ use {
         system_transaction,
         timing::duration_as_ms,
     },
-    std::{
-        sync::mpsc::channel,
-        time::{Duration, Instant},
-    },
+    std::time::{Duration, Instant},
     test::Bencher,
 };
 
@@ -63,7 +60,7 @@ fn bench_packet_discard(bencher: &mut Bencher) {
 #[bench]
 fn bench_sigverify_stage(bencher: &mut Bencher) {
     solana_logger::setup();
-    let (packet_s, packet_r) = channel();
+    let (packet_s, packet_r) = unbounded();
     let (verified_s, verified_r) = unbounded();
     let verifier = TransactionSigVerifier::default();
     let stage = SigVerifyStage::new(packet_r, verified_s, verifier);

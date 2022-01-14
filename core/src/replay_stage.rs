@@ -26,6 +26,7 @@ use {
         voting_service::VoteOp,
         window_service::DuplicateSlotReceiver,
     },
+    crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
     solana_accountsdb_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
     solana_client::rpc_response::SlotUpdate,
     solana_entry::entry::VerifyRecyclers,
@@ -67,7 +68,6 @@ use {
         result,
         sync::{
             atomic::{AtomicBool, Ordering},
-            mpsc::{Receiver, RecvTimeoutError, Sender},
             Arc, Mutex, RwLock,
         },
         thread::{self, Builder, JoinHandle},
@@ -3011,7 +3011,7 @@ pub mod tests {
         std::{
             fs::remove_dir_all,
             iter,
-            sync::{atomic::AtomicU64, mpsc::channel, Arc, RwLock},
+            sync::{atomic::AtomicU64, Arc, RwLock},
         },
         trees::{tr, Tree},
     };
@@ -3289,7 +3289,7 @@ pub mod tests {
             .into_iter()
             .map(|slot| (slot, Hash::default()))
             .collect();
-        let (bank_drop_sender, _bank_drop_receiver) = channel();
+        let (bank_drop_sender, _bank_drop_receiver) = unbounded();
         ReplayStage::handle_new_root(
             root,
             &bank_forks,
@@ -3370,7 +3370,7 @@ pub mod tests {
         for i in 0..=root {
             progress.insert(i, ForkProgress::new(Hash::default(), None, None, 0, 0));
         }
-        let (bank_drop_sender, _bank_drop_receiver) = channel();
+        let (bank_drop_sender, _bank_drop_receiver) = unbounded();
         ReplayStage::handle_new_root(
             root,
             &bank_forks,
@@ -3821,10 +3821,12 @@ pub mod tests {
     #[test]
     fn test_write_persist_transaction_status() {
         let GenesisConfigInfo {
-            genesis_config,
+            mut genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_config(1000);
+        } = create_genesis_config(solana_sdk::native_token::sol_to_lamports(1000.0));
+        genesis_config.rent.lamports_per_byte_year = 50;
+        genesis_config.rent.exemption_threshold = 2.0;
         let (ledger_path, _) = create_new_tmp_ledger!(&genesis_config);
         {
             let blockstore = Blockstore::open(&ledger_path)
@@ -3837,7 +3839,11 @@ pub mod tests {
 
             let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
             bank0
-                .transfer(4, &mint_keypair, &keypair2.pubkey())
+                .transfer(
+                    bank0.get_minimum_balance_for_rent_exemption(0),
+                    &mint_keypair,
+                    &keypair2.pubkey(),
+                )
                 .unwrap();
 
             let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
@@ -5707,7 +5713,7 @@ pub mod tests {
         let my_vote_pubkey = my_vote_keypair[0].pubkey();
         let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
 
-        let (voting_sender, voting_receiver) = channel();
+        let (voting_sender, voting_receiver) = unbounded();
 
         // Simulate landing a vote for slot 0 landing in slot 1
         let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));

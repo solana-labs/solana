@@ -1,11 +1,9 @@
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-use solana_frozen_abi::abi_example::IgnoreAsHelper;
 use {
     crate::{
         accounts::Accounts,
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig, AppendVecId,
-            AtomicAppendVecId, BankHashInfo, IndexGenerationInfo,
+            AtomicAppendVecId, BankHashInfo, IndexGenerationInfo, SnapshotStorage,
         },
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -16,7 +14,6 @@ use {
         epoch_stakes::EpochStakes,
         hardened_unpack::UnpackedAppendVecMap,
         rent_collector::RentCollector,
-        serde_snapshot::future::{AppendVecIdSerialized, SerializableStorage},
         stakes::Stakes,
     },
     bincode::{self, config::Options, Error},
@@ -48,17 +45,16 @@ use {
 };
 
 mod common;
-mod future;
+mod newer;
+mod storage;
 mod tests;
 mod utils;
 
+use storage::{SerializableStorage, SerializedAppendVecId};
+
 // a number of test cases in accounts_db use this
 #[cfg(test)]
-pub(crate) use self::tests::reconstruct_accounts_db_via_serialization;
-pub(crate) use crate::accounts_db::{SnapshotStorage, SnapshotStorages};
-use future::Context as TypeContextFuture;
-#[allow(unused_imports)]
-use utils::{serialize_iter_as_map, serialize_iter_as_seq, serialize_iter_as_tuple};
+pub(crate) use tests::reconstruct_accounts_db_via_serialization;
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub(crate) enum SerdeStyle {
@@ -204,15 +200,15 @@ where
     R: Read,
 {
     macro_rules! INTO {
-        ($x:ident) => {{
+        ($style:ident) => {{
             let (full_snapshot_bank_fields, full_snapshot_accounts_db_fields) =
-                $x::deserialize_bank_fields(snapshot_streams.full_snapshot_stream)?;
+                $style::Context::deserialize_bank_fields(snapshot_streams.full_snapshot_stream)?;
             let (incremental_snapshot_bank_fields, incremental_snapshot_accounts_db_fields) =
                 if let Some(ref mut incremental_snapshot_stream) =
                     snapshot_streams.incremental_snapshot_stream
                 {
                     let (bank_fields, accounts_db_fields) =
-                        $x::deserialize_bank_fields(incremental_snapshot_stream)?;
+                        $style::Context::deserialize_bank_fields(incremental_snapshot_stream)?;
                     (Some(bank_fields), Some(accounts_db_fields))
                 } else {
                     (None, None)
@@ -242,7 +238,7 @@ where
         }};
     }
     match serde_style {
-        SerdeStyle::Newer => INTO!(TypeContextFuture),
+        SerdeStyle::Newer => INTO!(newer),
     }
     .map_err(|err| {
         warn!("bankrc_from_stream error: {:?}", err);
@@ -260,10 +256,10 @@ where
     W: Write,
 {
     macro_rules! INTO {
-        ($x:ident) => {
+        ($style:ident) => {
             bincode::serialize_into(
                 stream,
-                &SerializableBankAndStorage::<$x> {
+                &SerializableBankAndStorage::<$style::Context> {
                     bank,
                     snapshot_storages,
                     phantom: std::marker::PhantomData::default(),
@@ -272,7 +268,7 @@ where
         };
     }
     match serde_style {
-        SerdeStyle::Newer => INTO!(TypeContextFuture),
+        SerdeStyle::Newer => INTO!(newer),
     }
     .map_err(|err| {
         warn!("bankrc_to_stream error: {:?}", err);
@@ -312,7 +308,7 @@ impl<'a, C: TypeContext<'a>> Serialize for SerializableAccountsDb<'a, C> {
 }
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
-impl<'a, C> IgnoreAsHelper for SerializableAccountsDb<'a, C> {}
+impl<'a, C> solana_frozen_abi::abi_example::IgnoreAsHelper for SerializableAccountsDb<'a, C> {}
 
 #[allow(clippy::too_many_arguments)]
 fn reconstruct_bank_from_fields<E>(
@@ -468,7 +464,7 @@ where
                     //    rename the file to this new path.
                     //    **DEVELOPER NOTE:**  Keep this check last so that it can short-circuit if
                     //    possible.
-                    if storage_entry.id() == remapped_append_vec_id as AppendVecIdSerialized
+                    if storage_entry.id() == remapped_append_vec_id as SerializedAppendVecId
                         || std::fs::metadata(&remapped_append_vec_path).is_err()
                     {
                         break (remapped_append_vec_id, remapped_append_vec_path);
@@ -479,7 +475,7 @@ where
                     num_collisions.fetch_add(1, Ordering::Relaxed);
                 };
                 // Only rename the file if the new ID is actually different from the original.
-                if storage_entry.id() != remapped_append_vec_id as AppendVecIdSerialized {
+                if storage_entry.id() != remapped_append_vec_id as SerializedAppendVecId {
                     std::fs::rename(append_vec_path, &remapped_append_vec_path)?;
                 }
 
@@ -519,7 +515,7 @@ where
         .write()
         .unwrap()
         .insert(snapshot_slot, snapshot_bank_hash_info);
-    accounts_db.storage.0.extend(
+    accounts_db.storage.map.extend(
         storage
             .into_iter()
             .map(|(slot, slot_storage_entry)| (slot, Arc::new(RwLock::new(slot_storage_entry)))),

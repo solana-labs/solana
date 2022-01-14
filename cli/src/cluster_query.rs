@@ -5,6 +5,7 @@ use {
     },
     clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand},
     console::{style, Emoji},
+    crossbeam_channel::unbounded,
     serde::{Deserialize, Serialize},
     solana_clap_utils::{
         input_parsers::*,
@@ -1368,7 +1369,7 @@ pub fn process_ping(
     println_name_value("Source Account:", &config.signers[0].pubkey().to_string());
     println!();
 
-    let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
+    let (signal_sender, signal_receiver) = unbounded();
     ctrlc::set_handler(move || {
         let _ = signal_sender.send(());
     })
@@ -2128,7 +2129,7 @@ pub fn process_calculate_rent(
         timing::years_as_slots(1.0, &seconds_per_tick, clock::DEFAULT_TICKS_PER_SLOT);
     let slots_per_epoch = epoch_schedule.slots_per_epoch as f64;
     let years_per_epoch = slots_per_epoch / slots_per_year;
-    let (lamports_per_epoch, _) = rent.due(0, data_length, years_per_epoch);
+    let lamports_per_epoch = rent.due(0, data_length, years_per_epoch).lamports();
     let cli_rent_calculation = CliRentCalculation {
         lamports_per_byte_year: rent.lamports_per_byte_year,
         lamports_per_epoch,

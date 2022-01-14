@@ -5,6 +5,7 @@ use {
         instruction_recorder::InstructionRecorder,
         invoke_context::{BuiltinProgram, Executors, InvokeContext},
         log_collector::LogCollector,
+        sysvar_cache::SysvarCache,
         timings::ExecuteTimings,
     },
     solana_sdk::{
@@ -12,16 +13,15 @@ use {
         compute_budget::ComputeBudget,
         feature_set::{prevent_calling_precompiles_as_programs, FeatureSet},
         hash::Hash,
-        message::Message,
+        message::SanitizedMessage,
         precompiles::is_precompile,
-        pubkey::Pubkey,
         rent::Rent,
         saturating_add_assign,
         sysvar::instructions,
         transaction::TransactionError,
         transaction_context::{InstructionAccount, TransactionContext},
     },
-    std::{cell::RefCell, rc::Rc, sync::Arc},
+    std::{borrow::Cow, cell::RefCell, rc::Rc, sync::Arc},
 };
 
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
@@ -52,7 +52,7 @@ impl MessageProcessor {
     #[allow(clippy::too_many_arguments)]
     pub fn process_message(
         builtin_programs: &[BuiltinProgram],
-        message: &Message,
+        message: &SanitizedMessage,
         program_indices: &[Vec<usize>],
         transaction_context: &mut TransactionContext,
         rent: Rent,
@@ -62,7 +62,7 @@ impl MessageProcessor {
         feature_set: Arc<FeatureSet>,
         compute_budget: ComputeBudget,
         timings: &mut ExecuteTimings,
-        sysvars: &[(Pubkey, Vec<u8>)],
+        sysvar_cache: &SysvarCache,
         blockhash: Hash,
         lamports_per_signature: u64,
         current_accounts_data_len: u64,
@@ -71,7 +71,7 @@ impl MessageProcessor {
             transaction_context,
             rent,
             builtin_programs,
-            sysvars,
+            Cow::Borrowed(sysvar_cache),
             log_collector,
             compute_budget,
             executors,
@@ -82,14 +82,12 @@ impl MessageProcessor {
             current_accounts_data_len,
         );
 
-        debug_assert_eq!(program_indices.len(), message.instructions.len());
-        for (instruction_index, (instruction, program_indices)) in message
-            .instructions
-            .iter()
+        debug_assert_eq!(program_indices.len(), message.instructions().len());
+        for (instruction_index, ((program_id, instruction), program_indices)) in message
+            .program_instructions_iter()
             .zip(program_indices.iter())
             .enumerate()
         {
-            let program_id = instruction.program_id(&message.account_keys);
             if invoke_context
                 .feature_set
                 .is_active(&prevent_calling_precompiles_as_programs::id())
@@ -139,7 +137,7 @@ impl MessageProcessor {
             );
             time.stop();
             timings.details.accumulate_program(
-                instruction.program_id(&message.account_keys),
+                program_id,
                 time.as_us(),
                 compute_units_consumed,
                 result.is_err(),
@@ -168,6 +166,7 @@ mod tests {
             instruction::{AccountMeta, Instruction, InstructionError},
             message::Message,
             native_loader::{self, create_loadable_account_for_test},
+            pubkey::Pubkey,
             secp256k1_instruction::new_secp256k1_instruction,
             secp256k1_program,
         },
@@ -251,14 +250,15 @@ mod tests {
             AccountMeta::new_readonly(*transaction_context.get_key_of_account_at_index(1), false),
         ];
 
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bincode(
                 mock_system_program_id,
                 &MockSystemInstruction::Correct,
                 account_metas.clone(),
             )],
             Some(transaction_context.get_key_of_account_at_index(0)),
-        );
+        ));
+        let sysvar_cache = SysvarCache::default();
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -271,7 +271,7 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),
-            &[],
+            &sysvar_cache,
             Hash::default(),
             0,
             0,
@@ -292,14 +292,14 @@ mod tests {
             0
         );
 
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bincode(
                 mock_system_program_id,
                 &MockSystemInstruction::TransferLamports { lamports: 50 },
                 account_metas.clone(),
             )],
             Some(transaction_context.get_key_of_account_at_index(0)),
-        );
+        ));
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -312,7 +312,7 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),
-            &[],
+            &sysvar_cache,
             Hash::default(),
             0,
             0,
@@ -325,14 +325,14 @@ mod tests {
             ))
         );
 
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bincode(
                 mock_system_program_id,
                 &MockSystemInstruction::ChangeData { data: 50 },
                 account_metas,
             )],
             Some(transaction_context.get_key_of_account_at_index(0)),
-        );
+        ));
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -345,7 +345,7 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),
-            &[],
+            &sysvar_cache,
             Hash::default(),
             0,
             0,
@@ -451,14 +451,15 @@ mod tests {
         ];
 
         // Try to borrow mut the same account
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bincode(
                 mock_program_id,
                 &MockSystemInstruction::BorrowFail,
                 account_metas.clone(),
             )],
             Some(transaction_context.get_key_of_account_at_index(0)),
-        );
+        ));
+        let sysvar_cache = SysvarCache::default();
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -471,7 +472,7 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),
-            &[],
+            &sysvar_cache,
             Hash::default(),
             0,
             0,
@@ -485,14 +486,14 @@ mod tests {
         );
 
         // Try to borrow mut the same account in a safe way
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bincode(
                 mock_program_id,
                 &MockSystemInstruction::MultiBorrowMut,
                 account_metas.clone(),
             )],
             Some(transaction_context.get_key_of_account_at_index(0)),
-        );
+        ));
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -505,7 +506,7 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),
-            &[],
+            &sysvar_cache,
             Hash::default(),
             0,
             0,
@@ -513,7 +514,7 @@ mod tests {
         assert!(result.is_ok());
 
         // Do work on the same transaction account but at different instruction accounts
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[Instruction::new_with_bincode(
                 mock_program_id,
                 &MockSystemInstruction::DoWork {
@@ -523,7 +524,7 @@ mod tests {
                 account_metas,
             )],
             Some(transaction_context.get_key_of_account_at_index(0)),
-        );
+        ));
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -536,7 +537,7 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),
-            &[],
+            &sysvar_cache,
             Hash::default(),
             0,
             0,
@@ -587,7 +588,7 @@ mod tests {
         ];
         let mut transaction_context = TransactionContext::new(accounts, 1);
 
-        let message = Message::new(
+        let message = SanitizedMessage::Legacy(Message::new(
             &[
                 new_secp256k1_instruction(
                     &libsecp256k1::SecretKey::random(&mut rand::thread_rng()),
@@ -596,7 +597,8 @@ mod tests {
                 Instruction::new_with_bytes(mock_program_id, &[], vec![]),
             ],
             None,
-        );
+        ));
+        let sysvar_cache = SysvarCache::default();
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -609,7 +611,7 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             ComputeBudget::new(),
             &mut ExecuteTimings::default(),
-            &[],
+            &sysvar_cache,
             Hash::default(),
             0,
             0,

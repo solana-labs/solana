@@ -17,6 +17,7 @@ criterion-stats = "0.3.0"
 ctrlc = { version = "3.2.1", features = ["termination"] }
 console = "0.15.0"
 const_format = "0.2.22"
+crossbeam-channel = "0.5"
 log = "0.4.14"
 humantime = "2.0.1"
 num-traits = "0.2"
@@ -49,7 +50,7 @@ tiny-bip39 = "0.8.2"
 [dev-dependencies]
 solana-streamer = { path = "../streamer", version = "=1.10.0" }
 solana-test-validator = { path = "../test-validator", version = "=1.10.0" }
-tempfile = "3.2.0"
+tempfile = "3.3.0"
 
 [[bin]]
 name = "solana"

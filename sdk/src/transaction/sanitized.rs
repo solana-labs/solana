@@ -1,22 +1,18 @@
 #![cfg(feature = "full")]
-
 use {
     crate::{
         hash::Hash,
         message::{
-            v0::{self, LoadedAddresses},
+            v0::{self, LoadedAddresses, MessageAddressTableLookup},
             SanitizedMessage, VersionedMessage,
         },
-        nonce::NONCED_TX_MARKER_IX_INDEX,
         precompiles::verify_if_precompile,
-        program_utils::limited_deserialize,
         pubkey::Pubkey,
         sanitize::Sanitize,
         signature::Signature,
         solana_sdk::feature_set,
         transaction::{Result, Transaction, TransactionError, VersionedTransaction},
     },
-    solana_program::{system_instruction::SystemInstruction, system_program},
     std::sync::Arc,
 };
 
@@ -51,7 +47,7 @@ impl SanitizedTransaction {
         tx: VersionedTransaction,
         message_hash: Hash,
         is_simple_vote_tx: Option<bool>,
-        address_loader: impl Fn(&v0::Message) -> Result<LoadedAddresses>,
+        address_loader: impl Fn(&[MessageAddressTableLookup]) -> Result<LoadedAddresses>,
     ) -> Result<Self> {
         tx.sanitize()?;
 
@@ -59,7 +55,7 @@ impl SanitizedTransaction {
         let message = match tx.message {
             VersionedMessage::Legacy(message) => SanitizedMessage::Legacy(message),
             VersionedMessage::V0(message) => SanitizedMessage::V0(v0::LoadedMessage {
-                loaded_addresses: address_loader(&message)?,
+                loaded_addresses: address_loader(&message.address_table_lookups)?,
                 message,
             }),
         };
@@ -182,31 +178,7 @@ impl SanitizedTransaction {
 
     /// If the transaction uses a durable nonce, return the pubkey of the nonce account
     pub fn get_durable_nonce(&self, nonce_must_be_writable: bool) -> Option<&Pubkey> {
-        self.message
-            .instructions()
-            .get(NONCED_TX_MARKER_IX_INDEX as usize)
-            .filter(
-                |ix| match self.message.get_account_key(ix.program_id_index as usize) {
-                    Some(program_id) => system_program::check_id(program_id),
-                    _ => false,
-                },
-            )
-            .filter(|ix| {
-                matches!(
-                    limited_deserialize(&ix.data),
-                    Ok(SystemInstruction::AdvanceNonceAccount)
-                )
-            })
-            .and_then(|ix| {
-                ix.accounts.get(0).and_then(|idx| {
-                    let idx = *idx as usize;
-                    if nonce_must_be_writable && !self.message.is_writable(idx) {
-                        None
-                    } else {
-                        self.message.get_account_key(idx)
-                    }
-                })
-            })
+        self.message.get_durable_nonce(nonce_must_be_writable)
     }
 
     /// Return the serialized message data to sign.

@@ -8,15 +8,13 @@ use {
             TMP_BANK_SNAPSHOT_PREFIX,
         },
     },
+    crossbeam_channel::{Receiver, SendError, Sender},
     log::*,
     solana_sdk::{clock::Slot, genesis_config::ClusterType, hash::Hash},
     std::{
         fs,
         path::{Path, PathBuf},
-        sync::{
-            mpsc::{Receiver, SendError, Sender},
-            Arc, Mutex,
-        },
+        sync::{Arc, Mutex},
     },
     tempfile::TempDir,
 };

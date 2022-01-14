@@ -4,10 +4,12 @@
 #[cfg(test)]
 mod tests {
     use {
+        crossbeam_channel::unbounded,
         log::*,
         solana_core::ledger_cleanup_service::LedgerCleanupService,
         solana_ledger::{
             blockstore::{make_many_slot_shreds, Blockstore},
+            blockstore_db::BlockstoreOptions,
             get_tmp_ledger_path,
         },
         solana_measure::measure::Measure,
@@ -16,7 +18,6 @@ mod tests {
             str::FromStr,
             sync::{
                 atomic::{AtomicBool, AtomicU64, Ordering},
-                mpsc::channel,
                 Arc, Mutex, RwLock,
             },
             thread::{self, Builder, JoinHandle},
@@ -283,7 +284,8 @@ mod tests {
         solana_logger::setup_with("error,ledger_cleanup::tests=info");
 
         let ledger_path = get_tmp_ledger_path!();
-        let mut blockstore = Blockstore::open(&ledger_path).unwrap();
+        let mut blockstore =
+            Blockstore::open_with_options(&ledger_path, BlockstoreOptions::default()).unwrap();
         let config = get_benchmark_config();
         if config.no_compaction {
             blockstore.set_no_compaction(true);
@@ -307,7 +309,7 @@ mod tests {
         let num_batches = benchmark_slots / batch_size_slots;
         let num_shreds_total = benchmark_slots * shreds_per_slot;
 
-        let (sender, receiver) = channel();
+        let (sender, receiver) = unbounded();
         let exit = Arc::new(AtomicBool::new(false));
 
         let cleaner = if cleanup_service {
@@ -585,7 +587,7 @@ mod tests {
         let u1 = blockstore.storage_size().unwrap() as f64;
 
         // send signal to cleanup slots
-        let (sender, receiver) = channel();
+        let (sender, receiver) = unbounded();
         sender.send(n).unwrap();
         let mut last_purge_slot = 0;
         let highest_compact_slot = Arc::new(AtomicU64::new(0));
