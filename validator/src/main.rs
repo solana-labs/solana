@@ -1619,13 +1619,6 @@ pub fn main() {
                 .help("Allow contacting private ip addresses")
                 .hidden(true),
         )
-        .arg(
-            Arg::with_name("enable_transaction_cost_metrics_reporting")
-                .long("enable-transaction-cost-metrics-reporting")
-                .help("Enable validator to send each replayed transaction's cost metrics, \
-                       Caution should be taken as this will generate large data points.")
-                .hidden(true),
-        )
         .after_help("The default subcommand is run")
         .subcommand(
             SubCommand::with_name("exit")
@@ -2329,8 +2322,6 @@ pub fn main() {
         tpu_coalesce_ms,
         no_wait_for_vote_to_start_leader: matches.is_present("no_wait_for_vote_to_start_leader"),
         accounts_shrink_ratio,
-        enable_transaction_cost_metrics_reporting: matches
-            .is_present("enable_transaction_cost_metrics_reporting"),
         ..ValidatorConfig::default()
     };
 

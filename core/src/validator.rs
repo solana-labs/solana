@@ -165,7 +165,6 @@ pub struct ValidatorConfig {
     pub validator_exit: Arc<RwLock<Exit>>,
     pub no_wait_for_vote_to_start_leader: bool,
     pub accounts_shrink_ratio: AccountShrinkThreshold,
-    pub enable_transaction_cost_metrics_reporting: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -225,7 +224,6 @@ impl Default for ValidatorConfig {
             no_wait_for_vote_to_start_leader: true,
             accounts_shrink_ratio: AccountShrinkThreshold::default(),
             accounts_db_config: None,
-            enable_transaction_cost_metrics_reporting: false,
         }
     }
 }
@@ -865,8 +863,6 @@ impl Validator {
                 rocksdb_max_compaction_jitter: config.rocksdb_compaction_interval,
                 wait_for_vote_to_start_leader,
                 accounts_shrink_ratio: config.accounts_shrink_ratio,
-                enable_transaction_cost_metrics_reporting: config
-                    .enable_transaction_cost_metrics_reporting,
             },
             &max_slots,
             &cost_model,

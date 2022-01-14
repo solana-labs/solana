@@ -101,7 +101,6 @@ pub struct TvuConfig {
     pub rocksdb_max_compaction_jitter: Option<u64>,
     pub wait_for_vote_to_start_leader: bool,
     pub accounts_shrink_ratio: AccountShrinkThreshold,
-    pub enable_transaction_cost_metrics_reporting: bool,
 }
 
 impl Tvu {
@@ -316,15 +315,10 @@ impl Tvu {
         let (drop_bank_sender, drop_bank_receiver) = unbounded();
 
         let (tx_cost_metrics_sender, tx_cost_metrics_receiver) = unbounded();
-        let transaction_cost_metrics_sender =
-            if tvu_config.enable_transaction_cost_metrics_reporting {
-                Some(TransactionCostMetricsSender::new(
-                    cost_model.clone(),
-                    tx_cost_metrics_sender,
-                ))
-            } else {
-                None
-            };
+        let transaction_cost_metrics_sender = Some(TransactionCostMetricsSender::new(
+            cost_model.clone(),
+            tx_cost_metrics_sender,
+        ));
         let transaction_cost_metrics_service =
             TransactionCostMetricsService::new(tx_cost_metrics_receiver);
 

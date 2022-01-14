@@ -4,9 +4,7 @@ use {
     log::*,
     solana_sdk::{clock::Slot, signature::Signature, transaction::SanitizedTransaction},
     std::{
-        sync::{
-            Arc, RwLock,
-        },
+        sync::{Arc, RwLock},
         thread::{self, Builder, JoinHandle},
     },
 };
