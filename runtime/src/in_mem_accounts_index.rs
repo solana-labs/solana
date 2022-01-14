@@ -344,6 +344,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         reclaims: &mut SlotList<T>,
         previous_slot_entry_was_cached: bool,
     ) {
+        use log::*;
         // try to get it just from memory first using only a read lock
         self.get_only_in_mem(pubkey, |entry| {
             if let Some(entry) = entry {
@@ -354,6 +355,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     reclaims,
                     previous_slot_entry_was_cached,
                 );
+                if reclaims.len() > 1 {
+                    error!("2.2 reclaims: {:?}, {}, {:?}", reclaims, pubkey, other_slot);
+                }
                 Self::update_stat(&self.stats().updates_in_mem, 1);
             } else {
                 let mut m = Measure::start("entry");
@@ -416,6 +420,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             self.stats().insert_or_delete_mem(true, self.bin);
                         }
                     }
+                }
+
+                if reclaims.len() > 1 {
+                    error!("2 reclaims: {:?}, {}, {:?}", reclaims, pubkey, other_slot);
                 }
 
                 drop(map);
