@@ -260,6 +260,14 @@ impl BankingStageStats {
     }
 }
 
+#[derive(Debug, Default)]
+pub struct BatchedTransactionCostDetails {
+    pub batched_signature_cost: u64,
+    pub batched_write_lock_cost: u64,
+    pub batched_data_bytes_cost: u64,
+    pub batched_execute_cost: u64,
+}
+
 /// Stores the stage's thread handle and output receiver.
 pub struct BankingStage {
     bank_thread_hdls: Vec<JoinHandle<()>>,
@@ -974,7 +982,7 @@ impl BankingStage {
             qos_service.select_transactions_per_cost(txs.iter(), tx_costs.iter(), bank);
 
         qos_service.accumulate_estimated_transaction_costs(
-            Self::accumulate_batched_transaction_costs(
+            &Self::accumulate_batched_transaction_costs(
                 tx_costs.iter(),
                 transactions_qos_results.iter(),
             ),
@@ -1006,9 +1014,9 @@ impl BankingStage {
         drop(batch);
         unlock_time.stop();
 
-        let (units, micro_sec) = Self::accumulate_execute_units_and_time(&execute_timings);
-        qos_service.accumulate_actual_execute_units(units);
-        qos_service.accumulate_actual_execute_time(micro_sec);
+        let (cu, us) = Self::accumulate_execute_units_and_time(&execute_timings);
+        qos_service.accumulate_actual_execute_cu(cu);
+        qos_service.accumulate_actual_execute_time(us);
 
         // reports qos service stats for this batch
         qos_service.report_metrics(bank.clone());
@@ -1029,29 +1037,27 @@ impl BankingStage {
     fn accumulate_batched_transaction_costs<'a>(
         transactions_costs: impl Iterator<Item = &'a TransactionCost>,
         transaction_results: impl Iterator<Item = &'a transaction::Result<()>>,
-    ) -> (u64, u64, u64, u64) {
-        let ((signature_costs, write_lock_costs), (data_bytes_costs, execution_costs)): (
-            (Vec<_>, Vec<_>),
-            (Vec<_>, Vec<_>),
-        ) = transactions_costs
+    ) -> BatchedTransactionCostDetails {
+        let mut cost_details = BatchedTransactionCostDetails::default();
+        transactions_costs
             .zip(transaction_results)
-            .filter_map(|(cost, result)| {
+            .for_each(|(cost, result)| {
                 if result.is_ok() {
-                    Some((
-                        (cost.signature_cost, cost.write_lock_cost),
-                        (cost.data_bytes_cost, cost.execution_cost),
-                    ))
-                } else {
-                    None
+                    cost_details.batched_signature_cost = cost_details
+                        .batched_signature_cost
+                        .saturating_add(cost.signature_cost);
+                    cost_details.batched_write_lock_cost = cost_details
+                        .batched_write_lock_cost
+                        .saturating_add(cost.write_lock_cost);
+                    cost_details.batched_data_bytes_cost = cost_details
+                        .batched_data_bytes_cost
+                        .saturating_add(cost.data_bytes_cost);
+                    cost_details.batched_execute_cost = cost_details
+                        .batched_execute_cost
+                        .saturating_add(cost.execution_cost);
                 }
-            })
-            .unzip();
-        (
-            signature_costs.iter().sum(),
-            write_lock_costs.iter().sum(),
-            data_bytes_costs.iter().sum(),
-            execution_costs.iter().sum(),
-        )
+            });
+        cost_details
     }
 
     fn accumulate_execute_units_and_time(execute_timings: &ExecuteTimings) -> (u64, u64) {
@@ -3466,12 +3472,12 @@ mod tests {
         let expected_write_locks = 7;
         let expected_data_bytes = 9;
         let expected_executions = 30;
-        let (signatures, write_locks, data_bytes, executions) =
+        let cost_details =
             BankingStage::accumulate_batched_transaction_costs(tx_costs.iter(), tx_results.iter());
-        assert_eq!(expected_signatures, signatures);
-        assert_eq!(expected_write_locks, write_locks);
-        assert_eq!(expected_data_bytes, data_bytes);
-        assert_eq!(expected_executions, executions);
+        assert_eq!(expected_signatures, cost_details.batched_signature_cost);
+        assert_eq!(expected_write_locks, cost_details.batched_write_lock_cost);
+        assert_eq!(expected_data_bytes, cost_details.batched_data_bytes_cost);
+        assert_eq!(expected_executions, cost_details.batched_execute_cost);
     }
 
     #[test]

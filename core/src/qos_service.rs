@@ -3,6 +3,7 @@
 //! how transactions are included in blocks, and optimize those blocks.
 //!
 use {
+    crate::banking_stage::BatchedTransactionCostDetails,
     crossbeam_channel::{unbounded, Receiver, Sender},
     solana_measure::measure::Measure,
     solana_runtime::{
@@ -202,36 +203,33 @@ impl QosService {
             .fetch_add(count, Ordering::Relaxed);
     }
 
-    pub fn accumulate_estimated_transaction_costs(&self, units: (u64, u64, u64, u64)) {
-        let (
-            estimated_signature_units,
-            estimated_write_lock_units,
-            estimated_data_bytes_units,
-            estimated_execute_units,
-        ) = units;
+    pub fn accumulate_estimated_transaction_costs(
+        &self,
+        cost_details: &BatchedTransactionCostDetails,
+    ) {
         self.metrics
-            .estimated_signature_units
-            .fetch_add(estimated_signature_units, Ordering::Relaxed);
+            .estimated_signature_cu
+            .fetch_add(cost_details.batched_signature_cost, Ordering::Relaxed);
         self.metrics
-            .estimated_write_lock_units
-            .fetch_add(estimated_write_lock_units, Ordering::Relaxed);
+            .estimated_write_lock_cu
+            .fetch_add(cost_details.batched_write_lock_cost, Ordering::Relaxed);
         self.metrics
-            .estimated_data_bytes_units
-            .fetch_add(estimated_data_bytes_units, Ordering::Relaxed);
+            .estimated_data_bytes_cu
+            .fetch_add(cost_details.batched_data_bytes_cost, Ordering::Relaxed);
         self.metrics
-            .estimated_execute_units
-            .fetch_add(estimated_execute_units, Ordering::Relaxed);
+            .estimated_execute_cu
+            .fetch_add(cost_details.batched_execute_cost, Ordering::Relaxed);
     }
 
-    pub fn accumulate_actual_execute_units(&self, units: u64) {
+    pub fn accumulate_actual_execute_cu(&self, units: u64) {
         self.metrics
-            .actual_execute_units
+            .actual_execute_cu
             .fetch_add(units, Ordering::Relaxed);
     }
 
     pub fn accumulate_actual_execute_time(&self, micro_sec: u64) {
         self.metrics
-            .actual_execute_time
+            .actual_execute_time_us
             .fetch_add(micro_sec, Ordering::Relaxed);
     }
 
@@ -310,22 +308,22 @@ struct QosServiceMetrics {
     retried_txs_per_account_data_limit_count: AtomicU64,
 
     // accumulated estimated signature Compute Unites to be packed into block
-    estimated_signature_units: AtomicU64,
+    estimated_signature_cu: AtomicU64,
 
     // accumulated estimated write locks Compute Units to be packed into block
-    estimated_write_lock_units: AtomicU64,
+    estimated_write_lock_cu: AtomicU64,
 
     // accumulated estimated instructino data Compute Units to be packed into block
-    estimated_data_bytes_units: AtomicU64,
+    estimated_data_bytes_cu: AtomicU64,
 
     // accumulated estimated program Compute Units to be packed into block
-    estimated_execute_units: AtomicU64,
+    estimated_execute_cu: AtomicU64,
 
     // accumulated actual program Compute Units that have been packed into block
-    actual_execute_units: AtomicU64,
+    actual_execute_cu: AtomicU64,
 
     // accumulated actual program execute micro-sec that have been packed into block
-    actual_execute_time: AtomicU64,
+    actual_execute_time_us: AtomicU64,
 }
 
 impl QosServiceMetrics {
@@ -412,33 +410,33 @@ impl QosServiceMetrics {
                     i64
                 ),
                 (
-                    "estimated_signature_units",
-                    self.estimated_signature_units.swap(0, Ordering::Relaxed) as i64,
+                    "estimated_signature_cu",
+                    self.estimated_signature_cu.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
-                    "estimated_write_lock_units",
-                    self.estimated_write_lock_units.swap(0, Ordering::Relaxed) as i64,
+                    "estimated_write_lock_cu",
+                    self.estimated_write_lock_cu.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
-                    "estimated_data_bytes_units",
-                    self.estimated_data_bytes_units.swap(0, Ordering::Relaxed) as i64,
+                    "estimated_data_bytes_cu",
+                    self.estimated_data_bytes_cu.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
-                    "estimated_execute_units",
-                    self.estimated_execute_units.swap(0, Ordering::Relaxed) as i64,
+                    "estimated_execute_cu",
+                    self.estimated_execute_cu.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
-                    "actual_execute_units",
-                    self.actual_execute_units.swap(0, Ordering::Relaxed) as i64,
+                    "actual_execute_cu",
+                    self.actual_execute_cu.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
-                    "actual_execute_time",
-                    self.actual_execute_time.swap(0, Ordering::Relaxed) as i64,
+                    "actual_execute_time_us",
+                    self.actual_execute_time_us.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
             );
