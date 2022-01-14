@@ -6708,7 +6708,7 @@ impl AccountsDb {
                     accounts_data_len += stored_account.data().len() as u64;
                 }
 
-                if !rent_collector.should_collect_rent(&pubkey, &stored_account, false)
+                if !rent_collector.should_collect_rent(&pubkey, &stored_account)
                     || rent_collector.get_rent_due(&stored_account).is_exempt()
                 {
                     num_accounts_rent_exempt += 1;
