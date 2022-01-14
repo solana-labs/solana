@@ -3990,7 +3990,7 @@ impl Bank {
     }
 
     /// Load the accounts data len
-    fn load_accounts_data_len(&self) -> u64 {
+    pub(crate) fn load_accounts_data_len(&self) -> u64 {
         self.accounts_data_len.load(Acquire)
     }
 

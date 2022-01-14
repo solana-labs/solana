@@ -17,7 +17,8 @@ use {
     },
 };
 
-struct SetRootTimings {
+#[derive(Debug, Default, Copy, Clone)]
+struct SetRootMetrics {
     total_parent_banks: i64,
     total_squash_cache_ms: i64,
     total_squash_accounts_ms: i64,
@@ -31,6 +32,7 @@ struct SetRootTimings {
     prune_slots_ms: i64,
     prune_remove_ms: i64,
     dropped_banks_len: i64,
+    accounts_data_len: i64,
 }
 
 pub struct BankForks {
@@ -195,7 +197,7 @@ impl BankForks {
         root: Slot,
         accounts_background_request_sender: &AbsRequestSender,
         highest_confirmed_root: Option<Slot>,
-    ) -> (Vec<Arc<Bank>>, SetRootTimings) {
+    ) -> (Vec<Arc<Bank>>, SetRootMetrics) {
         let old_epoch = self.root_bank().epoch();
         self.root = root;
         let root_bank = self
@@ -285,6 +287,7 @@ impl BankForks {
             total_squash_cache_ms += squash_timing.squash_cache_ms as i64;
         }
         let new_tx_count = root_bank.transaction_count();
+        let accounts_data_len = root_bank.load_accounts_data_len() as i64;
         let mut prune_time = Measure::start("set_root::prune");
         let (removed_banks, prune_slots_ms, prune_remove_ms) =
             self.prune_non_rooted(root, highest_confirmed_root);
@@ -297,7 +300,7 @@ impl BankForks {
 
         (
             removed_banks,
-            SetRootTimings {
+            SetRootMetrics {
                 total_parent_banks: total_parent_banks as i64,
                 total_squash_cache_ms,
                 total_squash_accounts_ms,
@@ -311,6 +314,7 @@ impl BankForks {
                 prune_slots_ms: prune_slots_ms as i64,
                 prune_remove_ms: prune_remove_ms as i64,
                 dropped_banks_len: dropped_banks_len as i64,
+                accounts_data_len,
             },
         )
     }
@@ -381,6 +385,7 @@ impl BankForks {
             ("prune_slots_ms", set_root_metrics.prune_slots_ms, i64),
             ("prune_remove_ms", set_root_metrics.prune_remove_ms, i64),
             ("dropped_banks_len", set_root_metrics.dropped_banks_len, i64),
+            ("accounts_data_len", set_root_metrics.accounts_data_len, i64),
         );
         removed_banks
     }
