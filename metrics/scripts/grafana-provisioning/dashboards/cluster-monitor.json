@@ -23,14 +23,14 @@
       "tags": [],
       "title": "Beta",
       "type": "link",
-      "url": "https://metrics.solana.com:3000/d/monitor-beta/cluster-telemetry-beta"
+      "url": "https://internal-metrics.solana.com:3000/d/monitor-beta/cluster-telemetry-beta"
     },
     {
       "icon": "dashboard",
       "tags": [],
       "title": "Edge",
       "type": "link",
-      "url": "https://metrics.solana.com:3000/d/monitor-edge/cluster-telemetry-edge"
+      "url": "https://internal-metrics.solana.com:3000/d/monitor-edge/cluster-telemetry-edge"
     }
   ],
   "panels": [
