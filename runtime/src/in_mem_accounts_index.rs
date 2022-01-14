@@ -429,7 +429,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
                 let reclaims_now_len = reclaims.len();
                 if reclaims_now_len - reclaims_orig_len > 1 {
-                    error!("at least 2 reclaims: {:?}, {}, {:?}", reclaims, pubkey, other_slot);
+                    error!("at least 2 reclaims: {:?}, {}, {:?}", reclaims.iter().skip(reclaims_orig_len).collect::<Vec<_>>(), pubkey, other_slot);
                 }
 
                 drop(map);
@@ -469,7 +469,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             reclaims,
             previous_slot_entry_was_cached,
         );
-        if slot_list.len() > 1 {
+        if slot_list.len() == 2 {
             use log::*;
             error!("slot list: {:?}, {}", slot_list, pubkey);
         }
