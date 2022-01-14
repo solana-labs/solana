@@ -433,22 +433,22 @@ fn process_entries_with_callback(
 
 #[derive(Error, Debug)]
 pub enum BlockstoreProcessorError {
-    #[error("failed to load entries")]
+    #[error("failed to load entries, error: {0}")]
     FailedToLoadEntries(#[from] BlockstoreError),
 
     #[error("failed to load meta")]
     FailedToLoadMeta,
 
-    #[error("invalid block")]
+    #[error("invalid block error: {0}")]
     InvalidBlock(#[from] BlockError),
 
-    #[error("invalid transaction")]
+    #[error("invalid transaction error: {0}")]
     InvalidTransaction(#[from] TransactionError),
 
     #[error("no valid forks found")]
     NoValidForksFound,
 
-    #[error("invalid hard fork")]
+    #[error("invalid hard fork slot {0}")]
     InvalidHardFork(Slot),
 
     #[error("root bank with mismatched capitalization at {0}")]
