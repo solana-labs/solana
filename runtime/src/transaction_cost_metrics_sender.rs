@@ -1,10 +1,10 @@
 use {
     crate::{bank::Bank, cost_model::CostModel},
+    crossbeam_channel::{Receiver, Sender},
     log::*,
     solana_sdk::{clock::Slot, signature::Signature, transaction::SanitizedTransaction},
     std::{
         sync::{
-            mpsc::{Receiver, Sender},
             Arc, RwLock,
         },
         thread::{self, Builder, JoinHandle},
@@ -97,7 +97,7 @@ impl TransactionCostMetricsService {
                     execution_cost,
                 } => {
                     // report transaction cost details per slot|signature
-                    datapoint_info!(
+                    datapoint_trace!(
                         "transaction-cost-details",
                         ("slot", slot as i64, i64),
                         ("tx_signature", tx_signature.to_string(), String),
