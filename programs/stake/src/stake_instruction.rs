@@ -281,16 +281,16 @@ mod tests {
             account::{self, Account, AccountSharedData, WritableAccount},
             instruction::{AccountMeta, Instruction},
             keyed_account::KeyedAccount,
-            process_instruction::MockInvokeContext,
+            process_instruction::{mock_set_sysvar, MockInvokeContext},
             rent::Rent,
             stake::{
                 config as stake_config,
                 instruction::{self, LockupArgs},
                 state::{Authorized, Lockup, StakeAuthorize},
             },
-            sysvar::{stake_history::StakeHistory, Sysvar},
+            sysvar::stake_history::StakeHistory,
         },
-        std::{cell::RefCell, str::FromStr},
+        std::{cell::RefCell, rc::Rc, str::FromStr},
     };
 
     fn create_default_account() -> RefCell<AccountSharedData> {
@@ -370,9 +370,12 @@ mod tests {
                 .collect();
 
             let mut invoke_context = MockInvokeContext::new(keyed_accounts);
-            let mut data = Vec::with_capacity(sysvar::clock::Clock::size_of());
-            bincode::serialize_into(&mut data, &sysvar::clock::Clock::default()).unwrap();
-            invoke_context.sysvars = vec![(sysvar::clock::id(), data)];
+            mock_set_sysvar(
+                &mut invoke_context,
+                sysvar::clock::id(),
+                sysvar::clock::Clock::default(),
+            )
+            .unwrap();
             super::process_instruction(&Pubkey::default(), &instruction.data, &mut invoke_context)
         }
     }
@@ -1035,9 +1038,12 @@ mod tests {
         ];
 
         let mut invoke_context = MockInvokeContext::new(keyed_accounts);
-        let mut data = Vec::with_capacity(sysvar::clock::Clock::size_of());
-        bincode::serialize_into(&mut data, &sysvar::clock::Clock::default()).unwrap();
-        invoke_context.sysvars = vec![(sysvar::clock::id(), data)];
+        let clock = Clock::default();
+        let mut data = vec![];
+        bincode::serialize_into(&mut data, &clock).unwrap();
+        invoke_context
+            .sysvars
+            .push((sysvar::clock::id(), Some(Rc::new(data))));
 
         assert_eq!(
             super::process_instruction(

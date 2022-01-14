@@ -402,9 +402,8 @@ mod tests {
         bincode::serialize,
         solana_sdk::{
             account::{self, Account, AccountSharedData},
-            process_instruction::MockInvokeContext,
+            process_instruction::{mock_set_sysvar, MockInvokeContext},
             rent::Rent,
-            sysvar::Sysvar,
         },
         std::{cell::RefCell, str::FromStr},
     };
@@ -463,9 +462,12 @@ mod tests {
                 .map(|(meta, account)| KeyedAccount::new(&meta.pubkey, meta.is_signer, account))
                 .collect();
             let mut invoke_context = MockInvokeContext::new(keyed_accounts);
-            let mut data = Vec::with_capacity(sysvar::rent::Rent::size_of());
-            bincode::serialize_into(&mut data, &sysvar::rent::Rent::default()).unwrap();
-            invoke_context.sysvars = vec![(sysvar::rent::id(), data)];
+            mock_set_sysvar(
+                &mut invoke_context,
+                sysvar::rent::id(),
+                sysvar::rent::Rent::default(),
+            )
+            .unwrap();
             super::process_instruction(&Pubkey::default(), &instruction.data, &mut invoke_context)
         }
     }

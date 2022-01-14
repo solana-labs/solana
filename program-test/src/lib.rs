@@ -32,7 +32,7 @@ use {
         native_token::sol_to_lamports,
         poh_config::PohConfig,
         process_instruction::{
-            self, stable_log, BpfComputeBudget, InvokeContext, ProcessInstructionWithContext,
+            stable_log, BpfComputeBudget, InvokeContext, ProcessInstructionWithContext,
         },
         program_error::{ProgramError, ACCOUNT_BORROW_FAILED, UNSUPPORTED_SYSVAR},
         pubkey::Pubkey,
@@ -196,6 +196,24 @@ fn get_sysvar<T: Default + Sysvar + Sized + serde::de::DeserializeOwned>(
     var_addr: *mut u8,
 ) -> u64 {
     let invoke_context = get_invoke_context();
+
+    let sysvar_data = match invoke_context.get_sysvar_data(id).ok_or_else(|| {
+        ic_msg!(invoke_context, "Unable to get Sysvar {}", id);
+        UNSUPPORTED_SYSVAR
+    }) {
+        Ok(sysvar_data) => sysvar_data,
+        Err(err) => return err,
+    };
+
+    let var: T = match bincode::deserialize(&sysvar_data) {
+        Ok(sysvar_data) => sysvar_data,
+        Err(_) => return UNSUPPORTED_SYSVAR,
+    };
+
+    unsafe {
+        *(var_addr as *mut _ as *mut T) = var;
+    }
+
     if invoke_context
         .get_compute_meter()
         .try_borrow_mut()
@@ -206,13 +224,8 @@ fn get_sysvar<T: Default + Sysvar + Sized + serde::de::DeserializeOwned>(
     {
         panic!("Exceeded compute budget");
     }
-    match process_instruction::get_sysvar::<T>(invoke_context, id) {
-        Ok(sysvar_data) => unsafe {
-            *(var_addr as *mut _ as *mut T) = sysvar_data;
-            SUCCESS
-        },
-        Err(_) => UNSUPPORTED_SYSVAR,
-    }
+
+    SUCCESS
 }
 
 struct SyscallStubs {}
