@@ -1454,6 +1454,14 @@ impl ReplayStage {
             }
             Ok(vote_state) => vote_state,
         };
+        if vote_state.node_pubkey != node_keypair.pubkey() {
+            info!(
+                "Vote account node_pubkey mismatch: {} (expected: {}).  Unable to vote",
+                vote_state.node_pubkey,
+                node_keypair.pubkey()
+            );
+            return None;
+        }
         let authorized_voter_pubkey =
             if let Some(authorized_voter_pubkey) = vote_state.get_authorized_voter(bank.epoch()) {
                 authorized_voter_pubkey

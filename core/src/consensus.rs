@@ -1157,10 +1157,6 @@ impl Tower {
                 self.node_pubkey,
                 bank.slot(),
             );
-            assert_eq!(
-                self.vote_state.node_pubkey, self.node_pubkey,
-                "vote account's node_pubkey doesn't match",
-            );
         } else {
             self.initialize_root(root);
             info!(
