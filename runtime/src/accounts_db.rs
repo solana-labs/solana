@@ -3066,6 +3066,9 @@ impl AccountsDb {
         old_slots.sort_unstable();
         // old_slots.truncate(3); // artificially limit to 3 slots
                 self.combine_ancient_slots(old_slots, max_root);
+
+                let x: Vec<usize> = self.range_scan_accounts                ("dummy", &Ancestors::default(), Pubkey::default()..=
+                Pubkey::new(&[0xff; 32]), &ScanConfig::default(), |dummy, _got|{});
             }
 
     /// combine all these slots into ancient append vecs
