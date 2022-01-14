@@ -1,5 +1,5 @@
 use {
-<<<<<<< HEAD
+    itertools::Itertools,
     serde::{
         de::{Deserialize, Deserializer},
         ser::{Serialize, Serializer},
@@ -14,21 +14,6 @@ use {
         cmp::Ordering,
         collections::{hash_map::Entry, HashMap},
         iter::FromIterator,
-=======
-    itertools::Itertools,
-    serde::de::{Deserialize, Deserializer},
-    serde::ser::{Serialize, Serializer},
-    solana_sdk::{
-        account::Account, account::AccountSharedData, instruction::InstructionError, pubkey::Pubkey,
-    },
-    solana_vote_program::vote_state::VoteState,
-    std::{
-        borrow::Borrow,
-        cmp::Ordering,
-        collections::{hash_map::Entry, HashMap},
-        iter::FromIterator,
-        ops::Deref,
->>>>>>> f302774cf (implements copy-on-write for staked-nodes (#19090))
         sync::{Arc, Once, RwLock, RwLockReadGuard},
     },
 };
@@ -52,11 +37,7 @@ pub type VoteAccountsHashMap = HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>;
 
 #[derive(Debug, AbiExample)]
 pub struct VoteAccounts {
-<<<<<<< HEAD
     vote_accounts: Arc<VoteAccountsHashMap>,
-=======
-    vote_accounts: HashMap<Pubkey, (u64 /*stake*/, ArcVoteAccount)>,
->>>>>>> f302774cf (implements copy-on-write for staked-nodes (#19090))
     // Inner Arc is meant to implement copy-on-write semantics as opposed to
     // sharing mutations (hence RwLock<Arc<...>> instead of Arc<RwLock<...>>).
     staked_nodes: RwLock<
@@ -579,7 +560,6 @@ mod tests {
             }
         }
     }
-<<<<<<< HEAD
 
     // Asserts that returned vote-accounts are copy-on-write references.
     #[test]
@@ -614,6 +594,4 @@ mod tests {
             }
         }
     }
-=======
->>>>>>> f302774cf (implements copy-on-write for staked-nodes (#19090))
 }

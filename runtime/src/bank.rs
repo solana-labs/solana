@@ -5282,13 +5282,8 @@ impl Bank {
         self.stakes_cache.stakes().stake_delegations().clone()
     }
 
-<<<<<<< HEAD
-    pub fn staked_nodes(&self) -> HashMap<Pubkey, u64> {
-        self.stakes_cache.stakes().staked_nodes()
-=======
     pub fn staked_nodes(&self) -> Arc<HashMap<Pubkey, u64>> {
-        self.stakes.read().unwrap().staked_nodes()
->>>>>>> f302774cf (implements copy-on-write for staked-nodes (#19090))
+        self.stakes_cache.stakes().staked_nodes()
     }
 
     /// current vote accounts for this bank along with the stake
