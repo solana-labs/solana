@@ -302,7 +302,7 @@ impl AppendVec {
         self.map.flush()
     }
 
-    pub fn reset(&self) {
+    pub fn reset2(&self) {
         // This mutex forces append to be single threaded, but concurrent with reads
         // See UNSAFE usage in `append_ptr`
         let _lock = self.append_lock.lock().unwrap();

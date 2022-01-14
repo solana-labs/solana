@@ -699,7 +699,8 @@ impl AccountStorageEntry {
             //          **and**
             //  the append_vec has previously been completely full
             //
-            self.accounts.reset();
+            error!("resetting append_vec: {}", self.append_vec_id());
+            self.accounts.reset2();
             status = AccountStorageStatus::Available;
         }
 
@@ -708,7 +709,7 @@ impl AccountStorageEntry {
 
     pub fn recycle(&self, slot: Slot, id: AppendVecId) {
         let mut count_and_status = self.count_and_status.write().unwrap();
-        self.accounts.reset();
+        self.accounts.reset2();
         *count_and_status = (0, AccountStorageStatus::Available);
         self.slot.store(slot, Ordering::Release);
         self.id.store(id, Ordering::Release);
@@ -799,7 +800,7 @@ impl AccountStorageEntry {
             //
             // otherwise, the storage may be in flight with a store()
             //   call
-            self.accounts.reset();
+            self.accounts.reset2();
             status = AccountStorageStatus::Available;
         }
 
@@ -3217,7 +3218,8 @@ impl AccountsDb {
                                     slot
                                 );
                             }
-                            store.accounts.reset();
+                            error!("reset append_vec: {}", store.append_vec_id());
+                            store.accounts.reset2();
                             false
                         } else {
                             if created_this_slot {
