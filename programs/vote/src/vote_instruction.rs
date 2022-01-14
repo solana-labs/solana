@@ -449,7 +449,9 @@ mod tests {
     use {
         super::*,
         bincode::serialize,
-        solana_program_runtime::invoke_context::mock_process_instruction,
+        solana_program_runtime::{
+            invoke_context::mock_process_instruction, sysvar_cache::SysvarCache,
+        },
         solana_sdk::{
             account::{self, Account, AccountSharedData},
             rent::Rent,
@@ -509,14 +511,15 @@ mod tests {
             .map(|(meta, account)| (meta.is_signer, meta.is_writable, meta.pubkey, account))
             .collect();
 
+        let mut sysvar_cache = SysvarCache::default();
         let rent = Rent::default();
-        let rent_sysvar = (sysvar::rent::id(), bincode::serialize(&rent).unwrap());
+        sysvar_cache.push_entry(sysvar::rent::id(), bincode::serialize(&rent).unwrap());
         solana_program_runtime::invoke_context::mock_process_instruction_with_sysvars(
             &id(),
             Vec::new(),
             &instruction.data,
             &keyed_accounts,
-            &[rent_sysvar],
+            &sysvar_cache,
             super::process_instruction,
         )
     }

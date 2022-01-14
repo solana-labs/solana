@@ -341,8 +341,11 @@ mod tests {
         super::*,
         crate::stake_state::{Meta, StakeState},
         bincode::serialize,
-        solana_program_runtime::invoke_context::{
-            mock_process_instruction, prepare_mock_invoke_context, InvokeContext,
+        solana_program_runtime::{
+            invoke_context::{
+                mock_process_instruction, prepare_mock_invoke_context, InvokeContext,
+            },
+            sysvar_cache::SysvarCache,
         },
         solana_sdk::{
             account::{self, AccountSharedData},
@@ -354,9 +357,9 @@ mod tests {
                 instruction::{self, LockupArgs},
                 state::{Authorized, Lockup, StakeAuthorize},
             },
-            sysvar::{stake_history::StakeHistory, Sysvar},
+            sysvar::stake_history::StakeHistory,
         },
-        std::{cell::RefCell, rc::Rc, str::FromStr},
+        std::{borrow::Cow, cell::RefCell, rc::Rc, str::FromStr},
     };
 
     fn create_default_account() -> Rc<RefCell<AccountSharedData>> {
@@ -428,11 +431,13 @@ mod tests {
         let processor_account = AccountSharedData::new_ref(0, 0, &solana_sdk::native_loader::id());
         let program_indices = vec![preparation.accounts.len()];
         preparation.accounts.push((id(), processor_account));
-        let mut data = Vec::with_capacity(sysvar::clock::Clock::size_of());
-        bincode::serialize_into(&mut data, &sysvar::clock::Clock::default()).unwrap();
         let mut invoke_context = InvokeContext::new_mock(&preparation.accounts, &[]);
-        let sysvars = [(sysvar::clock::id(), data)];
-        invoke_context.sysvars = &sysvars;
+        let mut sysvar_cache = SysvarCache::default();
+        sysvar_cache.push_entry(
+            sysvar::clock::id(),
+            bincode::serialize(&Clock::default()).unwrap(),
+        );
+        invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
         invoke_context.push(
             &preparation.message,
             &preparation.message.instructions()[0],
@@ -1074,11 +1079,13 @@ mod tests {
         let processor_account = AccountSharedData::new_ref(0, 0, &solana_sdk::native_loader::id());
         let program_indices = vec![preparation.accounts.len()];
         preparation.accounts.push((id(), processor_account));
-        let mut data = Vec::with_capacity(sysvar::clock::Clock::size_of());
-        bincode::serialize_into(&mut data, &sysvar::clock::Clock::default()).unwrap();
         let mut invoke_context = InvokeContext::new_mock(&preparation.accounts, &[]);
-        let sysvars = [(sysvar::clock::id(), data)];
-        invoke_context.sysvars = &sysvars;
+        let mut sysvar_cache = SysvarCache::default();
+        sysvar_cache.push_entry(
+            sysvar::clock::id(),
+            bincode::serialize(&Clock::default()).unwrap(),
+        );
+        invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
         invoke_context
             .push(
                 &preparation.message,

@@ -2647,12 +2647,12 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallLogData<'a, 'b> {
 mod tests {
     use {
         super::*,
-        solana_program_runtime::invoke_context::InvokeContext,
+        solana_program_runtime::{invoke_context::InvokeContext, sysvar_cache::SysvarCache},
         solana_rbpf::{
             ebpf::HOST_ALIGN, memory_region::MemoryRegion, user_error::UserError, vm::Config,
         },
         solana_sdk::{bpf_loader, fee_calculator::FeeCalculator, hash::hashv},
-        std::str::FromStr,
+        std::{borrow::Cow, str::FromStr},
     };
 
     macro_rules! assert_access_violation {
@@ -3559,11 +3559,10 @@ mod tests {
                 leader_schedule_epoch: 4,
                 unix_timestamp: 5,
             };
-            let mut data = vec![];
-            bincode::serialize_into(&mut data, &src_clock).unwrap();
+            let mut sysvar_cache = SysvarCache::default();
+            sysvar_cache.push_entry(sysvar::clock::id(), bincode::serialize(&src_clock).unwrap());
             let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
-            let sysvars = [(sysvar::clock::id(), data)];
-            invoke_context.sysvars = &sysvars;
+            invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
             invoke_context
                 .push(&message, &message.instructions()[0], &[0], &[])
                 .unwrap();
@@ -3604,11 +3603,13 @@ mod tests {
                 first_normal_epoch: 3,
                 first_normal_slot: 4,
             };
-            let mut data = vec![];
-            bincode::serialize_into(&mut data, &src_epochschedule).unwrap();
+            let mut sysvar_cache = SysvarCache::default();
+            sysvar_cache.push_entry(
+                sysvar::epoch_schedule::id(),
+                bincode::serialize(&src_epochschedule).unwrap(),
+            );
             let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
-            let sysvars = [(sysvar::epoch_schedule::id(), data)];
-            invoke_context.sysvars = &sysvars;
+            invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
             invoke_context
                 .push(&message, &message.instructions()[0], &[0], &[])
                 .unwrap();
@@ -3656,11 +3657,10 @@ mod tests {
                     lamports_per_signature: 1,
                 },
             };
-            let mut data = vec![];
-            bincode::serialize_into(&mut data, &src_fees).unwrap();
+            let mut sysvar_cache = SysvarCache::default();
+            sysvar_cache.push_entry(sysvar::fees::id(), bincode::serialize(&src_fees).unwrap());
             let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
-            let sysvars = [(sysvar::fees::id(), data)];
-            invoke_context.sysvars = &sysvars;
+            invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
             invoke_context
                 .push(&message, &message.instructions()[0], &[0], &[])
                 .unwrap();
@@ -3699,11 +3699,10 @@ mod tests {
                 exemption_threshold: 2.0,
                 burn_percent: 3,
             };
-            let mut data = vec![];
-            bincode::serialize_into(&mut data, &src_rent).unwrap();
+            let mut sysvar_cache = SysvarCache::default();
+            sysvar_cache.push_entry(sysvar::rent::id(), bincode::serialize(&src_rent).unwrap());
             let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
-            let sysvars = [(sysvar::rent::id(), data)];
-            invoke_context.sysvars = &sysvars;
+            invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
             invoke_context
                 .push(&message, &message.instructions()[0], &[0], &[])
                 .unwrap();
