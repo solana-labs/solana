@@ -3149,7 +3149,7 @@ impl AccountsDb {
                     ));
                 });
                 
-                if i % 1000 == 0 {
+                if i % 1 == 0 {
                     error!(
                     "ancient_append_vec: writing to ancient append vec: slot: {}, # accts: {}, available bytes after: {}, distance to max: {}, id: {:?}, # stores: {}, # stores {}, original bytes: {}",
                     slot, accounts_this_append_vec.len(), available_bytes, max_root.saturating_sub(slot), all_storages.iter().map(|store| (store.append_vec_id(), store.accounts.capacity(), store.accounts.is_ancient())).collect::<Vec<_>>(), all_storages.len(), num_stores, original_bytes
@@ -3256,7 +3256,7 @@ impl AccountsDb {
                     .clean_dead_slot(*slot, &mut AccountsIndexRootsStats::default());
             });
         }
-                error!(
+        error!(
             "ancient_append_vec: purge_dead_slots_from_storage: first {:?}, last {:?}, len {:?}, ",
             dropped_roots_storages.first(),
             dropped_roots_storages.last(),
