@@ -457,16 +457,11 @@ mod tests {
         solana_program_runtime::{
             invoke_context::mock_process_instruction, sysvar_cache::SysvarCache,
         },
-<<<<<<< HEAD
         solana_sdk::{
             account::{self, Account, AccountSharedData},
             rent::Rent,
         },
         std::{cell::RefCell, rc::Rc, str::FromStr},
-=======
-        solana_sdk::account::{self, Account, AccountSharedData},
-        std::str::FromStr,
->>>>>>> b211f839cb (Fetch sysvars from invoke context for vote program (#22444))
     };
 
     fn create_default_account() -> Rc<RefCell<AccountSharedData>> {
@@ -522,8 +517,18 @@ mod tests {
             .collect();
 
         let mut sysvar_cache = SysvarCache::default();
-        let rent = Rent::free();
-        sysvar_cache.push_entry(sysvar::rent::id(), bincode::serialize(&rent).unwrap());
+        sysvar_cache.push_entry(
+            sysvar::rent::id(),
+            bincode::serialize(&Rent::free()).unwrap(),
+        );
+        sysvar_cache.push_entry(
+            sysvar::clock::id(),
+            bincode::serialize(&Clock::default()).unwrap(),
+        );
+        sysvar_cache.push_entry(
+            sysvar::slot_hashes::id(),
+            bincode::serialize(&SlotHashes::default()).unwrap(),
+        );
         solana_program_runtime::invoke_context::mock_process_instruction_with_sysvars(
             &id(),
             Vec::new(),
