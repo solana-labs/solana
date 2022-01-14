@@ -790,10 +790,13 @@ mod tests {
         super::*,
         crate::StoredConfirmedBlock,
         prost::Message,
-        solana_sdk::{hash::Hash, signature::Keypair, system_transaction},
+        solana_sdk::{
+            hash::Hash, message::v0::LoadedAddresses, signature::Keypair, system_transaction,
+        },
         solana_storage_proto::convert::generated,
         solana_transaction_status::{
             ConfirmedBlock, TransactionStatusMeta, TransactionWithStatusMeta,
+            VersionedConfirmedBlock,
         },
         std::convert::TryInto,
     };
@@ -815,6 +818,7 @@ mod tests {
                 pre_token_balances: Some(vec![]),
                 post_token_balances: Some(vec![]),
                 rewards: Some(vec![]),
+                loaded_addresses: LoadedAddresses::default(),
             }),
         };
         let block = ConfirmedBlock {
@@ -845,8 +849,9 @@ mod tests {
             "".to_string(),
         )
         .unwrap();
+        let expected_block: VersionedConfirmedBlock = block.into();
         if let CellData::Protobuf(protobuf_block) = deserialized {
-            assert_eq!(block, protobuf_block.try_into().unwrap());
+            assert_eq!(expected_block, protobuf_block.try_into().unwrap());
         } else {
             panic!("deserialization should produce CellData::Protobuf");
         }
@@ -861,7 +866,7 @@ mod tests {
         )
         .unwrap();
         if let CellData::Bincode(bincode_block) = deserialized {
-            let mut block = block;
+            let mut block = expected_block;
             if let Some(meta) = &mut block.transactions[0].meta {
                 meta.inner_instructions = None; // Legacy bincode implementation does not support inner_instructions
                 meta.log_messages = None; // Legacy bincode implementation does not support log_messages

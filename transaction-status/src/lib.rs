@@ -26,11 +26,11 @@ use {
         clock::{Slot, UnixTimestamp},
         commitment_config::CommitmentConfig,
         instruction::CompiledInstruction,
-        message::{Message, MessageHeader},
+        message::{v0::LoadedAddresses, Message, MessageHeader},
         pubkey::Pubkey,
         sanitize::Sanitize,
         signature::Signature,
-        transaction::{Result, Transaction, TransactionError},
+        transaction::{Result, Transaction, TransactionError, VersionedTransaction},
     },
     std::fmt,
 };
@@ -82,13 +82,13 @@ pub enum UiInstruction {
 }
 
 impl UiInstruction {
-    fn parse(instruction: &CompiledInstruction, message: &Message) -> Self {
-        let program_id = instruction.program_id(&message.account_keys);
-        if let Ok(parsed_instruction) = parse(program_id, instruction, &message.account_keys) {
+    fn parse(instruction: &CompiledInstruction, account_keys: &[Pubkey]) -> Self {
+        let program_id = instruction.program_id(account_keys);
+        if let Ok(parsed_instruction) = parse(program_id, instruction, account_keys) {
             UiInstruction::Parsed(UiParsedInstruction::Parsed(parsed_instruction))
         } else {
             UiInstruction::Parsed(UiParsedInstruction::PartiallyDecoded(
-                UiPartiallyDecodedInstruction::from(instruction, &message.account_keys),
+                UiPartiallyDecodedInstruction::from(instruction, account_keys),
             ))
         }
     }
@@ -167,7 +167,7 @@ impl UiInnerInstructions {
             instructions: inner_instructions
                 .instructions
                 .iter()
-                .map(|ix| UiInstruction::parse(ix, message))
+                .map(|ix| UiInstruction::parse(ix, &message.account_keys))
                 .collect(),
         }
     }
@@ -230,6 +230,7 @@ pub struct TransactionStatusMeta {
     pub pre_token_balances: Option<Vec<TransactionTokenBalance>>,
     pub post_token_balances: Option<Vec<TransactionTokenBalance>>,
     pub rewards: Option<Rewards>,
+    pub loaded_addresses: LoadedAddresses,
 }
 
 impl Default for TransactionStatusMeta {
@@ -244,6 +245,7 @@ impl Default for TransactionStatusMeta {
             pre_token_balances: None,
             post_token_balances: None,
             rewards: None,
+            loaded_addresses: LoadedAddresses::default(),
         }
     }
 }
@@ -397,6 +399,51 @@ pub struct ConfirmedBlock {
     pub block_height: Option<u64>,
 }
 
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct VersionedConfirmedBlock {
+    pub previous_blockhash: String,
+    pub blockhash: String,
+    pub parent_slot: Slot,
+    pub transactions: Vec<VersionedTransactionWithStatusMeta>,
+    pub rewards: Rewards,
+    pub block_time: Option<UnixTimestamp>,
+    pub block_height: Option<u64>,
+}
+
+impl VersionedConfirmedBlock {
+    /// Downgrades a versioned block into a legacy block type
+    /// if it only contains legacy transactions
+    pub fn into_legacy_block(self) -> Option<ConfirmedBlock> {
+        Some(ConfirmedBlock {
+            previous_blockhash: self.previous_blockhash,
+            blockhash: self.blockhash,
+            parent_slot: self.parent_slot,
+            transactions: self
+                .transactions
+                .into_iter()
+                .map(|tx_with_meta| tx_with_meta.into_legacy_transaction_with_meta())
+                .collect::<Option<Vec<_>>>()?,
+            rewards: self.rewards,
+            block_time: self.block_time,
+            block_height: self.block_height,
+        })
+    }
+}
+
+impl From<ConfirmedBlock> for VersionedConfirmedBlock {
+    fn from(block: ConfirmedBlock) -> Self {
+        VersionedConfirmedBlock {
+            previous_blockhash: block.previous_blockhash,
+            blockhash: block.blockhash,
+            parent_slot: block.parent_slot,
+            transactions: block.transactions.into_iter().map(|tx| tx.into()).collect(),
+            rewards: block.rewards,
+            block_time: block.block_time,
+            block_height: block.block_height,
+        }
+    }
+}
+
 impl Encodable for ConfirmedBlock {
     type Encoded = EncodedConfirmedBlock;
     fn encode(self, encoding: UiTransactionEncoding) -> Self::Encoded {
@@ -428,7 +475,7 @@ impl ConfirmedBlock {
                 Some(
                     self.transactions
                         .into_iter()
-                        .map(|tx| tx.encode(encoding))
+                        .map(|tx_with_meta| tx_with_meta.encode(encoding))
                         .collect(),
                 ),
                 None,
@@ -519,6 +566,41 @@ impl From<EncodedConfirmedBlock> for UiConfirmedBlock {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct VersionedTransactionWithStatusMeta {
+    pub transaction: VersionedTransaction,
+    pub meta: Option<TransactionStatusMeta>,
+}
+
+impl VersionedTransactionWithStatusMeta {
+    pub fn account_keys_iter(&self) -> impl Iterator<Item = &Pubkey> {
+        let static_keys_iter = self.transaction.message.static_account_keys().iter();
+        let dynamic_keys_iter = self
+            .meta
+            .iter()
+            .map(|meta| meta.loaded_addresses.ordered_iter())
+            .flatten();
+
+        static_keys_iter.chain(dynamic_keys_iter)
+    }
+
+    pub fn into_legacy_transaction_with_meta(self) -> Option<TransactionWithStatusMeta> {
+        Some(TransactionWithStatusMeta {
+            transaction: self.transaction.into_legacy_transaction()?,
+            meta: self.meta,
+        })
+    }
+}
+
+impl From<TransactionWithStatusMeta> for VersionedTransactionWithStatusMeta {
+    fn from(tx_with_meta: TransactionWithStatusMeta) -> Self {
+        Self {
+            transaction: tx_with_meta.transaction.into(),
+            meta: tx_with_meta.meta,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct TransactionWithStatusMeta {
     pub transaction: Transaction,
     pub meta: Option<TransactionStatusMeta>,
@@ -531,7 +613,7 @@ impl Encodable for TransactionWithStatusMeta {
             transaction: self.transaction.encode(encoding),
             meta: self.meta.map(|meta| match encoding {
                 UiTransactionEncoding::JsonParsed => {
-                    UiTransactionStatusMeta::parse(meta, self.transaction.message())
+                    UiTransactionStatusMeta::parse(meta, &self.transaction.message)
                 }
                 _ => UiTransactionStatusMeta::from(meta),
             }),
@@ -545,6 +627,7 @@ pub struct EncodedTransactionWithStatusMeta {
     pub transaction: EncodedTransaction,
     pub meta: Option<UiTransactionStatusMeta>,
 }
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConfirmedTransactionWithStatusMeta {
     pub slot: Slot,
@@ -560,6 +643,28 @@ impl Encodable for ConfirmedTransactionWithStatusMeta {
             transaction: self.transaction.encode(encoding),
             block_time: self.block_time,
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct VersionedConfirmedTransactionWithStatusMeta {
+    pub slot: Slot,
+    pub tx_with_meta: VersionedTransactionWithStatusMeta,
+    pub block_time: Option<UnixTimestamp>,
+}
+
+impl VersionedConfirmedTransactionWithStatusMeta {
+    /// Downgrades a versioned confirmed transaction into a legacy
+    /// confirmed transaction if it contains a legacy transaction.
+    pub fn into_legacy_confirmed_transaction(self) -> Option<ConfirmedTransactionWithStatusMeta> {
+        Some(ConfirmedTransactionWithStatusMeta {
+            transaction: TransactionWithStatusMeta {
+                transaction: self.tx_with_meta.transaction.into_legacy_transaction()?,
+                meta: self.tx_with_meta.meta,
+            },
+            block_time: self.block_time,
+            slot: self.slot,
+        })
     }
 }
 
@@ -655,7 +760,7 @@ impl Encodable for &Message {
                 instructions: self
                     .instructions
                     .iter()
-                    .map(|instruction| UiInstruction::parse(instruction, self))
+                    .map(|instruction| UiInstruction::parse(instruction, &self.account_keys))
                     .collect(),
             })
         } else {

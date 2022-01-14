@@ -957,7 +957,20 @@ impl RpcSubscriptions {
                                 if s > max_complete_transaction_status_slot.load(Ordering::SeqCst) {
                                     break;
                                 }
-                                match blockstore.get_complete_block(s, false) {
+
+                                let block_result = blockstore
+                                    .get_complete_block(s, false)
+                                    .map_err(|e| {
+                                        error!("get_complete_block error: {}", e);
+                                        RpcBlockUpdateError::BlockStoreError
+                                    })
+                                    .and_then(|versioned_block| {
+                                        versioned_block.into_legacy_block().ok_or(
+                                            RpcBlockUpdateError::UnsupportedTransactionVersion,
+                                        )
+                                    });
+
+                                match block_result {
                                     Ok(block) => {
                                         if let Some(res) = filter_block_result_txs(block, s, params)
                                         {
@@ -975,17 +988,16 @@ impl RpcSubscriptions {
                                             *w_last_unnotified_slot = s + 1;
                                         }
                                     }
-                                    Err(e) => {
+                                    Err(err) => {
                                         // we don't advance `w_last_unnotified_slot` so that
                                         // it'll retry on the next notification trigger
-                                        error!("get_complete_block error: {}", e);
                                         notifier.notify(
                                             Response {
                                                 context: RpcResponseContext { slot: s },
                                                 value: RpcBlockUpdate {
                                                     slot,
                                                     block: None,
-                                                    err: Some(RpcBlockUpdateError::BlockStoreError),
+                                                    err: Some(err),
                                                 },
                                             },
                                             subscription,
@@ -1398,8 +1410,9 @@ pub(crate) mod tests {
         let actual_resp = receiver.recv();
         let actual_resp = serde_json::from_str::<serde_json::Value>(&actual_resp).unwrap();
 
-        let block = blockstore.get_complete_block(slot, false).unwrap();
-        let block = block.configure(params.encoding, params.transaction_details, false);
+        let versioned_block = blockstore.get_complete_block(slot, false).unwrap();
+        let legacy_block = versioned_block.into_legacy_block().unwrap();
+        let block = legacy_block.configure(params.encoding, params.transaction_details, false);
         let expected_resp = RpcBlockUpdate {
             slot,
             block: Some(block),
@@ -1497,14 +1510,16 @@ pub(crate) mod tests {
         let actual_resp = serde_json::from_str::<serde_json::Value>(&actual_resp).unwrap();
 
         // make sure it filtered out the other keypairs
-        let mut block = blockstore.get_complete_block(slot, false).unwrap();
-        block.transactions.retain(|tx| {
-            tx.transaction
+        let versioned_block = blockstore.get_complete_block(slot, false).unwrap();
+        let mut legacy_block = versioned_block.into_legacy_block().unwrap();
+        legacy_block.transactions.retain(|tx_with_meta| {
+            tx_with_meta
+                .transaction
                 .message
                 .account_keys
                 .contains(&keypair1.pubkey())
         });
-        let block = block.configure(params.encoding, params.transaction_details, false);
+        let block = legacy_block.configure(params.encoding, params.transaction_details, false);
         let expected_resp = RpcBlockUpdate {
             slot,
             block: Some(block),
@@ -1594,8 +1609,9 @@ pub(crate) mod tests {
         let actual_resp = receiver.recv();
         let actual_resp = serde_json::from_str::<serde_json::Value>(&actual_resp).unwrap();
 
-        let block = blockstore.get_complete_block(slot, false).unwrap();
-        let block = block.configure(params.encoding, params.transaction_details, false);
+        let versioned_block = blockstore.get_complete_block(slot, false).unwrap();
+        let legacy_block = versioned_block.into_legacy_block().unwrap();
+        let block = legacy_block.configure(params.encoding, params.transaction_details, false);
         let expected_resp = RpcBlockUpdate {
             slot,
             block: Some(block),

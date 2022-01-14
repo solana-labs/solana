@@ -4848,6 +4848,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "solana-accountsdb-plugin-manager",
+ "solana-address-lookup-table-program",
  "solana-client",
  "solana-entry",
  "solana-frozen-abi 1.10.0",

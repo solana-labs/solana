@@ -898,8 +898,17 @@ pub fn create_random_ticks(num_ticks: u64, max_hashes_per_tick: u64, mut hash: H
 
 /// Creates the next Tick or Transaction Entry `num_hashes` after `start_hash`.
 pub fn next_entry(prev_hash: &Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Entry {
-    assert!(num_hashes > 0 || transactions.is_empty());
     let transactions = transactions.into_iter().map(Into::into).collect::<Vec<_>>();
+    next_versioned_entry(prev_hash, num_hashes, transactions)
+}
+
+/// Creates the next Tick or Transaction Entry `num_hashes` after `start_hash`.
+pub fn next_versioned_entry(
+    prev_hash: &Hash,
+    num_hashes: u64,
+    transactions: Vec<VersionedTransaction>,
+) -> Entry {
+    assert!(num_hashes > 0 || transactions.is_empty());
     Entry {
         num_hashes,
         hash: next_hash(prev_hash, num_hashes, &transactions),

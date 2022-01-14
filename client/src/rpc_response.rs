@@ -429,6 +429,9 @@ pub struct RpcInflationReward {
 pub enum RpcBlockUpdateError {
     #[error("block store error")]
     BlockStoreError,
+
+    #[error("unsupported transaction version")]
+    UnsupportedTransactionVersion,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

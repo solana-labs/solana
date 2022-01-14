@@ -4,7 +4,9 @@ use {
         parse_token::{real_number_string_trimmed, UiTokenAmount},
         StringAmount,
     },
-    solana_sdk::{deserialize_utils::default_on_eof, transaction::Result},
+    solana_sdk::{
+        deserialize_utils::default_on_eof, message::v0::LoadedAddresses, transaction::Result,
+    },
     solana_transaction_status::{
         InnerInstructions, Reward, RewardType, TransactionStatusMeta, TransactionTokenBalance,
     },
@@ -193,12 +195,14 @@ impl From<StoredTransactionStatusMeta> for TransactionStatusMeta {
                 .map(|balances| balances.into_iter().map(|balance| balance.into()).collect()),
             rewards: rewards
                 .map(|rewards| rewards.into_iter().map(|reward| reward.into()).collect()),
+            loaded_addresses: LoadedAddresses::default(),
         }
     }
 }
 
-impl From<TransactionStatusMeta> for StoredTransactionStatusMeta {
-    fn from(value: TransactionStatusMeta) -> Self {
+impl TryFrom<TransactionStatusMeta> for StoredTransactionStatusMeta {
+    type Error = bincode::Error;
+    fn try_from(value: TransactionStatusMeta) -> std::result::Result<Self, Self::Error> {
         let TransactionStatusMeta {
             status,
             fee,
@@ -209,8 +213,18 @@ impl From<TransactionStatusMeta> for StoredTransactionStatusMeta {
             pre_token_balances,
             post_token_balances,
             rewards,
+            loaded_addresses,
         } = value;
-        Self {
+
+        if !loaded_addresses.is_empty() {
+            // Deprecated bincode serialized status metadata doesn't support
+            // loaded addresses.
+            return Err(
+                bincode::ErrorKind::Custom("Bincode serialization is deprecated".into()).into(),
+            );
+        }
+
+        Ok(Self {
             status,
             fee,
             pre_balances,
@@ -223,6 +237,6 @@ impl From<TransactionStatusMeta> for StoredTransactionStatusMeta {
                 .map(|balances| balances.into_iter().map(|balance| balance.into()).collect()),
             rewards: rewards
                 .map(|rewards| rewards.into_iter().map(|reward| reward.into()).collect()),
-        }
+        })
     }
 }

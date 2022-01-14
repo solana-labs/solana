@@ -176,6 +176,14 @@ impl SanitizedTransaction {
         account_locks
     }
 
+    /// Return the list of addresses loaded from on-chain address lookup tables
+    pub fn get_loaded_addresses(&self) -> LoadedAddresses {
+        match &self.message {
+            SanitizedMessage::Legacy(_) => LoadedAddresses::default(),
+            SanitizedMessage::V0(message) => message.loaded_addresses.clone(),
+        }
+    }
+
     /// If the transaction uses a durable nonce, return the pubkey of the nonce account
     pub fn get_durable_nonce(&self, nonce_must_be_writable: bool) -> Option<&Pubkey> {
         self.message.get_durable_nonce(nonce_must_be_writable)

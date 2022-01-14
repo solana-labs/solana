@@ -1034,6 +1034,10 @@ pub(crate) mod tests {
                     commission: Some(11),
                 },
             ]),
+            loaded_addresses: LoadedAddresses {
+                writable: vec![Pubkey::new_unique()],
+                readonly: vec![Pubkey::new_unique()],
+            },
         }
     }
 
