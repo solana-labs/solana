@@ -366,8 +366,13 @@ impl Tower {
         last_voted_slot_in_bank: Option<Slot>,
     ) -> Vote {
         let vote = Vote::new(vec![slot], hash);
+<<<<<<< HEAD
         local_vote_state.process_vote_unchecked(&vote);
         let slots = if let Some(last_voted_slot_in_bank) = last_voted_slot_in_bank {
+=======
+        local_vote_state.process_vote_unchecked(vote);
+        let slots = if let Some(last_voted_slot) = last_voted_slot_in_bank {
+>>>>>>> 4ab7d6c23 (Filter out outdated slots (#22450))
             local_vote_state
                 .votes
                 .iter()
@@ -2274,7 +2279,7 @@ pub mod test {
             hash: Hash::default(),
             timestamp: None,
         };
-        local.process_vote_unchecked(&vote);
+        local.process_vote_unchecked(vote);
         assert_eq!(local.votes.len(), 1);
         let vote =
             Tower::apply_vote_and_generate_vote_diff(&mut local, 1, Hash::default(), Some(0));
@@ -2290,7 +2295,7 @@ pub mod test {
             hash: Hash::default(),
             timestamp: None,
         };
-        local.process_vote_unchecked(&vote);
+        local.process_vote_unchecked(vote);
         assert_eq!(local.votes.len(), 1);
 
         // First vote expired, so should be evicted from tower. Thus even with

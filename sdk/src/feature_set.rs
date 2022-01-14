@@ -267,6 +267,7 @@ pub mod require_rent_exempt_accounts {
     solana_sdk::declare_id!("BkFDxiJQWZXGTZaJQxH7wVEHkAmwCgSEVkrvswFfRJPD");
 }
 
+<<<<<<< HEAD
 pub mod vote_withdraw_authority_may_change_authorized_voter {
     solana_sdk::declare_id!("AVZS3ZsN4gi6Rkx2QUibYuSJG3S6QHib7xCYhG6vGJxU");
 }
@@ -293,6 +294,10 @@ pub mod disable_bpf_deprecated_load_instructions {
 
 pub mod disable_bpf_unresolved_symbols_at_runtime {
     solana_sdk::declare_id!("4yuaYAj2jGMGTh1sSmi4G2eFscsDq8qjugJXZoBN6YEa");
+=======
+pub mod filter_votes_outside_slot_hashes {
+    solana_sdk::declare_id!("3gtZPqvPpsbXZVCx6hceMfWxtsmrjMzmg8C7PLKSxS2d");
+>>>>>>> 4ab7d6c23 (Filter out outdated slots (#22450))
 }
 
 lazy_static! {
@@ -356,6 +361,7 @@ lazy_static! {
         (cap_accounts_data_len::id(), "cap the accounts data len"),
         (max_tx_account_locks::id(), "enforce max number of locked accounts per transaction"),
         (require_rent_exempt_accounts::id(), "require all new transaction accounts with data to be rent-exempt"),
+<<<<<<< HEAD
         (vote_withdraw_authority_may_change_authorized_voter::id(), "vote account withdraw authority may change the authorized voter #22521"),
         (spl_associated_token_account_v1_0_4::id(), "SPL Associated Token Account Program release version 1.0.4, tied to token 3.3.0 #22648"),
         (update_syscall_base_costs::id(), "Update syscall base costs"),
@@ -363,6 +369,9 @@ lazy_static! {
         (bank_tranaction_count_fix::id(), "Fixes Bank::transaction_count to include all committed transactions, not just successful ones"),
         (disable_bpf_deprecated_load_instructions::id(), "Disable ldabs* and ldind* BPF instructions"),
         (disable_bpf_unresolved_symbols_at_runtime::id(), "Disable reporting of unresolved BPF symbols at runtime"),
+=======
+        (filter_votes_outside_slot_hashes::id(), "filter vote slots older than the slot hashes history"),
+>>>>>>> 4ab7d6c23 (Filter out outdated slots (#22450))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
