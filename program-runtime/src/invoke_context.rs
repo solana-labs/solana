@@ -1069,25 +1069,17 @@ pub fn mock_process_instruction_with_sysvars(
     loader_id: &Pubkey,
     mut program_indices: Vec<usize>,
     instruction_data: &[u8],
-<<<<<<< HEAD
     keyed_accounts: &[(bool, bool, Pubkey, Rc<RefCell<AccountSharedData>>)],
-    sysvars: &[(Pubkey, Vec<u8>)],
-=======
-    transaction_accounts: Vec<TransactionAccount>,
-    instruction_accounts: Vec<AccountMeta>,
-    expected_result: Result<(), InstructionError>,
     sysvar_cache: &SysvarCache,
->>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
     process_instruction: ProcessInstructionWithContext,
 ) -> Result<(), InstructionError> {
     let mut preparation =
-<<<<<<< HEAD
         prepare_mock_invoke_context(&program_indices, instruction_data, keyed_accounts);
     let processor_account = AccountSharedData::new_ref(0, 0, &solana_sdk::native_loader::id());
     program_indices.insert(0, preparation.accounts.len());
     preparation.accounts.push((*loader_id, processor_account));
     let mut invoke_context = InvokeContext::new_mock(&preparation.accounts, &[]);
-    invoke_context.sysvars = sysvars;
+    invoke_context.sysvar_cache = Cow::Borrowed(sysvar_cache);
     invoke_context.push(
         &preparation.message,
         &preparation.message.instructions()[0],
@@ -1095,31 +1087,6 @@ pub fn mock_process_instruction_with_sysvars(
         &preparation.account_indices,
     )?;
     process_instruction(1, instruction_data, &mut invoke_context)
-=======
-        prepare_mock_invoke_context(transaction_accounts, instruction_accounts, &program_indices);
-    let processor_account = AccountSharedData::new(0, 0, &solana_sdk::native_loader::id());
-    preparation
-        .transaction_accounts
-        .push((*loader_id, processor_account));
-    let mut transaction_context = TransactionContext::new(
-        preparation.transaction_accounts,
-        ComputeBudget::default().max_invoke_depth.saturating_add(1),
-    );
-    let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-    invoke_context.sysvar_cache = Cow::Borrowed(sysvar_cache);
-    let result = invoke_context
-        .push(
-            &preparation.instruction_accounts,
-            &program_indices,
-            instruction_data,
-        )
-        .and_then(|_| process_instruction(1, instruction_data, &mut invoke_context));
-    invoke_context.pop().unwrap();
-    assert_eq!(result, expected_result);
-    let mut transaction_accounts = transaction_context.deconstruct_without_keys().unwrap();
-    transaction_accounts.pop();
-    transaction_accounts
->>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
 }
 
 pub fn mock_process_instruction(
@@ -1133,15 +1100,8 @@ pub fn mock_process_instruction(
         loader_id,
         program_indices,
         instruction_data,
-<<<<<<< HEAD
         keyed_accounts,
-        &[],
-=======
-        transaction_accounts,
-        instruction_accounts,
-        expected_result,
         &SysvarCache::default(),
->>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
         process_instruction,
     )
 }

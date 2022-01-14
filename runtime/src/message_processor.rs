@@ -254,11 +254,7 @@ mod tests {
             )],
             Some(&accounts[0].0),
         ));
-<<<<<<< HEAD
-
-=======
         let sysvar_cache = SysvarCache::default();
->>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -591,11 +587,7 @@ mod tests {
             ],
             None,
         ));
-<<<<<<< HEAD
-
-=======
         let sysvar_cache = SysvarCache::default();
->>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,

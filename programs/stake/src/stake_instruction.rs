@@ -341,14 +341,11 @@ mod tests {
         super::*,
         crate::stake_state::{Meta, StakeState},
         bincode::serialize,
-<<<<<<< HEAD
-        solana_program_runtime::invoke_context::{
-            mock_process_instruction, prepare_mock_invoke_context, InvokeContext,
-=======
         solana_program_runtime::{
-            invoke_context::{mock_process_instruction, mock_process_instruction_with_sysvars},
+            invoke_context::{
+                mock_process_instruction, prepare_mock_invoke_context, InvokeContext,
+            },
             sysvar_cache::SysvarCache,
->>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
         },
         solana_sdk::{
             account::{self, AccountSharedData},
@@ -362,7 +359,7 @@ mod tests {
             },
             sysvar::stake_history::StakeHistory,
         },
-        std::{cell::RefCell, rc::Rc, str::FromStr},
+        std::{borrow::Cow, cell::RefCell, rc::Rc, str::FromStr},
     };
 
     fn create_default_account() -> Rc<RefCell<AccountSharedData>> {
@@ -430,16 +427,17 @@ mod tests {
             .zip(accounts)
             .map(|(meta, account)| (meta.is_signer, meta.is_writable, meta.pubkey, account))
             .collect();
-<<<<<<< HEAD
         let mut preparation = prepare_mock_invoke_context(&[], &instruction.data, &keyed_accounts);
         let processor_account = AccountSharedData::new_ref(0, 0, &solana_sdk::native_loader::id());
         let program_indices = vec![preparation.accounts.len()];
         preparation.accounts.push((id(), processor_account));
-        let mut data = Vec::with_capacity(sysvar::clock::Clock::size_of());
-        bincode::serialize_into(&mut data, &sysvar::clock::Clock::default()).unwrap();
         let mut invoke_context = InvokeContext::new_mock(&preparation.accounts, &[]);
-        let sysvars = [(sysvar::clock::id(), data)];
-        invoke_context.sysvars = &sysvars;
+        let mut sysvar_cache = SysvarCache::default();
+        sysvar_cache.push_entry(
+            sysvar::clock::id(),
+            bincode::serialize(&Clock::default()).unwrap(),
+        );
+        invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
         invoke_context.push(
             &preparation.message,
             &preparation.message.instructions()[0],
@@ -447,21 +445,6 @@ mod tests {
             &preparation.account_indices,
         )?;
         super::process_instruction(1, &instruction.data, &mut invoke_context)
-=======
-        let mut sysvar_cache = SysvarCache::default();
-        let clock = Clock::default();
-        sysvar_cache.push_entry(sysvar::clock::id(), bincode::serialize(&clock).unwrap());
-        mock_process_instruction_with_sysvars(
-            &id(),
-            Vec::new(),
-            &instruction.data,
-            transaction_accounts,
-            instruction.accounts.clone(),
-            expected_result,
-            &sysvar_cache,
-            super::process_instruction,
-        )
->>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
     }
 
     #[test]
@@ -1087,7 +1070,6 @@ mod tests {
         );
         let custodian_account = create_default_account();
 
-<<<<<<< HEAD
         let keyed_accounts = [
             (false, false, stake_address, stake_account),
             (true, false, withdrawer, withdrawer_account),
@@ -1097,11 +1079,13 @@ mod tests {
         let processor_account = AccountSharedData::new_ref(0, 0, &solana_sdk::native_loader::id());
         let program_indices = vec![preparation.accounts.len()];
         preparation.accounts.push((id(), processor_account));
-        let mut data = Vec::with_capacity(sysvar::clock::Clock::size_of());
-        bincode::serialize_into(&mut data, &sysvar::clock::Clock::default()).unwrap();
         let mut invoke_context = InvokeContext::new_mock(&preparation.accounts, &[]);
-        let sysvars = [(sysvar::clock::id(), data)];
-        invoke_context.sysvars = &sysvars;
+        let mut sysvar_cache = SysvarCache::default();
+        sysvar_cache.push_entry(
+            sysvar::clock::id(),
+            bincode::serialize(&Clock::default()).unwrap(),
+        );
+        invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
         invoke_context
             .push(
                 &preparation.message,
@@ -1113,40 +1097,6 @@ mod tests {
         assert_eq!(
             super::process_instruction(1, &instruction.data, &mut invoke_context),
             Ok(()),
-=======
-        let mut sysvar_cache = SysvarCache::default();
-        let clock = Clock::default();
-        sysvar_cache.push_entry(sysvar::clock::id(), bincode::serialize(&clock).unwrap());
-        mock_process_instruction_with_sysvars(
-            &id(),
-            Vec::new(),
-            &instruction.data,
-            vec![
-                (stake_address, stake_account),
-                (withdrawer, withdrawer_account),
-                (custodian, custodian_account),
-            ],
-            vec![
-                AccountMeta {
-                    pubkey: stake_address,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: withdrawer,
-                    is_signer: true,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: custodian,
-                    is_signer: true,
-                    is_writable: false,
-                },
-            ],
-            Ok(()),
-            &sysvar_cache,
-            super::process_instruction,
->>>>>>> 7171c95bd (Refactor: move sysvar cache to new module)
         );
     }
 }
