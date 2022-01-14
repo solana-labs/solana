@@ -11,14 +11,11 @@ pub type AncestorsForSerialization = HashMap<Slot, usize>;
 pub struct Ancestors {
     ancestors: RollingBitField,
 }
-/*
 impl Clone for Ancestors {
     fn clone(&self) -> Self {
-        Self {
-            ancestors
-        }
+        Ancestors::from(self.ancestors.get_all())
     }
-}*/
+}
 
 impl Debug for Ancestors {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
