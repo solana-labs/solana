@@ -3461,17 +3461,12 @@ impl Bank {
             .check_hash_age(hash, max_age)
     }
 
-<<<<<<< HEAD
-    pub fn check_transaction_for_nonce(
+    fn check_message_for_nonce(
         &self,
-        tx: &SanitizedTransaction,
+        message: &SanitizedMessage,
     ) -> Option<(Pubkey, AccountSharedData)> {
-        tx.get_durable_nonce(self.feature_set.is_active(&nonce_must_be_writable::id()))
-=======
-    fn check_message_for_nonce(&self, message: &SanitizedMessage) -> Option<TransactionAccount> {
         message
             .get_durable_nonce(self.feature_set.is_active(&nonce_must_be_writable::id()))
->>>>>>> 4c577d7f8 (`Bank::get_fee_for_message` is now nonce aware)
             .and_then(|nonce_address| {
                 self.get_account_with_fixed_root(nonce_address)
                     .map(|nonce_account| (*nonce_address, nonce_account))
@@ -3484,7 +3479,7 @@ impl Bank {
     pub fn check_transaction_for_nonce(
         &self,
         tx: &SanitizedTransaction,
-    ) -> Option<TransactionAccount> {
+    ) -> Option<(Pubkey, AccountSharedData)> {
         self.check_message_for_nonce(tx.message())
     }
 

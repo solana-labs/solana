@@ -2,9 +2,6 @@ use {
     crate::{
         hash::Hash,
         instruction::{CompiledInstruction, Instruction},
-<<<<<<< HEAD
-        message::{v0::{self, LoadedAddresses}, legacy::Message as LegacyMessage, MessageHeader},
-=======
         message::{
             legacy::Message as LegacyMessage,
             v0::{self, LoadedAddresses},
@@ -12,7 +9,6 @@ use {
         },
         nonce::NONCED_TX_MARKER_IX_INDEX,
         program_utils::limited_deserialize,
->>>>>>> 4c577d7f8 (`Bank::get_fee_for_message` is now nonce aware)
         pubkey::Pubkey,
         sanitize::{Sanitize, SanitizeError},
         serialize_utils::{append_slice, append_u16, append_u8},
