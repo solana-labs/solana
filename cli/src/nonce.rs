@@ -334,9 +334,17 @@ pub fn check_nonce_account(
     match state_from_account(nonce_account)? {
         State::Initialized(ref data) => {
             if &data.blockhash != nonce_hash {
-                Err(Error::InvalidHash.into())
+                Err(Error::InvalidHash {
+                    provided: *nonce_hash,
+                    expected: data.blockhash,
+                }
+                .into())
             } else if nonce_authority != &data.authority {
-                Err(Error::InvalidAuthority.into())
+                Err(Error::InvalidAuthority {
+                    provided: *nonce_authority,
+                    expected: data.authority,
+                }
+                .into())
             } else {
                 Ok(())
             }
@@ -946,15 +954,22 @@ mod tests {
             hash(b"invalid"),
             0,
         )));
-        let invalid_hash = Account::new_data(1, &data, &system_program::ID);
+        let invalid_hash = Account::new_data(1, &data, &system_program::ID).unwrap();
         if let CliError::InvalidNonce(err) =
-            check_nonce_account(&invalid_hash.unwrap(), &nonce_pubkey, &blockhash).unwrap_err()
+            check_nonce_account(&invalid_hash, &nonce_pubkey, &blockhash).unwrap_err()
         {
-            assert_eq!(err, Error::InvalidHash,);
+            assert_eq!(
+                err,
+                Error::InvalidHash {
+                    provided: blockhash,
+                    expected: hash(b"invalid"),
+                }
+            );
         }
 
+        let new_nonce_authority = solana_sdk::pubkey::new_rand();
         let data = Versions::new_current(State::Initialized(nonce::state::Data::new(
-            solana_sdk::pubkey::new_rand(),
+            new_nonce_authority,
             blockhash,
             0,
         )));
@@ -962,7 +977,13 @@ mod tests {
         if let CliError::InvalidNonce(err) =
             check_nonce_account(&invalid_authority.unwrap(), &nonce_pubkey, &blockhash).unwrap_err()
         {
-            assert_eq!(err, Error::InvalidAuthority,);
+            assert_eq!(
+                err,
+                Error::InvalidAuthority {
+                    provided: nonce_pubkey,
+                    expected: new_nonce_authority,
+                }
+            );
         }
 
         let data = Versions::new_current(State::Uninitialized);
