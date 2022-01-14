@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import { PublicKey } from "@solana/web3.js";
 import { CacheEntry, FetchStatus } from "providers/cache";
 import {
@@ -201,6 +202,29 @@ export function AccountHeader({
           <h2 className="header-title">
             {tokenDetails?.name || "Unknown Token"}
           </h2>
+        </div>
+      </div>
+    );
+  }
+
+  if (account?.details?.space === 0) {
+    return (
+      <div className="row align-items-end">
+        <div className="col-auto">
+          <div className="avatar avatar-lg header-avatar-top">
+            <Link to={clusterPath(`/address/${account.details.pfpData?.mintAccount?.toBase58()}`)}>              
+              <img
+                src={account?.details?.pfpData?.url}
+                alt="token logo"
+                className="avatar-img rounded-circle border border-4 border-body"
+              />
+            </Link>
+
+          </div>
+        </div>
+        <div className="col mb-3 ms-n3 ms-md-n2">
+          <h6 className="header-pretitle">Details</h6>
+          <h2 className="header-title">Account</h2>
         </div>
       </div>
     );

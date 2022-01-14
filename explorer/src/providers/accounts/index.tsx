@@ -27,6 +27,7 @@ import {
 } from "validators/accounts/upgradeable-program";
 import { RewardsProvider } from "./rewards";
 import { programs, MetadataJson } from "@metaplex/js";
+import { getProfilePicture } from "@solflare-wallet/pfp"
 import getEditionInfo, { EditionInfo } from "./utils/getEditionInfo";
 export { useAccountHistory } from "./history";
 
@@ -76,6 +77,15 @@ export type ConfigProgramData = {
   parsed: ConfigAccount;
 };
 
+export type PfpData = {
+  isAvailable: boolean;
+  url: string;
+  name?: string;
+  metadata?: any;
+  tokenAccount?: PublicKey;
+  mintAccount?: PublicKey;
+}
+
 export type ProgramData =
   | UpgradeableLoaderAccountData
   | StakeProgramData
@@ -89,6 +99,7 @@ export interface Details {
   executable: boolean;
   owner: PublicKey;
   space: number;
+  pfpData?: PfpData;
   data?: ProgramData;
 }
 
@@ -288,6 +299,7 @@ async function fetchAccountInfo(
         space,
         executable: result.executable,
         owner: result.owner,
+        pfpData: await getProfilePicture(connection, pubkey),
         data,
       };
     }
