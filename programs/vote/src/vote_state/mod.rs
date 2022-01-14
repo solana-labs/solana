@@ -1,7 +1,7 @@
 //! Vote state, vote program
 //! Receive and processes votes from validators
 use {
-    crate::{authorized_voters::AuthorizedVoters, id, vote_instruction::VoteError},
+    crate::{authorized_voters::AuthorizedVoters, id, vote_error::VoteError},
     bincode::{deserialize, serialize_into, serialized_size, ErrorKind},
     log::*,
     serde_derive::{Deserialize, Serialize},
@@ -3217,5 +3217,13 @@ mod tests {
                 confirmation_count: 1,
             }]
         );
+    }
+
+    #[test]
+    fn test_minimum_balance() {
+        let rent = solana_sdk::rent::Rent::default();
+        let minimum_balance = rent.minimum_balance(VoteState::size_of());
+        // golden, may need updating when vote_state grows
+        assert!(minimum_balance as f64 / 10f64.powf(9.0) < 0.04)
     }
 }

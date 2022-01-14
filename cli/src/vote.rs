@@ -35,7 +35,8 @@ use {
         transaction::Transaction,
     },
     solana_vote_program::{
-        vote_instruction::{self, withdraw, VoteError},
+        vote_error::VoteError,
+        vote_instruction::{self, withdraw},
         vote_state::{VoteAuthorize, VoteInit, VoteState},
     },
     std::sync::Arc,

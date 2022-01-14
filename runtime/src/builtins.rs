@@ -112,7 +112,7 @@ fn genesis_builtins() -> Vec<Builtin> {
         Builtin::new(
             "vote_program",
             solana_vote_program::id(),
-            with_program_logging!(solana_vote_program::vote_instruction::process_instruction),
+            with_program_logging!(solana_vote_program::vote_processor::process_instruction),
         ),
         Builtin::new(
             "stake_program",
