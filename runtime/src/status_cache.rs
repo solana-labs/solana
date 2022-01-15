@@ -158,7 +158,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
     /// to search all blockhashes.
     pub fn get_status_any_blockhash<K: AsRef<[u8]>>(
         &self,
-        key: &K,
+        key: K,
         ancestors: &Ancestors,
     ) -> Option<(Slot, T)> {
         let mut keys = vec![];
@@ -167,7 +167,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
 
         for blockhash in keys.iter() {
             trace!("get_status_any_blockhash: trying {}", blockhash);
-            let status = self.get_status(key, blockhash, ancestors);
+            let status = self.get_status(&key, blockhash, ancestors);
             if status.is_some() {
                 return status;
             }
@@ -190,7 +190,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
     pub fn insert<K: AsRef<[u8]>>(
         &mut self,
         transaction_blockhash: &Hash,
-        key: &K,
+        key: K,
         slot: Slot,
         res: T,
     ) {
