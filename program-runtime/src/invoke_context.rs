@@ -27,7 +27,6 @@ use {
         pubkey::Pubkey,
         rent::Rent,
         saturating_add_assign,
-        sysvar::Sysvar,
     },
     std::{borrow::Cow, cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, sync::Arc},
 };
@@ -951,21 +950,9 @@ impl<'a> InvokeContext<'a> {
         &self.current_compute_budget
     }
 
-    /// Get the value of a sysvar by its id
-    pub fn get_sysvar<T: Sysvar>(&self, id: &Pubkey) -> Result<T, InstructionError> {
-        self.sysvar_cache
-            .iter()
-            .find_map(|(key, data)| {
-                if id == key {
-                    bincode::deserialize(data).ok()
-                } else {
-                    None
-                }
-            })
-            .ok_or_else(|| {
-                ic_msg!(self, "Unable to get sysvar {}", id);
-                InstructionError::UnsupportedSysvar
-            })
+    /// Get cached sysvars
+    pub fn get_sysvar_cache(&self) -> &SysvarCache {
+        &self.sysvar_cache
     }
 }
 

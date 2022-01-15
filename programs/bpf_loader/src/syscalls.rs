@@ -1,5 +1,3 @@
-#[allow(deprecated)]
-use solana_sdk::sysvar::fees::Fees;
 use {
     crate::{alloc, BpfError},
     alloc::Alloc,
@@ -21,9 +19,7 @@ use {
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_info::AccountInfo,
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
-        clock::Clock,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
-        epoch_schedule::EpochSchedule,
         feature_set::{
             blake3_syscall_enabled, disable_fees_sysvar, do_support_realloc,
             libsecp256k1_0_5_upgrade_enabled, prevent_calling_precompiles_as_programs,
@@ -38,11 +34,10 @@ use {
         precompiles::is_precompile,
         program::MAX_RETURN_DATA,
         pubkey::{Pubkey, PubkeyError, MAX_SEEDS, MAX_SEED_LEN},
-        rent::Rent,
         secp256k1_recover::{
             Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
         },
-        sysvar::{self, Sysvar, SysvarId},
+        sysvar::{Sysvar, SysvarId},
     },
     std::{
         alloc::Layout,
@@ -51,6 +46,7 @@ use {
         rc::Rc,
         slice::from_raw_parts_mut,
         str::{from_utf8, Utf8Error},
+        sync::Arc,
     },
     thiserror::Error as ThisError,
 };
@@ -1023,8 +1019,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSha256<'a, 'b> {
     }
 }
 
-fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId>(
-    id: &Pubkey,
+fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId + Clone>(
+    sysvar: Result<Arc<T>, InstructionError>,
     var_addr: u64,
     loader_id: &Pubkey,
     memory_mapping: &MemoryMapping,
@@ -1035,9 +1031,8 @@ fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId>(
         .consume(invoke_context.get_compute_budget().sysvar_base_cost + size_of::<T>() as u64)?;
     let var = translate_type_mut::<T>(memory_mapping, var_addr, loader_id)?;
 
-    *var = invoke_context
-        .get_sysvar::<T>(id)
-        .map_err(SyscallError::InstructionError)?;
+    let sysvar: Arc<T> = sysvar.map_err(SyscallError::InstructionError)?;
+    *var = T::clone(sysvar.as_ref());
 
     Ok(SUCCESS)
 }
@@ -1069,8 +1064,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetClockSysvar<'a, 'b> {
                 .map_err(SyscallError::InstructionError),
             result
         );
-        *result = get_sysvar::<Clock>(
-            &sysvar::clock::id(),
+        *result = get_sysvar(
+            invoke_context.get_sysvar_cache().get_clock(),
             var_addr,
             &loader_id,
             memory_mapping,
@@ -1105,8 +1100,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetEpochScheduleSysvar<'a, 'b> {
                 .map_err(SyscallError::InstructionError),
             result
         );
-        *result = get_sysvar::<EpochSchedule>(
-            &sysvar::epoch_schedule::id(),
+        *result = get_sysvar(
+            invoke_context.get_sysvar_cache().get_epoch_schedule(),
             var_addr,
             &loader_id,
             memory_mapping,
@@ -1142,8 +1137,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetFeesSysvar<'a, 'b> {
                 .map_err(SyscallError::InstructionError),
             result
         );
-        *result = get_sysvar::<Fees>(
-            &sysvar::fees::id(),
+        *result = get_sysvar(
+            invoke_context.get_sysvar_cache().get_fees(),
             var_addr,
             &loader_id,
             memory_mapping,
@@ -1178,8 +1173,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetRentSysvar<'a, 'b> {
                 .map_err(SyscallError::InstructionError),
             result
         );
-        *result = get_sysvar::<Rent>(
-            &sysvar::rent::id(),
+        *result = get_sysvar(
+            invoke_context.get_sysvar_cache().get_rent(),
             var_addr,
             &loader_id,
             memory_mapping,
@@ -2645,13 +2640,21 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallLogData<'a, 'b> {
 
 #[cfg(test)]
 mod tests {
+    #[allow(deprecated)]
+    use solana_sdk::sysvar::fees::Fees;
     use {
         super::*,
         solana_program_runtime::{invoke_context::InvokeContext, sysvar_cache::SysvarCache},
         solana_rbpf::{
             ebpf::HOST_ALIGN, memory_region::MemoryRegion, user_error::UserError, vm::Config,
         },
-        solana_sdk::{bpf_loader, fee_calculator::FeeCalculator, hash::hashv},
+        solana_sdk::{
+            account::AccountSharedData,
+            bpf_loader,
+            fee_calculator::FeeCalculator,
+            hash::hashv,
+            sysvar::{clock::Clock, epoch_schedule::EpochSchedule, rent::Rent},
+        },
         std::{borrow::Cow, str::FromStr},
     };
 
@@ -3559,8 +3562,10 @@ mod tests {
                 leader_schedule_epoch: 4,
                 unix_timestamp: 5,
             };
+
             let mut sysvar_cache = SysvarCache::default();
-            sysvar_cache.push_entry(sysvar::clock::id(), bincode::serialize(&src_clock).unwrap());
+            sysvar_cache.set_clock(src_clock.clone());
+
             let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
             invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
             invoke_context
@@ -3603,11 +3608,10 @@ mod tests {
                 first_normal_epoch: 3,
                 first_normal_slot: 4,
             };
+
             let mut sysvar_cache = SysvarCache::default();
-            sysvar_cache.push_entry(
-                sysvar::epoch_schedule::id(),
-                bincode::serialize(&src_epochschedule).unwrap(),
-            );
+            sysvar_cache.set_epoch_schedule(src_epochschedule);
+
             let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
             invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
             invoke_context
@@ -3657,8 +3661,10 @@ mod tests {
                     lamports_per_signature: 1,
                 },
             };
+
             let mut sysvar_cache = SysvarCache::default();
-            sysvar_cache.push_entry(sysvar::fees::id(), bincode::serialize(&src_fees).unwrap());
+            sysvar_cache.set_fees(src_fees.clone());
+
             let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
             invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
             invoke_context
@@ -3699,8 +3705,10 @@ mod tests {
                 exemption_threshold: 2.0,
                 burn_percent: 3,
             };
+
             let mut sysvar_cache = SysvarCache::default();
-            sysvar_cache.push_entry(sysvar::rent::id(), bincode::serialize(&src_rent).unwrap());
+            sysvar_cache.set_rent(src_rent);
+
             let mut invoke_context = InvokeContext::new_mock(&accounts, &[]);
             invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
             invoke_context
