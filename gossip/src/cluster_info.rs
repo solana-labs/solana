@@ -1003,6 +1003,7 @@ impl ClusterInfo {
         // TODO: When there are more than one vote evicted from the tower, only
         // one crds vote is overwritten here. Decide what to do with the rest.
         let mut num_crds_votes = 0;
+        let mut is_duplicate_vote = false;
         let self_pubkey = self.id();
         // Returns true if the tower does not contain the vote.slot.
         let should_evict_vote = |vote: &Vote| -> bool {
@@ -1019,10 +1020,20 @@ impl ClusterInfo {
                 self.time_gossip_read_lock("gossip_read_push_vote", &self.stats.push_vote_read);
             (0..MAX_LOCKOUT_HISTORY as u8)
                 .filter_map(|ix| {
+                    if is_duplicate_vote {
+                        // Stop searching if this is a duplicate vote
+                        return None;
+                    }
                     let vote = CrdsValueLabel::Vote(ix, self_pubkey);
                     let vote: &CrdsData = gossip_crds.get(&vote)?;
                     num_crds_votes += 1;
                     match &vote {
+                        CrdsData::Vote(_, vote) if vote.slot() == tower.last().copied() => {
+                            is_duplicate_vote = true;
+                            let (_, gossip_vote, _) = vote_parser::parse_vote_transaction(vote.transaction()).unwrap();
+                            error!("Duplicate vote detected for slot {:?}, tower {:?}, gossip vote_slots {:?}", tower.last().unwrap(), tower, gossip_vote.slots());
+                            None
+                        }
                         CrdsData::Vote(_, vote) if should_evict_vote(vote) => {
                             Some((vote.wallclock, ix))
                         }
@@ -1033,6 +1044,11 @@ impl ClusterInfo {
                 .min() // Boot the oldest evicted vote by wallclock.
                 .map(|(_ /*wallclock*/, ix)| ix)
         };
+        if is_duplicate_vote {
+            // Don't do anything. Perhaps in the future we can use this indicator to adopt a newer
+            // vote state from gossip.
+            return;
+        }
         let vote_index = vote_index.unwrap_or(num_crds_votes);
         if (vote_index as usize) >= MAX_LOCKOUT_HISTORY {
             let (_, vote, hash) = vote_parser::parse_vote_transaction(&vote).unwrap();
@@ -3787,6 +3803,56 @@ mod tests {
             assert!(vote_slot != 23);
             assert!(vote_slot != 5);
         }
+    }
+
+    #[test]
+    fn test_push_duplicate_vote() {
+        solana_logger::setup();
+        let mut rng = rand::thread_rng();
+        let keys = Keypair::new();
+        let contact_info = ContactInfo::new_localhost(&keys.pubkey(), 0);
+        let cluster_info = ClusterInfo::new(
+            contact_info,
+            Arc::new(Keypair::new()),
+            SocketAddrSpace::Unspecified,
+        );
+
+        // Add a vote
+        let tx = new_vote_transaction(&mut rng, vec![7, 8, 9]);
+        let tower = vec![1, 2, 3, 4, 5, 6, 7, 8, 9];
+        cluster_info.push_vote(&tower, tx.clone());
+
+        // Add a duplicate vote for the same slots
+        let dup_tx = new_vote_transaction(&mut rng, vec![7, 8, 9]);
+        cluster_info.push_vote(&tower, dup_tx);
+
+        // Make sure we only have the old tx
+        let mut cursor = Cursor::default();
+        let (labels, votes) = cluster_info.get_votes_with_labels(&mut cursor);
+        assert_eq!(votes, vec![tx.clone()]);
+        assert_eq!(labels.len(), 1);
+
+        // Add a duplicate vote for the same slot, but with a different diff
+        let dup_tx2 = new_vote_transaction(&mut rng, vec![9]);
+        cluster_info.push_vote(&tower, dup_tx2);
+
+        // Make sure we only have the original tx
+        cursor = Cursor::default();
+        let (labels, votes) = cluster_info.get_votes_with_labels(&mut cursor);
+        assert_eq!(votes, vec![tx]);
+        assert_eq!(labels.len(), 1);
+
+        // Now add a full tower of votes to make sure we don't panic
+        for i in 10..(10 + 2 * MAX_LOCKOUT_HISTORY) as u64 {
+            let lo = i.checked_sub(MAX_LOCKOUT_HISTORY as u64).unwrap_or(1);
+            let tower: Vec<u64> = (lo..i).collect();
+            let tx = new_vote_transaction(&mut rng, vec![i - 1]);
+            cluster_info.push_vote(&tower, tx);
+        }
+
+        // Should be full
+        let (_, votes) = cluster_info.get_votes_with_labels(&mut cursor);
+        assert_eq!(votes.len(), MAX_LOCKOUT_HISTORY);
     }
 
     #[test]
