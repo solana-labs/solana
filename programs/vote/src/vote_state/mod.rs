@@ -10,6 +10,7 @@ use {
         account_utils::State,
         clock::{Epoch, Slot, UnixTimestamp},
         epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
+        feature_set::{self, FeatureSet},
         hash::Hash,
         instruction::InstructionError,
         keyed_account::KeyedAccount,
@@ -813,21 +814,37 @@ pub fn authorize<S: std::hash::BuildHasher>(
     vote_authorize: VoteAuthorize,
     signers: &HashSet<Pubkey, S>,
     clock: &Clock,
+    feature_set: &FeatureSet,
 ) -> Result<(), InstructionError> {
     let mut vote_state: VoteState =
         State::<VoteStateVersions>::state(vote_account)?.convert_to_current();
 
-    // current authorized signer must say "yay"
     match vote_authorize {
         VoteAuthorize::Voter => {
+            let authorized_withdrawer_signer = if feature_set
+                .is_active(&feature_set::vote_withdraw_authority_may_change_authorized_voter::id())
+            {
+                verify_authorized_signer(&vote_state.authorized_withdrawer, signers).is_ok()
+            } else {
+                false
+            };
+
             vote_state.set_new_authorized_voter(
                 authorized,
                 clock.epoch,
                 clock.leader_schedule_epoch + 1,
-                |epoch_authorized_voter| verify_authorized_signer(&epoch_authorized_voter, signers),
+                |epoch_authorized_voter| {
+                    // current authorized withdrawer or authorized voter must say "yay"
+                    if authorized_withdrawer_signer {
+                        Ok(())
+                    } else {
+                        verify_authorized_signer(&epoch_authorized_voter, signers)
+                    }
+                },
             )?;
         }
         VoteAuthorize::Withdrawer => {
+            // current authorized withdrawer must say "yay"
             verify_authorized_signer(&vote_state.authorized_withdrawer, signers)?;
             vote_state.authorized_withdrawer = *authorized;
         }
@@ -1408,6 +1425,7 @@ mod tests {
                 leader_schedule_epoch: 2,
                 ..Clock::default()
             },
+            &FeatureSet::default(),
         );
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
@@ -1423,6 +1441,7 @@ mod tests {
                 leader_schedule_epoch: 2,
                 ..Clock::default()
             },
+            &FeatureSet::default(),
         );
         assert_eq!(res, Ok(()));
 
@@ -1438,6 +1457,7 @@ mod tests {
                 leader_schedule_epoch: 2,
                 ..Clock::default()
             },
+            &FeatureSet::default(),
         );
         assert_eq!(res, Err(VoteError::TooSoonToReauthorize.into()));
 
@@ -1460,6 +1480,7 @@ mod tests {
                 leader_schedule_epoch: 4,
                 ..Clock::default()
             },
+            &FeatureSet::default(),
         );
         assert_eq!(res, Ok(()));
 
@@ -1478,6 +1499,7 @@ mod tests {
                 leader_schedule_epoch: 4,
                 ..Clock::default()
             },
+            &FeatureSet::default(),
         );
         assert_eq!(res, Ok(()));
 
@@ -1498,6 +1520,7 @@ mod tests {
                 leader_schedule_epoch: 4,
                 ..Clock::default()
             },
+            &FeatureSet::default(),
         );
         assert_eq!(res, Ok(()));
 
@@ -1538,6 +1561,39 @@ mod tests {
             &signers,
         );
         assert_eq!(res, Ok(()));
+
+        // verify authorized_withdrawer can authorize a new authorized_voter when
+        // `feature_set::vote_withdraw_authority_may_change_authorized_voter` is enabled
+        let keyed_accounts = &[
+            KeyedAccount::new(&vote_pubkey, false, &vote_account),
+            KeyedAccount::new(&authorized_withdrawer_pubkey, true, &withdrawer_account),
+        ];
+        let another_authorized_voter_pubkey = solana_sdk::pubkey::new_rand();
+        let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
+
+        for (feature_set, expected_res) in [
+            (
+                FeatureSet::default(),
+                Err(InstructionError::MissingRequiredSignature),
+            ),
+            (FeatureSet::all_enabled(), Ok(())),
+        ]
+        .into_iter()
+        {
+            let res = authorize(
+                &keyed_accounts[0],
+                &another_authorized_voter_pubkey,
+                VoteAuthorize::Voter,
+                &signers,
+                &Clock {
+                    epoch: 4,
+                    leader_schedule_epoch: 5,
+                    ..Clock::default()
+                },
+                &feature_set,
+            );
+            assert_eq!(res, expected_res)
+        }
     }
 
     #[test]
@@ -2019,6 +2075,7 @@ mod tests {
             VoteAuthorize::Withdrawer,
             &signers,
             &Clock::default(),
+            &FeatureSet::default(),
         );
         assert_eq!(res, Ok(()));
 
