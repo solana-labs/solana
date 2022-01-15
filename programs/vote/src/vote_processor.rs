@@ -86,7 +86,14 @@ pub fn process_instruction(
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
                 invoke_context,
             )?;
-            vote_state::authorize(me, &voter_pubkey, vote_authorize, &signers, &clock)
+            vote_state::authorize(
+                me,
+                &voter_pubkey,
+                vote_authorize,
+                &signers,
+                &clock,
+                &invoke_context.feature_set,
+            )
         }
         VoteInstruction::UpdateValidatorIdentity => vote_state::update_validator_identity(
             me,
@@ -166,6 +173,7 @@ pub fn process_instruction(
                         keyed_accounts,
                         first_instruction_account + 1,
                     )?)?,
+                    &invoke_context.feature_set,
                 )
             } else {
                 Err(InstructionError::InvalidInstructionData)
