@@ -213,6 +213,7 @@ pub struct ErrorCounters {
     pub invalid_program_for_execution: usize,
     pub not_allowed_during_cluster_maintenance: usize,
     pub invalid_writable_account: usize,
+    pub invalid_rent_paying_account: usize,
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -551,7 +552,9 @@ impl<'a> LoadedAccount<'a> {
 }
 
 #[derive(Clone, Default, Debug)]
-pub struct AccountStorage(pub DashMap<Slot, SlotStores>);
+pub struct AccountStorage {
+    pub map: DashMap<Slot, SlotStores>,
+}
 
 impl AccountStorage {
     fn get_account_storage_entry(
@@ -564,7 +567,7 @@ impl AccountStorage {
     }
 
     pub fn get_slot_stores(&self, slot: Slot) -> Option<SlotStores> {
-        self.0.get(&slot).map(|result| result.value().clone())
+        self.map.get(&slot).map(|result| result.value().clone())
     }
 
     fn get_slot_storage_entries(&self, slot: Slot) -> Option<Vec<Arc<AccountStorageEntry>>> {
@@ -578,7 +581,7 @@ impl AccountStorage {
     }
 
     fn all_slots(&self) -> Vec<Slot> {
-        self.0.iter().map(|iter_item| *iter_item.key()).collect()
+        self.map.iter().map(|iter_item| *iter_item.key()).collect()
     }
 }
 
@@ -963,7 +966,7 @@ pub struct AccountsDb {
     write_cache_limit_bytes: Option<u64>,
 
     sender_bg_hasher: Option<Sender<CachedAccount>>,
-    pub read_only_accounts_cache: ReadOnlyAccountsCache,
+    read_only_accounts_cache: ReadOnlyAccountsCache,
 
     recycle_stores: RwLock<RecycleStores>,
 
@@ -3606,7 +3609,7 @@ impl AccountsDb {
                 // cleaned yet. That means this must be rpc access and not replay/banking at the
                 // very least. Note that purge shouldn't occur even for RPC as caller must hold all
                 // of ancestor slots..
-                assert!(load_hint == LoadHint::Unspecified);
+                assert_eq!(load_hint, LoadHint::Unspecified);
 
                 // Everything being assert!()-ed, let's panic!() here as it's an error condition
                 // after all....
@@ -3649,7 +3652,7 @@ impl AccountsDb {
         // Notice the subtle `?` at previous line, we bail out pretty early if missing.
 
         if self.caching_enabled && !storage_location.is_cached() {
-            let result = self.read_only_accounts_cache.load(pubkey, slot);
+            let result = self.read_only_accounts_cache.load(*pubkey, slot);
             if let Some(account) = result {
                 return Some((account, slot));
             }
@@ -3680,7 +3683,8 @@ impl AccountsDb {
             However, by the assumption for contradiction above ,  'A' has already been updated in 'S' which means '(S, A)'
             must exist in the write cache, which is a contradiction.
             */
-            self.read_only_accounts_cache.store(pubkey, slot, &account);
+            self.read_only_accounts_cache
+                .store(*pubkey, slot, account.clone());
         }
         Some((account, slot))
     }
@@ -3942,7 +3946,7 @@ impl AccountsDb {
             // However, we still want to persist the reference to the `SlotStores` behind
             // the lock, hence we clone it out, (`SlotStores` is an Arc so is cheap to clone).
             self.storage
-                .0
+                .map
                 .entry(slot)
                 .or_insert(Arc::new(RwLock::new(HashMap::new())))
                 .clone());
@@ -4093,7 +4097,7 @@ impl AccountsDb {
         let mut remove_storage_entries_elapsed = Measure::start("remove_storage_entries_elapsed");
         for remove_slot in removed_slots {
             // Remove the storage entries and collect some metrics
-            if let Some((_, slot_storages_to_be_removed)) = self.storage.0.remove(remove_slot) {
+            if let Some((_, slot_storages_to_be_removed)) = self.storage.map.remove(remove_slot) {
                 {
                     let r_slot_removed_storages = slot_storages_to_be_removed.read().unwrap();
                     total_removed_storage_entries += r_slot_removed_storages.len();
@@ -4928,7 +4932,7 @@ impl AccountsDb {
         let accounts_and_meta_to_store: Vec<_> = accounts
             .iter()
             .map(|(pubkey, account)| {
-                self.read_only_accounts_cache.remove(pubkey, slot);
+                self.read_only_accounts_cache.remove(**pubkey, slot);
                 // this is the source of Some(Account) or None.
                 // Some(Account) = store 'Account'
                 // None = store a default/empty account with 0 lamports
@@ -4997,7 +5001,7 @@ impl AccountsDb {
         let mut oldest_slot = std::u64::MAX;
         let mut total_bytes = 0;
         let mut total_alive_bytes = 0;
-        for iter_item in self.storage.0.iter() {
+        for iter_item in self.storage.map.iter() {
             let slot = iter_item.key();
             let slot_stores = iter_item.value().read().unwrap();
             total_count += slot_stores.len();
@@ -6554,7 +6558,7 @@ impl AccountsDb {
         let mut m = Measure::start("get slots");
         let slots = self
             .storage
-            .0
+            .map
             .iter()
             .map(|k| *k.key() as Slot)
             .collect::<Vec<_>>();
@@ -6577,7 +6581,7 @@ impl AccountsDb {
                                         .map(|ancestors| ancestors.contains_key(slot))
                                         .unwrap_or_default())
                             {
-                                self.storage.0.get(slot).map_or_else(
+                                self.storage.map.get(slot).map_or_else(
                                     || None,
                                     |item| {
                                         let storages = item
@@ -6704,7 +6708,7 @@ impl AccountsDb {
                     accounts_data_len += stored_account.data().len() as u64;
                 }
 
-                if !rent_collector.should_collect_rent(&pubkey, &stored_account, false)
+                if !rent_collector.should_collect_rent(&pubkey, &stored_account)
                     || rent_collector.get_rent_due(&stored_account).is_exempt()
                 {
                     num_accounts_rent_exempt += 1;
@@ -7142,7 +7146,7 @@ impl AccountsDb {
     ) {
         // store count and size for each storage
         let mut storage_size_storages_time = Measure::start("storage_size_storages");
-        for slot_stores in self.storage.0.iter() {
+        for slot_stores in self.storage.map.iter() {
             for (id, store) in slot_stores.value().read().unwrap().iter() {
                 // Should be default at this point
                 assert_eq!(store.alive_bytes(), 0);
@@ -8360,7 +8364,7 @@ pub mod tests {
         assert!(db.load_without_fixed_root(&ancestors, &key).is_none());
         assert!(db.bank_hashes.read().unwrap().get(&unrooted_slot).is_none());
         assert!(db.accounts_cache.slot_cache(unrooted_slot).is_none());
-        assert!(db.storage.0.get(&unrooted_slot).is_none());
+        assert!(db.storage.map.get(&unrooted_slot).is_none());
         assert!(db.accounts_index.get_account_read_entry(&key).is_none());
         assert!(db
             .accounts_index
@@ -8605,7 +8609,7 @@ pub mod tests {
 
         let mut append_vec_histogram = HashMap::new();
         let mut all_storages = vec![];
-        for slot_storage in accounts.storage.0.iter() {
+        for slot_storage in accounts.storage.map.iter() {
             all_storages.extend(slot_storage.read().unwrap().values().cloned())
         }
         for storage in all_storages {
@@ -8636,7 +8640,7 @@ pub mod tests {
         let account2 = AccountSharedData::new(1, DEFAULT_FILE_SIZE as usize / 2, &pubkey2);
         accounts.store_uncached(0, &[(&pubkey2, &account2)]);
         {
-            assert_eq!(accounts.storage.0.len(), 1);
+            assert_eq!(accounts.storage.map.len(), 1);
             let stores = &accounts.storage.get_slot_stores(0).unwrap();
             let r_stores = stores.read().unwrap();
             assert_eq!(r_stores.len(), 2);
@@ -8665,7 +8669,7 @@ pub mod tests {
         for _ in 0..25 {
             accounts.store_uncached(0, &[(&pubkey1, &account1)]);
             {
-                assert_eq!(accounts.storage.0.len(), 1);
+                assert_eq!(accounts.storage.map.len(), 1);
                 let stores = &accounts.storage.get_slot_stores(0).unwrap();
                 let r_stores = stores.read().unwrap();
                 assert!(r_stores.len() <= 7);
@@ -8730,7 +8734,7 @@ pub mod tests {
         //slot is gone
         accounts.print_accounts_stats("pre-clean");
         accounts.clean_accounts(None, false, None);
-        assert!(accounts.storage.0.get(&0).is_none());
+        assert!(accounts.storage.map.get(&0).is_none());
 
         //new value is there
         let ancestors = vec![(1, 1)].into_iter().collect();
@@ -13247,7 +13251,7 @@ pub mod tests {
         accounts.store_uncached(slot0, &[(&shared_key, &account)]);
 
         // fake out the store count to avoid the assert
-        for slot_stores in accounts.storage.0.iter() {
+        for slot_stores in accounts.storage.map.iter() {
             for (_id, store) in slot_stores.value().read().unwrap().iter() {
                 store.alive_bytes.store(0, Ordering::Release);
             }
@@ -13263,8 +13267,8 @@ pub mod tests {
             },
         );
         accounts.set_storage_count_and_alive_bytes(dashmap, &mut GenerateIndexTimings::default());
-        assert_eq!(accounts.storage.0.len(), 1);
-        for slot_stores in accounts.storage.0.iter() {
+        assert_eq!(accounts.storage.map.len(), 1);
+        for slot_stores in accounts.storage.map.iter() {
             for (id, store) in slot_stores.value().read().unwrap().iter() {
                 assert_eq!(id, &0);
                 assert_eq!(store.count_and_status.read().unwrap().0, 3);

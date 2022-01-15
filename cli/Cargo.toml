@@ -17,6 +17,7 @@ criterion-stats = "0.3.0"
 ctrlc = { version = "3.2.1", features = ["termination"] }
 console = "0.15.0"
 const_format = "0.2.22"
+crossbeam-channel = "0.5"
 log = "0.4.14"
 humantime = "2.0.1"
 num-traits = "0.2"

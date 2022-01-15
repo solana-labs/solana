@@ -95,6 +95,8 @@ pub struct ComputeBudget {
     /// Number of compute units per additional 32k heap above the default (~.5
     /// us per 32k at 15 units/us rounded up)
     pub heap_cost: u64,
+    /// Memory operation syscall base cost
+    pub mem_op_base_cost: u64,
 }
 impl Default for ComputeBudget {
     fn default() -> Self {
@@ -122,6 +124,7 @@ impl ComputeBudget {
             zk_token_elgamal_op_cost: 25_000,
             heap_size: None,
             heap_cost: 8,
+            mem_op_base_cost: 15,
         }
     }
     pub fn process_transaction(

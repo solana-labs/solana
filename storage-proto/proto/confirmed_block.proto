@@ -27,12 +27,20 @@ message Message {
     repeated bytes account_keys = 2;
     bytes recent_blockhash = 3;
     repeated CompiledInstruction instructions = 4;
+    bool versioned = 5;
+    repeated MessageAddressTableLookup address_table_lookups = 6;
 }
 
 message MessageHeader {
     uint32 num_required_signatures = 1;
     uint32 num_readonly_signed_accounts = 2;
     uint32 num_readonly_unsigned_accounts = 3;
+}
+
+message MessageAddressTableLookup {
+    bytes account_key = 1;
+    bytes writable_indexes = 2;
+    bytes readonly_indexes = 3;
 }
 
 message TransactionStatusMeta {
@@ -47,6 +55,8 @@ message TransactionStatusMeta {
     repeated TokenBalance pre_token_balances = 7;
     repeated TokenBalance post_token_balances = 8;
     repeated Reward rewards = 9;
+    repeated bytes loaded_writable_addresses = 12;
+    repeated bytes loaded_readonly_addresses = 13;
 }
 
 message TransactionError {

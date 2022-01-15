@@ -26,6 +26,7 @@ use {
         voting_service::VoteOp,
         window_service::DuplicateSlotReceiver,
     },
+    crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
     solana_accountsdb_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
     solana_client::rpc_response::SlotUpdate,
     solana_entry::entry::VerifyRecyclers,
@@ -50,6 +51,7 @@ use {
         bank::{Bank, NewBankOptions},
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
+        transaction_cost_metrics_sender::TransactionCostMetricsSender,
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{
@@ -67,7 +69,6 @@ use {
         result,
         sync::{
             atomic::{AtomicBool, Ordering},
-            mpsc::{Receiver, RecvTimeoutError, Sender},
             Arc, Mutex, RwLock,
         },
         thread::{self, Builder, JoinHandle},
@@ -339,6 +340,7 @@ impl ReplayStage {
         voting_sender: Sender<VoteOp>,
         drop_bank_sender: Sender<Vec<Arc<Bank>>>,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
+        transaction_cost_metrics_sender: Option<TransactionCostMetricsSender>,
     ) -> Self {
         let ReplayStageConfig {
             vote_account,
@@ -445,6 +447,7 @@ impl ReplayStage {
                         &mut duplicate_slots_to_repair,
                         &ancestor_hashes_replay_update_sender,
                         block_metadata_notifier.clone(),
+                        transaction_cost_metrics_sender.as_ref(),
                     );
                     replay_active_banks_time.stop();
 
@@ -1570,6 +1573,7 @@ impl ReplayStage {
         bank_progress: &mut ForkProgress,
         transaction_status_sender: Option<&TransactionStatusSender>,
         replay_vote_sender: &ReplayVoteSender,
+        transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
         verify_recyclers: &VerifyRecyclers,
     ) -> result::Result<usize, BlockstoreProcessorError> {
         let tx_count_before = bank_progress.replay_progress.num_txs;
@@ -1581,6 +1585,7 @@ impl ReplayStage {
             false,
             transaction_status_sender,
             Some(replay_vote_sender),
+            transaction_cost_metrics_sender,
             None,
             verify_recyclers,
             false,
@@ -2070,6 +2075,7 @@ impl ReplayStage {
         duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
         ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
+        transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
@@ -2119,6 +2125,7 @@ impl ReplayStage {
                     bank_progress,
                     transaction_status_sender,
                     replay_vote_sender,
+                    transaction_cost_metrics_sender,
                     verify_recyclers,
                 );
                 match replay_result {
@@ -3003,7 +3010,7 @@ pub mod tests {
             transaction::TransactionError,
         },
         solana_streamer::socket::SocketAddrSpace,
-        solana_transaction_status::TransactionWithStatusMeta,
+        solana_transaction_status::VersionedTransactionWithStatusMeta,
         solana_vote_program::{
             vote_state::{VoteState, VoteStateVersions},
             vote_transaction,
@@ -3011,7 +3018,7 @@ pub mod tests {
         std::{
             fs::remove_dir_all,
             iter,
-            sync::{atomic::AtomicU64, mpsc::channel, Arc, RwLock},
+            sync::{atomic::AtomicU64, Arc, RwLock},
         },
         trees::{tr, Tree},
     };
@@ -3289,7 +3296,7 @@ pub mod tests {
             .into_iter()
             .map(|slot| (slot, Hash::default()))
             .collect();
-        let (bank_drop_sender, _bank_drop_receiver) = channel();
+        let (bank_drop_sender, _bank_drop_receiver) = unbounded();
         ReplayStage::handle_new_root(
             root,
             &bank_forks,
@@ -3370,7 +3377,7 @@ pub mod tests {
         for i in 0..=root {
             progress.insert(i, ForkProgress::new(Hash::default(), None, None, 0, 0));
         }
-        let (bank_drop_sender, _bank_drop_receiver) = channel();
+        let (bank_drop_sender, _bank_drop_receiver) = unbounded();
         ReplayStage::handle_new_root(
             root,
             &bank_forks,
@@ -3652,6 +3659,7 @@ pub mod tests {
                 bank1_progress,
                 None,
                 &replay_vote_sender,
+                None,
                 &VerifyRecyclers::default(),
             );
             let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
@@ -3821,10 +3829,12 @@ pub mod tests {
     #[test]
     fn test_write_persist_transaction_status() {
         let GenesisConfigInfo {
-            genesis_config,
+            mut genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_config(1000);
+        } = create_genesis_config(solana_sdk::native_token::sol_to_lamports(1000.0));
+        genesis_config.rent.lamports_per_byte_year = 50;
+        genesis_config.rent.exemption_threshold = 2.0;
         let (ledger_path, _) = create_new_tmp_ledger!(&genesis_config);
         {
             let blockstore = Blockstore::open(&ledger_path)
@@ -3837,7 +3847,11 @@ pub mod tests {
 
             let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
             bank0
-                .transfer(4, &mint_keypair, &keypair2.pubkey())
+                .transfer(
+                    bank0.get_minimum_balance_for_rent_exemption(0),
+                    &mint_keypair,
+                    &keypair2.pubkey(),
+                )
                 .unwrap();
 
             let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
@@ -3854,7 +3868,7 @@ pub mod tests {
             let confirmed_block = blockstore.get_rooted_block(slot, false).unwrap();
             assert_eq!(confirmed_block.transactions.len(), 3);
 
-            for TransactionWithStatusMeta { transaction, meta } in
+            for VersionedTransactionWithStatusMeta { transaction, meta } in
                 confirmed_block.transactions.into_iter()
             {
                 if transaction.signatures[0] == signatures[0] {
@@ -5707,7 +5721,7 @@ pub mod tests {
         let my_vote_pubkey = my_vote_keypair[0].pubkey();
         let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
 
-        let (voting_sender, voting_receiver) = channel();
+        let (voting_sender, voting_receiver) = unbounded();
 
         // Simulate landing a vote for slot 0 landing in slot 1
         let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));

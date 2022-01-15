@@ -336,6 +336,8 @@ pub enum DbTransactionErrorCode {
     InvalidAddressLookupTableOwner,
     InvalidAddressLookupTableData,
     InvalidAddressLookupTableIndex,
+    InvalidRentPayingAccount,
+    WouldExceedMaxVoteCostLimit,
 }
 
 impl From<&TransactionError> for DbTransactionErrorCode {
@@ -362,6 +364,7 @@ impl From<&TransactionError> for DbTransactionErrorCode {
                 Self::WouldExceedMaxAccountCostLimit
             }
             TransactionError::WouldExceedMaxBlockCostLimit => Self::WouldExceedMaxBlockCostLimit,
+            TransactionError::WouldExceedMaxVoteCostLimit => Self::WouldExceedMaxVoteCostLimit,
             TransactionError::UnsupportedVersion => Self::UnsupportedVersion,
             TransactionError::InvalidWritableAccount => Self::InvalidWritableAccount,
             TransactionError::WouldExceedMaxAccountDataCostLimit => {
@@ -376,6 +379,7 @@ impl From<&TransactionError> for DbTransactionErrorCode {
             TransactionError::InvalidAddressLookupTableIndex => {
                 Self::InvalidAddressLookupTableIndex
             }
+            TransactionError::InvalidRentPayingAccount => Self::InvalidRentPayingAccount,
         }
     }
 }
@@ -1032,6 +1036,10 @@ pub(crate) mod tests {
                     commission: Some(11),
                 },
             ]),
+            loaded_addresses: LoadedAddresses {
+                writable: vec![Pubkey::new_unique()],
+                readonly: vec![Pubkey::new_unique()],
+            },
         }
     }
 

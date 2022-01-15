@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use {
     serde_json::Value,
     solana_cli::{

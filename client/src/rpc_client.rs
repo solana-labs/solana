@@ -4940,6 +4940,7 @@ mod tests {
         super::*,
         crate::{client_error::ClientErrorKind, mock_sender::PUBKEY},
         assert_matches::assert_matches,
+        crossbeam_channel::unbounded,
         jsonrpc_core::{futures::prelude::*, Error, IoHandler, Params},
         jsonrpc_http_server::{AccessControlAllowOrigin, DomainsValidation, ServerBuilder},
         serde_json::Number,
@@ -4949,7 +4950,7 @@ mod tests {
             system_transaction,
             transaction::TransactionError,
         },
-        std::{io, sync::mpsc::channel, thread},
+        std::{io, thread},
     };
 
     #[test]
@@ -4969,7 +4970,7 @@ mod tests {
     }
 
     fn _test_send() {
-        let (sender, receiver) = channel();
+        let (sender, receiver) = unbounded();
         thread::spawn(move || {
             let rpc_addr = "0.0.0.0:0".parse().unwrap();
             let mut io = IoHandler::default();

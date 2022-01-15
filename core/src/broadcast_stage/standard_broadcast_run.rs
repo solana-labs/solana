@@ -166,8 +166,8 @@ impl StandardBroadcastRun {
         receive_results: ReceiveResults,
         bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()> {
-        let (bsend, brecv) = channel();
-        let (ssend, srecv) = channel();
+        let (bsend, brecv) = unbounded();
+        let (ssend, srecv) = unbounded();
         self.process_receive_results(keypair, blockstore, &ssend, &bsend, receive_results)?;
         let srecv = Arc::new(Mutex::new(srecv));
         let brecv = Arc::new(Mutex::new(brecv));
@@ -763,8 +763,8 @@ mod test {
         let num_shreds_per_slot = 2;
         let (blockstore, genesis_config, _cluster_info, bank, leader_keypair, _socket, _bank_forks) =
             setup(num_shreds_per_slot);
-        let (bsend, brecv) = channel();
-        let (ssend, _srecv) = channel();
+        let (bsend, brecv) = unbounded();
+        let (ssend, _srecv) = unbounded();
         let mut last_tick_height = 0;
         let mut standard_broadcast_run = StandardBroadcastRun::new(0);
         let mut process_ticks = |num_ticks| {

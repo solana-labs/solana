@@ -4,7 +4,7 @@
 extern crate test;
 
 use {
-    crossbeam_channel::unbounded,
+    crossbeam_channel::{unbounded, Receiver},
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
@@ -37,7 +37,7 @@ use {
     solana_streamer::socket::SocketAddrSpace,
     std::{
         collections::VecDeque,
-        sync::{atomic::Ordering, mpsc::Receiver, Arc, RwLock},
+        sync::{atomic::Ordering, Arc, RwLock},
         time::{Duration, Instant},
     },
     test::Bencher,
@@ -169,13 +169,13 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
     let (vote_sender, vote_receiver) = unbounded();
     let mut bank = Bank::new_for_benches(&genesis_config);
     // Allow arbitrary transaction processing time for the purposes of this bench
-    bank.ns_per_slot = std::u128::MAX;
-    let bank = Arc::new(Bank::new_for_benches(&genesis_config));
+    bank.ns_per_slot = u128::MAX;
+    let bank = Arc::new(bank);
 
     // set cost tracker limits to MAX so it will not filter out TXs
     bank.write_cost_tracker()
         .unwrap()
-        .set_limits(std::u64::MAX, std::u64::MAX);
+        .set_limits(std::u64::MAX, std::u64::MAX, std::u64::MAX);
 
     debug!("threads: {} txs: {}", num_threads, txes);
 

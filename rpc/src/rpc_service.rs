@@ -11,6 +11,7 @@ use {
         },
         rpc_health::*,
     },
+    crossbeam_channel::unbounded,
     jsonrpc_core::{futures::prelude::*, MetaIoHandler},
     jsonrpc_http_server::{
         hyper, AccessControlAllowOrigin, CloseHandle, DomainsValidation, RequestMiddleware,
@@ -42,7 +43,6 @@ use {
         path::{Path, PathBuf},
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
-            mpsc::channel,
             Arc, Mutex, RwLock,
         },
         thread::{self, Builder, JoinHandle},
@@ -415,7 +415,7 @@ impl JsonRpcService {
 
         let ledger_path = ledger_path.to_path_buf();
 
-        let (close_handle_sender, close_handle_receiver) = channel();
+        let (close_handle_sender, close_handle_receiver) = unbounded();
         let thread_hdl = Builder::new()
             .name("solana-jsonrpc".to_string())
             .spawn(move || {

@@ -4,6 +4,7 @@ use {
         crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
         AppSettings, Arg, ArgMatches, SubCommand,
     },
+    crossbeam_channel::unbounded,
     dashmap::DashMap,
     itertools::Itertools,
     log::*,
@@ -72,7 +73,6 @@ use {
         str::FromStr,
         sync::{
             atomic::{AtomicBool, Ordering},
-            mpsc::channel,
             Arc, RwLock,
         },
     },
@@ -741,7 +741,7 @@ fn load_bank_forks(
         vec![non_primary_accounts_path]
     };
 
-    let (accounts_package_sender, _) = channel();
+    let (accounts_package_sender, _) = unbounded();
     bank_forks_utils::load(
         genesis_config,
         blockstore,

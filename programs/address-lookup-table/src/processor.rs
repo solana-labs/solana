@@ -15,13 +15,7 @@ use {
         keyed_account::keyed_account_at_index,
         program_utils::limited_deserialize,
         pubkey::{Pubkey, PUBKEY_BYTES},
-        slot_hashes::SlotHashes,
         system_instruction,
-        sysvar::{
-            clock::{self, Clock},
-            rent::{self, Rent},
-            slot_hashes,
-        },
     },
     std::convert::TryFrom,
 };
@@ -92,7 +86,7 @@ impl Processor {
         })?;
 
         let derivation_slot = {
-            let slot_hashes: SlotHashes = invoke_context.get_sysvar(&slot_hashes::id())?;
+            let slot_hashes = invoke_context.get_sysvar_cache().get_slot_hashes()?;
             if slot_hashes.get(&untrusted_recent_slot).is_some() {
                 Ok(untrusted_recent_slot)
             } else {
@@ -127,7 +121,7 @@ impl Processor {
         }
 
         let table_account_data_len = LOOKUP_TABLE_META_SIZE;
-        let rent: Rent = invoke_context.get_sysvar(&rent::id())?;
+        let rent = invoke_context.get_sysvar_cache().get_rent()?;
         let required_lamports = rent
             .minimum_balance(table_account_data_len)
             .max(1)
@@ -281,7 +275,7 @@ impl Processor {
             return Err(InstructionError::InvalidInstructionData);
         }
 
-        let clock: Clock = invoke_context.get_sysvar(&clock::id())?;
+        let clock = invoke_context.get_sysvar_cache().get_clock()?;
         if clock.slot != lookup_table.meta.last_extended_slot {
             lookup_table.meta.last_extended_slot = clock.slot;
             lookup_table.meta.last_extended_slot_start_index =
@@ -313,7 +307,7 @@ impl Processor {
             }
         }
 
-        let rent: Rent = invoke_context.get_sysvar(&rent::id())?;
+        let rent = invoke_context.get_sysvar_cache().get_rent()?;
         let required_lamports = rent
             .minimum_balance(new_table_data_len)
             .max(1)
@@ -367,7 +361,7 @@ impl Processor {
         let mut lookup_table_meta = lookup_table.meta;
         drop(lookup_table_account_ref);
 
-        let clock: Clock = invoke_context.get_sysvar(&clock::id())?;
+        let clock = invoke_context.get_sysvar_cache().get_clock()?;
         lookup_table_meta.deactivation_slot = clock.slot;
 
         AddressLookupTable::overwrite_meta_data(
@@ -420,8 +414,9 @@ impl Processor {
             return Err(InstructionError::IncorrectAuthority);
         }
 
-        let clock: Clock = invoke_context.get_sysvar(&clock::id())?;
-        let slot_hashes: SlotHashes = invoke_context.get_sysvar(&slot_hashes::id())?;
+        let sysvar_cache = invoke_context.get_sysvar_cache();
+        let clock = sysvar_cache.get_clock()?;
+        let slot_hashes = sysvar_cache.get_slot_hashes()?;
 
         match lookup_table.meta.status(clock.slot, &slot_hashes) {
             LookupTableStatus::Activated => {

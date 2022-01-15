@@ -5,6 +5,7 @@ use {
         cluster_info::{ClusterInfo, VALIDATOR_PORT_RANGE},
         contact_info::ContactInfo,
     },
+    crossbeam_channel::{unbounded, Sender},
     rand::{thread_rng, Rng},
     solana_client::thin_client::{create_client, ThinClient},
     solana_perf::recycler::Recycler,
@@ -19,7 +20,6 @@ use {
         net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
         sync::{
             atomic::{AtomicBool, Ordering},
-            mpsc::{channel, Sender},
             Arc, RwLock,
         },
         thread::{self, sleep, JoinHandle},
@@ -41,7 +41,7 @@ impl GossipService {
         stats_reporter_sender: Option<Sender<Box<dyn FnOnce() + Send>>>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
-        let (request_sender, request_receiver) = channel();
+        let (request_sender, request_receiver) = unbounded();
         let gossip_socket = Arc::new(gossip_socket);
         trace!(
             "GossipService: id: {}, listening on: {:?}",
@@ -58,15 +58,13 @@ impl GossipService {
             1,
             false,
         );
-        let (consume_sender, listen_receiver) = channel();
-        // https://github.com/rust-lang/rust/issues/39364#issuecomment-634545136
-        let _consume_sender = consume_sender.clone();
+        let (consume_sender, listen_receiver) = unbounded();
         let t_socket_consume = cluster_info.clone().start_socket_consume_thread(
             request_receiver,
             consume_sender,
             exit.clone(),
         );
-        let (response_sender, response_receiver) = channel();
+        let (response_sender, response_receiver) = unbounded();
         let t_listen = cluster_info.clone().listen(
             bank_forks.clone(),
             listen_receiver,
@@ -80,10 +78,6 @@ impl GossipService {
             gossip_validators,
             exit.clone(),
         );
-        // To work around:
-        // https://github.com/rust-lang/rust/issues/54267
-        // responder thread should start after response_sender.clone(). see:
-        // https://github.com/rust-lang/rust/issues/39364#issuecomment-381446873
         let t_responder = streamer::responder(
             "gossip",
             gossip_socket,

@@ -5,7 +5,7 @@ use {
         pubkey::Pubkey,
         sysvar,
     },
-    std::{collections::HashSet, convert::TryFrom, ops::Deref},
+    std::{collections::HashSet, ops::Deref},
 };
 
 /// Combination of a version #0 message and its loaded addresses
@@ -44,6 +44,30 @@ impl FromIterator<LoadedAddresses> for LoadedAddresses {
             writable: writable.into_iter().flatten().collect(),
             readonly: readonly.into_iter().flatten().collect(),
         }
+    }
+}
+
+impl LoadedAddresses {
+    /// Checks if there are no writable or readonly addresses
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Combined length of loaded writable and readonly addresses
+    pub fn len(&self) -> usize {
+        self.writable.len().saturating_add(self.readonly.len())
+    }
+
+    /// Iterate over loaded addresses in the order that they are used
+    /// as account indexes
+    pub fn ordered_iter(&self) -> impl Iterator<Item = &Pubkey> {
+        self.writable.iter().chain(self.readonly.iter())
+    }
+
+    /// Iterate over loaded addresses in the order that they are used
+    /// as account indexes
+    pub fn into_ordered_iter(self) -> impl Iterator<Item = Pubkey> {
+        self.writable.into_iter().chain(self.readonly.into_iter())
     }
 }
 

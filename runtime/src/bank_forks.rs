@@ -17,20 +17,27 @@ use {
     },
 };
 
-struct SetRootTimings {
+#[derive(Debug, Default, Copy, Clone)]
+struct SetRootMetrics {
+    timings: SetRootTimings,
     total_parent_banks: i64,
+    tx_count: i64,
+    dropped_banks_len: i64,
+    accounts_data_len: i64,
+}
+
+#[derive(Debug, Default, Copy, Clone)]
+struct SetRootTimings {
     total_squash_cache_ms: i64,
     total_squash_accounts_ms: i64,
     total_squash_accounts_index_ms: i64,
     total_squash_accounts_cache_ms: i64,
     total_squash_accounts_store_ms: i64,
     total_snapshot_ms: i64,
-    tx_count: i64,
     prune_non_rooted_ms: i64,
     drop_parent_banks_ms: i64,
     prune_slots_ms: i64,
     prune_remove_ms: i64,
-    dropped_banks_len: i64,
 }
 
 pub struct BankForks {
@@ -195,7 +202,7 @@ impl BankForks {
         root: Slot,
         accounts_background_request_sender: &AbsRequestSender,
         highest_confirmed_root: Option<Slot>,
-    ) -> (Vec<Arc<Bank>>, SetRootTimings) {
+    ) -> (Vec<Arc<Bank>>, SetRootMetrics) {
         let old_epoch = self.root_bank().epoch();
         self.root = root;
         let root_bank = self
@@ -285,6 +292,7 @@ impl BankForks {
             total_squash_cache_ms += squash_timing.squash_cache_ms as i64;
         }
         let new_tx_count = root_bank.transaction_count();
+        let accounts_data_len = root_bank.load_accounts_data_len() as i64;
         let mut prune_time = Measure::start("set_root::prune");
         let (removed_banks, prune_slots_ms, prune_remove_ms) =
             self.prune_non_rooted(root, highest_confirmed_root);
@@ -297,20 +305,23 @@ impl BankForks {
 
         (
             removed_banks,
-            SetRootTimings {
+            SetRootMetrics {
+                timings: SetRootTimings {
+                    total_squash_cache_ms,
+                    total_squash_accounts_ms,
+                    total_squash_accounts_index_ms,
+                    total_squash_accounts_cache_ms,
+                    total_squash_accounts_store_ms,
+                    total_snapshot_ms,
+                    prune_non_rooted_ms: prune_time.as_ms() as i64,
+                    drop_parent_banks_ms: drop_parent_banks_time.as_ms() as i64,
+                    prune_slots_ms: prune_slots_ms as i64,
+                    prune_remove_ms: prune_remove_ms as i64,
+                },
                 total_parent_banks: total_parent_banks as i64,
-                total_squash_cache_ms,
-                total_squash_accounts_ms,
-                total_squash_accounts_index_ms,
-                total_squash_accounts_cache_ms,
-                total_squash_accounts_store_ms,
-                total_snapshot_ms,
                 tx_count: (new_tx_count - root_tx_count) as i64,
-                prune_non_rooted_ms: prune_time.as_ms() as i64,
-                drop_parent_banks_ms: drop_parent_banks_time.as_ms() as i64,
-                prune_slots_ms: prune_slots_ms as i64,
-                prune_remove_ms: prune_remove_ms as i64,
                 dropped_banks_len: dropped_banks_len as i64,
+                accounts_data_len,
             },
         )
     }
@@ -343,44 +354,57 @@ impl BankForks {
             ("total_banks", self.banks.len(), i64),
             (
                 "total_squash_cache_ms",
-                set_root_metrics.total_squash_cache_ms,
+                set_root_metrics.timings.total_squash_cache_ms,
                 i64
             ),
             (
                 "total_squash_accounts_ms",
-                set_root_metrics.total_squash_accounts_ms,
+                set_root_metrics.timings.total_squash_accounts_ms,
                 i64
             ),
             (
                 "total_squash_accounts_index_ms",
-                set_root_metrics.total_squash_accounts_index_ms,
+                set_root_metrics.timings.total_squash_accounts_index_ms,
                 i64
             ),
             (
                 "total_squash_accounts_cache_ms",
-                set_root_metrics.total_squash_accounts_cache_ms,
+                set_root_metrics.timings.total_squash_accounts_cache_ms,
                 i64
             ),
             (
                 "total_squash_accounts_store_ms",
-                set_root_metrics.total_squash_accounts_store_ms,
+                set_root_metrics.timings.total_squash_accounts_store_ms,
                 i64
             ),
-            ("total_snapshot_ms", set_root_metrics.total_snapshot_ms, i64),
+            (
+                "total_snapshot_ms",
+                set_root_metrics.timings.total_snapshot_ms,
+                i64
+            ),
             ("tx_count", set_root_metrics.tx_count, i64),
             (
                 "prune_non_rooted_ms",
-                set_root_metrics.prune_non_rooted_ms,
+                set_root_metrics.timings.prune_non_rooted_ms,
                 i64
             ),
             (
                 "drop_parent_banks_ms",
-                set_root_metrics.drop_parent_banks_ms,
+                set_root_metrics.timings.drop_parent_banks_ms,
                 i64
             ),
-            ("prune_slots_ms", set_root_metrics.prune_slots_ms, i64),
-            ("prune_remove_ms", set_root_metrics.prune_remove_ms, i64),
+            (
+                "prune_slots_ms",
+                set_root_metrics.timings.prune_slots_ms,
+                i64
+            ),
+            (
+                "prune_remove_ms",
+                set_root_metrics.timings.prune_remove_ms,
+                i64
+            ),
             ("dropped_banks_len", set_root_metrics.dropped_banks_len, i64),
+            ("accounts_data_len", set_root_metrics.accounts_data_len, i64),
         );
         removed_banks
     }

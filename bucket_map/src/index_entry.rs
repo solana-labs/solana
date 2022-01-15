@@ -1,9 +1,11 @@
+#![allow(dead_code)]
 use {
     crate::{
         bucket::Bucket,
         bucket_storage::{BucketStorage, Uid},
         RefCount,
     },
+    modular_bitfield::prelude::*,
     solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{
         collections::hash_map::DefaultHasher,
@@ -19,38 +21,40 @@ use {
 pub struct IndexEntry {
     pub key: Pubkey, // can this be smaller if we have reduced the keys into buckets already?
     pub ref_count: RefCount, // can this be smaller? Do we ever need more than 4B refcounts?
-    // storage_offset_mask contains both storage_offset and storage_capacity_when_created_pow2
-    // see _MASK_ constants below
-    storage_offset_mask: u64, // smaller? since these are variably sized, this could get tricky. well, actually accountinfo is not variable sized...
+    storage_cap_and_offset: PackedStorage,
     // if the bucket doubled, the index can be recomputed using create_bucket_capacity_pow2
     pub num_slots: Slot, // can this be smaller? epoch size should ~ be the max len. this is the num elements in the slot list
 }
 
-/// how many bits to shift the capacity value in the mask
-const STORAGE_OFFSET_MASK_CAPACITY_SHIFT: u64 = (u64::BITS - u8::BITS) as u64;
-/// mask to use on 'storage_offset_mask' to get the 'storage_offset' portion
-const STORAGE_OFFSET_MASK_STORAGE_OFFSET: u64 = (1 << STORAGE_OFFSET_MASK_CAPACITY_SHIFT) - 1;
+/// Pack the storage offset and capacity-when-crated-pow2 fields into a single u64
+#[bitfield(bits = 64)]
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
+struct PackedStorage {
+    capacity_when_created_pow2: B8,
+    offset: B56,
+}
+
 impl IndexEntry {
     pub fn init(&mut self, pubkey: &Pubkey) {
         self.key = *pubkey;
         self.ref_count = 0;
-        self.storage_offset_mask = 0;
+        self.storage_cap_and_offset = PackedStorage::default();
         self.num_slots = 0;
     }
+
     pub fn set_storage_capacity_when_created_pow2(
         &mut self,
         storage_capacity_when_created_pow2: u8,
     ) {
-        self.storage_offset_mask = self.storage_offset()
-            | ((storage_capacity_when_created_pow2 as u64) << STORAGE_OFFSET_MASK_CAPACITY_SHIFT)
+        self.storage_cap_and_offset
+            .set_capacity_when_created_pow2(storage_capacity_when_created_pow2)
     }
 
     pub fn set_storage_offset(&mut self, storage_offset: u64) {
-        let offset_mask = storage_offset & STORAGE_OFFSET_MASK_STORAGE_OFFSET;
-        assert_eq!(storage_offset, offset_mask, "offset too large");
-        self.storage_offset_mask = ((self.storage_capacity_when_created_pow2() as u64)
-            << STORAGE_OFFSET_MASK_CAPACITY_SHIFT)
-            | offset_mask;
+        self.storage_cap_and_offset
+            .set_offset_checked(storage_offset)
+            .expect("New storage offset must fit into 7 bytes!")
     }
 
     pub fn data_bucket_from_num_slots(num_slots: Slot) -> u64 {
@@ -65,11 +69,12 @@ impl IndexEntry {
         self.ref_count
     }
 
-    fn storage_offset(&self) -> u64 {
-        self.storage_offset_mask & STORAGE_OFFSET_MASK_STORAGE_OFFSET
-    }
     fn storage_capacity_when_created_pow2(&self) -> u8 {
-        (self.storage_offset_mask >> STORAGE_OFFSET_MASK_CAPACITY_SHIFT) as u8
+        self.storage_cap_and_offset.capacity_when_created_pow2()
+    }
+
+    fn storage_offset(&self) -> u64 {
+        self.storage_cap_and_offset.offset()
     }
 
     // This function maps the original data location into an index in the current bucket storage.
@@ -93,6 +98,7 @@ impl IndexEntry {
         };
         Some((slice, self.ref_count))
     }
+
     pub fn key_uid(key: &Pubkey) -> Uid {
         let mut s = DefaultHasher::new();
         key.hash(&mut s);
@@ -109,7 +115,7 @@ mod tests {
             IndexEntry {
                 key,
                 ref_count: 0,
-                storage_offset_mask: 0,
+                storage_cap_and_offset: PackedStorage::default(),
                 num_slots: 0,
             }
         }
@@ -132,5 +138,19 @@ mod tests {
                 assert_eq!(index.storage_capacity_when_created_pow2(), pow);
             }
         }
+    }
+
+    #[test]
+    fn test_size() {
+        assert_eq!(std::mem::size_of::<PackedStorage>(), 1 + 7);
+        assert_eq!(std::mem::size_of::<IndexEntry>(), 32 + 8 + 8 + 8);
+    }
+
+    #[test]
+    #[should_panic(expected = "New storage offset must fit into 7 bytes!")]
+    fn test_set_storage_offset_value_too_large() {
+        let too_big = 1 << 56;
+        let mut index = IndexEntry::new(Pubkey::new_unique());
+        index.set_storage_offset(too_big);
     }
 }

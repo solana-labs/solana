@@ -5,6 +5,7 @@
 // set and halt the node if a mismatch is detected.
 
 use {
+    crossbeam_channel::RecvTimeoutError,
     rayon::ThreadPool,
     solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES},
     solana_measure::measure::Measure,
@@ -24,7 +25,6 @@ use {
         path::{Path, PathBuf},
         sync::{
             atomic::{AtomicBool, Ordering},
-            mpsc::RecvTimeoutError,
             Arc,
         },
         thread::{self, Builder, JoinHandle},

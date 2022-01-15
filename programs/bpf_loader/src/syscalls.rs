@@ -20,14 +20,13 @@ use {
         account::{ReadableAccount, WritableAccount},
         account_info::AccountInfo,
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
-        clock::Clock,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
-        epoch_schedule::EpochSchedule,
         feature_set::{
             self, blake3_syscall_enabled, disable_fees_sysvar, do_support_realloc,
             fixed_memcpy_nonoverlapping_check, libsecp256k1_0_5_upgrade_enabled,
             prevent_calling_precompiles_as_programs, return_data_syscall_enabled,
             secp256k1_recover_syscall_enabled, sol_log_data_syscall_enabled,
+            update_syscall_base_costs,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{AccountMeta, Instruction, InstructionError},
@@ -36,20 +35,20 @@ use {
         program::MAX_RETURN_DATA,
         program_stubs::is_nonoverlapping,
         pubkey::{Pubkey, PubkeyError, MAX_SEEDS, MAX_SEED_LEN},
-        rent::Rent,
         secp256k1_recover::{
             Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
         },
-        sysvar::{self, fees::Fees, Sysvar, SysvarId},
+        sysvar::{Sysvar, SysvarId},
         transaction_context::InstructionAccount,
     },
     std::{
         alloc::Layout,
-        cell::{RefCell, RefMut},
+        cell::{Ref, RefCell, RefMut},
         mem::{align_of, size_of},
         rc::Rc,
         slice::from_raw_parts_mut,
         str::{from_utf8, Utf8Error},
+        sync::Arc,
     },
     thiserror::Error as ThisError,
 };
@@ -619,8 +618,12 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallPanic<'a, 'b> {
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
-        question_mark!(invoke_context.get_compute_meter().consume(len), result);
-
+        if !invoke_context
+            .feature_set
+            .is_active(&update_syscall_base_costs::id())
+        {
+            question_mark!(invoke_context.get_compute_meter().consume(len), result);
+        }
         let loader_id = question_mark!(
             invoke_context
                 .transaction_context
@@ -659,7 +662,18 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallLog<'a, 'b> {
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
-        question_mark!(invoke_context.get_compute_meter().consume(len), result);
+        let cost = if invoke_context
+            .feature_set
+            .is_active(&update_syscall_base_costs::id())
+        {
+            invoke_context
+                .get_compute_budget()
+                .syscall_base_cost
+                .max(len)
+        } else {
+            len
+        };
+        question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
         let loader_id = question_mark!(
             invoke_context
@@ -741,7 +755,15 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallLogBpfComputeUnits<'a, 'b> {
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
-        question_mark!(invoke_context.get_compute_meter().consume(0), result);
+        let cost = if invoke_context
+            .feature_set
+            .is_active(&update_syscall_base_costs::id())
+        {
+            invoke_context.get_compute_budget().syscall_base_cost
+        } else {
+            0
+        };
+        question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
         ic_logger_msg!(
             invoke_context.get_log_collector(),
@@ -1022,9 +1044,11 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSha256<'a, 'b> {
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
-        let base_cost = invoke_context.get_compute_budget().sha256_base_cost;
+        let compute_budget = invoke_context.get_compute_budget();
         question_mark!(
-            invoke_context.get_compute_meter().consume(base_cost),
+            invoke_context
+                .get_compute_meter()
+                .consume(compute_budget.sha256_base_cost),
             result
         );
 
@@ -1055,13 +1079,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSha256<'a, 'b> {
                     ),
                     result
                 );
-                let byte_cost = invoke_context.get_compute_budget().sha256_byte_cost;
-                question_mark!(
-                    invoke_context
-                        .get_compute_meter()
-                        .consume(byte_cost * (val.len() as u64 / 2)),
-                    result
-                );
+                let cost = compute_budget.sha256_byte_cost * (val.len() as u64 / 2);
+                question_mark!(invoke_context.get_compute_meter().consume(cost), result);
                 hasher.hash(bytes);
             }
         }
@@ -1070,8 +1089,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallSha256<'a, 'b> {
     }
 }
 
-fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId>(
-    id: &Pubkey,
+fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId + Clone>(
+    sysvar: Result<Arc<T>, InstructionError>,
     var_addr: u64,
     loader_id: &Pubkey,
     memory_mapping: &MemoryMapping,
@@ -1082,9 +1101,8 @@ fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId>(
         .consume(invoke_context.get_compute_budget().sysvar_base_cost + size_of::<T>() as u64)?;
     let var = translate_type_mut::<T>(memory_mapping, var_addr, loader_id)?;
 
-    *var = invoke_context
-        .get_sysvar::<T>(id)
-        .map_err(SyscallError::InstructionError)?;
+    let sysvar: Arc<T> = sysvar.map_err(SyscallError::InstructionError)?;
+    *var = T::clone(sysvar.as_ref());
 
     Ok(SUCCESS)
 }
@@ -1117,8 +1135,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetClockSysvar<'a, 'b> {
                 .map_err(SyscallError::InstructionError),
             result
         );
-        *result = get_sysvar::<Clock>(
-            &sysvar::clock::id(),
+        *result = get_sysvar(
+            invoke_context.get_sysvar_cache().get_clock(),
             var_addr,
             &loader_id,
             memory_mapping,
@@ -1154,8 +1172,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetEpochScheduleSysvar<'a, 'b> {
                 .map_err(SyscallError::InstructionError),
             result
         );
-        *result = get_sysvar::<EpochSchedule>(
-            &sysvar::epoch_schedule::id(),
+        *result = get_sysvar(
+            invoke_context.get_sysvar_cache().get_epoch_schedule(),
             var_addr,
             &loader_id,
             memory_mapping,
@@ -1192,8 +1210,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetFeesSysvar<'a, 'b> {
                 .map_err(SyscallError::InstructionError),
             result
         );
-        *result = get_sysvar::<Fees>(
-            &sysvar::fees::id(),
+        *result = get_sysvar(
+            invoke_context.get_sysvar_cache().get_fees(),
             var_addr,
             &loader_id,
             memory_mapping,
@@ -1229,8 +1247,8 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetRentSysvar<'a, 'b> {
                 .map_err(SyscallError::InstructionError),
             result
         );
-        *result = get_sysvar::<Rent>(
-            &sysvar::rent::id(),
+        *result = get_sysvar(
+            invoke_context.get_sysvar_cache().get_rent(),
             var_addr,
             &loader_id,
             memory_mapping,
@@ -1260,9 +1278,11 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallKeccak256<'a, 'b> {
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
-        let base_cost = invoke_context.get_compute_budget().sha256_base_cost;
+        let compute_budget = invoke_context.get_compute_budget();
         question_mark!(
-            invoke_context.get_compute_meter().consume(base_cost),
+            invoke_context
+                .get_compute_meter()
+                .consume(compute_budget.sha256_base_cost),
             result
         );
 
@@ -1298,13 +1318,9 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallKeccak256<'a, 'b> {
                     ),
                     result
                 );
-                let byte_cost = invoke_context.get_compute_budget().sha256_byte_cost;
-                question_mark!(
-                    invoke_context
-                        .get_compute_meter()
-                        .consume(byte_cost * (val.len() as u64 / 2)),
-                    result
-                );
+                let cost = compute_budget.sha256_byte_cost * (val.len() as u64 / 2);
+                question_mark!(invoke_context.get_compute_meter().consume(cost), result);
+
                 hasher.hash(bytes);
             }
         }
@@ -1318,6 +1334,24 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallKeccak256<'a, 'b> {
 fn check_overlapping_do_not_use(src_addr: u64, dst_addr: u64, n: u64) -> bool {
     (src_addr <= dst_addr && src_addr + n > dst_addr)
         || (dst_addr <= src_addr && dst_addr + n > src_addr)
+}
+
+fn mem_op_consume<'a, 'b>(
+    invoke_context: &Ref<&'a mut InvokeContext<'b>>,
+    n: u64,
+) -> Result<(), EbpfError<BpfError>> {
+    let compute_budget = invoke_context.get_compute_budget();
+    let cost = if invoke_context
+        .feature_set
+        .is_active(&update_syscall_base_costs::id())
+    {
+        compute_budget
+            .mem_op_base_cost
+            .max(n / compute_budget.cpi_bytes_per_unit)
+    } else {
+        n / compute_budget.cpi_bytes_per_unit
+    };
+    invoke_context.get_compute_meter().consume(cost)
 }
 
 /// memcpy
@@ -1341,6 +1375,18 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcpy<'a, 'b> {
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
+        // When deprecating `update_syscall_base_costs` switch to `mem_op_consume`
+        let compute_budget = invoke_context.get_compute_budget();
+        let update_syscall_base_costs = invoke_context
+            .feature_set
+            .is_active(&update_syscall_base_costs::id());
+        if update_syscall_base_costs {
+            let cost = compute_budget
+                .mem_op_base_cost
+                .max(n / compute_budget.cpi_bytes_per_unit);
+            question_mark!(invoke_context.get_compute_meter().consume(cost), result);
+        }
+
         let use_fixed_nonoverlapping_check = invoke_context
             .feature_set
             .is_active(&fixed_memcpy_nonoverlapping_check::id());
@@ -1358,14 +1404,10 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcpy<'a, 'b> {
             }
         }
 
-        let invoke_context = question_mark!(
-            self.invoke_context
-                .try_borrow()
-                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
-            result
-        );
-        let cost = invoke_context.get_compute_budget().cpi_bytes_per_unit;
-        question_mark!(invoke_context.get_compute_meter().consume(n / cost), result);
+        if !update_syscall_base_costs {
+            let cost = n / compute_budget.cpi_bytes_per_unit;
+            question_mark!(invoke_context.get_compute_meter().consume(cost), result);
+        };
 
         let loader_id = question_mark!(
             invoke_context
@@ -1409,8 +1451,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemmove<'a, 'b> {
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
-        let cost = invoke_context.get_compute_budget().cpi_bytes_per_unit;
-        question_mark!(invoke_context.get_compute_meter().consume(n / cost), result);
+        question_mark!(mem_op_consume(&invoke_context, n), result);
 
         let loader_id = question_mark!(
             invoke_context
@@ -1454,8 +1495,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcmp<'a, 'b> {
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
-        let cost = invoke_context.get_compute_budget().cpi_bytes_per_unit;
-        question_mark!(invoke_context.get_compute_meter().consume(n / cost), result);
+        question_mark!(mem_op_consume(&invoke_context, n), result);
 
         let loader_id = question_mark!(
             invoke_context
@@ -1512,8 +1552,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemset<'a, 'b> {
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
-        let cost = invoke_context.get_compute_budget().cpi_bytes_per_unit;
-        question_mark!(invoke_context.get_compute_meter().consume(n / cost), result);
+        question_mark!(mem_op_consume(&invoke_context, n), result);
 
         let loader_id = question_mark!(
             invoke_context
@@ -1847,9 +1886,11 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallBlake3<'a, 'b> {
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
-        let base_cost = invoke_context.get_compute_budget().sha256_base_cost;
+        let compute_budget = invoke_context.get_compute_budget();
         question_mark!(
-            invoke_context.get_compute_meter().consume(base_cost),
+            invoke_context
+                .get_compute_meter()
+                .consume(compute_budget.sha256_base_cost),
             result
         );
 
@@ -1885,13 +1926,10 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallBlake3<'a, 'b> {
                     ),
                     result
                 );
-                let byte_cost = invoke_context.get_compute_budget().sha256_byte_cost;
-                question_mark!(
-                    invoke_context
-                        .get_compute_meter()
-                        .consume(byte_cost * (val.len() as u64 / 2)),
-                    result
-                );
+
+                let cost = compute_budget.sha256_byte_cost * (val.len() as u64 / 2);
+                question_mark!(invoke_context.get_compute_meter().consume(cost), result);
+
                 hasher.hash(bytes);
             }
         }
@@ -2919,17 +2957,23 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallLogData<'a, 'b> {
 
 #[cfg(test)]
 mod tests {
+    #[allow(deprecated)]
+    use solana_sdk::sysvar::fees::Fees;
     use {
         super::*,
-        solana_program_runtime::invoke_context::InvokeContext,
+        solana_program_runtime::{invoke_context::InvokeContext, sysvar_cache::SysvarCache},
         solana_rbpf::{
             ebpf::HOST_ALIGN, memory_region::MemoryRegion, user_error::UserError, vm::Config,
         },
         solana_sdk::{
-            account::AccountSharedData, bpf_loader, fee_calculator::FeeCalculator, hash::hashv,
+            account::AccountSharedData,
+            bpf_loader,
+            fee_calculator::FeeCalculator,
+            hash::hashv,
+            sysvar::{clock::Clock, epoch_schedule::EpochSchedule, rent::Rent},
             transaction_context::TransactionContext,
         },
-        std::str::FromStr,
+        std::{borrow::Cow, str::FromStr},
     };
 
     macro_rules! assert_access_violation {
@@ -3344,7 +3388,7 @@ mod tests {
             .borrow_mut()
             .get_compute_meter()
             .borrow_mut()
-            .mock_set_remaining((string.len() as u64 * 5) - 1);
+            .mock_set_remaining(400 - 1);
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall_sol_log.call(
             0x100000001, // AccessViolation
@@ -3724,7 +3768,7 @@ mod tests {
             .borrow_mut()
             .mock_set_remaining(
                 (invoke_context.get_compute_budget().sha256_base_cost
-                    + (bytes1.len() + bytes2.len()) as u64
+                    + ((bytes1.len() + bytes2.len()) as u64 / 2)
                         * invoke_context.get_compute_budget().sha256_byte_cost)
                     * 4,
             );
@@ -3792,8 +3836,6 @@ mod tests {
             leader_schedule_epoch: 4,
             unix_timestamp: 5,
         };
-        let mut data_clock = vec![];
-        bincode::serialize_into(&mut data_clock, &src_clock).unwrap();
         let src_epochschedule = EpochSchedule {
             slots_per_epoch: 1,
             leader_schedule_slot_offset: 2,
@@ -3801,35 +3843,30 @@ mod tests {
             first_normal_epoch: 3,
             first_normal_slot: 4,
         };
-        let mut data_epochschedule = vec![];
-        bincode::serialize_into(&mut data_epochschedule, &src_epochschedule).unwrap();
         let src_fees = Fees {
             fee_calculator: FeeCalculator {
                 lamports_per_signature: 1,
             },
         };
-        let mut data_fees = vec![];
-        bincode::serialize_into(&mut data_fees, &src_fees).unwrap();
         let src_rent = Rent {
             lamports_per_byte_year: 1,
             exemption_threshold: 2.0,
             burn_percent: 3,
         };
-        let mut data_rent = vec![];
-        bincode::serialize_into(&mut data_rent, &src_rent).unwrap();
-        let sysvars = [
-            (sysvar::clock::id(), data_clock),
-            (sysvar::epoch_schedule::id(), data_epochschedule),
-            (sysvar::fees::id(), data_fees),
-            (sysvar::rent::id(), data_rent),
-        ];
+
+        let mut sysvar_cache = SysvarCache::default();
+        sysvar_cache.set_clock(src_clock.clone());
+        sysvar_cache.set_epoch_schedule(src_epochschedule);
+        sysvar_cache.set_fees(src_fees.clone());
+        sysvar_cache.set_rent(src_rent);
+
         let program_id = Pubkey::new_unique();
         let mut transaction_context = TransactionContext::new(
             vec![(program_id, AccountSharedData::new(0, 0, &bpf_loader::id()))],
             1,
         );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        invoke_context.sysvars = &sysvars;
+        invoke_context.sysvar_cache = Cow::Owned(sysvar_cache);
         invoke_context.push(&[], &[0], &[]).unwrap();
 
         // Test clock sysvar
