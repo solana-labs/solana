@@ -305,7 +305,7 @@ impl PubsubClient {
 
         let result = PubsubClientSubscription {
             message_type: PhantomData,
-            operation: "blocks",
+            operation: "block",
             socket,
             subscription_id,
             t_cleanup: Some(t_cleanup),
