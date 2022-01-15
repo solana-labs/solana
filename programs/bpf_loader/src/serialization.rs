@@ -55,7 +55,7 @@ impl<'a> DuplicateInstructionAccounts<'a> {
         })
     }
 
-    fn get(&self, index_in_instruction: usize) -> Result<Option<&usize>, InstructionError> {
+    fn get(&self, index_in_instruction: usize) -> Result<Option<usize>, InstructionError> {
         let index_in_transaction = self
             .instruction_context
             .get_index_in_transaction(index_in_instruction)?;
@@ -64,7 +64,7 @@ impl<'a> DuplicateInstructionAccounts<'a> {
                 // The map entry corresponds to this account, hence not a duplicate.
                 None
             } else {
-                Some(position)
+                Some(*position)
             }
         }))
     }
@@ -183,7 +183,7 @@ pub fn serialize_parameters_unaligned(
     {
         let duplicate = duplicate_instruction_accounts.get(index_in_instruction)?;
         if let Some(position) = duplicate {
-            v.write_u8(*position as u8)
+            v.write_u8(position as u8)
                 .map_err(|_| InstructionError::InvalidArgument)?;
         } else {
             let borrowed_account = instruction_context
@@ -303,7 +303,7 @@ pub fn serialize_parameters_aligned(
     {
         let duplicate = duplicate_instruction_accounts.get(index_in_instruction)?;
         if let Some(position) = duplicate {
-            v.write_u8(*position as u8)
+            v.write_u8(position as u8)
                 .map_err(|_| InstructionError::InvalidArgument)?;
             v.write_all(&[0u8, 0, 0, 0, 0, 0, 0])
                 .map_err(|_| InstructionError::InvalidArgument)?; // 7 bytes of padding to make 64-bit aligned
@@ -531,8 +531,8 @@ mod tests {
         assert_eq!(duplicates.get(1), Ok(None));
         assert_eq!(duplicates.get(2), Ok(None));
         assert_eq!(duplicates.get(3), Ok(None));
-        assert_eq!(duplicates.get(4), Ok(Some(&0usize)));
-        assert_eq!(duplicates.get(5), Ok(Some(&1usize)));
+        assert_eq!(duplicates.get(4), Ok(Some(0usize)));
+        assert_eq!(duplicates.get(5), Ok(Some(1usize)));
         assert_eq!(
             duplicates.get(6),
             Err(InstructionError::NotEnoughAccountKeys)
