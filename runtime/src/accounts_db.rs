@@ -3170,17 +3170,23 @@ impl AccountsDb {
 
                 let mut ids = vec![writer.1.append_vec_id()];
                 let mut drop_root = slot > writer.0;
-                // write what we can to the current ancient storage
-                let _store_accounts_timing = self.store_accounts_frozen(
-                    writer.0,
-                    &accounts_this_append_vec,
-                    Some(&hashes_this_append_vec),
-                    Some(Box::new(move |_, _| writer.1.clone())),
-                    None,
-                );
+                if accounts_next_append_vec.is_empty() {
+                    // write what we can to the current ancient storage
+                    let _store_accounts_timing = self.store_accounts_frozen(
+                        writer.0,
+                        &accounts_this_append_vec,
+                        Some(&hashes_this_append_vec),
+                        Some(Box::new(move |_, _| writer.1.clone())),
+                        None,
+                    );
+                }
 
                 if !accounts_next_append_vec.is_empty() {
                     writer.1.accounts.set_full_ancient();
+                    accounts_this_append_vec.append(&mut accounts_next_append_vec);
+                    hashes_this_append_vec.append(&mut hashes_next_append_vec);
+                    accounts_next_append_vec = accounts_this_append_vec;
+                    hashes_next_append_vec = hashes_this_append_vec;
                     drop_root = false;
                     // we need a new ancient append vec
                     assert!(
