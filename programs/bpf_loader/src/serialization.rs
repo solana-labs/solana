@@ -59,14 +59,17 @@ impl<'a> DuplicateInstructionAccounts<'a> {
         let index_in_transaction = self
             .instruction_context
             .get_index_in_transaction(index_in_instruction)?;
-        Ok(self.map.get(&index_in_transaction).and_then(|position| {
-            if position + self.index_offset == index_in_instruction {
-                // The map entry corresponds to this account, hence not a duplicate.
-                None
-            } else {
-                Some(*position)
+        match self.map.get(&index_in_transaction) {
+            None => Err(InstructionError::MissingAccount),
+            Some(position) => {
+                if position + self.index_offset == index_in_instruction {
+                    // The map entry corresponds to this account, hence not a duplicate.
+                    Ok(None)
+                } else {
+                    Ok(Some(*position))
+                }
             }
-        }))
+        }
     }
 }
 
