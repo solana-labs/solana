@@ -316,10 +316,7 @@ impl Tvu {
             cost_update_receiver,
         );
 
-<<<<<<< HEAD
         let (drop_bank_sender, drop_bank_receiver) = channel();
-=======
-        let (drop_bank_sender, drop_bank_receiver) = unbounded();
 
         let (tx_cost_metrics_sender, tx_cost_metrics_receiver) = unbounded();
         let transaction_cost_metrics_sender = Some(TransactionCostMetricsSender::new(
@@ -329,7 +326,6 @@ impl Tvu {
         let transaction_cost_metrics_service =
             TransactionCostMetricsService::new(tx_cost_metrics_receiver);
 
->>>>>>> a724fa234 (Add hidden cli option to allow validator reports replayed transaction cost metrics (#22369))
         let drop_bank_service = DropBankService::new(drop_bank_receiver);
 
         let replay_stage = ReplayStage::new(
