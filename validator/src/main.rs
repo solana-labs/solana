@@ -1662,6 +1662,16 @@ pub fn main() {
                 .help("PubSub worker threads"),
         )
         .arg(
+<<<<<<< HEAD
+=======
+            Arg::with_name("rpc_pubsub_enable_block_subscription")
+                .long("rpc-pubsub-enable-block-subscription")
+                .requires("enable_rpc_transaction_history")
+                .takes_value(false)
+                .help("Enable the unstable RPC PubSub `blockSubscribe` subscription"),
+        )
+        .arg(
+>>>>>>> 7171b3a3a (Bugfix/block subscribe (#22516))
             Arg::with_name("rpc_pubsub_enable_vote_subscription")
                 .long("rpc-pubsub-enable-vote-subscription")
                 .takes_value(false)

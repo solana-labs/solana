@@ -253,6 +253,48 @@ impl PubsubClient {
         Ok((result, receiver))
     }
 
+<<<<<<< HEAD
+=======
+    pub fn block_subscribe(
+        url: &str,
+        filter: RpcBlockSubscribeFilter,
+        config: Option<RpcBlockSubscribeConfig>,
+    ) -> Result<BlockSubscription, PubsubClientError> {
+        let url = Url::parse(url)?;
+        let socket = connect_with_retry(url)?;
+        let (sender, receiver) = unbounded();
+
+        let socket = Arc::new(RwLock::new(socket));
+        let socket_clone = socket.clone();
+        let exit = Arc::new(AtomicBool::new(false));
+        let exit_clone = exit.clone();
+        let body = json!({
+            "jsonrpc":"2.0",
+            "id":1,
+            "method":"blockSubscribe",
+            "params":[filter, config]
+        })
+        .to_string();
+
+        let subscription_id = PubsubBlockClientSubscription::send_subscribe(&socket_clone, body)?;
+
+        let t_cleanup = std::thread::spawn(move || {
+            Self::cleanup_with_sender(exit_clone, &socket_clone, sender)
+        });
+
+        let result = PubsubClientSubscription {
+            message_type: PhantomData,
+            operation: "block",
+            socket,
+            subscription_id,
+            t_cleanup: Some(t_cleanup),
+            exit,
+        };
+
+        Ok((result, receiver))
+    }
+
+>>>>>>> 7171b3a3a (Bugfix/block subscribe (#22516))
     pub fn logs_subscribe(
         url: &str,
         filter: RpcTransactionLogsFilter,
