@@ -3157,7 +3157,7 @@ impl AccountsDb {
                     ));
                 });
                 
-                if i % 1 == 0 {
+                if i % 1000 == 0 {
                     error!(
                     "ancient_append_vec: writing to ancient append vec: slot: {}, # accts: {}, available bytes after: {}, distance to max: {}, id: {:?}, # stores: {}, # stores {}, original bytes: {}",
                     slot, accounts_this_append_vec.len(), available_bytes, max_root.saturating_sub(slot), all_storages.iter().map(|store| (store.append_vec_id(), store.accounts.capacity(), store.accounts.is_ancient())).collect::<Vec<_>>(), all_storages.len(), num_stores, original_bytes
