@@ -470,8 +470,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             previous_slot_entry_was_cached,
         );
         if slot_list.len() == 2 {
-            use log::*;
-            error!("slot list: {:?}, {}", slot_list, pubkey);
+            //use log::*;
+            //error!("slot list: {:?}, {}", slot_list, pubkey);
         }
         if addref {
             current.add_un_ref(true);
