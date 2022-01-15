@@ -2695,6 +2695,36 @@ fn get_epoch_duration(bank_forks: Option<&RwLock<BankForks>>) -> Duration {
     Duration::from_millis(num_slots * DEFAULT_MS_PER_SLOT)
 }
 
+fn get_retransmit_parents<T: Copy>(
+    fanout: usize,
+    node_index: usize, // Local node's index within the `nodes` slice.
+    nodes: &[T],
+) -> Vec<T> {
+    let offset = node_index % fanout; // Node's index within its neighborhood.
+    let mut parents = vec![];
+    let mut current_parent_index = node_index;
+
+    loop {
+        // The index of my neighborhood, i.e. view the turbine as
+        // a tree with fanout == `fanout` at each level, where each neighborhood is a node, and
+        // the first level has a *single* root node, instead of `fanout` nodes
+        let my_neighborhood_index = current_parent_index / fanout;
+
+        if my_neighborhood_index == 0 {
+            return parents;
+        }
+
+        // In an n-fanout tree, the parent of node with index `i` is `(i - 1) / fanout`
+        let parent_neighborhood_index = (my_neighborhood_index - 1) / fanout;
+        // Now expand the index into an actual index into the `nodes` slice .
+        // This represents the index inside the `nodes` slice of the anchor node of the parent neighborhood.
+        let parent_neighborhood_anchor_index = parent_neighborhood_index * fanout;
+        // Get the parent of the node by indexing `offset` into the neighborhood
+        current_parent_index = parent_neighborhood_anchor_index + offset;
+        parents.push(nodes[current_parent_index]);
+    }
+}
+
 /// Turbine logic
 /// 1 - For the current node find out if it is in layer 1
 /// 1.1 - If yes, then broadcast to all layer 1 nodes
@@ -2705,7 +2735,8 @@ fn get_epoch_duration(bank_forks: Option<&RwLock<BankForks>>) -> Duration {
 /// Returns Neighbor Nodes and Children Nodes `(neighbors, children)` for a given node based on its stake
 pub fn compute_retransmit_peers<T: Copy>(
     fanout: usize,
-    index: usize, // Local node's index withing the nodes slice.
+    index: usize, // Local node's index within the nodes slice.
+    // Note slot leader is excluded here,
     nodes: &[T],
 ) -> (Vec<T> /*neighbors*/, Vec<T> /*children*/) {
     // 1st layer: fanout    nodes starting at 0
@@ -2714,19 +2745,54 @@ pub fn compute_retransmit_peers<T: Copy>(
     // ...
     // Each layer is divided into neighborhoods of fanout nodes each.
     let offset = index % fanout; // Node's index within its neighborhood.
-    let anchor = index - offset; // First node in the neighborhood.
-    let neighbors = (anchor..)
+    let anchor_index = index - offset; // First node in the neighborhood.
+    let neighbors = (anchor_index..)
         .take(fanout)
         .map(|i| nodes.get(i).copied())
         .while_some()
         .collect();
-    let children = ((anchor + 1) * fanout + offset..)
+    let children = ((anchor_index + 1) * fanout + offset..)
         .step_by(fanout)
         .take(fanout)
         .map(|i| nodes.get(i).copied())
         .while_some()
         .collect();
     (neighbors, children)
+}
+
+pub fn compute_retransmit_peers_with_parents<'a, T: Copy>(
+    fanout: usize,
+    index: usize, // Local node's index within the nodes slice.
+    // Note slot leader is excluded here,
+    nodes: &[T],
+) -> (
+    Vec<T>, /*neighbors*/
+    Vec<T>, /*children*/
+    Vec<T>, /*parents*/
+    T,      /*anchor in my neighborhood*/
+    Vec<T>, /*anchor parents*/
+) {
+    // 1st layer: fanout    nodes starting at 0
+    // 2nd layer: fanout**2 nodes starting at fanout
+    // 3rd layer: fanout**3 nodes starting at fanout + fanout**2
+    // ...
+    // Each layer is divided into neighborhoods of fanout nodes each.
+    let (neighbors, children) = compute_retransmit_peers(fanout, index, nodes);
+
+    let offset = index % fanout; // Node's index within its neighborhood.
+    let anchor_index = index - offset; // First node in the neighborhood.
+
+    // TODO: ensure the slot leader also makes it into this list, since the leader is
+    // filtered from `nodes` beforehand
+    let parents = get_retransmit_parents(fanout, index, nodes);
+    let anchor_parents = get_retransmit_parents(fanout, anchor_index, nodes);
+    (
+        neighbors,
+        children,
+        parents,
+        nodes[anchor_index],
+        anchor_parents,
+    )
 }
 
 #[derive(Debug)]

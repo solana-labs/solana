@@ -5,7 +5,9 @@ use {
     rand::{Rng, SeedableRng},
     rand_chacha::ChaChaRng,
     solana_gossip::{
-        cluster_info::{compute_retransmit_peers, ClusterInfo},
+        cluster_info::{
+            compute_retransmit_peers, compute_retransmit_peers_with_parents, ClusterInfo,
+        },
         contact_info::ContactInfo,
         crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
         weighted_shuffle::{
@@ -197,7 +199,7 @@ impl ClusterNodes<RetransmitStage> {
         root_bank: &Bank,
         fanout: usize,
     ) -> Vec<SocketAddr> {
-        let (neighbors, children) =
+        let (neighbors, children, parents, anchor, anchor_parents) =
             self.get_retransmit_peers(slot_leader, shred, root_bank, fanout);
         // If the node is on the critical path (i.e. the first node in each
         // neighborhood), it should send the packet to tvu socket of its
@@ -230,6 +232,9 @@ impl ClusterNodes<RetransmitStage> {
     ) -> (
         Vec<&Node>, // neighbors
         Vec<&Node>, // children
+        Vec<&Node>, // parents
+        &Node,      // anchor in my neighborhood
+        Vec<&Node>, // anchor parents
     ) {
         let shred_seed = shred.seed(slot_leader, root_bank);
         if !enable_turbine_peers_shuffle_patch(shred.slot(), root_bank) {
@@ -251,11 +256,12 @@ impl ClusterNodes<RetransmitStage> {
             .iter()
             .position(|node| node.pubkey() == self.pubkey)
             .unwrap();
-        let (neighbors, children) = compute_retransmit_peers(fanout, self_index, &nodes);
+        let (neighbors, children, parents, anchor, anchor_parents) =
+            compute_retransmit_peers_with_parents(fanout, self_index, &nodes);
         // Assert that the node itself is included in the set of neighbors, at
         // the right offset.
         debug_assert_eq!(neighbors[self_index % fanout].pubkey(), self.pubkey);
-        (neighbors, children)
+        (neighbors, children, parents, anchor, anchor_parents)
     }
 
     fn get_retransmit_peers_compat(
@@ -266,6 +272,9 @@ impl ClusterNodes<RetransmitStage> {
     ) -> (
         Vec<&Node>, // neighbors
         Vec<&Node>, // children
+        Vec<&Node>, // parents
+        &Node,      // anchor in my neighborhood
+        Vec<&Node>, // anchor parents
     ) {
         // Exclude leader from list of nodes.
         let (weights, index): (Vec<u64>, Vec<usize>) = if slot_leader == self.pubkey {
@@ -286,7 +295,8 @@ impl ClusterNodes<RetransmitStage> {
             .iter()
             .position(|i| self.nodes[*i].pubkey() == self.pubkey)
             .unwrap();
-        let (neighbors, children) = compute_retransmit_peers(fanout, self_index, &index);
+        let (neighbors, children, parents, anchor, anchor_parents) =
+            compute_retransmit_peers_with_parents(fanout, self_index, &index);
         // Assert that the node itself is included in the set of neighbors, at
         // the right offset.
         debug_assert_eq!(
@@ -295,7 +305,15 @@ impl ClusterNodes<RetransmitStage> {
         );
         let neighbors = neighbors.into_iter().map(|i| &self.nodes[i]).collect();
         let children = children.into_iter().map(|i| &self.nodes[i]).collect();
-        (neighbors, children)
+        let parents = parents.into_iter().map(|i| &self.nodes[i]).collect();
+        let anchor_parents = anchor_parents.into_iter().map(|i| &self.nodes[i]).collect();
+        (
+            neighbors,
+            children,
+            parents,
+            &self.nodes[anchor],
+            anchor_parents,
+        )
     }
 }
 
