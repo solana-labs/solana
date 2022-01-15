@@ -1016,9 +1016,14 @@ mod tests {
                             versioned_tx.message.hash()
                         };
 
-                    SanitizedTransaction::try_create(versioned_tx, message_hash, None, |_| {
-                        Err(TransactionError::UnsupportedVersion)
-                    })
+                    SanitizedTransaction::try_create(
+                        versioned_tx,
+                        message_hash,
+                        None,
+                        |_| Err(TransactionError::UnsupportedVersion),
+                        None,
+                        None,
+                    )
                 }?;
 
                 Ok(sanitized_tx)

@@ -3351,9 +3351,14 @@ impl Bank {
             .into_iter()
             .map(|tx| {
                 let message_hash = tx.message.hash();
-                SanitizedTransaction::try_create(tx, message_hash, None, |_| {
-                    Err(TransactionError::UnsupportedVersion)
-                })
+                SanitizedTransaction::try_create(
+                    tx,
+                    message_hash,
+                    None,
+                    |_| Err(TransactionError::UnsupportedVersion),
+                    None,
+                    None,
+                )
             })
             .collect::<Result<Vec<_>>>()?;
         let lock_results = self
@@ -5695,9 +5700,14 @@ impl Bank {
                 tx.message.hash()
             };
 
-            SanitizedTransaction::try_create(tx, message_hash, None, |lookups| {
-                self.load_lookup_table_addresses(lookups)
-            })
+            SanitizedTransaction::try_create(
+                tx,
+                message_hash,
+                None,
+                |lookups| self.load_lookup_table_addresses(lookups),
+                None,
+                None,
+            )
         }?;
 
         if verification_mode == TransactionVerificationMode::HashAndVerifyPrecompiles
