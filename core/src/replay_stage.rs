@@ -49,6 +49,7 @@ use {
         bank::{Bank, NewBankOptions},
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
+        transaction_cost_metrics_sender::TransactionCostMetricsSender,
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{
@@ -330,6 +331,7 @@ impl ReplayStage {
         voting_sender: Sender<VoteOp>,
         drop_bank_sender: Sender<Vec<Arc<Bank>>>,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
+        transaction_cost_metrics_sender: Option<TransactionCostMetricsSender>,
     ) -> Self {
         let ReplayStageConfig {
             vote_account,
@@ -436,6 +438,7 @@ impl ReplayStage {
                         &mut duplicate_slots_to_repair,
                         &ancestor_hashes_replay_update_sender,
                         block_metadata_notifier.clone(),
+                        transaction_cost_metrics_sender.as_ref(),
                     );
                     replay_active_banks_time.stop();
 
@@ -1493,6 +1496,7 @@ impl ReplayStage {
         bank_progress: &mut ForkProgress,
         transaction_status_sender: Option<&TransactionStatusSender>,
         replay_vote_sender: &ReplayVoteSender,
+        transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
         verify_recyclers: &VerifyRecyclers,
     ) -> result::Result<usize, BlockstoreProcessorError> {
         let tx_count_before = bank_progress.replay_progress.num_txs;
@@ -1504,6 +1508,7 @@ impl ReplayStage {
             false,
             transaction_status_sender,
             Some(replay_vote_sender),
+            transaction_cost_metrics_sender,
             None,
             verify_recyclers,
             false,
@@ -1993,6 +1998,7 @@ impl ReplayStage {
         duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
         ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
+        transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
@@ -2042,6 +2048,7 @@ impl ReplayStage {
                     bank_progress,
                     transaction_status_sender,
                     replay_vote_sender,
+                    transaction_cost_metrics_sender,
                     verify_recyclers,
                 );
                 match replay_result {
@@ -3585,6 +3592,7 @@ pub mod tests {
                 bank1_progress,
                 None,
                 &replay_vote_sender,
+                None,
                 &VerifyRecyclers::default(),
             );
             let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
