@@ -46,6 +46,7 @@ use {
         bank::{Bank, ExecuteTimings, NewBankOptions},
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
+        transaction_cost_metrics_sender::TransactionCostMetricsSender,
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{
@@ -317,6 +318,11 @@ impl ReplayStage {
         voting_sender: Sender<VoteOp>,
         cost_update_sender: Sender<CostUpdate>,
         drop_bank_sender: Sender<Vec<Arc<Bank>>>,
+<<<<<<< HEAD
+=======
+        block_metadata_notifier: Option<BlockMetadataNotifierLock>,
+        transaction_cost_metrics_sender: Option<TransactionCostMetricsSender>,
+>>>>>>> a724fa234 (Add hidden cli option to allow validator reports replayed transaction cost metrics (#22369))
     ) -> Self {
         let ReplayStageConfig {
             my_pubkey,
@@ -414,6 +420,13 @@ impl ReplayStage {
                         &mut latest_validator_votes_for_frozen_banks,
                         &cluster_slots_update_sender,
                         &cost_update_sender,
+<<<<<<< HEAD
+=======
+                        &mut duplicate_slots_to_repair,
+                        &ancestor_hashes_replay_update_sender,
+                        block_metadata_notifier.clone(),
+                        transaction_cost_metrics_sender.as_ref(),
+>>>>>>> a724fa234 (Add hidden cli option to allow validator reports replayed transaction cost metrics (#22369))
                     );
                     replay_active_banks_time.stop();
 
@@ -1220,6 +1233,7 @@ impl ReplayStage {
         bank_progress: &mut ForkProgress,
         transaction_status_sender: Option<&TransactionStatusSender>,
         replay_vote_sender: &ReplayVoteSender,
+        transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
         verify_recyclers: &VerifyRecyclers,
     ) -> result::Result<usize, BlockstoreProcessorError> {
         let tx_count_before = bank_progress.replay_progress.num_txs;
@@ -1231,6 +1245,7 @@ impl ReplayStage {
             false,
             transaction_status_sender,
             Some(replay_vote_sender),
+            transaction_cost_metrics_sender,
             None,
             verify_recyclers,
             false,
@@ -1698,6 +1713,13 @@ impl ReplayStage {
         latest_validator_votes_for_frozen_banks: &mut LatestValidatorVotesForFrozenBanks,
         cluster_slots_update_sender: &ClusterSlotsUpdateSender,
         cost_update_sender: &Sender<CostUpdate>,
+<<<<<<< HEAD
+=======
+        duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
+        ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
+        block_metadata_notifier: Option<BlockMetadataNotifierLock>,
+        transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
+>>>>>>> a724fa234 (Add hidden cli option to allow validator reports replayed transaction cost metrics (#22369))
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
@@ -1747,6 +1769,7 @@ impl ReplayStage {
                     bank_progress,
                     transaction_status_sender,
                     replay_vote_sender,
+                    transaction_cost_metrics_sender,
                     verify_recyclers,
                 );
                 match replay_result {
@@ -3224,6 +3247,7 @@ mod tests {
                 &mut bank0_progress,
                 None,
                 &replay_vote_sender,
+                None,
                 &VerifyRecyclers::default(),
             );
             let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
