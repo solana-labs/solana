@@ -1644,7 +1644,7 @@ impl fmt::Display for CliSignOnlyDatas {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f)?;
         for data in &self.cli_sign_only_datas {
-            Display::fmt(data, f)?;
+            fmt::Display::fmt(data, f)?;
         }
         Ok(())
     }
@@ -1697,7 +1697,7 @@ impl fmt::Display for CliSignatures {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f)?;
         for signature in &self.cli_signatures {
-            Display::fmt(signature, f)?;
+            fmt::Display::fmt(signature, f)?;
         }
         Ok(())
     }
