@@ -1636,6 +1636,42 @@ impl fmt::Display for CliSignOnlyData {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CliSignOnlyDatas {
+    pub cli_sign_only_datas: Vec<CliSignOnlyData>,
+}
+
+impl Display for CliSignOnlyDatas {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f)?;
+        for data in &self.cli_sign_only_datas {
+            Display::fmt(data, f)?;
+        }
+        Ok(())
+    }
+}
+
+impl QuietDisplay for CliSignOnlyDatas {
+    fn write_str(&self, w: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        writeln!(w)?;
+        for data in &self.cli_sign_only_datas {
+            QuietDisplay::write_str(data, w)?;
+        }
+        Ok(())
+    }
+}
+
+impl VerboseDisplay for CliSignOnlyDatas {
+    fn write_str(&self, w: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        writeln!(w)?;
+        for data in &self.cli_sign_only_datas {
+            VerboseDisplay::write_str(data, w)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CliSignature {
     pub signature: String,
 }
@@ -1647,6 +1683,42 @@ impl fmt::Display for CliSignature {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f)?;
         writeln_name_value(f, "Signature:", &self.signature)?;
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliSignatures {
+    pub cli_signatures: Vec<CliSignature>,
+}
+
+impl Display for CliSignatures {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f)?;
+        for signature in &self.cli_signatures {
+            Display::fmt(signature, f)?;
+        }
+        Ok(())
+    }
+}
+
+impl QuietDisplay for CliSignatures {
+    fn write_str(&self, w: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        writeln!(w)?;
+        for signature in &self.cli_signatures {
+            QuietDisplay::write_str(signature, w)?;
+        }
+        Ok(())
+    }
+}
+
+impl VerboseDisplay for CliSignatures {
+    fn write_str(&self, w: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        writeln!(w)?;
+        for signature in &self.cli_signatures {
+            VerboseDisplay::write_str(signature, w)?;
+        }
         Ok(())
     }
 }
