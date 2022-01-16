@@ -91,6 +91,20 @@ impl Node {
 }
 
 impl<T> ClusterNodes<T> {
+    pub fn find_node_id_by_addr(&self, socket_addr: &SocketAddr) -> Option<Pubkey> {
+        let ip = socket_addr.ip();
+        self.nodes
+            .iter()
+            .find(|node| {
+                if let Some(contact_info) = node.contact_info() {
+                    contact_info.gossip.ip() == ip
+                } else {
+                    false
+                }
+            })
+            .map(|node| node.pubkey())
+    }
+
     pub(crate) fn num_peers(&self) -> usize {
         self.index.len()
     }
@@ -196,31 +210,56 @@ impl ClusterNodes<RetransmitStage> {
         &self,
         slot_leader: Pubkey,
         shred: &Shred,
+        shred_sender: Option<Pubkey>,
         root_bank: &Bank,
         fanout: usize,
-    ) -> Vec<SocketAddr> {
-        let (neighbors, children, parents, anchor, anchor_parents) =
+    ) -> (Vec<SocketAddr>, Option<Vec<Pubkey>>) {
+        let (neighbors, children, mut parent_path, mut anchor_path) =
             self.get_retransmit_peers(slot_leader, shred, root_bank, fanout);
+
+        // Both `parent_path` and `anchor_path` are sorted from most recent parent to least recent parent,
+        // so push the slot leader itself into the path at the end, since they are always the oldest parent.
+        parent_path.push(slot_leader);
+        anchor_path.push(slot_leader);
+
+        // Figure out which of the two paths this shred came from. If none match, then we have a turbine
+        // shuffle mismatch between us and the sender
+        let sender_path = shred_sender.and_then(|shred_sender| {
+            if shred_sender == parent_path[0] {
+                Some(parent_path)
+            } else if shred_sender == anchor_path[0] {
+                Some(anchor_path)
+            } else {
+                None
+            }
+        });
+
         // If the node is on the critical path (i.e. the first node in each
         // neighborhood), it should send the packet to tvu socket of its
         // children and also tvu_forward socket of its neighbors. Otherwise it
         // should only forward to tvu_forwards socket of its children.
         if neighbors[0].pubkey() != self.pubkey {
-            return children
-                .iter()
-                .filter_map(|node| Some(node.contact_info()?.tvu_forwards))
-                .collect();
-        }
-        // First neighbor is this node itself, so skip it.
-        neighbors[1..]
-            .iter()
-            .filter_map(|node| Some(node.contact_info()?.tvu_forwards))
-            .chain(
+            return (
                 children
                     .iter()
-                    .filter_map(|node| Some(node.contact_info()?.tvu)),
-            )
-            .collect()
+                    .filter_map(|node| Some(node.contact_info()?.tvu_forwards))
+                    .collect(),
+                sender_path,
+            );
+        }
+        // First neighbor is this node itself, so skip it.
+        (
+            neighbors[1..]
+                .iter()
+                .filter_map(|node| Some(node.contact_info()?.tvu_forwards))
+                .chain(
+                    children
+                        .iter()
+                        .filter_map(|node| Some(node.contact_info()?.tvu)),
+                )
+                .collect(),
+            sender_path,
+        )
     }
 
     fn get_retransmit_peers(
@@ -230,11 +269,10 @@ impl ClusterNodes<RetransmitStage> {
         root_bank: &Bank,
         fanout: usize,
     ) -> (
-        Vec<&Node>, // neighbors
-        Vec<&Node>, // children
-        Vec<&Node>, // parents
-        &Node,      // anchor in my neighborhood
-        Vec<&Node>, // anchor parents
+        Vec<&Node>,  // neighbors
+        Vec<&Node>,  // children
+        Vec<Pubkey>, /*path that the shred arrives through the parent neighborhood*/
+        Vec<Pubkey>, /*path that the shred arrives through the anchor in the neighborhood*/
     ) {
         let shred_seed = shred.seed(slot_leader, root_bank);
         if !enable_turbine_peers_shuffle_patch(shred.slot(), root_bank) {
@@ -256,12 +294,16 @@ impl ClusterNodes<RetransmitStage> {
             .iter()
             .position(|node| node.pubkey() == self.pubkey)
             .unwrap();
-        let (neighbors, children, parents, anchor, anchor_parents) =
+        let (neighbors, children, parent_path, anchor_path) =
             compute_retransmit_peers_with_parents(fanout, self_index, &nodes);
         // Assert that the node itself is included in the set of neighbors, at
         // the right offset.
         debug_assert_eq!(neighbors[self_index % fanout].pubkey(), self.pubkey);
-        (neighbors, children, parents, anchor, anchor_parents)
+
+        let parent_path = parent_path.into_iter().map(|node| node.pubkey()).collect();
+        let anchor_path = anchor_path.into_iter().map(|node| node.pubkey()).collect();
+
+        (neighbors, children, parent_path, anchor_path)
     }
 
     fn get_retransmit_peers_compat(
@@ -270,11 +312,10 @@ impl ClusterNodes<RetransmitStage> {
         fanout: usize,
         slot_leader: Pubkey,
     ) -> (
-        Vec<&Node>, // neighbors
-        Vec<&Node>, // children
-        Vec<&Node>, // parents
-        &Node,      // anchor in my neighborhood
-        Vec<&Node>, // anchor parents
+        Vec<&Node>,  // neighbors
+        Vec<&Node>,  // children
+        Vec<Pubkey>, /*path that the shred arrives through the parent neighborhood*/
+        Vec<Pubkey>, /*path that the shred arrives through the anchor in the neighborhood*/
     ) {
         // Exclude leader from list of nodes.
         let (weights, index): (Vec<u64>, Vec<usize>) = if slot_leader == self.pubkey {
@@ -295,7 +336,7 @@ impl ClusterNodes<RetransmitStage> {
             .iter()
             .position(|i| self.nodes[*i].pubkey() == self.pubkey)
             .unwrap();
-        let (neighbors, children, parents, anchor, anchor_parents) =
+        let (neighbors, children, parent_path, anchor_path) =
             compute_retransmit_peers_with_parents(fanout, self_index, &index);
         // Assert that the node itself is included in the set of neighbors, at
         // the right offset.
@@ -305,15 +346,15 @@ impl ClusterNodes<RetransmitStage> {
         );
         let neighbors = neighbors.into_iter().map(|i| &self.nodes[i]).collect();
         let children = children.into_iter().map(|i| &self.nodes[i]).collect();
-        let parents = parents.into_iter().map(|i| &self.nodes[i]).collect();
-        let anchor_parents = anchor_parents.into_iter().map(|i| &self.nodes[i]).collect();
-        (
-            neighbors,
-            children,
-            parents,
-            &self.nodes[anchor],
-            anchor_parents,
-        )
+        let parent_path = parent_path
+            .into_iter()
+            .map(|i| self.nodes[i].pubkey())
+            .collect();
+        let anchor_path = anchor_path
+            .into_iter()
+            .map(|i| self.nodes[i].pubkey())
+            .collect();
+        (neighbors, children, parent_path, anchor_path)
     }
 }
 

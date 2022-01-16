@@ -54,6 +54,7 @@ use {
         convert::TryInto,
         fs,
         io::{Error as IoError, ErrorKind},
+        net::SocketAddr,
         path::{Path, PathBuf},
         rc::Rc,
         sync::{
@@ -94,12 +95,33 @@ pub const MAX_DATA_SHREDS_PER_SLOT: usize = 32_768;
 
 pub type CompletedSlotsSender = Sender<Vec<Slot>>;
 pub type CompletedSlotsReceiver = Receiver<Vec<Slot>>;
+pub type RetransmitSender = Sender<RetransmitBatch>;
+pub type RetransmitReceiver = Receiver<RetransmitBatch>;
 type CompletedRanges = Vec<(u32, u32)>;
 
 #[derive(Default)]
 pub struct SignatureInfosForAddress {
     pub infos: Vec<ConfirmedTransactionStatusWithSignature>,
     pub found_before: bool,
+}
+
+pub enum RetransmitBatch {
+    ErasureRecovered(Vec<Shred>),
+    Turbine(Vec<(Shred, SocketAddr)>),
+}
+
+impl From<RetransmitBatch> for Vec<(Shred, Option<SocketAddr>)> {
+    fn from(retransmit_batch: RetransmitBatch) -> Vec<(Shred, Option<SocketAddr>)> {
+        match retransmit_batch {
+            RetransmitBatch::ErasureRecovered(shreds) => {
+                shreds.into_iter().map(|shred| (shred, None)).collect()
+            }
+            RetransmitBatch::Turbine(shreds_and_senders) => shreds_and_senders
+                .into_iter()
+                .map(|(shred, sender_addr)| (shred, Some(sender_addr)))
+                .collect(),
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -818,7 +840,7 @@ impl Blockstore {
         is_repaired: Vec<bool>,
         leader_schedule: Option<&LeaderScheduleCache>,
         is_trusted: bool,
-        retransmit_sender: Option<&Sender<Vec<Shred>>>,
+        retransmit_sender: Option<&RetransmitSender>,
         handle_duplicate: &F,
         metrics: &mut BlockstoreInsertionMetrics,
     ) -> Result<(Vec<CompletedDataSetInfo>, Vec<usize>)>
@@ -957,7 +979,8 @@ impl Blockstore {
                 .collect();
             if !recovered_data_shreds.is_empty() {
                 if let Some(retransmit_sender) = retransmit_sender {
-                    let _ = retransmit_sender.send(recovered_data_shreds);
+                    let _ = retransmit_sender
+                        .send(RetransmitBatch::ErasureRecovered(recovered_data_shreds));
                 }
             }
         }

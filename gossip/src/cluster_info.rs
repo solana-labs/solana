@@ -2699,9 +2699,15 @@ fn get_retransmit_parents<T: Copy>(
     fanout: usize,
     node_index: usize, // Local node's index within the `nodes` slice.
     nodes: &[T],
+    include_self_in_results: bool,
 ) -> Vec<T> {
     let offset = node_index % fanout; // Node's index within its neighborhood.
-    let mut parents = vec![];
+    let mut parents = if include_self_in_results {
+        vec![nodes[node_index]]
+    } else {
+        vec![]
+    };
+
     let mut current_parent_index = node_index;
 
     loop {
@@ -2768,9 +2774,8 @@ pub fn compute_retransmit_peers_with_parents<'a, T: Copy>(
 ) -> (
     Vec<T>, /*neighbors*/
     Vec<T>, /*children*/
-    Vec<T>, /*parents*/
-    T,      /*anchor in my neighborhood*/
-    Vec<T>, /*anchor parents*/
+    Vec<T>, /*path that the shred arrives through the parent neighborhood*/
+    Vec<T>, /*path that the shred arrives through the anchor in the neighborhood*/
 ) {
     // 1st layer: fanout    nodes starting at 0
     // 2nd layer: fanout**2 nodes starting at fanout
@@ -2784,15 +2789,9 @@ pub fn compute_retransmit_peers_with_parents<'a, T: Copy>(
 
     // TODO: ensure the slot leader also makes it into this list, since the leader is
     // filtered from `nodes` beforehand
-    let parents = get_retransmit_parents(fanout, index, nodes);
-    let anchor_parents = get_retransmit_parents(fanout, anchor_index, nodes);
-    (
-        neighbors,
-        children,
-        parents,
-        nodes[anchor_index],
-        anchor_parents,
-    )
+    let parent_path = get_retransmit_parents(fanout, index, nodes, false);
+    let anchor_path = get_retransmit_parents(fanout, anchor_index, nodes, true);
+    (neighbors, children, parent_path, anchor_path)
 }
 
 #[derive(Debug)]
