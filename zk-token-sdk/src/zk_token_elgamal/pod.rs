@@ -19,7 +19,7 @@ impl fmt::Debug for ElGamalCiphertext {
     }
 }
 
-#[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
+#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq)]
 #[repr(transparent)]
 pub struct ElGamalPubkey(pub [u8; 32]);
 
@@ -29,7 +29,7 @@ impl fmt::Debug for ElGamalPubkey {
     }
 }
 
-#[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
+#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq)]
 #[repr(transparent)]
 pub struct PedersenCommitment(pub [u8; 32]);
 
@@ -39,7 +39,7 @@ impl fmt::Debug for PedersenCommitment {
     }
 }
 
-#[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
+#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq)]
 #[repr(transparent)]
 pub struct PedersenDecryptHandle(pub [u8; 32]);
 
@@ -112,5 +112,11 @@ unsafe impl Pod for AeCiphertext {}
 impl fmt::Debug for AeCiphertext {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self.0)
+    }
+}
+
+impl Default for AeCiphertext {
+    fn default() -> Self {
+        Self::zeroed()
     }
 }
