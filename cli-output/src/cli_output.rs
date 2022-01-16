@@ -1640,7 +1640,7 @@ pub struct CliSignOnlyDatas {
     pub cli_sign_only_datas: Vec<CliSignOnlyData>,
 }
 
-impl Display for CliSignOnlyDatas {
+impl fmt::Display for CliSignOnlyDatas {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f)?;
         for data in &self.cli_sign_only_datas {
@@ -1693,7 +1693,7 @@ pub struct CliSignatures {
     pub cli_signatures: Vec<CliSignature>,
 }
 
-impl Display for CliSignatures {
+impl fmt::Display for CliSignatures {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f)?;
         for signature in &self.cli_signatures {
