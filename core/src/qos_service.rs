@@ -3,11 +3,7 @@
 //! how transactions are included in blocks, and optimize those blocks.
 //!
 use {
-<<<<<<< HEAD
-=======
     crate::banking_stage::BatchedTransactionCostDetails,
-    crossbeam_channel::{unbounded, Receiver, Sender},
->>>>>>> 1309a9cea (Add estimated and actual block cost units metrics (#22326))
     solana_measure::measure::Measure,
     solana_runtime::{
         bank::Bank,
@@ -28,32 +24,12 @@ use {
     },
 };
 
-<<<<<<< HEAD
-=======
-pub enum QosMetrics {
-    BlockBatchUpdate { bank: Arc<Bank> },
-}
-
-// QosService is local to each banking thread, each instance of QosService provides services to
-// one banking thread.
-// It hosts a private thread for async metrics reporting, tagged with banking thredas ID. Banking
-// threda calls `report_metrics(&bank)` at end of `process_and_record_tramsaction()`, or any time
-// it wants, QosService sends `&bank` to reporting thread via channel, signalling stats to be
-// reported if new bank slot has changed.
-//
->>>>>>> 1309a9cea (Add estimated and actual block cost units metrics (#22326))
 pub struct QosService {
     // cost_model instance is owned by validator, shared between replay_stage and
     // banking_stage. replay_stage writes the latest on-chain program timings to
     // it; banking_stage's qos_service reads that information to calculate
     // transaction cost, hence RwLock wrapped.
     cost_model: Arc<RwLock<CostModel>>,
-<<<<<<< HEAD
-=======
-    // QosService hosts metrics object and a private reporting thread, as well as sender to
-    // communicate with thread.
-    report_sender: Sender<QosMetrics>,
->>>>>>> 1309a9cea (Add estimated and actual block cost units metrics (#22326))
     metrics: Arc<QosServiceMetrics>,
     reporting_thread: Option<JoinHandle<()>>,
     running_flag: Arc<AtomicBool>,
@@ -172,53 +148,6 @@ impl QosService {
         select_results
     }
 
-<<<<<<< HEAD
-    fn reporting_loop(
-        running_flag: Arc<AtomicBool>,
-        metrics: Arc<QosServiceMetrics>,
-        reporting_duration_ms: u64,
-    ) {
-        while running_flag.load(Ordering::Relaxed) {
-            metrics.report(reporting_duration_ms);
-=======
-    // metrics are reported by bank slot
-    pub fn report_metrics(&self, bank: Arc<Bank>) {
-        self.report_sender
-            .send(QosMetrics::BlockBatchUpdate { bank })
-            .unwrap_or_else(|err| warn!("qos service report metrics failed: {:?}", err));
-    }
-
-    // metrics accumulating apis
-    pub fn accumulate_tpu_ingested_packets_count(&self, count: u64) {
-        self.metrics
-            .tpu_ingested_packets_count
-            .fetch_add(count, Ordering::Relaxed);
-    }
-
-    pub fn accumulate_tpu_buffered_packets_count(&self, count: u64) {
-        self.metrics
-            .tpu_buffered_packets_count
-            .fetch_add(count, Ordering::Relaxed);
-    }
-
-    pub fn accumulated_verified_txs_count(&self, count: u64) {
-        self.metrics
-            .verified_txs_count
-            .fetch_add(count, Ordering::Relaxed);
-    }
-
-    pub fn accumulated_processed_txs_count(&self, count: u64) {
-        self.metrics
-            .processed_txs_count
-            .fetch_add(count, Ordering::Relaxed);
-    }
-
-    pub fn accumulated_retryable_txs_count(&self, count: u64) {
-        self.metrics
-            .retryable_txs_count
-            .fetch_add(count, Ordering::Relaxed);
-    }
-
     pub fn accumulate_estimated_transaction_costs(
         &self,
         cost_details: &BatchedTransactionCostDetails,
@@ -252,17 +181,10 @@ impl QosService {
     fn reporting_loop(
         running_flag: Arc<AtomicBool>,
         metrics: Arc<QosServiceMetrics>,
-        report_receiver: Receiver<QosMetrics>,
+        reporting_duration_ms: u64,
     ) {
         while running_flag.load(Ordering::Relaxed) {
-            for qos_metrics in report_receiver.try_iter() {
-                match qos_metrics {
-                    QosMetrics::BlockBatchUpdate { bank } => {
-                        metrics.report(bank.slot());
-                    }
-                }
-            }
->>>>>>> 1309a9cea (Add estimated and actual block cost units metrics (#22326))
+            metrics.report(reporting_duration_ms);
             thread::sleep(Duration::from_millis(100));
         }
     }
@@ -278,11 +200,6 @@ struct QosServiceMetrics {
     retried_txs_per_block_limit_count: AtomicU64,
     retried_txs_per_vote_limit_count: AtomicU64,
     retried_txs_per_account_limit_count: AtomicU64,
-<<<<<<< HEAD
-=======
-
-    // number of transactions to be queued for retry due to its account data limits
-    retried_txs_per_account_data_limit_count: AtomicU64,
 
     // accumulated estimated signature Compute Unites to be packed into block
     estimated_signature_cu: AtomicU64,
@@ -301,7 +218,6 @@ struct QosServiceMetrics {
 
     // accumulated actual program execute micro-sec that have been packed into block
     actual_execute_time_us: AtomicU64,
->>>>>>> 1309a9cea (Add estimated and actual block cost units metrics (#22326))
 }
 
 impl QosServiceMetrics {
@@ -347,14 +263,6 @@ impl QosServiceMetrics {
                         .swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
-<<<<<<< HEAD
-=======
-                (
-                    "retried_txs_per_account_data_limit_count",
-                    self.retried_txs_per_account_data_limit_count
-                        .swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
                 (
                     "estimated_signature_cu",
                     self.estimated_signature_cu.swap(0, Ordering::Relaxed) as i64,
@@ -385,7 +293,6 @@ impl QosServiceMetrics {
                     self.actual_execute_time_us.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
->>>>>>> 1309a9cea (Add estimated and actual block cost units metrics (#22326))
             );
         }
     }

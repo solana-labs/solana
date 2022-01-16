@@ -1006,17 +1006,6 @@ impl BankingStage {
             bank.prepare_sanitized_batch_with_results(txs, transactions_qos_results.into_iter());
         lock_time.stop();
 
-<<<<<<< HEAD
-        // retryable_txs includes AccountInUse, WouldExceedMaxBlockCostLimit,
-        // WouldExceedMaxVoteCostLimit and WouldExceedMaxAccountCostLimit
-        let (result, mut retryable_txs) = Self::process_and_record_transactions_locked(
-            bank,
-            poh,
-            &batch,
-            transaction_status_sender,
-            gossip_vote_sender,
-        );
-=======
         // retryable_txs includes AccountInUse, WouldExceedMaxBlockCostLimit
         // WouldExceedMaxAccountCostLimit, WouldExceedMaxVoteCostLimit
         // and WouldExceedMaxAccountDataCostLimit
@@ -1028,7 +1017,6 @@ impl BankingStage {
                 transaction_status_sender,
                 gossip_vote_sender,
             );
->>>>>>> 1309a9cea (Add estimated and actual block cost units metrics (#22326))
         retryable_txs.iter_mut().for_each(|x| *x += chunk_offset);
 
         let mut unlock_time = Measure::start("unlock_time");
@@ -1036,16 +1024,10 @@ impl BankingStage {
         drop(batch);
         unlock_time.stop();
 
-<<<<<<< HEAD
-=======
         let (cu, us) = Self::accumulate_execute_units_and_time(&execute_timings);
         qos_service.accumulate_actual_execute_cu(cu);
         qos_service.accumulate_actual_execute_time(us);
 
-        // reports qos service stats for this batch
-        qos_service.report_metrics(bank.clone());
-
->>>>>>> 1309a9cea (Add estimated and actual block cost units metrics (#22326))
         debug!(
             "bank: {} lock: {}us unlock: {}us txs_len: {}",
             bank.slot(),
