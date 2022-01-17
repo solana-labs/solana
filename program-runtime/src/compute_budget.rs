@@ -1,53 +1,27 @@
-#![cfg(feature = "full")]
-
 use {
-    crate::instruction::Instruction,
-    borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
+    solana_sdk::{
+        borsh::try_from_slice_unchecked,
+        compute_budget::{self, ComputeBudgetInstruction},
+        entrypoint::HEAP_LENGTH as MIN_HEAP_FRAME_BYTES,
+        feature_set::{requestable_heap_size, FeatureSet},
+        instruction::InstructionError,
+        transaction::{SanitizedTransaction, TransactionError},
+    },
+    std::sync::Arc,
 };
 
-crate::declare_id!("ComputeBudget111111111111111111111111111111");
+const MAX_UNITS: u32 = 1_000_000;
+const MAX_HEAP_FRAME_BYTES: u32 = 256 * 1024;
 
-/// Compute Budget Instructions
-#[derive(
-    Serialize,
-    Deserialize,
-    BorshSerialize,
-    BorshDeserialize,
-    BorshSchema,
-    Debug,
-    Clone,
-    PartialEq,
-    AbiExample,
-    AbiEnumVisitor,
-)]
-pub enum ComputeBudgetInstruction {
-    /// Request a specific maximum number of compute units the transaction is
-    /// allowed to consume.
-    RequestUnits(u32),
-    /// Request a specific transaction-wide program heap frame size in bytes.
-    /// The value requested must be a multiple of 1024. This new heap frame size
-    /// applies to each program executed, including all calls to CPIs.
-    RequestHeapFrame(u32),
-}
-
-impl ComputeBudgetInstruction {
-    /// Create a `ComputeBudgetInstruction::RequestUnits` `Instruction`
-    pub fn request_units(units: u32) -> Instruction {
-        Instruction::new_with_borsh(id(), &ComputeBudgetInstruction::RequestUnits(units), vec![])
-    }
-
-    /// Create a `ComputeBudgetInstruction::RequestHeapFrame` `Instruction`
-    pub fn request_heap_frame(bytes: u32) -> Instruction {
-        Instruction::new_with_borsh(
-            id(),
-            &ComputeBudgetInstruction::RequestHeapFrame(bytes),
-            vec![],
-        )
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl ::solana_frozen_abi::abi_example::AbiExample for ComputeBudget {
+    fn example() -> Self {
+        // ComputeBudget is not Serialize so just rely on Default.
+        ComputeBudget::default()
     }
 }
-<<<<<<< HEAD
 
-#[derive(Clone, Copy, Debug, AbiExample, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ComputeBudget {
     /// Number of compute units that an instruction is allowed.  Compute units
     /// are consumed by program execution, resources they use, etc...
@@ -81,17 +55,23 @@ pub struct ComputeBudget {
     pub secp256k1_recover_cost: u64,
     /// Number of compute units consumed to do a syscall without any work
     pub syscall_base_cost: u64,
+    /// Number of compute units consumed to call zktoken_crypto_op
+    pub zk_token_elgamal_op_cost: u64,
     /// Optional program heap region size, if `None` then loader default
     pub heap_size: Option<usize>,
     /// Number of compute units per additional 32k heap above the default (~.5
     /// us per 32k at 15 units/us rounded up)
     pub heap_cost: u64,
+    /// Memory operation syscall base cost
+    pub mem_op_base_cost: u64,
 }
+
 impl Default for ComputeBudget {
     fn default() -> Self {
         Self::new()
     }
 }
+
 impl ComputeBudget {
     pub fn new() -> Self {
         ComputeBudget {
@@ -110,10 +90,13 @@ impl ComputeBudget {
             sysvar_base_cost: 100,
             secp256k1_recover_cost: 25_000,
             syscall_base_cost: 100,
+            zk_token_elgamal_op_cost: 25_000,
             heap_size: None,
             heap_cost: 8,
+            mem_op_base_cost: 15,
         }
     }
+
     pub fn process_transaction(
         &mut self,
         tx: &SanitizedTransaction,
@@ -123,7 +106,7 @@ impl ComputeBudget {
         // Compute budget instruction must be in the 1st 3 instructions (avoid
         // nonce marker), otherwise ignored
         for (program_id, instruction) in tx.message().program_instructions_iter().take(3) {
-            if check_id(program_id) {
+            if compute_budget::check_id(program_id) {
                 match try_from_slice_unchecked(&instruction.data) {
                     Ok(ComputeBudgetInstruction::RequestUnits(units)) => {
                         if units > MAX_UNITS {
@@ -153,9 +136,9 @@ impl ComputeBudget {
 mod tests {
     use {
         super::*,
-        crate::{
-            hash::Hash, message::Message, pubkey::Pubkey, signature::Keypair, signer::Signer,
-            transaction::Transaction,
+        solana_sdk::{
+            hash::Hash, instruction::Instruction, message::Message, pubkey::Pubkey,
+            signature::Keypair, signer::Signer, transaction::Transaction,
         },
     };
 
@@ -307,5 +290,3 @@ mod tests {
         );
     }
 }
-=======
->>>>>>> b27976626 (Refactor: move compute budget runtime logic into solana-program-runtime (#22533))

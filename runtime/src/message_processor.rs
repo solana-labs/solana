@@ -2,6 +2,7 @@ use {
     serde::{Deserialize, Serialize},
     solana_measure::measure::Measure,
     solana_program_runtime::{
+        compute_budget::ComputeBudget,
         instruction_recorder::InstructionRecorder,
         invoke_context::{
             BuiltinProgram, Executors, InvokeContext, ProcessInstructionResult,
@@ -13,7 +14,6 @@ use {
     },
     solana_sdk::{
         account::WritableAccount,
-        compute_budget::ComputeBudget,
         feature_set::{prevent_calling_precompiles_as_programs, FeatureSet},
         hash::Hash,
         message::SanitizedMessage,
