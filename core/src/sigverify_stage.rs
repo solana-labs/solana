@@ -48,6 +48,7 @@ pub struct DisabledSigVerifier {}
 struct SigVerifierStats {
     recv_batches_us_hist: histogram::Histogram, // time to call recv_batch
     verify_batches_pp_us_hist: histogram::Histogram, // per-packet time to call verify_batch
+    discard_packets_pp_us_hist: histogram::Histogram, // per-packet time to call verify_batch
     batches_hist: histogram::Histogram,         // number of packet batches per verify call
     packets_hist: histogram::Histogram,         // number of packets per verify call
     total_batches: usize,
@@ -96,6 +97,28 @@ impl SigVerifierStats {
             (
                 "verify_batches_pp_us_mean",
                 self.verify_batches_pp_us_hist.mean().unwrap_or(0),
+                i64
+            ),
+            (
+                "discard_packets_pp_us_90pct",
+                self.discard_packets_pp_us_hist
+                    .percentile(90.0)
+                    .unwrap_or(0),
+                i64
+            ),
+            (
+                "discard_packets_pp_us_min",
+                self.discard_packets_pp_us_hist.minimum().unwrap_or(0),
+                i64
+            ),
+            (
+                "discard_packets_pp_us_max",
+                self.discard_packets_pp_us_hist.maximum().unwrap_or(0),
+                i64
+            ),
+            (
+                "discard_packets_pp_us_mean",
+                self.discard_packets_pp_us_hist.mean().unwrap_or(0),
                 i64
             ),
             (
@@ -177,6 +200,7 @@ impl SigVerifyStage {
     ) -> Result<()> {
         let (mut batches, num_packets, recv_duration) = streamer::recv_packet_batches(recvr)?;
 
+        let mut discard_time = Measure::start("sigverify_discard_time");
         let batches_len = batches.len();
         debug!(
             "@{:?} verifier: verifying: {}",
@@ -186,7 +210,7 @@ impl SigVerifyStage {
         if num_packets > MAX_SIGVERIFY_BATCH {
             Self::discard_excess_packets(&mut batches, MAX_SIGVERIFY_BATCH);
         }
-
+        discard_time.stop();
         let mut verify_batch_time = Measure::start("sigverify_batch_time");
         sendr.send(verifier.verify_batches(batches))?;
         verify_batch_time.stop();
@@ -207,6 +231,10 @@ impl SigVerifyStage {
         stats
             .verify_batches_pp_us_hist
             .increment(verify_batch_time.as_us() / (num_packets as u64))
+            .unwrap();
+        stats
+            .discard_packets_pp_us_hist
+            .increment(discard_time.as_us() / (len as u64))
             .unwrap();
         stats.batches_hist.increment(batches_len as u64).unwrap();
         stats.packets_hist.increment(num_packets as u64).unwrap();
