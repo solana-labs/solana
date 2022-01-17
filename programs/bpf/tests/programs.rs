@@ -229,20 +229,7 @@ fn run_program(name: &str) -> u64 {
         let mut instruction_count = 0;
         let mut tracer = None;
         for i in 0..2 {
-<<<<<<< HEAD
             invoke_context.return_data = (*invoke_context.get_caller().unwrap(), Vec::new());
-=======
-            invoke_context
-                .transaction_context
-                .set_return_data(
-                    *invoke_context
-                        .transaction_context
-                        .get_program_key()
-                        .unwrap(),
-                    Vec::new(),
-                )
-                .unwrap();
->>>>>>> cc76a73c4 (Refactor: move compute budget runtime logic into solana-program-runtime (#22543))
             let mut parameter_bytes = parameter_bytes.clone();
             {
                 let mut vm = create_vm(
