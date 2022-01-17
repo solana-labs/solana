@@ -1,4 +1,5 @@
 #![feature(test)]
+#![allow(clippy::integer_arithmetic)]
 
 extern crate solana_core;
 extern crate test;
@@ -19,8 +20,7 @@ use {
     test::Bencher,
 };
 
-#[bench]
-fn bench_packet_discard(bencher: &mut Bencher) {
+fn run_bench_packet_discard(num_ips: usize, bencher: &mut Bencher) {
     solana_logger::setup();
     let len = 30 * 1000;
     let chunk_size = 1024;
@@ -29,7 +29,7 @@ fn bench_packet_discard(bencher: &mut Bencher) {
 
     let mut total = 0;
 
-    let ips: Vec<_> = (0..10_000)
+    let ips: Vec<_> = (0..num_ips)
         .into_iter()
         .map(|_| {
             let mut addr = [0u16; 8];
@@ -55,6 +55,16 @@ fn bench_packet_discard(bencher: &mut Bencher) {
             }
         }
     });
+}
+
+#[bench]
+fn bench_packet_discard_many_senders(bencher: &mut Bencher) {
+    run_bench_packet_discard(1000, bencher);
+}
+
+#[bench]
+fn bench_packet_discard_single_sender(bencher: &mut Bencher) {
+    run_bench_packet_discard(1, bencher);
 }
 
 #[bench]

@@ -13,7 +13,7 @@ use {
     solana_sdk::timing,
     solana_streamer::streamer::{self, PacketBatchReceiver, StreamerError},
     std::{
-        collections::HashMap,
+        collections::{HashMap, VecDeque},
         thread::{self, Builder, JoinHandle},
         time::Instant,
     },
@@ -144,17 +144,17 @@ impl SigVerifyStage {
             for (packet_index, packets) in batch.packets.iter().enumerate() {
                 let e = received_ips
                     .entry(packets.meta.addr().ip())
-                    .or_insert_with(Vec::new);
-                e.push((batch_index, packet_index));
+                    .or_insert_with(VecDeque::new);
+                e.push_back((batch_index, packet_index));
             }
         }
         let mut batch_len = 0;
         while batch_len < max_packets {
             for (_ip, indexes) in received_ips.iter_mut() {
                 if !indexes.is_empty() {
-                    indexes.remove(0);
+                    indexes.pop_front();
                     batch_len += 1;
-                    if batch_len >= MAX_SIGVERIFY_BATCH {
+                    if batch_len >= max_packets {
                         break;
                     }
                 }
