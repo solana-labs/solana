@@ -53,7 +53,7 @@ use {
         },
     },
     solana_rayon_threadlimit::get_thread_count,
-    solana_runtime::bank_forks::BankForks,
+    solana_runtime::{bank_forks::BankForks, vote_parser},
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT, DEFAULT_SLOTS_PER_EPOCH},
         feature_set::FeatureSet,
@@ -70,9 +70,7 @@ use {
         socket::SocketAddrSpace,
         streamer::{PacketBatchReceiver, PacketBatchSender},
     },
-    solana_vote_program::{
-        vote_state::MAX_LOCKOUT_HISTORY, vote_transaction::parse_vote_transaction,
-    },
+    solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY,
     std::{
         borrow::Cow,
         collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
@@ -1037,7 +1035,7 @@ impl ClusterInfo {
         };
         let vote_index = vote_index.unwrap_or(num_crds_votes);
         if (vote_index as usize) >= MAX_LOCKOUT_HISTORY {
-            let (_, vote, hash) = parse_vote_transaction(&vote).unwrap();
+            let (_, vote, hash) = vote_parser::parse_vote_transaction(&vote).unwrap();
             panic!(
                 "invalid vote index: {}, switch: {}, vote slots: {:?}, tower: {:?}",
                 vote_index,

@@ -30,6 +30,7 @@ use {
         bank::{Bank, TransactionLogInfo},
         bank_forks::BankForks,
         commitment::{BlockCommitmentCache, CommitmentSlots},
+        vote_transaction::VoteTransaction,
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
@@ -40,7 +41,6 @@ use {
         transaction,
     },
     solana_transaction_status::ConfirmedBlock,
-    solana_vote_program::vote_state::VoteTransaction,
     std::{
         cell::RefCell,
         collections::{HashMap, VecDeque},
