@@ -234,7 +234,7 @@ impl SigVerifyStage {
             .unwrap();
         stats
             .discard_packets_pp_us_hist
-            .increment(discard_time.as_us() / (len as u64))
+            .increment(discard_time.as_us() / (num_packets as u64))
             .unwrap();
         stats.batches_hist.increment(batches_len as u64).unwrap();
         stats.packets_hist.increment(num_packets as u64).unwrap();
