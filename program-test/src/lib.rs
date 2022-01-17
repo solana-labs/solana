@@ -10,7 +10,8 @@ use {
     solana_banks_client::start_client,
     solana_banks_server::banks_server::start_local_server,
     solana_program_runtime::{
-        ic_msg, invoke_context::ProcessInstructionWithContext, stable_log, timings::ExecuteTimings,
+        compute_budget::ComputeBudget, ic_msg, invoke_context::ProcessInstructionWithContext,
+        stable_log, timings::ExecuteTimings,
     },
     solana_runtime::{
         bank::Bank,
@@ -23,7 +24,6 @@ use {
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_info::AccountInfo,
         clock::Slot,
-        compute_budget::ComputeBudget,
         entrypoint::{ProgramResult, SUCCESS},
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig},

@@ -17,7 +17,10 @@ use solana_bpf_loader_program::{
 use solana_bpf_rust_invoke::instructions::*;
 use solana_bpf_rust_realloc::instructions::*;
 use solana_bpf_rust_realloc_invoke::instructions::*;
-use solana_program_runtime::{invoke_context::with_mock_invoke_context, timings::ExecuteTimings};
+use solana_program_runtime::{
+    compute_budget::ComputeBudget, invoke_context::with_mock_invoke_context,
+    timings::ExecuteTimings,
+};
 use solana_rbpf::{
     elf::Executable,
     static_analysis::Analysis,
@@ -41,7 +44,7 @@ use solana_sdk::{
     bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
     client::SyncClient,
     clock::MAX_PROCESSING_AGE,
-    compute_budget::{ComputeBudget, ComputeBudgetInstruction},
+    compute_budget::ComputeBudgetInstruction,
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     loader_instruction,
@@ -226,7 +229,20 @@ fn run_program(name: &str) -> u64 {
         let mut instruction_count = 0;
         let mut tracer = None;
         for i in 0..2 {
+<<<<<<< HEAD
             invoke_context.return_data = (*invoke_context.get_caller().unwrap(), Vec::new());
+=======
+            invoke_context
+                .transaction_context
+                .set_return_data(
+                    *invoke_context
+                        .transaction_context
+                        .get_program_key()
+                        .unwrap(),
+                    Vec::new(),
+                )
+                .unwrap();
+>>>>>>> cc76a73c4 (Refactor: move compute budget runtime logic into solana-program-runtime (#22543))
             let mut parameter_bytes = parameter_bytes.clone();
             {
                 let mut vm = create_vm(
