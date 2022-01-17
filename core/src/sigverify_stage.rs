@@ -200,13 +200,13 @@ impl SigVerifyStage {
     ) -> Result<()> {
         let (mut batches, num_packets, recv_duration) = streamer::recv_packet_batches(recvr)?;
 
-        let mut discard_time = Measure::start("sigverify_discard_time");
         let batches_len = batches.len();
         debug!(
             "@{:?} verifier: verifying: {}",
             timing::timestamp(),
             num_packets,
         );
+        let mut discard_time = Measure::start("sigverify_discard_time");
         if num_packets > MAX_SIGVERIFY_BATCH {
             Self::discard_excess_packets(&mut batches, MAX_SIGVERIFY_BATCH);
         }
