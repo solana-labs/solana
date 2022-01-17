@@ -5,6 +5,7 @@
 //! transaction. All processing is done on the CPU by default and on a GPU
 //! if perf-libs are available
 
+use std::collections::LinkedList;
 use {
     crate::sigverify,
     crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
@@ -144,15 +145,15 @@ impl SigVerifyStage {
             for (packet_index, packets) in batch.packets.iter().enumerate() {
                 let e = received_ips
                     .entry(packets.meta.addr().ip())
-                    .or_insert_with(Vec::new);
-                e.push((batch_index, packet_index));
+                    .or_insert_with(LinkedList::new);
+                e.push_back((batch_index, packet_index));
             }
         }
         let mut batch_len = 0;
         while batch_len < max_packets {
             for (_ip, indexes) in received_ips.iter_mut() {
                 if !indexes.is_empty() {
-                    indexes.remove(0);
+                    indexes.pop_front().unwrap();
                     batch_len += 1;
                     if batch_len >= MAX_SIGVERIFY_BATCH {
                         break;
