@@ -1,6 +1,7 @@
 use {
     crate::{
         accounts_data_meter::AccountsDataMeter,
+        compute_budget::ComputeBudget,
         ic_logger_msg, ic_msg,
         instruction_recorder::InstructionRecorder,
         log_collector::LogCollector,
@@ -13,7 +14,6 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-        compute_budget::ComputeBudget,
         feature_set::{
             cap_accounts_data_len, do_support_realloc, neon_evm_compute_budget,
             reject_empty_instruction_without_program, remove_native_loader, requestable_heap_size,
