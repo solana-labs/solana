@@ -5,11 +5,9 @@
 # shellcheck disable=SC1091
 # shellcheck disable=SC2034
 
-echo "DIR in system-test/automation_utils is : $( cd "$( dirname "${BASH_SOURCE[0]}" )""
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 REPO_ROOT=${DIR}/..
 
-echo "REPO_ROOT in system-test/automation_utils is : $REPO_ROOT"
 source "${REPO_ROOT}"/ci/upload-ci-artifact.sh
 
 function execution_step {
@@ -34,7 +32,6 @@ function analyze_packet_loss {
     set -x
     # shellcheck disable=SC1091
     source "${REPO_ROOT}"/net/config/config
-    cat "${REPO_ROOT}"/net/config/config
     mkdir -p iftop-logs
     execution_step "Map private -> public IP addresses in iftop logs"
     # shellcheck disable=SC2154
@@ -203,7 +200,6 @@ function upload_results_to_slack() {
     echo "SLACK_WEBHOOOK_URL undefined"
     exit 1
   fi
-  echo "SLACK_WEBHOOOK_URL is : $SLACK_WEBHOOOK_URL"
 
   [[ -n $BUILDKITE_MESSAGE ]] || BUILDKITE_MESSAGE="Message not defined"
 
