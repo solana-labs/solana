@@ -3236,7 +3236,7 @@ mod tests {
         let mut dropped_packet_batches_count = 0;
         let mut dropped_packets_count = 0;
         let mut newly_buffered_packets_count = 0;
-        let banking_stage_stats = BankingStageStats::default();
+        let mut banking_stage_stats = BankingStageStats::default();
         // Because the set of unprocessed `packet_indexes` is empty, the
         // packets are not added to the unprocessed queue
         BankingStage::push_unprocessed(
@@ -3248,7 +3248,7 @@ mod tests {
             &mut newly_buffered_packets_count,
             batch_limit,
             &packet_deduper,
-            &banking_stage_stats,
+            &mut banking_stage_stats,
         );
         assert_eq!(unprocessed_packets.len(), 1);
         assert_eq!(dropped_packet_batches_count, 0);
@@ -3267,7 +3267,7 @@ mod tests {
             &mut newly_buffered_packets_count,
             batch_limit,
             &packet_deduper,
-            &banking_stage_stats,
+            &mut banking_stage_stats,
         );
         assert_eq!(unprocessed_packets.len(), 2);
         assert_eq!(dropped_packet_batches_count, 0);
@@ -3291,7 +3291,7 @@ mod tests {
             &mut newly_buffered_packets_count,
             batch_limit,
             &packet_deduper,
-            &banking_stage_stats,
+            &mut banking_stage_stats,
         );
         assert_eq!(unprocessed_packets.len(), 2);
         assert_eq!(
@@ -3312,7 +3312,7 @@ mod tests {
             &mut newly_buffered_packets_count,
             3,
             &packet_deduper,
-            &banking_stage_stats,
+            &mut banking_stage_stats,
         );
         assert_eq!(unprocessed_packets.len(), 2);
         assert_eq!(
