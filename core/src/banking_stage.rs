@@ -113,7 +113,10 @@ impl BankingStageStats {
     pub fn new(id: u32) -> Self {
         BankingStageStats {
             id,
-            packet_batch_indices_len: Histogram::configure().max_value(PACKETS_PER_BATCH as u64).build().unwrap(),
+            packet_batch_indices_len: Histogram::configure()
+                .max_value(PACKETS_PER_BATCH as u64)
+                .build()
+                .unwrap(),
             ..BankingStageStats::default()
         }
     }
@@ -1503,7 +1506,9 @@ impl BankingStage {
                     *dropped_packets_count += dropped_batch.1.len();
                 }
             }
-            let _ = banking_stage_stats.packet_batch_indices_len.increment(packet_indexes.len() as u64);
+            let _ = banking_stage_stats
+                .packet_batch_indices_len
+                .increment(packet_indexes.len() as u64);
 
             *newly_buffered_packets_count += packet_indexes.len();
             unprocessed_packet_batches.push_back((packet_batch, packet_indexes, false));
