@@ -3922,7 +3922,7 @@ if false {
                 // If the entry was missing from the cache, that means it must have been flushed,
                 // and the accounts index is always updated before cache flush, so store_id must
                 // not indicate being cached at this point.
-                error!("slot: {:?}, location: {:?}", new_slot, new_storage_location);
+                error!("slot: {:?}, location: {:?},{:?},{:?}", new_slot, new_storage_location, pubkey, self.accounts_index.get_account_read_entry(pubkey).map(|entry| entry.slot_list().clone()));
                 assert!(!new_storage_location.is_cached());
 
                 // If this is not a cache entry, then this was a minor fork slot
