@@ -4875,6 +4875,7 @@ dependencies = [
  "solana-vote-program",
  "static_assertions",
  "sys-info",
+ "sysctl",
  "systemstat",
  "tempfile",
  "thiserror",
@@ -6141,7 +6142,6 @@ dependencies = [
  "solana-version",
  "solana-vote-program",
  "symlink",
- "sysctl",
  "tikv-jemallocator",
 ]
 
