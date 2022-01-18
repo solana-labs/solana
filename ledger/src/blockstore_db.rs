@@ -1560,7 +1560,7 @@ fn excludes_from_compaction(cf_name: &str) -> bool {
 
 #[cfg(test)]
 pub mod tests {
-    use {super::*, crate::blockstore_db::columns::ShredData};
+    use {super::*, columns::*};
 
     #[test]
     fn test_compaction_filter() {
@@ -1612,12 +1612,16 @@ pub mod tests {
 
     #[test]
     fn test_excludes_from_compaction() {
-        // currently there are two CFs are excluded from compaction:
-        assert!(excludes_from_compaction(
-            columns::TransactionStatusIndex::NAME
-        ));
-        assert!(excludes_from_compaction(columns::ProgramCosts::NAME));
-        assert!(excludes_from_compaction(columns::TransactionMemos::NAME));
-        assert!(!excludes_from_compaction("something else"));
+        // Column Families are included in compaction by default and must opt out if desired
+        for column_name in Rocks::columns() {
+            match column_name {
+                TransactionStatusIndex::NAME | ProgramCosts::NAME | TransactionMemos::NAME => {
+                    assert!(excludes_from_compaction(column_name));
+                }
+                _ => {
+                    assert!(!excludes_from_compaction(column_name));
+                }
+            }
+        }
     }
 }
