@@ -232,6 +232,14 @@ pub fn register_syscalls(
         )?;
     }
 
+    if invoke_context
+        .feature_set
+        .is_active(&add_get_processed_inner_instruction_syscall::id())
+    {
+        syscall_registry
+            .register_syscall_by_name(b"sol_get_invoke_depth", SyscallGetInvokeDepth::call)?;
+    }
+
     Ok(syscall_registry)
 }
 
@@ -462,6 +470,15 @@ pub fn bind_syscall_context_objects<'a, 'b>(
         vm,
         add_get_processed_inner_instruction_syscall,
         Box::new(SyscallGetProcessedInnerInstruction {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+
+    // processed inner instructions
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        add_get_processed_inner_instruction_syscall,
+        Box::new(SyscallGetInvokeDepth {
             invoke_context: invoke_context.clone(),
         }),
     );
@@ -3014,7 +3031,9 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetProcessedInnerInstruction<'a,
             result
         );
 
-        if let Some((stack_depth, instruction)) = invoke_context.get_processed_inner_instruction(index as usize) {
+        if let Some((stack_depth, instruction)) =
+            invoke_context.get_processed_inner_instruction(index as usize)
+        {
             let InnerMeta {
                 data_len,
                 accounts_len,
@@ -3023,15 +3042,18 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetProcessedInnerInstruction<'a,
                 translate_type_mut::<InnerMeta>(memory_mapping, meta_addr, &loader_id),
                 result
             );
-            if *data_len >= instruction.data.len()
-                && *accounts_len >= instruction.accounts.len()
-            {
+            if *data_len >= instruction.data.len() && *accounts_len >= instruction.accounts.len() {
                 let program_id = question_mark!(
                     translate_type_mut::<Pubkey>(memory_mapping, program_id_addr, &loader_id),
                     result
                 );
                 let data = question_mark!(
-                    translate_slice_mut::<u8>(memory_mapping, data_addr, *data_len as u64, &loader_id,),
+                    translate_slice_mut::<u8>(
+                        memory_mapping,
+                        data_addr,
+                        *data_len as u64,
+                        &loader_id,
+                    ),
                     result
                 );
                 let accounts = question_mark!(
@@ -3055,6 +3077,39 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetProcessedInnerInstruction<'a,
         } else {
             *result = Ok(false as u64);
         }
+    }
+}
+
+pub struct SyscallGetInvokeDepth<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallGetInvokeDepth<'a, 'b> {
+    fn call(
+        &mut self,
+        _arg1: u64,
+        _arg2: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        _memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+
+        let budget = invoke_context.get_compute_budget();
+        question_mark!(
+            invoke_context
+                .get_compute_meter()
+                .consume(budget.syscall_base_cost),
+            result
+        );
+
+        *result = Ok(invoke_context.invoke_depth() as u64);
     }
 }
 

@@ -6,7 +6,7 @@ use solana_program::{
     account_info::AccountInfo,
     entrypoint,
     entrypoint::ProgramResult,
-    instruction::{get_processed_inner_instruction, AccountMeta, Instruction},
+    instruction::{get_invoke_depth, get_processed_inner_instruction, AccountMeta, Instruction},
     msg,
     program::invoke,
     pubkey::Pubkey,
@@ -51,6 +51,7 @@ fn process_instruction(
     invoke(&instruction1, accounts)?;
     invoke(&instruction0, accounts)?;
 
+    assert_eq!(1, get_invoke_depth());
     assert_eq!(Some((1, instruction0)), get_processed_inner_instruction(0));
     assert_eq!(Some((1, instruction1)), get_processed_inner_instruction(1));
     assert_eq!(Some((1, instruction2)), get_processed_inner_instruction(2));

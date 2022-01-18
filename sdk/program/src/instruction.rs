@@ -707,14 +707,35 @@ pub fn get_processed_inner_instruction(index: usize) -> Option<(usize, Instructi
                 )
             };
 
-            Some((meta.depth, Instruction::new_with_bytes(program_id, &data, accounts)))
+            Some((
+                meta.depth,
+                Instruction::new_with_bytes(program_id, &data, accounts),
+            ))
         } else {
             None
         }
     }
 
     #[cfg(not(target_arch = "bpf"))]
-    crate::program_stubs::get_processed_inner_instruction(index)
+    crate::program_stubs::sol_get_processed_inner_instruction(index)
+}
+
+/// Get the current invocation depth, transaction-level instructions are depth
+/// 0, fist invoked inner instruction is depth 1, etc...
+pub fn get_invoke_depth() -> usize {
+    #[cfg(target_arch = "bpf")]
+    {
+        extern "C" {
+            fn sol_get_invoke_depth() -> u64;
+        }
+
+        unsafe { sol_get_invoke_depth() as usize }
+    }
+
+    #[cfg(not(target_arch = "bpf"))]
+    {
+        crate::program_stubs::sol_get_invoke_depth() as usize
+    }
 }
 
 #[test]

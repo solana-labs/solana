@@ -91,8 +91,11 @@ pub trait SyscallStubs: Sync + Send {
     fn sol_log_data(&self, fields: &[&[u8]]) {
         println!("data: {}", fields.iter().map(base64::encode).join(" "));
     }
-    fn get_processed_inner_instruction(&self, _index: usize) -> Option<(usize, Instruction)> {
+    fn sol_get_processed_inner_instruction(&self, _index: usize) -> Option<(usize, Instruction)> {
         None
+    }
+    fn sol_get_invoke_depth(&self) -> u64 {
+        0
     }
 }
 
@@ -180,11 +183,15 @@ pub(crate) fn sol_log_data(data: &[&[u8]]) {
     SYSCALL_STUBS.read().unwrap().sol_log_data(data)
 }
 
-pub(crate) fn get_processed_inner_instruction(index: usize) -> Option<(usize, Instruction)> {
+pub(crate) fn sol_get_processed_inner_instruction(index: usize) -> Option<(usize, Instruction)> {
     SYSCALL_STUBS
         .read()
         .unwrap()
-        .get_processed_inner_instruction(index)
+        .sol_get_processed_inner_instruction(index)
+}
+
+pub(crate) fn sol_get_invoke_depth() -> u64 {
+    SYSCALL_STUBS.read().unwrap().sol_get_invoke_depth()
 }
 
 /// Check that two regions do not overlap.
