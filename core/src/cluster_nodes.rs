@@ -35,6 +35,16 @@ use {
     },
 };
 
+#[derive(Debug)]
+pub enum TurbinePath {
+    // The path the shred took to get to us through turbine, ordered
+    // from most recent ancestor to latest
+    TurbinePath(Vec<Pubkey>),
+    SenderContactInfoNotFound,
+    TurbinePathMismatch,
+    NotReceivedFromTurbine,
+}
+
 #[allow(clippy::large_enum_variant)]
 enum NodeId {
     // TVU node obtained through gossip (staked or not).
@@ -210,10 +220,10 @@ impl ClusterNodes<RetransmitStage> {
         &self,
         slot_leader: Pubkey,
         shred: &Shred,
-        shred_sender: Option<Pubkey>,
+        shred_sender_addr: Option<SocketAddr>,
         root_bank: &Bank,
         fanout: usize,
-    ) -> (Vec<SocketAddr>, Option<Vec<Pubkey>>) {
+    ) -> (Vec<SocketAddr>, TurbinePath) {
         let (neighbors, children, mut parent_path, mut anchor_path) =
             self.get_retransmit_peers(slot_leader, shred, root_bank, fanout);
 
@@ -224,15 +234,21 @@ impl ClusterNodes<RetransmitStage> {
 
         // Figure out which of the two paths this shred came from. If none match, then we have a turbine
         // shuffle mismatch between us and the sender
-        let sender_path = shred_sender.and_then(|shred_sender| {
-            if shred_sender == parent_path[0] {
-                Some(parent_path)
-            } else if shred_sender == anchor_path[0] {
-                Some(anchor_path)
+        let sender_turbine_path = if let Some(shred_sender_addr) = shred_sender_addr {
+            if let Some(sender_pubkey) = self.find_node_id_by_addr(&shred_sender_addr) {
+                if sender_pubkey == parent_path[0] {
+                    TurbinePath::TurbinePath(parent_path)
+                } else if sender_pubkey == anchor_path[0] {
+                    TurbinePath::TurbinePath(anchor_path)
+                } else {
+                    TurbinePath::TurbinePathMismatch
+                }
             } else {
-                None
+                TurbinePath::SenderContactInfoNotFound
             }
-        });
+        } else {
+            TurbinePath::NotReceivedFromTurbine
+        };
 
         // If the node is on the critical path (i.e. the first node in each
         // neighborhood), it should send the packet to tvu socket of its
@@ -244,7 +260,7 @@ impl ClusterNodes<RetransmitStage> {
                     .iter()
                     .filter_map(|node| Some(node.contact_info()?.tvu_forwards))
                     .collect(),
-                sender_path,
+                sender_turbine_path,
             );
         }
         // First neighbor is this node itself, so skip it.
@@ -258,7 +274,7 @@ impl ClusterNodes<RetransmitStage> {
                         .filter_map(|node| Some(node.contact_info()?.tvu)),
                 )
                 .collect(),
-            sender_path,
+            sender_turbine_path,
         )
     }
 

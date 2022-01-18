@@ -5,7 +5,7 @@ use {
     crate::{
         ancestor_hashes_service::AncestorHashesReplayUpdateReceiver,
         cluster_info_vote_listener::VerifiedVoteReceiver,
-        cluster_nodes::ClusterNodesCache,
+        cluster_nodes::{ClusterNodesCache, TurbinePath},
         cluster_slots::ClusterSlots,
         cluster_slots_service::{ClusterSlotsService, ClusterSlotsUpdateReceiver},
         completed_data_sets_service::CompletedDataSetsSender,
@@ -34,7 +34,7 @@ use {
     solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey, timing::timestamp},
     solana_streamer::sendmmsg::{multi_target_send, SendPktsError},
     std::{
-        collections::{BTreeSet, HashMap, HashSet},
+        collections::{btree_map, BTreeMap, HashMap, HashSet},
         net::{SocketAddr, UdpSocket},
         ops::{AddAssign, DerefMut},
         sync::{
@@ -52,6 +52,9 @@ const DEFAULT_LRU_SIZE: usize = 10_000;
 const CLUSTER_NODES_CACHE_NUM_EPOCH_CAP: usize = 8;
 const CLUSTER_NODES_CACHE_TTL: Duration = Duration::from_secs(5);
 
+const FIRST_SHRED_CACHE_DELAY_SLOTS: Slot = 100;
+const NUM_PUBKEYS_TO_SUBMIT_TO_METRICS: usize = 5;
+
 #[derive(Default)]
 struct RetransmitSlotStats {
     num_shreds: usize,
@@ -65,6 +68,12 @@ impl AddAssign for RetransmitSlotStats {
             num_nodes: self.num_nodes + other.num_nodes,
         }
     }
+}
+
+#[derive(Default)]
+struct TurbineSlotLatencyTracker {
+    total_shreds_received: u64,
+    per_validator_latencies: HashMap<Pubkey, u64>,
 }
 
 #[derive(Default)]
@@ -172,27 +181,50 @@ fn should_skip_retransmit(shred: &Shred, shreds_received: &Mutex<ShredFilterAndH
     }
 }
 
-// Returns true if this is the first time receiving a shred for `shred_slot`.
+#[derive(Debug)]
+enum ShredDelay {
+    TooOld,
+    FirstShred,
+    Delay(u64),
+}
+
+impl ShredDelay {
+    fn to_delay_ms(&self) -> Option<u64> {
+        match self {
+            ShredDelay::TooOld => None,
+            ShredDelay::FirstShred => Some(0),
+            ShredDelay::Delay(delay) => Some(*delay),
+        }
+    }
+}
+
+// Returns the delay from receiving the first shred for `shred_slot` to the current shred.
 fn check_if_first_shred_received(
     shred_slot: Slot,
-    first_shreds_received: &Mutex<BTreeSet<Slot>>,
+    first_shreds_received: &Mutex<BTreeMap<Slot, Instant>>,
     root_bank: &Bank,
-) -> bool {
-    if shred_slot <= root_bank.slot() {
-        return false;
+) -> ShredDelay {
+    if shred_slot <= root_bank.slot() + FIRST_SHRED_CACHE_DELAY_SLOTS {
+        return ShredDelay::TooOld;
     }
 
     let mut first_shreds_received_locked = first_shreds_received.lock().unwrap();
-    if first_shreds_received_locked.insert(shred_slot) {
-        datapoint_info!("retransmit-first-shred", ("slot", shred_slot, i64));
-        if first_shreds_received_locked.len() > 100 {
-            *first_shreds_received_locked =
-                first_shreds_received_locked.split_off(&(root_bank.slot() + 1));
+
+    let slot_first_received_elapsed = match first_shreds_received_locked.entry(shred_slot) {
+        btree_map::Entry::Vacant(vacant_entry) => {
+            datapoint_info!("retransmit-first-shred", ("slot", shred_slot, i64));
+            vacant_entry.insert(Instant::now());
+            if first_shreds_received_locked.len() > 100 {
+                *first_shreds_received_locked =
+                        // Keep around when the first shred arrived for path analysis
+                        first_shreds_received_locked.split_off(&(root_bank.slot() + FIRST_SHRED_CACHE_DELAY_SLOTS));
+            }
+            return ShredDelay::FirstShred;
         }
-        true
-    } else {
-        false
-    }
+        btree_map::Entry::Occupied(occupied_entry) => occupied_entry.get().elapsed().as_millis(),
+    };
+
+    ShredDelay::Delay(slot_first_received_elapsed as u64)
 }
 
 fn maybe_reset_shreds_received_cache(
@@ -209,12 +241,92 @@ fn maybe_reset_shreds_received_cache(
     }
 }
 
-fn run_network_analysis(
-    latency_tracker: &HashMap<Pubkey, (usize, usize)>,
+fn run_turbine_path_analysis(
+    latency_tracker: &mut HashMap<Slot, TurbineSlotLatencyTracker>,
     shred: &Shred,
     slot_leader: &Pubkey,
-    shred_path: &[Pubkey],
+    turbine_path: &TurbinePath,
+    is_anchor: bool,
+    children: Vec<Pubkey>,
+    shred_delay: ShredDelay,
 ) {
+    let shred_delay = shred_delay.to_delay_ms();
+    if shred_delay.is_none() {
+        return;
+    }
+
+    if let TurbinePath::NotReceivedFromTurbine = turbine_path {
+        return;
+    }
+
+    let shred_delay = shred_delay.unwrap();
+    if shred.index() == 0 && shred.is_data() {
+        match turbine_path {
+            TurbinePath::TurbinePath(turbine_path) => {
+                datapoint_info!(
+                    "turbine_tracer_shred_0",
+                    (
+                        "sender_pubkeys",
+                        &turbine_path[..NUM_PUBKEYS_TO_SUBMIT_TO_METRICS]
+                            .iter()
+                            .fold(String::default(), |output_string, pubkey| {
+                                output_string + ", " + &pubkey.to_string()
+                            }),
+                        String
+                    ),
+                    ("delay_from_first_shred", shred_delay, i64),
+                    (
+                        "children",
+                        &children[..NUM_PUBKEYS_TO_SUBMIT_TO_METRICS]
+                            .iter()
+                            .fold(String::default(), |output_string, pubkey| {
+                                output_string + ", " + &pubkey.to_string()
+                            }),
+                        String
+                    ),
+                    // If we're the anchor, we're transmitting to a whole neighborhood,
+                    // so don't print that out here
+                    ("is_anchor", is_anchor, bool),
+                    ("slot_leader", slot_leader.to_string(), String),
+                    ("slot", shred.slot(), i64),
+                );
+            }
+
+            TurbinePath::SenderContactInfoNotFound => {
+                datapoint_info!(
+                    "turbine_tracer_shred_0_sender_contact_info_not_found",
+                    ("slot", shred.slot(), i64),
+                    ("slot_leader", slot_leader.to_string(), String)
+                );
+            }
+
+            TurbinePath::TurbinePathMismatch => {
+                datapoint_info!(
+                    "turbine_tracer_shred_0_path_mismatch",
+                    ("slot", shred.slot(), i64),
+                    ("slot_leader", slot_leader.to_string(), String)
+                );
+            }
+
+            TurbinePath::NotReceivedFromTurbine => {
+                panic!("should not get here");
+            }
+        }
+    }
+
+    // TODO: log this information
+    if let TurbinePath::TurbinePath(turbine_path) = turbine_path {
+        let slot_latency_tracker = latency_tracker.entry(shred.slot()).or_default();
+        slot_latency_tracker.total_shreds_received += 1;
+        for pubkey in turbine_path {
+            let validator_latency = slot_latency_tracker
+                .per_validator_latencies
+                .entry(*pubkey)
+                .or_default();
+            *validator_latency =
+                (*validator_latency + shred_delay) / slot_latency_tracker.total_shreds_received;
+        }
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -230,7 +342,7 @@ fn retransmit(
     hasher_reset_ts: &mut Instant,
     shreds_received: &Mutex<ShredFilterAndHasher>,
     max_slots: &MaxSlots,
-    first_shreds_received: &Mutex<BTreeSet<Slot>>,
+    first_shreds_received: &Mutex<BTreeMap<Slot, Instant>>,
     rpc_subscriptions: Option<&RpcSubscriptions>,
 ) -> Result<(), RecvTimeoutError> {
     const RECV_TIMEOUT: Duration = Duration::from_secs(1);
@@ -268,8 +380,11 @@ fn retransmit(
             .retransmit
             .fetch_max(shred_slot, Ordering::Relaxed);
 
+        let first_shred_received_result =
+            check_if_first_shred_received(shred_slot, first_shreds_received, &root_bank);
+
         if let Some(rpc_subscriptions) = rpc_subscriptions {
-            if check_if_first_shred_received(shred_slot, first_shreds_received, &root_bank) {
+            if let ShredDelay::FirstShred = first_shred_received_result {
                 rpc_subscriptions.notify_slot_update(SlotUpdate::FirstShredReceived {
                     slot: shred_slot,
                     timestamp: timestamp(),
@@ -294,12 +409,11 @@ fn retransmit(
             };
         let cluster_nodes =
             cluster_nodes_cache.get(shred_slot, &root_bank, &working_bank, cluster_info);
-        let (addrs, turbine_path): (Vec<SocketAddr>, Option<Vec<Pubkey>>) = cluster_nodes
+        let (addrs, shred_turbine_path): (Vec<SocketAddr>, TurbinePath) = cluster_nodes
             .get_retransmit_addrs(
                 slot_leader,
                 shred,
-                sender_addr
-                    .and_then(|sender_addr| cluster_nodes.find_node_id_by_addr(&sender_addr)),
+                sender_addr,
                 &root_bank,
                 DATA_PLANE_FANOUT,
             );
@@ -399,7 +513,7 @@ pub fn retransmitter(
     let mut hasher_reset_ts = Instant::now();
     let mut stats = RetransmitStats::default();
     let shreds_received = Mutex::new((LruCache::new(DEFAULT_LRU_SIZE), PacketHasher::default()));
-    let first_shreds_received = Mutex::<BTreeSet<Slot>>::default();
+    let first_shreds_received = Mutex::<BTreeMap<Slot, Instant>>::default();
     let num_threads = get_thread_count().min(8).max(sockets.len());
     let thread_pool = ThreadPoolBuilder::new()
         .num_threads(num_threads)
