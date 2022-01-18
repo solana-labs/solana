@@ -170,6 +170,7 @@ impl SnapshotRequestHandler {
 
                 if accounts_db_caching_enabled {
                     shrink_time = Measure::start("shrink_time");
+                    error!("{}{}", file!(), line!());
                     snapshot_root_bank.shrink_candidate_slots();
                     shrink_time.stop();
                 }
@@ -450,6 +451,7 @@ impl AccountsBackgroundService {
                         }
                     } else {
                         if accounts_db_caching_enabled {
+                            error!("{}{}", file!(), line!());
                             bank.shrink_candidate_slots();
                         } else {
                             // under sustained writes, shrink can lag behind so cap to
