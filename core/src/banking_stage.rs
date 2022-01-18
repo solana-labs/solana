@@ -1145,7 +1145,11 @@ impl BankingStage {
                 .filter_map(|(tx, tx_index)| {
                     // put transaction into retry queue if it wouldn't fit
                     // into current bank
-                    if read_cost_tracker
+                    let is_vote = &packet_batch.packets[tx_index].meta.is_simple_vote_tx;
+
+                    // excluding vote TX from cost_model, for now
+                    if !is_vote
+                        && read_cost_tracker
                             .would_transaction_fit(
                                 &tx,
                                 &cost_model
