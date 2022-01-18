@@ -51,9 +51,7 @@ use {
         inline_spl_token,
         instruction_recorder::InstructionRecorder,
         log_collector::LogCollector,
-        message_processor::{
-            ExecuteDetailsTimings, Executors, MessageProcessor, TransactionExecutor,
-        },
+        message_processor::{Executors, MessageProcessor, TransactionExecutor},
         rent_collector::RentCollector,
         stake_weighted_timestamp::{
             calculate_stake_weighted_timestamp, MaxAllowableDrift, MAX_ALLOWABLE_DRIFT_PERCENTAGE,
@@ -90,6 +88,7 @@ use {
         compute_budget,
         epoch_info::EpochInfo,
         epoch_schedule::EpochSchedule,
+        execute_timings::ExecuteTimings,
         feature,
         feature_set::{self, tx_wide_compute_cap, FeatureSet},
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -195,31 +194,6 @@ impl RentDebits {
         self.0
             .into_iter()
             .filter_map(|(address, rent_debit)| Some((address, rent_debit.try_into_reward_info()?)))
-    }
-}
-
-#[derive(Default, Debug)]
-pub struct ExecuteTimings {
-    pub check_us: u64,
-    pub load_us: u64,
-    pub execute_us: u64,
-    pub store_us: u64,
-    pub update_stakes_cache_us: u64,
-    pub total_batches_len: usize,
-    pub num_execute_batches: u64,
-    pub details: ExecuteDetailsTimings,
-}
-
-impl ExecuteTimings {
-    pub fn accumulate(&mut self, other: &ExecuteTimings) {
-        self.check_us += other.check_us;
-        self.load_us += other.load_us;
-        self.execute_us += other.execute_us;
-        self.store_us += other.store_us;
-        self.update_stakes_cache_us += other.update_stakes_cache_us;
-        self.total_batches_len += other.total_batches_len;
-        self.num_execute_batches += other.num_execute_batches;
-        self.details.accumulate(&other.details);
     }
 }
 
@@ -3541,7 +3515,15 @@ impl Bank {
                     (Err(e.clone()), None)
                 }
                 (Ok(loaded_transaction), nonce_rollback) => {
+                    let mut feature_set_clone_time = Measure::start("feature_set_clone_time");
                     let feature_set = self.feature_set.clone();
+
+                    feature_set_clone_time.stop();
+                    saturating_add_assign!(
+                        timings.execute_accessories.feature_set_clone_us,
+                        feature_set_clone_time.as_us()
+                    );
+
                     signature_count += u64::from(tx.message().header.num_required_signatures);
 
                     let mut bpf_compute_budget = self
@@ -3559,8 +3541,14 @@ impl Bank {
                     };
 
                     if process_result.is_ok() {
+                        let mut get_executors_time = Measure::start("get_executors_time");
                         let executors =
                             self.get_executors(&tx.message, &loaded_transaction.loaders);
+                        get_executors_time.stop();
+                        saturating_add_assign!(
+                            timings.execute_accessories.get_executors_us,
+                            get_executors_time.as_us()
+                        );
 
                         let (account_refcells, loader_refcells) = Self::accounts_to_refcells(
                             &mut loaded_transaction.accounts,
@@ -3586,6 +3574,7 @@ impl Bank {
                             bpf_compute_budget.max_units,
                         )));
 
+                        let mut process_message_time = Measure::start("process_message_time");
                         process_result = self.message_processor.process_message(
                             tx.message(),
                             &loader_refcells,
@@ -3597,9 +3586,14 @@ impl Bank {
                             feature_set,
                             bpf_compute_budget,
                             compute_meter,
-                            &mut timings.details,
+                            timings,
                             self.rc.accounts.clone(),
                             &self.ancestors,
+                        );
+                        process_message_time.stop();
+                        saturating_add_assign!(
+                            timings.execute_accessories.process_message_us,
+                            process_message_time.as_us()
                         );
 
                         transaction_log_messages.push(Self::collect_log_messages(log_collector));
@@ -3618,7 +3612,13 @@ impl Bank {
                             process_result = Err(e);
                         }
 
+                        let mut update_executors_time = Measure::start("update_executors_time");
                         self.update_executors(process_result.is_ok(), executors);
+                        update_executors_time.stop();
+                        saturating_add_assign!(
+                            timings.execute_accessories.update_executors_us,
+                            update_executors_time.as_us()
+                        );
                     } else {
                         transaction_log_messages.push(None);
                         inner_instructions.push(None);

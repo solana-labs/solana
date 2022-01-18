@@ -11,6 +11,7 @@ use {
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+        execute_timings::{ExecuteDetailsTimings, ExecuteTimings},
         feature_set::{
             demote_program_write_locks, fix_write_privs, instructions_sysvar_enabled,
             neon_evm_compute_budget, remove_native_loader, requestable_heap_size,
@@ -27,7 +28,7 @@ use {
         },
         pubkey::Pubkey,
         rent::Rent,
-        system_program,
+        saturating_add_assign, system_program,
         sysvar::instructions,
         transaction::TransactionError,
     },
@@ -90,100 +91,6 @@ impl TransactionExecutor {
 
     pub fn clear_miss_for_test(&mut self) {
         self.is_miss = false;
-    }
-}
-
-#[derive(Default, Debug, PartialEq)]
-pub struct ProgramTiming {
-    pub accumulated_us: u64,
-    pub accumulated_units: u64,
-    pub count: u32,
-    pub errored_txs_compute_consumed: Vec<u64>,
-    // Sum of all units in `errored_txs_compute_consumed`
-    pub total_errored_units: u64,
-}
-
-impl ProgramTiming {
-    pub fn coalesce_error_timings(&mut self, current_estimated_program_cost: u64) {
-        for tx_error_compute_consumed in self.errored_txs_compute_consumed.drain(..) {
-            let compute_units_update =
-                std::cmp::max(current_estimated_program_cost, tx_error_compute_consumed);
-            self.accumulated_units = self.accumulated_units.saturating_add(compute_units_update);
-            self.count = self.count.saturating_add(1);
-        }
-    }
-
-    pub fn accumulate_program_timings(&mut self, other: &ProgramTiming) {
-        self.accumulated_us = self.accumulated_us.saturating_add(other.accumulated_us);
-        self.accumulated_units = self
-            .accumulated_units
-            .saturating_add(other.accumulated_units);
-        self.count = self.count.saturating_add(other.count);
-        // Clones the entire vector, maybe not great...
-        self.errored_txs_compute_consumed
-            .extend(other.errored_txs_compute_consumed.clone());
-        self.total_errored_units = self
-            .total_errored_units
-            .saturating_add(other.total_errored_units);
-    }
-}
-
-#[derive(Default, Debug, PartialEq)]
-pub struct ExecuteDetailsTimings {
-    pub serialize_us: u64,
-    pub create_vm_us: u64,
-    pub execute_us: u64,
-    pub deserialize_us: u64,
-    pub changed_account_count: u64,
-    pub total_account_count: u64,
-    pub total_data_size: usize,
-    pub data_size_changed: usize,
-    pub per_program_timings: HashMap<Pubkey, ProgramTiming>,
-}
-impl ExecuteDetailsTimings {
-    pub fn accumulate(&mut self, other: &ExecuteDetailsTimings) {
-        self.serialize_us = self.serialize_us.saturating_add(other.serialize_us);
-        self.create_vm_us = self.create_vm_us.saturating_add(other.create_vm_us);
-        self.execute_us = self.execute_us.saturating_add(other.execute_us);
-        self.deserialize_us = self.deserialize_us.saturating_add(other.deserialize_us);
-        self.changed_account_count = self
-            .changed_account_count
-            .saturating_add(other.changed_account_count);
-        self.total_account_count = self
-            .total_account_count
-            .saturating_add(other.total_account_count);
-        self.total_data_size = self.total_data_size.saturating_add(other.total_data_size);
-        self.data_size_changed = self
-            .data_size_changed
-            .saturating_add(other.data_size_changed);
-        for (id, other) in &other.per_program_timings {
-            let program_timing = self.per_program_timings.entry(*id).or_default();
-            program_timing.accumulate_program_timings(other);
-        }
-    }
-
-    pub fn accumulate_program(
-        &mut self,
-        program_id: &Pubkey,
-        us: u64,
-        compute_units_consumed: u64,
-        is_error: bool,
-    ) {
-        let program_timing = self.per_program_timings.entry(*program_id).or_default();
-        program_timing.accumulated_us = program_timing.accumulated_us.saturating_add(us);
-        if is_error {
-            program_timing
-                .errored_txs_compute_consumed
-                .push(compute_units_consumed);
-            program_timing.total_errored_units = program_timing
-                .total_errored_units
-                .saturating_add(compute_units_consumed);
-        } else {
-            program_timing.accumulated_units = program_timing
-                .accumulated_units
-                .saturating_add(compute_units_consumed);
-            program_timing.count = program_timing.count.saturating_add(1);
-        };
     }
 }
 
@@ -632,6 +539,9 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     }
     fn get_return_data(&self) -> &Option<(Pubkey, Vec<u8>)> {
         &self.return_data
+    }
+    fn get_timings(&mut self) -> &mut ExecuteDetailsTimings {
+        &mut self.timings
     }
 }
 pub struct ThisLogger {
@@ -1305,7 +1215,7 @@ impl MessageProcessor {
         feature_set: Arc<FeatureSet>,
         bpf_compute_budget: BpfComputeBudget,
         compute_meter: Rc<RefCell<dyn ComputeMeter>>,
-        timings: &mut ExecuteDetailsTimings,
+        timings: &mut ExecuteTimings,
         account_db: Arc<Accounts>,
         ancestors: &Ancestors,
     ) -> Result<(), InstructionError> {
@@ -1371,7 +1281,7 @@ impl MessageProcessor {
                 executable_accounts,
                 accounts,
                 &rent_collector.rent,
-                timings,
+                &mut timings.details,
                 invoke_context.get_logger(),
                 invoke_context.is_feature_active(&updated_verify_policy::id()),
                 invoke_context.is_feature_active(&demote_program_write_locks::id()),
@@ -1381,14 +1291,18 @@ impl MessageProcessor {
         time.stop();
         let post_remaining_units = invoke_context.get_compute_meter().borrow().get_remaining();
         let compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
-        timings.accumulate_program(
+        timings.details.accumulate_program(
             program_id,
             time.as_us(),
             compute_units_consumed,
             execute_or_verify_result.is_err(),
         );
 
-        timings.accumulate(&invoke_context.timings);
+        timings.details.accumulate(&invoke_context.timings);
+        saturating_add_assign!(
+            timings.execute_accessories.process_instructions_us,
+            time.as_us()
+        );
 
         execute_or_verify_result
     }
@@ -1410,7 +1324,7 @@ impl MessageProcessor {
         feature_set: Arc<FeatureSet>,
         bpf_compute_budget: BpfComputeBudget,
         compute_meter: Rc<RefCell<dyn ComputeMeter>>,
-        timings: &mut ExecuteDetailsTimings,
+        timings: &mut ExecuteTimings,
         account_db: Arc<Accounts>,
         ancestors: &Ancestors,
     ) -> Result<(), TransactionError> {
@@ -2118,7 +2032,7 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
-            &mut ExecuteDetailsTimings::default(),
+            &mut ExecuteTimings::default(),
             Arc::new(Accounts::default()),
             &ancestors,
         );
@@ -2146,7 +2060,7 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
-            &mut ExecuteDetailsTimings::default(),
+            &mut ExecuteTimings::default(),
             Arc::new(Accounts::default()),
             &ancestors,
         );
@@ -2178,7 +2092,7 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
-            &mut ExecuteDetailsTimings::default(),
+            &mut ExecuteTimings::default(),
             Arc::new(Accounts::default()),
             &ancestors,
         );
@@ -2302,7 +2216,7 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
-            &mut ExecuteDetailsTimings::default(),
+            &mut ExecuteTimings::default(),
             Arc::new(Accounts::default()),
             &ancestors,
         );
@@ -2334,7 +2248,7 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
-            &mut ExecuteDetailsTimings::default(),
+            &mut ExecuteTimings::default(),
             Arc::new(Accounts::default()),
             &ancestors,
         );
@@ -2364,7 +2278,7 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
-            &mut ExecuteDetailsTimings::default(),
+            &mut ExecuteTimings::default(),
             Arc::new(Accounts::default()),
             &ancestors,
         );

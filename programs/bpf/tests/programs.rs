@@ -21,7 +21,7 @@ use solana_rbpf::{
     vm::{Config, Tracer},
 };
 use solana_runtime::{
-    bank::{Bank, ExecuteTimings, NonceRollbackInfo, TransactionBalancesSet, TransactionResults},
+    bank::{Bank, NonceRollbackInfo, TransactionBalancesSet, TransactionResults},
     bank_client::BankClient,
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
     loader_utils::{
@@ -37,6 +37,7 @@ use solana_sdk::{
     clock::MAX_PROCESSING_AGE,
     compute_budget,
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
+    execute_timings::ExecuteTimings,
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     keyed_account::KeyedAccount,
     message::Message,

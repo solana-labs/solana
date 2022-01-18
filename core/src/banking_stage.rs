@@ -20,10 +20,7 @@ use {
     solana_poh::poh_recorder::{PohRecorder, PohRecorderError, TransactionRecorder},
     solana_runtime::{
         accounts_db::ErrorCounters,
-        bank::{
-            Bank, ExecuteTimings, TransactionBalancesSet, TransactionCheckResult,
-            TransactionExecutionResult,
-        },
+        bank::{Bank, TransactionBalancesSet, TransactionCheckResult, TransactionExecutionResult},
         bank_utils,
         cost_model::CostModel,
         cost_tracker::CostTracker,
@@ -36,6 +33,7 @@ use {
             Slot, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
             MAX_TRANSACTION_FORWARDING_DELAY_GPU,
         },
+        execute_timings::ExecuteTimings,
         feature_set,
         message::Message,
         pubkey::Pubkey,

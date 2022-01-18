@@ -52,6 +52,7 @@ use {
         program_utils::limited_deserialize,
         pubkey::Pubkey,
         rent::Rent,
+        saturating_add_assign,
         system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
     },
     std::{cell::RefCell, fmt::Debug, pin::Pin, rc::Rc, sync::Arc},
@@ -86,7 +87,16 @@ pub fn create_executor(
     use_jit: bool,
     reject_deployment_of_broken_elfs: bool,
 ) -> Result<Arc<BpfExecutor>, InstructionError> {
-    let syscall_registry = syscalls::register_syscalls(invoke_context).map_err(|e| {
+    let mut register_syscalls_time = Measure::start("register_syscalls_time");
+    let register_syscall_result = syscalls::register_syscalls(invoke_context);
+    register_syscalls_time.stop();
+    saturating_add_assign!(
+        invoke_context
+            .get_timings()
+            .create_executor_register_syscalls_us,
+        register_syscalls_time.as_us()
+    );
+    let syscall_registry = register_syscall_result.map_err(|e| {
         ic_msg!(invoke_context, "Failed to register syscalls: {}", e);
         InstructionError::ProgramEnvironmentSetupFailure
     })?;
@@ -108,9 +118,8 @@ pub fn create_executor(
     };
     let program_id;
     let load_elf_us: u64;
-    let verify_elf_us: u64;
     let mut jit_compile_us = 0u64;
-    let mut executable = {
+    let executable_result = {
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
         let program = keyed_account_at_index(keyed_accounts, program_account_index)?;
         program_id = *program.unsigned_key();
@@ -126,20 +135,35 @@ pub fn create_executor(
         load_elf_time.stop();
         load_elf_us = load_elf_time.as_us();
         executable
-    }
-    .map_err(|e| map_ebpf_error(invoke_context, e))?;
+    };
+
+    saturating_add_assign!(
+        invoke_context.get_timings().create_executor_load_elf_us,
+        load_elf_us
+    );
+
+    let mut executable = executable_result.map_err(|e| map_ebpf_error(invoke_context, e))?;
+
     let text_bytes = executable.get_text_bytes().1;
     let mut verify_code_time = Measure::start("verify_code_time");
     verifier::check(text_bytes, &config)
         .map_err(|e| map_ebpf_error(invoke_context, EbpfError::UserError(e.into())))?;
     verify_code_time.stop();
-    verify_elf_us = verify_code_time.as_us();
+    let verify_elf_us = verify_code_time.as_us();
+    saturating_add_assign!(
+        invoke_context.get_timings().create_executor_verify_code_us,
+        verify_elf_us
+    );
     if use_jit {
         let mut jit_compile_time = Measure::start("jit_compile_time");
         let jit_compile_result =
             Executable::<BpfError, ThisInstructionMeter>::jit_compile(&mut executable);
         jit_compile_time.stop();
         jit_compile_us = jit_compile_time.as_us();
+        saturating_add_assign!(
+            invoke_context.get_timings().create_executor_jit_compile_us,
+            jit_compile_us
+        );
         if let Err(err) = jit_compile_result {
             ic_msg!(invoke_context, "Failed to compile program {:?}", err);
             return Err(InstructionError::ProgramFailedToCompile);
@@ -273,7 +297,9 @@ fn process_instruction_common(
             return Err(InstructionError::IncorrectProgramId);
         }
 
-        let executor = match invoke_context.get_executor(program_id) {
+        let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
+        let maybe_executor = invoke_context.get_executor(program_id);
+        let executor = match maybe_executor {
             Some(executor) => executor,
             None => {
                 let executor =
@@ -282,6 +308,12 @@ fn process_instruction_common(
                 executor
             }
         };
+        get_or_create_executor_time.stop();
+        saturating_add_assign!(
+            invoke_context.get_timings().get_or_create_executor_us,
+            get_or_create_executor_time.as_us()
+        );
+
         executor.execute(
             loader_id,
             program_id,
@@ -1053,6 +1085,7 @@ mod tests {
             account_utils::StateMut,
             client::SyncClient,
             clock::Clock,
+            execute_timings::ExecuteDetailsTimings,
             feature_set::FeatureSet,
             genesis_config::create_genesis_config,
             instruction::Instruction,
@@ -1330,6 +1363,7 @@ mod tests {
             sysvars: vec![],
             disabled_features: vec![].into_iter().collect(),
             return_data: None,
+            execute_timings: ExecuteDetailsTimings::default(),
         };
         assert_eq!(
             Err(InstructionError::ProgramFailedToComplete),
