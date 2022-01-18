@@ -3237,7 +3237,7 @@ impl AccountsDb {
                                     slot
                                 );
                             }
-                            error!("reset append_vec: {}", store.append_vec_id());
+                            //error!("reset append_vec: {}", store.append_vec_id());
                             store.accounts.reset2();
                             false
                         } else {
