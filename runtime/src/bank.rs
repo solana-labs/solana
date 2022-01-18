@@ -2633,7 +2633,7 @@ impl Bank {
         let mut hash = self.hash.write().unwrap();
         if *hash == Hash::default() {
             // finish up any deferred changes to account state
-            self.collect_rent_eagerly();
+            self.collect_rent_eagerly(false);
             self.collect_fees();
             self.distribute_rent();
             self.update_slot_history();
@@ -4111,7 +4111,13 @@ impl Bank {
         }
     }
 
-    fn collect_rent_eagerly(&self) {
+    /// after deserialize, populate rewrites with accounts that would normally have had their data rewritten in this slot due to rent collection (but didn't)
+    pub fn prepare_rewrites_for_hash(&self) {
+        self.collect_rent_eagerly(true);
+        error!("ancient_append_vec: collecting rewrites: {}", self.rewrites.len());
+    }
+
+    fn collect_rent_eagerly(&self, just_rewrites: bool) {
         if !self.enable_eager_rent_collection() {
             return;
         }
@@ -4121,7 +4127,7 @@ impl Bank {
         let count = partitions.len();
         let account_count: usize = partitions
             .into_iter()
-            .map(|partition| self.collect_rent_in_partition(partition))
+            .map(|partition| self.collect_rent_in_partition(partition, just_rewrites))
             .sum();
         measure.stop();
         datapoint_info!(
@@ -4166,7 +4172,7 @@ impl Bank {
         }
     }
 
-    fn collect_rent_in_partition(&self, partition: Partition) -> usize {
+    fn collect_rent_in_partition(&self, partition: Partition, just_rewrites: bool) -> usize {
         let subrange = Self::pubkey_range_from_partition(partition);
 
         let thread_pool = &self.rc.accounts.accounts_db.thread_pool;
@@ -4197,20 +4203,23 @@ impl Bank {
             //  verify the whole on-chain state (= all accounts)
             //  via the account delta hash slowly once per an epoch.
             if rent != 0 {
-                self.store_account(&pubkey, &account);
-            }
-            else {
-                let hash = crate::accounts_db::AccountsDb::hash_account(self.slot(), &account, &pubkey);
+                if !just_rewrites {
+                    self.store_account(&pubkey, &account);
+                }
+            } else {
+                let hash =
+                    crate::accounts_db::AccountsDb::hash_account(self.slot(), &account, &pubkey);
                 self.rewrites.insert(pubkey, hash); // this would have been rewritten, except we're not going to do so
             }
             rent_debits.insert(&pubkey, rent, account.lamports());
         }
-        self.collected_rent.fetch_add(total_rent, Relaxed);
-        self.rewards
-            .write()
-            .unwrap()
-            .extend(rent_debits.into_unordered_rewards_iter());
-
+        if !just_rewrites {
+            self.collected_rent.fetch_add(total_rent, Relaxed);
+            self.rewards
+                .write()
+                .unwrap()
+                .extend(rent_debits.into_unordered_rewards_iter());
+        }
         self.rc
             .accounts
             .hold_range_in_memory(&subrange, false, thread_pool);
