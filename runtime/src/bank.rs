@@ -5260,6 +5260,7 @@ impl Bank {
     ///  of the delta of the ledger since the last vote and up to now
     fn hash_internal_state(&self) -> Hash {
         // If there are no accounts, return the hash of the previous state and the latest blockhash
+        error!("ancient_append_vec: rewrites: {}", self.rewrites.len());
         let accounts_delta_hash = self
             .rc
             .accounts
