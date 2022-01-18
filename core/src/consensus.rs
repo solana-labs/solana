@@ -451,7 +451,7 @@ impl Tower {
         self.stray_restored_slot
     }
 
-    pub fn last_vote(&mut self) -> Vote {
+    pub fn last_vote(&self) -> Vote {
         self.last_vote.clone()
     }
 
