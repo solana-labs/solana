@@ -357,7 +357,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     pubkey,
                 );
                 if reclaims.len() > 1 {
-                    error!("2.2 reclaims: {:?}, {}, {:?}", reclaims, pubkey, other_slot);
+                    //error!("2.2 reclaims: {:?}, {}, {:?}", reclaims, pubkey, other_slot);
                 }
                 Self::update_stat(&self.stats().updates_in_mem, 1);
             } else {
