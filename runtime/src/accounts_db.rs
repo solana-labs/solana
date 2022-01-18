@@ -3207,7 +3207,7 @@ impl AccountsDb {
                     let writer = current_storage.as_ref().unwrap();
                     ids.push(writer.1.append_vec_id());
                     if created_this_slot {
-                        error!("rewrites2 from same slot as ancient: {}, {:?}", slot, accounts_next_append_vec.iter().map(|(a,b,c)| (a,c,b.offset)).collect::<Vec<_>>());
+                        //error!("rewrites2 from same slot as ancient: {}, {:?}", slot, accounts_next_append_vec.iter().map(|(a,b,c)| (a,c,b.offset)).collect::<Vec<_>>());
                     }
 
                                         let clone = &writer.1.clone();
