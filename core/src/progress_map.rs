@@ -410,7 +410,7 @@ impl std::ops::DerefMut for ProgressMap {
 }
 
 impl ProgressMap {
-    pub fn insert(&mut self, slot: Slot, fork_progress: ForkProgress) {
+    pub fn insert2(&mut self, slot: Slot, fork_progress: ForkProgress) {
         self.progress_map.insert(slot, fork_progress);
     }
 
@@ -478,7 +478,7 @@ impl ProgressMap {
     pub fn get_latest_leader_slot(&self, slot: Slot) -> Option<Slot> {
         let propagated_stats = self
             .get_propagated_stats(slot)
-            .expect("All frozen banks must exist in the Progress map");
+            .expect(&format!("All frozen banks must exist in the Progress map: {}, map items: {}", slot, self.progress_map.len()));
 
         if propagated_stats.is_leader_slot {
             Some(slot)
