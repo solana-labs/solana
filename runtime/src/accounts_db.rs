@@ -3086,8 +3086,10 @@ if false {
         let mut i = 0;
         let len = sorted_slots.len();
         let mut t = Measure::start("");
+        let mut first = true;
         for slot in sorted_slots {
-                        if i == 0 {
+                        if first {
+                            first = false;
                 error!("ancient_append_vec: combine_ancient_slots max_root: {}, first slot: {}, distance from max: {}", max_root, slot, max_root.saturating_sub(slot));
             }
             if let Some(storages) = self.storage.map.get(&slot) {
