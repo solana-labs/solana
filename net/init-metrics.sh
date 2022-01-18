@@ -58,12 +58,14 @@ if $useEnv; then
     usage "SOLANA_METRICS_CONFIG is not defined in the environment"
 else
   username=$1
+  echo "username innet/init-metrics is : $username"
   [[ -n "$username" ]] || usage "username not specified"
 
   read -rs -p "InfluxDB password for $username: " password
   [[ -n $password ]] || { echo "Password not specified"; exit 1; }
   echo
 
+  echo "password is : $password"
   password="$(urlencode "$password")"
 
   if ! $createWithoutConfig; then
@@ -77,7 +79,10 @@ else
       "$host/query?u=${username}&p=${password}" \
       --data-urlencode "q=$*"
   }
-
+  
+  echo "username innet/init-metrics is : $username"
+  echo "password is : $password"
+  echo "netBasename is : $netBasename"
   query "DROP DATABASE \"$netBasename\""
   ! $delete || exit 0
   query "CREATE DATABASE \"$netBasename\""

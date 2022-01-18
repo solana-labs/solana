@@ -11,11 +11,13 @@ netDir=$(
   cd "$(dirname "${BASH_SOURCE[0]}")" || exit
   echo "$PWD"
 )
+echo "netDir in net/common is : $netDir"
 netConfigDir="$netDir"/config
 mkdir -p "$netConfigDir"
 
 SOLANA_ROOT="$netDir"/..
 # shellcheck source=scripts/configure-metrics.sh
+echo "SOLANA_ROOT in net/common is : $SOLANA_ROOT"
 source "$SOLANA_ROOT"/scripts/configure-metrics.sh
 
 configFile="$netConfigDir/config"
@@ -58,6 +60,7 @@ loadConfigFile() {
 
   # shellcheck source=/dev/null
   source "$configFile"
+  cat "$configFile"
   [[ -n "$publicNetwork" ]] || usage "Config file invalid, publicNetwork unspecified: $configFile"
   [[ -n "$netBasename" ]] || usage "Config file invalid, netBasename unspecified: $configFile"
   [[ -n $sshPrivateKey ]] || usage "Config file invalid, sshPrivateKey unspecified: $configFile"
