@@ -136,7 +136,7 @@ fn run_dos(
             }
         }
         count += 1;
-        if last_log.elapsed().as_secs() > 5 {
+        if last_log.elapsed().as_millis() > 10_000 {
             info!("count: {} errors: {}", count, error_count);
             last_log = Instant::now();
             count = 0;
@@ -271,6 +271,7 @@ fn main() {
 
 #[cfg(test)]
 pub mod test {
+    use solana_local_cluster::{cluster::Cluster, local_cluster::LocalCluster};
     use {super::*, solana_sdk::timing::timestamp};
 
     #[test]
@@ -307,6 +308,29 @@ pub mod test {
             "repair_shred".to_string(),
             10,
             "serve_repair".to_string(),
+            None,
+        );
+    }
+
+    #[test]
+    #[ignore]
+    fn test_dos_local_cluster() {
+        solana_logger::setup();
+        let num_nodes = 1;
+        let cluster =
+            LocalCluster::new_with_equal_stakes(num_nodes, 100, 3, SocketAddrSpace::Unspecified);
+        assert_eq!(cluster.validators.len(), num_nodes);
+
+        let nodes = cluster.get_node_pubkeys();
+        let node = cluster.get_contact_info(&nodes[0]).unwrap().clone();
+
+        run_dos(
+            &[node],
+            10_000_000,
+            cluster.entry_point_info.gossip,
+            "transaction".to_string(),
+            1000,
+            "tpu".to_string(),
             None,
         );
     }
