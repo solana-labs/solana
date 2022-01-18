@@ -3302,13 +3302,15 @@ if false {
         fn write_accounts_to_ancient_append_vec(storage: &Arc<AccountStorageEntry>, )
     */
     pub fn shrink_candidate_slots(&self) -> usize {
-        self.shrink_ancient_slots();
         let shrink_candidates_slots =
             std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
-        error!(
-            "ancient_append_vec: shrink_candidate_slots, len: {}",
-            shrink_candidates_slots.len()
-        );
+        if !shrink_candidates_slots.is_empty() {
+            self.shrink_ancient_slots();
+            error!(
+                "ancient_append_vec: shrink_candidate_slots, len: {}",
+                shrink_candidates_slots.len()
+            );
+        }
         let (shrink_slots, shrink_slots_next_batch) = {
             if let AccountShrinkThreshold::TotalSpace { shrink_ratio } = self.shrink_ratio {
                 let (shrink_slots, shrink_slots_next_batch) =
