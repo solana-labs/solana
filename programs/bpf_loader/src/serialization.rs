@@ -10,65 +10,83 @@ use {
         system_instruction::MAX_PERMITTED_DATA_LENGTH,
         transaction_context::{InstructionAccount, InstructionContext, TransactionContext},
     },
-    std::{collections::hash_map::Entry, collections::HashMap, io::prelude::*, mem::size_of},
+    std::{io::prelude::*, mem::size_of},
 };
 
 /// Holds information about duplicate instruction accounts. It can be used as a
 /// cache to avoid calculating duplicates repeatedly.
+///
+/// The cost of constructor `[new]` is `O(n)` and duplicate detection is based
+/// on duplicate instruction accounts having the same `index_in_transaction`.
 struct DuplicateInstructionAccounts<'a> {
     instruction_context: &'a InstructionContext,
-    /// Used to translate between position of duplicate and index in instruction.
-    index_offset: usize,
-    /// Maps an instruction account's index_in_transaction to its position.
-    map: HashMap<usize, usize>,
+    /// Substract from `index_in_instruction` to get the zero-based position.
+    position_offset: usize,
+    /// Substract from `index_in_transaction` to get the zero-based cache index.
+    cache_offset: usize,
+    /// Stores the position of an account's first occurrence.
+    cache: Vec<usize>,
 }
 
 impl<'a> DuplicateInstructionAccounts<'a> {
     fn new(instruction_context: &'a InstructionContext) -> Result<Self, InstructionError> {
-        // We create the HashMap with capacity to avoid reallocations. If there
-        // are duplicate instruction accounts, the map's capacity will not be
-        // used up. Neglect this as elements are small and the number of
-        // accounts is bounded.
-        let mut map: HashMap<usize, usize> =
-            HashMap::with_capacity(instruction_context.get_number_of_instruction_accounts());
-
         // Instruction accounts start after program accounts.
-        let index_offset = instruction_context.get_number_of_program_accounts();
-        for index_in_instruction in index_offset..instruction_context.get_number_of_accounts() {
+        let position_offset = instruction_context.get_number_of_program_accounts();
+        let mut indices_in_transaction =
+            Vec::with_capacity(instruction_context.get_number_of_instruction_accounts());
+        for index_in_instruction in position_offset..instruction_context.get_number_of_accounts() {
+            indices_in_transaction
+                .push(instruction_context.get_index_in_transaction(index_in_instruction)?);
+        }
+        let cache_offset = indices_in_transaction.into_iter().min().unwrap_or(0);
+
+        let mut pre_cache: Vec<Option<usize>> =
+            vec![None; instruction_context.get_number_of_instruction_accounts()];
+        let mut number_unique_accounts = 0;
+        for index_in_instruction in position_offset..instruction_context.get_number_of_accounts() {
             let index_in_transaction =
                 instruction_context.get_index_in_transaction(index_in_instruction)?;
-            match map.entry(index_in_transaction) {
-                Entry::Vacant(x) => {
-                    x.insert(index_in_instruction - index_offset);
-                }
-                Entry::Occupied(_) => {
-                    // It is a duplicate since we have already seen an account
-                    // with identical index_in_transaction.
-                }
+            let duplicate = pre_cache
+                .get_mut(index_in_transaction - cache_offset)
+                .ok_or(InstructionError::NotEnoughAccountKeys)?;
+            if duplicate.is_none() {
+                // This account was not seen before.
+                number_unique_accounts += 1;
+                let _ = duplicate.insert(index_in_instruction - position_offset);
             }
+        }
+
+        pre_cache.truncate(number_unique_accounts);
+        let mut cache = Vec::with_capacity(number_unique_accounts);
+        for item in pre_cache.iter() {
+            let position = item.ok_or(InstructionError::NotEnoughAccountKeys)?;
+            cache.push(position);
         }
 
         Ok(Self {
             instruction_context,
-            index_offset,
-            map,
+            position_offset,
+            cache_offset,
+            cache,
         })
     }
 
+    /// If `index_in_instruction` is not the first occurrence of a duplicate
+    /// account, it returns the position of the first occurence. Otherwise it
+    /// returns `Ok(None)` or an error if the account cannot be found.
     fn get(&self, index_in_instruction: usize) -> Result<Option<usize>, InstructionError> {
         let index_in_transaction = self
             .instruction_context
             .get_index_in_transaction(index_in_instruction)?;
-        match self.map.get(&index_in_transaction) {
-            None => Err(InstructionError::MissingAccount),
-            Some(position) => {
-                if position + self.index_offset == index_in_instruction {
-                    // The map entry corresponds to this account, hence not a duplicate.
-                    Ok(None)
-                } else {
-                    Ok(Some(*position))
-                }
-            }
+        let position = self
+            .cache
+            .get(index_in_transaction - self.cache_offset)
+            .ok_or(InstructionError::NotEnoughAccountKeys)?;
+        if position + self.position_offset != index_in_instruction {
+            // Duplicate, this account can also be found at position.
+            Ok(Some(*position))
+        } else {
+            Ok(None)
         }
     }
 }
@@ -517,11 +535,9 @@ mod tests {
             .get_current_instruction_context()
             .unwrap();
         let duplicates = DuplicateInstructionAccounts::new(instruction_context).unwrap();
-        assert_eq!(1, duplicates.index_offset); // there's one program account
-        assert_eq!(
-            HashMap::from([(1usize, 0usize), (2, 1), (3, 2),]),
-            duplicates.map,
-        );
+        assert_eq!(1, duplicates.position_offset); // there's one program account
+        assert_eq!(1, duplicates.cache_offset);
+        assert_eq!(vec![0, 1, 2], duplicates.cache,);
     }
 
     #[test]
