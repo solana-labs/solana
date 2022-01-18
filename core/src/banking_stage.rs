@@ -1,10 +1,10 @@
 //! The `banking_stage` processes Transaction messages. It is intended to be used
 //! to contruct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
-use histogram::Histogram;
 use {
     crate::{packet_deduper::PacketDeduper, qos_service::QosService},
     crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError},
+    histogram::Histogram,
     itertools::Itertools,
     retain_mut::RetainMut,
     solana_entry::entry::hash_transactions,
@@ -96,7 +96,7 @@ pub struct BankingStageStats {
     current_buffered_packet_batches_count: AtomicUsize,
     rebuffered_packets_count: AtomicUsize,
     consumed_buffered_packets_count: AtomicUsize,
-    pub(crate) packet_batch_indices_len: Histogram,
+    packet_batch_indices_len: Histogram,
 
     // Timing
     consume_buffered_packets_elapsed: AtomicU64,
