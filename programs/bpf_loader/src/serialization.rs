@@ -20,11 +20,9 @@ use {
 /// on duplicate instruction accounts having the same `index_in_transaction`.
 struct DuplicateInstructionAccounts<'a> {
     instruction_context: &'a InstructionContext,
-    /// Substract from `index_in_instruction` to get the zero-based position.
-    position_offset: usize,
     /// Substract from `index_in_transaction` to get the zero-based cache index.
     cache_offset: usize,
-    /// Stores the position of an account's first occurrence.
+    /// Stores the `index_in_instruction` of an account's first occurrence.
     cache: Vec<usize>,
 }
 
@@ -52,7 +50,7 @@ impl<'a> DuplicateInstructionAccounts<'a> {
             if duplicate.is_none() {
                 // This account was not seen before.
                 number_unique_accounts += 1;
-                let _ = duplicate.insert(index_in_instruction - position_offset);
+                let _ = duplicate.insert(index_in_instruction);
             }
         }
 
@@ -65,7 +63,6 @@ impl<'a> DuplicateInstructionAccounts<'a> {
 
         Ok(Self {
             instruction_context,
-            position_offset,
             cache_offset,
             cache,
         })
@@ -78,13 +75,15 @@ impl<'a> DuplicateInstructionAccounts<'a> {
         let index_in_transaction = self
             .instruction_context
             .get_index_in_transaction(index_in_instruction)?;
-        let position = self
+        let other = self
             .cache
             .get(index_in_transaction - self.cache_offset)
             .ok_or(InstructionError::NotEnoughAccountKeys)?;
-        if position + self.position_offset != index_in_instruction {
-            // Duplicate, this account can also be found at position.
-            Ok(Some(*position))
+        if *other != index_in_instruction {
+            // Duplicate, this account can also be found at this position.
+            Ok(Some(
+                *other - self.instruction_context.get_number_of_program_accounts(),
+            ))
         } else {
             Ok(None)
         }
@@ -535,9 +534,9 @@ mod tests {
             .get_current_instruction_context()
             .unwrap();
         let duplicates = DuplicateInstructionAccounts::new(instruction_context).unwrap();
-        assert_eq!(1, duplicates.position_offset); // there's one program account
+        // The `index_in_transaction` of the first instruction account is 1.
         assert_eq!(1, duplicates.cache_offset);
-        assert_eq!(vec![0, 1, 2], duplicates.cache,);
+        assert_eq!(vec![1, 2, 3], duplicates.cache,);
     }
 
     #[test]
