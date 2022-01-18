@@ -1,6 +1,7 @@
 //! The `banking_stage` processes Transaction messages. It is intended to be used
 //! to contruct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
+use histogram::Histogram;
 use {
     crate::{packet_deduper::PacketDeduper, qos_service::QosService},
     crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError},
@@ -95,6 +96,7 @@ pub struct BankingStageStats {
     current_buffered_packet_batches_count: AtomicUsize,
     rebuffered_packets_count: AtomicUsize,
     consumed_buffered_packets_count: AtomicUsize,
+    pub(crate) packet_batch_indices_len: Histogram,
 
     // Timing
     consume_buffered_packets_elapsed: AtomicU64,
@@ -111,6 +113,7 @@ impl BankingStageStats {
     pub fn new(id: u32) -> Self {
         BankingStageStats {
             id,
+            packet_batch_indices_len: Histogram::configure().max_value(PACKETS_PER_BATCH as u64).build().unwrap(),
             ..BankingStageStats::default()
         }
     }
@@ -147,9 +150,10 @@ impl BankingStageStats {
                 .unprocessed_packet_conversion_elapsed
                 .load(Ordering::Relaxed)
             + self.transaction_processing_elapsed.load(Ordering::Relaxed)
+            + self.packet_batch_indices_len.entries()
     }
 
-    fn report(&self, report_interval_ms: u64) {
+    fn report(&mut self, report_interval_ms: u64) {
         // skip repoting metrics if stats is empty
         if self.is_empty() {
             return;
@@ -255,7 +259,28 @@ impl BankingStageStats {
                         .swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
+                (
+                    "packet_batch_indices_len_min",
+                    self.packet_batch_indices_len.minimum().unwrap_or(0) as i64,
+                    i64
+                ),
+                (
+                    "packet_batch_indices_len_max",
+                    self.packet_batch_indices_len.maximum().unwrap_or(0) as i64,
+                    i64
+                ),
+                (
+                    "packet_batch_indices_len_mean",
+                    self.packet_batch_indices_len.mean().unwrap_or(0) as i64,
+                    i64
+                ),
+                (
+                    "packet_batch_indices_len_90pct",
+                    self.packet_batch_indices_len.percentile(90.0).unwrap_or(0) as i64,
+                    i64
+                )
             );
+            self.packet_batch_indices_len.clear();
         }
     }
 }
@@ -734,7 +759,7 @@ impl BankingStage {
         let recorder = poh_recorder.lock().unwrap().recorder();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut buffered_packet_batches = VecDeque::with_capacity(batch_limit);
-        let banking_stage_stats = BankingStageStats::new(id);
+        let mut banking_stage_stats = BankingStageStats::new(id);
         let qos_service = QosService::new(cost_model, id);
         loop {
             let my_pubkey = cluster_info.id();
@@ -779,7 +804,7 @@ impl BankingStage {
                 id,
                 batch_limit,
                 &mut buffered_packet_batches,
-                &banking_stage_stats,
+                &mut banking_stage_stats,
                 packet_deduper,
             ) {
                 Ok(()) | Err(RecvTimeoutError::Timeout) => (),
@@ -1384,7 +1409,7 @@ impl BankingStage {
         id: u32,
         batch_limit: usize,
         buffered_packet_batches: &mut UnprocessedPacketBatches,
-        banking_stage_stats: &BankingStageStats,
+        banking_stage_stats: &mut BankingStageStats,
         packet_deduper: &PacketDeduper,
     ) -> Result<(), RecvTimeoutError> {
         let mut recv_time = Measure::start("receive_and_buffer_packets_recv");
@@ -1468,7 +1493,7 @@ impl BankingStage {
         newly_buffered_packets_count: &mut usize,
         batch_limit: usize,
         packet_deduper: &PacketDeduper,
-        banking_stage_stats: &BankingStageStats,
+        banking_stage_stats: &mut BankingStageStats,
     ) {
         packet_deduper.dedupe_packets(&packet_batch, &mut packet_indexes, banking_stage_stats);
         if Self::packet_has_more_unprocessed_transactions(&packet_indexes) {
@@ -1478,6 +1503,8 @@ impl BankingStage {
                     *dropped_packets_count += dropped_batch.1.len();
                 }
             }
+            let _ = banking_stage_stats.packet_batch_indices_len.increment(packet_indexes.len() as u64);
+
             *newly_buffered_packets_count += packet_indexes.len();
             unprocessed_packet_batches.push_back((packet_batch, packet_indexes, false));
         }
