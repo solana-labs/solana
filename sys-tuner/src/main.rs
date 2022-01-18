@@ -93,6 +93,10 @@ fn tune_kernel_udp_buffers_and_vmmap() {
 
     // increase mmap counts for many append_vecs
     sysctl_write("vm.max_map_count", "1000000");
+
+    // Reference: https://community.mellanox.com/s/article/linux-sysctl-tuning
+    sysctl_write("net.core.optmem_max", "4194304");
+    sysctl_write("net.core.netdev_max_backlog", "250000");
 }
 
 #[cfg(unix)]

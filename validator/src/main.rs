@@ -441,9 +441,9 @@ fn check_os_network_limits() {
     recommended_limits.insert("net.core.wmem_default", 134217728);
     recommended_limits.insert("vm.max_map_count", 1000000);
 
-    // Additionally collect the following limits
-    recommended_limits.insert("net.core.optmem_max", 0);
-    recommended_limits.insert("net.core.netdev_max_backlog", 0);
+    // Reference: https://community.mellanox.com/s/article/linux-sysctl-tuning
+    recommended_limits.insert("net.core.optmem_max", 4194304);
+    recommended_limits.insert("net.core.netdev_max_backlog", 250000);
 
     let mut current_limits: HashMap<&str, i64> = HashMap::default();
     for (key, _) in recommended_limits.iter() {
