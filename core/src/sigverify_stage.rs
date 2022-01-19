@@ -291,6 +291,7 @@ impl SigVerifyStage {
         let verifier = verifier.clone();
         let mut stats = SigVerifierStats::default();
         let mut last_print = Instant::now();
+        const MAX_BLOOM_AGE: Duration = Duration::from_millis(2_000);
         Builder::new()
             .name("solana-verifier".to_string())
             .spawn(move || {
