@@ -3173,7 +3173,7 @@ if false {
 
                 let mut ids = vec![writer.1.append_vec_id()];
                 let mut drop_root = slot > writer.0;
-                if true { //accounts_next_append_vec.is_empty() {
+                let prev = if true { //accounts_next_append_vec.is_empty() {
                     // write what we can to the current ancient storage
                     let _store_accounts_timing = self.store_accounts_frozen(
                         writer.0,
@@ -3182,13 +3182,17 @@ if false {
                         Some(Box::new(move |_, _| writer.1.clone())),
                         None,
                     );
+                    let prev = format!("{:?}", accounts_this_append_vec.iter().map(|(a,b,c)| (a,c,b.offset)).collect::<Vec<_>>());
                     accounts_this_append_vec.clear();
                     hashes_this_append_vec.clear();
+                    prev
                 }
+                else {
+                    format!("")
+                };
 
                 if !accounts_next_append_vec.is_empty() {
                     created_this_slot = true;
-                    let prev = format!("{:?}", accounts_this_append_vec.iter().map(|(a,b,c)| (a,c,b.offset)).collect::<Vec<_>>());
                     writer.1.accounts.set_full_ancient();
                     accounts_this_append_vec.append(&mut accounts_next_append_vec);
                     hashes_this_append_vec.append(&mut hashes_next_append_vec);
