@@ -3322,7 +3322,8 @@ if false {
                         match self.accounts_index.get(&account.meta.pubkey, None, Some(append_vec_slot)) {
                             AccountIndexGetResult::Found(g, _) => 
                         assert!(g.slot_list().iter().any(|(slot, info)| {
-                            if slot == &append_vec_slot && info.store_id() == store_id {
+                            if slot == &append_vec_slot {
+                                assert_eq!(info.store_id(), store_id);
                                 true
                             }
                             else {
@@ -3335,7 +3336,7 @@ if false {
                 }
                 start = next;
             }
-
+            assert_eq!(current, recent.len());
         }
         else {
     let temp = Arc::clone(writer);
