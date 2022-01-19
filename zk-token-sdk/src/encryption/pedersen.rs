@@ -1,8 +1,7 @@
 #[cfg(not(target_arch = "bpf"))]
-use rand::{rngs::OsRng, CryptoRng, RngCore};
+use rand::rngs::OsRng;
 use {
-    crate::encryption::elgamal::ElGamalPubkey,
-    core::ops::{Add, Div, Mul, Sub},
+    core::ops::{Add, Mul, Sub},
     curve25519_dalek::{
         constants::{RISTRETTO_BASEPOINT_COMPRESSED, RISTRETTO_BASEPOINT_POINT},
         ristretto::{CompressedRistretto, RistrettoPoint},
@@ -49,24 +48,29 @@ impl Pedersen {
         let x: Scalar = amount.into();
         let r = open.get_scalar();
 
-        PedersenCommitment(RistrettoPoint::multiscalar_mul(&[x, r], &[G, H]))
+        PedersenCommitment(RistrettoPoint::multiscalar_mul(&[x, *r], &[G, H]))
     }
 }
 
 /// Pedersen opening type.
 ///
 /// Instances of Pedersen openings are zeroized on drop.
-#[derive(Clone, Debug, Default, Serialize, Deserialize, Zeroize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Zeroize)]
 #[zeroize(drop)]
 pub struct PedersenOpening(pub(crate) Scalar);
 impl PedersenOpening {
-    pub fn get_scalar(&self) -> Scalar {
-        self.0
+    pub fn get_scalar(&self) -> &Scalar {
+        &self.0
     }
 
     #[cfg(not(target_arch = "bpf"))]
     pub fn random() -> Self {
         PedersenOpening(Scalar::random(&mut OsRng))
+    }
+
+    #[allow(clippy::wrong_self_convention)]
+    pub fn as_bytes(&self) -> &[u8; 32] {
+        self.0.as_bytes()
     }
 
     #[allow(clippy::wrong_self_convention)]
@@ -139,8 +143,13 @@ define_mul_variants!(
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct PedersenCommitment(pub(crate) RistrettoPoint);
 impl PedersenCommitment {
-    pub fn get_point(&self) -> RistrettoPoint {
-        self.0
+    pub fn get_point(&self) -> &RistrettoPoint {
+        &self.0
+    }
+
+    #[allow(clippy::wrong_self_convention)]
+    pub fn as_bytes(&self) -> &[u8; 32] {
+        self.0.compress().as_bytes()
     }
 
     #[allow(clippy::wrong_self_convention)]
