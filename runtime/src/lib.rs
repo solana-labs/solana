@@ -15,7 +15,6 @@ pub mod bank_forks;
 pub mod bank_utils;
 pub mod block_cost_limits;
 pub mod blockhash_queue;
-pub mod bloom;
 pub mod builtins;
 pub mod commitment;
 pub mod contains;

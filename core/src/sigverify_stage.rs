@@ -8,8 +8,10 @@
 use {
     crate::sigverify,
     crossbeam_channel::{SendError, Sender as CrossbeamSender},
+    solana_bloom::bloom::{AtomicBloom, Bloom},
     solana_measure::measure::Measure,
     solana_perf::packet::PacketBatch,
+    solana_perf::sigverify::dedup_packets,
     solana_sdk::timing,
     solana_streamer::streamer::{self, PacketBatchReceiver, StreamerError},
     std::{
@@ -50,10 +52,13 @@ struct SigVerifierStats {
     recv_batches_us_hist: histogram::Histogram, // time to call recv_batch
     verify_batches_pp_us_hist: histogram::Histogram, // per-packet time to call verify_batch
     discard_packets_pp_us_hist: histogram::Histogram, // per-packet time to call verify_batch
+    dedup_packets_pp_us_hist: histogram::Histogram, // per-packet time to call verify_batch
     batches_hist: histogram::Histogram,         // number of packet batches per verify call
     packets_hist: histogram::Histogram,         // number of packets per verify call
     total_batches: usize,
     total_packets: usize,
+    total_dedup: usize,
+    total_excess_fail: usize,
 }
 
 impl SigVerifierStats {
@@ -123,6 +128,26 @@ impl SigVerifierStats {
                 i64
             ),
             (
+                "dedup_packets_pp_us_90pct",
+                self.dedup_packets_pp_us_hist.percentile(90.0).unwrap_or(0),
+                i64
+            ),
+            (
+                "dedup_packets_pp_us_min",
+                self.dedup_packets_pp_us_hist.minimum().unwrap_or(0),
+                i64
+            ),
+            (
+                "dedup_packets_pp_us_max",
+                self.dedup_packets_pp_us_hist.maximum().unwrap_or(0),
+                i64
+            ),
+            (
+                "dedup_packets_pp_us_mean",
+                self.dedup_packets_pp_us_hist.mean().unwrap_or(0),
+                i64
+            ),
+            (
                 "batches_90pct",
                 self.batches_hist.percentile(90.0).unwrap_or(0),
                 i64
@@ -140,6 +165,8 @@ impl SigVerifierStats {
             ("packets_mean", self.packets_hist.mean().unwrap_or(0), i64),
             ("total_batches", self.total_batches, i64),
             ("total_packets", self.total_packets, i64),
+            ("total_dedup", self.total_dedup, i64),
+            ("total_excess_fail", self.total_excess_fail, i64),
         );
     }
 }
@@ -162,7 +189,8 @@ impl SigVerifyStage {
         Self { thread_hdl }
     }
 
-    pub fn discard_excess_packets(batches: &mut Vec<PacketBatch>, max_packets: usize) {
+    pub fn discard_excess_packets(batches: &mut Vec<PacketBatch>, max_packets: usize) -> usize {
+        let mut fail = 0;
         let mut received_ips = HashMap::new();
         for (batch_index, batch) in batches.iter().enumerate() {
             for (packet_index, packets) in batch.packets.iter().enumerate() {
@@ -187,27 +215,43 @@ impl SigVerifyStage {
         for (_addr, indexes) in received_ips {
             for (batch_index, packet_index) in indexes {
                 batches[batch_index].packets[packet_index].meta.discard = true;
+                fail += 1;
             }
         }
+        fail
     }
 
     fn verifier<T: SigVerifier>(
+        bloom: &AtomicBloom<&[u8]>,
         recvr: &PacketBatchReceiver,
         sendr: &CrossbeamSender<Vec<PacketBatch>>,
         verifier: &T,
         stats: &mut SigVerifierStats,
     ) -> Result<()> {
-        let (mut batches, len, recv_time) = streamer::recv_batch(recvr)?;
+        let (mut batches, num_packets, recv_time) = streamer::recv_batch(recvr)?;
+
+        let batches_len = batches.len();
+        debug!(
+            "@{:?} verifier: verifying: {}",
+            timing::timestamp(),
+            num_packets,
+        );
+
+        let mut discard_time = Measure::start("sigverify_discard_time");
+        let excess_fail = if num_packets > MAX_SIGVERIFY_BATCH {
+            Self::discard_excess_packets(&mut batches, MAX_SIGVERIFY_BATCH)
+        } else {
+            0
+        };
+        discard_time.stop();
+
+        let mut dedup_time = Measure::start("sigverify_dedup_time");
+        let dedup_fail = dedup_packets(bloom, &mut batches) as usize;
+        dedup_time.stop();
 
         let mut verify_batch_time = Measure::start("sigverify_batch_time");
-        let batches_len = batches.len();
-        debug!("@{:?} verifier: verifying: {}", timing::timestamp(), len,);
-        let mut discard_time = Measure::start("sigverify_discard_time");
-        if len > MAX_SIGVERIFY_BATCH {
-            Self::discard_excess_packets(&mut batches, MAX_SIGVERIFY_BATCH);
-        }
-        discard_time.stop();
-        sendr.send(verifier.verify_batches(batches))?;
+        let batches = verifier.verify_batches(batches);
+        sendr.send(batches)?;
         verify_batch_time.stop();
 
         debug!(
@@ -215,14 +259,14 @@ impl SigVerifyStage {
             timing::timestamp(),
             batches_len,
             verify_batch_time.as_ms(),
-            len,
-            (len as f32 / verify_batch_time.as_s())
+            num_packets,
+            (num_packets as f32 / verify_batch_time.as_s())
         );
 
         datapoint_debug!(
             "sigverify_stage-total_verify_time",
             ("num_batches", batches_len, i64),
-            ("num_packets", len, i64),
+            ("num_packets", num_packets, i64),
             ("verify_time_ms", verify_batch_time.as_ms(), i64),
             ("recv_time", recv_time, i64),
         );
@@ -233,16 +277,22 @@ impl SigVerifyStage {
             .unwrap();
         stats
             .verify_batches_pp_us_hist
-            .increment(verify_batch_time.as_us() / (len as u64))
+            .increment(verify_batch_time.as_us() / (num_packets as u64))
             .unwrap();
         stats
             .discard_packets_pp_us_hist
-            .increment(discard_time.as_us() / (len as u64))
+            .increment(discard_time.as_us() / (num_packets as u64))
+            .unwrap();
+        stats
+            .dedup_packets_pp_us_hist
+            .increment(dedup_time.as_us() / (num_packets as u64))
             .unwrap();
         stats.batches_hist.increment(batches_len as u64).unwrap();
-        stats.packets_hist.increment(len as u64).unwrap();
+        stats.packets_hist.increment(num_packets as u64).unwrap();
         stats.total_batches += batches_len;
-        stats.total_packets += len;
+        stats.total_packets += num_packets;
+        stats.total_dedup += dedup_fail;
+        stats.total_excess_fail += excess_fail;
 
         Ok(())
     }
@@ -257,27 +307,40 @@ impl SigVerifyStage {
         let mut last_print = Instant::now();
         Builder::new()
             .name("solana-verifier".to_string())
-            .spawn(move || loop {
-                if let Err(e) =
-                    Self::verifier(&packet_receiver, &verified_sender, &verifier, &mut stats)
-                {
-                    match e {
-                        SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
-                            RecvTimeoutError::Disconnected,
-                        )) => break,
-                        SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
-                            RecvTimeoutError::Timeout,
-                        )) => (),
-                        SigVerifyServiceError::Send(_) => {
-                            break;
-                        }
-                        _ => error!("{:?}", e),
+            .spawn(move || {
+                let mut bloom = Bloom::random(1_000_000, 0.0001, 8 << 22).into();
+                let mut bloom_age = Measure::start("bloom_age").as_ms();
+                loop {
+                    let now = Measure::start("bloom_age").as_ms();
+                    if now - bloom_age > 2_000 {
+                        bloom = Bloom::random(1_000_000, 0.0001, 8 << 22).into();
+                        bloom_age = now;
                     }
-                }
-                if last_print.elapsed().as_secs() > 2 {
-                    stats.report();
-                    stats = SigVerifierStats::default();
-                    last_print = Instant::now();
+                    if let Err(e) = Self::verifier(
+                        &bloom,
+                        &packet_receiver,
+                        &verified_sender,
+                        &verifier,
+                        &mut stats,
+                    ) {
+                        match e {
+                            SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
+                                RecvTimeoutError::Disconnected,
+                            )) => break,
+                            SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
+                                RecvTimeoutError::Timeout,
+                            )) => (),
+                            SigVerifyServiceError::Send(_) => {
+                                break;
+                            }
+                            _ => error!("{:?}", e),
+                        }
+                    }
+                    if last_print.elapsed().as_secs() > 2 {
+                        stats.report();
+                        stats = SigVerifierStats::default();
+                        last_print = Instant::now();
+                    }
                 }
             })
             .unwrap()

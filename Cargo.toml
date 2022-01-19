@@ -12,6 +12,7 @@ members = [
     "banks-client",
     "banks-interface",
     "banks-server",
+    "bloom",
     "clap-utils",
     "cli-config",
     "cli-output",

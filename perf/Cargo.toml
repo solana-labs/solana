@@ -19,6 +19,7 @@ log = "0.4.11"
 rand = "0.7.0"
 rayon = "1.5.0"
 serde = "1.0.126"
+solana-bloom = { path = "../bloom", version = "=1.8.14" }
 solana-logger = { path = "../logger", version = "=1.8.14" }
 solana-metrics = { path = "../metrics", version = "=1.8.14" }
 solana-sdk = { path = "../sdk", version = "=1.8.14" }
