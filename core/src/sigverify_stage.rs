@@ -13,7 +13,7 @@ use {
     solana_bloom::bloom::{AtomicBloom, Bloom},
     solana_measure::measure::Measure,
     solana_perf::packet::PacketBatch,
-    solana_perf::sigverify::{count_packets_in_batches, dedup_packets},
+    solana_perf::sigverify::dedup_packets,
     solana_sdk::timing,
     solana_streamer::streamer::{self, PacketBatchReceiver, StreamerError},
     std::{
@@ -237,8 +237,9 @@ impl SigVerifyStage {
         if num_packets > MAX_SIGVERIFY_BATCH {
             Self::discard_excess_packets(&mut batches, MAX_SIGVERIFY_BATCH)
         };
-        let excess_fail = (num_packets.saturating_sub(count_packets_in_batches(&batches)))
-            .saturating_sub(dedup_fail);
+        let excess_fail = num_packets
+            .saturating_sub(dedup_fail)
+            .saturating_sub(MAX_SIGVERIFY_BATCH);
         discard_time.stop();
 
         let mut verify_batch_time = Measure::start("sigverify_batch_time");
