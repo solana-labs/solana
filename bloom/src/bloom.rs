@@ -101,7 +101,7 @@ impl<T: BloomHashIndex> Bloom<T> {
         }
     }
     fn pos(&self, key: &T, k: u64) -> u64 {
-        key.hash_at_index(k) % self.bits.len()
+        key.hash_at_index(k).wrapping_rem(self.bits.len())
     }
     pub fn clear(&mut self) {
         self.bits = BitVec::new_fill(false, self.bits.len());
@@ -111,7 +111,7 @@ impl<T: BloomHashIndex> Bloom<T> {
         for k in &self.keys {
             let pos = self.pos(key, *k);
             if !self.bits.get(pos) {
-                self.num_bits_set += 1;
+                self.num_bits_set = self.num_bits_set.saturating_add(1);
                 self.bits.set(pos, true);
             }
         }
@@ -164,13 +164,13 @@ impl<T: BloomHashIndex> From<Bloom<T>> for AtomicBloom<T> {
 
 impl<T: BloomHashIndex> AtomicBloom<T> {
     fn pos(&self, key: &T, hash_index: u64) -> (usize, u64) {
-        let pos = key.hash_at_index(hash_index) % self.num_bits;
+        let pos = key.hash_at_index(hash_index).wrapping_rem(self.num_bits);
         // Divide by 64 to figure out which of the
         // AtomicU64 bit chunks we need to modify.
-        let index = pos >> 6;
+        let index = pos.wrapping_shr(6);
         // (pos & 63) is equivalent to mod 64 so that we can find
         // the index of the bit within the AtomicU64 to modify.
-        let mask = 1u64 << (pos & 63);
+        let mask = 1u64.wrapping_shl(u32::try_from(pos & 63).unwrap());
         (index as usize, mask)
     }
 

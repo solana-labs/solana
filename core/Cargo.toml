@@ -34,6 +34,7 @@ retain_mut = "0.1.5"
 serde = "1.0.133"
 serde_derive = "1.0.103"
 solana-address-lookup-table-program = { path = "../programs/address-lookup-table", version = "=1.10.0" }
+solana-bloom = { path = "../bloom", version = "=1.10.0" }
 solana-accountsdb-plugin-manager = { path = "../accountsdb-plugin-manager", version = "=1.10.0" }
 solana-client = { path = "../client", version = "=1.10.0" }
 solana-entry = { path = "../entry", version = "=1.10.0" }

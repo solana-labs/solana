@@ -2,7 +2,7 @@
 //! to contruct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
 use {
-    crate::{packet_deduper::PacketDeduper, qos_service::QosService},
+    crate::qos_service::QosService,
     crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError},
     histogram::Histogram,
     itertools::Itertools,
@@ -328,7 +328,6 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
         cost_model: Arc<RwLock<CostModel>>,
-        packet_deduper: PacketDeduper,
     ) -> Self {
         Self::new_num_threads(
             cluster_info,
@@ -340,7 +339,6 @@ impl BankingStage {
             transaction_status_sender,
             gossip_vote_sender,
             cost_model,
-            packet_deduper,
         )
     }
 
@@ -355,7 +353,6 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
         cost_model: Arc<RwLock<CostModel>>,
-        packet_deduper: PacketDeduper,
     ) -> Self {
         let batch_limit = TOTAL_BUFFERED_PACKETS / ((num_threads - 1) as usize * PACKETS_PER_BATCH);
         // Single thread to generate entries from many banks.
@@ -384,7 +381,6 @@ impl BankingStage {
                 let mut recv_start = Instant::now();
                 let transaction_status_sender = transaction_status_sender.clone();
                 let gossip_vote_sender = gossip_vote_sender.clone();
-                let packet_deduper = packet_deduper.clone();
                 let data_budget = data_budget.clone();
                 let cost_model = cost_model.clone();
                 Builder::new()
@@ -400,7 +396,6 @@ impl BankingStage {
                             batch_limit,
                             transaction_status_sender,
                             gossip_vote_sender,
-                            &packet_deduper,
                             &data_budget,
                             cost_model,
                         );
@@ -755,7 +750,6 @@ impl BankingStage {
         batch_limit: usize,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
-        packet_deduper: &PacketDeduper,
         data_budget: &DataBudget,
         cost_model: Arc<RwLock<CostModel>>,
     ) {
@@ -808,7 +802,6 @@ impl BankingStage {
                 batch_limit,
                 &mut buffered_packet_batches,
                 &mut banking_stage_stats,
-                packet_deduper,
             ) {
                 Ok(()) | Err(RecvTimeoutError::Timeout) => (),
                 Err(RecvTimeoutError::Disconnected) => break,
@@ -1413,7 +1406,6 @@ impl BankingStage {
         batch_limit: usize,
         buffered_packet_batches: &mut UnprocessedPacketBatches,
         banking_stage_stats: &mut BankingStageStats,
-        packet_deduper: &PacketDeduper,
     ) -> Result<(), RecvTimeoutError> {
         let mut recv_time = Measure::start("receive_and_buffer_packets_recv");
         let packet_batches = verified_receiver.recv_timeout(recv_timeout)?;
@@ -1444,7 +1436,6 @@ impl BankingStage {
                 &mut dropped_packets_count,
                 &mut newly_buffered_packets_count,
                 batch_limit,
-                packet_deduper,
                 banking_stage_stats,
             );
         }
@@ -1490,15 +1481,13 @@ impl BankingStage {
     fn push_unprocessed(
         unprocessed_packet_batches: &mut UnprocessedPacketBatches,
         packet_batch: PacketBatch,
-        mut packet_indexes: Vec<usize>,
+        packet_indexes: Vec<usize>,
         dropped_packet_batches_count: &mut usize,
         dropped_packets_count: &mut usize,
         newly_buffered_packets_count: &mut usize,
         batch_limit: usize,
-        packet_deduper: &PacketDeduper,
         banking_stage_stats: &mut BankingStageStats,
     ) {
-        packet_deduper.dedupe_packets(&packet_batch, &mut packet_indexes, banking_stage_stats);
         if Self::packet_has_more_unprocessed_transactions(&packet_indexes) {
             if unprocessed_packet_batches.len() >= batch_limit {
                 *dropped_packet_batches_count += 1;
@@ -1658,7 +1647,6 @@ mod tests {
                 None,
                 gossip_vote_sender,
                 Arc::new(RwLock::new(CostModel::default())),
-                PacketDeduper::default(),
             );
             drop(verified_sender);
             drop(gossip_verified_vote_sender);
@@ -1708,7 +1696,6 @@ mod tests {
                 None,
                 gossip_vote_sender,
                 Arc::new(RwLock::new(CostModel::default())),
-                PacketDeduper::default(),
             );
             trace!("sending bank");
             drop(verified_sender);
@@ -1784,7 +1771,6 @@ mod tests {
                 None,
                 gossip_vote_sender,
                 Arc::new(RwLock::new(CostModel::default())),
-                PacketDeduper::default(),
             );
 
             // fund another account so we can send 2 good transactions in a single batch.
@@ -1936,7 +1922,6 @@ mod tests {
                     None,
                     gossip_vote_sender,
                     Arc::new(RwLock::new(CostModel::default())),
-                    PacketDeduper::default(),
                 );
 
                 // wait for banking_stage to eat the packets
@@ -3237,7 +3222,6 @@ mod tests {
         let new_packet_batch = PacketBatch::new(vec![Packet::default()]);
         let packet_indexes = vec![];
 
-        let packet_deduper = PacketDeduper::default();
         let mut dropped_packet_batches_count = 0;
         let mut dropped_packets_count = 0;
         let mut newly_buffered_packets_count = 0;
@@ -3252,7 +3236,6 @@ mod tests {
             &mut dropped_packets_count,
             &mut newly_buffered_packets_count,
             batch_limit,
-            &packet_deduper,
             &mut banking_stage_stats,
         );
         assert_eq!(unprocessed_packets.len(), 1);
@@ -3271,7 +3254,6 @@ mod tests {
             &mut dropped_packets_count,
             &mut newly_buffered_packets_count,
             batch_limit,
-            &packet_deduper,
             &mut banking_stage_stats,
         );
         assert_eq!(unprocessed_packets.len(), 2);
@@ -3290,33 +3272,11 @@ mod tests {
         BankingStage::push_unprocessed(
             &mut unprocessed_packets,
             new_packet_batch.clone(),
-            packet_indexes.clone(),
-            &mut dropped_packet_batches_count,
-            &mut dropped_packets_count,
-            &mut newly_buffered_packets_count,
-            batch_limit,
-            &packet_deduper,
-            &mut banking_stage_stats,
-        );
-        assert_eq!(unprocessed_packets.len(), 2);
-        assert_eq!(
-            unprocessed_packets[1].0.packets[0],
-            new_packet_batch.packets[0]
-        );
-        assert_eq!(dropped_packet_batches_count, 1);
-        assert_eq!(dropped_packets_count, 2);
-        assert_eq!(newly_buffered_packets_count, 2);
-
-        // Check duplicates are dropped (newly buffered shouldn't change)
-        BankingStage::push_unprocessed(
-            &mut unprocessed_packets,
-            new_packet_batch.clone(),
             packet_indexes,
             &mut dropped_packet_batches_count,
             &mut dropped_packets_count,
             &mut newly_buffered_packets_count,
-            3,
-            &packet_deduper,
+            batch_limit,
             &mut banking_stage_stats,
         );
         assert_eq!(unprocessed_packets.len(), 2);

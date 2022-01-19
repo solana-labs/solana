@@ -11,6 +11,7 @@ members = [
     "banks-interface",
     "banks-server",
     "bucket_map",
+    "bloom",
     "clap-utils",
     "cli-config",
     "cli-output",

@@ -4438,6 +4438,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bloom"
+version = "1.10.0"
+dependencies = [
+ "bv",
+ "fnv",
+ "log 0.4.14",
+ "rand 0.7.3",
+ "rayon",
+ "rustc_version 0.4.0",
+ "serde",
+ "serde_derive",
+ "solana-frozen-abi 1.10.0",
+ "solana-frozen-abi-macro 1.10.0",
+ "solana-sdk",
+]
+
+[[package]]
 name = "solana-bpf-loader-program"
 version = "1.10.0"
 dependencies = [
@@ -4707,6 +4724,7 @@ dependencies = [
  "serial_test",
  "solana-accountsdb-plugin-manager",
  "solana-address-lookup-table-program",
+ "solana-bloom",
  "solana-client",
  "solana-entry",
  "solana-frozen-abi 1.10.0",
@@ -4930,6 +4948,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serial_test",
+ "solana-bloom",
  "solana-clap-utils",
  "solana-client",
  "solana-entry",
@@ -5241,10 +5260,12 @@ name = "solana-perf"
 version = "1.10.0"
 dependencies = [
  "bincode",
+ "bv",
  "caps",
  "curve25519-dalek 3.2.0",
  "dlopen",
  "dlopen_derive",
+ "fnv",
  "lazy_static",
  "libc",
  "log 0.4.14",
@@ -5253,6 +5274,7 @@ dependencies = [
  "rand 0.7.3",
  "rayon",
  "serde",
+ "solana-bloom",
  "solana-logger 1.10.0",
  "solana-metrics",
  "solana-rayon-threadlimit",
@@ -5609,6 +5631,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-address-lookup-table-program",
+ "solana-bloom",
  "solana-bucket-map",
  "solana-compute-budget-program",
  "solana-config-program",
