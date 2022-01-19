@@ -3312,6 +3312,24 @@ if false {
     fn                     verify_contents<'a>(&self, writer: &Arc<AccountStorageEntry>, append_vec_slot: Slot, recent: &Vec<(&Pubkey, &StoredAccountMeta<'a>, u64)>)
     {
         if true {
+            let store_id = writer.append_vec_id();
+            for c in recent {
+                match self.accounts_index.get(&c.0, None, Some(append_vec_slot)) {
+                    AccountIndexGetResult::Found(g, _) => 
+                assert!(g.slot_list().iter().any(|(slot, info)| {
+                    if slot == &append_vec_slot {
+                        assert_eq!(info.store_id(), store_id);
+                        true
+                    }
+                    else {
+                        false
+                    }
+                }), "{}, {:?}, id: {}", c.0, g.slot_list(), writer.append_vec_id()),
+                _ => {}
+            }
+    }
+        }
+        else if true {
             let mut start = 0;
             let store_id = writer.append_vec_id();
             let mut current = 0;
