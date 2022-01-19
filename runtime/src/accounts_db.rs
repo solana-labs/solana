@@ -3168,7 +3168,7 @@ if false {
                 }
 
                 if created_this_slot {
-                    error!("rewrites from same slot as ancient: {}, {:?}", slot, accounts_next_append_vec.iter().map(|(a,b,c)| (a,c,b.offset)).collect::<Vec<_>>());
+                    error!("rewrites from same slot as ancient: {}, {:?}", slot, accounts_next_append_vec.iter().take(10_000).map(|(a,b,c)| (a,c,b.offset)).collect::<Vec<_>>());
                 }
 
                 let mut ids = vec![writer.1.append_vec_id()];
@@ -3184,7 +3184,7 @@ if false {
                     );
                     self.verify_contents(&writer.1, writer.0, &accounts_this_append_vec);
                     
-                    let prev = format!("{:?}", accounts_this_append_vec.iter().map(|(a,b,c)| (a,c,b.offset)).collect::<Vec<_>>());
+                    let prev = format!("{:?}", accounts_this_append_vec.iter().take(10_000).map(|(a,b,c)| (a,c,b.offset)).collect::<Vec<_>>());
                     accounts_this_append_vec.clear();
                     hashes_this_append_vec.clear();
                     prev
@@ -3220,7 +3220,7 @@ if false {
                     ids.push(writer.1.append_vec_id());
                     if created_this_slot {
                         error!("rewrites2 from same slot as ancient_previous: {}, {:?}", slot, prev);
-                        error!("rewrites2 from same slot as ancient: {}, {:?}", slot, accounts_next_append_vec.iter().map(|(a,b,c)| (a,c,b.offset)).collect::<Vec<_>>());
+                        error!("rewrites2 from same slot as ancient: {}, {:?}", slot, accounts_next_append_vec.iter().take(10_000).map(|(a,b,c)| (a,c,b.offset)).collect::<Vec<_>>());
                     }
 
                                         let clone = &writer.1.clone();
