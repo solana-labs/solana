@@ -7,12 +7,13 @@
 
 use {
     crate::sigverify,
+    core::time::Duration,
     crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
     itertools::Itertools,
     solana_bloom::bloom::{AtomicBloom, Bloom},
     solana_measure::measure::Measure,
     solana_perf::packet::PacketBatch,
-    solana_perf::sigverify::dedup_packets,
+    solana_perf::sigverify::{count_packets_in_batches, dedup_packets},
     solana_sdk::timing,
     solana_streamer::streamer::{self, PacketBatchReceiver, StreamerError},
     std::{
@@ -188,8 +189,7 @@ impl SigVerifyStage {
         Self { thread_hdl }
     }
 
-    pub fn discard_excess_packets(batches: &mut [PacketBatch], mut max_packets: usize) -> usize {
-        let mut fail = 0;
+    pub fn discard_excess_packets(batches: &mut [PacketBatch], mut max_packets: usize) {
         // Group packets by their incoming IP address.
         let mut addrs = batches
             .iter_mut()
@@ -210,9 +210,7 @@ impl SigVerifyStage {
         // Discard excess packets from each address.
         for packet in addrs.into_values().flatten() {
             packet.meta.set_discard(true);
-            fail += 1;
         }
-        fail
     }
 
     fn verifier<T: SigVerifier>(
@@ -236,11 +234,11 @@ impl SigVerifyStage {
         dedup_time.stop();
 
         let mut discard_time = Measure::start("sigverify_discard_time");
-        let excess_fail = if num_packets > MAX_SIGVERIFY_BATCH {
+        if num_packets > MAX_SIGVERIFY_BATCH {
             Self::discard_excess_packets(&mut batches, MAX_SIGVERIFY_BATCH)
-        } else {
-            0
         };
+        let excess_fail = (num_packets.saturating_sub(count_packets_in_batches(&batches)))
+            .saturating_sub(dedup_fail);
         discard_time.stop();
 
         let mut verify_batch_time = Measure::start("sigverify_batch_time");
@@ -292,15 +290,20 @@ impl SigVerifyStage {
         let mut stats = SigVerifierStats::default();
         let mut last_print = Instant::now();
         const MAX_BLOOM_AGE: Duration = Duration::from_millis(2_000);
+        const MAX_BLOOM_ITEMS: usize = 1_000_000;
+        const MAX_BLOOM_FAIL: f64 = 0.0001;
+        const MAX_BLOOM_BITS: usize = 8 << 22;
         Builder::new()
             .name("solana-verifier".to_string())
             .spawn(move || {
-                let mut bloom = Bloom::random(1_000_000, 0.0001, 8 << 22).into();
+                let mut bloom =
+                    Bloom::random(MAX_BLOOM_ITEMS, MAX_BLOOM_FAIL, MAX_BLOOM_BITS).into();
                 let mut bloom_age = Instant::now();
                 loop {
                     let now = Instant::now();
                     if now.duration_since(bloom_age) > MAX_BLOOM_AGE {
-                        bloom = Bloom::random(1_000_000, 0.0001, 8 << 22).into();
+                        bloom =
+                            Bloom::random(MAX_BLOOM_ITEMS, MAX_BLOOM_FAIL, MAX_BLOOM_BITS).into();
                         bloom_age = now;
                     }
                     if let Err(e) = Self::verifier(
