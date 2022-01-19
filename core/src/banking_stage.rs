@@ -96,7 +96,7 @@ pub struct BankingStageStats {
     current_buffered_packet_batches_count: AtomicUsize,
     rebuffered_packets_count: AtomicUsize,
     consumed_buffered_packets_count: AtomicUsize,
-    packet_batch_indices_len: Histogram,
+    batch_packet_indexes_len: Histogram,
 
     // Timing
     consume_buffered_packets_elapsed: AtomicU64,
@@ -113,7 +113,7 @@ impl BankingStageStats {
     pub fn new(id: u32) -> Self {
         BankingStageStats {
             id,
-            packet_batch_indices_len: Histogram::configure()
+            batch_packet_indexes_len: Histogram::configure()
                 .max_value(PACKETS_PER_BATCH as u64)
                 .build()
                 .unwrap(),
@@ -153,7 +153,7 @@ impl BankingStageStats {
                 .unprocessed_packet_conversion_elapsed
                 .load(Ordering::Relaxed)
             + self.transaction_processing_elapsed.load(Ordering::Relaxed)
-            + self.packet_batch_indices_len.entries()
+            + self.batch_packet_indexes_len.entries()
     }
 
     fn report(&mut self, report_interval_ms: u64) {
@@ -264,26 +264,26 @@ impl BankingStageStats {
                 ),
                 (
                     "packet_batch_indices_len_min",
-                    self.packet_batch_indices_len.minimum().unwrap_or(0) as i64,
+                    self.batch_packet_indexes_len.minimum().unwrap_or(0) as i64,
                     i64
                 ),
                 (
                     "packet_batch_indices_len_max",
-                    self.packet_batch_indices_len.maximum().unwrap_or(0) as i64,
+                    self.batch_packet_indexes_len.maximum().unwrap_or(0) as i64,
                     i64
                 ),
                 (
                     "packet_batch_indices_len_mean",
-                    self.packet_batch_indices_len.mean().unwrap_or(0) as i64,
+                    self.batch_packet_indexes_len.mean().unwrap_or(0) as i64,
                     i64
                 ),
                 (
                     "packet_batch_indices_len_90pct",
-                    self.packet_batch_indices_len.percentile(90.0).unwrap_or(0) as i64,
+                    self.batch_packet_indexes_len.percentile(90.0).unwrap_or(0) as i64,
                     i64
                 )
             );
-            self.packet_batch_indices_len.clear();
+            self.batch_packet_indexes_len.clear();
         }
     }
 }
@@ -1507,7 +1507,7 @@ impl BankingStage {
                 }
             }
             let _ = banking_stage_stats
-                .packet_batch_indices_len
+                .batch_packet_indexes_len
                 .increment(packet_indexes.len() as u64);
 
             *newly_buffered_packets_count += packet_indexes.len();
