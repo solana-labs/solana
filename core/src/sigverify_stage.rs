@@ -232,14 +232,13 @@ impl SigVerifyStage {
         let mut dedup_time = Measure::start("sigverify_dedup_time");
         let dedup_fail = dedup_packets(bloom, &mut batches) as usize;
         dedup_time.stop();
+        let valid_packets = num_packets.saturating_sub(dedup_fail);
 
         let mut discard_time = Measure::start("sigverify_discard_time");
-        if num_packets > MAX_SIGVERIFY_BATCH {
+        if valid_packets > MAX_SIGVERIFY_BATCH {
             Self::discard_excess_packets(&mut batches, MAX_SIGVERIFY_BATCH)
         };
-        let excess_fail = num_packets
-            .saturating_sub(dedup_fail)
-            .saturating_sub(MAX_SIGVERIFY_BATCH);
+        let excess_fail = valid_packets.saturating_sub(MAX_SIGVERIFY_BATCH);
         discard_time.stop();
 
         let mut verify_batch_time = Measure::start("sigverify_batch_time");
