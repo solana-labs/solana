@@ -4202,7 +4202,7 @@ impl Bank {
             // because of this, we are not doing this:
             //  verify the whole on-chain state (= all accounts)
             //  via the account delta hash slowly once per an epoch.
-            if rent != 0 {
+            if rent != 0 || true {
                 if !just_rewrites {
                     self.store_account(&pubkey, &account);
                 }
@@ -5304,6 +5304,10 @@ impl Bank {
             self.capitalization(),
             len,
         );
+
+        if self.slot() == 116979357 {
+            panic!("end");
+        }
 
         info!(
             "accounts hash slot: {} stats: {:?}",
