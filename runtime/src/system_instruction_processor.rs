@@ -661,7 +661,7 @@ mod tests {
 
     #[test]
     fn test_address_create_with_seed_mismatch() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let from = Pubkey::new_unique();
         let seed = "dull boy";
@@ -676,7 +676,7 @@ mod tests {
 
     #[test]
     fn test_create_account_with_seed_missing_sig() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let new_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_unique();
@@ -707,7 +707,7 @@ mod tests {
 
     #[test]
     fn test_create_with_zero_lamports() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         // create account with zero lamports transferred
         let new_owner = Pubkey::new(&[9; 32]);
@@ -742,7 +742,7 @@ mod tests {
 
     #[test]
     fn test_create_negative_lamports() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         // Attempt to create account with more lamports than remaining in from_account
         let new_owner = Pubkey::new(&[9; 32]);
@@ -767,7 +767,7 @@ mod tests {
 
     #[test]
     fn test_request_more_than_allowed_data_length() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let from_account = RefCell::new(AccountSharedData::new(100, 0, &system_program::id()));
         let from = Pubkey::new_unique();
@@ -815,7 +815,7 @@ mod tests {
 
     #[test]
     fn test_create_already_in_use() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         // Attempt to create system account in account already owned by another program
         let new_owner = Pubkey::new(&[9; 32]);
@@ -884,7 +884,7 @@ mod tests {
 
     #[test]
     fn test_create_unsigned() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         // Attempt to create an account without signing the transfer
         let new_owner = Pubkey::new(&[9; 32]);
@@ -940,7 +940,7 @@ mod tests {
 
     #[test]
     fn test_create_sysvar_invalid_id_with_feature() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         // Attempt to create system account in account already owned by another program
         let from = Pubkey::new_unique();
@@ -968,7 +968,7 @@ mod tests {
 
     #[test]
     fn test_create_data_populated() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         // Attempt to create system account in account with populated data
         let new_owner = Pubkey::new(&[9; 32]);
@@ -1002,7 +1002,7 @@ mod tests {
 
     #[test]
     fn test_create_from_account_is_nonce_fail() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let nonce = Pubkey::new_unique();
         let nonce_account = RefCell::new(
@@ -1041,7 +1041,7 @@ mod tests {
 
     #[test]
     fn test_assign() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let new_owner = Pubkey::new(&[9; 32]);
         let pubkey = Pubkey::new_unique();
@@ -1084,7 +1084,7 @@ mod tests {
 
     #[test]
     fn test_assign_to_sysvar_with_feature() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let new_owner = sysvar::id();
         let from = Pubkey::new_unique();
@@ -1135,7 +1135,7 @@ mod tests {
 
     #[test]
     fn test_transfer_lamports() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let from = Pubkey::new_unique();
         let from_account = RefCell::new(AccountSharedData::new(100, 0, &Pubkey::new(&[2; 32]))); // account owner should not matter
@@ -1174,7 +1174,7 @@ mod tests {
 
     #[test]
     fn test_transfer_with_seed() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let base = Pubkey::new_unique();
         let base_account = RefCell::new(AccountSharedData::new(100, 0, &Pubkey::new(&[2; 32]))); // account owner should not matter
@@ -1235,7 +1235,7 @@ mod tests {
 
     #[test]
     fn test_transfer_lamports_from_nonce_account_fail() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1);
+        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let from = Pubkey::new_unique();
         let from_account = RefCell::new(

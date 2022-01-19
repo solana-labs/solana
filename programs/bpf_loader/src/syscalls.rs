@@ -3285,6 +3285,7 @@ mod tests {
         let mut transaction_context = TransactionContext::new(
             vec![(program_id, AccountSharedData::new(0, 0, &bpf_loader::id()))],
             1,
+            1,
         );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context.push(&[], &[0], &[]).unwrap();
@@ -3357,6 +3358,7 @@ mod tests {
         let program_id = Pubkey::new_unique();
         let mut transaction_context = TransactionContext::new(
             vec![(program_id, AccountSharedData::new(0, 0, &bpf_loader::id()))],
+            1,
             1,
         );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
@@ -3458,6 +3460,7 @@ mod tests {
         let mut transaction_context = TransactionContext::new(
             vec![(program_id, AccountSharedData::new(0, 0, &bpf_loader::id()))],
             1,
+            1,
         );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context.push(&[], &[0], &[]).unwrap();
@@ -3495,6 +3498,7 @@ mod tests {
         let program_id = Pubkey::new_unique();
         let mut transaction_context = TransactionContext::new(
             vec![(program_id, AccountSharedData::new(0, 0, &bpf_loader::id()))],
+            1,
             1,
         );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
@@ -3707,6 +3711,7 @@ mod tests {
                 AccountSharedData::new(0, 0, &bpf_loader_deprecated::id()),
             )],
             1,
+            1,
         );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context.push(&[], &[0], &[]).unwrap();
@@ -3863,6 +3868,7 @@ mod tests {
         let program_id = Pubkey::new_unique();
         let mut transaction_context = TransactionContext::new(
             vec![(program_id, AccountSharedData::new(0, 0, &bpf_loader::id()))],
+            1,
             1,
         );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
@@ -4114,6 +4120,7 @@ mod tests {
         let mut transaction_context = TransactionContext::new(
             vec![(program_id, AccountSharedData::new(0, 0, &bpf_loader::id()))],
             1,
+            1,
         );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context.push(&[], &[0], &[]).unwrap();
@@ -4225,6 +4232,7 @@ mod tests {
         let program_id = Pubkey::new_unique();
         let mut transaction_context = TransactionContext::new(
             vec![(program_id, AccountSharedData::new(0, 0, &bpf_loader::id()))],
+            1,
             1,
         );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
