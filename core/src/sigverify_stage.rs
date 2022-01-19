@@ -298,8 +298,8 @@ impl SigVerifyStage {
                 let mut bloom = Bloom::random(1_000_000, 0.0001, 8 << 22).into();
                 let mut bloom_age = Measure::start("bloom_age").as_ms();
                 loop {
-                    let now = Measure::start("bloom_age").as_ms();
-                    if now - bloom_age > 2_000 {
+                    let now = Instant::now();
+                    if now.duration_since(bloom_age) > MAX_BLOOM_AGE {
                         bloom = Bloom::random(1_000_000, 0.0001, 8 << 22).into();
                         bloom_age = now;
                     }
