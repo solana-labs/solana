@@ -1,8 +1,7 @@
 use {
     crate::{
-        accounts::Accounts, ancestors::Ancestors, bank::TransactionAccountRefCell,
-        instruction_recorder::InstructionRecorder, log_collector::LogCollector,
-        native_loader::NativeLoader, rent_collector::RentCollector,
+        bank::TransactionAccountRefCell, instruction_recorder::InstructionRecorder,
+        log_collector::LogCollector, native_loader::NativeLoader, rent_collector::RentCollector,
     },
     log::*,
     serde::{Deserialize, Serialize},
@@ -278,6 +277,7 @@ pub struct ThisInvokeContext<'a> {
     pre_accounts: Vec<PreAccount>,
     accounts: &'a [TransactionAccountRefCell],
     programs: &'a [(Pubkey, ProcessInstructionWithContext)],
+    sysvars: &'a [(Pubkey, Vec<u8>)],
     logger: Rc<RefCell<dyn Logger>>,
     bpf_compute_budget: BpfComputeBudget,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
@@ -285,10 +285,6 @@ pub struct ThisInvokeContext<'a> {
     instruction_recorder: Option<InstructionRecorder>,
     feature_set: Arc<FeatureSet>,
     pub timings: ExecuteDetailsTimings,
-    account_db: Arc<Accounts>,
-    ancestors: &'a Ancestors,
-    #[allow(clippy::type_complexity)]
-    sysvars: RefCell<Vec<(Pubkey, Option<Rc<Vec<u8>>>)>>,
     // return data and program_id that set it
     return_data: Option<(Pubkey, Vec<u8>)>,
 }
@@ -302,14 +298,13 @@ impl<'a> ThisInvokeContext<'a> {
         executable_accounts: &'a [TransactionAccountRefCell],
         accounts: &'a [TransactionAccountRefCell],
         programs: &'a [(Pubkey, ProcessInstructionWithContext)],
+        sysvars: &'a [(Pubkey, Vec<u8>)],
         log_collector: Option<Rc<LogCollector>>,
         bpf_compute_budget: BpfComputeBudget,
         compute_meter: Rc<RefCell<dyn ComputeMeter>>,
         executors: Rc<RefCell<Executors>>,
         instruction_recorder: Option<InstructionRecorder>,
         feature_set: Arc<FeatureSet>,
-        account_db: Arc<Accounts>,
-        ancestors: &'a Ancestors,
     ) -> Self {
         let pre_accounts = MessageProcessor::create_pre_accounts(message, instruction, accounts);
         let keyed_accounts = MessageProcessor::create_keyed_accounts(
@@ -332,6 +327,7 @@ impl<'a> ThisInvokeContext<'a> {
             pre_accounts,
             accounts,
             programs,
+            sysvars,
             logger: Rc::new(RefCell::new(ThisLogger { log_collector })),
             bpf_compute_budget,
             compute_meter,
@@ -339,9 +335,6 @@ impl<'a> ThisInvokeContext<'a> {
             instruction_recorder,
             feature_set,
             timings: ExecuteDetailsTimings::default(),
-            account_db,
-            ancestors,
-            sysvars: RefCell::new(vec![]),
             return_data: None,
         };
         invoke_context
@@ -514,25 +507,8 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         self.timings.execute_us += execute_us;
         self.timings.deserialize_us += deserialize_us;
     }
-    fn get_sysvar_data(&self, id: &Pubkey) -> Option<Rc<Vec<u8>>> {
-        if let Ok(mut sysvars) = self.sysvars.try_borrow_mut() {
-            // Try share from cache
-            let mut result = sysvars
-                .iter()
-                .find_map(|(key, sysvar)| if id == key { sysvar.clone() } else { None });
-            if result.is_none() {
-                // Load it
-                result = self
-                    .account_db
-                    .load_with_fixed_root(self.ancestors, id)
-                    .map(|(account, _)| Rc::new(account.data().to_vec()));
-                // Cache it
-                sysvars.push((*id, result.clone()));
-            }
-            result
-        } else {
-            None
-        }
+    fn get_sysvars(&self) -> &[(Pubkey, Vec<u8>)] {
+        self.sysvars
     }
     fn set_return_data(&mut self, return_data: Option<(Pubkey, Vec<u8>)>) {
         self.return_data = return_data;
@@ -1208,6 +1184,7 @@ impl MessageProcessor {
         executable_accounts: &[TransactionAccountRefCell],
         accounts: &[TransactionAccountRefCell],
         rent_collector: &RentCollector,
+        sysvars: &[(Pubkey, Vec<u8>)],
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
         instruction_recorder: Option<InstructionRecorder>,
@@ -1216,8 +1193,6 @@ impl MessageProcessor {
         bpf_compute_budget: BpfComputeBudget,
         compute_meter: Rc<RefCell<dyn ComputeMeter>>,
         timings: &mut ExecuteTimings,
-        account_db: Arc<Accounts>,
-        ancestors: &Ancestors,
     ) -> Result<(), InstructionError> {
         // Fixup the special instructions key if present
         // before the account pre-values are taken care of
@@ -1259,14 +1234,13 @@ impl MessageProcessor {
             executable_accounts,
             accounts,
             &self.programs,
+            sysvars,
             log_collector,
             bpf_compute_budget,
             compute_meter,
             executors,
             instruction_recorder,
             feature_set,
-            account_db,
-            ancestors,
         );
         let pre_remaining_units = invoke_context.get_compute_meter().borrow().get_remaining();
         let mut time = Measure::start("execute_instruction");
@@ -1325,8 +1299,7 @@ impl MessageProcessor {
         bpf_compute_budget: BpfComputeBudget,
         compute_meter: Rc<RefCell<dyn ComputeMeter>>,
         timings: &mut ExecuteTimings,
-        account_db: Arc<Accounts>,
-        ancestors: &Ancestors,
+        sysvars: &[(Pubkey, Vec<u8>)],
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             let instruction_recorder = instruction_recorders
@@ -1339,6 +1312,7 @@ impl MessageProcessor {
                     &loaders[instruction_index],
                     accounts,
                     rent_collector,
+                    sysvars,
                     log_collector.clone(),
                     executors.clone(),
                     instruction_recorder,
@@ -1347,8 +1321,6 @@ impl MessageProcessor {
                     bpf_compute_budget,
                     compute_meter.clone(),
                     timings,
-                    account_db.clone(),
-                    ancestors,
                 )
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err));
 
@@ -1406,7 +1378,6 @@ mod tests {
             &[Instruction::new_with_bytes(invoke_stack[0], &[0], metas)],
             None,
         );
-        let ancestors = Ancestors::default();
         let mut invoke_context = ThisInvokeContext::new(
             &invoke_stack[0],
             Rent::default(),
@@ -1415,14 +1386,13 @@ mod tests {
             &[],
             &accounts,
             &[],
+            &[],
             None,
             BpfComputeBudget::default(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             Rc::new(RefCell::new(Executors::default())),
             None,
             Arc::new(FeatureSet::all_enabled()),
-            Arc::new(Accounts::default()),
-            &ancestors,
         );
 
         // Check call depth increases and has a limit
@@ -2006,7 +1976,6 @@ mod tests {
         let loaders = vec![vec![(mock_system_program_id, account)]];
 
         let executors = Rc::new(RefCell::new(Executors::default()));
-        let ancestors = Ancestors::default();
 
         let account_metas = vec![
             AccountMeta::new(accounts[0].0, true),
@@ -2033,8 +2002,7 @@ mod tests {
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             &mut ExecuteTimings::default(),
-            Arc::new(Accounts::default()),
-            &ancestors,
+            &[],
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].1.borrow().lamports(), 100);
@@ -2061,8 +2029,7 @@ mod tests {
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             &mut ExecuteTimings::default(),
-            Arc::new(Accounts::default()),
-            &ancestors,
+            &[],
         );
         assert_eq!(
             result,
@@ -2093,8 +2060,7 @@ mod tests {
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             &mut ExecuteTimings::default(),
-            Arc::new(Accounts::default()),
-            &ancestors,
+            &[],
         );
         assert_eq!(
             result,
@@ -2188,7 +2154,6 @@ mod tests {
         let loaders = vec![vec![(mock_program_id, account)]];
 
         let executors = Rc::new(RefCell::new(Executors::default()));
-        let ancestors = Ancestors::default();
 
         let account_metas = vec![
             AccountMeta::new(accounts[0].0, true),
@@ -2217,8 +2182,7 @@ mod tests {
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             &mut ExecuteTimings::default(),
-            Arc::new(Accounts::default()),
-            &ancestors,
+            &[],
         );
         assert_eq!(
             result,
@@ -2249,8 +2213,7 @@ mod tests {
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             &mut ExecuteTimings::default(),
-            Arc::new(Accounts::default()),
-            &ancestors,
+            &[],
         );
         assert_eq!(result, Ok(()));
 
@@ -2266,7 +2229,6 @@ mod tests {
             )],
             Some(&accounts[0].0),
         );
-        let ancestors = Ancestors::default();
         let result = message_processor.process_message(
             &message,
             &loaders,
@@ -2279,8 +2241,7 @@ mod tests {
             BpfComputeBudget::new(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             &mut ExecuteTimings::default(),
-            Arc::new(Accounts::default()),
-            &ancestors,
+            &[],
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].1.borrow().lamports(), 80);
@@ -2381,7 +2342,6 @@ mod tests {
         let feature_set = FeatureSet::all_enabled();
         let demote_program_write_locks = feature_set.is_active(&demote_program_write_locks::id());
 
-        let ancestors = Ancestors::default();
         let mut invoke_context = ThisInvokeContext::new(
             &caller_program_id,
             Rent::default(),
@@ -2390,14 +2350,13 @@ mod tests {
             &executable_accounts,
             &accounts,
             programs.as_slice(),
+            &[],
             None,
             BpfComputeBudget::default(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             Rc::new(RefCell::new(Executors::default())),
             None,
             Arc::new(feature_set),
-            Arc::new(Accounts::default()),
-            &ancestors,
         );
 
         // not owned account modified by the caller (before the invoke)
@@ -2452,7 +2411,6 @@ mod tests {
                 Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
             let message = Message::new(&[callee_instruction], None);
 
-            let ancestors = Ancestors::default();
             let mut invoke_context = ThisInvokeContext::new(
                 &caller_program_id,
                 Rent::default(),
@@ -2461,14 +2419,13 @@ mod tests {
                 &executable_accounts,
                 &accounts,
                 programs.as_slice(),
+                &[],
                 None,
                 BpfComputeBudget::default(),
                 Rc::new(RefCell::new(MockComputeMeter::default())),
                 Rc::new(RefCell::new(Executors::default())),
                 None,
                 Arc::new(FeatureSet::all_enabled()),
-                Arc::new(Accounts::default()),
-                &ancestors,
             );
 
             let caller_write_privileges = message
@@ -2605,7 +2562,6 @@ mod tests {
         );
         let message = Message::new(&[callee_instruction.clone()], None);
 
-        let ancestors = Ancestors::default();
         let mut invoke_context = ThisInvokeContext::new(
             &caller_program_id,
             Rent::default(),
@@ -2614,14 +2570,13 @@ mod tests {
             &executable_accounts,
             &accounts,
             programs.as_slice(),
+            &[],
             None,
             BpfComputeBudget::default(),
             Rc::new(RefCell::new(MockComputeMeter::default())),
             Rc::new(RefCell::new(Executors::default())),
             None,
             Arc::new(FeatureSet::all_enabled()),
-            Arc::new(Accounts::default()),
-            &ancestors,
         );
 
         // not owned account modified by the invoker
@@ -2672,7 +2627,6 @@ mod tests {
                 Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
             let message = Message::new(&[callee_instruction.clone()], None);
 
-            let ancestors = Ancestors::default();
             let mut invoke_context = ThisInvokeContext::new(
                 &caller_program_id,
                 Rent::default(),
@@ -2681,14 +2635,13 @@ mod tests {
                 &executable_accounts,
                 &accounts,
                 programs.as_slice(),
+                &[],
                 None,
                 BpfComputeBudget::default(),
                 Rc::new(RefCell::new(MockComputeMeter::default())),
                 Rc::new(RefCell::new(Executors::default())),
                 None,
                 Arc::new(FeatureSet::all_enabled()),
-                Arc::new(Accounts::default()),
-                &ancestors,
             );
 
             assert_eq!(
