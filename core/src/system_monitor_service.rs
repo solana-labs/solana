@@ -195,6 +195,9 @@ impl SystemMonitorService {
                 );
             }
         }
+        if check_failed {
+            datapoint_warn!("os-config", ("network_limit_test_failed", 1, i64));
+        }
         !check_failed
     }
 
