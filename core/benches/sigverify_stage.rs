@@ -55,14 +55,10 @@ fn run_bench_packet_discard(num_ips: usize, bencher: &mut Bencher) {
         let mut num_packets = 0;
         for batch in batches.iter_mut() {
             for p in batch.packets.iter_mut() {
-<<<<<<< HEAD
-                p.meta.discard = false;
-=======
-                if !p.meta.discard() {
+                if !p.meta.discard {
                     num_packets += 1;
                 }
-                p.meta.set_discard(false);
->>>>>>> dcf44d252 (improves sigverify discard_excess_packets performance (#22577))
+                p.meta.discard = false;
             }
         }
         assert_eq!(num_packets, 10_000);
@@ -83,10 +79,10 @@ fn bench_packet_discard_single_sender(bencher: &mut Bencher) {
 fn bench_packet_discard_mixed_senders(bencher: &mut Bencher) {
     const SIZE: usize = 30 * 1000;
     const CHUNK_SIZE: usize = 1024;
-    fn new_rand_addr<R: Rng>(rng: &mut R) -> std::net::IpAddr {
+    fn new_rand_addr<R: Rng>(rng: &mut R) -> [u16; 8] {
         let mut addr = [0u16; 8];
         rng.fill(&mut addr);
-        std::net::IpAddr::from(addr)
+        addr
     }
     let mut rng = thread_rng();
     let mut batches = to_packet_batches(&vec![test_tx(); SIZE], CHUNK_SIZE);
@@ -106,10 +102,10 @@ fn bench_packet_discard_mixed_senders(bencher: &mut Bencher) {
         let mut num_packets = 0;
         for batch in batches.iter_mut() {
             for packet in batch.packets.iter_mut() {
-                if !packet.meta.discard() {
+                if !packet.meta.discard {
                     num_packets += 1;
                 }
-                packet.meta.set_discard(false);
+                packet.meta.discard = false;
             }
         }
         assert_eq!(num_packets, 10_000);

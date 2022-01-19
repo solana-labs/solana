@@ -7,22 +7,14 @@
 
 use {
     crate::sigverify,
-<<<<<<< HEAD
     crossbeam_channel::{SendError, Sender as CrossbeamSender},
-=======
-    crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
     itertools::Itertools,
->>>>>>> dcf44d252 (improves sigverify discard_excess_packets performance (#22577))
     solana_measure::measure::Measure,
     solana_perf::packet::PacketBatch,
     solana_sdk::timing,
     solana_streamer::streamer::{self, PacketBatchReceiver, StreamerError},
     std::{
-<<<<<<< HEAD
-        collections::{HashMap, VecDeque},
         sync::mpsc::{Receiver, RecvTimeoutError},
-=======
->>>>>>> dcf44d252 (improves sigverify discard_excess_packets performance (#22577))
         thread::{self, Builder, JoinHandle},
         time::Instant,
     },
@@ -188,28 +180,9 @@ impl SigVerifyStage {
                 !packets.is_empty()
             });
         }
-<<<<<<< HEAD
-        let mut batch_len = 0;
-        while batch_len < max_packets {
-            for (_ip, indexes) in received_ips.iter_mut() {
-                if !indexes.is_empty() {
-                    indexes.pop_front();
-                    batch_len += 1;
-                    if batch_len >= max_packets {
-                        break;
-                    }
-                }
-            }
-        }
-        for (_addr, indexes) in received_ips {
-            for (batch_index, packet_index) in indexes {
-                batches[batch_index].packets[packet_index].meta.discard = true;
-            }
-=======
         // Discard excess packets from each address.
-        for packet in addrs.into_values().flatten() {
-            packet.meta.set_discard(true);
->>>>>>> dcf44d252 (improves sigverify discard_excess_packets performance (#22577))
+        for packet in addrs.values_mut().flatten() {
+            packet.meta.discard = true;
         }
     }
 
