@@ -31,6 +31,7 @@ pub struct TransactionContext {
     accounts: Pin<Box<[RefCell<AccountSharedData>]>>,
     instruction_context_capacity: usize,
     instruction_context_stack: Vec<InstructionContext>,
+    number_of_instructions_at_transaction_level: usize,
     instruction_trace: Vec<Vec<CompiledInstruction>>,
     return_data: (Pubkey, Vec<u8>),
 }
@@ -52,6 +53,7 @@ impl TransactionContext {
             accounts: Pin::new(accounts.into_boxed_slice()),
             instruction_context_capacity,
             instruction_context_stack: Vec::with_capacity(instruction_context_capacity),
+            number_of_instructions_at_transaction_level,
             instruction_trace: Vec::with_capacity(number_of_instructions_at_transaction_level),
             return_data: (Pubkey::default(), Vec::new()),
         }
@@ -150,6 +152,9 @@ impl TransactionContext {
             return Err(InstructionError::CallDepth);
         }
         if self.instruction_context_stack.is_empty() {
+            debug_assert!(
+                self.instruction_trace.len() < self.number_of_instructions_at_transaction_level
+            );
             self.instruction_trace.push(Vec::new());
         }
         self.instruction_context_stack.push(InstructionContext {
