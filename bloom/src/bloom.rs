@@ -170,7 +170,7 @@ impl<T: BloomHashIndex> AtomicBloom<T> {
         let index = pos.wrapping_shr(6);
         // (pos & 63) is equivalent to mod 64 so that we can find
         // the index of the bit within the AtomicU64 to modify.
-        let mask = 1u64.wrapping_shl((pos & 63).try_into().unwrap());
+        let mask = 1u64.wrapping_shl(u32::try_from(pos & 63).unwrap());
         (index as usize, mask)
     }
 
