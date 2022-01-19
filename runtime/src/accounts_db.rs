@@ -6524,6 +6524,15 @@ if false {
         });
         hashes.extend(rewrites.into_iter());
 
+        if slot == 116979357 {
+            let mut h2 = hashes.clone();
+            AccountsHash::sort_hashes_by_pubkey(&mut h2); 
+
+            info!(
+                "hash calc: {:?}", h2,
+            );
+        }
+
         let ret = AccountsHash::accumulate_account_hashes(hashes);
         accumulate.stop();
         let mut uncleaned_time = Measure::start("uncleaned_index");
