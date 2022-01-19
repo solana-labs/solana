@@ -13,11 +13,12 @@ use {
         serve_repair::ServeRepair,
         serve_repair_service::ServeRepairService,
         sigverify,
+        sigverify_stage::MAX_SIGVERIFY_BATCH,
         snapshot_packager_service::SnapshotPackagerService,
         stats_reporter_service::StatsReporterService,
         system_monitor_service::{verify_udp_stats_access, SystemMonitorService},
         tower_storage::TowerStorage,
-        tpu::{Tpu, TpuSockets, DEFAULT_TPU_COALESCE_MS},
+        tpu::{Tpu, TpuConfig, TpuSockets, DEFAULT_TPU_COALESCE_MS},
         tvu::{Tvu, TvuConfig, TvuSockets},
     },
     crossbeam_channel::{bounded, unbounded, Receiver},
@@ -165,6 +166,8 @@ pub struct ValidatorConfig {
     pub validator_exit: Arc<RwLock<Exit>>,
     pub no_wait_for_vote_to_start_leader: bool,
     pub accounts_shrink_ratio: AccountShrinkThreshold,
+    pub tpu_sigverify_batch_size: usize,
+    pub tpu_packet_rate_per_second: Option<usize>,
 }
 
 impl Default for ValidatorConfig {
@@ -224,6 +227,8 @@ impl Default for ValidatorConfig {
             no_wait_for_vote_to_start_leader: true,
             accounts_shrink_ratio: AccountShrinkThreshold::default(),
             accounts_db_config: None,
+            tpu_packet_rate_per_second: None,
+            tpu_sigverify_batch_size: MAX_SIGVERIFY_BATCH,
         }
     }
 }
@@ -871,6 +876,12 @@ impl Validator {
             block_metadata_notifier,
         );
 
+        let tpu_config = TpuConfig {
+            tpu_coalesce_ms: config.tpu_coalesce_ms,
+            tpu_packet_rate_per_second: config.tpu_packet_rate_per_second,
+            tpu_sigverify_batch_size: config.tpu_sigverify_batch_size,
+            shred_version: node.info.shred_version,
+        };
         let tpu = Tpu::new(
             &cluster_info,
             &poh_recorder,
@@ -887,7 +898,6 @@ impl Validator {
             &blockstore,
             &config.broadcast_stage_type,
             &exit,
-            node.info.shred_version,
             vote_tracker,
             bank_forks,
             verified_vote_sender,
@@ -895,9 +905,9 @@ impl Validator {
             replay_vote_receiver,
             replay_vote_sender,
             bank_notification_sender,
-            config.tpu_coalesce_ms,
             cluster_confirmed_slot_sender,
             &cost_model,
+            tpu_config,
         );
 
         datapoint_info!("validator-new", ("id", id.to_string(), String));

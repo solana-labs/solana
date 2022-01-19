@@ -21,7 +21,7 @@ use {
         rewards_recorder_service::RewardsRecorderSender,
         shred_fetch_stage::ShredFetchStage,
         sigverify_shreds::ShredSigVerifier,
-        sigverify_stage::SigVerifyStage,
+        sigverify_stage::{SigVerifyStage, MAX_SIGVERIFY_BATCH},
         tower_storage::TowerStorage,
         voting_service::VotingService,
     },
@@ -175,6 +175,8 @@ impl Tvu {
             fetch_receiver,
             verified_sender,
             ShredSigVerifier::new(bank_forks.clone(), leader_schedule_cache.clone()),
+            MAX_SIGVERIFY_BATCH,
+            None,
         );
 
         let cluster_slots = Arc::new(ClusterSlots::default());

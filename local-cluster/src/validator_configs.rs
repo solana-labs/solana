@@ -61,6 +61,8 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         no_wait_for_vote_to_start_leader: config.no_wait_for_vote_to_start_leader,
         accounts_shrink_ratio: config.accounts_shrink_ratio,
         accounts_db_config: config.accounts_db_config.clone(),
+        tpu_packet_rate_per_second: config.tpu_packet_rate_per_second,
+        tpu_sigverify_batch_size: config.tpu_sigverify_batch_size,
     }
 }
 

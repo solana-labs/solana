@@ -23,6 +23,7 @@ use {
     },
     solana_core::{
         ledger_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
+        sigverify_stage::MAX_SIGVERIFY_BATCH,
         system_monitor_service::SystemMonitorService,
         tower_storage,
         tpu::DEFAULT_TPU_COALESCE_MS,
@@ -415,6 +416,8 @@ pub fn main() {
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
     let default_genesis_archive_unpacked_size = &MAX_GENESIS_ARCHIVE_UNPACKED_SIZE.to_string();
     let default_rpc_max_multiple_accounts = &MAX_MULTIPLE_ACCOUNTS.to_string();
+
+    let default_sigverify_batch_size = &MAX_SIGVERIFY_BATCH.to_string();
 
     let default_rpc_pubsub_max_active_subscriptions =
         PubSubConfig::default().max_active_subscriptions.to_string();
@@ -1331,6 +1334,27 @@ pub fn main() {
                 ),
         )
         .arg(
+            Arg::with_name("tpu_sigverify_batch_size")
+                .long("tpu-sigverify-batch-size")
+                .value_name("NUMBER")
+                .takes_value(true)
+                .default_value(default_sigverify_batch_size)
+                .hidden(true)
+                .help(
+                    "Number of packets to sigverify at a time",
+                ),
+        )
+        .arg(
+            Arg::with_name("tpu_packet_rate_per_second")
+                .long("tpu-packet-rate-per-second")
+                .value_name("NUMBER")
+                .takes_value(true)
+                .hidden(true)
+                .help(
+                    "Limit the TPU throughput by this many packets per second.",
+                ),
+        )
+        .arg(
             Arg::with_name("wal_recovery_mode")
                 .long("wal-recovery-mode")
                 .value_name("MODE")
@@ -1905,6 +1929,22 @@ pub fn main() {
         incremental_snapshot_fetch: matches.is_present("incremental_snapshots"),
     };
 
+    let tpu_packet_rate_per_second = value_t!(matches, "tpu_packet_rate_per_second", usize).ok();
+    if let Some(rate) = tpu_packet_rate_per_second {
+        const MIN_TPU_PACKET_RATE: usize = 2000;
+        if rate < MIN_TPU_PACKET_RATE {
+            eprintln!(
+                "TPU packet rate too low: {} minimum of {}",
+                rate, MIN_TPU_PACKET_RATE
+            );
+            exit(1);
+        }
+    }
+    let tpu_sigverify_batch_size = value_t_or_exit!(matches, "tpu_sigverify_batch_size", usize);
+    if !(2..=10_000_000).contains(&tpu_sigverify_batch_size) {
+        eprintln!("TPU batch size not in valid range of {{2, 10_000_000}}");
+        exit(1);
+    }
     let private_rpc = matches.is_present("private_rpc");
     let do_port_check = !matches.is_present("no_port_check");
     let no_rocksdb_compaction = true;
@@ -2243,6 +2283,8 @@ pub fn main() {
         tpu_coalesce_ms,
         no_wait_for_vote_to_start_leader: matches.is_present("no_wait_for_vote_to_start_leader"),
         accounts_shrink_ratio,
+        tpu_sigverify_batch_size,
+        tpu_packet_rate_per_second,
         ..ValidatorConfig::default()
     };
 

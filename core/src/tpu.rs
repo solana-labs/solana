@@ -51,6 +51,13 @@ pub struct Tpu {
     broadcast_stage: BroadcastStage,
 }
 
+pub struct TpuConfig {
+    pub tpu_coalesce_ms: u64,
+    pub shred_version: u16,
+    pub tpu_sigverify_batch_size: usize,
+    pub tpu_packet_rate_per_second: Option<usize>,
+}
+
 impl Tpu {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -64,7 +71,6 @@ impl Tpu {
         blockstore: &Arc<Blockstore>,
         broadcast_type: &BroadcastStageType,
         exit: &Arc<AtomicBool>,
-        shred_version: u16,
         vote_tracker: Arc<VoteTracker>,
         bank_forks: Arc<RwLock<BankForks>>,
         verified_vote_sender: VerifiedVoteSender,
@@ -72,9 +78,9 @@ impl Tpu {
         replay_vote_receiver: ReplayVoteReceiver,
         replay_vote_sender: ReplayVoteSender,
         bank_notification_sender: Option<BankNotificationSender>,
-        tpu_coalesce_ms: u64,
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
         cost_model: &Arc<RwLock<CostModel>>,
+        tpu_config: TpuConfig,
     ) -> Self {
         let TpuSockets {
             transactions: transactions_sockets,
@@ -82,6 +88,13 @@ impl Tpu {
             vote: tpu_vote_sockets,
             broadcast: broadcast_sockets,
         } = sockets;
+
+        let TpuConfig {
+            tpu_coalesce_ms,
+            shred_version,
+            tpu_sigverify_batch_size,
+            tpu_packet_rate_per_second,
+        } = tpu_config;
 
         let (packet_sender, packet_receiver) = unbounded();
         let (vote_packet_sender, vote_packet_receiver) = unbounded();
@@ -99,7 +112,13 @@ impl Tpu {
 
         let sigverify_stage = {
             let verifier = TransactionSigVerifier::default();
-            SigVerifyStage::new(packet_receiver, verified_sender, verifier)
+            SigVerifyStage::new(
+                packet_receiver,
+                verified_sender,
+                verifier,
+                tpu_sigverify_batch_size,
+                tpu_packet_rate_per_second,
+            )
         };
 
         let (verified_tpu_vote_packets_sender, verified_tpu_vote_packets_receiver) = unbounded();
@@ -110,6 +129,8 @@ impl Tpu {
                 vote_packet_receiver,
                 verified_tpu_vote_packets_sender,
                 verifier,
+                tpu_sigverify_batch_size,
+                tpu_packet_rate_per_second,
             )
         };
 
