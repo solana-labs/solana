@@ -3187,6 +3187,8 @@ if false {
                 }
 
                 if !accounts_next_append_vec.is_empty() {
+                    created_this_slot = true;
+                    let prev = format!("{:?}", accounts_this_append_vec.iter().map(|(a,b,c)| (a,c,b.offset)).collect::<Vec<_>>());
                     writer.1.accounts.set_full_ancient();
                     accounts_this_append_vec.append(&mut accounts_next_append_vec);
                     hashes_this_append_vec.append(&mut hashes_next_append_vec);
@@ -3208,11 +3210,11 @@ if false {
                     //error!("ancient_append_vec: creating ancient append vec because previous one was full, old one: {}, full one: {}, additional: {}, {}", slot, writer.0, accounts_this_append_vec.len(), hashes_next_append_vec.len());
                     error!("ancient_append_vec: creating ancient append vec because previous one was full: {}, full one: {}, additional: {}, {}", slot, writer.0, accounts_next_append_vec.len(), hashes_next_append_vec.len());
                     current_storage = Some((slot, shrunken_store));
-                    created_this_slot = true;
                     let writer = current_storage.as_ref().unwrap();
                     ids.push(writer.1.append_vec_id());
                     if created_this_slot {
-                        //error!("rewrites2 from same slot as ancient: {}, {:?}", slot, accounts_next_append_vec.iter().map(|(a,b,c)| (a,c,b.offset)).collect::<Vec<_>>());
+                        error!("rewrites2 from same slot as ancient_previous: {}, {:?}", slot, prev);
+                        error!("rewrites2 from same slot as ancient: {}, {:?}", slot, accounts_next_append_vec.iter().map(|(a,b,c)| (a,c,b.offset)).collect::<Vec<_>>());
                     }
 
                                         let clone = &writer.1.clone();
