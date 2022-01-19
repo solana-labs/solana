@@ -7,22 +7,14 @@
 
 use {
     crate::sigverify,
-<<<<<<< HEAD
     crossbeam_channel::{SendError, Sender as CrossbeamSender},
-=======
-    crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
     itertools::Itertools,
->>>>>>> dcf44d252 (improves sigverify discard_excess_packets performance (#22577))
     solana_measure::measure::Measure,
     solana_perf::packet::PacketBatch,
     solana_sdk::timing,
     solana_streamer::streamer::{self, PacketBatchReceiver, StreamerError},
     std::{
-<<<<<<< HEAD
-        collections::{HashMap, VecDeque},
         sync::mpsc::{Receiver, RecvTimeoutError},
-=======
->>>>>>> dcf44d252 (improves sigverify discard_excess_packets performance (#22577))
         thread::{self, Builder, JoinHandle},
         time::Instant,
     },
