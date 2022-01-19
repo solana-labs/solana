@@ -29,7 +29,7 @@ use {
             sol_log_data_syscall_enabled, update_syscall_base_costs,
         },
         hash::{Hasher, HASH_BYTES},
-        instruction::{AccountMeta, InnerMeta, Instruction, InstructionError},
+        instruction::{AccountMeta, Instruction, InstructionError, ProcessedInnerInstruction},
         keccak, native_loader,
         precompiles::is_precompile,
         program::MAX_RETURN_DATA,
@@ -3034,12 +3034,16 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallGetProcessedInnerInstruction<'a,
         if let Some((stack_depth, instruction)) =
             invoke_context.get_processed_inner_instruction(index as usize)
         {
-            let InnerMeta {
+            let ProcessedInnerInstruction {
                 data_len,
                 accounts_len,
                 depth,
             } = question_mark!(
-                translate_type_mut::<InnerMeta>(memory_mapping, meta_addr, &loader_id),
+                translate_type_mut::<ProcessedInnerInstruction>(
+                    memory_mapping,
+                    meta_addr,
+                    &loader_id
+                ),
                 result
             );
             if *data_len >= instruction.data.len() && *accounts_len >= instruction.accounts.len() {

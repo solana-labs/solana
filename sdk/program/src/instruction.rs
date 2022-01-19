@@ -650,7 +650,7 @@ impl CompiledInstruction {
 /// when calling the `sol_get_processed_inner_instruction` syscall.
 #[repr(C)]
 #[derive(Default, Debug, Clone, Copy)]
-pub struct InnerMeta {
+pub struct ProcessedInnerInstruction {
     pub data_len: usize,
     pub accounts_len: usize,
     pub depth: usize,
@@ -673,14 +673,14 @@ pub fn get_processed_inner_instruction(index: usize) -> Option<(usize, Instructi
         extern "C" {
             fn sol_get_processed_inner_instruction(
                 index: u64,
-                meta: *mut InnerMeta,
+                meta: *mut ProcessedInnerInstruction,
                 program_id: *mut Pubkey,
                 data: *mut u8,
                 accounts: *mut AccountMeta,
             ) -> u64;
         }
 
-        let mut meta = InnerMeta::default();
+        let mut meta = ProcessedInnerInstruction::default();
         let mut program_id = Pubkey::default();
 
         if 1 == unsafe {
