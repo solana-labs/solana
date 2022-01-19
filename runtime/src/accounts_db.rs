@@ -3182,7 +3182,7 @@ if false {
                         Some(Box::new(move |_, _| writer.1.clone())),
                         None,
                     );
-                    self.verify_contents(&writer.1, writer.0);
+                    self.verify_contents(&writer.1, writer.0, &accounts_this_append_vec);
                     
                     let prev = format!("{:?}", accounts_this_append_vec.iter().map(|(a,b,c)| (a,c,b.offset)).collect::<Vec<_>>());
                     accounts_this_append_vec.clear();
@@ -3232,7 +3232,7 @@ if false {
                         Some(Box::new(move |_, _| Arc::clone(clone))),
                         None,
                     );
-                    self.verify_contents(&writer.1, writer.0);
+                    self.verify_contents(&writer.1, writer.0, &accounts_next_append_vec);
                                     }
 
                                 // Purge old, overwritten storage entries
@@ -3309,8 +3309,35 @@ if false {
             t.as_ms()
         );
     }
-    fn                     verify_contents(&self, writer: &Arc<AccountStorageEntry>, append_vec_slot: Slot)
+    fn                     verify_contents<'a>(&self, writer: &Arc<AccountStorageEntry>, append_vec_slot: Slot, recent: &Vec<(&Pubkey, &StoredAccountMeta<'a>, u64)>)
     {
+        if true {
+            let mut start = 0;
+            let store_id = writer.append_vec_id();
+            let mut current = 0;
+            while let Some((account, next)) = writer.accounts.get_account(start) {
+                    let account_size= next - start;
+                let c = &recent[current];
+                if c.0 == &account.meta.pubkey {
+                        match self.accounts_index.get(&account.meta.pubkey, None, Some(append_vec_slot)) {
+                            AccountIndexGetResult::Found(g, _) => 
+                        assert!(g.slot_list().iter().any(|(slot, info)| {
+                            if slot == &append_vec_slot && info.store_id() == store_id {
+                                true
+                            }
+                            else {
+                                false
+                            }
+                        }), "{}, {:?}, id: {}", account.meta.pubkey, g.slot_list(), writer.append_vec_id()),
+                        _ => {}
+                    }
+                    current += 1;
+                }
+                start = next;
+            }
+
+        }
+        else {
     let temp = Arc::clone(writer);
     let temp2 = [temp];
     let (stored_accounts, num_stores, original_bytes) =
@@ -3330,6 +3357,7 @@ if false {
     }
     
     }
+}
 }
     /*
         fn write_accounts_to_ancient_append_vec(storage: &Arc<AccountStorageEntry>, )
