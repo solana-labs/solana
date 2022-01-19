@@ -421,7 +421,7 @@ impl AppendVec {
     /// Return a reference to the type at `offset` if its data doesn't overrun the internal buffer.
     /// Otherwise return None. Also return the offset of the first byte after the requested data
     /// that falls on a 64-byte boundary.
-    fn get_type<'a, T>(&self, offset: usize) -> Option<(&'a T, usize)> {
+    fn get_type<T>(&self, offset: usize) -> Option<(&T, usize)> {
         let (data, next) = self.get_slice(offset, mem::size_of::<T>())?;
         let ptr: *const T = data.as_ptr() as *const T;
         //UNSAFE: The cast is safe because the slice is aligned and fits into the memory
