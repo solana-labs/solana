@@ -951,6 +951,7 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< HEAD
 name = "crypto-mac"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -961,6 +962,8 @@ dependencies = [
 ]
 
 [[package]]
+=======
+>>>>>>> 60850d71c (Removed solana-accountsdb-plugin-postgres from the monorepo as it has its own (#22567))
 name = "csv"
 version = "1.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1356,6 +1359,7 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< HEAD
 name = "fake-simd"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1368,6 +1372,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4443176a9f2c162692bd3d352d745ef9413eec5782a80d8fd6f8a1ac692a07f7"
 
 [[package]]
+=======
+>>>>>>> 60850d71c (Removed solana-accountsdb-plugin-postgres from the monorepo as it has its own (#22567))
 name = "fast-math"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1837,12 +1843,20 @@ dependencies = [
 
 [[package]]
 name = "hmac"
+<<<<<<< HEAD
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a2a2320eb7ec0ebe8da8f744d7812d9fc4cb4d09344ac01898dbcb6a20ae69b"
 dependencies = [
  "crypto-mac 0.11.1",
  "digest 0.9.0",
+=======
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ddca131f3e7f2ce2df364b57949a9d47915cfbd35e46cfee355ccebbf794d6a2"
+dependencies = [
+ "digest 0.10.1",
+>>>>>>> 60850d71c (Removed solana-accountsdb-plugin-postgres from the monorepo as it has its own (#22567))
 ]
 
 [[package]]
@@ -2437,6 +2451,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60302e4db3a61da70c0cb7991976248362f30319e88850c487b9b95bbf059e00"
 
 [[package]]
+<<<<<<< HEAD
 name = "md-5"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2448,6 +2463,8 @@ dependencies = [
 ]
 
 [[package]]
+=======
+>>>>>>> 60850d71c (Removed solana-accountsdb-plugin-postgres from the monorepo as it has its own (#22567))
 name = "memchr"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2994,24 +3011,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "phf"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9fc3db1018c4b59d7d582a739436478b6035138b6aecbce989fc91c3e98409f"
-dependencies = [
- "phf_shared",
-]
-
-[[package]]
-name = "phf_shared"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6796ad771acdc0123d2a88dc428b5e38ef24456743ddb1744ed628f9815c096"
-dependencies = [
- "siphasher",
-]
-
-[[package]]
 name = "pickledb"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3069,6 +3068,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 
 [[package]]
+<<<<<<< HEAD
 name = "postgres"
 version = "0.19.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3122,6 +3122,17 @@ dependencies = [
  "fallible-iterator",
  "postgres-derive",
  "postgres-protocol",
+=======
+name = "polyval"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8419d2b623c7c0896ff2d5d96e2cb4ede590fed28fcc34934f4c33c036e620a1"
+dependencies = [
+ "cfg-if 1.0.0",
+ "cpufeatures",
+ "opaque-debug",
+ "universal-hash",
+>>>>>>> 60850d71c (Removed solana-accountsdb-plugin-postgres from the monorepo as it has its own (#22567))
 ]
 
 [[package]]
@@ -4196,12 +4207,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a30f10c911c0355f80f1c2faa8096efc4a58cdf8590b954d5b395efa071c711"
 
 [[package]]
-name = "siphasher"
-version = "0.3.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "533494a8f9b724d33625ab53c6c4800f7cc445895924a8ef649222dcb76e938b"
-
-[[package]]
 name = "slab"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4358,6 +4363,7 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< HEAD
 name = "solana-accountsdb-plugin-postgres"
 version = "1.9.5"
 dependencies = [
@@ -4383,6 +4389,8 @@ dependencies = [
 ]
 
 [[package]]
+=======
+>>>>>>> 60850d71c (Removed solana-accountsdb-plugin-postgres from the monorepo as it has its own (#22567))
 name = "solana-address-lookup-table-program"
 version = "1.9.5"
 dependencies = [
@@ -6260,16 +6268,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "stringprep"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ee348cb74b87454fff4b551cbf727025810a004f88aeacae7f85b87f4e9a1c1"
-dependencies = [
- "unicode-bidi",
- "unicode-normalization",
-]
-
-[[package]]
 name = "strsim"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6704,6 +6702,7 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< HEAD
 name = "tokio-postgres"
 version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6727,6 +6726,8 @@ dependencies = [
 ]
 
 [[package]]
+=======
+>>>>>>> 60850d71c (Removed solana-accountsdb-plugin-postgres from the monorepo as it has its own (#22567))
 name = "tokio-reactor"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
