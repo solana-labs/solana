@@ -253,6 +253,7 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
 }
 
 pub enum AccountIndexGetResult<T: IndexValue> {
+    /// (index entry, index in slot list)
     Found(ReadAccountMapEntry<T>, usize),
     NotFound,
 }

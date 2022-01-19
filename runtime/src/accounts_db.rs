@@ -3182,6 +3182,8 @@ if false {
                         Some(Box::new(move |_, _| writer.1.clone())),
                         None,
                     );
+                    self.verify_contents(&writer.1, writer.0);
+                    
                     let prev = format!("{:?}", accounts_this_append_vec.iter().map(|(a,b,c)| (a,c,b.offset)).collect::<Vec<_>>());
                     accounts_this_append_vec.clear();
                     hashes_this_append_vec.clear();
@@ -3230,6 +3232,7 @@ if false {
                         Some(Box::new(move |_, _| Arc::clone(clone))),
                         None,
                     );
+                    self.verify_contents(&writer.1, writer.0);
                                     }
 
                                 // Purge old, overwritten storage entries
@@ -3306,6 +3309,28 @@ if false {
             t.as_ms()
         );
     }
+    fn                     verify_contents(&self, writer: &Arc<AccountStorageEntry>, append_vec_slot: Slot)
+    {
+    let temp = Arc::clone(writer);
+    let temp2 = [temp];
+    let (stored_accounts, num_stores, original_bytes) =
+    self.get_unique_accounts_from_storages(temp2.iter());
+    for (pubkey, found) in stored_accounts.iter() {
+        match self.accounts_index.get(pubkey, None, Some(append_vec_slot)) {
+            AccountIndexGetResult::Found(g, _) => 
+        assert!(g.slot_list().iter().any(|(slot, info)| {
+            if slot == &append_vec_slot && info.store_id() == found.store_id {
+                true
+            }
+            else {
+                false
+            }
+        }), "{}, {:?}, id: {}", pubkey, g.slot_list(), writer.append_vec_id()),
+        _ => {}
+    }
+    
+    }
+}
     /*
         fn write_accounts_to_ancient_append_vec(storage: &Arc<AccountStorageEntry>, )
     */
