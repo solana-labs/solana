@@ -377,12 +377,7 @@ impl AppendVec {
         let data = &self.map[offset..next];
         let next = u64_align!(next);
 
-        Some((
-            //UNSAFE: This unsafe creates a slice that represents a chunk of self.map memory
-            //The lifetime of this slice is tied to &self, since it points to self.map memory
-            unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, size) },
-            next,
-        ))
+        Some((data, next))
     }
 
     /// Copy `len` bytes from `src` to the first 64-byte boundary after position `offset` of
