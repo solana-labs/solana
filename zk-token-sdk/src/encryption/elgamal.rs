@@ -1,9 +1,7 @@
 use {
     crate::encryption::{
         discrete_log::{DecodeU32Precomputation, DiscreteLog},
-        pedersen::{
-            Pedersen, PedersenBase, PedersenCommitment, PedersenDecryptHandle, PedersenOpening,
-        },
+        pedersen::{Pedersen, PedersenCommitment, PedersenOpening, G, H},
     },
     arrayref::{array_ref, array_refs},
     core::ops::{Add, Div, Mul, Sub},
@@ -535,6 +533,90 @@ define_div_variants!(
     Output = ElGamalCiphertext
 );
 
+/// Decryption handle for Pedersen commitment.
+///
+/// A decryption handle can be combined with Pedersen commitments to form an
+/// ElGamal ciphertext.
+#[derive(Serialize, Deserialize, Default, Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PedersenDecryptHandle(pub(crate) RistrettoPoint);
+impl PedersenDecryptHandle {
+    pub fn new(pk: &ElGamalPubkey, open: &PedersenOpening) -> Self {
+        Self(pk.get_point() * open.get_scalar())
+    }
+
+    pub fn get_point(&self) -> RistrettoPoint {
+        self.0
+    }
+
+    #[allow(clippy::wrong_self_convention)]
+    pub fn to_bytes(&self) -> [u8; 32] {
+        self.0.compress().to_bytes()
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Option<PedersenDecryptHandle> {
+        Some(PedersenDecryptHandle(
+            CompressedRistretto::from_slice(bytes).decompress()?,
+        ))
+    }
+}
+
+impl<'a, 'b> Add<&'b PedersenDecryptHandle> for &'a PedersenDecryptHandle {
+    type Output = PedersenDecryptHandle;
+
+    fn add(self, other: &'b PedersenDecryptHandle) -> PedersenDecryptHandle {
+        PedersenDecryptHandle(self.get_point() + other.get_point())
+    }
+}
+
+define_add_variants!(
+    LHS = PedersenDecryptHandle,
+    RHS = PedersenDecryptHandle,
+    Output = PedersenDecryptHandle
+);
+
+impl<'a, 'b> Sub<&'b PedersenDecryptHandle> for &'a PedersenDecryptHandle {
+    type Output = PedersenDecryptHandle;
+
+    fn sub(self, other: &'b PedersenDecryptHandle) -> PedersenDecryptHandle {
+        PedersenDecryptHandle(self.get_point() - other.get_point())
+    }
+}
+
+define_sub_variants!(
+    LHS = PedersenDecryptHandle,
+    RHS = PedersenDecryptHandle,
+    Output = PedersenDecryptHandle
+);
+
+impl<'a, 'b> Mul<&'b Scalar> for &'a PedersenDecryptHandle {
+    type Output = PedersenDecryptHandle;
+
+    fn mul(self, other: &'b Scalar) -> PedersenDecryptHandle {
+        PedersenDecryptHandle(self.get_point() * other)
+    }
+}
+
+define_mul_variants!(
+    LHS = PedersenDecryptHandle,
+    RHS = Scalar,
+    Output = PedersenDecryptHandle
+);
+
+impl<'a, 'b> Div<&'b Scalar> for &'a PedersenDecryptHandle {
+    type Output = PedersenDecryptHandle;
+
+    #[allow(clippy::suspicious_arithmetic_impl)]
+    fn div(self, other: &'b Scalar) -> PedersenDecryptHandle {
+        PedersenDecryptHandle(self.get_point() * other.invert())
+    }
+}
+
+define_div_variants!(
+    LHS = PedersenDecryptHandle,
+    RHS = Scalar,
+    Output = PedersenDecryptHandle
+);
+
 #[cfg(test)]
 mod tests {
     use {
@@ -786,5 +868,25 @@ mod tests {
 
         let null_signer = NullSigner::new(&Pubkey::default());
         assert!(ElGamalSecretKey::new(&null_signer, &Pubkey::default()).is_err());
+    }
+
+    #[test]
+    fn test_decrypt_handle_bytes() {
+        let handle = PedersenDecryptHandle(RistrettoPoint::default());
+
+        let encoded = handle.to_bytes();
+        let decoded = PedersenDecryptHandle::from_bytes(&encoded).unwrap();
+
+        assert_eq!(handle, decoded);
+    }
+
+    #[test]
+    fn test_serde_decrypt_handle() {
+        let handle = PedersenDecryptHandle(RistrettoPoint::default());
+
+        let encoded = bincode::serialize(&handle).unwrap();
+        let decoded: PedersenDecryptHandle = bincode::deserialize(&encoded).unwrap();
+
+        assert_eq!(handle, decoded);
     }
 }
