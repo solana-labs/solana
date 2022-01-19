@@ -296,7 +296,7 @@ impl SigVerifyStage {
             .name("solana-verifier".to_string())
             .spawn(move || {
                 let mut bloom = Bloom::random(1_000_000, 0.0001, 8 << 22).into();
-                let mut bloom_age = Measure::start("bloom_age").as_ms();
+                let mut bloom_age = Instant::now();
                 loop {
                     let now = Instant::now();
                     if now.duration_since(bloom_age) > MAX_BLOOM_AGE {
