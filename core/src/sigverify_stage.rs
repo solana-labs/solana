@@ -8,12 +8,12 @@
 use {
     crate::sigverify,
     crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
+    itertools::Itertools,
     solana_measure::measure::Measure,
     solana_perf::packet::PacketBatch,
     solana_sdk::timing,
     solana_streamer::streamer::{self, PacketBatchReceiver, StreamerError},
     std::{
-        collections::{HashMap, VecDeque},
         thread::{self, Builder, JoinHandle},
         time::Instant,
     },
@@ -161,34 +161,27 @@ impl SigVerifyStage {
         Self { thread_hdl }
     }
 
-    pub fn discard_excess_packets(batches: &mut Vec<PacketBatch>, max_packets: usize) {
-        let mut received_ips = HashMap::new();
-        for (batch_index, batch) in batches.iter().enumerate() {
-            for (packet_index, packets) in batch.packets.iter().enumerate() {
-                let e = received_ips
-                    .entry(packets.meta.addr().ip())
-                    .or_insert_with(VecDeque::new);
-                e.push_back((batch_index, packet_index));
-            }
+    pub fn discard_excess_packets(batches: &mut [PacketBatch], mut max_packets: usize) {
+        // Group packets by their incoming IP address.
+        let mut addrs = batches
+            .iter_mut()
+            .rev()
+            .flat_map(|batch| batch.packets.iter_mut().rev())
+            .map(|packet| (packet.meta.addr, packet))
+            .into_group_map();
+        // Allocate max_packets evenly across addresses.
+        while max_packets > 0 && !addrs.is_empty() {
+            let num_addrs = addrs.len();
+            addrs.retain(|_, packets| {
+                let cap = (max_packets + num_addrs - 1) / num_addrs;
+                max_packets -= packets.len().min(cap);
+                packets.truncate(packets.len().saturating_sub(cap));
+                !packets.is_empty()
+            });
         }
-        let mut batch_len = 0;
-        while batch_len < max_packets {
-            for (_ip, indexes) in received_ips.iter_mut() {
-                if !indexes.is_empty() {
-                    indexes.pop_front();
-                    batch_len += 1;
-                    if batch_len >= max_packets {
-                        break;
-                    }
-                }
-            }
-        }
-        for (_addr, indexes) in received_ips {
-            for (batch_index, packet_index) in indexes {
-                batches[batch_index].packets[packet_index]
-                    .meta
-                    .set_discard(true);
-            }
+        // Discard excess packets from each address.
+        for packet in addrs.into_values().flatten() {
+            packet.meta.set_discard(true);
         }
     }
 
