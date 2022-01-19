@@ -4202,7 +4202,7 @@ impl Bank {
             // because of this, we are not doing this:
             //  verify the whole on-chain state (= all accounts)
             //  via the account delta hash slowly once per an epoch.
-            if rent != 0 || self.slot() >= 116979356 {
+            if rent != 0 {//} || self.slot() >= 116979356 {
                 if !just_rewrites {
                     self.store_account(&pubkey, &account);
                 }
