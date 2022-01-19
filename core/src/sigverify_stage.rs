@@ -24,7 +24,7 @@ use {
     thiserror::Error,
 };
 
-const MAX_SIGVERIFY_BATCH: usize = 10_000;
+pub const MAX_SIGVERIFY_BATCH: usize = 10_000;
 
 #[derive(Error, Debug)]
 pub enum SigVerifyServiceError {
@@ -195,8 +195,16 @@ impl SigVerifyStage {
         packet_receiver: Receiver<PacketBatch>,
         verified_sender: Sender<Vec<PacketBatch>>,
         verifier: T,
+        max_batch_size: usize,
+        max_packet_throughput: Option<usize>,
     ) -> Self {
-        let thread_hdl = Self::verifier_services(packet_receiver, verified_sender, verifier);
+        let thread_hdl = Self::verifier_services(
+            packet_receiver,
+            verified_sender,
+            verifier,
+            max_batch_size,
+            max_packet_throughput,
+        );
         Self { thread_hdl }
     }
 
@@ -231,6 +239,8 @@ impl SigVerifyStage {
         sendr: &Sender<Vec<PacketBatch>>,
         verifier: &T,
         stats: &mut SigVerifierStats,
+        mut max_batch_size: usize,
+        packets_available: &mut usize,
     ) -> Result<()> {
         let (mut batches, num_packets, recv_duration) = streamer::recv_packet_batches(recvr)?;
 
@@ -248,11 +258,13 @@ impl SigVerifyStage {
 
         let mut discard_time = Measure::start("sigverify_discard_time");
         let mut num_valid_packets = num_unique;
-        if num_unique > MAX_SIGVERIFY_BATCH {
-            Self::discard_excess_packets(&mut batches, MAX_SIGVERIFY_BATCH);
-            num_valid_packets = MAX_SIGVERIFY_BATCH;
-        }
-        let excess_fail = num_unique.saturating_sub(MAX_SIGVERIFY_BATCH);
+        *packets_available = packets_available.saturating_sub(num_unique);
+        max_batch_size = max_batch_size.min(*packets_available);
+        if num_unique > max_batch_size {
+            Self::discard_excess_packets(&mut batches, max_batch_size);
+            num_valid_packets = max_batch_size;
+        };
+        let excess_fail = num_unique.saturating_sub(max_batch_size);
         discard_time.stop();
 
         let mut verify_batch_time = Measure::start("sigverify_batch_time");
@@ -315,16 +327,21 @@ impl SigVerifyStage {
         packet_receiver: PacketBatchReceiver,
         verified_sender: Sender<Vec<PacketBatch>>,
         verifier: &T,
+        max_batch_size: usize,
+        max_packet_throughput: Option<usize>,
     ) -> JoinHandle<()> {
         let verifier = verifier.clone();
         let mut stats = SigVerifierStats::default();
         let mut last_print = Instant::now();
         const MAX_DEDUPER_AGE: Duration = Duration::from_secs(2);
         const MAX_DEDUPER_ITEMS: u32 = 1_000_000;
+        const MAX_PACKETS_AGE: Duration = Duration::from_secs(1);
         Builder::new()
             .name("solana-verifier".to_string())
             .spawn(move || {
                 let mut deduper = Deduper::new(MAX_DEDUPER_ITEMS, MAX_DEDUPER_AGE);
+                let mut packets_available = max_packet_throughput.unwrap_or(usize::MAX);
+                let mut last_packets_update = Instant::now();
                 loop {
                     deduper.reset();
                     if let Err(e) = Self::verifier(
@@ -333,6 +350,8 @@ impl SigVerifyStage {
                         &verified_sender,
                         &verifier,
                         &mut stats,
+                        max_batch_size,
+                        &mut packets_available,
                     ) {
                         match e {
                             SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
@@ -352,6 +371,11 @@ impl SigVerifyStage {
                         stats = SigVerifierStats::default();
                         last_print = Instant::now();
                     }
+                    let now = Instant::now();
+                    if now.duration_since(last_packets_update) > MAX_PACKETS_AGE {
+                        packets_available = max_packet_throughput.unwrap_or(usize::MAX);
+                        last_packets_update = now;
+                    }
                 }
             })
             .unwrap()
@@ -361,8 +385,16 @@ impl SigVerifyStage {
         packet_receiver: PacketBatchReceiver,
         verified_sender: Sender<Vec<PacketBatch>>,
         verifier: T,
+        max_batch_size: usize,
+        max_packet_throughput: Option<usize>,
     ) -> JoinHandle<()> {
-        Self::verifier_service(packet_receiver, verified_sender, &verifier)
+        Self::verifier_service(
+            packet_receiver,
+            verified_sender,
+            &verifier,
+            max_batch_size,
+            max_packet_throughput,
+        )
     }
 
     pub fn join(self) -> thread::Result<()> {
@@ -430,7 +462,7 @@ mod tests {
         let (packet_s, packet_r) = unbounded();
         let (verified_s, verified_r) = unbounded();
         let verifier = TransactionSigVerifier::default();
-        let stage = SigVerifyStage::new(packet_r, verified_s, verifier);
+        let stage = SigVerifyStage::new(packet_r, verified_s, verifier, 1000, None);
 
         let use_same_tx = true;
         let now = Instant::now();
