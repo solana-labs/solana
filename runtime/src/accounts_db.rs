@@ -5990,6 +5990,7 @@ if false {
     // storages are sorted by slot and have range info.
     // if we know slots_per_epoch, then add all stores older than slots_per_epoch to dirty_stores so clean visits these slots
     fn mark_old_slots_as_dirty(&self, storages: &SortedStorages, slots_per_epoch: Option<Slot>) {
+        error!("{} {}", file!(), line!());
         if let Some(slots_per_epoch) = slots_per_epoch {
             let max = storages.range().end;
             let acceptable_straggler_slot_count = 100; // do nothing special for these old stores which will likely get cleaned up shortly
@@ -6004,6 +6005,7 @@ if false {
                 }
             }
         }
+        error!("{} {}", file!(), line!());
     }
 
     fn calculate_accounts_hash_helper(
@@ -6024,10 +6026,12 @@ if false {
                 None
             };
 
+            error!("{} {} slot: {}", file!(), line!(), slot);
             let mut collect_time = Measure::start("collect");
             let (combined_maps, slots) = self.get_snapshot_storages(slot, None, Some(ancestors));
             collect_time.stop();
 
+            error!("{} {} slot: {}", file!(), line!(), slot);
             let mut sort_time = Measure::start("sort_storages");
             let min_root = self.accounts_index.min_root();
             let storages = SortedStorages::new_with_slots(
@@ -6038,6 +6042,7 @@ if false {
 
             self.mark_old_slots_as_dirty(&storages, slots_per_epoch);
             sort_time.stop();
+            error!("{} {} slot: {}", file!(), line!(), slot);
 
             let timings = HashStats {
                 collect_snapshots_us: collect_time.as_us(),
