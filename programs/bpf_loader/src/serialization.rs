@@ -23,42 +23,32 @@ struct DuplicateInstructionAccounts<'a> {
     /// Substract from `index_in_transaction` to get the zero-based cache index.
     cache_offset: usize,
     /// Stores the `index_in_instruction` of an account's first occurrence.
-    cache: Vec<usize>,
+    cache: Vec<Option<usize>>,
 }
 
 impl<'a> DuplicateInstructionAccounts<'a> {
     fn new(instruction_context: &'a InstructionContext) -> Result<Self, InstructionError> {
-        // Instruction accounts start after program accounts.
-        let position_offset = instruction_context.get_number_of_program_accounts();
-        let mut indices_in_transaction =
-            Vec::with_capacity(instruction_context.get_number_of_instruction_accounts());
-        for index_in_instruction in position_offset..instruction_context.get_number_of_accounts() {
-            indices_in_transaction
-                .push(instruction_context.get_index_in_transaction(index_in_instruction)?);
-        }
-        let cache_offset = indices_in_transaction.into_iter().min().unwrap_or(0);
+        let (cache_offset, cache_size) =
+            match Self::index_in_transaction_range(instruction_context)? {
+                None => (0, 0),
+                Some((min, max)) => (min, max + 1 - min),
+            };
 
-        let mut pre_cache: Vec<Option<usize>> =
-            vec![None; instruction_context.get_number_of_instruction_accounts()];
-        let mut number_unique_accounts = 0;
-        for index_in_instruction in position_offset..instruction_context.get_number_of_accounts() {
+        // For an account cache[index_in_transaction - cache_offset] stores
+        // the index_in_transaction at which that account was first seen.
+        let mut cache: Vec<Option<usize>> = vec![None; cache_size];
+        for index_in_instruction in instruction_context.get_number_of_program_accounts()
+            ..instruction_context.get_number_of_accounts()
+        {
             let index_in_transaction =
                 instruction_context.get_index_in_transaction(index_in_instruction)?;
-            let duplicate = pre_cache
+            let duplicate = cache
                 .get_mut(index_in_transaction - cache_offset)
-                .ok_or(InstructionError::NotEnoughAccountKeys)?;
+                .ok_or(InstructionError::MissingAccount)?;
             if duplicate.is_none() {
-                // This account was not seen before.
-                number_unique_accounts += 1;
+                // This account was not seen before, store first occurrence.
                 let _ = duplicate.insert(index_in_instruction);
             }
-        }
-
-        pre_cache.truncate(number_unique_accounts);
-        let mut cache = Vec::with_capacity(number_unique_accounts);
-        for item in pre_cache.iter() {
-            let position = item.ok_or(InstructionError::NotEnoughAccountKeys)?;
-            cache.push(position);
         }
 
         Ok(Self {
@@ -66,6 +56,26 @@ impl<'a> DuplicateInstructionAccounts<'a> {
             cache_offset,
             cache,
         })
+    }
+
+    /// Returns `(min, max)` of instruction accounts' index in transaction.
+    fn index_in_transaction_range(
+        instruction_context: &'a InstructionContext,
+    ) -> Result<Option<(usize, usize)>, InstructionError> {
+        if instruction_context.get_number_of_instruction_accounts() == 0 {
+            return Ok(None);
+        }
+        let mut min = usize::MAX;
+        let mut max = usize::MIN;
+        for index_in_instruction in instruction_context.get_number_of_program_accounts()
+            ..instruction_context.get_number_of_accounts()
+        {
+            let index_in_transaction =
+                instruction_context.get_index_in_transaction(index_in_instruction)?;
+            min = std::cmp::min(index_in_transaction, min);
+            max = std::cmp::max(index_in_transaction, max);
+        }
+        Ok(Some((min, max)))
     }
 
     /// If `index_in_instruction` is not the first occurrence of a duplicate
@@ -78,11 +88,12 @@ impl<'a> DuplicateInstructionAccounts<'a> {
         let other = self
             .cache
             .get(index_in_transaction - self.cache_offset)
-            .ok_or(InstructionError::NotEnoughAccountKeys)?;
-        if *other != index_in_instruction {
+            .ok_or(InstructionError::NotEnoughAccountKeys)?
+            .ok_or(InstructionError::MissingAccount)?;
+        if other != index_in_instruction {
             // Duplicate, this account can also be found at this position.
             Ok(Some(
-                *other - self.instruction_context.get_number_of_program_accounts(),
+                other - self.instruction_context.get_number_of_program_accounts(),
             ))
         } else {
             Ok(None)
@@ -536,7 +547,7 @@ mod tests {
         let duplicates = DuplicateInstructionAccounts::new(instruction_context).unwrap();
         // The `index_in_transaction` of the first instruction account is 1.
         assert_eq!(1, duplicates.cache_offset);
-        assert_eq!(vec![1, 2, 3], duplicates.cache,);
+        assert_eq!(vec![Some(1), Some(2), Some(3)], duplicates.cache,);
     }
 
     #[test]
