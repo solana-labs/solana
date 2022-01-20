@@ -26,6 +26,7 @@ use {
     },
     std::hash::Hasher,
     std::sync::atomic::{AtomicU64, Ordering},
+    std::time::{Duration, Instant},
     std::{convert::TryFrom, mem::size_of},
 };
 
@@ -397,14 +398,31 @@ pub fn generate_offsets(
 pub struct Deduper {
     filter: Vec<AtomicBool>,
     seed: u64,
+    age: Instant,
+    max_age: Duration,
 }
 
 impl Deduper {
-    pub fn new(size: usize) -> Self {
+    pub fn new(size: usize, max_age_ms: u64) -> Self {
         let mut filter: Vec<AtomicBool> = Vec::with_capacity(size);
         filter.resize_with(size, Default::default);
         let seed = thread_rng().gen();
-        Self { filter, seed }
+        Self {
+            filter,
+            seed,
+            age: Instant::now(),
+            max_age: Duration::from_millis(max_age_ms),
+        }
+    }
+
+    pub fn reset(&mut self) {
+        let now = Instant::now();
+        if now.duration_since(self.age) > self.max_age {
+            for i in &self.filter {
+                i.store(false, Ordering::Relaxed);
+            }
+            self.age = now;
+        }
     }
 
     fn dedup_packet(&self, count: &AtomicU64, packet: &mut Packet) {
@@ -1276,7 +1294,7 @@ mod tests {
         let mut batches =
             to_packet_batches(&std::iter::repeat(tx).take(1024).collect::<Vec<_>>(), 128);
         let packet_count = sigverify::count_packets_in_batches(&batches);
-        let filter = Deduper::new(1_000_000);
+        let filter = Deduper::new(1_000_000, 0);
         let discard = filter.dedup_packets(&mut batches) as usize;
         // because dedup uses a threadpool, there maybe up to N threads of txs that go through
         let n = get_thread_count();
@@ -1286,12 +1304,16 @@ mod tests {
     #[test]
     fn test_dedup_diff() {
         // generate packet vector
-        let filter = Deduper::new(1_000_000);
+        let mut filter = Deduper::new(1_000_000, 0);
         let mut batches = to_packet_batches(&(0..1024).map(|_| test_tx()).collect::<Vec<_>>(), 128);
 
         let discard = filter.dedup_packets(&mut batches) as usize;
         // because dedup uses a threadpool, there maybe up to N threads of txs that go through
         let n = get_thread_count();
         assert!(discard < n * 2);
+        filter.reset();
+        for i in filter.filter {
+            assert_eq!(i.load(Ordering::Relaxed), false);
+        }
     }
 }

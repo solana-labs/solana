@@ -13,7 +13,7 @@ use {
     solana_bloom::bloom::{AtomicBloom, Bloom},
     solana_measure::measure::Measure,
     solana_perf::packet::PacketBatch,
-    solana_perf::sigverify::{Deduper},
+    solana_perf::sigverify::Deduper,
     solana_sdk::timing,
     solana_streamer::streamer::{self, PacketBatchReceiver, StreamerError},
     std::{
@@ -298,19 +298,14 @@ impl SigVerifyStage {
         let verifier = verifier.clone();
         let mut stats = SigVerifierStats::default();
         let mut last_print = Instant::now();
-        const MAX_DEDUPER_AGE: Duration = Duration::from_millis(2_000);
+        const MAX_DEDUPER_AGE_MS: usize = 2_000;
         const MAX_DEDUPER_ITEMS: usize = 1_000_000;
         Builder::new()
             .name("solana-verifier".to_string())
             .spawn(move || {
-                let mut deduper = Deduper::new(MAX_DEDUPER_ITEMS);
-                let mut deduper_age = Instant::now();
+                let mut deduper = Deduper::new(MAX_DEDUPER_ITEMS, MAX_DEDUPER_AGE_MS);
                 loop {
-                    let now = Instant::now();
-                    if now.duration_since(deduper_age) > MAX_DEDUPER_AGE {
-                        deduper = Deduper::new(MAX_DEDUPER_ITEMS);
-                        deduper_age = now;
-                    }
+                    deduper.reset();
                     if let Err(e) = Self::verifier(
                         &deduper,
                         &packet_receiver,
