@@ -6,6 +6,7 @@ use {
 pub struct SortedStorages<'a> {
     range: Range<Slot>,
     storages: Vec<Option<&'a SnapshotStorage>>,
+    next_valid_slot: Vec<Slot>,
     slot_count: usize,
     storage_count: usize,
 }
@@ -17,6 +18,25 @@ impl<'a> SortedStorages<'a> {
         } else {
             let index = (slot - self.range.start) as usize;
             self.storages[index]
+        }
+    }
+
+    /// find slot that is valid and >= 'slot'
+    pub fn find_valid_slot(&self, slot: Slot) -> Option<Slot> {
+        if slot > self.range.end {
+            None
+        }
+        else if slot < self.range.start || self.next_valid_slot.is_empty() {
+            self.next_valid_slot.first().cloned()
+        }
+        else {
+            let index = (slot - self.range.start) as usize;
+            if index < self.next_valid_slot.len() {
+                Some(self.next_valid_slot[index])
+            }
+            else {
+                None
+            }
         }
     }
 
@@ -97,20 +117,32 @@ impl<'a> SortedStorages<'a> {
         let mut time2 = Measure::start("sort");
         let range;
         let mut storages;
+        let mut next_valid_slot;
         if min > max {
             range = Range::default();
             storages = vec![];
+            next_valid_slot = vec![];
         } else {
             range = Range {
                 start: min,
                 end: max,
             };
-            let len = max - min;
-            storages = vec![None; len as usize];
+            let len = (max - min) as usize;
+            storages = vec![None; len];
+            next_valid_slot = Vec::with_capacity(len);
+            let mut previous_unwritten_valid_slot_index = 0;
+            let mut fill_next_valid_slot = |valid_slot: Slot| {
+                let valid_index = (valid_slot - min) as usize;
+                (previous_unwritten_valid_slot_index..=valid_index).for_each(|previous_index| {
+                    next_valid_slot.push(valid_slot);
+                });
+                previous_unwritten_valid_slot_index = valid_index;
+            };
             source.for_each(|(original_storages, slot)| {
                 let index = (slot - min) as usize;
                 assert!(storages[index].is_none(), "slots are not unique"); // we should not encounter the same slot twice
                 storages[index] = Some(original_storages);
+                fill_next_valid_slot(*slot);
             });
         }
         time2.stop();
@@ -120,6 +152,7 @@ impl<'a> SortedStorages<'a> {
             storages,
             slot_count,
             storage_count,
+            next_valid_slot,
         }
     }
 }

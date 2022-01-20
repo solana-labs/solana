@@ -6168,21 +6168,21 @@ if false {
             // see if we skipped the rent collection IN THIS EPOCH
             if partition_from_pubkey <= partition_index_from_slot {
                 use_stored = true;
+                // we can use the previously calculated hash
+                return loaded_account.loaded_hash();
             }
         }
-        let mut expected_slot = slot / slots_per_epoch + partition_from_pubkey;
-        if !use_stored {
-            // now, we have to find the root that is >= that slot
-            use_stored = true;
-            let expected_slot_start = expected_slot;
-            for maybe_root in expected_slot_start..storage.range().end {
-                if storage.contains(maybe_root) {
-                    // found a root (because we have a storage) that is >= expected_slot.
-                    expected_slot = maybe_root;
-                    use_stored = false;
-                    break;
-                }
-            }
+        // now, we have to find the root that is >= that slot
+        let first_slot_in_current_epoch = slot - partition_index_from_slot;
+        let first_slot_in_previous_epoch = first_slot_in_current_epoch - slots_per_epoch;
+        let mut expected_slot = first_slot_in_previous_epoch + partition_from_pubkey;
+        use_stored = true;
+        let expected_slot_start = expected_slot;
+        let find = storage.find_valid_slot(expected_slot_start);
+        if let Some(find) = find {
+            // found a root (because we have a storage) that is >= expected_slot.
+            expected_slot = find;
+            use_stored = false;
         }
 
         if use_stored {
