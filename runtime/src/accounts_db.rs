@@ -3220,7 +3220,7 @@ if false {
                     let (shrunken_store, _time) = self.get_store_for_shrink(slot, size);
                     shrunken_store.accounts.set_ancient();
                     //error!("ancient_append_vec: creating ancient append vec because previous one was full, old one: {}, full one: {}, additional: {}, {}", slot, writer.0, accounts_this_append_vec.len(), hashes_next_append_vec.len());
-                    error!("ancient_append_vec: creating ancient append vec because previous one was full: {}, full one: {}, additional: {}, {}", slot, writer.0, accounts_next_append_vec.len(), hashes_next_append_vec.len());
+                    error!("ancient_append_vec: creating ancient append vec because previous one was full: {}, full one: {}, additional: {}, {}, items in full one: {} {}", slot, writer.0, accounts_next_append_vec.len(), hashes_next_append_vec.len(), writer.1.count(), writer.1.approx_stored_count());
                     current_storage = Some((slot, shrunken_store));
                     let writer = current_storage.as_ref().unwrap();
                     ids.push(writer.1.append_vec_id());
