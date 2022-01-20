@@ -33,7 +33,7 @@ use {
             ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
         },
         accounts_update_notifier_interface::AccountsUpdateNotifier,
-        active_stats::{ActiveStatItems, ActiveStats},
+        active_stats::{ActiveStatItem, ActiveStats},
         ancestors::Ancestors,
         append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
         cache_hash_data::CacheHashData,
@@ -2079,7 +2079,7 @@ impl AccountsDb {
         is_startup: bool,
         last_full_snapshot_slot: Option<Slot>,
     ) {
-        let stats = self.active_stats.get_state(ActiveStatItems::Clean);
+        let stat_ = self.active_stats.get_state(ActiveStatItem::Clean);
 
         let mut measure_all = Measure::start("clean_accounts");
         let max_clean_root = self.max_clean_root(max_clean_root);
@@ -2408,7 +2408,6 @@ impl AccountsDb {
             ),
             ("next_store_id", self.next_id.load(Ordering::Relaxed), i64),
         );
-        drop(stats);
     }
 
     /// Removes the accounts in the input `reclaims` from the tracked "count" of
@@ -3389,7 +3388,7 @@ if false {
         fn write_accounts_to_ancient_append_vec(storage: &Arc<AccountStorageEntry>, )
     */
     pub fn shrink_candidate_slots(&self) -> usize {
-        self.active_stats.log(ActiveStatItems::Shrink, true);
+        let stat_ = self.active_stats.get_state(ActiveStatItem::Shrink);
 
         let shrink_candidates_slots =
             std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
@@ -3439,13 +3438,12 @@ if false {
             }
         }
         inc_new_counter_info!("shrink_pended_stores-count", pended_counts);
-        self.active_stats.log(ActiveStatItems::Shrink, false);
 
         num_candidates
     }
 
     pub fn shrink_all_slots(&self, is_startup: bool, last_full_snapshot_slot: Option<Slot>) {
-        self.active_stats.log(ActiveStatItems::Shrink, true);
+        let stat_ = self.active_stats.get_state(ActiveStatItem::Shrink);
         const DIRTY_STORES_CLEANING_THRESHOLD: usize = 10_000;
         const OUTER_CHUNK_SIZE: usize = 2000;
 
@@ -3483,7 +3481,6 @@ if false {
                 }
             }
         }
-        self.active_stats.log(ActiveStatItems::Shrink, false);
     }
 
     pub fn scan_accounts<F, A>(
@@ -4961,7 +4958,7 @@ if false {
         let mut account_bytes_saved = 0;
         let mut num_accounts_saved = 0;
 
-        self.active_stats.log(ActiveStatItems::Flush, true);
+        let stat_ = self.active_stats.get_state(ActiveStatItem::Flush);
 
         // Note even if force_flush is false, we will still flush all roots <= the
         // given `requested_flush_root`, even if some of the later roots cannot be used for
@@ -5119,7 +5116,6 @@ if false {
                 );
             }
         }
-        self.active_stats.log(ActiveStatItems::Flush, false);
     }
 
     fn flush_rooted_accounts_cache(
@@ -6082,6 +6078,7 @@ if false {
         slots_per_epoch: Option<Slot>,
         is_startup: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
+        let stat_ = self.active_stats.get_state(ActiveStatItem::Hash);
         let (hash, total_lamports) = self.calculate_accounts_hash_helper(
             use_index,
             slot,
@@ -6122,7 +6119,6 @@ if false {
         slots_per_epoch: Option<Slot>,
         is_startup: bool,
     ) -> (Hash, u64) {
-        self.active_stats.log(ActiveStatItems::Hash, true);
         let check_hash = false;
         let (hash, total_lamports) = self
             .calculate_accounts_hash_helper_with_verify(
@@ -6140,7 +6136,6 @@ if false {
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();
         bank_hash_info.snapshot_hash = hash;
-        self.active_stats.log(ActiveStatItems::Hash, false);
         (hash, total_lamports)
     }
 
@@ -6279,6 +6274,10 @@ if false {
                     accum.append(&mut vec![Vec::new(); range]);
                 }
                 accum[pubkey_to_bin_index].push(source_item);
+                let len = accum[pubkey_to_bin_index].len();
+                if len % 10_000 == 0 {
+                    error!("")
+                }
             },
             |x| {
                 let (result, timing) = Self::sort_slot_storage_scan(x);

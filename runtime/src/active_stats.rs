@@ -9,16 +9,17 @@ pub struct ActiveStats {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub enum ActiveStatItems {
+pub enum ActiveStatItem {
     Clean,
     Shrink,
     Hash,
     Flush,
 }
 
+/// sole purpose is to handle 'drop' so that stat is decremented when self is dropped
 pub struct ActiveState<'a> {
     stats: &'a ActiveStats,
-    item: ActiveStatItems,
+    item: ActiveStatItem,
 }
 
 impl<'a> Drop for ActiveState<'a> {
@@ -29,19 +30,21 @@ impl<'a> Drop for ActiveState<'a> {
 
 impl ActiveStats {
     #[must_use]
-    pub fn get_state(&self, stat: ActiveStatItems) -> ActiveState<'_> {
+    /// create a stack object to set the state to increment stat initially and decrement on drop
+    pub fn get_state(&self, stat: ActiveStatItem) -> ActiveState<'_> {
         self.log(stat, true);
         ActiveState {
             stats: self,
             item: stat,
         }
     }
-    pub fn log(&self, item: ActiveStatItems, increment: bool) {
+    /// update and log the change to the specified 'item'
+    fn log(&self, item: ActiveStatItem, increment: bool) {
         let stat = match item {
-            ActiveStatItems::Clean => &self.clean,
-            ActiveStatItems::Shrink => &self.shrink,
-            ActiveStatItems::Hash => &self.hash,
-            ActiveStatItems::Flush => &self.flush,
+            ActiveStatItem::Clean => &self.clean,
+            ActiveStatItem::Shrink => &self.shrink,
+            ActiveStatItem::Hash => &self.hash,
+            ActiveStatItem::Flush => &self.flush,
         };
         if increment {
             stat.fetch_add(1, Ordering::Relaxed);
@@ -50,12 +53,12 @@ impl ActiveStats {
         }
         let value = stat.load(Ordering::Relaxed);
         match item {
-            ActiveStatItems::Clean => datapoint_info!("accounts_db_active", ("clean", value, i64)),
-            ActiveStatItems::Shrink => {
+            ActiveStatItem::Clean => datapoint_info!("accounts_db_active", ("clean", value, i64)),
+            ActiveStatItem::Shrink => {
                 datapoint_info!("accounts_db_active", ("shrink", value, i64))
             }
-            ActiveStatItems::Hash => datapoint_info!("accounts_db_active", ("hash", value, i64)),
-            ActiveStatItems::Flush => datapoint_info!("accounts_db_active", ("flush", value, i64)),
+            ActiveStatItem::Hash => datapoint_info!("accounts_db_active", ("hash", value, i64)),
+            ActiveStatItem::Flush => datapoint_info!("accounts_db_active", ("flush", value, i64)),
         };
     }
 }
