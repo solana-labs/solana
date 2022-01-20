@@ -32,13 +32,8 @@ use {
         bank_forks::BankForks,
         commitment::VOTE_THRESHOLD_SIZE,
         epoch_stakes::EpochStakes,
-<<<<<<< HEAD
+        vote_parser,
         vote_sender_types::{ReplayVoteReceiver, ReplayedVote},
-=======
-        vote_parser::{self, ParsedVote},
-        vote_sender_types::ReplayVoteReceiver,
-        vote_transaction::VoteTransaction,
->>>>>>> 7f20c6149 (Refactor: move simple vote parsing to runtime (#22537))
     },
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT},
@@ -48,10 +43,7 @@ use {
         slot_hashes,
         transaction::Transaction,
     },
-<<<<<<< HEAD
-    solana_vote_program::{self, vote_state::Vote, vote_transaction},
-=======
->>>>>>> 7f20c6149 (Refactor: move simple vote parsing to runtime (#22537))
+    solana_vote_program::vote_state::Vote,
     std::{
         collections::{HashMap, HashSet},
         iter::repeat,

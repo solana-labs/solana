@@ -6435,29 +6435,6 @@ pub fn goto_end_of_slot(bank: &mut Bank) {
     }
 }
 
-<<<<<<< HEAD
-fn is_simple_vote_transaction(transaction: &SanitizedTransaction) -> bool {
-    if transaction.message().instructions().len() == 1 {
-        let (program_pubkey, instruction) = transaction
-            .message()
-            .program_instructions_iter()
-            .next()
-            .unwrap();
-        if program_pubkey == &solana_vote_program::id() {
-            if let Ok(vote_instruction) = limited_deserialize::<VoteInstruction>(&instruction.data)
-            {
-                return matches!(
-                    vote_instruction,
-                    VoteInstruction::Vote(_) | VoteInstruction::VoteSwitch(_, _)
-                );
-            }
-        }
-    }
-    false
-}
-
-=======
->>>>>>> 7f20c6149 (Refactor: move simple vote parsing to runtime (#22537))
 #[cfg(test)]
 pub(crate) mod tests {
     #[allow(deprecated)]

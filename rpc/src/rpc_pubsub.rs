@@ -594,7 +594,6 @@ mod tests {
                 create_genesis_config, create_genesis_config_with_vote_accounts, GenesisConfigInfo,
                 ValidatorVoteKeypairs,
             },
-            vote_transaction::VoteTransaction,
         },
         solana_sdk::{
             account::ReadableAccount,

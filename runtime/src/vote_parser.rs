@@ -1,15 +1,14 @@
 use {
-    crate::vote_transaction::VoteTransaction,
     solana_sdk::{
         hash::Hash,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
         transaction::{SanitizedTransaction, Transaction},
     },
-    solana_vote_program::vote_instruction::VoteInstruction,
+    solana_vote_program::{vote_instruction::VoteInstruction, vote_state::Vote},
 };
 
-pub type ParsedVote = (Pubkey, VoteTransaction, Option<Hash>);
+pub type ParsedVote = (Pubkey, Vote, Option<Hash>);
 
 // Used for filtering out votes from the transaction log collector
 pub(crate) fn is_simple_vote_transaction(transaction: &SanitizedTransaction) -> bool {
@@ -24,10 +23,7 @@ pub(crate) fn is_simple_vote_transaction(transaction: &SanitizedTransaction) -> 
             {
                 return matches!(
                     vote_instruction,
-                    VoteInstruction::Vote(_)
-                        | VoteInstruction::VoteSwitch(_, _)
-                        | VoteInstruction::UpdateVoteState(_)
-                        | VoteInstruction::UpdateVoteStateSwitch(_, _)
+                    VoteInstruction::Vote(_) | VoteInstruction::VoteSwitch(_, _)
                 );
             }
         }
@@ -65,24 +61,11 @@ pub fn parse_vote_transaction(tx: &Transaction) -> Option<ParsedVote> {
     Some((*key, vote, switch_proof_hash))
 }
 
-fn parse_vote_instruction_data(
-    vote_instruction_data: &[u8],
-) -> Option<(VoteTransaction, Option<Hash>)> {
+fn parse_vote_instruction_data(vote_instruction_data: &[u8]) -> Option<(Vote, Option<Hash>)> {
     match limited_deserialize(vote_instruction_data).ok()? {
-        VoteInstruction::Vote(vote) => Some((VoteTransaction::from(vote), None)),
-        VoteInstruction::VoteSwitch(vote, hash) => Some((VoteTransaction::from(vote), Some(hash))),
-        VoteInstruction::UpdateVoteState(vote_state_update) => {
-            Some((VoteTransaction::from(vote_state_update), None))
-        }
-        VoteInstruction::UpdateVoteStateSwitch(vote_state_update, hash) => {
-            Some((VoteTransaction::from(vote_state_update), Some(hash)))
-        }
-        VoteInstruction::Authorize(_, _)
-        | VoteInstruction::AuthorizeChecked(_)
-        | VoteInstruction::InitializeAccount(_)
-        | VoteInstruction::UpdateCommission(_)
-        | VoteInstruction::UpdateValidatorIdentity
-        | VoteInstruction::Withdraw(_) => None,
+        VoteInstruction::Vote(vote) => Some((vote, None)),
+        VoteInstruction::VoteSwitch(vote, hash) => Some((vote, Some(hash))),
+        _ => None,
     }
 }
 
@@ -111,7 +94,7 @@ mod test {
         );
         let (key, vote, hash) = parse_vote_transaction(&vote_tx).unwrap();
         assert_eq!(hash, input_hash);
-        assert_eq!(vote, VoteTransaction::from(Vote::new(vec![42], bank_hash)));
+        assert_eq!(vote, Vote::new(vec![42], bank_hash));
         assert_eq!(key, vote_keypair.pubkey());
 
         // Test bad program id fails
