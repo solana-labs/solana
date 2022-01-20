@@ -401,10 +401,8 @@ pub struct Deduper {
 
 impl Deduper {
     pub fn new(size: usize) -> Self {
-        let filter: Vec<AtomicBool> = (0usize..size)
-            .into_iter()
-            .map(|_| AtomicBool::new(false))
-            .collect();
+        let mut filter: Vec<AtomicBool> = Vec::with_capacity(size);
+        filter.resize_with(size, Default::default);
         let seed = thread_rng().gen();
         Self { filter, seed }
     }
