@@ -6172,7 +6172,8 @@ if false {
         if !use_stored {
             // now, we have to find the root that is >= that slot
             use_stored = true;
-            for maybe_root in expected_slot..storage.range().end {
+            let expected_slot_start = expected_slot;
+            for maybe_root in expected_slot_start..storage.range().end {
                 if storage.contains(maybe_root) {
                     // found a root (because we have a storage) that is >= expected_slot.
                     expected_slot = maybe_root;
@@ -6187,7 +6188,10 @@ if false {
             return loaded_account.loaded_hash();
         }
 
-        rehash.fetch_add(1, Ordering::Relaxed);
+        let num = rehash.fetch_add(1, Ordering::Relaxed);
+        if num % 10000 == 0 {
+            error!("rehashed: {}", num);
+        }
         // recompute based on rent collection/rewrite slot
         // Rent would have been collected AT 'expected_slot', so hash according to that slot.
         // Note that a later storage (and slot) may contain this same pubkey. In that case, that newer hash will make this one irrelevant.

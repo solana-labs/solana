@@ -5520,6 +5520,9 @@ impl Bank {
         let mut verify_time = Measure::start("verify_bank_hash");
         let mut verify = self.verify_bank_hash(test_hash_calculation);
         verify_time.stop();
+        let mut verify_time = Measure::start("verify_bank_hash");
+        let mut verify = self.verify_bank_hash(test_hash_calculation);
+        verify_time.stop();
         self.rc
             .accounts
             .accounts_db
