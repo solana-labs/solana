@@ -5,7 +5,6 @@ extern crate test;
 
 use {
     rand::prelude::*,
-    solana_bloom::bloom::{AtomicBloom, Bloom},
     solana_perf::{
         packet::{to_packet_batches, PacketBatch},
         sigverify,
@@ -22,20 +21,14 @@ fn test_packet_with_size(size: usize, rng: &mut ThreadRng) -> Vec<u8> {
 
 fn do_bench_dedup_packets(bencher: &mut Bencher, mut batches: Vec<PacketBatch>) {
     // verify packets
-    let mut bloom: AtomicBloom<&[u8]> = Bloom::random(1_000_000, 0.0001, 8 << 22).into();
+    let mut deduper = sigverify::Deduper::new(1_000_000, 2_000);
     bencher.iter(|| {
-        // bench
-        sigverify::dedup_packets(&bloom, &mut batches);
-
-        // reset
-        bloom.clear_for_tests();
-        batches.iter_mut().for_each(|batch| {
-            batch
-                .packets
-                .iter_mut()
-                .for_each(|p| p.meta.set_discard(false))
-        });
-    })
+        let _ans = deduper.dedup_packets(&mut batches);
+        deduper.reset();
+        batches
+            .iter_mut()
+            .for_each(|b| b.packets.iter_mut().for_each(|p| p.meta.set_discard(false)));
+    });
 }
 
 #[bench]
@@ -96,4 +89,13 @@ fn bench_dedup_diff_big_packets(bencher: &mut Bencher) {
     );
 
     do_bench_dedup_packets(bencher, batches);
+}
+
+#[bench]
+#[ignore]
+fn bench_dedup_reset(bencher: &mut Bencher) {
+    let mut deduper = sigverify::Deduper::new(1_000_000, 0);
+    bencher.iter(|| {
+        deduper.reset();
+    });
 }
