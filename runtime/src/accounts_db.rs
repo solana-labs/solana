@@ -6147,7 +6147,7 @@ if false {
     fn maybe_rehash_rewrites(
         loaded_account: &LoadedAccount,
         pubkey: &Pubkey,
-        slot: Slot,
+        storage_slot: Slot,
         storage: &SortedStorages,
         slots_per_epoch: Option<Slot>,
         rehash: &AtomicUsize,
@@ -6157,31 +6157,42 @@ if false {
             return loaded_account.loaded_hash();
         }
 
+        let mut is_ancient = false;
+        if let Some(storages) = storage.get(storage_slot) {
+            if storages.len() == 1 && storages[0].accounts.is_ancient() {
+                is_ancient = true;
+            }
+        }
+
+        // todo: if we are ancient, then we should assume we need to recompute
+        // if we are not ancient, we can calculate based on distance of this slot from max
         let slots_per_epoch = slots_per_epoch.unwrap_or(DEFAULT_SLOTS_PER_EPOCH);
         let partition_from_pubkey =
             crate::bank::Bank::partition_from_pubkey(pubkey, slots_per_epoch);
-        let partition_index_from_slot = slot % slots_per_epoch;
-        let mut use_stored = false;
-        if slot < storage.range().end - slots_per_epoch {
-            // this slot is ancient and we know we have to recompute
-        } else {
-            // see if we skipped the rent collection IN THIS EPOCH
-            if partition_from_pubkey <= partition_index_from_slot {
-                use_stored = true;
-                // we can use the previously calculated hash
-                return loaded_account.loaded_hash();
-            }
+        let max_slot_in_storages = storage.range().end;
+        let partition_index_from_max_slot = max_slot_in_storages % slots_per_epoch;
+        if max_slot_in_storages >= slots_per_epoch && storage_slot <= max_slot_in_storages - slots_per_epoch {
+            // this storage_slot is ancient and we know we have to recompute
         }
-        // now, we have to find the root that is >= that slot
-        let first_slot_in_current_epoch = slot - partition_index_from_slot;
-        let first_slot_in_previous_epoch = first_slot_in_current_epoch - slots_per_epoch;
-        let mut expected_slot = first_slot_in_previous_epoch + partition_from_pubkey;
-        use_stored = true;
-        let expected_slot_start = expected_slot;
+        // now, we have to find the root that is >= that storage_slot
+        let first_slot_in_max_epoch = max_slot_in_storages - partition_index_from_max_slot;
+        let mut expected_rent_collection_slot_max_epoch = first_slot_in_max_epoch + partition_from_pubkey;
+        if expected_rent_collection_slot_max_epoch > max_slot_in_storages {
+            // max slot has not hit the slot in the max epoch where we would have collected rent yet, so the most recent rent-collected rewrite slot for this pubkey would be in the previous epoch
+            expected_rent_collection_slot_max_epoch.saturating_sub(slots_per_epoch);
+        }
+        let mut use_stored = true;
+        if !is_ancient && storage_slot >= expected_rent_collection_slot_max_epoch {
+            // the storage slot is at least as recent as the expected rent collection slot, so whatever is in the append vec is good
+            // we have not collected rent yet in this epoch for this pubkey
+            // we can use the previously calculated hash
+            return loaded_account.loaded_hash();
+        }
+        let expected_slot_start = expected_rent_collection_slot_max_epoch;
         let find = storage.find_valid_slot(expected_slot_start);
         if let Some(find) = find {
-            // found a root (because we have a storage) that is >= expected_slot.
-            expected_slot = find;
+            // found a root (because we have a storage) that is >= expected_rent_collection_slot.
+            expected_rent_collection_slot_max_epoch = find;
             use_stored = false;
         }
 
@@ -6191,13 +6202,13 @@ if false {
         }
 
         let num = rehash.fetch_add(1, Ordering::Relaxed);
-        if num % 10000 == 0 {
+        if num % 100_000 == 0 {
             error!("rehashed: {}", num);
         }
         // recompute based on rent collection/rewrite slot
-        // Rent would have been collected AT 'expected_slot', so hash according to that slot.
+        // Rent would have been collected AT 'expected_rent_collection_slot', so hash according to that slot.
         // Note that a later storage (and slot) may contain this same pubkey. In that case, that newer hash will make this one irrelevant.
-        loaded_account.compute_hash(expected_slot, pubkey)
+        loaded_account.compute_hash(expected_rent_collection_slot_max_epoch, pubkey)
     }
 
     fn scan_snapshot_stores_with_cache(
