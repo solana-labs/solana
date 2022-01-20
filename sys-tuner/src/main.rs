@@ -71,7 +71,7 @@ fn tune_kernel_udp_buffers_and_vmmap() {
 
     // limits should be kept in sync with limits in validator and
     // https://docs.solana.com/running-validator/validator-start#manual
-    fn get_recommended_net_limits() -> HashMap<&str, i64> {
+    fn get_recommended_net_limits() -> HashMap<&'static str, i64> {
         let mut limits = HashMap::default();
         // Reference: https://medium.com/@CameronSparr/increase-os-udp-buffers-to-improve-performance-51d167bb1360
         limits.insert("net.core.rmem_max", 134217728);
@@ -99,7 +99,7 @@ fn tune_kernel_udp_buffers_and_vmmap() {
             return;
         }
         let ctl = ctl.unwrap();
-        info("Old {} value {:?}", name, ctl.value());
+        info!("Old {} value {:?}", name, ctl.value());
 
         let existing_value = ctl.value_string();
         if let Err(e) = existing_value {
@@ -110,13 +110,19 @@ fn tune_kernel_udp_buffers_and_vmmap() {
 
         let existing_int_value = existing_value.parse::<i64>();
         if let Err(e) = existing_int_value {
-            error!("Failed to parse value for {}: {:?}", name, existing_int_value);
+            error!(
+                "Failed to parse value for {}: {:?}",
+                name, existing_int_value
+            );
             return;
         }
         let existing_int_value = existing_int_value.unwrap();
 
         if existing_int_value >= new_value {
-            info!("{}={} >= {}, ignoring update", name, existing_int_value, new_value);
+            info!(
+                "{}={} >= {}, ignoring update",
+                name, existing_int_value, new_value
+            );
             return;
         }
 
