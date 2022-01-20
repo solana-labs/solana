@@ -15,13 +15,11 @@ use {
     zeroize::Zeroize,
 };
 
-/// Curve basepoints for which Pedersen commitment is defined over.
-///
-/// The point `G` should be used to encode the message to be committed.
-/// The point `H` should be used to encode the Pedersen opening value.
-pub static G: RistrettoPoint = RISTRETTO_BASEPOINT_POINT;
-pub static H: RistrettoPoint =
-    RistrettoPoint::hash_from_bytes::<Sha3_512>(RISTRETTO_BASEPOINT_COMPRESSED.as_bytes());
+lazy_static::lazy_static!{
+    pub static ref G: RistrettoPoint = RISTRETTO_BASEPOINT_POINT;
+    pub static ref H: RistrettoPoint =
+        RistrettoPoint::hash_from_bytes::<Sha3_512>(RISTRETTO_BASEPOINT_COMPRESSED.as_bytes());
+}
 
 /// Algorithm handle for the Pedersen commitment scheme.
 pub struct Pedersen;
@@ -48,7 +46,7 @@ impl Pedersen {
         let x: Scalar = amount.into();
         let r = open.get_scalar();
 
-        PedersenCommitment(RistrettoPoint::multiscalar_mul(&[x, *r], &[G, H]))
+        PedersenCommitment(RistrettoPoint::multiscalar_mul(&[x, *r], &[*G, *H]))
     }
 }
 
@@ -145,11 +143,6 @@ pub struct PedersenCommitment(pub(crate) RistrettoPoint);
 impl PedersenCommitment {
     pub fn get_point(&self) -> &RistrettoPoint {
         &self.0
-    }
-
-    #[allow(clippy::wrong_self_convention)]
-    pub fn as_bytes(&self) -> &[u8; 32] {
-        self.0.compress().as_bytes()
     }
 
     #[allow(clippy::wrong_self_convention)]

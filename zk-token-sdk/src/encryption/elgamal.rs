@@ -45,7 +45,7 @@ impl ElGamal {
     #[allow(non_snake_case)]
     fn keygen() -> ElGamalKeypair {
         // secret scalar should be zero with negligible probability
-        let s = Scalar::random(&mut OsRng);
+        let mut s = Scalar::random(&mut OsRng);
         let keypair = Self::keygen_with_scalar(&s);
 
         s.zeroize();
@@ -58,7 +58,7 @@ impl ElGamal {
     fn keygen_with_scalar(s: &Scalar) -> ElGamalKeypair {
         assert!(s != &Scalar::zero());
 
-        let P = s.invert() * H;
+        let P = s.invert() * &(*H);
 
         ElGamalKeypair {
             public: ElGamalPubkey(P),
@@ -97,7 +97,7 @@ impl ElGamal {
     /// message, use `DiscreteLog::decode`.
     fn decrypt(secret: &ElGamalSecretKey, ciphertext: &ElGamalCiphertext) -> DiscreteLog {
         DiscreteLog {
-            generator: G,
+            generator: *G,
             target: &ciphertext.commitment.0 - &(&secret.0 * &ciphertext.handle.0),
         }
     }
@@ -153,7 +153,7 @@ impl ElGamalKeypair {
             return Err(SignerError::Custom("Rejecting default signature".into()));
         }
 
-        let scalar = Scalar::hash_from_bytes::<Sha3_512>(signature.as_ref());
+        let mut scalar = Scalar::hash_from_bytes::<Sha3_512>(signature.as_ref());
         let keypair = ElGamal::keygen_with_scalar(&scalar);
 
         // TODO: zeroize signature?
@@ -172,7 +172,7 @@ impl ElGamalKeypair {
 
     pub fn to_bytes(&self) -> [u8; 64] {
         let mut bytes = [0u8; 64];
-        bytes[..32].copy_from_slice(self.public.as_bytes());
+        bytes[..32].copy_from_slice(&self.public.to_bytes());
         bytes[32..].copy_from_slice(self.secret.as_bytes());
         bytes
     }
@@ -247,16 +247,11 @@ impl ElGamalPubkey {
     /// Derives the `ElGamalPubkey` that uniquely corresponds to an `ElGamalSecretKey`.
     #[allow(non_snake_case)]
     pub fn new(secret: &ElGamalSecretKey) -> Self {
-        ElGamalPubkey(&secret.0 * &H)
+        ElGamalPubkey(&secret.0 * &(*H))
     }
 
     pub fn get_point(&self) -> &RistrettoPoint {
         &self.0
-    }
-
-    #[allow(clippy::wrong_self_convention)]
-    pub fn as_bytes(&self) -> &[u8; 32] {
-        self.0.compress().as_bytes()
     }
 
     #[allow(clippy::wrong_self_convention)]
@@ -405,7 +400,7 @@ pub struct ElGamalCiphertext {
 }
 impl ElGamalCiphertext {
     pub fn add_amount<T: Into<Scalar>>(&self, amount: T) -> Self {
-        let commitment_to_add = PedersenCommitment(amount.into() * G);
+        let commitment_to_add = PedersenCommitment(amount.into() * &(*G));
         ElGamalCiphertext {
             commitment: &self.commitment + &commitment_to_add,
             handle: self.handle,
@@ -413,7 +408,7 @@ impl ElGamalCiphertext {
     }
 
     pub fn subtract_amount<T: Into<Scalar>>(&self, amount: T) -> Self {
-        let commitment_to_subtract = PedersenCommitment(amount.into() * G);
+        let commitment_to_subtract = PedersenCommitment(amount.into() * &(*G));
         ElGamalCiphertext {
             commitment: &self.commitment - &commitment_to_subtract,
             handle: self.handle,
@@ -423,8 +418,8 @@ impl ElGamalCiphertext {
     #[allow(clippy::wrong_self_convention)]
     pub fn to_bytes(&self) -> [u8; 64] {
         let mut bytes = [0u8; 64];
-        bytes[..32].copy_from_slice(self.commitment.as_bytes());
-        bytes[32..].copy_from_slice(self.handle.as_bytes());
+        bytes[..32].copy_from_slice(&self.commitment.to_bytes());
+        bytes[32..].copy_from_slice(&self.handle.to_bytes());
         bytes
     }
 
@@ -529,11 +524,6 @@ impl DecryptHandle {
     }
 
     #[allow(clippy::wrong_self_convention)]
-    pub fn as_bytes(&self) -> &[u8; 32] {
-        self.0.compress().as_bytes()
-    }
-
-    #[allow(clippy::wrong_self_convention)]
     pub fn to_bytes(&self) -> [u8; 32] {
         self.0.compress().to_bytes()
     }
@@ -598,8 +588,8 @@ mod tests {
         let ciphertext = ElGamal::encrypt(&public, amount);
 
         let expected_instance = DiscreteLog {
-            generator: G,
-            target: Scalar::from(amount) * G,
+            generator: *G,
+            target: Scalar::from(amount) * &(*G),
         };
 
         assert_eq!(expected_instance, ElGamal::decrypt(&secret, &ciphertext));
@@ -632,8 +622,8 @@ mod tests {
         };
 
         let expected_instance = DiscreteLog {
-            generator: G,
-            target: Scalar::from(amount) * G,
+            generator: *G,
+            target: Scalar::from(amount) * (*G),
         };
 
         assert_eq!(expected_instance, secret_0.decrypt(&ciphertext_0));
