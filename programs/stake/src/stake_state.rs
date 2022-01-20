@@ -3120,12 +3120,11 @@ mod tests {
         let to_account = AccountSharedData::new_ref(1, 0, &system_program::id());
         let to_keyed_account = KeyedAccount::new(&to, false, &to_account);
 
-        // Withdrawing account down to only rent-exempt reserve should succeed before feature, and
-        // fail after
+        // Withdrawing account down to minimum balance should succeed
         let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
         assert_eq!(
             stake_keyed_account.withdraw(
-                stake,
+                stake - 1,
                 &to_keyed_account,
                 &clock,
                 &StakeHistory::default(),
@@ -3134,9 +3133,11 @@ mod tests {
             ),
             Ok(())
         );
+
+        // Withdrawing account down to only rent-exempt reserve should fail
         stake_account
             .borrow_mut()
-            .checked_add_lamports(stake)
+            .checked_add_lamports(stake - 1)
             .unwrap(); // top up account
         let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
         assert_eq!(
@@ -6230,7 +6231,7 @@ mod tests {
     fn test_merge_kind_merge() {
         let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        let clock = invoke_context.get_sysvar_cache().get_clock().unwrap();
+        let clock = Clock::default();
         let lamports = 424242;
         let meta = Meta {
             rent_exempt_reserve: 42,
@@ -6310,7 +6311,7 @@ mod tests {
     fn test_active_stake_merge() {
         let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        let clock = invoke_context.get_sysvar_cache().get_clock().unwrap();
+        let clock = Clock::default();
         let delegation_a = 4_242_424_242u64;
         let delegation_b = 6_200_000_000u64;
         let credits_a = 124_521_000u64;
