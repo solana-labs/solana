@@ -250,7 +250,7 @@ impl CacheHashData {
         */
     }
 
-    pub fn save_internal(
+    fn save_internal(
         &self,
         file_name: &Path,
         data: &SavedTypeSlice,

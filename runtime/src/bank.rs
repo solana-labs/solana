@@ -4191,6 +4191,9 @@ impl Bank {
         let mut total_rent = 0;
         let mut rent_debits = RentDebits::default();
         for (pubkey, mut account) in accounts {
+            let found = Self::partition_from_pubkey(&pubkey, partition.2);        
+            assert!(found <= partition.1, "{}, {}, {:?}", pubkey, found, partition);
+            assert!(found > partition.0 || (found == 0 && partition.0 == 0), "{}, {}, {:?}", pubkey, found, partition);
             let rent = self.rent_collector.collect_from_existing_account(
                 &pubkey,
                 &mut account,
