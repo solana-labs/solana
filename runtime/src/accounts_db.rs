@@ -966,6 +966,12 @@ type AccountInfoAccountsIndex = AccountsIndex<AccountInfo>;
 // This structure handles the load/store of the accounts
 #[derive(Debug)]
 pub struct AccountsDb {
+    clean_active: AtomicUsize,
+    shrink_slot_stores_active: AtomicUsize,
+    shrink_all_slots_active    : AtomicUsize,
+    shrink_candidate_slots_active:AtomicUsize,
+    hash_active: AtomicUsize,
+    flush_active: AtomicUsize,
     /// Keeps tracks of index into AppendVec on a per slot basis
     pub accounts_index: AccountInfoAccountsIndex,
 
@@ -1523,6 +1529,23 @@ struct IndexAccountMapEntry<'a> {
 type GenerateIndexAccountsMap<'a> = HashMap<Pubkey, IndexAccountMapEntry<'a>>;
 
 impl AccountsDb {
+    fn log_active_stats(&self, stat: &AtomicUsize, increment: bool) {
+        if increment {
+            stat.fetch_add(1, Ordering::Relaxed);
+        }
+        else {
+            stat.fetch_sub(1, Ordering::Relaxed);
+        }
+        datapoint_info!(
+            "accounts_db_active",
+            ("clean_active", self.clean_active.load(Ordering::Relaxed), i64),
+            ("shrink_all_slots_active", self.shrink_all_slots_active.load(Ordering::Relaxed), i64),
+            ("hash_active", self.hash_active.load(Ordering::Relaxed), i64),
+            ("flush_active", self.flush_active.load(Ordering::Relaxed), i64),
+            ("shrink_candidate_slots_active", self.shrink_candidate_slots_active.load(Ordering::Relaxed), i64),
+        );
+    }
+
     pub fn default_for_tests() -> Self {
         Self::default_with_accounts_index(AccountInfoAccountsIndex::default_for_tests(), None, None)
     }
@@ -1569,6 +1592,12 @@ impl AccountsDb {
         Self::bins_per_pass(num_hash_scan_passes);
 
         AccountsDb {
+            shrink_candidate_slots_active: AtomicUsize::default(),
+            shrink_slot_stores_active: AtomicUsize::default(),
+            clean_active: AtomicUsize::default(),
+            flush_active: AtomicUsize::default(),
+            hash_active: AtomicUsize::default(),
+            shrink_all_slots_active: AtomicUsize::default(),
             accounts_index,
             storage: AccountStorage::default(),
             accounts_cache: AccountsCache::default(),
@@ -2075,7 +2104,7 @@ impl AccountsDb {
         is_startup: bool,
         last_full_snapshot_slot: Option<Slot>,
     ) {
-        inc_new_counter_info!("clean_accounts", 1);
+        self.log_active_stats(&self.clean_active, true);
 
         let mut measure_all = Measure::start("clean_accounts");
         let max_clean_root = self.max_clean_root(max_clean_root);
@@ -2404,7 +2433,7 @@ impl AccountsDb {
             ),
             ("next_store_id", self.next_id.load(Ordering::Relaxed), i64),
         );
-        inc_new_counter_info!("clean_accounts_done", 1);
+        self.log_active_stats(&self.clean_active, false);
     }
 
     /// Removes the accounts in the input `reclaims` from the tracked "count" of
@@ -2674,7 +2703,7 @@ impl AccountsDb {
     where
         I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
     {
-        inc_new_counter_info!("do_shrink_slot_stores", 1);
+        self.log_active_stats(&self.shrink_slot_stores_active, true);
 
         debug!("do_shrink_slot_stores: slot: {}", slot);
         let (stored_accounts, num_stores, original_bytes) =
@@ -2880,7 +2909,7 @@ impl AccountsDb {
 
         self.shrink_stats.report();
 
-        inc_new_counter_info!("do_shrink_slot_stores_done", 1);
+        self.log_active_stats(&self.shrink_slot_stores_active, false);
 
         total_accounts_after_shrink
     }
@@ -3389,6 +3418,8 @@ if false {
         fn write_accounts_to_ancient_append_vec(storage: &Arc<AccountStorageEntry>, )
     */
     pub fn shrink_candidate_slots(&self) -> usize {
+        self.log_active_stats(&self.shrink_candidate_slots_active, true);
+
         let shrink_candidates_slots =
             std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
         if !shrink_candidates_slots.is_empty() {
@@ -3437,12 +3468,13 @@ if false {
             }
         }
         inc_new_counter_info!("shrink_pended_stores-count", pended_counts);
+        self.log_active_stats(&self.shrink_candidate_slots_active, false);
 
         num_candidates
     }
 
     pub fn shrink_all_slots(&self, is_startup: bool, last_full_snapshot_slot: Option<Slot>) {
-        inc_new_counter_info!("shrink_all_slots", 1);
+        self.log_active_stats(&self.shrink_all_slots_active, true);
         const DIRTY_STORES_CLEANING_THRESHOLD: usize = 10_000;
         const OUTER_CHUNK_SIZE: usize = 2000;
 
@@ -3484,7 +3516,7 @@ if false {
             "ancient_append_vec: DONE shrink_all_slots, last full {:?}, startup {}",
             last_full_snapshot_slot, is_startup
         );
-        inc_new_counter_info!("shrink_all_slots_done", 1);
+        self.log_active_stats(&self.shrink_all_slots_active, false);
     }
 
     pub fn scan_accounts<F, A>(
@@ -4962,7 +4994,7 @@ if false {
         let mut account_bytes_saved = 0;
         let mut num_accounts_saved = 0;
 
-        inc_new_counter_info!("flush_accounts_cache", 1);
+        self.log_active_stats(&self.flush_active, true);
 
         // Note even if force_flush is false, we will still flush all roots <= the
         // given `requested_flush_root`, even if some of the later roots cannot be used for
@@ -5120,7 +5152,7 @@ if false {
                 );
             }
         }
-        inc_new_counter_info!("flush_accounts_cache_done", 1);
+        self.log_active_stats(&self.flush_active, false);
 
     }
 
@@ -6123,6 +6155,7 @@ if false {
         slots_per_epoch: Option<Slot>,
         is_startup: bool,
     ) -> (Hash, u64) {
+        self.log_active_stats(&self.hash_active, true);
         let check_hash = false;
         let (hash, total_lamports) = self
             .calculate_accounts_hash_helper_with_verify(
@@ -6140,6 +6173,7 @@ if false {
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();
         bank_hash_info.snapshot_hash = hash;
+        self.log_active_stats(&self.hash_active, false);
         (hash, total_lamports)
     }
 
@@ -6337,7 +6371,6 @@ if false {
         num_hash_scan_passes: Option<usize>,
         slots_per_epoch: Option<Slot>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
-        inc_new_counter_info!("calculate_accounts_hash_without_index", 1);
 
         let rehash = AtomicUsize::default();
         let (num_hash_scan_passes, bins_per_pass) = Self::bins_per_pass(num_hash_scan_passes);
@@ -6388,7 +6421,6 @@ if false {
         } else {
             scan_and_hash()
         };
-        inc_new_counter_info!("calculate_accounts_hash_without_index_done", 1);
 
         result
     }
