@@ -11,10 +11,9 @@ use {
         program_utils::limited_deserialize,
         pubkey::Pubkey,
         sanitize::{Sanitize, SanitizeError},
-        serialize_utils::{append_slice, append_u16, append_u8},
         solana_program::{system_instruction::SystemInstruction, system_program},
+        sysvar::instructions::{BorrowedAccountMeta, BorrowedInstruction},
     },
-    bitflags::bitflags,
     std::convert::TryFrom,
     thiserror::Error,
 };
@@ -54,14 +53,6 @@ impl TryFrom<LegacyMessage> for SanitizedMessage {
     fn try_from(message: LegacyMessage) -> Result<Self, Self::Error> {
         message.sanitize()?;
         Ok(Self::Legacy(message))
-    }
-}
-
-bitflags! {
-    struct InstructionsSysvarAccountMeta: u8 {
-        const NONE = 0b00000000;
-        const IS_SIGNER = 0b00000001;
-        const IS_WRITABLE = 0b00000010;
     }
 }
 
@@ -199,57 +190,6 @@ impl SanitizedMessage {
         index < usize::from(self.header().num_required_signatures)
     }
 
-    // First encode the number of instructions:
-    // [0..2 - num_instructions
-    //
-    // Then a table of offsets of where to find them in the data
-    //  3..2 * num_instructions table of instruction offsets
-    //
-    // Each instruction is then encoded as:
-    //   0..2 - num_accounts
-    //   2 - meta_byte -> (bit 0 signer, bit 1 is_writable)
-    //   3..35 - pubkey - 32 bytes
-    //   35..67 - program_id
-    //   67..69 - data len - u16
-    //   69..data_len - data
-    #[allow(clippy::integer_arithmetic)]
-    pub fn serialize_instructions(&self) -> Vec<u8> {
-        // 64 bytes is a reasonable guess, calculating exactly is slower in benchmarks
-        let mut data = Vec::with_capacity(self.instructions().len() * (32 * 2));
-        append_u16(&mut data, self.instructions().len() as u16);
-        for _ in 0..self.instructions().len() {
-            append_u16(&mut data, 0);
-        }
-        for (i, (program_id, instruction)) in self.program_instructions_iter().enumerate() {
-            let start_instruction_offset = data.len() as u16;
-            let start = 2 + (2 * i);
-            data[start..start + 2].copy_from_slice(&start_instruction_offset.to_le_bytes());
-            append_u16(&mut data, instruction.accounts.len() as u16);
-            for account_index in &instruction.accounts {
-                let account_index = *account_index as usize;
-                let is_signer = self.is_signer(account_index);
-                let is_writable = self.is_writable(account_index);
-                let mut account_meta = InstructionsSysvarAccountMeta::NONE;
-                if is_signer {
-                    account_meta |= InstructionsSysvarAccountMeta::IS_SIGNER;
-                }
-                if is_writable {
-                    account_meta |= InstructionsSysvarAccountMeta::IS_WRITABLE;
-                }
-                append_u8(&mut data, account_meta.bits());
-                append_slice(
-                    &mut data,
-                    self.get_account_key(account_index).unwrap().as_ref(),
-                );
-            }
-
-            append_slice(&mut data, program_id.as_ref());
-            append_u16(&mut data, instruction.data.len() as u16);
-            append_slice(&mut data, &instruction.data);
-        }
-        data
-    }
-
     /// Return the resolved addresses for this message if it has any.
     fn loaded_lookup_table_addresses(&self) -> Option<&LoadedAddresses> {
         match &self {
@@ -286,6 +226,32 @@ impl SanitizedMessage {
             data: ix.data.clone(),
             accounts,
         })
+    }
+
+    /// Decompile message instructions without cloning account keys
+    pub fn decompile_instructions(&self) -> Vec<BorrowedInstruction> {
+        self.program_instructions_iter()
+            .map(|(program_id, instruction)| {
+                let accounts = instruction
+                    .accounts
+                    .iter()
+                    .map(|account_index| {
+                        let account_index = *account_index as usize;
+                        BorrowedAccountMeta {
+                            is_signer: self.is_signer(account_index),
+                            is_writable: self.is_writable(account_index),
+                            pubkey: self.get_account_key(account_index).unwrap(),
+                        }
+                    })
+                    .collect();
+
+                BorrowedInstruction {
+                    accounts,
+                    data: &instruction.data,
+                    program_id,
+                }
+            })
+            .collect()
     }
 
     /// Inspect all message keys for the bpf upgradeable loader
@@ -412,47 +378,6 @@ mod tests {
         });
 
         assert_eq!(v0_message.num_readonly_accounts(), 3);
-    }
-
-    #[test]
-    #[allow(deprecated)]
-    fn test_serialize_instructions() {
-        let program_id0 = Pubkey::new_unique();
-        let program_id1 = Pubkey::new_unique();
-        let id0 = Pubkey::new_unique();
-        let id1 = Pubkey::new_unique();
-        let id2 = Pubkey::new_unique();
-        let id3 = Pubkey::new_unique();
-        let instructions = vec![
-            Instruction::new_with_bincode(program_id0, &0, vec![AccountMeta::new(id0, false)]),
-            Instruction::new_with_bincode(program_id0, &0, vec![AccountMeta::new(id1, true)]),
-            Instruction::new_with_bincode(
-                program_id1,
-                &0,
-                vec![AccountMeta::new_readonly(id2, false)],
-            ),
-            Instruction::new_with_bincode(
-                program_id1,
-                &0,
-                vec![AccountMeta::new_readonly(id3, true)],
-            ),
-        ];
-
-        let message = LegacyMessage::new(&instructions, Some(&id1));
-        let sanitized_message = SanitizedMessage::try_from(message.clone()).unwrap();
-        let serialized = sanitized_message.serialize_instructions();
-
-        // assert that SanitizedMessage::serialize_instructions has the same behavior as the
-        // deprecated Message::serialize_instructions method
-        assert_eq!(serialized, message.serialize_instructions());
-
-        // assert that Message::deserialize_instruction is compatible with SanitizedMessage::serialize_instructions
-        for (i, instruction) in instructions.iter().enumerate() {
-            assert_eq!(
-                LegacyMessage::deserialize_instruction(i, &serialized).unwrap(),
-                *instruction
-            );
-        }
     }
 
     #[test]
