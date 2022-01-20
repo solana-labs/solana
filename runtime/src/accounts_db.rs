@@ -6013,8 +6013,9 @@ if false {
         check_hash: bool,
         can_cached_slot_be_unflushed: bool,
         slots_per_epoch: Option<Slot>,
-        is_startup: bool,
+        mut is_startup: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
+        is_startup = false;
         if !use_index {
             let accounts_cache_and_ancestors = if can_cached_slot_be_unflushed {
                 Some((&self.accounts_cache, ancestors, &self.accounts_index))
