@@ -5259,7 +5259,6 @@ dependencies = [
  "curve25519-dalek 2.1.0",
  "dlopen",
  "dlopen_derive",
- "fnv",
  "lazy_static",
  "libc",
  "log 0.4.14",

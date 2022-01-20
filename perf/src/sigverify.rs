@@ -4,7 +4,6 @@
 //! to the GPU.
 //!
 
-use solana_bloom::bloom::AtomicBloom;
 #[cfg(test)]
 use solana_sdk::transaction::Transaction;
 use {
@@ -15,11 +14,11 @@ use {
         recycler::Recycler,
     },
     core::sync::atomic::AtomicBool,
-    fnv::FnvHasher,
-    rand::{thread_rng, Rng},
     rayon::ThreadPool,
     solana_metrics::inc_new_counter_debug,
     solana_rayon_threadlimit::get_thread_count,
+    std::collections::hash_map::RandomState,
+    std::hash::BuildHasher,
     solana_sdk::{
         hash::Hash, message::MESSAGE_HEADER_LENGTH, pubkey::Pubkey, short_vec::decode_shortu16_len,
         signature::Signature,
@@ -397,7 +396,7 @@ pub fn generate_offsets(
 
 pub struct Deduper {
     filter: Vec<AtomicBool>,
-    seed: u64,
+    seed: RandomState,
     age: Instant,
     max_age: Duration,
 }
@@ -406,7 +405,7 @@ impl Deduper {
     pub fn new(size: usize, max_age_ms: u64) -> Self {
         let mut filter: Vec<AtomicBool> = Vec::with_capacity(size);
         filter.resize_with(size, Default::default);
-        let seed = thread_rng().gen();
+        let seed = RandomState::new();
         Self {
             filter,
             seed,
@@ -421,6 +420,7 @@ impl Deduper {
             for i in &self.filter {
                 i.store(false, Ordering::Relaxed);
             }
+            self.seed = RandomState::new();
             self.age = now;
         }
     }
@@ -431,7 +431,7 @@ impl Deduper {
             return;
         }
 
-        let mut hasher = FnvHasher::with_key(self.seed);
+        let mut hasher = self.seed.build_hasher();
         hasher.write(&&packet.data[..]);
         let hash = hasher.finish();
         let pos = hash.wrapping_rem(self.filter.len() as u64);
@@ -648,7 +648,6 @@ mod tests {
             test_tx::{test_multisig_tx, test_tx, vote_tx},
         },
         bincode::{deserialize, serialize},
-        solana_bloom::bloom::{AtomicBloom, Bloom},
         solana_sdk::{
             instruction::CompiledInstruction,
             message::{Message, MessageHeader},
