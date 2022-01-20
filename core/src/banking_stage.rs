@@ -3213,7 +3213,7 @@ mod tests {
         BankingStage::push_unprocessed(
             &mut unprocessed_packets,
             new_packet_batch.clone(),
-            packet_indexes.clone(),
+            packet_indexes,
             &mut dropped_packet_batches_count,
             &mut dropped_packets_count,
             &mut newly_buffered_packets_count,
