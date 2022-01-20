@@ -30,6 +30,7 @@ use {
         bank::{Bank, TransactionLogInfo},
         bank_forks::BankForks,
         commitment::{BlockCommitmentCache, CommitmentSlots},
+        vote_transaction::VoteTransaction,
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
@@ -40,7 +41,10 @@ use {
         transaction,
     },
     solana_transaction_status::ConfirmedBlock,
+<<<<<<< HEAD
     solana_vote_program::vote_state::Vote,
+=======
+>>>>>>> 7f20c6149 (Refactor: move simple vote parsing to runtime (#22537))
     std::{
         cell::RefCell,
         collections::{HashMap, VecDeque},

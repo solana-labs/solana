@@ -64,6 +64,7 @@ use {
         system_instruction_processor::{get_system_account_kind, SystemAccountKind},
         transaction_batch::TransactionBatch,
         vote_account::VoteAccount,
+        vote_parser,
     },
     byteorder::{ByteOrder, LittleEndian},
     dashmap::DashMap,
@@ -122,7 +123,6 @@ use {
         nonce, nonce_account,
         packet::PACKET_DATA_SIZE,
         precompiles::get_precompiles,
-        program_utils::limited_deserialize,
         pubkey::Pubkey,
         saturating_add_assign, secp256k1_program,
         signature::{Keypair, Signature},
@@ -139,10 +139,7 @@ use {
     solana_stake_program::stake_state::{
         self, InflationPointCalculationEvent, PointValue, StakeState,
     },
-    solana_vote_program::{
-        vote_instruction::VoteInstruction,
-        vote_state::{VoteState, VoteStateVersions},
-    },
+    solana_vote_program::vote_state::{VoteState, VoteStateVersions},
     std::{
         borrow::Cow,
         cell::RefCell,
@@ -3982,7 +3979,7 @@ impl Bank {
                     }
                 }
 
-                let is_vote = is_simple_vote_transaction(tx);
+                let is_vote = vote_parser::is_simple_vote_transaction(tx);
                 let store = match transaction_log_collector_config.filter {
                     TransactionLogCollectorFilter::All => {
                         !is_vote || !filtered_mentioned_addresses.is_empty()
@@ -6438,6 +6435,7 @@ pub fn goto_end_of_slot(bank: &mut Bank) {
     }
 }
 
+<<<<<<< HEAD
 fn is_simple_vote_transaction(transaction: &SanitizedTransaction) -> bool {
     if transaction.message().instructions().len() == 1 {
         let (program_pubkey, instruction) = transaction
@@ -6458,6 +6456,8 @@ fn is_simple_vote_transaction(transaction: &SanitizedTransaction) -> bool {
     false
 }
 
+=======
+>>>>>>> 7f20c6149 (Refactor: move simple vote parsing to runtime (#22537))
 #[cfg(test)]
 pub(crate) mod tests {
     #[allow(deprecated)]

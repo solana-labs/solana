@@ -1,19 +1,21 @@
 use {
+<<<<<<< HEAD
     crate::{
         vote_instruction::{self, VoteInstruction},
         vote_state::Vote,
     },
+=======
+    crate::{vote_instruction, vote_state::Vote},
+>>>>>>> 7f20c6149 (Refactor: move simple vote parsing to runtime (#22537))
     solana_sdk::{
         clock::Slot,
         hash::Hash,
-        instruction::CompiledInstruction,
-        program_utils::limited_deserialize,
-        pubkey::Pubkey,
         signature::{Keypair, Signer},
-        transaction::{SanitizedTransaction, Transaction},
+        transaction::Transaction,
     },
 };
 
+<<<<<<< HEAD
 pub type ParsedVote = (Pubkey, Vote, Option<Hash>);
 
 fn parse_vote(vote_ix: &CompiledInstruction, vote_key: &Pubkey) -> Option<ParsedVote> {
@@ -71,6 +73,8 @@ pub fn parse_vote_transaction(tx: &Transaction) -> Option<ParsedVote> {
     })
 }
 
+=======
+>>>>>>> 7f20c6149 (Refactor: move simple vote parsing to runtime (#22537))
 pub fn new_vote_transaction(
     slots: Vec<Slot>,
     bank_hash: Hash,
@@ -102,6 +106,7 @@ pub fn new_vote_transaction(
     vote_tx.partial_sign(&[authorized_voter_keypair], blockhash);
     vote_tx
 }
+<<<<<<< HEAD
 
 #[cfg(test)]
 mod test {
@@ -143,3 +148,5 @@ mod test {
         run_test_parse_vote_transaction(Some(hash(&[42u8])));
     }
 }
+=======
+>>>>>>> 7f20c6149 (Refactor: move simple vote parsing to runtime (#22537))
