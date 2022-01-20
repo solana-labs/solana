@@ -5254,6 +5254,7 @@ dependencies = [
 name = "solana-perf"
 version = "1.8.14"
 dependencies = [
+ "ahash 0.7.6",
  "bincode",
  "caps",
  "curve25519-dalek 2.1.0",
