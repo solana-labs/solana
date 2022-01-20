@@ -5934,6 +5934,8 @@ if false {
                 }
 
                 for slot in start..end {
+                    error!("{} {} slot: {}", file!(), line!(), slot);
+
                     let sub_storages = snapshot_storages.get(slot);
                     let valid_slot = sub_storages.is_some();
                     if let Some((cache, ancestors, accounts_index)) = accounts_cache_and_ancestors {
@@ -5955,6 +5957,7 @@ if false {
                             }
                         }
                     }
+                    error!("{} {} slot: {}", file!(), line!(), slot);
 
                     if let Some(sub_storages) = sub_storages {
                         Self::scan_multiple_account_storages_one_slot(
@@ -5964,8 +5967,10 @@ if false {
                             &mut retval,
                         );
                     }
+                    error!("{} {} slot: {}", file!(), line!(), slot);
                 }
                 let r = after_func(retval);
+                error!("{} {} slots: {}, {}", file!(), line!(), start, end);
                 if !file_name.is_empty() {
                     let result = cache_hash_data.save(Path::new(&file_name), &r);
 
@@ -6276,11 +6281,13 @@ if false {
                 accum[pubkey_to_bin_index].push(source_item);
                 let len = accum[pubkey_to_bin_index].len();
                 if len % 10_000 == 0 {
-                    error!("")
+                    error!("len is : {}", len);
                 }
             },
             |x| {
+                error!("{} {}", file!(), line!());
                 let (result, timing) = Self::sort_slot_storage_scan(x);
+                error!("{} {} {}", file!(), line!(), timing);
                 sort_time.fetch_add(timing, Ordering::Relaxed);
                 result
             },
@@ -6342,6 +6349,7 @@ if false {
         slots_per_epoch: Option<Slot>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
 
+        error!("{} {}", file!(), line!());
         let rehash = AtomicUsize::default();
         let (num_hash_scan_passes, bins_per_pass) = Self::bins_per_pass(num_hash_scan_passes);
         let mut scan_and_hash = move || {
@@ -6368,6 +6376,7 @@ if false {
                     slots_per_epoch,
                     &rehash,
                 )?;
+                error!("{} {}", file!(), line!());
 
                 let hash = AccountsHash {
                     filler_account_suffix: filler_account_suffix.cloned(),
@@ -6379,6 +6388,7 @@ if false {
                     previous_pass,
                     bins_per_pass,
                 );
+                error!("{} {}", file!(), line!());
                 previous_pass = for_next_pass;
                 final_result = (hash, lamports);
             }
@@ -6386,6 +6396,7 @@ if false {
 
             Ok(final_result)
         };
+        error!("{} {}", file!(), line!());
         let result = if let Some(thread_pool) = thread_pool {
             thread_pool.install(scan_and_hash)
         } else {
